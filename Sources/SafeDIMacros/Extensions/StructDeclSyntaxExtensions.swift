@@ -18,19 +18,21 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// TODO: Document macro.
-@attached(member, names: named(`init`), named(build), named(getDependencies), arbitrary)
-public macro builder(_ propertyName: StaticString) = #externalMacro(module: "SafeDIMacros", type: "BuilderMacro")
+import SwiftSyntax
+import SwiftSyntaxBuilder
 
-// TODO: Document macro.
-@attached(member, names: named(`init`))
-public macro dependencies() = #externalMacro(module: "SafeDIMacros", type: "DependenciesMacro")
+extension StructDeclSyntax {
 
-// TODO: Document macro.
-@attached(member)
-public macro constructed() = #externalMacro(module: "SafeDIMacros", type: "ConstructedMacro")
+    static var dependenciesTemplate: Self {
+        try! StructDeclSyntax("""
+            @dependencies public struct Dependencies {
+                \(FunctionDeclSyntax.buildTemplate) {
+                    <#T##ConcreteBuiltProductType#>(<#T##parameter#>: <#T##ParameterType#>)
+                }
 
-// TODO: Document macro.
-@attached(member)
-public macro singleton() = #externalMacro(module: "SafeDIMacros", type: "SingletonMacro")
+                private let <#T##dependency#>: <#T##DependencyType#>
+            }
+            """)
+    }
 
+}

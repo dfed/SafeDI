@@ -18,19 +18,36 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// TODO: Document macro.
-@attached(member, names: named(`init`), named(build), named(getDependencies), arbitrary)
-public macro builder(_ propertyName: StaticString) = #externalMacro(module: "SafeDIMacros", type: "BuilderMacro")
+import SwiftDiagnostics
+import SwiftSyntax
 
-// TODO: Document macro.
-@attached(member, names: named(`init`))
-public macro dependencies() = #externalMacro(module: "SafeDIMacros", type: "DependenciesMacro")
+protocol DiagnosticError: Error, CustomStringConvertible {
+    associatedtype DiagnosticErrorMessage: DiagnosticMessage
+    var diagnostic: DiagnosticErrorMessage { get }
 
-// TODO: Document macro.
-@attached(member)
-public macro constructed() = #externalMacro(module: "SafeDIMacros", type: "ConstructedMacro")
+    associatedtype DiagnosticErrorFixIt: FixItMessage
+    var fixIt: DiagnosticErrorFixIt { get }
+}
 
-// TODO: Document macro.
-@attached(member)
-public macro singleton() = #externalMacro(module: "SafeDIMacros", type: "SingletonMacro")
-
+extension Diagnostic {
+    init(
+        node: some SyntaxProtocol,
+        position: AbsolutePosition? = nil,
+        error: some DiagnosticError,
+        highlights: [Syntax]? = nil,
+        notes: [Note] = [],
+        changes: [FixIt.Change])
+    {
+        self.init(
+            node: node,
+            position: position,
+            message: error.diagnostic,
+            highlights: highlights,
+            notes: notes,
+            fixIts: [
+                FixIt(
+                    message: error.fixIt,
+                    changes: changes)
+            ])
+    }
+}

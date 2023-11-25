@@ -18,19 +18,19 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// TODO: Document macro.
-@attached(member, names: named(`init`), named(build), named(getDependencies), arbitrary)
-public macro builder(_ propertyName: StaticString) = #externalMacro(module: "SafeDIMacros", type: "BuilderMacro")
+import SwiftSyntax
 
-// TODO: Document macro.
-@attached(member, names: named(`init`))
-public macro dependencies() = #externalMacro(module: "SafeDIMacros", type: "DependenciesMacro")
+extension DeclModifierListSyntax {
 
-// TODO: Document macro.
-@attached(member)
-public macro constructed() = #externalMacro(module: "SafeDIMacros", type: "ConstructedMacro")
+    var containsPublic: Bool {
+        contains(where: { modifier in
+            modifier.name.text == "public"
+        })
+    }
 
-// TODO: Document macro.
-@attached(member)
-public macro singleton() = #externalMacro(module: "SafeDIMacros", type: "SingletonMacro")
-
+    var staticModifier: Element? {
+        first(where: { modifier in
+            modifier.name.text == "static"
+        })
+    }
+}

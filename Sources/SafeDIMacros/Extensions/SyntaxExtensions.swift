@@ -18,19 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// TODO: Document macro.
-@attached(member, names: named(`init`), named(build), named(getDependencies), arbitrary)
-public macro builder(_ propertyName: StaticString) = #externalMacro(module: "SafeDIMacros", type: "BuilderMacro")
+import SwiftSyntax
 
-// TODO: Document macro.
-@attached(member, names: named(`init`))
-public macro dependencies() = #externalMacro(module: "SafeDIMacros", type: "DependenciesMacro")
+extension Syntax {
 
-// TODO: Document macro.
-@attached(member)
-public macro constructed() = #externalMacro(module: "SafeDIMacros", type: "ConstructedMacro")
-
-// TODO: Document macro.
-@attached(member)
-public macro singleton() = #externalMacro(module: "SafeDIMacros", type: "SingletonMacro")
-
+    static var empty: Self {
+        Syntax(CodeBlockSyntax(statements: CodeBlockItemListSyntax()))
+    }
+}

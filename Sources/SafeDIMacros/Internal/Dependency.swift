@@ -18,19 +18,43 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// TODO: Document macro.
-@attached(member, names: named(`init`), named(build), named(getDependencies), arbitrary)
-public macro builder(_ propertyName: StaticString) = #externalMacro(module: "SafeDIMacros", type: "BuilderMacro")
+struct Dependency: Codable, Equatable {
+    let variableName: String
+    let type: String
+    let source: Source
 
-// TODO: Document macro.
-@attached(member, names: named(`init`))
-public macro dependencies() = #externalMacro(module: "SafeDIMacros", type: "DependenciesMacro")
+    var isVariant: Bool {
+        switch source {
+        case .constructedInvariant, .providedInvariant, .singletonInvariant:
+            return false
+        case .variant:
+            return true
+        }
+    }
 
-// TODO: Document macro.
-@attached(member)
-public macro constructed() = #externalMacro(module: "SafeDIMacros", type: "ConstructedMacro")
+    var isInvariant: Bool {
+        switch source {
+        case .constructedInvariant, .providedInvariant, .singletonInvariant:
+            return true
+        case .variant:
+            return false
+        }
+    }
 
-// TODO: Document macro.
-@attached(member)
-public macro singleton() = #externalMacro(module: "SafeDIMacros", type: "SingletonMacro")
+    enum Source: Codable, Equatable {
+        case constructedInvariant
+        case providedInvariant
+        case singletonInvariant
+        case variant
 
+        init?(_ attributeText: String) {
+            if attributeText == ConstructedMacro.name {
+                self = .constructedInvariant
+            } else if attributeText == SingletonMacro.name {
+                self = .singletonInvariant
+            } else {
+                return nil
+            }
+        }
+    }
+}
