@@ -31,8 +31,11 @@ let package = Package(
             name: "SafeDIMacros",
             dependencies: [
                 "SafeDICore",
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+                .product(name: "SwiftDiagnostics", package: "swift-syntax"),
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-                .product(name: "SwiftCompilerPlugin", package: "swift-syntax")
             ]
         ),
         .testTarget(
@@ -47,9 +50,9 @@ let package = Package(
         .target(
             name: "SafeDICore",
             dependencies: [
+                .product(name: "SwiftDiagnostics", package: "swift-syntax"),
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
             ]
         ),
         .testTarget(
