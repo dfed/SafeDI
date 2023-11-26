@@ -1,0 +1,14 @@
+codecov:
+  require_ci_to_pass: yes
+
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: no
+
+coverage:
+  status:
+    project:
+      default:
+        target: 100%
+    patch: off
