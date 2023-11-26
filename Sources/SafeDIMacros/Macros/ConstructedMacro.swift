@@ -21,23 +21,15 @@
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-public struct ConstructedMacro: MemberMacro {
+public struct ConstructedMacro: PeerMacro {
     public static func expansion(
         of node: AttributeSyntax,
-        providingMembersOf declaration: some DeclGroupSyntax,
+        providingPeersOf declaration: some DeclSyntaxProtocol,
         in context: some MacroExpansionContext)
     throws -> [DeclSyntax]
     {
         guard VariableDeclSyntax(declaration) != nil else {
             throw ConstructedError.notDecoratingBinding
-        }
-
-        guard
-            let parent = declaration.parent,
-            let parentStruct = StructDeclSyntax(parent),
-            parentStruct.attributes.isDecoratedWithDependenciesMacro
-        else {
-            throw ConstructedError.notWithinDependencies
         }
 
         // This macro purposefully does not expand.
@@ -51,14 +43,11 @@ public struct ConstructedMacro: MemberMacro {
 
     private enum ConstructedError: Error, CustomStringConvertible {
         case notDecoratingBinding
-        case notWithinDependencies
 
         var description: String {
             switch self {
             case .notDecoratingBinding:
-                return "@\(ConstructedMacro.name) must decorate a intance variable"
-            case .notWithinDependencies:
-                return "@\(ConstructedMacro.name) must decorate a intance variable on a @\(DependenciesMacro.name)-decorated type"
+                return "@\(ConstructedMacro.name) must decorate a instance variable"
             }
         }
     }

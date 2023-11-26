@@ -31,11 +31,11 @@ enum FixableBuilderError: DiagnosticError {
         case .missingDependencies:
             return "Missing nested `@\(DependenciesMacro.name) public struct \(DependenciesMacro.decoratedStructName)` declaration"
         case .unexpectedVariableDeclaration:
-            return "Found unexpected variable declaration in `\(DependenciesMacro.decoratedStructName)`"
+            return "Found unexpected variable declaration in `\(BuilderMacro.decoratedStructName)`"
         case .unexpectedInitializer:
-            return "Found unexpected initializer in `\(DependenciesMacro.decoratedStructName)`"
+            return "Found unexpected initializer in `\(BuilderMacro.decoratedStructName)`"
         case .unexpectedFuncationDeclaration:
-            return "Found unexpected function declaration in `\(DependenciesMacro.decoratedStructName)`"
+            return "Found unexpected function declaration in `\(BuilderMacro.decoratedStructName)`"
         }
     }
 

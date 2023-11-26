@@ -34,11 +34,11 @@ public macro builder(_ propertyName: StaticString) = #externalMacro(module: "Saf
 public macro dependencies() = #externalMacro(module: "SafeDIMacros", type: "DependenciesMacro")
 
 /// Marks a SafeDI dependency that is instantiated when its associated builder is instantiated.
-@attached(member)
+@attached(peer)
 public macro constructed() = #externalMacro(module: "SafeDIMacros", type: "ConstructedMacro")
 
 /// Marks a SafeDI dependency that will only ever have one instance instantiated at a given time. Singleton dependencies may deallocate when the built products that use it deallocate. Singleton dependencies can not be marked with @constructed.
-@attached(member)
+@attached(peer)
 public macro singleton() = #externalMacro(module: "SafeDIMacros", type: "SingletonMacro")
 
 #endif
