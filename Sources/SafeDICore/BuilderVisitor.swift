@@ -110,29 +110,51 @@ public final class BuilderVisitor: SyntaxVisitor {
     }
 
     public override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-        if node.name.text == DependenciesVisitor.decoratedStructName {
+        if
+            let builderMacro = node.attributes.builderMacro,
+            let propertyName = builderMacro.arguments?.firstArgumentString
+        {
+            builderTypeName = node.name.text
+            builtPropertyName = propertyName
+            return .visitChildren
+
+        } else if node.attributes.dependenciesMacro != nil {
             didFindDependencies = true
             dependenciesVisitor.walk(node)
+            return .skipChildren
+
+        } else {
+            return .skipChildren
         }
-        return .skipChildren
     }
 
     // MARK: Public
 
-    public var dependencies: [Dependency] {
-        dependenciesVisitor.dependencies
+    public var builder: Builder? {
+        guard
+            let builtPropertyName,
+            let builtType = dependenciesVisitor.builtType,
+            let builderTypeName
+        else {
+            return nil
+        }
+        return Builder(
+            typeName: builderTypeName,
+            builtPropertyName: builtPropertyName,
+            builtType: builtType,
+            dependencies: dependenciesVisitor.dependencies
+        )
     }
-    public var builtType: String? {
-        dependenciesVisitor.builtType
-    }
+
     public private(set) var didFindDependencies = false
     public private(set) var diagnostics = [Diagnostic]()
 
     public static let macroName = "builder"
-    public static let decoratedStructName = "Builder"
     public static let getDependenciesClosureName = "getDependencies"
 
     // MARK: Private
 
     private let dependenciesVisitor = DependenciesVisitor()
+    private var builderTypeName: String?
+    private var builtPropertyName: String?
 }

@@ -31,11 +31,11 @@ public enum FixableBuilderError: DiagnosticError {
         case .missingDependencies:
             return "Missing nested `@\(DependenciesVisitor.macroName) public struct \(DependenciesVisitor.decoratedStructName)` declaration"
         case .unexpectedVariableDeclaration:
-            return "Found unexpected variable declaration in `\(BuilderVisitor.decoratedStructName)`"
+            return "Found unexpected variable declaration in `@\(BuilderVisitor.macroName)`"
         case .unexpectedInitializer:
-            return "Found unexpected initializer in `\(BuilderVisitor.decoratedStructName)`"
+            return "Found unexpected initializer in `@\(BuilderVisitor.macroName)`"
         case .unexpectedFuncationDeclaration:
-            return "Found unexpected function declaration in `\(BuilderVisitor.decoratedStructName)`"
+            return "Found unexpected function declaration in `@\(BuilderVisitor.macroName)`"
         }
     }
 

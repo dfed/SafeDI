@@ -18,27 +18,42 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A representation of a property.
-/// e.g. `let myDependency: MyDependency`
-public struct Property: Codable, Equatable {
-    /// The label by which the property is referenced.
-    public let label: String
-    /// The type to which the property conforms.
-    public let type: String
+public struct Builder: Codable, Equatable {
 
-    public var asPropertyDeclaration: String {
-        "let \(label): \(type)"
+    // MARK: Initialization
+
+    init(
+        typeName: String,
+        builtPropertyName: String,
+        builtType: String,
+        dependencies: [Dependency]
+    ) {
+        builtProduct = Property(
+            label: builtPropertyName,
+            type: builtType
+        )
+        builder = Property(
+            label: Self.propertyNameSuffix(forProperty: builtPropertyName),
+            type: typeName
+        )
+        self.dependencies = dependencies
     }
 
-    public var asParameterDeclaration: String {
-        "\(label): \(type)"
-    }
+    // MARK: Public
 
-    public var asLabeledParameterExpression: String {
-        "\(label): \(label)"
-    }
+    /// The injectable built product created by this builder.
+    public let builtProduct: Property
+    /// The injectable builder property that represents this builder.
+    public let builder: Property
+    /// This builder's dependencies.
+    public let dependencies: [Dependency]
 
-    public var asSelfAssignment: String {
-        "self.\(label) = \(label)"
+    // MARK: Private
+
+    /// The label suffix on all builder properties.
+    private static let propertyNameSuffix = "Builder"
+
+    private static func propertyNameSuffix(forProperty label: String) -> String {
+        label + Self.propertyNameSuffix
     }
 }

@@ -39,7 +39,7 @@ extension Array where Element == Dependency {
     public var variantParameterList: FunctionParameterListSyntax {
         FunctionParameterListSyntax(
             filter { $0.source == .variant }
-                .map { "\(raw: $0.property.label): \(raw: $0.property.type)" }
+                .map { "\(raw: $0.property.asParameterDeclaration)" }
                 .transformUntilLast {
                     var functionPamameterSyntax = $0
                     functionPamameterSyntax.trailingComma = TokenSyntax(.comma, presence: .present)
@@ -51,20 +51,20 @@ extension Array where Element == Dependency {
 
     public var variantUnlabeledExpressionList: String {
         filter { $0.isVariant }
-            .map { "\($0.property.label)" }
+            .map(\.property.label)
             .joined(separator: ", ")
     }
 
     public var variantLabeledExpressionList: String {
         filter { $0.isVariant }
-            .map { "\($0.property.label): \($0.property.label)" }
+            .map(\.property.asLabeledParameterExpression)
             .joined(separator: ", ")
     }
 
     public var invariantParameterList: FunctionParameterListSyntax {
         FunctionParameterListSyntax(
             filter { $0.isInvariant }
-                .map { "\(raw: $0.property.label): \(raw: $0.property.type)" }
+                .map { "\(raw: $0.property.asParameterDeclaration)" }
                 .transformUntilLast {
                     var functionPamameterSyntax = $0
                     functionPamameterSyntax.trailingComma = TokenSyntax(.comma, presence: .present)
@@ -77,7 +77,7 @@ extension Array where Element == Dependency {
     public var invariantAssignmentExpressionList: String {
         """
         \(filter(\.isInvariant)
-        .map { "self.\($0.property.label) = \($0.property.label)" }
+        .map(\.property.asSelfAssignment)
         .joined(separator: "\n"))
         """
     }

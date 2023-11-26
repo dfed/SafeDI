@@ -21,7 +21,7 @@
 import SwiftSyntax
 
 extension AttributeSyntax.Arguments {
-    public var string: String? {
+    var firstArgumentString: String? {
         switch self {
         case let .argumentList(labeledExprListSyntax):
             return labeledExprListSyntax

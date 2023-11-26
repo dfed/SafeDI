@@ -267,7 +267,7 @@ public final class DependenciesVisitor: SyntaxVisitor {
                 return .skipChildren
             }
 
-            guard node.attributes.isDecoratedWithDependenciesMacro else {
+            guard node.attributes.dependenciesMacro != nil else {
                 var newAttributes = node.attributes
                 newAttributes.append(.attribute(
                     AttributeSyntax(

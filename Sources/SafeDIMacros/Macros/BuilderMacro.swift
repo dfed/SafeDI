@@ -44,17 +44,9 @@ public struct BuilderMacro: MemberMacro {
         }
 
         let builderVisitor = BuilderVisitor()
-        builderVisitor.walk(structDelcaration.memberBlock)
+        builderVisitor.walk(structDelcaration)
         for diagnostic in builderVisitor.diagnostics {
             context.diagnose(diagnostic)
-        }
-
-        guard
-            let builderMacroArguments = node.arguments,
-            let builtPropertyName = builderMacroArguments.string
-        else {
-            // Builder macro is misconfigured. Compiler will highlight the issue – just fail to expand.
-            return []
         }
 
         guard builderVisitor.didFindDependencies else {
@@ -79,15 +71,17 @@ public struct BuilderMacro: MemberMacro {
             return []
         }
 
-        let variantUnlabeledParameterList = builderVisitor.dependencies.variantUnlabeledParameterList
-        let variantParameterList = builderVisitor.dependencies.variantParameterList
-        let variantUnlabeledExpressionList = builderVisitor.dependencies.variantUnlabeledExpressionList
-        let variantLabeledExpressionList = builderVisitor.dependencies.variantLabeledExpressionList
-        guard let builtType = builderVisitor.builtType else {
+        guard let builder = builderVisitor.builder else {
+            // Builder macro is misconfigured. Compiler will highlight the issue – just fail to expand.
             return []
         }
-        let builtPropertyDescription = "let \(builtPropertyName): \(builtType)"
-        let builderPropertyDescription = "let \(builtPropertyName)\(BuilderVisitor.decoratedStructName): \(structDelcaration.name.text)"
+
+        let variantUnlabeledParameterList = builder.dependencies.variantUnlabeledParameterList
+        let variantParameterList = builder.dependencies.variantParameterList
+        let variantUnlabeledExpressionList = builder.dependencies.variantUnlabeledExpressionList
+        let variantLabeledExpressionList = builder.dependencies.variantLabeledExpressionList
+        let builtPropertyDescription = builder.builtProduct.asPropertyDeclaration
+        let builderPropertyDescription = builder.builder.asPropertyDeclaration
         return [
             """
             // Inject this builder as a dependency by adding `\(raw: builderPropertyDescription)` to your @\(raw: DependenciesVisitor.macroName) type
@@ -97,7 +91,7 @@ public struct BuilderMacro: MemberMacro {
             """,
             """
             // Inject this built product as a dependency by adding `\(raw: builtPropertyDescription)` to your @\(raw: DependenciesVisitor.macroName) type
-            public func build(\(variantParameterList)) -> \(raw: builtType) {
+            public func build(\(variantParameterList)) -> \(raw: builder.builtProduct.type) {
                 \(raw: BuilderVisitor.getDependenciesClosureName)(\(raw: variantUnlabeledExpressionList)).build(\(raw: variantLabeledExpressionList))
             }
             """,

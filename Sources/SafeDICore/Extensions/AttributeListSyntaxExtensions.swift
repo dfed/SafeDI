@@ -22,15 +22,32 @@ import SwiftSyntax
 
 extension AttributeListSyntax {
 
-    public var isDecoratedWithDependenciesMacro: Bool {
-        contains(where: { element in
+    var dependenciesMacro: AttributeSyntax? {
+        guard let attribute = first(where: { element in
             switch element {
             case let .attribute(attribute):
                 return attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text == DependenciesVisitor.macroName
             case .ifConfigDecl:
                 return false
             }
-        })
+        }) else {
+            return nil
+        }
+        return AttributeSyntax(attribute)
+    }
+
+    var builderMacro: AttributeSyntax? {
+        guard let attribute = first(where: { element in
+            switch element {
+            case let .attribute(attribute):
+                return attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text == BuilderVisitor.macroName
+            case .ifConfigDecl:
+                return false
+            }
+        }) else {
+            return nil
+        }
+        return AttributeSyntax(attribute)
     }
 
     public var attributedNodes: [(attribute: String, node: AttributeListSyntax.Element)] {
