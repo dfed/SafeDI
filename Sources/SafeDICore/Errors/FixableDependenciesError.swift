@@ -20,7 +20,7 @@
 
 import SwiftDiagnostics
 
-enum FixableDependenciesError: DiagnosticError {
+public enum FixableDependenciesError: DiagnosticError {
     case missingDependenciesAttribute
     case missingPublicAttributeOnDependencies
     case dependencyHasTooManyAttributes
@@ -33,14 +33,14 @@ enum FixableDependenciesError: DiagnosticError {
     case multipleBuildMethods
     case duplicateDependency
 
-    var description: String {
+    public var description: String {
         switch self {
         case .missingDependenciesAttribute:
-            return "Missing `@\(DependenciesMacro.name)` attached macro on `public struct Dependencies`"
+            return "Missing `@\(DependenciesVisitor.macroName)` attached macro on `public struct Dependencies`"
         case .missingPublicAttributeOnDependencies:
             return "Missing `public` modifier on `struct Dependencies`"
         case .dependencyHasTooManyAttributes:
-            return "Dependency can have at most one `@\(ConstructedMacro.name)` or `@\(SingletonMacro.name)` attached macro"
+            return "Dependency can have at most one `@\(Dependency.Source.constructedAttributeName)` or `@\(Dependency.Source.singletonAttributeName)` attached macro"
         case .dependencyIsStatic:
             return "Dependency must not be `static`"
         case .dependencyIsNotPrivate:
@@ -50,27 +50,27 @@ enum FixableDependenciesError: DiagnosticError {
         case .unexpectedInitializer:
             return "Dependency must not have hand-written initializer"
         case .missingBuildMethod:
-            return "@\(DependenciesMacro.name)-decorated type must have `func build(...) -> BuiltProduct` method"
+            return "@\(DependenciesVisitor.macroName)-decorated type must have `func build(...) -> BuiltProduct` method"
         case .missingBuildMethodReturnClause:
-            return "@\(DependenciesMacro.name)-decorated type's `func build(...)` method must return a type"
+            return "@\(DependenciesVisitor.macroName)-decorated type's `func build(...)` method must return a type"
         case .multipleBuildMethods:
-            return "@\(DependenciesMacro.name)-decorated type must have a single `func build(...) -> BuiltProduct` method"
+            return "@\(DependenciesVisitor.macroName)-decorated type must have a single `func build(...) -> BuiltProduct` method"
         case .duplicateDependency:
             return "Every declared dependency must have a unique name"
         }
     }
 
-    var diagnostic: DiagnosticMessage {
-        DiagnosticMessage(error: self)
+    public var diagnostic: DiagnosticMessage {
+        DependenciesDiagnosticMessage(error: self)
     }
 
-    var fixIt: FixItMessage {
-        FixItMessage(error: self)
+    public var fixIt: FixItMessage {
+        DependenciesFixItMessage(error: self)
     }
 
-    struct DiagnosticMessage: SwiftDiagnostics.DiagnosticMessage {
+    // MARK: - DependenciesDiagnosticMessage
 
-        let error: FixableDependenciesError
+    private struct DependenciesDiagnosticMessage: DiagnosticMessage {
 
         var diagnosticID: MessageID {
             MessageID(domain: "FixableDependenciesError.DiagnosticMessage", id: error.description)
@@ -96,17 +96,21 @@ enum FixableDependenciesError: DiagnosticError {
         var message: String {
             error.description
         }
+
+        let error: FixableDependenciesError
     }
 
-    struct FixItMessage: SwiftDiagnostics.FixItMessage {
+    // MARK: - DependenciesFixItMessage
+
+    struct DependenciesFixItMessage: SwiftDiagnostics.FixItMessage {
         var message: String {
             switch error {
             case .missingDependenciesAttribute:
-                return "Attach `@\(DependenciesMacro.name)` macro"
+                return "Attach `@\(DependenciesVisitor.macroName)` macro"
             case .missingPublicAttributeOnDependencies:
-                return "Make `struct \(DependenciesMacro.decoratedStructName)` have an access level of `public`"
+                return "Make `struct \(DependenciesVisitor.decoratedStructName)` have an access level of `public`"
             case .dependencyHasTooManyAttributes:
-                return "Remove all but first `@\(ConstructedMacro.name)` or `@\(SingletonMacro.name)` attached macro"
+                return "Remove all but first `@\(Dependency.Source.constructedAttributeName)` or `@\(Dependency.Source.singletonAttributeName)` attached macro"
             case .dependencyIsStatic:
                 return "Remove `static` from property"
             case .dependencyIsNotPrivate:

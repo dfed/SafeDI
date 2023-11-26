@@ -20,21 +20,17 @@
 
 import SwiftSyntax
 
-extension AttributeSyntax.Arguments {
-    var string: String? {
-        switch self {
-        case let .argumentList(labeledExprListSyntax):
-            return labeledExprListSyntax
-                .map(\.expression)
-                .compactMap(StringLiteralExprSyntax.init)
-                .map(\.segments)
-                .flatMap { $0 }
-                .compactMap(StringSegmentSyntax.init)
-                .map(\.content)
-                .map(\.text)
-                .first
-        default:
-            return nil
-        }
+extension DeclModifierListSyntax {
+
+    public var containsPublic: Bool {
+        contains(where: { modifier in
+            modifier.name.text == "public"
+        })
+    }
+
+    public var staticModifier: Element? {
+        first(where: { modifier in
+            modifier.name.text == "static"
+        })
     }
 }

@@ -18,19 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import SwiftSyntax
-
-extension DeclModifierListSyntax {
-
-    var containsPublic: Bool {
-        contains(where: { modifier in
-            modifier.name.text == "public"
-        })
-    }
-
-    var staticModifier: Element? {
-        first(where: { modifier in
-            modifier.name.text == "static"
-        })
-    }
+/// A representation of a property.
+/// e.g. `let myDependency: MyDependency`
+public struct Property: Codable, Equatable {
+    /// The label by which the property is referenced.
+    public let label: String
+    /// The type to which the property conforms.
+    public let type: String
 }

@@ -21,17 +21,17 @@
 import SwiftDiagnostics
 import SwiftSyntax
 
-final class DependenciesVisitor: SyntaxVisitor {
+public final class DependenciesVisitor: SyntaxVisitor {
 
     // MARK: Initialization
 
-    init() {
+    public init() {
         super.init(viewMode: .sourceAccurate)
     }
 
     // MARK: SyntaxVisitor
 
-    override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
         // Check attributes and extract dependency source.
         let dependencySources = node.attributes.dependencySources
         guard dependencySources.isEmpty || dependencySources.count == 1 else {
@@ -42,7 +42,7 @@ final class DependenciesVisitor: SyntaxVisitor {
                 replacementNode = Syntax(AttributeSyntax(
                     attributeName: IdentifierTypeSyntax(
                         name: TokenSyntax(
-                            TokenKind.identifier(ConstructedMacro.name),
+                            TokenKind.identifier(Dependency.Source.constructedAttributeName),
                             presence: .present
                         )
                     )
@@ -157,7 +157,7 @@ final class DependenciesVisitor: SyntaxVisitor {
         return .skipChildren
     }
 
-    override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
         guard
             let parent = node.parent,
             let typedParent = MemberBlockItemSyntax(parent),
@@ -183,8 +183,8 @@ final class DependenciesVisitor: SyntaxVisitor {
         return .skipChildren
     }
 
-    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-        if node.name.text == DependenciesMacro.buildMethodName {
+    public override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+        if node.name.text == DependenciesVisitor.buildMethodName {
             if didFindBuildMethod {
                 // We've already found a `build` method!
                 if
@@ -246,8 +246,8 @@ final class DependenciesVisitor: SyntaxVisitor {
         return .skipChildren
     }
 
-    override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-        if node.name.text == DependenciesMacro.decoratedStructName {
+    public override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
+        if node.name.text == DependenciesVisitor.decoratedStructName {
             guard node.modifiers.containsPublic else {
                 diagnostics.append(Diagnostic(
                     node: node.attributes,
@@ -272,7 +272,7 @@ final class DependenciesVisitor: SyntaxVisitor {
                 newAttributes.append(.attribute(
                     AttributeSyntax(
                         attributeName: IdentifierTypeSyntax(
-                            name: .identifier(DependenciesMacro.decoratedStructName)
+                            name: .identifier(DependenciesVisitor.decoratedStructName)
                         )
                     )
                 ))
@@ -296,12 +296,16 @@ final class DependenciesVisitor: SyntaxVisitor {
         }
     }
 
-    // MARK: Internal
+    // MARK: Public
 
-    private(set) var didFindBuildMethod = false
-    private(set) var dependencies = [Dependency]()
-    private(set) var builtType: String?
-    private(set) var diagnostics = [Diagnostic]()
+    public private(set) var didFindBuildMethod = false
+    public private(set) var dependencies = [Dependency]()
+    public private(set) var builtType: String?
+    public private(set) var diagnostics = [Diagnostic]()
+
+    public static let macroName = "dependencies"
+    public static let decoratedStructName = "Dependencies"
+    public static let buildMethodName = "build"
 
     // MARK: Private
 

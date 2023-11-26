@@ -3,7 +3,7 @@ import SwiftSyntaxBuilder
 
 extension FunctionDeclSyntax {
 
-    static var buildTemplate: Self {
+    public static var buildTemplate: Self {
         try! FunctionDeclSyntax("""
             func build(<#T##parameter#>: <#T##ParameterType#>) \(returnClauseTemplate) {
                 <#T##ConcreteBuiltProductType#>(<#T##parameter#>: <#T##ParameterType#>)
@@ -11,7 +11,7 @@ extension FunctionDeclSyntax {
         """)
     }
 
-    static var returnClauseTemplate: ReturnClauseSyntax {
+    public static var returnClauseTemplate: ReturnClauseSyntax {
         ReturnClauseSyntax(
             type: TypeSyntax(" <#T##BuiltProductType#>")
         )

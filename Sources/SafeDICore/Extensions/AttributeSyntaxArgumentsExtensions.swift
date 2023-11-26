@@ -19,21 +19,22 @@
 // SOFTWARE.
 
 import SwiftSyntax
-import SwiftSyntaxBuilder
 
-extension StructDeclSyntax {
-
-    static var dependenciesTemplate: Self {
-        try! StructDeclSyntax("""
-
-            @dependencies public struct Dependencies {
-                \(FunctionDeclSyntax.buildTemplate)
-
-                private let <#T##dependency#>: <#T##DependencyType#>
-            }
-
-            """
-        )
+extension AttributeSyntax.Arguments {
+    public var string: String? {
+        switch self {
+        case let .argumentList(labeledExprListSyntax):
+            return labeledExprListSyntax
+                .map(\.expression)
+                .compactMap(StringLiteralExprSyntax.init)
+                .map(\.segments)
+                .flatMap { $0 }
+                .compactMap(StringSegmentSyntax.init)
+                .map(\.content)
+                .map(\.text)
+                .first
+        default:
+            return nil
+        }
     }
-
 }

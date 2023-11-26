@@ -18,36 +18,22 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import SwiftDiagnostics
 import SwiftSyntax
+import SwiftSyntaxBuilder
 
-protocol DiagnosticError: Error, CustomStringConvertible {
-    associatedtype DiagnosticErrorMessage: DiagnosticMessage
-    var diagnostic: DiagnosticErrorMessage { get }
+extension StructDeclSyntax {
 
-    associatedtype DiagnosticErrorFixIt: FixItMessage
-    var fixIt: DiagnosticErrorFixIt { get }
-}
+    public static var dependenciesTemplate: Self {
+        try! StructDeclSyntax("""
 
-extension Diagnostic {
-    init(
-        node: some SyntaxProtocol,
-        position: AbsolutePosition? = nil,
-        error: some DiagnosticError,
-        highlights: [Syntax]? = nil,
-        notes: [Note] = [],
-        changes: [FixIt.Change])
-    {
-        self.init(
-            node: node,
-            position: position,
-            message: error.diagnostic,
-            highlights: highlights,
-            notes: notes,
-            fixIts: [
-                FixIt(
-                    message: error.fixIt,
-                    changes: changes)
-            ])
+            @dependencies public struct Dependencies {
+                \(FunctionDeclSyntax.buildTemplate)
+
+                private let <#T##dependency#>: <#T##DependencyType#>
+            }
+
+            """
+        )
     }
+
 }

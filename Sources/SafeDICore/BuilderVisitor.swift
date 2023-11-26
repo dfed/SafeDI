@@ -21,17 +21,17 @@
 import SwiftDiagnostics
 import SwiftSyntax
 
-final class BuilderVisitor: SyntaxVisitor {
+public final class BuilderVisitor: SyntaxVisitor {
 
     // MARK: Initialization
 
-    init() {
+    public init() {
         super.init(viewMode: .sourceAccurate)
     }
 
     // MARK: SyntaxVisitor
 
-    override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
         guard
             let parent = node.parent,
             let typedParent = MemberBlockItemSyntax(parent),
@@ -57,7 +57,7 @@ final class BuilderVisitor: SyntaxVisitor {
         return .skipChildren
     }
 
-    override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
         guard
             let parent = node.parent,
             let typedParent = MemberBlockItemSyntax(parent),
@@ -83,7 +83,7 @@ final class BuilderVisitor: SyntaxVisitor {
         return .skipChildren
     }
 
-    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
         guard
             let parent = node.parent,
             let typedParent = MemberBlockItemSyntax(parent),
@@ -109,24 +109,28 @@ final class BuilderVisitor: SyntaxVisitor {
         return .skipChildren
     }
 
-    override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-        if node.name.text == DependenciesMacro.decoratedStructName {
+    public override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
+        if node.name.text == DependenciesVisitor.decoratedStructName {
             didFindDependencies = true
             dependenciesVisitor.walk(node)
         }
         return .skipChildren
     }
 
-    // MARK: Internal
+    // MARK: Public
 
-    var dependencies: [Dependency] {
+    public var dependencies: [Dependency] {
         dependenciesVisitor.dependencies
     }
-    var builtType: String? {
+    public var builtType: String? {
         dependenciesVisitor.builtType
     }
-    private(set) var didFindDependencies = false
-    private(set) var diagnostics = [Diagnostic]()
+    public private(set) var didFindDependencies = false
+    public private(set) var diagnostics = [Diagnostic]()
+
+    public static let macroName = "builder"
+    public static let decoratedStructName = "Builder"
+    public static let getDependenciesClosureName = "getDependencies"
 
     // MARK: Private
 

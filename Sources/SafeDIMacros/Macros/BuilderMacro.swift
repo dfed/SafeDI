@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import SafeDICore
 import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxBuilder
@@ -86,29 +87,25 @@ public struct BuilderMacro: MemberMacro {
             return []
         }
         let builtPropertyDescription = "let \(builtPropertyName): \(builtType)"
-        let builderPropertyDescription = "let \(builtPropertyName)\(Self.decoratedStructName): \(structDelcaration.name.text)"
+        let builderPropertyDescription = "let \(builtPropertyName)\(BuilderVisitor.decoratedStructName): \(structDelcaration.name.text)"
         return [
             """
-            // Inject this builder as a dependency by adding `\(raw: builderPropertyDescription)` to your @\(raw: DependenciesMacro.name) type
-            public init(\(raw: Self.getDependenciesClosureName): @escaping (\(variantUnlabeledParameterList)) -> \(raw: DependenciesMacro.decoratedStructName)) {
-                self.\(raw: Self.getDependenciesClosureName) = \(raw: Self.getDependenciesClosureName)
+            // Inject this builder as a dependency by adding `\(raw: builderPropertyDescription)` to your @\(raw: DependenciesVisitor.macroName) type
+            public init(\(raw: BuilderVisitor.getDependenciesClosureName): @escaping (\(variantUnlabeledParameterList)) -> \(raw: DependenciesVisitor.decoratedStructName)) {
+                self.\(raw: BuilderVisitor.getDependenciesClosureName) = \(raw: BuilderVisitor.getDependenciesClosureName)
             }
             """,
             """
-            // Inject this built product as a dependency by adding `\(raw: builtPropertyDescription)` to your @\(raw: DependenciesMacro.name) type
+            // Inject this built product as a dependency by adding `\(raw: builtPropertyDescription)` to your @\(raw: DependenciesVisitor.macroName) type
             public func build(\(variantParameterList)) -> \(raw: builtType) {
-                \(raw: Self.getDependenciesClosureName)(\(raw: variantUnlabeledExpressionList)).build(\(raw: variantLabeledExpressionList))
+                \(raw: BuilderVisitor.getDependenciesClosureName)(\(raw: variantUnlabeledExpressionList)).build(\(raw: variantLabeledExpressionList))
             }
             """,
             """
-            private let \(raw: Self.getDependenciesClosureName): (\(variantUnlabeledParameterList)) -> \(raw: DependenciesMacro.decoratedStructName)
+            private let \(raw: BuilderVisitor.getDependenciesClosureName): (\(variantUnlabeledParameterList)) -> \(raw: DependenciesVisitor.decoratedStructName)
             """,
         ]
     }
-
-    static let name = "builder"
-    static let decoratedStructName = "Builder"
-    static let getDependenciesClosureName = "getDependencies"
 
     // MARK: - BuilderError
 
@@ -120,11 +117,11 @@ public struct BuilderMacro: MemberMacro {
         var description: String {
             switch self {
             case .notPublic:
-                return "@\(BuilderMacro.name) struct must be `public`"
+                return "@\(BuilderVisitor.macroName) struct must be `public`"
             case .notStruct:
-                return "@\(BuilderMacro.name) must decorate a `struct`"
+                return "@\(BuilderVisitor.macroName) must decorate a `struct`"
             case .notTopLevelDeclaration:
-                return "@\(BuilderMacro.name) struct is not declared at the top level"
+                return "@\(BuilderVisitor.macroName) struct is not declared at the top level"
             }
         }
     }

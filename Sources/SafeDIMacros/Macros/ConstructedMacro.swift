@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import SafeDICore
 import SwiftSyntax
 import SwiftSyntaxMacros
 
@@ -37,8 +38,6 @@ public struct ConstructedMacro: PeerMacro {
         return []
     }
 
-    static let name = "constructed"
-
     // MARK: - ConstructedError
 
     private enum ConstructedError: Error, CustomStringConvertible {
@@ -47,7 +46,7 @@ public struct ConstructedMacro: PeerMacro {
         var description: String {
             switch self {
             case .notDecoratingBinding:
-                return "@\(ConstructedMacro.name) must decorate a instance variable"
+                return "@\(Dependency.Source.constructedAttributeName) must decorate a instance variable"
             }
         }
     }

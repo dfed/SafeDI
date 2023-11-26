@@ -18,41 +18,45 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import SwiftSyntax
+public struct Dependency: Codable, Equatable {
+    public let property: Property
+    public let source: Source
 
-extension AttributeListSyntax {
-
-    var isDecoratedWithDependenciesMacro: Bool {
-        contains(where: { element in
-            switch element {
-            case let .attribute(attribute):
-                return attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text == DependenciesMacro.name
-            case .ifConfigDecl:
-                return false
-            }
-        })
-    }
-
-    var attributedNodes: [(attribute: String, node: AttributeListSyntax.Element)] {
-        compactMap { element in
-            switch element {
-            case let .attribute(attribute):
-                guard let identifierText = attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text else {
-                    return nil
-                }
-                return (attribute: identifierText, node: element)
-            case .ifConfigDecl:
-                return nil
-            }
+    public var isVariant: Bool {
+        switch source {
+        case .constructedInvariant, .providedInvariant, .singletonInvariant:
+            return false
+        case .variant:
+            return true
         }
     }
 
-    var dependencySources: [(source: Dependency.Source, node: AttributeListSyntax.Element)] {
-        attributedNodes.compactMap {
-            guard let source = Dependency.Source.init($0.attribute) else {
+    public var isInvariant: Bool {
+        switch source {
+        case .constructedInvariant, .providedInvariant, .singletonInvariant:
+            return true
+        case .variant:
+            return false
+        }
+    }
+
+    public enum Source: Codable, Equatable {
+        case constructedInvariant
+        case providedInvariant
+        case singletonInvariant
+        case variant
+
+        public static let constructedAttributeName = "constructed"
+        public static let singletonAttributeName = "singleton"
+
+        public init?(_ attributeText: String) {
+            if attributeText == Self.constructedAttributeName {
+                self = .constructedInvariant
+            } else if attributeText == Self.singletonAttributeName {
+                self = .singletonInvariant
+            } else {
                 return nil
             }
-            return (source: source, node: $0.node)
         }
     }
 }

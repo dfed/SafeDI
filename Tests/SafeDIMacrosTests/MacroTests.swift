@@ -22,13 +22,16 @@ import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
 import XCTest
 
+import SafeDICore
+
+#if canImport(SafeDIMacros)
 @testable import SafeDIMacros
 
 let testMacros: [String: Macro.Type] = [
-    BuilderMacro.name: BuilderMacro.self,
-    DependenciesMacro.name: DependenciesMacro.self,
-    ConstructedMacro.name: ConstructedMacro.self,
-    SingletonMacro.name: SingletonMacro.self,
+    BuilderVisitor.macroName: BuilderMacro.self,
+    DependenciesVisitor.macroName: DependenciesMacro.self,
+    Dependency.Source.constructedAttributeName: ConstructedMacro.self,
+    Dependency.Source.singletonAttributeName: SingletonMacro.self,
 ]
 
 final class MacroTests: XCTestCase {
@@ -502,3 +505,4 @@ final class MacroTests: XCTestCase {
         )
     }
 }
+#endif

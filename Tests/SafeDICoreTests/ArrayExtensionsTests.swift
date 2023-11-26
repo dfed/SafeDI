@@ -20,12 +20,12 @@
 
 import XCTest
 
-@testable import SafeDIMacros
+@testable import SafeDICore
 
 final class ArrayExtensionsTests: XCTestCase {
 
     func test_variantUnlabeledParameterList_withSingleVariant() throws {
-        let dependencies = [Dependency(variableName: "int", type: "Int", source: .variant)]
+        let dependencies = [Dependency(property: Property(label: "int", type: "Int"), source: .variant)]
         XCTAssertEqual(
             dependencies.variantUnlabeledParameterList.description,
             "Int"
@@ -34,10 +34,10 @@ final class ArrayExtensionsTests: XCTestCase {
 
     func test_variantUnlabeledParameterList_withMultipleVariants() throws {
         let dependencies = [
-            Dependency(variableName: "int", type: "Int", source: .variant),
-            Dependency(variableName: "string", type: "String", source: .variant),
-            Dependency(variableName: "double", type: "Double", source: .variant),
-            Dependency(variableName: "invariant", type: "Invariant", source: .providedInvariant)
+            Dependency(property: Property(label: "int", type: "Int"), source: .variant),
+            Dependency(property: Property(label: "string", type: "String"), source: .variant),
+            Dependency(property: Property(label: "double", type: "Double"), source: .variant),
+            Dependency(property: Property(label: "invariant", type: "Invariant"), source: .providedInvariant)
         ]
         XCTAssertEqual(
             dependencies.variantUnlabeledParameterList.description,
@@ -46,7 +46,7 @@ final class ArrayExtensionsTests: XCTestCase {
     }
 
     func test_variantParameterList_withSingleVariant() throws {
-        let dependencies = [Dependency(variableName: "int", type: "Int", source: .variant)]
+        let dependencies = [Dependency(property: Property(label: "int", type: "Int"), source: .variant)]
         XCTAssertEqual(
             dependencies.variantParameterList.description,
             "int: Int"
@@ -55,10 +55,10 @@ final class ArrayExtensionsTests: XCTestCase {
 
     func test_variantParameterList_withMultipleVariants() throws {
         let dependencies = [
-            Dependency(variableName: "int", type: "Int", source: .variant),
-            Dependency(variableName: "string", type: "String", source: .variant),
-            Dependency(variableName: "double", type: "Double", source: .variant),
-            Dependency(variableName: "invariant", type: "Invariant", source: .providedInvariant)
+            Dependency(property: Property(label: "int", type: "Int"), source: .variant),
+            Dependency(property: Property(label: "string", type: "String"), source: .variant),
+            Dependency(property: Property(label: "double", type: "Double"), source: .variant),
+            Dependency(property: Property(label: "invariant", type: "Invariant"), source: .providedInvariant)
         ]
         XCTAssertEqual(
             dependencies.variantParameterList.description,
@@ -67,7 +67,7 @@ final class ArrayExtensionsTests: XCTestCase {
     }
 
     func test_variantUnlabeledExpressionList_withSingleVariant() throws {
-        let dependencies = [Dependency(variableName: "int", type: "Int", source: .variant)]
+        let dependencies = [Dependency(property: Property(label: "int", type: "Int"), source: .variant)]
         XCTAssertEqual(
             dependencies.variantUnlabeledExpressionList,
             "int"
@@ -76,10 +76,10 @@ final class ArrayExtensionsTests: XCTestCase {
 
     func test_variantUnlabeledExpressionList_withMultipleVariants() throws {
         let dependencies = [
-            Dependency(variableName: "int", type: "Int", source: .variant),
-            Dependency(variableName: "string", type: "String", source: .variant),
-            Dependency(variableName: "double", type: "Double", source: .variant),
-            Dependency(variableName: "invariant", type: "Invariant", source: .providedInvariant)
+            Dependency(property: Property(label: "int", type: "Int"), source: .variant),
+            Dependency(property: Property(label: "string", type: "String"), source: .variant),
+            Dependency(property: Property(label: "double", type: "Double"), source: .variant),
+            Dependency(property: Property(label: "invariant", type: "Invariant"), source: .providedInvariant)
         ]
         XCTAssertEqual(
             dependencies.variantUnlabeledExpressionList,
@@ -89,7 +89,7 @@ final class ArrayExtensionsTests: XCTestCase {
 
 
     func test_variantLabeledExpressionList_withSingleVariant() throws {
-        let dependencies = [Dependency(variableName: "int", type: "Int", source: .variant)]
+        let dependencies = [Dependency(property: Property(label: "int", type: "Int"), source: .variant)]
         XCTAssertEqual(
             dependencies.variantLabeledExpressionList,
             "int: int"
@@ -98,10 +98,10 @@ final class ArrayExtensionsTests: XCTestCase {
 
     func test_variantLabeledExpressionList_withMultipleVariants() throws {
         let dependencies = [
-            Dependency(variableName: "int", type: "Int", source: .variant),
-            Dependency(variableName: "string", type: "String", source: .variant),
-            Dependency(variableName: "double", type: "Double", source: .variant),
-            Dependency(variableName: "invariant", type: "Invariant", source: .providedInvariant)
+            Dependency(property: Property(label: "int", type: "Int"), source: .variant),
+            Dependency(property: Property(label: "string", type: "String"), source: .variant),
+            Dependency(property: Property(label: "double", type: "Double"), source: .variant),
+            Dependency(property: Property(label: "invariant", type: "Invariant"), source: .providedInvariant)
         ]
         XCTAssertEqual(
             dependencies.variantLabeledExpressionList,
@@ -110,7 +110,7 @@ final class ArrayExtensionsTests: XCTestCase {
     }
 
     func test_invariantParameterList_withSingleInvariant() throws {
-        let dependencies = [Dependency(variableName: "int", type: "Int", source: .providedInvariant)]
+        let dependencies = [Dependency(property: Property(label: "int", type: "Int"), source: .providedInvariant)]
         XCTAssertEqual(
             dependencies.invariantParameterList.description,
             "int: Int"
@@ -119,10 +119,10 @@ final class ArrayExtensionsTests: XCTestCase {
 
     func test_invariantParameterList_withMultipleInvariants() throws {
         let dependencies = [
-            Dependency(variableName: "int", type: "Int", source: .singletonInvariant),
-            Dependency(variableName: "string", type: "String", source: .constructedInvariant),
-            Dependency(variableName: "double", type: "Double", source: .providedInvariant),
-            Dependency(variableName: "variant", type: "Variant", source: .variant)
+            Dependency(property: Property(label: "int", type: "Int"), source: .singletonInvariant),
+            Dependency(property: Property(label: "string", type: "String"), source: .constructedInvariant),
+            Dependency(property: Property(label: "double", type: "Double"), source: .providedInvariant),
+            Dependency(property: Property(label: "variant", type: "Variant"), source: .variant)
         ]
         XCTAssertEqual(
             dependencies.invariantParameterList.description,
@@ -131,7 +131,7 @@ final class ArrayExtensionsTests: XCTestCase {
     }
 
     func test_invariantAssignmentExpressionList_withSingleInvariant() throws {
-        let dependencies = [Dependency(variableName: "int", type: "Int", source: .providedInvariant)]
+        let dependencies = [Dependency(property: Property(label: "int", type: "Int"), source: .providedInvariant)]
         XCTAssertEqual(
             dependencies.invariantAssignmentExpressionList,
             "self.int = int"
@@ -140,10 +140,10 @@ final class ArrayExtensionsTests: XCTestCase {
 
     func test_invariantAssignmentExpressionList_withMultipleInvariants() throws {
         let dependencies = [
-            Dependency(variableName: "int", type: "Int", source: .singletonInvariant),
-            Dependency(variableName: "string", type: "String", source: .constructedInvariant),
-            Dependency(variableName: "double", type: "Double", source: .providedInvariant),
-            Dependency(variableName: "variant", type: "Variant", source: .variant)
+            Dependency(property: Property(label: "int", type: "Int"), source: .singletonInvariant),
+            Dependency(property: Property(label: "string", type: "String"), source: .constructedInvariant),
+            Dependency(property: Property(label: "double", type: "Double"), source: .providedInvariant),
+            Dependency(property: Property(label: "variant", type: "Variant"), source: .variant)
         ]
         XCTAssertEqual(
             dependencies.invariantAssignmentExpressionList,

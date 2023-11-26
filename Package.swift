@@ -24,20 +24,38 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.2.0"),
     ],
     targets: [
+        .target(name: "SafeDI", dependencies: [
+            "SafeDIMacros"
+        ]),
         .macro(
             name: "SafeDIMacros",
             dependencies: [
+                "SafeDICore",
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
                 .product(name: "SwiftCompilerPlugin", package: "swift-syntax")
             ]
         ),
-        .target(name: "SafeDI", dependencies: ["SafeDIMacros"]),
         .testTarget(
             name: "SafeDIMacrosTests",
             dependencies: [
                 "SafeDIMacros",
+                "SafeDICore",
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
                 .product(name: "MacroTesting", package: "swift-macro-testing"), // TODO: write tests that use this!
+            ]
+        ),
+        .target(
+            name: "SafeDICore",
+            dependencies: [
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+            ]
+        ),
+        .testTarget(
+            name: "SafeDICoreTests",
+            dependencies: [
+                "SafeDICore"
             ]
         ),
     ]

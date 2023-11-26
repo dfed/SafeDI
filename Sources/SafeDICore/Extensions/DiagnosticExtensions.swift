@@ -18,42 +18,28 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-struct Dependency: Codable, Equatable {
-    let property: Property
-    let source: Source
+import SwiftDiagnostics
+import SwiftSyntax
 
-    var isVariant: Bool {
-        switch source {
-        case .constructedInvariant, .providedInvariant, .singletonInvariant:
-            return false
-        case .variant:
-            return true
-        }
-    }
-
-    var isInvariant: Bool {
-        switch source {
-        case .constructedInvariant, .providedInvariant, .singletonInvariant:
-            return true
-        case .variant:
-            return false
-        }
-    }
-
-    enum Source: Codable, Equatable {
-        case constructedInvariant
-        case providedInvariant
-        case singletonInvariant
-        case variant
-
-        init?(_ attributeText: String) {
-            if attributeText == ConstructedMacro.name {
-                self = .constructedInvariant
-            } else if attributeText == SingletonMacro.name {
-                self = .singletonInvariant
-            } else {
-                return nil
-            }
-        }
+extension Diagnostic {
+    public init(
+        node: some SyntaxProtocol,
+        position: AbsolutePosition? = nil,
+        error: some DiagnosticError,
+        highlights: [Syntax]? = nil,
+        notes: [Note] = [],
+        changes: [FixIt.Change])
+    {
+        self.init(
+            node: node,
+            position: position,
+            message: error.diagnostic,
+            highlights: highlights,
+            notes: notes,
+            fixIts: [
+                FixIt(
+                    message: error.fixIt,
+                    changes: changes)
+            ])
     }
 }

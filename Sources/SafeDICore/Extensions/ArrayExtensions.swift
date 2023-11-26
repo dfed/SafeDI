@@ -23,7 +23,7 @@ import SwiftSyntaxBuilder
 
 extension Array where Element == Dependency {
 
-    var variantUnlabeledParameterList: FunctionParameterListSyntax {
+    public var variantUnlabeledParameterList: FunctionParameterListSyntax {
         FunctionParameterListSyntax(
             filter { $0.source == .variant }
                 .map { "\(raw: $0.property.type)" }
@@ -36,7 +36,7 @@ extension Array where Element == Dependency {
         )
     }
 
-    var variantParameterList: FunctionParameterListSyntax {
+    public var variantParameterList: FunctionParameterListSyntax {
         FunctionParameterListSyntax(
             filter { $0.source == .variant }
                 .map { "\(raw: $0.property.label): \(raw: $0.property.type)" }
@@ -49,19 +49,19 @@ extension Array where Element == Dependency {
         )
     }
 
-    var variantUnlabeledExpressionList: String {
+    public var variantUnlabeledExpressionList: String {
         filter { $0.isVariant }
             .map { "\($0.property.label)" }
             .joined(separator: ", ")
     }
 
-    var variantLabeledExpressionList: String {
+    public var variantLabeledExpressionList: String {
         filter { $0.isVariant }
             .map { "\($0.property.label): \($0.property.label)" }
             .joined(separator: ", ")
     }
 
-    var invariantParameterList: FunctionParameterListSyntax {
+    public var invariantParameterList: FunctionParameterListSyntax {
         FunctionParameterListSyntax(
             filter { $0.isInvariant }
                 .map { "\(raw: $0.property.label): \(raw: $0.property.type)" }
@@ -74,7 +74,7 @@ extension Array where Element == Dependency {
         )
     }
 
-    var invariantAssignmentExpressionList: String {
+    public var invariantAssignmentExpressionList: String {
         """
         \(filter(\.isInvariant)
         .map { "self.\($0.property.label) = \($0.property.label)" }
@@ -89,7 +89,7 @@ extension Array {
     /// Returns an array with all of the items in the array except for the last transformed.
     /// - Parameter transform: A transforming closure. `transform` accepts an element of this sequence as its parameter and returns a transformed value of the same type.
     /// - Returns: An array containing the transformed elements of this sequence, plus the untransfomred last element.
-    func transformUntilLast(_ transform: (Element) throws -> Element) rethrows -> [Element] {
+    fileprivate func transformUntilLast(_ transform: (Element) throws -> Element) rethrows -> [Element] {
         var arrayToTransform = self
         guard let lastItem = arrayToTransform.popLast() else {
             // Array is empty.

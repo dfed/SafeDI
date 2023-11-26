@@ -20,37 +20,36 @@
 
 import SwiftDiagnostics
 
-enum FixableBuilderError: DiagnosticError {
+public enum FixableBuilderError: DiagnosticError {
     case missingDependencies
     case unexpectedVariableDeclaration
     case unexpectedInitializer
     case unexpectedFuncationDeclaration
 
-    var description: String {
+    public var description: String {
         switch self {
         case .missingDependencies:
-            return "Missing nested `@\(DependenciesMacro.name) public struct \(DependenciesMacro.decoratedStructName)` declaration"
+            return "Missing nested `@\(DependenciesVisitor.macroName) public struct \(DependenciesVisitor.decoratedStructName)` declaration"
         case .unexpectedVariableDeclaration:
-            return "Found unexpected variable declaration in `\(BuilderMacro.decoratedStructName)`"
+            return "Found unexpected variable declaration in `\(BuilderVisitor.decoratedStructName)`"
         case .unexpectedInitializer:
-            return "Found unexpected initializer in `\(BuilderMacro.decoratedStructName)`"
+            return "Found unexpected initializer in `\(BuilderVisitor.decoratedStructName)`"
         case .unexpectedFuncationDeclaration:
-            return "Found unexpected function declaration in `\(BuilderMacro.decoratedStructName)`"
+            return "Found unexpected function declaration in `\(BuilderVisitor.decoratedStructName)`"
         }
     }
 
-    var diagnostic: DiagnosticMessage {
-        DiagnosticMessage(error: self)
+    public var diagnostic: SwiftDiagnostics.DiagnosticMessage {
+        BuilderDiagnosticMessage(error: self)
     }
 
-    var fixIt: FixItMessage {
-        FixItMessage(error: self)
+    public var fixIt: SwiftDiagnostics.FixItMessage {
+        BuilderFixItMessage(error: self)
     }
 
-    struct DiagnosticMessage: SwiftDiagnostics.DiagnosticMessage {
+    // MARK: - BuilderDiagnosticMessage
 
-        let error: FixableBuilderError
-
+    private struct BuilderDiagnosticMessage: DiagnosticMessage {
         var diagnosticID: MessageID {
             MessageID(domain: "FixableBuilderError.DiagnosticMessage", id: error.description)
         }
@@ -68,13 +67,17 @@ enum FixableBuilderError: DiagnosticError {
         var message: String {
             error.description
         }
+
+        let error: FixableBuilderError
     }
 
-    struct FixItMessage: SwiftDiagnostics.FixItMessage {
+    // MARK: - BuilderFixItMessage
+
+    private struct BuilderFixItMessage: FixItMessage {
         var message: String {
             switch error {
             case .missingDependencies:
-                return "Create nested `@\(DependenciesMacro.name) struct \(DependenciesMacro.decoratedStructName)`"
+                return "Create nested `@\(DependenciesVisitor.macroName) struct \(DependenciesVisitor.decoratedStructName)`"
             case .unexpectedVariableDeclaration:
                 return "Delete variable declaration"
             case .unexpectedInitializer:

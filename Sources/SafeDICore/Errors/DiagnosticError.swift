@@ -18,11 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A representation of a property.
-/// e.g. `let myDependency: MyDependency`
-struct Property: Codable, Equatable {
-    /// The label by which the property is referenced.
-    let label: String
-    /// The type to which the property conforms.
-    let type: String
+import SwiftDiagnostics
+import SwiftSyntax
+
+public protocol DiagnosticError: Error, CustomStringConvertible {
+    var diagnostic: DiagnosticMessage { get }
+
+    var fixIt: FixItMessage { get }
 }

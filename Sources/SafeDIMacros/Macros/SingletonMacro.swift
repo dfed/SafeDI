@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import SafeDICore
 import SwiftSyntax
 import SwiftSyntaxMacros
 
@@ -37,8 +38,6 @@ public struct SingletonMacro: PeerMacro {
         return []
     }
 
-    static let name = "singleton"
-
     // MARK: - SingletonError
 
     private enum SingletonError: Error, CustomStringConvertible {
@@ -47,7 +46,7 @@ public struct SingletonMacro: PeerMacro {
         var description: String {
             switch self {
             case .notDecoratingBinding:
-                return "@\(SingletonMacro.name) must decorate a instance variable"
+                return "@\(Dependency.Source.singletonAttributeName) must decorate a instance variable"
             }
         }
     }

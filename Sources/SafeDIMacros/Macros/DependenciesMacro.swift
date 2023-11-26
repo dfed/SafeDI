@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import SafeDICore
 import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxBuilder
@@ -38,7 +39,7 @@ public struct DependenciesMacro: MemberMacro {
             throw DependenciesError.notStruct // TODO: add fixit instead
         }
 
-        guard structDelcaration.name.text == Self.decoratedStructName else {
+        guard structDelcaration.name.text == DependenciesVisitor.decoratedStructName else {
             throw DependenciesError.notNamedDependencies // TODO: add fixit instead
         }
 
@@ -79,10 +80,6 @@ public struct DependenciesMacro: MemberMacro {
         ]
     }
 
-    static let name = "dependencies"
-    static let decoratedStructName = "Dependencies"
-    static let buildMethodName = "build"
-
     // MARK: - DependenciesError
 
     private enum DependenciesError: Error, CustomStringConvertible {
@@ -93,11 +90,11 @@ public struct DependenciesMacro: MemberMacro {
         var description: String {
             switch self {
             case .notPublic:
-                return "@\(DependenciesMacro.name) struct must be `public`"
+                return "@\(DependenciesVisitor.macroName) struct must be `public`"
             case .notStruct:
-                return "@\(DependenciesMacro.name) must decorate a `struct`"
+                return "@\(DependenciesVisitor.macroName) must decorate a `struct`"
             case .notNamedDependencies:
-                return "@\(DependenciesMacro.name) must decorate a `struct` with the name `Dependencies`"
+                return "@\(DependenciesVisitor.macroName) must decorate a `struct` with the name `Dependencies`"
             }
         }
     }
