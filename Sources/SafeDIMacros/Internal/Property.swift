@@ -18,42 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-struct Dependency: Codable, Equatable {
-    let property: Property
-    let source: Source
-
-    var isVariant: Bool {
-        switch source {
-        case .constructedInvariant, .providedInvariant, .singletonInvariant:
-            return false
-        case .variant:
-            return true
-        }
-    }
-
-    var isInvariant: Bool {
-        switch source {
-        case .constructedInvariant, .providedInvariant, .singletonInvariant:
-            return true
-        case .variant:
-            return false
-        }
-    }
-
-    enum Source: Codable, Equatable {
-        case constructedInvariant
-        case providedInvariant
-        case singletonInvariant
-        case variant
-
-        init?(_ attributeText: String) {
-            if attributeText == ConstructedMacro.name {
-                self = .constructedInvariant
-            } else if attributeText == SingletonMacro.name {
-                self = .singletonInvariant
-            } else {
-                return nil
-            }
-        }
-    }
+/// A representation of a property.
+/// e.g. `let myDependency: MyDependency`
+struct Property: Codable, Equatable {
+    /// The label by which the property is referenced.
+    let label: String
+    /// The type to which the property conforms.
+    let type: String
 }

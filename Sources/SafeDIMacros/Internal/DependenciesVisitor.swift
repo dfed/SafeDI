@@ -138,13 +138,15 @@ final class DependenciesVisitor: SyntaxVisitor {
             }
 
             if
-                let variableName = IdentifierPatternSyntax(binding.pattern)?.identifier.text,
+                let label = IdentifierPatternSyntax(binding.pattern)?.identifier.text,
                 let type = binding.typeAnnotation?.type
             {
                 addDependency(
                     Dependency(
-                        variableName: variableName,
-                        type: type.description,
+                        property: Property(
+                            label: label,
+                            type: type.description
+                        ),
                         source: dependencySource
                     ),
                     derivedFrom: Syntax(node)
@@ -212,8 +214,10 @@ final class DependenciesVisitor: SyntaxVisitor {
                 for parameter in node.signature.parameterClause.parameters {
                     addDependency(
                         Dependency(
-                            variableName: parameter.secondName?.text ?? parameter.firstName.text,
-                            type: parameter.type.trimmedDescription,
+                            property: Property(
+                                label: parameter.secondName?.text ?? parameter.firstName.text,
+                                type: parameter.type.trimmedDescription
+                            ),
                             source: .variant
                         ),
                         derivedFrom: Syntax(parameter)
@@ -304,7 +308,7 @@ final class DependenciesVisitor: SyntaxVisitor {
     private var dependencyVariableNames = Set<String>()
 
     private func addDependency(_ dependency: Dependency, derivedFrom node: Syntax) {
-        guard !dependencyVariableNames.contains(dependency.variableName) else {
+        guard !dependencyVariableNames.contains(dependency.property.label) else {
             if
                 let typedNode = FunctionParameterSyntax(node),
                 let parent = node.parent,
@@ -346,7 +350,7 @@ final class DependenciesVisitor: SyntaxVisitor {
             }
             return
         }
-        dependencyVariableNames.insert(dependency.variableName)
+        dependencyVariableNames.insert(dependency.property.label)
         dependencies.append(dependency)
     }
 }
