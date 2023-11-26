@@ -167,7 +167,6 @@ guard CommandLine.arguments.count > 1 else {
 
 let rawPlatforms = CommandLine.arguments[1].components(separatedBy: ",")
 
-var isFirstRun = true
 for rawPlatform in rawPlatforms {
     guard let platform = Platform(rawValue: rawPlatform) else {
         print("Received unknown platform type \(rawPlatform)")
@@ -180,7 +179,7 @@ for rawPlatform in rawPlatforms {
         "-sdk", platform.sdk,
         "-derivedDataPath", platform.derivedDataPath,
         "-PBXBuildsContinueAfterErrors=0",
-        "OTHER_SWIFT_FLAGS=-warnings-as-errors",
+        "OTHER_SWIFT_FLAGS=-warnings-as-errors -D CI",
     ]
 
     if !platform.destination.isEmpty {
@@ -197,5 +196,4 @@ for rawPlatform in rawPlatforms {
     }
 
     try execute(commandPath: "/usr/bin/xcodebuild", arguments: xcodeBuildArguments)
-    isFirstRun = false
 }
