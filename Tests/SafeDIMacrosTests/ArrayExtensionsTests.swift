@@ -24,6 +24,27 @@ import XCTest
 
 final class ArrayExtensionsTests: XCTestCase {
 
+    func test_variantUnlabeledParameterList_withSingleVariant() throws {
+        let dependencies = [Dependency(variableName: "int", type: "Int", source: .variant)]
+        XCTAssertEqual(
+            dependencies.variantUnlabeledParameterList.description,
+            "Int"
+        )
+    }
+
+    func test_variantUnlabeledParameterList_withMultipleVariants() throws {
+        let dependencies = [
+            Dependency(variableName: "int", type: "Int", source: .variant),
+            Dependency(variableName: "string", type: "String", source: .variant),
+            Dependency(variableName: "double", type: "Double", source: .variant),
+            Dependency(variableName: "invariant", type: "Invariant", source: .providedInvariant)
+        ]
+        XCTAssertEqual(
+            dependencies.variantUnlabeledParameterList.description,
+            "Int, String, Double"
+        )
+    }
+
     func test_variantParameterList_withSingleVariant() throws {
         let dependencies = [Dependency(variableName: "int", type: "Int", source: .variant)]
         XCTAssertEqual(
@@ -44,6 +65,28 @@ final class ArrayExtensionsTests: XCTestCase {
             "int: Int, string: String, double: Double"
         )
     }
+
+    func test_variantUnlabeledExpressionList_withSingleVariant() throws {
+        let dependencies = [Dependency(variableName: "int", type: "Int", source: .variant)]
+        XCTAssertEqual(
+            dependencies.variantUnlabeledExpressionList,
+            "int"
+        )
+    }
+
+    func test_variantUnlabeledExpressionList_withMultipleVariants() throws {
+        let dependencies = [
+            Dependency(variableName: "int", type: "Int", source: .variant),
+            Dependency(variableName: "string", type: "String", source: .variant),
+            Dependency(variableName: "double", type: "Double", source: .variant),
+            Dependency(variableName: "invariant", type: "Invariant", source: .providedInvariant)
+        ]
+        XCTAssertEqual(
+            dependencies.variantUnlabeledExpressionList,
+            "int, string, double"
+        )
+    }
+
 
     func test_variantLabeledExpressionList_withSingleVariant() throws {
         let dependencies = [Dependency(variableName: "int", type: "Int", source: .variant)]

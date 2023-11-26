@@ -24,11 +24,11 @@
 #else
 
 // TODO: Document macro.
-@attached(member, names: named(`init`), named(build), named(getDependencies), arbitrary)
+@attached(member, names: arbitrary)
 public macro builder(_ propertyName: StaticString) = #externalMacro(module: "SafeDIMacros", type: "BuilderMacro")
 
 // TODO: Document macro.
-@attached(member, names: named(`init`))
+@attached(member, names: arbitrary)
 public macro dependencies() = #externalMacro(module: "SafeDIMacros", type: "DependenciesMacro")
 
 // TODO: Document macro.

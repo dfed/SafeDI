@@ -4,7 +4,11 @@ import SwiftSyntaxBuilder
 extension FunctionDeclSyntax {
 
     static var buildTemplate: Self {
-        try! FunctionDeclSyntax("public func build(<#T##parameter#>: <#T##ParameterType#>) \(returnClauseTemplate)")
+        try! FunctionDeclSyntax("""
+            func build(<#T##parameter#>: <#T##ParameterType#>) \(returnClauseTemplate) {
+                <#T##ConcreteBuiltProductType#>(<#T##parameter#>: <#T##ParameterType#>)
+            }
+        """)
     }
 
     static var returnClauseTemplate: ReturnClauseSyntax {

@@ -32,13 +32,25 @@ final class BuilderVisitor: SyntaxVisitor {
     // MARK: SyntaxVisitor
 
     override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+        guard
+            let parent = node.parent,
+            let typedParent = MemberBlockItemSyntax(parent),
+            let greatGrandparent = parent.parent?.parent,
+            var modifiedGreatGrandparent = MemberBlockSyntax(greatGrandparent),
+            let index = modifiedGreatGrandparent.members.index(of: typedParent)
+        else {
+            return .skipChildren
+        }
+
+        modifiedGreatGrandparent.members.remove(at: index)
+
         diagnostics.append(Diagnostic(
-            node: node.modifiers,
+            node: node,
             error: FixableBuilderError.unexpectedVariableDeclaration,
             changes: [
                 .replace(
-                    oldNode: Syntax(node),
-                    newNode: .empty
+                    oldNode: greatGrandparent,
+                    newNode: Syntax(modifiedGreatGrandparent)
                 )
             ]
         ))
@@ -46,13 +58,25 @@ final class BuilderVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+        guard
+            let parent = node.parent,
+            let typedParent = MemberBlockItemSyntax(parent),
+            let greatGrandparent = parent.parent?.parent,
+            var modifiedGreatGrandparent = MemberBlockSyntax(greatGrandparent),
+            let index = modifiedGreatGrandparent.members.index(of: typedParent)
+        else {
+            return .skipChildren
+        }
+
+        modifiedGreatGrandparent.members.remove(at: index)
+
         diagnostics.append(Diagnostic(
-            node: node.modifiers,
+            node: node,
             error: FixableBuilderError.unexpectedInitializer,
             changes: [
                 .replace(
-                    oldNode: Syntax(node),
-                    newNode: .empty
+                    oldNode: greatGrandparent,
+                    newNode: Syntax(modifiedGreatGrandparent)
                 )
             ]
         ))
@@ -60,13 +84,25 @@ final class BuilderVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+        guard
+            let parent = node.parent,
+            let typedParent = MemberBlockItemSyntax(parent),
+            let greatGrandparent = parent.parent?.parent,
+            var modifiedGreatGrandparent = MemberBlockSyntax(greatGrandparent),
+            let index = modifiedGreatGrandparent.members.index(of: typedParent)
+        else {
+            return .skipChildren
+        }
+
+        modifiedGreatGrandparent.members.remove(at: index)
+
         diagnostics.append(Diagnostic(
-            node: node.modifiers,
+            node: node,
             error: FixableBuilderError.unexpectedFuncationDeclaration,
             changes: [
                 .replace(
-                    oldNode: Syntax(node),
-                    newNode: .empty
+                    oldNode: greatGrandparent,
+                    newNode: Syntax(modifiedGreatGrandparent)
                 )
             ]
         ))

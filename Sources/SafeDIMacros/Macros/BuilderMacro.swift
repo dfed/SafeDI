@@ -57,24 +57,30 @@ public struct BuilderMacro: MemberMacro {
         }
 
         guard builderVisitor.didFindDependencies else {
-            var memberBlockWithDependencies = structDelcaration.memberBlock
-            memberBlockWithDependencies.members.append(
-                MemberBlockItemSyntax(decl: StructDeclSyntax.dependenciesTemplate)
+            var membersWithDependencies = structDelcaration.memberBlock.members
+            membersWithDependencies.append(
+                MemberBlockItemSyntax(
+                    leadingTrivia: .newline,
+                    decl: StructDeclSyntax.dependenciesTemplate,
+                    trailingTrivia: .newline
+                )
             )
             context.diagnose(Diagnostic(
                 node: structDelcaration,
                 error: FixableBuilderError.missingDependencies,
                 changes: [
                     .replace(
-                        oldNode: Syntax(structDelcaration.memberBlock),
-                        newNode: Syntax(memberBlockWithDependencies)
+                        oldNode: Syntax(structDelcaration.memberBlock.members),
+                        newNode: Syntax(membersWithDependencies)
                     )
                 ]
             ))
             return []
         }
 
+        let variantUnlabeledParameterList = builderVisitor.dependencies.variantUnlabeledParameterList
         let variantParameterList = builderVisitor.dependencies.variantParameterList
+        let variantUnlabeledExpressionList = builderVisitor.dependencies.variantUnlabeledExpressionList
         let variantLabeledExpressionList = builderVisitor.dependencies.variantLabeledExpressionList
         guard let builtType = builderVisitor.builtType else {
             return []
@@ -84,18 +90,18 @@ public struct BuilderMacro: MemberMacro {
         return [
             """
             // Inject this builder as a dependency by adding `\(raw: builderPropertyDescription)` to your @\(raw: DependenciesMacro.name) type
-            public init(\(raw: Self.getDependenciesClosureName): @escaping (\(variantParameterList)) -> \(raw: DependenciesMacro.decoratedStructName)) {
+            public init(\(raw: Self.getDependenciesClosureName): @escaping (\(variantUnlabeledParameterList)) -> \(raw: DependenciesMacro.decoratedStructName)) {
                 self.\(raw: Self.getDependenciesClosureName) = \(raw: Self.getDependenciesClosureName)
             }
             """,
             """
             // Inject this built product as a dependency by adding `\(raw: builtPropertyDescription)` to your @\(raw: DependenciesMacro.name) type
             public func build(\(variantParameterList)) -> \(raw: builtType) {
-                \(raw: Self.getDependenciesClosureName)(\(raw: variantLabeledExpressionList)).build(\(raw: variantLabeledExpressionList))
+                \(raw: Self.getDependenciesClosureName)(\(raw: variantUnlabeledExpressionList)).build(\(raw: variantLabeledExpressionList))
             }
             """,
             """
-            private let \(raw: Self.getDependenciesClosureName): (\(variantParameterList)) -> \(raw: DependenciesMacro.decoratedStructName)
+            private let \(raw: Self.getDependenciesClosureName): (\(variantUnlabeledParameterList)) -> \(raw: DependenciesMacro.decoratedStructName)
             """,
         ]
     }

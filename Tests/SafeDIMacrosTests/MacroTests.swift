@@ -22,8 +22,6 @@ import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
 import XCTest
 
-// Macro implementations build for the host, so the corresponding module is not available when cross-compiling. Cross-compiled tests may still make use of the macro itself in end-to-end tests.
-#if canImport(SafeDIMacros)
 @testable import SafeDIMacros
 
 let testMacros: [String: Macro.Type] = [
@@ -32,11 +30,12 @@ let testMacros: [String: Macro.Type] = [
     ConstructedMacro.name: ConstructedMacro.self,
     SingletonMacro.name: SingletonMacro.self,
 ]
-#endif
 
-final class SafeDITests: XCTestCase {
+final class MacroTests: XCTestCase {
+
+    // MARK: Expansion tests
+
     func test_builderAndDependenciesMacros_withNoInvariantsOrVariants() throws {
-#if canImport(SafeDIMacros)
         assertMacroExpansion(
             """
             @builder("myExample")
@@ -76,13 +75,9 @@ final class SafeDITests: XCTestCase {
             """,
             macros: testMacros
         )
-#else
-        throw XCTSkip("macros are only supported when running tests for the host platform")
-#endif
     }
 
     func test_builderAndDependenciesMacros_withSingleInvariantAndNoVariants() throws {
-#if canImport(SafeDIMacros)
         assertMacroExpansion(
             """
             @builder("myExample")
@@ -126,13 +121,9 @@ final class SafeDITests: XCTestCase {
             """,
             macros: testMacros
         )
-#else
-        throw XCTSkip("macros are only supported when running tests for the host platform")
-#endif
     }
 
     func test_builderAndDependenciesMacros_withMultipleInvariantsAndNoVariants() throws {
-#if canImport(SafeDIMacros)
         assertMacroExpansion(
             """
             @builder("myExample")
@@ -191,13 +182,9 @@ final class SafeDITests: XCTestCase {
             """,
             macros: testMacros
         )
-#else
-        throw XCTSkip("macros are only supported when running tests for the host platform")
-#endif
     }
 
     func test_builderAndDependenciesMacros_withNoInvariantsAndSingleVariant() throws {
-#if canImport(SafeDIMacros)
         assertMacroExpansion(
             """
             @builder("myExample")
@@ -223,27 +210,23 @@ final class SafeDITests: XCTestCase {
                 }
 
                 // Inject this builder as a dependency by adding `let myExampleBuilder: MyExampleBuilder` to your @dependencies type
-                public init(getDependencies: @escaping (variant: Variant) -> Dependencies) {
+                public init(getDependencies: @escaping (Variant) -> Dependencies) {
                     self.getDependencies = getDependencies
                 }
 
                 // Inject this built product as a dependency by adding `let myExample: MyExample` to your @dependencies type
                 public func build(variant: Variant) -> MyExample {
-                    getDependencies(variant: variant).build(variant: variant)
+                    getDependencies(variant).build(variant: variant)
                 }
 
-                private let getDependencies: (variant: Variant) -> Dependencies
+                private let getDependencies: (Variant) -> Dependencies
             }
             """,
             macros: testMacros
         )
-#else
-        throw XCTSkip("macros are only supported when running tests for the host platform")
-#endif
     }
 
     func test_builderAndDependenciesMacros_withSingleInvariantAndVariant() throws {
-#if canImport(SafeDIMacros)
         assertMacroExpansion(
             """
             @builder("myExample")
@@ -279,27 +262,23 @@ final class SafeDITests: XCTestCase {
                 }
 
                 // Inject this builder as a dependency by adding `let myExampleBuilder: MyExampleBuilder` to your @dependencies type
-                public init(getDependencies: @escaping (variant: Variant) -> Dependencies) {
+                public init(getDependencies: @escaping (Variant) -> Dependencies) {
                     self.getDependencies = getDependencies
                 }
 
                 // Inject this built product as a dependency by adding `let myExample: MyExample` to your @dependencies type
                 public func build(variant: Variant) -> MyExample {
-                    getDependencies(variant: variant).build(variant: variant)
+                    getDependencies(variant).build(variant: variant)
                 }
 
-                private let getDependencies: (variant: Variant) -> Dependencies
+                private let getDependencies: (Variant) -> Dependencies
             }
             """,
             macros: testMacros
         )
-#else
-        throw XCTSkip("macros are only supported when running tests for the host platform")
-#endif
     }
 
     func test_builderAndDependenciesMacros_withMultipleInvariantsAndSingleVariant() throws {
-#if canImport(SafeDIMacros)
         assertMacroExpansion(
             """
             @builder("myExample")
@@ -346,27 +325,23 @@ final class SafeDITests: XCTestCase {
                 }
 
                 // Inject this builder as a dependency by adding `let myExampleBuilder: MyExampleBuilder` to your @dependencies type
-                public init(getDependencies: @escaping (variant: Variant) -> Dependencies) {
+                public init(getDependencies: @escaping (Variant) -> Dependencies) {
                     self.getDependencies = getDependencies
                 }
 
                 // Inject this built product as a dependency by adding `let myExample: MyExample` to your @dependencies type
                 public func build(variant: Variant) -> MyExample {
-                    getDependencies(variant: variant).build(variant: variant)
+                    getDependencies(variant).build(variant: variant)
                 }
 
-                private let getDependencies: (variant: Variant) -> Dependencies
+                private let getDependencies: (Variant) -> Dependencies
             }
             """,
             macros: testMacros
         )
-#else
-        throw XCTSkip("macros are only supported when running tests for the host platform")
-#endif
     }
 
     func test_builderAndDependenciesMacros_withNoInvariantsAndMultipleVariant() throws {
-#if canImport(SafeDIMacros)
         assertMacroExpansion(
             """
             @builder("myExample")
@@ -392,27 +367,23 @@ final class SafeDITests: XCTestCase {
                 }
 
                 // Inject this builder as a dependency by adding `let myExampleBuilder: MyExampleBuilder` to your @dependencies type
-                public init(getDependencies: @escaping (variantA: VariantA, variantB: VariantB) -> Dependencies) {
+                public init(getDependencies: @escaping (VariantA, VariantB) -> Dependencies) {
                     self.getDependencies = getDependencies
                 }
 
                 // Inject this built product as a dependency by adding `let myExample: MyExample` to your @dependencies type
                 public func build(variantA: VariantA, variantB: VariantB) -> MyExample {
-                    getDependencies(variantA: variantA, variantB: variantB).build(variantA: variantA, variantB: variantB)
+                    getDependencies(variantA, variantB).build(variantA: variantA, variantB: variantB)
                 }
 
-                private let getDependencies: (variantA: VariantA, variantB: VariantB) -> Dependencies
+                private let getDependencies: (VariantA, VariantB) -> Dependencies
             }
             """,
             macros: testMacros
         )
-#else
-        throw XCTSkip("macros are only supported when running tests for the host platform")
-#endif
     }
 
     func test_builderAndDependenciesMacros_withSingleInvariantAndMultipleVariants() throws {
-#if canImport(SafeDIMacros)
         assertMacroExpansion(
             """
             @builder("myExample")
@@ -450,27 +421,23 @@ final class SafeDITests: XCTestCase {
                 }
 
                 // Inject this builder as a dependency by adding `let myExampleBuilder: MyExampleBuilder` to your @dependencies type
-                public init(getDependencies: @escaping (variantA: VariantA, variantB: VariantB) -> Dependencies) {
+                public init(getDependencies: @escaping (VariantA, VariantB) -> Dependencies) {
                     self.getDependencies = getDependencies
                 }
 
                 // Inject this built product as a dependency by adding `let myExample: MyExample` to your @dependencies type
                 public func build(variantA: VariantA, variantB: VariantB) -> MyExample {
-                    getDependencies(variantA: variantA, variantB: variantB).build(variantA: variantA, variantB: variantB)
+                    getDependencies(variantA, variantB).build(variantA: variantA, variantB: variantB)
                 }
 
-                private let getDependencies: (variantA: VariantA, variantB: VariantB) -> Dependencies
+                private let getDependencies: (VariantA, VariantB) -> Dependencies
             }
             """,
             macros: testMacros
         )
-#else
-        throw XCTSkip("macros are only supported when running tests for the host platform")
-#endif
     }
 
     func test_builderAndDependenciesMacros_withMultipleInvariantsAndMultipleVariants() throws {
-#if canImport(SafeDIMacros)
         assertMacroExpansion(
             """
             @builder("myExample")
@@ -519,22 +486,19 @@ final class SafeDITests: XCTestCase {
                 }
 
                 // Inject this builder as a dependency by adding `let myExampleBuilder: MyExampleBuilder` to your @dependencies type
-                public init(getDependencies: @escaping (variantA: VariantA, variantB: VariantB) -> Dependencies) {
+                public init(getDependencies: @escaping (VariantA, VariantB) -> Dependencies) {
                     self.getDependencies = getDependencies
                 }
 
                 // Inject this built product as a dependency by adding `let myExample: MyExample` to your @dependencies type
                 public func build(variantA: VariantA, variantB: VariantB) -> MyExample {
-                    getDependencies(variantA: variantA, variantB: variantB).build(variantA: variantA, variantB: variantB)
+                    getDependencies(variantA, variantB).build(variantA: variantA, variantB: variantB)
                 }
 
-                private let getDependencies: (variantA: VariantA, variantB: VariantB) -> Dependencies
+                private let getDependencies: (VariantA, VariantB) -> Dependencies
             }
             """,
             macros: testMacros
         )
-#else
-        throw XCTSkip("macros are only supported when running tests for the host platform")
-#endif
     }
 }

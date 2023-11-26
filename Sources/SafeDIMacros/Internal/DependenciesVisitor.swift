@@ -63,16 +63,18 @@ final class DependenciesVisitor: SyntaxVisitor {
         let dependencySource = dependencySources.first?.source ?? .providedInvariant
 
         // Check modifiers.
-        if let staticModifier = node.modifiers.staticModifier {
+        if node.modifiers.staticModifier != nil {
+            var mutatedNode = node
+            mutatedNode.modifiers = mutatedNode.modifiers.filter {
+                $0.name.text != "static"
+            }
             diagnostics.append(Diagnostic(
-                node: node.attributes,
+                node: node,
                 error: FixableDependenciesError.dependencyIsStatic,
                 changes: [
                     .replace(
-                        oldNode: Syntax(node.modifiers),
-                        newNode: Syntax(node.modifiers.filter {
-                            $0 != staticModifier
-                        })
+                        oldNode: Syntax(node),
+                        newNode: Syntax(mutatedNode)
                     )
                 ]
             ))
@@ -81,18 +83,23 @@ final class DependenciesVisitor: SyntaxVisitor {
         if node.modifiers.count != 1,
            node.modifiers.first?.name.text != "private"
         {
+            let replacedModifiers = DeclModifierListSyntax(
+                arrayLiteral: DeclModifierSyntax(
+                    name: TokenSyntax(
+                        TokenKind.identifier("private"),
+                        presence: .present
+                    )
+                )
+            )
+            var modifiedNode = node
+            modifiedNode.modifiers = replacedModifiers
             diagnostics.append(Diagnostic(
-                node: node.modifiers,
+                node: node,
                 error: FixableDependenciesError.dependencyIsNotPrivate,
                 changes: [
                     .replace(
-                        oldNode: Syntax(node.modifiers),
-                        newNode: Syntax(DeclModifierSyntax(
-                            name: TokenSyntax(
-                                TokenKind.identifier("private"),
-                                presence: .present
-                            )
-                        ))
+                        oldNode: Syntax(node),
+                        newNode: Syntax(modifiedNode)
                     )
                 ]
             ))
@@ -102,12 +109,12 @@ final class DependenciesVisitor: SyntaxVisitor {
         // Check the binding specifier.
         if node.bindingSpecifier.text == "var" {
             diagnostics.append(Diagnostic(
-                node: node.modifiers,
+                node: node,
                 error: FixableDependenciesError.dependencyIsMutable,
                 changes: [
                     .replace(
                         oldNode: Syntax(node.bindingSpecifier),
-                        newNode: Syntax(TokenSyntax(TokenKind.keyword(.var), presence: .present))
+                        newNode: Syntax(TokenSyntax(TokenKind.keyword(.let), presence: .present))
                     )
                 ]
             ))
@@ -119,7 +126,7 @@ final class DependenciesVisitor: SyntaxVisitor {
                 var bindingWithoutInitializer = binding
                 bindingWithoutInitializer.initializer = nil
                 diagnostics.append(Diagnostic(
-                    node: node.modifiers,
+                    node: node,
                     error: FixableDependenciesError.unexpectedInitializer,
                     changes: [
                         .replace(
@@ -149,13 +156,25 @@ final class DependenciesVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+        guard
+            let parent = node.parent,
+            let typedParent = MemberBlockItemSyntax(parent),
+            let greatGrandparent = parent.parent?.parent,
+            var modifiedGreatGrandparent = MemberBlockSyntax(greatGrandparent),
+            let index = modifiedGreatGrandparent.members.index(of: typedParent)
+        else {
+            return .skipChildren
+        }
+
+        modifiedGreatGrandparent.members.remove(at: index)
+
         diagnostics.append(Diagnostic(
-            node: node.modifiers,
+            node: node,
             error: FixableDependenciesError.unexpectedInitializer,
             changes: [
                 .replace(
-                    oldNode: Syntax(node),
-                    newNode: .empty
+                    oldNode: greatGrandparent,
+                    newNode: Syntax(modifiedGreatGrandparent)
                 )
             ]
         ))
@@ -166,16 +185,27 @@ final class DependenciesVisitor: SyntaxVisitor {
         if node.name.text == DependenciesMacro.buildMethodName {
             if didFindBuildMethod {
                 // We've already found a `build` method!
-                diagnostics.append(Diagnostic(
-                    node: node.modifiers,
-                    error: FixableDependenciesError.multipleBuildMethods,
-                    changes: [
-                        .replace(
-                            oldNode: Syntax(node),
-                            newNode: .empty
-                        )
-                    ]
-                ))
+                if
+                    let parent = node.parent,
+                    let typedParent = MemberBlockItemSyntax(parent),
+                    let greatGrandparent = parent.parent?.parent,
+                    var modifiedGreatGrandparent = MemberBlockSyntax(greatGrandparent),
+                    let index = modifiedGreatGrandparent.members.index(of: typedParent)
+                {
+                    modifiedGreatGrandparent.members.remove(at: index)
+                    diagnostics.append(Diagnostic(
+                        node: node,
+                        error: FixableDependenciesError.multipleBuildMethods,
+                        changes: [
+                            .replace(
+                                oldNode: Syntax(greatGrandparent),
+                                newNode: Syntax(modifiedGreatGrandparent)
+                            )
+                        ]
+                    ))
+                } else {
+                    assertionFailure("Found duplicate build method with unexpected properties \(node)")
+                }
 
             } else {
                 didFindBuildMethod = true
@@ -186,7 +216,7 @@ final class DependenciesVisitor: SyntaxVisitor {
                             type: parameter.type.trimmedDescription,
                             source: .variant
                         ),
-                        derivedFrom: Syntax(node)
+                        derivedFrom: Syntax(parameter)
                     )
                 }
 
@@ -196,7 +226,7 @@ final class DependenciesVisitor: SyntaxVisitor {
                     var signatureWithReturnClause = node.signature
                     signatureWithReturnClause.returnClause = FunctionDeclSyntax.returnClauseTemplate
                     diagnostics.append(Diagnostic(
-                        node: node.modifiers,
+                        node: node,
                         error: FixableDependenciesError.missingBuildMethodReturnClause,
                         changes: [
                             .replace(
@@ -275,15 +305,45 @@ final class DependenciesVisitor: SyntaxVisitor {
 
     private func addDependency(_ dependency: Dependency, derivedFrom node: Syntax) {
         guard !dependencyVariableNames.contains(dependency.variableName) else {
-            diagnostics.append(Diagnostic(
-                node: node,
-                error: FixableDependenciesError.duplicateDependency,
-                changes: [
-                    .replace(
-                        oldNode: node,
-                        newNode: .empty)
-                ]
-            ))
+            if
+                let typedNode = FunctionParameterSyntax(node),
+                let parent = node.parent,
+                let typedParent = FunctionParameterListSyntax(parent),
+                let index = typedParent.index(of: typedNode)
+            {
+                var modifiedParent = typedParent
+                modifiedParent.remove(at: index)
+                diagnostics.append(Diagnostic(
+                    node: node,
+                    error: FixableDependenciesError.duplicateDependency,
+                    changes: [
+                        .replace(
+                            oldNode: Syntax(typedParent),
+                            newNode: Syntax(modifiedParent)
+                        )
+                    ]
+                ))
+            } else if
+                let parent = node.parent,
+                let typedParent = MemberBlockItemSyntax(parent),
+                let greatGrandparent = parent.parent?.parent,
+                var modifiedGreatGrandparent = MemberBlockSyntax(greatGrandparent),
+                let index = modifiedGreatGrandparent.members.index(of: typedParent)
+            {
+                modifiedGreatGrandparent.members.remove(at: index)
+                diagnostics.append(Diagnostic(
+                    node: node,
+                    error: FixableDependenciesError.duplicateDependency,
+                    changes: [
+                        .replace(
+                            oldNode: Syntax(greatGrandparent),
+                            newNode: Syntax(modifiedGreatGrandparent)
+                        )
+                    ]
+                ))
+            } else {
+                assertionFailure("Unexpected node with duplicate dependency \(node)")
+            }
             return
         }
         dependencyVariableNames.insert(dependency.variableName)

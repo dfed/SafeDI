@@ -25,14 +25,15 @@ extension StructDeclSyntax {
 
     static var dependenciesTemplate: Self {
         try! StructDeclSyntax("""
+
             @dependencies public struct Dependencies {
-                \(FunctionDeclSyntax.buildTemplate) {
-                    <#T##ConcreteBuiltProductType#>(<#T##parameter#>: <#T##ParameterType#>)
-                }
+                \(FunctionDeclSyntax.buildTemplate)
 
                 private let <#T##dependency#>: <#T##DependencyType#>
             }
-            """)
+
+            """
+        )
     }
 
 }

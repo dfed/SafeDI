@@ -51,7 +51,10 @@ public struct DependenciesMacro: MemberMacro {
         guard dependenciesVisitor.didFindBuildMethod else {
             var memberWithDependencies = structDelcaration.memberBlock.members
             memberWithDependencies.append(
-                MemberBlockItemSyntax(decl: FunctionDeclSyntax.buildTemplate)
+                MemberBlockItemSyntax(
+                    leadingTrivia: .newline,
+                    decl: FunctionDeclSyntax.buildTemplate
+                )
             )
             context.diagnose(Diagnostic(
                 node: structDelcaration,

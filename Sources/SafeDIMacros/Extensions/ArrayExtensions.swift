@@ -23,6 +23,19 @@ import SwiftSyntaxBuilder
 
 extension Array where Element == Dependency {
 
+    var variantUnlabeledParameterList: FunctionParameterListSyntax {
+        FunctionParameterListSyntax(
+            filter { $0.source == .variant }
+                .map { "\(raw: $0.type)" }
+                .transformUntilLast {
+                    var functionPamameterSyntax = $0
+                    functionPamameterSyntax.trailingComma = TokenSyntax(.comma, presence: .present)
+                    functionPamameterSyntax.trailingTrivia = .space
+                    return functionPamameterSyntax
+                }
+        )
+    }
+
     var variantParameterList: FunctionParameterListSyntax {
         FunctionParameterListSyntax(
             filter { $0.source == .variant }
@@ -34,6 +47,12 @@ extension Array where Element == Dependency {
                     return functionPamameterSyntax
                 }
         )
+    }
+
+    var variantUnlabeledExpressionList: String {
+        filter { $0.isVariant }
+            .map { "\($0.variableName)" }
+            .joined(separator: ", ")
     }
 
     var variantLabeledExpressionList: String {
