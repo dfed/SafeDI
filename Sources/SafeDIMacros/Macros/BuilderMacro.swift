@@ -31,10 +31,6 @@ public struct BuilderMacro: MemberMacro {
         in context: some MacroExpansionContext)
     throws -> [DeclSyntax]
     {
-        guard declaration.parent == nil else {
-            throw BuilderError.notTopLevelDeclaration
-        }
-
         guard declaration.modifiers.containsPublic else {
             throw BuilderError.notPublic // TODO: add fixit instead.
         }
@@ -104,7 +100,6 @@ public struct BuilderMacro: MemberMacro {
     // MARK: - BuilderError
 
     private enum BuilderError: Error, CustomStringConvertible {
-        case notTopLevelDeclaration
         case notPublic
         case notStruct
         
@@ -114,8 +109,6 @@ public struct BuilderMacro: MemberMacro {
                 return "@\(BuilderVisitor.macroName) struct must be `public`"
             case .notStruct:
                 return "@\(BuilderVisitor.macroName) must decorate a `struct`"
-            case .notTopLevelDeclaration:
-                return "@\(BuilderVisitor.macroName) struct is not declared at the top level"
             }
         }
     }
