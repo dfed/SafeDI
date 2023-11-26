@@ -23,19 +23,21 @@
 
 #else
 
-// TODO: Document macro.
+/// Marks a builder utilized by SafeDI.
+///
+/// - Parameter propertyName: The name of the property that can be injected into other SafeDI builders.
 @attached(member, names: arbitrary)
 public macro builder(_ propertyName: StaticString) = #externalMacro(module: "SafeDIMacros", type: "BuilderMacro")
 
-// TODO: Document macro.
+/// Marks a collection of dependencies used by a SafeDI builder.
 @attached(member, names: arbitrary)
 public macro dependencies() = #externalMacro(module: "SafeDIMacros", type: "DependenciesMacro")
 
-// TODO: Document macro.
+/// Marks a SafeDI dependency that is instantiated when its associated builder is instantiated.
 @attached(member)
 public macro constructed() = #externalMacro(module: "SafeDIMacros", type: "ConstructedMacro")
 
-// TODO: Document macro.
+/// Marks a SafeDI dependency that will only ever have one instance instantiated at a given time. Singleton dependencies may deallocate when the built products that use it deallocate. Singleton dependencies can not be marked with @constructed.
 @attached(member)
 public macro singleton() = #externalMacro(module: "SafeDIMacros", type: "SingletonMacro")
 
