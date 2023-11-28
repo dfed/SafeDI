@@ -24,9 +24,7 @@ import SwiftSyntaxMacros
 @main
 struct SafeDIPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
-        BuilderMacro.self,
-        DependenciesMacro.self,
-        ConstructedMacro.self,
-        SingletonMacro.self,
+        ConstructableMacro.self,
+        InjectableMacro.self,
     ]
 }

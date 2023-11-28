@@ -18,42 +18,22 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-public struct Builder: Codable, Equatable {
+import SwiftSyntax
 
-    // MARK: Initialization
+public protocol ConcreteDeclSyntaxProtocol: SyntaxProtocol {
+    var attributes: AttributeListSyntax { get set }
+    var modifiers: DeclModifierListSyntax { get set }
+    var inheritanceClause: InheritanceClauseSyntax? { get set }
+    var name: TokenSyntax { get set }
+    var isClass: Bool { get }
+}
 
-    init(
-        typeName: String,
-        builtPropertyName: String,
-        builtType: String,
-        dependencies: [Dependency]
-    ) {
-        builtProduct = Property(
-            label: builtPropertyName,
-            type: builtType
-        )
-        builder = Property(
-            label: Self.propertyNameSuffix(forProperty: builtPropertyName),
-            type: typeName
-        )
-        self.dependencies = dependencies
-    }
-
-    // MARK: Public
-
-    /// The injectable built product created by this builder.
-    public let builtProduct: Property
-    /// The injectable builder property that represents this builder.
-    public let builder: Property
-    /// This builder's dependencies.
-    public let dependencies: [Dependency]
-
-    // MARK: Private
-
-    /// The label suffix on all builder properties.
-    private static let propertyNameSuffix = "Builder"
-
-    private static func propertyNameSuffix(forProperty label: String) -> String {
-        label + Self.propertyNameSuffix
-    }
+extension ActorDeclSyntax: ConcreteDeclSyntaxProtocol {
+    public var isClass: Bool { false }
+}
+extension ClassDeclSyntax: ConcreteDeclSyntaxProtocol {
+    public var isClass: Bool { true }
+}
+extension StructDeclSyntax: ConcreteDeclSyntaxProtocol {
+    public var isClass: Bool { false }
 }

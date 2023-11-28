@@ -18,37 +18,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import SafeDICore
-import SwiftSyntax
-import SwiftSyntaxMacros
+public struct Constructable: Codable, Equatable {
 
-public struct ConstructedMacro: PeerMacro {
-    public static func expansion(
-        of node: AttributeSyntax,
-        providingPeersOf declaration: some DeclSyntaxProtocol,
-        in context: some MacroExpansionContext)
-    throws -> [DeclSyntax]
+    // MARK: Initialization
+
+    public init?(
+        constructableType: String,
+        additionalConstructableTypes: [String]?,
+        dependencies: [Dependency])
     {
-        guard VariableDeclSyntax(declaration) != nil else {
-            throw ConstructedError.notDecoratingBinding
-        }
-
-        // This macro purposefully does not expand.
-        // This macro serves as a decorator, nothing more.
-        return []
+        self.constructableTypes = [constructableType] + (additionalConstructableTypes ?? [])
+        self.dependencies = dependencies
     }
 
-    // MARK: - ConstructedError
+    // MARK: Public
 
-    private enum ConstructedError: Error, CustomStringConvertible {
-        case notDecoratingBinding
-
-        var description: String {
-            switch self {
-            case .notDecoratingBinding:
-                return "@\(Dependency.Source.constructedAttributeName) must decorate a instance variable"
-            }
-        }
+    /// The types that can be fulfilled with this Constructable.
+    public let constructableTypes: [String]
+    /// The concrete type that fulfills `constructableTypes`.
+    public var concreteConstructableType: String {
+        constructableTypes[0]
     }
+    /// The ordered dependencies of this Constructable.
+    public let dependencies: [Dependency]
 }
-

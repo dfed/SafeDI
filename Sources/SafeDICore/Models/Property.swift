@@ -18,27 +18,54 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import SwiftSyntax
+
 /// A representation of a property.
-/// e.g. `let myDependency: MyDependency`
+/// e.g. `let myProperty: MyProperty`
 public struct Property: Codable, Equatable {
+    // MARK: Public
+
     /// The label by which the property is referenced.
     public let label: String
     /// The type to which the property conforms.
     public let type: String
 
-    public var asPropertyDeclaration: String {
-        "let \(label): \(type)"
+    // MARK: Internal
+
+    var asFunctionParamter: FunctionParameterSyntax {
+        FunctionParameterSyntax(
+            firstName: .identifier(label),
+            colon: .colonToken(trailingTrivia: .space),
+            type: IdentifierTypeSyntax(
+                name: .identifier(type)
+            )
+        )
     }
 
-    public var asParameterDeclaration: String {
-        "\(label): \(type)"
+    var asNamedTupleTypeElement: TupleTypeElementSyntax {
+        TupleTypeElementSyntax(
+            firstName: .identifier(label),
+            colon: .colonToken(trailingTrivia: .space),
+            type: IdentifierTypeSyntax(
+                name: .identifier(type)
+            )
+        )
     }
 
-    public var asLabeledParameterExpression: String {
-        "\(label): \(label)"
+    var asUnnamedTupleTypeElement: TupleTypeElementSyntax {
+        TupleTypeElementSyntax(
+            type: IdentifierTypeSyntax(
+                name: .identifier(type)
+            )
+        )
     }
 
-    public var asSelfAssignment: String {
-        "self.\(label) = \(label)"
+    var asUnnamedLabeledExpr: LabeledExprSyntax {
+        LabeledExprSyntax(
+            expression: DeclReferenceExprSyntax(
+                baseName: .identifier(label)
+            )
+        )
     }
+
 }

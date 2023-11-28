@@ -23,72 +23,128 @@ import SwiftSyntaxBuilder
 
 extension Array where Element == Dependency {
 
-    public var variantUnlabeledParameterList: FunctionParameterListSyntax {
-        FunctionParameterListSyntax(
-            filter { $0.source == .variant }
-                .map { "\(raw: $0.property.type)" }
-                .transformUntilLast {
-                    var functionPamameterSyntax = $0
-                    functionPamameterSyntax.trailingComma = TokenSyntax(.comma, presence: .present)
-                    functionPamameterSyntax.trailingTrivia = .space
-                    return functionPamameterSyntax
-                }
+    var buildDependenciesFunctionParameter: FunctionParameterSyntax {
+        FunctionParameterSyntax(
+            firstName: Initializer.Argument.dependenciesArgumentName,
+            colon: .colonToken(trailingTrivia: .space),
+            type: buildDependenciesFunctionSignature,
+            trailingComma: filter { $0.isVariant }.isEmpty ? nil : .commaToken(trailingTrivia: .space)
         )
     }
 
-    public var variantParameterList: FunctionParameterListSyntax {
-        FunctionParameterListSyntax(
-            filter { $0.source == .variant }
-                .map { "\(raw: $0.property.asParameterDeclaration)" }
-                .transformUntilLast {
-                    var functionPamameterSyntax = $0
-                    functionPamameterSyntax.trailingComma = TokenSyntax(.comma, presence: .present)
-                    functionPamameterSyntax.trailingTrivia = .space
-                    return functionPamameterSyntax
-                }
+    var buildDependenciesFunctionSignature: FunctionTypeSyntax {
+        FunctionTypeSyntax(
+            parameters: buildDependenciesClosureArguments,
+            returnClause: ReturnClauseSyntax(
+                leadingTrivia: .space,
+                type: TupleTypeSyntax(
+                    leadingTrivia: .space,
+                    elements: buildDependenciesClosureReturnType
+                )
+            )
         )
     }
 
-    public var variantUnlabeledExpressionList: String {
+    var buildDependenciesClosureArguments: TupleTypeElementListSyntax {
+        TupleTypeElementListSyntax {
+            for variantUnamedTuple in variantUnamedTuples {
+                variantUnamedTuple
+            }
+        }
+    }
+
+    var buildDependenciesClosureReturnType: TupleTypeElementListSyntax {
+        TupleTypeElementListSyntax {
+            for invariantNamedTuple in namedTuples {
+                invariantNamedTuple
+            }
+        }
+    }
+
+    var namedTuples: [TupleTypeElementSyntax] {
+        map {
+            if count > 1 {
+                return $0.property.asNamedTupleTypeElement
+            } else {
+                return $0.property.asUnnamedTupleTypeElement
+            }
+        }
+        .transformUntilLast {
+            var node = $0
+            node.trailingComma = .commaToken(trailingTrivia: .space)
+            return node
+        }
+    }
+
+    var variantUnamedTuples: [TupleTypeElementSyntax] {
         filter { $0.isVariant }
-            .map(\.property.label)
-            .joined(separator: ", ")
+            .map(\.property.asUnnamedTupleTypeElement)
+            .transformUntilLast {
+                var node = $0
+                node.trailingComma = .commaToken(trailingTrivia: .space)
+                return node
+            }
     }
 
-    public var variantLabeledExpressionList: String {
+    var functionParameters: [FunctionParameterSyntax] {
+        map { $0.property.asFunctionParamter }
+            .transformUntilLast {
+                var node = $0
+                node.trailingComma = .commaToken(trailingTrivia: .space)
+                return node
+            }
+    }
+
+    var propagatedVariantsFunctionParameters: [FunctionParameterSyntax] {
         filter { $0.isVariant }
-            .map(\.property.asLabeledParameterExpression)
-            .joined(separator: ", ")
+            .map { $0.property.asFunctionParamter }
+            .transformUntilLast {
+                var node = $0
+                node.trailingComma = .commaToken(trailingTrivia: .space)
+                return node
+            }
     }
 
-    public var invariantParameterList: FunctionParameterListSyntax {
-        FunctionParameterListSyntax(
-            filter { $0.isInvariant }
-                .map { "\(raw: $0.property.asParameterDeclaration)" }
-                .transformUntilLast {
-                    var functionPamameterSyntax = $0
-                    functionPamameterSyntax.trailingComma = TokenSyntax(.comma, presence: .present)
-                    functionPamameterSyntax.trailingTrivia = .space
-                    return functionPamameterSyntax
-                }
+    var propagatedVariantsLabeledExpressions: [LabeledExprSyntax] {
+        filter { $0.isVariant }
+            .map { $0.property.asUnnamedLabeledExpr }
+            .transformUntilLast {
+                var node = $0
+                node.trailingComma = .commaToken(trailingTrivia: .space)
+                return node
+            }
+    }
+
+    var dependenciesDeclaration: VariableDeclSyntax {
+        VariableDeclSyntax(
+            leadingTrivia: .spaces(4),
+            .let,
+            name: PatternSyntax(
+                IdentifierPatternSyntax(
+                    leadingTrivia: .space,
+                    identifier: isEmpty ? .identifier("_") : Initializer.dependenciesToken)
+            ),
+            initializer: InitializerClauseSyntax(
+                leadingTrivia: .space,
+                equal: .equalToken(trailingTrivia: .space),
+                value: FunctionCallExprSyntax(
+                    calledExpression: DeclReferenceExprSyntax(
+                        baseName: Initializer.Argument.dependenciesArgumentName),
+                    leftParen: .leftParenToken(),
+                    arguments: LabeledExprListSyntax {
+                        for propagatedVariantsLabeledExpression in propagatedVariantsLabeledExpressions {
+                            propagatedVariantsLabeledExpression
+                        }
+                    },
+                    rightParen: .rightParenToken()
+                ),
+                trailingTrivia: .newline
+            )
         )
     }
-
-    public var invariantAssignmentExpressionList: String {
-        """
-        \(filter(\.isInvariant)
-        .map(\.property.asSelfAssignment)
-        .joined(separator: "\n"))
-        """
-    }
-
 }
 
 extension Array {
-    
-    /// Returns an array with all of the items in the array except for the last transformed.
-    /// - Parameter transform: A transforming closure. `transform` accepts an element of this sequence as its parameter and returns a transformed value of the same type.
-    /// - Returns: An array containing the transformed elements of this sequence, plus the untransfomred last element.
     fileprivate func transformUntilLast(_ transform: (Element) throws -> Element) rethrows -> [Element] {
         var arrayToTransform = self
         guard let lastItem = arrayToTransform.popLast() else {

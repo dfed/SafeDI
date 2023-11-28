@@ -22,9 +22,10 @@ import SwiftSyntax
 
 extension DeclModifierListSyntax {
 
-    public var containsPublic: Bool {
+    public var containsPublicOrOpen: Bool {
         contains(where: { modifier in
             modifier.name.text == "public"
+            || modifier.name.text == "open"
         })
     }
 

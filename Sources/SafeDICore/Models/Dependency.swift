@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+/// A representation of a dependency.
+/// e.g. `@singleton let mySingleton: MySingleton`
 public struct Dependency: Codable, Equatable {
     public let property: Property
     public let source: Source
@@ -26,7 +28,7 @@ public struct Dependency: Codable, Equatable {
         switch source {
         case .constructedInvariant, .providedInvariant, .singletonInvariant:
             return false
-        case .variant:
+        case .propagatedVariant:
             return true
         }
     }
@@ -35,28 +37,15 @@ public struct Dependency: Codable, Equatable {
         switch source {
         case .constructedInvariant, .providedInvariant, .singletonInvariant:
             return true
-        case .variant:
+        case .propagatedVariant:
             return false
         }
     }
 
-    public enum Source: Codable, Equatable {
-        case constructedInvariant
-        case providedInvariant
-        case singletonInvariant
-        case variant
-
-        public static let constructedAttributeName = "constructed"
-        public static let singletonAttributeName = "singleton"
-
-        public init?(_ attributeText: String) {
-            if attributeText == Self.constructedAttributeName {
-                self = .constructedInvariant
-            } else if attributeText == Self.singletonAttributeName {
-                self = .singletonInvariant
-            } else {
-                return nil
-            }
-        }
+    public enum Source: String, RawRepresentable, Codable, Equatable {
+        case constructedInvariant = "constructed"
+        case providedInvariant = "provided"
+        case singletonInvariant = "singleton"
+        case propagatedVariant = "propagated"
     }
 }

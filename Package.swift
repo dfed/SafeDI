@@ -44,7 +44,7 @@ let package = Package(
                 "SafeDIMacros",
                 "SafeDICore",
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
-                .product(name: "MacroTesting", package: "swift-macro-testing"), // TODO: write tests that use this!
+                .product(name: "MacroTesting", package: "swift-macro-testing"),
             ]
         ),
         .target(

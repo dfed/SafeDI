@@ -19,18 +19,40 @@
 // SOFTWARE.
 
 import SafeDICore
+import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-public struct SingletonMacro: PeerMacro {
+public struct InjectableMacro: PeerMacro {
     public static func expansion(
         of node: AttributeSyntax,
         providingPeersOf declaration: some DeclSyntaxProtocol,
         in context: some MacroExpansionContext)
     throws -> [DeclSyntax]
     {
-        guard VariableDeclSyntax(declaration) != nil else {
-            throw SingletonError.notDecoratingBinding
+        guard let variableDecl = VariableDeclSyntax(declaration) else {
+            throw InjectableError.notDecoratingBinding
+        }
+
+        guard variableDecl.modifiers.staticModifier == nil else {
+            throw InjectableError.decoratingStatic
+        }
+
+        if variableDecl.bindingSpecifier.text != TokenSyntax.keyword(.let).text {
+            context.diagnose(Diagnostic(
+                node: variableDecl.bindingSpecifier,
+                error: FixableInjectableError.unexpectedMutable,
+                changes: [
+                    .replace(
+                        oldNode: Syntax(variableDecl.bindingSpecifier),
+                        newNode: Syntax(TokenSyntax.keyword(
+                            .let,
+                            leadingTrivia: .space,
+                            trailingTrivia: .space
+                        ))
+                    )
+                ]
+            ))
         }
 
         // This macro purposefully does not expand.
@@ -38,15 +60,18 @@ public struct SingletonMacro: PeerMacro {
         return []
     }
 
-    // MARK: - SingletonError
+    // MARK: - InjectableError
 
-    private enum SingletonError: Error, CustomStringConvertible {
+    private enum InjectableError: Error, CustomStringConvertible {
         case notDecoratingBinding
+        case decoratingStatic
 
         var description: String {
             switch self {
             case .notDecoratingBinding:
-                return "@\(Dependency.Source.singletonAttributeName) must decorate a instance variable"
+                return "This macro must decorate a instance variable"
+            case .decoratingStatic:
+                return "This macro can not decorate `static` variables"
             }
         }
     }

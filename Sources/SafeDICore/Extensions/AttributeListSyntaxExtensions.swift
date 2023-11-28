@@ -22,25 +22,11 @@ import SwiftSyntax
 
 extension AttributeListSyntax {
 
-    var dependenciesMacro: AttributeSyntax? {
+    var constructingMacro: AttributeSyntax? {
         guard let attribute = first(where: { element in
             switch element {
             case let .attribute(attribute):
-                return attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text == DependenciesVisitor.macroName
-            case .ifConfigDecl:
-                return false
-            }
-        }) else {
-            return nil
-        }
-        return AttributeSyntax(attribute)
-    }
-
-    var builderMacro: AttributeSyntax? {
-        guard let attribute = first(where: { element in
-            switch element {
-            case let .attribute(attribute):
-                return attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text == BuilderVisitor.macroName
+                return attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text == ConstructableVisitor.macroName
             case .ifConfigDecl:
                 return false
             }
@@ -66,7 +52,7 @@ extension AttributeListSyntax {
 
     public var dependencySources: [(source: Dependency.Source, node: AttributeListSyntax.Element)] {
         attributedNodes.compactMap {
-            guard let source = Dependency.Source.init($0.attribute) else {
+            guard let source = Dependency.Source.init(rawValue: $0.attribute) else {
                 return nil
             }
             return (source: source, node: $0.node)
