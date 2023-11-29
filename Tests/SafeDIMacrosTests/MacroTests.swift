@@ -488,7 +488,7 @@ final class MacroTests: XCTestCase {
 
                 @provided
             }
-            """ // fixes is quite wrong here. In Xcode this removes all but the first macro.
+            """ // fixes are super wrong here. We delete @provided not the rest.
         }
     }
 
@@ -679,14 +679,14 @@ final class MacroTests: XCTestCase {
             init() {}
 
             init() {}
-            """ // fixes are wrong! It's duplicating the correction. not sure why.
+            """ // this is seriously incorrect – it works in Xcode.
         } expansion: {
             """
             public struct ExampleService {
             init() {}
 
             init() {}
-            """ // expansion is wrong! It's duplicating the correction. not sure why.
+            """
         }
     }
 
@@ -732,6 +732,96 @@ final class MacroTests: XCTestCase {
                 public init(buildSafeDIDependencies: () -> (InvariantA)) {
                     let dependencies = buildSafeDIDependencies()
                     self.init(invariantA: dependencies)
+                }
+            }
+            """
+        }
+    }
+
+    func test_constructableMacro_addsFixitMissingRequiredInitializerWhenDependencyMissingFromInit() {
+        assertMacro {
+            """
+            @constructable
+            public struct ExampleService {
+                init(variantA: VariantA, variantB: VariantB) {
+                    self.variantA = variantA
+                    self.variantB = variantB
+                    invariantA = InvariantA()
+                }
+
+                @propagated
+                let variantA: VariantA
+                @propagated
+                let variantB: VariantB
+                @provided
+                let invariantA: InvariantA
+            }
+            """
+        } diagnostics: {
+            """
+            @constructable
+            public struct ExampleService {
+                                         ╰─ 🛑 @constructable-decorated type must have initializer for all injected parameters
+                                            ✏️ Add required initializer
+                init(variantA: VariantA, variantB: VariantB) {
+                    self.variantA = variantA
+                    self.variantB = variantB
+                    invariantA = InvariantA()
+                }
+
+                @propagated
+                let variantA: VariantA
+                @propagated
+                let variantB: VariantB
+                @provided
+                let invariantA: InvariantA
+            }
+            """
+        } fixes: {
+            """
+            @constructable
+            public struct ExampleService {
+            init(variantA: VariantA, variantB: VariantB, invariantA: InvariantA) {
+            self.variantA = variantA
+            self.variantB = variantB
+            self.invariantA = invariantA
+            }
+
+                init(variantA: VariantA, variantB: VariantB) {
+                    self.variantA = variantA
+                    self.variantB = variantB
+                    invariantA = InvariantA()
+                }
+
+                @propagated
+                let variantA: VariantA
+                @propagated
+                let variantB: VariantB
+                @provided
+                let invariantA: InvariantA
+            }
+            """
+        } expansion: {
+            """
+            public struct ExampleService {
+            init(variantA: VariantA, variantB: VariantB, invariantA: InvariantA) {
+            self.variantA = variantA
+            self.variantB = variantB
+            self.invariantA = invariantA
+            }
+
+                init(variantA: VariantA, variantB: VariantB) {
+                    self.variantA = variantA
+                    self.variantB = variantB
+                    invariantA = InvariantA()
+                }
+                let variantA: VariantA
+                let variantB: VariantB
+                let invariantA: InvariantA
+
+                public init(buildSafeDIDependencies: (VariantA, VariantB) -> (variantA: VariantA, variantB: VariantB, invariantA: InvariantA), variantA: VariantA, variantB: VariantB) {
+                    let dependencies = buildSafeDIDependencies(variantA, variantB)
+                    self.init(variantA: dependencies.variantA, variantB: dependencies.variantB, invariantA: dependencies.invariantA)
                 }
             }
             """

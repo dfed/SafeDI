@@ -186,7 +186,7 @@ public struct Initializer: Codable, Equatable {
                                 leadingTrivia: .space,
                                 trailingTrivia: .space),
                             rightOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(dependency.property.label)),
-                            trailingTrivia: .newline
+                            trailingTrivia: dependency == dependencies.last ? .newline : nil
                         )))
                     )
                 }

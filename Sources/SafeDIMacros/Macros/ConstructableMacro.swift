@@ -59,7 +59,7 @@ public struct ConstructableMacro: MemberMacro {
                 .compactMap({ try? $0.result.get() })
                 .first
         else {
-            if initializerAndResultPairs.isEmpty {
+            if !visitor.dependencies.isEmpty || initializerAndResultPairs.isEmpty {
                 var membersWithInitializer = declaration.memberBlock.members
                 membersWithInitializer.insert(
                     MemberBlockItemSyntax(
