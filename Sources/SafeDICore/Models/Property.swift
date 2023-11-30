@@ -23,23 +23,65 @@ import SwiftSyntax
 /// A representation of a property.
 /// e.g. `let myProperty: MyProperty`
 public struct Property: Codable, Equatable {
+    // MARK: Lifecycle
+
+    init(label: String, type node: TypeSyntax) {
+        self.label = label
+        typeDescription = node.typeDescription
+    }
+
+    init(label: String, typeDescription: TypeDescription) {
+        self.label = label
+        self.typeDescription = typeDescription
+    }
+
     // MARK: Public
 
     /// The label by which the property is referenced.
     public let label: String
     /// The type to which the property conforms.
-    public let type: String
+    public var typeDescription: TypeDescription
 
     // MARK: Internal
 
     var asFunctionParamter: FunctionParameterSyntax {
-        FunctionParameterSyntax(
-            firstName: .identifier(label),
-            colon: .colonToken(trailingTrivia: .space),
-            type: IdentifierTypeSyntax(
-                name: .identifier(type)
+        switch typeDescription {
+        case .closure:
+            FunctionParameterSyntax(
+                firstName: .identifier(label),
+                colon: .colonToken(trailingTrivia: .space),
+                type: AttributedTypeSyntax(
+                    attributes: AttributeListSyntax([
+                        .attribute(
+                            AttributeSyntax(
+                                attributeName: IdentifierTypeSyntax(
+                                    name: TokenSyntax.identifier("escaping")
+                                ),
+                                trailingTrivia: .space
+                            )
+                        )
+                    ]),
+                    baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource)))
             )
-        )
+        case .any,
+                .array,
+                .attributed,
+                .composition,
+                .dictionary,
+                .implicitlyUnwrappedOptional,
+                .metatype,
+                .nested,
+                .optional,
+                .simple,
+                .some,
+                .tuple,
+                .unknown:
+            FunctionParameterSyntax(
+                firstName: .identifier(label),
+                colon: .colonToken(trailingTrivia: .space),
+                type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
+            )
+        }
     }
 
     var asNamedTupleTypeElement: TupleTypeElementSyntax {
@@ -47,7 +89,7 @@ public struct Property: Codable, Equatable {
             firstName: .identifier(label),
             colon: .colonToken(trailingTrivia: .space),
             type: IdentifierTypeSyntax(
-                name: .identifier(type)
+                name: .identifier(typeDescription.asSource)
             )
         )
     }
@@ -55,7 +97,7 @@ public struct Property: Codable, Equatable {
     var asUnnamedTupleTypeElement: TupleTypeElementSyntax {
         TupleTypeElementSyntax(
             type: IdentifierTypeSyntax(
-                name: .identifier(type)
+                name: .identifier(typeDescription.asSource)
             )
         )
     }
@@ -67,5 +109,4 @@ public struct Property: Codable, Equatable {
             )
         )
     }
-
 }

@@ -78,7 +78,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     Dependency(
                         property: Property(
                             label: label,
-                            type: type.description
+                            type: type
                         ),
                         source: dependencySource
                     )

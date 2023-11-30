@@ -214,7 +214,7 @@ public struct Initializer: Codable, Equatable {
         /// The label by which the argument is referenced.
         public let innerLabel: String
         /// The type to which the property conforms.
-        public let type: String
+        public let typeDescription: TypeDescription
         /// The label by which this argument is referenced at the call site.
         public var label: String {
             outerLabel ?? innerLabel
@@ -223,14 +223,14 @@ public struct Initializer: Codable, Equatable {
         public var asProperty: Property {
             Property(
                 label: innerLabel,
-                type: type
+                typeDescription: typeDescription
             )
         }
 
         public init(property: Property) {
             outerLabel = nil
             innerLabel = property.label
-            type = property.type
+            typeDescription = property.typeDescription
         }
 
         init(_ node: FunctionParameterSyntax) {
@@ -241,13 +241,13 @@ public struct Initializer: Codable, Equatable {
                 outerLabel = nil
                 innerLabel = node.firstName.text
             }
-            type = node.type.trimmedDescription
+            typeDescription = node.type.typeDescription
         }
 
-        init(outerLabel: String? = nil, innerLabel: String, type: String) {
+        init(outerLabel: String? = nil, innerLabel: String, typeDescription: TypeDescription) {
             self.outerLabel = outerLabel
             self.innerLabel = innerLabel
-            self.type = type
+            self.typeDescription = typeDescription
         }
 
         static let dependenciesArgumentName: TokenSyntax = .identifier("buildSafeDIDependencies")

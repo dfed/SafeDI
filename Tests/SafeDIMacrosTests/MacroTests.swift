@@ -95,6 +95,36 @@ final class MacroTests: XCTestCase {
         )
     }
 
+    func test_instantiableAndInjectableMacros_withClosureInvariantAndNoVariants() throws {
+        assertMacroExpansion(
+            """
+            @Instantiable
+            public struct ExampleService {
+                init(invariantABuilder: @escaping () -> InvariantA) {
+                    self.invariantABuilder = invariantABuilder
+                }
+
+                @Instantiated
+                private let invariantABuilder: () -> InvariantA
+            }
+            """,
+            expandedSource: """
+            public struct ExampleService {
+                init(invariantABuilder: @escaping () -> InvariantA) {
+                    self.invariantABuilder = invariantABuilder
+                }
+                private let invariantABuilder: () -> InvariantA
+
+                public init(buildSafeDIDependencies: () -> (() -> InvariantA)) {
+                    let dependencies = buildSafeDIDependencies()
+                    self.init(invariantABuilder: dependencies)
+                }
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
     func test_instantiableAndInjectableMacros_withMultipleInvariantsAndNoVariants() throws {
         assertMacroExpansion(
             """
@@ -539,7 +569,7 @@ final class MacroTests: XCTestCase {
                 }
                 let invariantA: InvariantA 
 
-                public init(buildSafeDIDependencies: () -> (InvariantA )) {
+                public init(buildSafeDIDependencies: () -> (InvariantA)) {
                     let dependencies = buildSafeDIDependencies()
                     self.init(invariantA: dependencies)
                 }
@@ -822,6 +852,54 @@ final class MacroTests: XCTestCase {
                 public init(buildSafeDIDependencies: (VariantA, VariantB) -> (variantA: VariantA, variantB: VariantB, invariantA: InvariantA), variantA: VariantA, variantB: VariantB) {
                     let dependencies = buildSafeDIDependencies(variantA, variantB)
                     self.init(variantA: dependencies.variantA, variantB: dependencies.variantB, invariantA: dependencies.invariantA)
+                }
+            }
+            """
+        }
+    }
+
+    func test_instantiableMacro_addsFixitMissingRequiredInitializerWhenBuilderDependencyMissingFromInit() {
+        assertMacro {
+            """
+            @Instantiable
+            public struct ExampleService {
+                @Instantiated
+                private let invariantABuilder: () -> InvariantA
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            public struct ExampleService {
+                                         ╰─ 🛑 @Instantiable-decorated type must have initializer for all injected parameters
+                                            ✏️ Add required initializer
+                @Instantiated
+                private let invariantABuilder: () -> InvariantA
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            public struct ExampleService {
+            init(invariantABuilder: @escaping () -> InvariantA) {
+            self.invariantABuilder = invariantABuilder
+            }
+
+                @Instantiated
+                private let invariantABuilder: () -> InvariantA
+            }
+            """
+        } expansion: {
+            """
+            public struct ExampleService {
+            init(invariantABuilder: @escaping () -> InvariantA) {
+            self.invariantABuilder = invariantABuilder
+            }
+                private let invariantABuilder: () -> InvariantA
+
+                public init(buildSafeDIDependencies: () -> (() -> InvariantA)) {
+                    let dependencies = buildSafeDIDependencies()
+                    self.init(invariantABuilder: dependencies)
                 }
             }
             """

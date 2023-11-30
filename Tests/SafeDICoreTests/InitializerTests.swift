@@ -68,7 +68,7 @@ final class InitializerTests: XCTestCase {
             arguments: [
                 .init(
                     innerLabel: "variant",
-                    type: "Variant"
+                    typeDescription: .simple(name: "Variant")
                 )
             ]
         )
@@ -79,7 +79,7 @@ final class InitializerTests: XCTestCase {
                     .init(
                         property: .init(
                             label: "variant",
-                            type: "Variant"
+                            typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded
                     )
@@ -99,7 +99,7 @@ final class InitializerTests: XCTestCase {
             arguments: [
                 .init(
                     innerLabel: "variant",
-                    type: "Variant"
+                    typeDescription: .simple(name: "Variant")
                 )
             ]
         )
@@ -110,7 +110,7 @@ final class InitializerTests: XCTestCase {
                     .init(
                         property: .init(
                             label: "variant",
-                            type: "Variant"
+                            typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded
                     )
@@ -130,7 +130,7 @@ final class InitializerTests: XCTestCase {
             arguments: [
                 .init(
                     innerLabel: "variant",
-                    type: "Variant"
+                    typeDescription: .simple(name: "Variant")
                 )
             ]
         )
@@ -159,7 +159,7 @@ final class InitializerTests: XCTestCase {
                     .init(
                         property: .init(
                             label: "variant",
-                            type: "Variant"
+                            typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded
                     )
@@ -179,7 +179,7 @@ final class InitializerTests: XCTestCase {
             arguments: [
                 .init(
                     innerLabel: "variant",
-                    type: "Variant"
+                    typeDescription: .simple(name: "Variant")
                 )
             ]
         )
@@ -190,7 +190,7 @@ final class InitializerTests: XCTestCase {
                     .init(
                         property: .init(
                             label: "variant",
-                            type: "Variant"
+                            typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded
                     )
@@ -215,7 +215,7 @@ final class InitializerTests: XCTestCase {
                 .init(
                     outerLabel: "with",
                     innerLabel: "variant",
-                    type: "Variant"
+                    typeDescription: .simple(name: "Variant")
                 )
             ]
         )
@@ -226,7 +226,7 @@ final class InitializerTests: XCTestCase {
                     .init(
                         property: .init(
                             label: "variant",
-                            type: "Variant"
+                            typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded
                     )
@@ -251,15 +251,15 @@ final class InitializerTests: XCTestCase {
                 .init(
                     outerLabel: "with",
                     innerLabel: "variantA",
-                    type: "VariantA"
+                    typeDescription: .simple(name: "VariantA")
                 ),
                 .init(
                     innerLabel: "variantB",
-                    type: "VariantB"
+                    typeDescription: .simple(name: "VariantB")
                 ),
                 .init(
                     innerLabel: "variantC",
-                    type: "VariantC"
+                    typeDescription: .simple(name: "VariantC")
                 )
             ]
         )
@@ -270,20 +270,20 @@ final class InitializerTests: XCTestCase {
                     .init(
                         property: .init(
                             label: "variantA",
-                            type: "VariantA"
+                            typeDescription: .simple(name: "VariantA")
                         ),
                         source: .forwarded),
                     .init(
                         property: .init(
                             label: "variantB",
-                            type: "VariantB"
+                            typeDescription: .simple(name: "VariantB")
                         ),
                         source: .forwarded
                     ),
                     .init(
                         property: .init(
                             label: "variantC",
-                            type: "VariantC"
+                            typeDescription: .simple(name: "VariantC")
                         ),
                         source: .forwarded
                     )
@@ -307,7 +307,7 @@ final class InitializerTests: XCTestCase {
             arguments: [
                 .init(
                     innerLabel: "invariant",
-                    type: "Invariant"
+                    typeDescription: .simple(name: "Invariant")
                 )
             ]
         )
@@ -318,7 +318,7 @@ final class InitializerTests: XCTestCase {
                     .init(
                         property: .init(
                             label: "invariant",
-                            type: "Invariant"
+                            typeDescription: .simple(name: "Invariant")
                         ),
                         source: .inherited
                     )
@@ -343,7 +343,7 @@ final class InitializerTests: XCTestCase {
                 .init(
                     outerLabel: "with",
                     innerLabel: "invariant",
-                    type: "Invariant"
+                    typeDescription: .simple(name: "Invariant")
                 )
             ]
         )
@@ -354,7 +354,7 @@ final class InitializerTests: XCTestCase {
                     .init(
                         property: .init(
                             label: "invariant",
-                            type: "Invariant"
+                            typeDescription: .simple(name: "Invariant")
                         ),
                         source: .inherited
                     )
@@ -378,16 +378,16 @@ final class InitializerTests: XCTestCase {
             arguments: [
                 .init(
                     innerLabel: "invariantA",
-                    type: "InvariantA"
+                    typeDescription: .simple(name: "InvariantA")
                 ),
                 .init(
                     outerLabel: "with",
                     innerLabel: "invariantB",
-                    type: "InvariantB"
+                    typeDescription: .simple(name: "InvariantB")
                 ),
                 .init(
                     innerLabel: "invariantC",
-                    type: "InvariantC"
+                    typeDescription: .simple(name: "InvariantC")
                 )
             ]
         )
@@ -398,20 +398,20 @@ final class InitializerTests: XCTestCase {
                     .init(
                         property: .init(
                             label: "invariantA",
-                            type: "InvariantA"
+                            typeDescription: .simple(name: "InvariantA")
                         ),
                         source: .inherited),
                     .init(
                         property: .init(
                             label: "invariantB",
-                            type: "InvariantB"
+                            typeDescription: .simple(name: "InvariantB")
                         ),
                         source: .instantiated
                     ),
                     .init(
                         property: .init(
                             label: "invariantC",
-                            type: "InvariantC"
+                            typeDescription: .simple(name: "InvariantC")
                         ),
                         source: .singleton
                     )
@@ -435,11 +435,11 @@ final class InitializerTests: XCTestCase {
             arguments: [
                 .init(
                     innerLabel: "variant",
-                    type: "Variant"
+                    typeDescription: .simple(name: "Variant")
                 ),
                 .init(
                     innerLabel: "invariant",
-                    type: "Invariant"
+                    typeDescription: .simple(name: "Invariant")
                 )
             ]
         )
@@ -450,14 +450,14 @@ final class InitializerTests: XCTestCase {
                     .init(
                         property: .init(
                             label: "variant",
-                            type: "Variant"
+                            typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded
                     ),
                     .init(
                         property: .init(
                             label: "invariant",
-                            type: "Invariant"
+                            typeDescription: .simple(name: "Invariant")
                         ),
                         source: .instantiated
                     )
@@ -481,19 +481,19 @@ final class InitializerTests: XCTestCase {
             arguments: [
                 .init(
                     innerLabel: "invariantA",
-                    type: "InvariantA"
+                    typeDescription: .simple(name: "InvariantA")
                 ),
                 .init(
                     innerLabel: "variantA",
-                    type: "VariantA"
+                    typeDescription: .simple(name: "VariantA")
                 ),
                 .init(
                     innerLabel: "invariantB",
-                    type: "InvariantB"
+                    typeDescription: .simple(name: "InvariantB")
                 ),
                 .init(
                     innerLabel: "variantB",
-                    type: "VariantB"
+                    typeDescription: .simple(name: "VariantB")
                 )
             ]
         )
@@ -504,28 +504,28 @@ final class InitializerTests: XCTestCase {
                     .init(
                         property: .init(
                             label: "variantA",
-                            type: "VariantA"
+                            typeDescription: .simple(name: "VariantA")
                         ),
                         source: .forwarded
                     ),
                     .init(
                         property: .init(
                             label: "variantB",
-                            type: "VariantB"
+                            typeDescription: .simple(name: "VariantB")
                         ),
                         source: .forwarded
                     ),
                     .init(
                         property: .init(
                             label: "invariantA",
-                            type: "InvariantA"
+                            typeDescription: .simple(name: "InvariantA")
                         ),
                         source: .instantiated
                     ),
                     .init(
                         property: .init(
                             label: "invariantB",
-                            type: "InvariantB"
+                            typeDescription: .simple(name: "InvariantB")
                         ),
                         source: .instantiated
                     )
@@ -549,19 +549,19 @@ final class InitializerTests: XCTestCase {
             arguments: [
                 .init(
                     innerLabel: "invariantA",
-                    type: "InvariantA"
+                    typeDescription: .simple(name: "InvariantA")
                 ),
                 .init(
                     innerLabel: "variantA",
-                    type: "VariantA"
+                    typeDescription: .simple(name: "VariantA")
                 ),
                 .init(
                     innerLabel: "invariantB",
-                    type: "InvariantB"
+                    typeDescription: .simple(name: "InvariantB")
                 ),
                 .init(
                     innerLabel: "variantB",
-                    type: "VariantB"
+                    typeDescription: .simple(name: "VariantB")
                 )
             ]
         )
@@ -572,28 +572,28 @@ final class InitializerTests: XCTestCase {
                     .init(
                         property: .init(
                             label: "variantA",
-                            type: "VariantA"
+                            typeDescription: .simple(name: "VariantA")
                         ),
                         source: .forwarded
                     ),
                     .init(
                         property: .init(
                             label: "variantB",
-                            type: "VariantB"
+                            typeDescription: .simple(name: "VariantB")
                         ),
                         source: .forwarded
                     ),
                     .init(
                         property: .init(
                             label: "invariantA",
-                            type: "InvariantA"
+                            typeDescription: .simple(name: "InvariantA")
                         ),
                         source: .instantiated
                     ),
                     .init(
                         property: .init(
                             label: "invariantB",
-                            type: "InvariantB"
+                            typeDescription: .simple(name: "InvariantB")
                         ),
                         source: .instantiated
                     )
