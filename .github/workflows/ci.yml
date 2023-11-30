@@ -8,7 +8,7 @@ on:
 
 jobs:
   spm-15:
-    name: Swift Build Xcode 15
+    name: Build and Test on Xcode 15
     runs-on: macos-13
     steps:
       - name: Checkout Repo
