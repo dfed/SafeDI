@@ -72,13 +72,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
             if
                 let label = IdentifierPatternSyntax(binding.pattern)?.identifier.text,
-                let type = binding.typeAnnotation?.type
+                let typeDescription = binding.typeAnnotation?.type.typeDescription
             {
                 dependencies.append(
                     Dependency(
                         property: Property(
                             label: label,
-                            type: type
+                            typeDescription: typeDescription
                         ),
                         source: dependencySource
                     )

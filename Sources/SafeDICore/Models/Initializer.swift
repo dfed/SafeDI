@@ -27,6 +27,8 @@ public struct Initializer: Codable, Equatable {
 
     init(_ node: InitializerDeclSyntax) {
         isOptional = node.optionalMark != nil
+        isAsync = node.signature.effectSpecifiers?.asyncSpecifier != nil
+        doesThrow = node.signature.effectSpecifiers?.throwsSpecifier != nil
         hasGenericParameter = node.genericParameterClause != nil
         hasGenericWhereClause = node.genericWhereClause != nil
         arguments = node
@@ -38,11 +40,15 @@ public struct Initializer: Codable, Equatable {
 
     public init(
         isOptional: Bool,
+        isAsync: Bool,
+        doesThrow: Bool,
         hasGenericParameter: Bool,
         hasGenericWhereClause: Bool,
         arguments: [Initializer.Argument])
     {
         self.isOptional = isOptional
+        self.isAsync = isAsync
+        self.doesThrow = doesThrow
         self.hasGenericParameter = hasGenericParameter
         self.hasGenericWhereClause = hasGenericWhereClause
         self.arguments = arguments
@@ -51,6 +57,8 @@ public struct Initializer: Codable, Equatable {
     // MARK: Public
 
     public let isOptional: Bool
+    public let isAsync: Bool
+    public let doesThrow: Bool
     public let hasGenericParameter: Bool
     public let hasGenericWhereClause: Bool
     public let arguments: [Argument]
@@ -59,6 +67,12 @@ public struct Initializer: Codable, Equatable {
         guard !isOptional else {
             throw GenerationError.optionalInitializer
         }
+        guard !isAsync else {
+            throw GenerationError.asyncInitializer
+        }
+        guard !doesThrow else {
+            throw GenerationError.throwingInitializer
+        }
         guard !hasGenericParameter else {
             throw GenerationError.genericParameterInInitializer
         }
@@ -66,15 +80,21 @@ public struct Initializer: Codable, Equatable {
             throw GenerationError.whereClauseOnInitializer
         }
 
-        let propertyLabels = Set(dependencies.map(\.property.label))
-        let argumentLabels = Set(arguments.map(\.innerLabel))
-        let extraArguments = argumentLabels.subtracting(propertyLabels)
-        guard extraArguments.isEmpty else {
-            throw GenerationError.tooManyArguments(labels: extraArguments)
+        let dependencyAndArgumentBinding = try arguments.reduce(into: [(dependency: Dependency, argument: Argument)]()) { partialResult, argument in
+            guard let dependency = dependencies.first(where: {
+                $0.asInitializerArgument.label == argument.innerLabel
+                && $0.asInitializerArgument.typeDescription == argument.typeDescription
+            }) else {
+                throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
+            }
+            partialResult.append((dependency: dependency, argument: argument))
         }
-        let missingArguments = propertyLabels.subtracting(argumentLabels)
+
+        let dependenciesWithDuplicateInitializerArgumentsRemoved = dependencies.removingDuplicateInitializerArguments
+        let initializerFulfulledDependencies = Set(dependencyAndArgumentBinding.map(\.dependency))
+        let missingArguments = Set(dependenciesWithDuplicateInitializerArgumentsRemoved).subtracting(initializerFulfulledDependencies)
         guard missingArguments.isEmpty else {
-            throw GenerationError.missingArguments(labels: missingArguments)
+            throw GenerationError.missingArguments(missingArguments.map(\.asInitializerArgument.asSource))
         }
         guard !dependencies.isEmpty else {
             throw GenerationError.noDependencies
@@ -112,22 +132,22 @@ public struct Initializer: Codable, Equatable {
                 name: TokenSyntax.keyword(.`init`)),
             leftParen: .leftParenToken(),
             arguments: LabeledExprListSyntax {
-                for (index, argument) in arguments.enumerated() {
-                    if dependencies.count > 1 {
+                for (index, dependencyAndArgument) in dependencyAndArgumentBinding.enumerated() {
+                    if dependenciesWithDuplicateInitializerArgumentsRemoved.count > 1 {
                         LabeledExprSyntax(
                             leadingTrivia: index == 0 ? nil : .space,
-                            label: .identifier(argument.label),
+                            label: .identifier(dependencyAndArgument.argument.label),
                             colon: .colonToken(trailingTrivia: .space),
                             expression:
                                 MemberAccessExprSyntax(
                                     base: DeclReferenceExprSyntax(baseName: Self.dependenciesToken),
-                                    name: .identifier(argument.innerLabel)
+                                    name: .identifier(dependencyAndArgument.argument.innerLabel)
                                 )
                         )
                     } else {
                         LabeledExprSyntax(
                             leadingTrivia: index == 0 ? nil : .space,
-                            label: .identifier(argument.label),
+                            label: .identifier(dependencyAndArgument.argument.label),
                             colon: .colonToken(trailingTrivia: .space),
                             expression: DeclReferenceExprSyntax(baseName: Self.dependenciesToken)
                         )
@@ -141,7 +161,7 @@ public struct Initializer: Codable, Equatable {
             signature: FunctionSignatureSyntax(
                 parameterClause: FunctionParameterClauseSyntax(
                     parameters: FunctionParameterListSyntax(itemsBuilder: {
-                        dependencies.buildDependenciesFunctionParameter
+                        dependenciesWithDuplicateInitializerArgumentsRemoved.buildDependenciesFunctionParameter
                         for forwardedFunctionParameter in dependencies.forwardedFunctionParameters {
                             forwardedFunctionParameter
                         }
@@ -167,7 +187,7 @@ public struct Initializer: Codable, Equatable {
             signature: FunctionSignatureSyntax(
                 parameterClause: FunctionParameterClauseSyntax(
                     parameters: FunctionParameterListSyntax(itemsBuilder: {
-                        for functionParameter in dependencies.functionParameters {
+                        for functionParameter in dependencies.initializerFunctionParameters {
                             functionParameter
                         }
                     })
@@ -176,19 +196,48 @@ public struct Initializer: Codable, Equatable {
             ),
             bodyBuilder: {
                 for dependency in dependencies {
-                    CodeBlockItemSyntax(
-                        item: .expr(ExprSyntax(InfixOperatorExprSyntax(
-                            leadingTrivia: .newline,
-                            leftOperand: MemberAccessExprSyntax(
-                                base: DeclReferenceExprSyntax(baseName: TokenSyntax.keyword(.`self`)),
-                                name: TokenSyntax.identifier(dependency.property.label)),
-                            operator: AssignmentExprSyntax(
-                                leadingTrivia: .space,
-                                trailingTrivia: .space),
-                            rightOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(dependency.property.label)),
-                            trailingTrivia: dependency == dependencies.last ? .newline : nil
-                        )))
-                    )
+                    switch dependency.source {
+                    case .instantiated,
+                            .inherited,
+                            .singleton,
+                            .forwarded:
+                        CodeBlockItemSyntax(
+                            item: .expr(ExprSyntax(InfixOperatorExprSyntax(
+                                leadingTrivia: .newline,
+                                leftOperand: MemberAccessExprSyntax(
+                                    base: DeclReferenceExprSyntax(baseName: TokenSyntax.keyword(.`self`)),
+                                    name: TokenSyntax.identifier(dependency.property.label)),
+                                operator: AssignmentExprSyntax(
+                                    leadingTrivia: .space,
+                                    trailingTrivia: .space),
+                                rightOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(dependency.property.label)),
+                                trailingTrivia: dependency == dependencies.last ? .newline : nil
+                            )))
+                        )
+                    case .lazyInstantiated:
+                        CodeBlockItemSyntax(
+                            item: .expr(ExprSyntax(InfixOperatorExprSyntax(
+                                leadingTrivia: .newline,
+                                leftOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier("_\(dependency.property.label)")),
+                                operator: AssignmentExprSyntax(
+                                    leadingTrivia: .space,
+                                    trailingTrivia: .space),
+                                rightOperand: FunctionCallExprSyntax(
+                                    calledExpression: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(Dependency.Source.lazyInstantiated.rawValue)),
+                                    leftParen: .leftParenToken(),
+                                    arguments: LabeledExprListSyntax {
+                                        LabeledExprSyntax(
+                                            expression: DeclReferenceExprSyntax(
+                                                baseName: TokenSyntax.identifier(dependency.asInitializerArgument.label)
+                                            )
+                                        )
+                                    },
+                                    rightParen: .rightParenToken()
+                                ),
+                                trailingTrivia: dependency == dependencies.last ? .newline : nil
+                            )))
+                        )
+                    }
                 }
             }
         )
@@ -197,13 +246,15 @@ public struct Initializer: Codable, Equatable {
 
     public enum GenerationError: Error, Equatable {
         case noDependencies
+        case asyncInitializer
+        case throwingInitializer
         case optionalInitializer
         case genericParameterInInitializer
         case whereClauseOnInitializer
         /// The initializer is missing arguments for injected properties.
-        case missingArguments(labels: Set<String>)
-        /// The initializer has arguments that don't map to any injected properties.
-        case tooManyArguments(labels: Set<String>)
+        case missingArguments([String])
+        /// The initializer has an argument that does not map to any injected properties.
+        case unexpectedArgument(String)
     }
 
     // MARK: - Argument

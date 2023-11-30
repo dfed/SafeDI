@@ -22,15 +22,14 @@ import SwiftSyntax
 
 /// A representation of a property.
 /// e.g. `let myProperty: MyProperty`
-public struct Property: Codable, Equatable {
-    // MARK: Lifecycle
+public struct Property: Codable, Hashable {
 
-    init(label: String, type node: TypeSyntax) {
-        self.label = label
-        typeDescription = node.typeDescription
-    }
+    // MARK: Initialization
 
-    init(label: String, typeDescription: TypeDescription) {
+    init(
+        label: String,
+        typeDescription: TypeDescription)
+    {
         self.label = label
         self.typeDescription = typeDescription
     }
@@ -44,44 +43,16 @@ public struct Property: Codable, Equatable {
 
     // MARK: Internal
 
+    var asSource: String {
+        "\(label): \(typeDescription.asSource)"
+    }
+
     var asFunctionParamter: FunctionParameterSyntax {
-        switch typeDescription {
-        case .closure:
-            FunctionParameterSyntax(
-                firstName: .identifier(label),
-                colon: .colonToken(trailingTrivia: .space),
-                type: AttributedTypeSyntax(
-                    attributes: AttributeListSyntax([
-                        .attribute(
-                            AttributeSyntax(
-                                attributeName: IdentifierTypeSyntax(
-                                    name: TokenSyntax.identifier("escaping")
-                                ),
-                                trailingTrivia: .space
-                            )
-                        )
-                    ]),
-                    baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource)))
-            )
-        case .any,
-                .array,
-                .attributed,
-                .composition,
-                .dictionary,
-                .implicitlyUnwrappedOptional,
-                .metatype,
-                .nested,
-                .optional,
-                .simple,
-                .some,
-                .tuple,
-                .unknown:
-            FunctionParameterSyntax(
-                firstName: .identifier(label),
-                colon: .colonToken(trailingTrivia: .space),
-                type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
-            )
-        }
+        FunctionParameterSyntax(
+            firstName: .identifier(label),
+            colon: .colonToken(trailingTrivia: .space),
+            type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
+        )
     }
 
     var asNamedTupleTypeElement: TupleTypeElementSyntax {

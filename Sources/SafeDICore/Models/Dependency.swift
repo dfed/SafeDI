@@ -18,15 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import SwiftSyntax
+
 /// A representation of a dependency.
 /// e.g. `@Singleton let mySingleton: MySingleton`
-public struct Dependency: Codable, Equatable {
+public struct Dependency: Codable, Hashable {
     public let property: Property
     public let source: Source
 
     public var isVariant: Bool {
         switch source {
-        case .instantiated, .inherited, .singleton:
+        case .instantiated, .lazyInstantiated, .inherited, .singleton:
             return false
         case .forwarded:
             return true
@@ -35,15 +37,16 @@ public struct Dependency: Codable, Equatable {
 
     public var isInvariant: Bool {
         switch source {
-        case .instantiated, .inherited, .singleton:
+        case .instantiated, .lazyInstantiated, .inherited, .singleton:
             return true
         case .forwarded:
             return false
         }
     }
 
-    public enum Source: String, CustomStringConvertible, Codable, Equatable {
+    public enum Source: String, CustomStringConvertible, Codable, Hashable {
         case instantiated = "Instantiated"
+        case lazyInstantiated = "LazyInstantiated"
         case inherited = "Inherited"
         case singleton = "Singleton"
         case forwarded = "Forwarded"
@@ -52,4 +55,42 @@ public struct Dependency: Codable, Equatable {
             rawValue
         }
     }
+
+    // MARK: Internal
+
+    /// A version of the dependency as it looks in an initializer argument.
+    var asInitializerArgument: Property {
+        Property(
+            label: initializerArgumentLabel,
+            typeDescription: initializerArgumentTypeDescription)
+    }
+
+    /// The label by which this property is referenced in an initializer.
+    var initializerArgumentLabel: String {
+        switch source {
+        case .instantiated, .inherited, .singleton, .forwarded:
+            return property.label
+        case .lazyInstantiated:
+            return "\(property.label)\(Self.builderType)"
+        }
+    }
+
+    /// The type description by which this property is referenced in an initializer.
+    var initializerArgumentTypeDescription: TypeDescription {
+        switch source {
+        case .instantiated, .inherited, .singleton, .forwarded:
+            return property.typeDescription
+        case .lazyInstantiated:
+            // TODO: fully qualify this type with `SafeDI.` member prefix
+            return .simple(
+                name: Self.builderType,
+                generics: [
+                    .tuple([]),
+                    property.typeDescription
+                ]
+            )
+        }
+    }
+
+    static let builderType = "Builder"
 }

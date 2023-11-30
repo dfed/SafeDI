@@ -23,6 +23,19 @@ import SwiftSyntaxBuilder
 
 extension Array where Element == Dependency {
 
+    var removingDuplicateInitializerArguments: Self {
+        var alreadySeenInitializerArgument = Set<Property>()
+        return filter {
+            let initializerArgument = $0.asInitializerArgument
+            if alreadySeenInitializerArgument.contains(initializerArgument) {
+                return false
+            } else {
+                alreadySeenInitializerArgument.insert(initializerArgument)
+                return true
+            }
+        }
+    }
+
     var buildDependenciesFunctionParameter: FunctionParameterSyntax {
         FunctionParameterSyntax(
             firstName: Initializer.Argument.dependenciesArgumentName,
@@ -55,18 +68,18 @@ extension Array where Element == Dependency {
 
     var buildDependenciesClosureReturnType: TupleTypeElementListSyntax {
         TupleTypeElementListSyntax {
-            for invariantNamedTuple in namedTuples {
+            for invariantNamedTuple in namedInitializerReturnTypeTuples {
                 invariantNamedTuple
             }
         }
     }
 
-    var namedTuples: [TupleTypeElementSyntax] {
-        map {
+    var namedInitializerReturnTypeTuples: [TupleTypeElementSyntax] {
+        return map {
             if count > 1 {
-                return $0.property.asNamedTupleTypeElement
+                return $0.asInitializerArgument.asNamedTupleTypeElement
             } else {
-                return $0.property.asUnnamedTupleTypeElement
+                return $0.asInitializerArgument.asUnnamedTupleTypeElement
             }
         }
         .transformUntilLast {
@@ -86,8 +99,9 @@ extension Array where Element == Dependency {
             }
     }
 
-    var functionParameters: [FunctionParameterSyntax] {
-        map { $0.property.asFunctionParamter }
+    var initializerFunctionParameters: [FunctionParameterSyntax] {
+        removingDuplicateInitializerArguments
+            .map { $0.asInitializerArgument.asFunctionParamter }
             .transformUntilLast {
                 var node = $0
                 node.trailingComma = .commaToken(trailingTrivia: .space)

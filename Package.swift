@@ -24,9 +24,14 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.2.0"),
     ],
     targets: [
-        .target(name: "SafeDI", dependencies: [
-            "SafeDIMacros"
-        ]),
+        .target(name: "SafeDI", dependencies: ["SafeDIMacros"]),
+        .testTarget(
+            name: "SafeDITests",
+            dependencies: [
+                "SafeDI",
+                "SafeDICore"
+            ]
+        ),
         .macro(
             name: "SafeDIMacros",
             dependencies: [
