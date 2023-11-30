@@ -23,26 +23,26 @@
 
 #else
 
-/// Marks a `class`, `struct`, or `actor` as capable of having properties that conform to this type decorated with `@Constructed` or `@Singleton`.
+/// Marks a `class`, `struct`, or `actor` as capable of having properties that conform to this type decorated with `@Instantiated` or `@Singleton`.
 ///
-/// - Parameter fulfillingAdditionalTypes: The types (in addition to the type decorated with this macro) that can be decorated with `@Constructed` or `@Singleton` and yield a result of this type. The types provided *must* be either superclasses of this type or protocols to which this type conforms.
+/// - Parameter fulfillingAdditionalTypes: The types (in addition to the type decorated with this macro) that can be decorated with `@Instantiated` or `@Singleton` and yield a result of this type. The types provided *must* be either superclasses of this type or protocols to which this type conforms.
 @attached(member, names: arbitrary)
-public macro Constructable(fulfillingAdditionalTypes: [Any.Type] = []) = #externalMacro(module: "SafeDIMacros", type: "ConstructableMacro")
+public macro Instantiable(fulfillingAdditionalTypes: [Any.Type] = []) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")
 
 /// Marks a SafeDI dependency that is instantiated when its parent object is instantiated.
 @attached(peer)
-public macro Constructed() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
+public macro Instantiated() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
 
-/// Marks a SafeDI dependency that is constructed by an object higher up in the dependency tree.
+/// Marks a SafeDI dependency that is instantiated by an object higher up in the dependency tree.
 @attached(peer)
-public macro Provided() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
+public macro Inherited() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
 
-/// Marks a SafeDI dependency that will only ever have one instance instantiated at a given time. Singleton dependencies may deallocate when all of the objects that use it deallocate. Singleton dependencies can not be marked with @Constructed.
+/// Marks a SafeDI dependency that will only ever have one instance instantiated at a given time. Singleton dependencies may deallocate when all of the objects that use it deallocate. Singleton dependencies can not be marked with @Instantiated.
 @attached(peer)
 public macro Singleton() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
 
-/// Marks a SafeDI dependency that is injected into the parent object's initializer and provided to objects further down in the dependency tree.
+/// Marks a SafeDI dependency that is injected into the parent object's initializer and forwarded to objects further down in the dependency tree.
 @attached(peer)
-public macro Propagated() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
+public macro Forwarded() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
 
 #endif

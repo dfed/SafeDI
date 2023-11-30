@@ -26,27 +26,27 @@ public struct Dependency: Codable, Equatable {
 
     public var isVariant: Bool {
         switch source {
-        case .constructedInvariant, .providedInvariant, .singletonInvariant:
+        case .instantiated, .inherited, .singleton:
             return false
-        case .propagatedVariant:
+        case .forwarded:
             return true
         }
     }
 
     public var isInvariant: Bool {
         switch source {
-        case .constructedInvariant, .providedInvariant, .singletonInvariant:
+        case .instantiated, .inherited, .singleton:
             return true
-        case .propagatedVariant:
+        case .forwarded:
             return false
         }
     }
 
     public enum Source: String, CustomStringConvertible, Codable, Equatable {
-        case constructedInvariant = "Constructed"
-        case providedInvariant = "Provided"
-        case singletonInvariant = "Singleton"
-        case propagatedVariant = "Propagated"
+        case instantiated = "Instantiated"
+        case inherited = "Inherited"
+        case singleton = "Singleton"
+        case forwarded = "Forwarded"
 
         public var description: String {
             rawValue

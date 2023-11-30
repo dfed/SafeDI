@@ -81,7 +81,7 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             type: "Variant"
                         ),
-                        source: .propagatedVariant
+                        source: .forwarded
                     )
                 ],
                 typeIsClass: false,
@@ -112,7 +112,7 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             type: "Variant"
                         ),
-                        source: .propagatedVariant
+                        source: .forwarded
                     )
                 ],
                 typeIsClass: false,
@@ -161,7 +161,7 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             type: "Variant"
                         ),
-                        source: .propagatedVariant
+                        source: .forwarded
                     )
                 ],
                 typeIsClass: false,
@@ -192,7 +192,7 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             type: "Variant"
                         ),
-                        source: .propagatedVariant
+                        source: .forwarded
                     )
                 ],
                 typeIsClass: false,
@@ -228,7 +228,7 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             type: "Variant"
                         ),
-                        source: .propagatedVariant
+                        source: .forwarded
                     )
                 ],
                 typeIsClass: false,
@@ -272,20 +272,20 @@ final class InitializerTests: XCTestCase {
                             label: "variantA",
                             type: "VariantA"
                         ),
-                        source: .propagatedVariant),
+                        source: .forwarded),
                     .init(
                         property: .init(
                             label: "variantB",
                             type: "VariantB"
                         ),
-                        source: .propagatedVariant
+                        source: .forwarded
                     ),
                     .init(
                         property: .init(
                             label: "variantC",
                             type: "VariantC"
                         ),
-                        source: .propagatedVariant
+                        source: .forwarded
                     )
                 ],
                 typeIsClass: false,
@@ -320,7 +320,7 @@ final class InitializerTests: XCTestCase {
                             label: "invariant",
                             type: "Invariant"
                         ),
-                        source: .providedInvariant
+                        source: .inherited
                     )
                 ],
                 typeIsClass: false,
@@ -356,7 +356,7 @@ final class InitializerTests: XCTestCase {
                             label: "invariant",
                             type: "Invariant"
                         ),
-                        source: .providedInvariant
+                        source: .inherited
                     )
                 ],
                 typeIsClass: false,
@@ -400,20 +400,20 @@ final class InitializerTests: XCTestCase {
                             label: "invariantA",
                             type: "InvariantA"
                         ),
-                        source: .providedInvariant),
+                        source: .inherited),
                     .init(
                         property: .init(
                             label: "invariantB",
                             type: "InvariantB"
                         ),
-                        source: .constructedInvariant
+                        source: .instantiated
                     ),
                     .init(
                         property: .init(
                             label: "invariantC",
                             type: "InvariantC"
                         ),
-                        source: .singletonInvariant
+                        source: .singleton
                     )
                 ],
                 typeIsClass: false,
@@ -452,14 +452,14 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             type: "Variant"
                         ),
-                        source: .propagatedVariant
+                        source: .forwarded
                     ),
                     .init(
                         property: .init(
                             label: "invariant",
                             type: "Invariant"
                         ),
-                        source: .constructedInvariant
+                        source: .instantiated
                     )
                 ],
                 typeIsClass: false,
@@ -506,28 +506,28 @@ final class InitializerTests: XCTestCase {
                             label: "variantA",
                             type: "VariantA"
                         ),
-                        source: .propagatedVariant
+                        source: .forwarded
                     ),
                     .init(
                         property: .init(
                             label: "variantB",
                             type: "VariantB"
                         ),
-                        source: .propagatedVariant
+                        source: .forwarded
                     ),
                     .init(
                         property: .init(
                             label: "invariantA",
                             type: "InvariantA"
                         ),
-                        source: .constructedInvariant
+                        source: .instantiated
                     ),
                     .init(
                         property: .init(
                             label: "invariantB",
                             type: "InvariantB"
                         ),
-                        source: .constructedInvariant
+                        source: .instantiated
                     )
                 ],
                 typeIsClass: false,
@@ -574,28 +574,28 @@ final class InitializerTests: XCTestCase {
                             label: "variantA",
                             type: "VariantA"
                         ),
-                        source: .propagatedVariant
+                        source: .forwarded
                     ),
                     .init(
                         property: .init(
                             label: "variantB",
                             type: "VariantB"
                         ),
-                        source: .propagatedVariant
+                        source: .forwarded
                     ),
                     .init(
                         property: .init(
                             label: "invariantA",
                             type: "InvariantA"
                         ),
-                        source: .constructedInvariant
+                        source: .instantiated
                     ),
                     .init(
                         property: .init(
                             label: "invariantB",
                             type: "InvariantB"
                         ),
-                        source: .constructedInvariant
+                        source: .instantiated
                     )
                 ],
                 typeIsClass: true,

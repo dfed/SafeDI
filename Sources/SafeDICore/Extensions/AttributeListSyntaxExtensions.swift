@@ -26,7 +26,7 @@ extension AttributeListSyntax {
         guard let attribute = first(where: { element in
             switch element {
             case let .attribute(attribute):
-                return attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text == ConstructableVisitor.macroName
+                return attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text == InstantiableVisitor.macroName
             case .ifConfigDecl:
                 return false
             }

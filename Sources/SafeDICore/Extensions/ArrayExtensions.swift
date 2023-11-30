@@ -95,7 +95,7 @@ extension Array where Element == Dependency {
             }
     }
 
-    var propagatedVariantsFunctionParameters: [FunctionParameterSyntax] {
+    var forwardedFunctionParameters: [FunctionParameterSyntax] {
         filter { $0.isVariant }
             .map { $0.property.asFunctionParamter }
             .transformUntilLast {
@@ -105,7 +105,7 @@ extension Array where Element == Dependency {
             }
     }
 
-    var propagatedVariantsLabeledExpressions: [LabeledExprSyntax] {
+    var forwardedLabeledExpressions: [LabeledExprSyntax] {
         filter { $0.isVariant }
             .map { $0.property.asUnnamedLabeledExpr }
             .transformUntilLast {
@@ -132,8 +132,8 @@ extension Array where Element == Dependency {
                         baseName: Initializer.Argument.dependenciesArgumentName),
                     leftParen: .leftParenToken(),
                     arguments: LabeledExprListSyntax {
-                        for propagatedVariantsLabeledExpression in propagatedVariantsLabeledExpressions {
-                            propagatedVariantsLabeledExpression
+                        for forwardedLabeledExpression in forwardedLabeledExpressions {
+                            forwardedLabeledExpression
                         }
                     },
                     rightParen: .rightParenToken()

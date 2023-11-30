@@ -142,8 +142,8 @@ public struct Initializer: Codable, Equatable {
                 parameterClause: FunctionParameterClauseSyntax(
                     parameters: FunctionParameterListSyntax(itemsBuilder: {
                         dependencies.buildDependenciesFunctionParameter
-                        for propagatedVariantsFunctionParameter in dependencies.propagatedVariantsFunctionParameters {
-                            propagatedVariantsFunctionParameter
+                        for forwardedFunctionParameter in dependencies.forwardedFunctionParameters {
+                            forwardedFunctionParameter
                         }
                     })
                 ),

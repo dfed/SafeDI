@@ -24,7 +24,7 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-public struct ConstructableMacro: MemberMacro {
+public struct InstantiableMacro: MemberMacro {
     public static func expansion(
         of node: AttributeSyntax,
         providingMembersOf declaration: some DeclGroupSyntax,
@@ -36,10 +36,10 @@ public struct ConstructableMacro: MemberMacro {
                 = ActorDeclSyntax(declaration)
                 ?? ClassDeclSyntax(declaration)
                 ?? StructDeclSyntax(declaration) else {
-            throw ConstructableError.decoratingIncompatibleType
+            throw InstantiableError.decoratingIncompatibleType
         }
 
-        let visitor = ConstructableVisitor()
+        let visitor = InstantiableVisitor()
         visitor.walk(concreteDeclaration)
         for diagnostic in visitor.diagnostics {
             context.diagnose(diagnostic)
@@ -71,7 +71,7 @@ public struct ConstructableMacro: MemberMacro {
                 )
                 context.diagnose(Diagnostic(
                     node: Syntax(declaration.memberBlock),
-                    error: FixableConstructableError.missingRequiredInitializer,
+                    error: FixableInstantiableError.missingRequiredInitializer,
                     changes: [
                         .replace(
                             oldNode: Syntax(declaration.memberBlock.members),
@@ -88,13 +88,13 @@ public struct ConstructableMacro: MemberMacro {
 
     // MARK: - BuilderError
 
-    private enum ConstructableError: Error, CustomStringConvertible {
+    private enum InstantiableError: Error, CustomStringConvertible {
         case decoratingIncompatibleType
 
         var description: String {
             switch self {
             case .decoratingIncompatibleType:
-                return "@\(ConstructableVisitor.macroName) must decorate a class, struct, or actor"
+                return "@\(InstantiableVisitor.macroName) must decorate a class, struct, or actor"
             }
         }
     }

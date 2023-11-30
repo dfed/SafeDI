@@ -20,7 +20,7 @@
 
 import SwiftDiagnostics
 
-public enum FixableConstructableError: DiagnosticError {
+public enum FixableInstantiableError: DiagnosticError {
     case dependencyHasTooManyAttributes
     case dependencyHasInitializer
     case missingPublicOrOpenAttribute
@@ -29,27 +29,27 @@ public enum FixableConstructableError: DiagnosticError {
     public var description: String {
         switch self {
         case .dependencyHasTooManyAttributes:
-            return "Dependency can have at most one of @\(Dependency.Source.constructedInvariant), @\(Dependency.Source.providedInvariant), @\(Dependency.Source.singletonInvariant), or @\(Dependency.Source.propagatedVariant) attached macro"
+            return "Dependency can have at most one of @\(Dependency.Source.instantiated), @\(Dependency.Source.inherited), @\(Dependency.Source.singleton), or @\(Dependency.Source.forwarded) attached macro"
         case .dependencyHasInitializer:
             return "Dependency must not have hand-written initializer"
         case .missingPublicOrOpenAttribute:
-            return "@\(ConstructableVisitor.macroName)-decorated type must be `public` or `open`"
+            return "@\(InstantiableVisitor.macroName)-decorated type must be `public` or `open`"
         case .missingRequiredInitializer:
-            return "@\(ConstructableVisitor.macroName)-decorated type must have initializer for all injected parameters"
+            return "@\(InstantiableVisitor.macroName)-decorated type must have initializer for all injected parameters"
         }
     }
 
     public var diagnostic: DiagnosticMessage {
-        ConstructableDiagnosticMessage(error: self)
+        InstantiableDiagnosticMessage(error: self)
     }
 
     public var fixIt: FixItMessage {
-        ConstructableFixItMessage(error: self)
+        InstantiableFixItMessage(error: self)
     }
 
-    // MARK: - ConstructableDiagnosticMessage
+    // MARK: - InstantiableDiagnosticMessage
 
-    private struct ConstructableDiagnosticMessage: DiagnosticMessage {
+    private struct InstantiableDiagnosticMessage: DiagnosticMessage {
         var diagnosticID: MessageID {
             MessageID(domain: "\(Self.self)", id: error.description)
         }
@@ -68,12 +68,12 @@ public enum FixableConstructableError: DiagnosticError {
             error.description
         }
 
-        let error: FixableConstructableError
+        let error: FixableInstantiableError
     }
 
-    // MARK: - ConstructableFixItMessage
+    // MARK: - InstantiableFixItMessage
 
-    private struct ConstructableFixItMessage: FixItMessage {
+    private struct InstantiableFixItMessage: FixItMessage {
         var message: String {
             switch error {
             case .dependencyHasTooManyAttributes:
@@ -91,6 +91,6 @@ public enum FixableConstructableError: DiagnosticError {
             MessageID(domain: "\(Self.self)", id: error.description)
         }
 
-        let error: FixableConstructableError
+        let error: FixableInstantiableError
     }
 }

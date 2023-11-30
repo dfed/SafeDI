@@ -29,11 +29,11 @@ import SafeDICore
 @testable import SafeDIMacros
 
 let testMacros: [String: Macro.Type] = [
-    ConstructableVisitor.macroName: ConstructableMacro.self,
-    Dependency.Source.constructedInvariant.rawValue: InjectableMacro.self,
-    Dependency.Source.providedInvariant.rawValue: InjectableMacro.self,
-    Dependency.Source.singletonInvariant.rawValue: InjectableMacro.self,
-    Dependency.Source.propagatedVariant.rawValue: InjectableMacro.self,
+    InstantiableVisitor.macroName: InstantiableMacro.self,
+    Dependency.Source.instantiated.rawValue: InjectableMacro.self,
+    Dependency.Source.inherited.rawValue: InjectableMacro.self,
+    Dependency.Source.singleton.rawValue: InjectableMacro.self,
+    Dependency.Source.forwarded.rawValue: InjectableMacro.self,
 ]
 
 final class MacroTests: XCTestCase {
@@ -48,10 +48,10 @@ final class MacroTests: XCTestCase {
 
     // MARK: Expansion tests
 
-    func test_constructableAndInjectableMacros_withNoInvariantsOrVariants() throws {
+    func test_instantiableAndInjectableMacros_withNoInvariantsOrVariants() throws {
         assertMacroExpansion(
             """
-            @Constructable
+            @Instantiable
             public class ExampleService {
                 init() {}
             }
@@ -65,16 +65,16 @@ final class MacroTests: XCTestCase {
         )
     }
 
-    func test_constructableAndInjectableMacros_withSingleInvariantAndNoVariants() throws {
+    func test_instantiableAndInjectableMacros_withSingleInvariantAndNoVariants() throws {
         assertMacroExpansion(
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Constructed
+                @Instantiated
                 private let invariantA: InvariantA
             }
             """,
@@ -95,10 +95,10 @@ final class MacroTests: XCTestCase {
         )
     }
 
-    func test_constructableAndInjectableMacros_withMultipleInvariantsAndNoVariants() throws {
+    func test_instantiableAndInjectableMacros_withMultipleInvariantsAndNoVariants() throws {
         assertMacroExpansion(
             """
-            @Constructable(fulfillingAdditionalTypes: [ExampleService.self])
+            @Instantiable(fulfillingAdditionalTypes: [ExampleService.self])
             public struct DefaultExampleService: ExampleService {
                 init(
                     invariantA: invariantA,
@@ -110,9 +110,9 @@ final class MacroTests: XCTestCase {
                     self.invariantC = invariantC
                 }
 
-                @Constructed
+                @Instantiated
                 public let invariantA: InvariantA
-                @Provided
+                @Inherited
                 let invariantB: InvariantB
                 @Singleton
                 private let invariantC: InvariantC
@@ -143,16 +143,16 @@ final class MacroTests: XCTestCase {
         )
     }
 
-    func test_constructableAndInjectableMacros_withNoInvariantsAndSingleVariant() throws {
+    func test_instantiableAndInjectableMacros_withNoInvariantsAndSingleVariant() throws {
         assertMacroExpansion(
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(with variant: Variant) {
                     self.variant = variant
                 }
 
-                @Propagated
+                @Forwarded
                 public let variant: Variant
             }
             """,
@@ -173,19 +173,19 @@ final class MacroTests: XCTestCase {
         )
     }
 
-    func test_constructableAndInjectableMacros_withSingleInvariantAndVariant() throws {
+    func test_instantiableAndInjectableMacros_withSingleInvariantAndVariant() throws {
         assertMacroExpansion(
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(with variant: Variant, invariant: Invariant) {
                     self.variant = variant
                     self.invariant = invariant
                 }
 
-                @Propagated
+                @Forwarded
                 public let variant: Variant
-                @Constructed
+                @Instantiated
                 private let invariant: Invariant
             }
             """,
@@ -208,10 +208,10 @@ final class MacroTests: XCTestCase {
         )
     }
 
-    func test_constructableAndInjectableMacros_withMultipleInvariantsAndSingleVariant() throws {
+    func test_instantiableAndInjectableMacros_withMultipleInvariantsAndSingleVariant() throws {
         assertMacroExpansion(
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(
                     with variant: Variant,
@@ -225,11 +225,11 @@ final class MacroTests: XCTestCase {
                     self.invariantC = invariantC
                 }
 
-                @Propagated
+                @Forwarded
                 public let variant: Variant
-                @Constructed
+                @Instantiated
                 private let invariantA: invariantA
-                @Provided
+                @Inherited
                 private let invariantB: InvariantB
                 @Singleton
                 private let invariantC: InvariantC
@@ -263,19 +263,19 @@ final class MacroTests: XCTestCase {
         )
     }
 
-    func test_constructableAndInjectableMacros_withNoInvariantsAndMultipleVariant() throws {
+    func test_instantiableAndInjectableMacros_withNoInvariantsAndMultipleVariant() throws {
         assertMacroExpansion(
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(variantA: VariantA, variantB: VariantB) {
                     self.variantA = variantA
                     self.variantB = variantB
                 }
 
-                @Propagated
+                @Forwarded
                 let variantA: VariantA
-                @Propagated
+                @Forwarded
                 let variantB: VariantB
             }
             """,
@@ -298,10 +298,10 @@ final class MacroTests: XCTestCase {
         )
     }
 
-    func test_constructableAndInjectableMacros_withSingleInvariantAndMultipleVariants() throws {
+    func test_instantiableAndInjectableMacros_withSingleInvariantAndMultipleVariants() throws {
         assertMacroExpansion(
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(variantA: VariantA, variantB: VariantB, invariantA: InvariantA) {
                     self.variantA = variantA
@@ -309,11 +309,11 @@ final class MacroTests: XCTestCase {
                     self.invariantA = invariantA
                 }
 
-                @Propagated
+                @Forwarded
                 let variantA: VariantA
-                @Propagated
+                @Forwarded
                 let variantB: VariantB
-                @Constructed
+                @Instantiated
                 private let invariantA: InvariantA
             }
             """,
@@ -338,10 +338,10 @@ final class MacroTests: XCTestCase {
         )
     }
 
-    func test_constructableAndInjectableMacros_withMultipleInvariantsAndMultipleVariants() throws {
+    func test_instantiableAndInjectableMacros_withMultipleInvariantsAndMultipleVariants() throws {
         assertMacroExpansion(
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(variantA: VariantA, variantB: VariantB, invariantA: InvariantA, invariantB: InvariantB) {
                     self.variantA = variantA
@@ -350,11 +350,11 @@ final class MacroTests: XCTestCase {
                     self.invariantB = invariantB
                 }
 
-                @Propagated
+                @Forwarded
                 let variantA: VariantA
-                @Propagated
+                @Forwarded
                 let variantB: VariantB
-                @Constructed
+                @Instantiated
                 private let invariantA: InvariantA
                 @Singleton
                 public let invariantB: InvariantB
@@ -385,17 +385,17 @@ final class MacroTests: XCTestCase {
 
     // MARK: Error tests
 
-    func test_constructableMacro_throwsErrorWhenOnProtocol() {
+    func test_instantiableMacro_throwsErrorWhenOnProtocol() {
         assertMacro {
             """
-            @Constructable
+            @Instantiable
             protocol ExampleService {}
             """
         } diagnostics: {
             """
-            @Constructable
-            ┬─────────────
-            ╰─ 🛑 @Constructable must decorate a class, struct, or actor
+            @Instantiable
+            ┬────────────
+            ╰─ 🛑 @Instantiable must decorate a class, struct, or actor
             protocol ExampleService {}
             """
         }
@@ -404,42 +404,42 @@ final class MacroTests: XCTestCase {
     func test_injectableMacro_throwsErrorWhenOnProtocol() {
         assertMacro {
             """
-            @Constructed
+            @Instantiated
             protocol ExampleService {}
             """
         } diagnostics: {
             """
-            @Constructed
-            ┬───────────
+            @Instantiated
+            ┬────────────
             ╰─ 🛑 This macro must decorate a instance variable
             protocol ExampleService {}
             """
         }
     }
 
-    func test_constructableMacro_throwsErrorWhenInjectableMacroAttachedtoStaticProperty() {
+    func test_instantiableMacro_throwsErrorWhenInjectableMacroAttachedtoStaticProperty() {
         assertMacro {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Provided
+                @Inherited
                 static let invariantA: InvariantA
             }
             """
         } diagnostics: {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Provided
-                ┬────────
+                @Inherited
+                ┬─────────
                 ╰─ 🛑 This macro can not decorate `static` variables
                 static let invariantA: InvariantA
             }
@@ -449,71 +449,71 @@ final class MacroTests: XCTestCase {
 
     // MARK: FixIt tests
 
-    func test_constructableMacro_addsFixitWhenMultipleInjectableMacrosOntopOfSingleProperty() {
+    func test_instantiableMacro_addsFixitWhenMultipleInjectableMacrosOntopOfSingleProperty() {
         assertMacro {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Provided
-                @Constructed
+                @Inherited
+                @Instantiated
                 let invariantA: InvariantA
             }
             """
         } diagnostics: {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Provided
-                ╰─ 🛑 Dependency can have at most one of @Constructed, @Provided, @Singleton, or @Propagated attached macro
+                @Inherited
+                ╰─ 🛑 Dependency can have at most one of @Instantiated, @Inherited, @Singleton, or @Forwarded attached macro
                    ✏️ Remove excessive attached macros
-                @Constructed
+                @Instantiated
                 let invariantA: InvariantA
             }
             """
         } fixes: {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Provided
+                @Inherited
             }
-            """ // fixes are super wrong here. We delete @Provided not the rest.
+            """ // fixes are super wrong here. We delete @Inherited not the rest.
         }
     }
 
-    func test_constructableAndInjectableMacros_addsFixitWhenInjectableParameterHasInitializer() {
+    func test_instantiableAndInjectableMacros_addsFixitWhenInjectableParameterHasInitializer() {
         assertMacro {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Constructed
+                @Instantiated
                 let invariantA: InvariantA = .init()
             }
             """
         } diagnostics: {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Constructed
+                @Instantiated
                 ╰─ 🛑 Dependency must not have hand-written initializer
                    ✏️ Remove initializer
                 let invariantA: InvariantA = .init()
@@ -521,13 +521,13 @@ final class MacroTests: XCTestCase {
             """
         } fixes: {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Constructed
+                @Instantiated
                 let invariantA: InvariantA 
             }
             """
@@ -548,85 +548,85 @@ final class MacroTests: XCTestCase {
         }
     }
 
-    func test_constructableMacro_addsFixitWhenInjectableTypeIsNotPublicOrOpen() {
+    func test_instantiableMacro_addsFixitWhenInjectableTypeIsNotPublicOrOpen() {
         assertMacro {
             """
-            @Constructable
+            @Instantiable
             struct ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Constructed
+                @Instantiated
                 let invariantA: InvariantA
             }
             """
         } diagnostics: {
             """
-            @Constructable
-            ╰─ 🛑 @Constructable-decorated type must be `public` or `open`
+            @Instantiable
+            ╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
                ✏️ Add `public` modifier
             struct ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Constructed
+                @Instantiated
                 let invariantA: InvariantA
             }
             """
         } fixes: {
             """
-            @Constructable
+            @Instantiable
             public 
             public ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Constructed
+                @Instantiated
                 let invariantA: InvariantA
             }
             """ // this fixes are wrong (we aren't deleting 'struct'), but also the whitespace is wrong in Xcode.
             // TODO: fix Xcode spacing of this replacement.
         } expansion: {
             """
-            @Constructable
+            @Instantiable
             public 
             public ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Constructed
+                @Instantiated
                 let invariantA: InvariantA
             }
             """
         }
     }
 
-    func test_constructableAndInjectableMacros_addsFixitWhenInjectableParameterIsMutable() {
+    func test_instantiableAndInjectableMacros_addsFixitWhenInjectableParameterIsMutable() {
         assertMacro {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Constructed
+                @Instantiated
                 var invariantA: InvariantA
             }
             """
         } diagnostics: {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Constructed
+                @Instantiated
                 var invariantA: InvariantA
                 ┬──
                 ╰─ 🛑 Dependency can not be mutable
@@ -635,13 +635,13 @@ final class MacroTests: XCTestCase {
             """
         } fixes: {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
-                @Constructed let  let invariantA: InvariantA
+                @Instantiated let  let invariantA: InvariantA
             }
             """ // fixes are wrong! It's duplicating the correction. not sure why.
         } expansion: {
@@ -657,24 +657,24 @@ final class MacroTests: XCTestCase {
         }
     }
 
-    func test_constructableMacro_addsFixitMissingRequiredInitializerWithoutAnyDependencies() {
+    func test_instantiableMacro_addsFixitMissingRequiredInitializerWithoutAnyDependencies() {
         assertMacro {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
             }
             """
         } diagnostics: {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
-                                         ╰─ 🛑 @Constructable-decorated type must have initializer for all injected parameters
+                                         ╰─ 🛑 @Instantiable-decorated type must have initializer for all injected parameters
                                             ✏️ Add required initializer
             }
             """
         } fixes: {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
             init() {}
 
@@ -690,34 +690,34 @@ final class MacroTests: XCTestCase {
         }
     }
 
-    func test_constructableAndInjectableMacros_addsFixitMissingRequiredInitializerWithDependencies() {
+    func test_instantiableAndInjectableMacros_addsFixitMissingRequiredInitializerWithDependencies() {
         assertMacro {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
-                @Constructed
+                @Instantiated
                 let invariantA: InvariantA
             }
             """
         } diagnostics: {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
-                                         ╰─ 🛑 @Constructable-decorated type must have initializer for all injected parameters
+                                         ╰─ 🛑 @Instantiable-decorated type must have initializer for all injected parameters
                                             ✏️ Add required initializer
-                @Constructed
+                @Instantiated
                 let invariantA: InvariantA
             }
             """
         } fixes: {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
             init(invariantA: InvariantA) {
             self.invariantA = invariantA
             }
 
-                @Constructed
+                @Instantiated
                 let invariantA: InvariantA
             }
             """ // Whitespace is correct in Xcode, but not here.
@@ -738,10 +738,10 @@ final class MacroTests: XCTestCase {
         }
     }
 
-    func test_constructableMacro_addsFixitMissingRequiredInitializerWhenDependencyMissingFromInit() {
+    func test_instantiableMacro_addsFixitMissingRequiredInitializerWhenDependencyMissingFromInit() {
         assertMacro {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
                 init(variantA: VariantA, variantB: VariantB) {
                     self.variantA = variantA
@@ -749,19 +749,19 @@ final class MacroTests: XCTestCase {
                     invariantA = InvariantA()
                 }
 
-                @Propagated
+                @Forwarded
                 let variantA: VariantA
-                @Propagated
+                @Forwarded
                 let variantB: VariantB
-                @Provided
+                @Inherited
                 let invariantA: InvariantA
             }
             """
         } diagnostics: {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
-                                         ╰─ 🛑 @Constructable-decorated type must have initializer for all injected parameters
+                                         ╰─ 🛑 @Instantiable-decorated type must have initializer for all injected parameters
                                             ✏️ Add required initializer
                 init(variantA: VariantA, variantB: VariantB) {
                     self.variantA = variantA
@@ -769,17 +769,17 @@ final class MacroTests: XCTestCase {
                     invariantA = InvariantA()
                 }
 
-                @Propagated
+                @Forwarded
                 let variantA: VariantA
-                @Propagated
+                @Forwarded
                 let variantB: VariantB
-                @Provided
+                @Inherited
                 let invariantA: InvariantA
             }
             """
         } fixes: {
             """
-            @Constructable
+            @Instantiable
             public struct ExampleService {
             init(variantA: VariantA, variantB: VariantB, invariantA: InvariantA) {
             self.variantA = variantA
@@ -793,11 +793,11 @@ final class MacroTests: XCTestCase {
                     invariantA = InvariantA()
                 }
 
-                @Propagated
+                @Forwarded
                 let variantA: VariantA
-                @Propagated
+                @Forwarded
                 let variantB: VariantB
-                @Provided
+                @Inherited
                 let invariantA: InvariantA
             }
             """

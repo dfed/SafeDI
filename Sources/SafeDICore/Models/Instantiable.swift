@@ -18,27 +18,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-public struct Constructable: Codable, Equatable {
+public struct Instantiable: Codable, Equatable {
 
     // MARK: Initialization
 
     public init?(
-        constructableType: String,
-        additionalConstructableTypes: [String]?,
+        instantiableType: String,
+        additionalInstantiableTypes: [String]?,
         dependencies: [Dependency])
     {
-        self.constructableTypes = [constructableType] + (additionalConstructableTypes ?? [])
+        self.instantiableTypes = [instantiableType] + (additionalInstantiableTypes ?? [])
         self.dependencies = dependencies
     }
 
     // MARK: Public
 
-    /// The types that can be fulfilled with this Constructable.
-    public let constructableTypes: [String]
-    /// The concrete type that fulfills `constructableTypes`.
-    public var concreteConstructableType: String {
-        constructableTypes[0]
+    /// The types that can be fulfilled with this Instantiable.
+    public let instantiableTypes: [String]
+    /// The concrete type that fulfills `instantiableTypes`.
+    public var concreteInstantiableType: String {
+        instantiableTypes[0]
     }
-    /// The ordered dependencies of this Constructable.
+    /// The ordered dependencies of this Instantiable.
     public let dependencies: [Dependency]
 }

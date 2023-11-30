@@ -21,7 +21,7 @@
 import SwiftDiagnostics
 import SwiftSyntax
 
-public final class ConstructableVisitor: SyntaxVisitor {
+public final class InstantiableVisitor: SyntaxVisitor {
 
     // MARK: Initialization
 
@@ -37,7 +37,7 @@ public final class ConstructableVisitor: SyntaxVisitor {
         guard dependencySources.isEmpty || dependencySources.count == 1 else {
             diagnostics.append(Diagnostic(
                 node: node.attributes,
-                error: FixableConstructableError.dependencyHasTooManyAttributes,
+                error: FixableInstantiableError.dependencyHasTooManyAttributes,
                 changes: [
                     .replace(
                         oldNode: Syntax(node.attributes),
@@ -60,7 +60,7 @@ public final class ConstructableVisitor: SyntaxVisitor {
                 bindingWithoutInitializer.initializer = nil
                 diagnostics.append(Diagnostic(
                     node: node,
-                    error: FixableConstructableError.dependencyHasInitializer,
+                    error: FixableInstantiableError.dependencyHasInitializer,
                     changes: [
                         .replace(
                             oldNode: Syntax(binding),
@@ -114,18 +114,18 @@ public final class ConstructableVisitor: SyntaxVisitor {
 
     public private(set) var dependencies = [Dependency]()
     public private(set) var initializers = [Initializer]()
-    public private(set) var constructableType: String?
-    public private(set) var additionalConstructableTypes: [String]?
+    public private(set) var instantiableType: String?
+    public private(set) var additionalInstantiableTypes: [String]?
     public private(set) var diagnostics = [Diagnostic]()
-    public var constructable: Constructable? {
-        guard let constructableType else { return nil }
-        return Constructable(
-            constructableType: constructableType,
-            additionalConstructableTypes: additionalConstructableTypes,
+    public var instantiable: Instantiable? {
+        guard let instantiableType else { return nil }
+        return Instantiable(
+            instantiableType: instantiableType,
+            additionalInstantiableTypes: additionalInstantiableTypes,
             dependencies: dependencies)
     }
 
-    public static let macroName = "Constructable"
+    public static let macroName = "Instantiable"
 
     // MARK: Private
 
@@ -137,7 +137,7 @@ public final class ConstructableVisitor: SyntaxVisitor {
         }
         isInTopLevelDeclaration = true
 
-        constructableType = node.name.text
+        instantiableType = node.name.text
         processAttributes(node.attributes, on: node)
         processModifiers(node.modifiers, on: node)
 
@@ -159,7 +159,7 @@ public final class ConstructableVisitor: SyntaxVisitor {
             return
         }
 
-        additionalConstructableTypes = fulfillingAdditionalTypesArray
+        additionalInstantiableTypes = fulfillingAdditionalTypesArray
             .elements
             .map { $0.expression }
             .compactMap { MemberAccessExprSyntax($0)?.base }
@@ -170,7 +170,7 @@ public final class ConstructableVisitor: SyntaxVisitor {
         if !node.modifiers.containsPublicOrOpen {
             diagnostics.append(Diagnostic(
                 node: node,
-                error: FixableConstructableError.missingPublicOrOpenAttribute,
+                error: FixableInstantiableError.missingPublicOrOpenAttribute,
                 changes: [
                     .replace(
                         oldNode: Syntax(node.modifiers),
