@@ -22,7 +22,7 @@ import SwiftCompilerPlugin
 import SwiftSyntaxMacros
 
 @main
-struct SafeDIPlugin: CompilerPlugin {
+struct SafeDIMacroPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         ConstructableMacro.self,
         InjectableMacro.self,

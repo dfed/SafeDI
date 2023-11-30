@@ -125,7 +125,7 @@ public final class ConstructableVisitor: SyntaxVisitor {
             dependencies: dependencies)
     }
 
-    public static let macroName = "constructable"
+    public static let macroName = "Constructable"
 
     // MARK: Private
 

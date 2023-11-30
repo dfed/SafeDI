@@ -19,7 +19,7 @@
 // SOFTWARE.
 
 /// A representation of a dependency.
-/// e.g. `@singleton let mySingleton: MySingleton`
+/// e.g. `@Singleton let mySingleton: MySingleton`
 public struct Dependency: Codable, Equatable {
     public let property: Property
     public let source: Source
@@ -42,10 +42,14 @@ public struct Dependency: Codable, Equatable {
         }
     }
 
-    public enum Source: String, RawRepresentable, Codable, Equatable {
-        case constructedInvariant = "constructed"
-        case providedInvariant = "provided"
-        case singletonInvariant = "singleton"
-        case propagatedVariant = "propagated"
+    public enum Source: String, CustomStringConvertible, Codable, Equatable {
+        case constructedInvariant = "Constructed"
+        case providedInvariant = "Provided"
+        case singletonInvariant = "Singleton"
+        case propagatedVariant = "Propagated"
+
+        public var description: String {
+            rawValue
+        }
     }
 }
