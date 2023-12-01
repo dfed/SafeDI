@@ -21,7 +21,7 @@
 /// A SafeDI dependency responsible for the lazy instantiation of an `@Instantiable` type.
 /// This class facilitates the delayed creation of an `@Instantiable` instance, making it particularly
 /// useful in scenarios where immediate instantiation is not necessary or desirable. `LazyInstantiator`
-/// facilitates control over memory usage and enables just-in-time instantiation.
+/// facilitates control over memory usage and enables just-in-time instantiation. Instantiation is thread-safe.
 ///
 /// - SeeAlso: `LazyForwardingInstantiator`
 public final class LazyInstantiator<InstantiableType> {

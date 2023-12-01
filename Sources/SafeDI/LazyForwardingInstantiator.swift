@@ -22,6 +22,7 @@
 /// `@Forwarded` properties. This class enables instantiation with specific arguments, facilitating
 /// the inheritance of these arguments by `@Instantiable` types that are `@Instantiated` within
 /// the `InstantiableType`, as well as by all types `@Instantiated` downstream.
+/// Instantiation is thread-safe.
 ///
 /// - SeeAlso: `LazyInstantiator`
 /// - Note: This class is the sole means for instantiating an `@Instantiable` type with `@Forwarded`

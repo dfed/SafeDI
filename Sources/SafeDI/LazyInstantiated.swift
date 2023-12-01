@@ -20,7 +20,7 @@
 
 import Foundation
 
-/// Marks a SafeDI dependency that is instantiated on first access.
+/// Marks a SafeDI dependency that is instantiated on first access. Thread-safe.
 @propertyWrapper public final class LazyInstantiated<InstantiableType> {
 
     // MARK: Initialization
