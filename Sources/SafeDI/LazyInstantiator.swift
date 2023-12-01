@@ -18,23 +18,23 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import XCTest
-
-@testable import SafeDI
-
-final class BuilderTests: XCTestCase {
-    func test_build_returnsNewObjectEachTime() {
-        let systemUnderTest = Builder() { BuiltProduct() }
-        let firstBuiltProduct = systemUnderTest.build()
-        let secondBuiltProduct = systemUnderTest.build()
-        XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
+/// A SafeDI dependency responsible for the lazy instantiation of an `@Instantiable` type.
+/// This class facilitates the delayed creation of an `@Instantiable` instance, making it particularly
+/// useful in scenarios where immediate instantiation is not necessary or desirable. `LazyInstantiator`
+/// facilitates control over memory usage and enables just-in-time instantiation.
+///
+/// - SeeAlso: `LazyForwardingInstantiator`
+public final class LazyInstantiator<InstantiableType> {
+    /// - Parameter instantiator: A closure that returns an instance of `InstantiableType`.
+    public init(_ instantiator: @escaping () -> InstantiableType) {
+        self.instantiator = instantiator
     }
 
-    private final class BuiltProduct: Equatable, Identifiable {
-        static func == (lhs: BuilderTests.BuiltProduct, rhs: BuilderTests.BuiltProduct) -> Bool {
-            lhs.id == rhs.id
-        }
-
-        let id = UUID().uuidString
+    /// Instantiates and returns a new instance of the `@Instantiable` type.
+    /// - Returns: An `InstantiableType` instance.
+    public func instantiate() -> InstantiableType {
+        instantiator()
     }
+
+    private let instantiator: () -> InstantiableType
 }

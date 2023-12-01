@@ -18,24 +18,23 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A SafeDI dependency that is capable of building an `@Instantiable` type after initialization.
-/// - Note: This type **must** be used to instantiate any `@Instantiable` type with `@Forwarded` properties.
-public final class Builder<Arguments, BuiltType> {
-    public init(_ builder: @escaping (Arguments) -> BuiltType) {
-        self.builder = builder
+import XCTest
+
+@testable import SafeDI
+
+final class LazyInstantiatorTests: XCTestCase {
+    func test_instantiate_returnsNewObjectEachTime() {
+        let systemUnderTest = LazyInstantiator() { BuiltProduct() }
+        let firstBuiltProduct = systemUnderTest.instantiate()
+        let secondBuiltProduct = systemUnderTest.instantiate()
+        XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
     }
 
-    /// - Returns: a new instance of the `@Instantiable` type.
-    public func build(_ arguments: Arguments) -> BuiltType {
-        builder(arguments)
-    }
+    private final class BuiltProduct: Equatable, Identifiable {
+        static func == (lhs: BuiltProduct, rhs: BuiltProduct) -> Bool {
+            lhs.id == rhs.id
+        }
 
-    private let builder: (Arguments) -> BuiltType
-}
-
-extension Builder where Arguments == Void {
-    /// - Returns: a new instance of the `@Instantiable` type.
-    public func build() -> BuiltType {
-        build(())
+        let id = UUID().uuidString
     }
 }

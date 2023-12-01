@@ -21,34 +21,34 @@
 import Foundation
 
 /// Marks a SafeDI dependency that is instantiated on first access.
-@propertyWrapper public final class LazyInstantiated<BuiltType> {
+@propertyWrapper public final class LazyInstantiated<InstantiableType> {
 
     // MARK: Initialization
 
-    public init(synchronization: SynchronizationBehavior = .main, _ builder: Builder<(), BuiltType>) {
-        self.builder = builder
+    public init(synchronization: SynchronizationBehavior = .main, _ builder: LazyInstantiator<InstantiableType>) {
+        self.lazyInstantiator = builder
         self.synchronization = synchronization
     }
 
     // MARK: Public
 
-    public var wrappedValue: BuiltType {
+    public var wrappedValue: InstantiableType {
         synchronization.sync {
-            if let builtValue = self._unsafeBuiltValue {
-                return builtValue
+            if let instantiated = self._unsafeInstantiated {
+                return instantiated
             } else {
-                let builtValue = self.builder.build()
-                self._unsafeBuiltValue = builtValue
-                return builtValue
+                let instantiated = self.lazyInstantiator.instantiate()
+                self._unsafeInstantiated = instantiated
+                return instantiated
             }
         }
     }
 
     // MARK: Private
 
-    private let builder: Builder<(), BuiltType>
+    private let lazyInstantiator: LazyInstantiator<InstantiableType>
     private let synchronization: SynchronizationBehavior
-    private var _unsafeBuiltValue: BuiltType?
+    private var _unsafeInstantiated: InstantiableType?
 
     // MARK: - SynchronizationBehavior
 
