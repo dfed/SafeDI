@@ -117,15 +117,18 @@ public final class InstantiableVisitor: SyntaxVisitor {
     public private(set) var instantiableType: String?
     public private(set) var additionalInstantiableTypes: [String]?
     public private(set) var diagnostics = [Diagnostic]()
-    public var instantiable: Instantiable? {
+
+    public static let macroName = "Instantiable"
+
+    // MARK: Internal
+
+    var instantiable: Instantiable? {
         guard let instantiableType else { return nil }
         return Instantiable(
             instantiableType: instantiableType,
             additionalInstantiableTypes: additionalInstantiableTypes,
             dependencies: dependencies)
     }
-
-    public static let macroName = "Instantiable"
 
     // MARK: Private
 
