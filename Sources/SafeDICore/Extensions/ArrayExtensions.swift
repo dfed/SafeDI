@@ -41,7 +41,7 @@ extension Array where Element == Dependency {
             firstName: Initializer.Argument.dependenciesArgumentName,
             colon: .colonToken(trailingTrivia: .space),
             type: buildDependenciesFunctionSignature,
-            trailingComma: filter { $0.isVariant }.isEmpty ? nil : .commaToken(trailingTrivia: .space)
+            trailingComma: filter { $0.isForwarded }.isEmpty ? nil : .commaToken(trailingTrivia: .space)
         )
     }
 
@@ -90,7 +90,7 @@ extension Array where Element == Dependency {
     }
 
     var variantUnamedTuples: [TupleTypeElementSyntax] {
-        filter { $0.isVariant }
+        filter { $0.isForwarded }
             .map(\.property.asUnnamedTupleTypeElement)
             .transformUntilLast {
                 var node = $0
@@ -110,7 +110,7 @@ extension Array where Element == Dependency {
     }
 
     var forwardedFunctionParameters: [FunctionParameterSyntax] {
-        filter { $0.isVariant }
+        filter { $0.isForwarded }
             .map { $0.property.asFunctionParamter }
             .transformUntilLast {
                 var node = $0
@@ -120,7 +120,7 @@ extension Array where Element == Dependency {
     }
 
     var forwardedLabeledExpressions: [LabeledExprSyntax] {
-        filter { $0.isVariant }
+        filter { $0.isForwarded }
             .map { $0.property.asUnnamedLabeledExpr }
             .transformUntilLast {
                 var node = $0

@@ -26,21 +26,12 @@ public struct Dependency: Codable, Hashable {
     public let property: Property
     public let source: Source
 
-    public var isVariant: Bool {
+    public var isForwarded: Bool {
         switch source {
         case .instantiated, .lazyInstantiated, .inherited, .singleton:
             return false
         case .forwarded:
             return true
-        }
-    }
-
-    public var isInvariant: Bool {
-        switch source {
-        case .instantiated, .lazyInstantiated, .inherited, .singleton:
-            return true
-        case .forwarded:
-            return false
         }
     }
 
