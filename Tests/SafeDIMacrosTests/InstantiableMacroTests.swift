@@ -160,7 +160,7 @@ final class InstantiableMacroTests: XCTestCase {
         assertMacroExpansion(
             """
             @Instantiable(fulfillingAdditionalTypes: [ExampleService.self])
-            public struct DefaultExampleService: ExampleService {
+            public actor DefaultExampleService: ExampleService {
                 init(
                     invariantA: InvariantA,
                     invariantB: InvariantB,
