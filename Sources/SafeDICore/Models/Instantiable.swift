@@ -23,8 +23,8 @@ struct Instantiable: Codable {
     // MARK: Initialization
 
     init(
-        instantiableType: String,
-        additionalInstantiableTypes: [String]?,
+        instantiableType: TypeDescription,
+        additionalInstantiableTypes: [TypeDescription]?,
         dependencies: [Dependency])
     {
         self.instantiableTypes = [instantiableType] + (additionalInstantiableTypes ?? [])
@@ -34,9 +34,9 @@ struct Instantiable: Codable {
     // MARK: Public
 
     /// The types that can be fulfilled with this Instantiable.
-    let instantiableTypes: [String]
+    let instantiableTypes: [TypeDescription]
     /// The concrete type that fulfills `instantiableTypes`.
-    var concreteInstantiableType: String {
+    var concreteInstantiableType: TypeDescription {
         instantiableTypes[0]
     }
     /// The ordered dependencies of this Instantiable.

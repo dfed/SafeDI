@@ -114,8 +114,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
     public private(set) var dependencies = [Dependency]()
     public private(set) var initializers = [Initializer]()
-    public private(set) var instantiableType: String?
-    public private(set) var additionalInstantiableTypes: [String]?
+    public private(set) var instantiableType: TypeDescription?
+    public private(set) var additionalInstantiableTypes: [TypeDescription]?
     public private(set) var diagnostics = [Diagnostic]()
 
     public static let macroName = "Instantiable"
@@ -135,12 +135,19 @@ public final class InstantiableVisitor: SyntaxVisitor {
     private var isInTopLevelDeclaration = false
 
     private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
+        guard node.attributes.instantiableMacro != nil else {
+            // Not an instantiable type. We do not care.
+            return .skipChildren
+        }
         guard !isInTopLevelDeclaration else {
             return .skipChildren
         }
         isInTopLevelDeclaration = true
 
-        instantiableType = node.name.text
+        instantiableType = .simple(
+            name: node.name.text,
+            generics: []
+        )
         processAttributes(node.attributes, on: node)
         processModifiers(node.modifiers, on: node)
 
@@ -148,7 +155,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
     }
 
     private func processAttributes(_ attributes: AttributeListSyntax, on node: some ConcreteDeclSyntaxProtocol) {
-        guard let macro = attributes.constructingMacro else {
+        guard let macro = attributes.instantiableMacro else {
             assertionFailure("Constructing macro not found despite processing top-level declaration")
             return
         }
@@ -164,9 +171,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
         additionalInstantiableTypes = fulfillingAdditionalTypesArray
             .elements
-            .map { $0.expression }
-            .compactMap { MemberAccessExprSyntax($0)?.base }
-            .compactMap { DeclReferenceExprSyntax($0)?.baseName.text }
+            .map { $0.expression.typeDescription }
     }
 
     private func processModifiers(_ modifiers: DeclModifierListSyntax, on node: some ConcreteDeclSyntaxProtocol) {
