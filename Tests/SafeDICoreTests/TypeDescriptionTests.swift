@@ -396,7 +396,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.typeIdentifier?.asSource, "Int")
+        let typeDescription = try XCTUnwrap(visitor.typeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Int")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAMemberTypeSyntax_findsTheType() throws {
@@ -407,7 +409,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.nestedType?.asSource, "Swift.Int")
+        let typeDescription = try XCTUnwrap(visitor.nestedType)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Swift.Int")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAMemberTypeSyntax_withRightHandGeneric_findsTheType() throws {
@@ -418,7 +422,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.nestedType?.asSource, "Swift.Array<Int>")
+        let typeDescription = try XCTUnwrap(visitor.nestedType)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Swift.Array<Int>")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAMemberTypeSyntax_withLeftHandGeneric_findsTheType() throws {
@@ -429,7 +435,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.nestedType?.asSource, "OuterGenericType<Int>.InnerType")
+        let typeDescription = try XCTUnwrap(visitor.nestedType)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "OuterGenericType<Int>.InnerType")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAMemberTypeSyntax_withGenericOnBothSides_findsTheType() throws {
@@ -440,7 +448,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.nestedType?.asSource, "OuterGenericType<Int>.InnerGenericType<String>")
+        let typeDescription = try XCTUnwrap(visitor.nestedType)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "OuterGenericType<Int>.InnerGenericType<String>")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingACompositionTypeSyntax_findsTheType() throws {
@@ -451,7 +461,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = CompositionTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.composedTypeIdentifier?.asSource, "Foo & Bar")
+        let typeDescription = try XCTUnwrap(visitor.composedTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Foo & Bar")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAOptionalTypeSyntax_findsTheType() throws {
@@ -462,7 +474,11 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = OptionalTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertTrue(visitor.optionalTypeIdentifiers.map { $0.asSource }.contains("AnyObject?"))
+        for optionalTypeIdentifier in visitor.optionalTypeIdentifiers {
+            guard optionalTypeIdentifier.asSource != "Something" else { continue }
+            XCTAssertFalse(optionalTypeIdentifier.isUnknown, "Type description is not of known type!")
+            XCTAssertTrue(optionalTypeIdentifier.asSource.contains("AnyObject?"))
+        }
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAImplicitlyUnwrappedOptionalTypeSyntax_findsTheType() throws {
@@ -473,7 +489,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = ImplicitlyUnwrappedOptionalTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.implictlyUnwrappedOptionalTypeIdentifier?.asSource, "Int!")
+        let typeDescription = try XCTUnwrap(visitor.implictlyUnwrappedOptionalTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Int!")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAType_findsTheType() throws {
@@ -484,7 +502,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = MetatypeTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.metatypeTypeIdentifier?.asSource, "Int.Type")
+        let typeDescription = try XCTUnwrap(visitor.metatypeTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Int.Type")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAProtocol_findsTheType() throws {
@@ -495,7 +515,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = MetatypeTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.metatypeTypeIdentifier?.asSource, "Equatable.Protocol")
+        let typeDescription = try XCTUnwrap(visitor.metatypeTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Equatable.Protocol")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingASomeOrAnyTypeSyntax_withSome_findsTheType() throws {
@@ -506,7 +528,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = SomeOrAnyTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.someOrAnyTypeIdentifier?.asSource, "some Equatable")
+        let typeDescription = try XCTUnwrap(visitor.someOrAnyTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "some Equatable")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingASomeOrAnyTypeSyntax_withAny_findsTheType() throws {
@@ -517,7 +541,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = SomeOrAnyTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.someOrAnyTypeIdentifier?.asSource, "any Equatable")
+        let typeDescription = try XCTUnwrap(visitor.someOrAnyTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "any Equatable")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnAttributedTypeSyntax_findsTheType() throws {
@@ -528,7 +554,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = AttributedTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.attributedTypeIdentifier?.asSource, "inout Int")
+        let typeDescription = try XCTUnwrap(visitor.attributedTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "inout Int")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnAttributedTypeSyntax_withAttributes_findsTheType() throws {
@@ -539,7 +567,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = AttributedTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.attributedTypeIdentifier?.asSource, "@autoclosure () -> Void")
+        let typeDescription = try XCTUnwrap(visitor.attributedTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "@autoclosure () -> Void")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnAttributedTypeSyntax_withSpecifierAndAttributes_findsTheType() throws {
@@ -550,7 +580,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = AttributedTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.attributedTypeIdentifier?.asSource, "inout @autoclosure () -> Void")
+        let typeDescription = try XCTUnwrap(visitor.attributedTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "inout @autoclosure () -> Void")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnArrayTypeSyntax_findsTheType() throws {
@@ -561,7 +593,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = ArrayTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.arrayTypeIdentifier?.asSource, "Array<Int>")
+        let typeDescription = try XCTUnwrap(visitor.arrayTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Array<Int>")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnArray_notOfFormArrayTypeSyntax_findsTheType() throws {
@@ -572,7 +606,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.typeIdentifier?.asSource, "Array<Int>")
+        let typeDescription = try XCTUnwrap(visitor.typeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Array<Int>")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnArray_ofTwoDimensions_findsTheType() throws {
@@ -583,7 +619,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.typeIdentifier?.asSource, "Array<Array<Int>>")
+        let typeDescription = try XCTUnwrap(visitor.typeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Array<Array<Int>>")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingADictionaryTypeSyntax_findsTheType() throws {
@@ -594,7 +632,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = DictionaryTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.dictionaryTypeIdentifier?.asSource, "Dictionary<Int, String>")
+        let typeDescription = try XCTUnwrap(visitor.dictionaryTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Dictionary<Int, String>")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingADictionary_notOfFormDictionaryTypeSyntax_findsTheType() throws {
@@ -605,7 +645,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.typeIdentifier?.asSource, "Dictionary<Int, String>")
+        let typeDescription = try XCTUnwrap(visitor.typeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Dictionary<Int, String>")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingADictionary_OfTwoDimensions_findsTheType() throws {
@@ -616,7 +658,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.typeIdentifier?.asSource, "Dictionary<Int, Dictionary<Int, String>>")
+        let typeDescription = try XCTUnwrap(visitor.typeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Dictionary<Int, Dictionary<Int, String>>")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingATupleTypeSyntax_findsTheType() throws {
@@ -627,7 +671,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.tupleTypeIdentifier?.asSource, "(Int, String)")
+        let typeDescription = try XCTUnwrap(visitor.tupleTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "(Int, String)")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAClassRestrictionTypeSyntax_findsTheType() throws {
@@ -638,7 +684,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = ClassRestrictionTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.classRestrictionIdentifier?.asSource, "AnyObject")
+        let typeDescription = try XCTUnwrap(visitor.classRestrictionIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "AnyObject")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAFunctionTypeSyntax_onAFunctionThatDoesNotThrow_findsTheType() throws {
@@ -649,7 +697,9 @@ final class TypeDescriptionTests: XCTestCase {
         let visitor = FunctionTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        XCTAssertEqual(visitor.functionIdentifier?.asSource, "(Int, Double) -> String")
+        let typeDescription = try XCTUnwrap(visitor.functionIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "(Int, Double) -> String")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAFunctionTypeSyntax_onAFunctionThatThrows_findsTheType() throws {
@@ -659,8 +709,176 @@ final class TypeDescriptionTests: XCTestCase {
 
         let visitor = FunctionTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.functionIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "(Int, Double) throws -> String")
+    }
 
-        XCTAssertEqual(visitor.functionIdentifier?.asSource, "(Int, Double) throws -> String")
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingASimpleType_findsTheType() throws {
+        let content = """
+            let type: Any.Type = String.self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "String")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingASimpleTypeWithGenerics_findsTheType() throws {
+        let content = """
+            let test: Any.Type = Array<Int>.self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Array<Int>")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingANestedTypeWithGenerics_findsTheType() throws {
+        let content = """
+            let test: Any.Type = Swift.Array<Int>.self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Swift.Array<Int>")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAnAnyType_findsTheType() throws {
+        let content = """
+            let test: Any.Type = (any Collection).self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "any Collection")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingACompositionType_findsTheType() throws {
+        let content = """
+            let test: Any.Type = (Decodable & Encodable).self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Decodable & Encodable")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAnOptionalType_findsTheType() throws {
+        let content = """
+            let test: Any.Type = Int?.self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Int?")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAMetatypeType_findsTheType() throws {
+        let content = """
+            let test: Any.Type = Int.Type.self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Int.Type")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAMetatypeProtocol_findsTheType() throws {
+        let content = """
+            let test: Any.Type = Int.Protocol.self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Int.Protocol")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAnArrayType_findsTheType() throws {
+        let content = """
+            let test: Any.Type = [Int].self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Array<Int>")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingADictionaryType_findsTheType() throws {
+        let content = """
+            let test: Any.Type = [Int: String].self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Dictionary<Int, String>")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingATupleType_findsTheType() throws {
+        let content = """
+            let test: Any.Type = (Int, String).self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "(Int, String)")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAClosureType_findsTheType() throws {
+        let content = """
+            let test: Any.Type = (() -> ()).self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "() -> ()")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAThrowingClosureType_findsTheType() throws {
+        let content = """
+            let test: Any.Type = (() throws -> ()).self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "() throws -> ()")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAnAsyncClosureType_findsTheType() throws {
+        let content = """
+            let test: Any.Type = (() async -> ()).self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "() async -> ()")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAnAsyncThrowingClosureType_findsTheType() throws {
+        let content = """
+            let test: Any.Type = (() async throws -> ()).self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "() async throws -> ()")
     }
 
     func test_asSource_whenDescribingAnUnknownCase_returnsTheProvidedStringWithWhitespaceStripped() {
@@ -769,6 +987,13 @@ final class TypeDescriptionTests: XCTestCase {
         // but there's no way to get a TypeSyntax from an object of that type.
         override func visit(_ node: TypeAnnotationSyntax) -> SyntaxVisitorContinueKind {
             functionIdentifier = node.type.as(TypeSyntax.self)?.typeDescription
+            return .skipChildren
+        }
+    }
+    private final class MemberAccessExprSyntaxVisitor: SyntaxVisitor {
+        var typeDescription: TypeDescription?
+        override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
+            typeDescription = ExprSyntax(node).typeDescription
             return .skipChildren
         }
     }

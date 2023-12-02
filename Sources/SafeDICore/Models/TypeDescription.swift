@@ -134,7 +134,7 @@ public enum TypeDescription: Codable, Hashable {
         case let .tuple(types):
             return "(\(types.map { $0.asSource }.joined(separator: ", ")))"
         case let .closure(arguments, isAsync, doesThrow, returnType):
-            return "(\(arguments.map { $0.asSource }.joined(separator: ", ")))\([isAsync ? " async" : "", doesThrow ? " throws" : ""].filter { !$0.isEmpty }.joined(separator: " ")) -> \(returnType.asSource)"
+            return "(\(arguments.map { $0.asSource }.joined(separator: ", ")))\([isAsync ? " async" : "", doesThrow ? " throws" : ""].filter { !$0.isEmpty }.joined()) -> \(returnType.asSource)"
         case let .unknown(text):
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -288,6 +288,27 @@ public enum TypeDescription: Codable, Hashable {
         case unknownCase
     }
 
+    var isUnknown: Bool {
+        switch self {
+        case .any,
+                .array,
+                .attributed,
+                .closure,
+                .composition,
+                .dictionary,
+                .implicitlyUnwrappedOptional,
+                .metatype,
+                .nested,
+                .optional,
+                .simple,
+                .some,
+                .tuple:
+            return false
+        case .unknown:
+            return true
+        }
+    }
+
     private var caseDescription: String {
         switch self {
         case .composition:
@@ -339,7 +360,7 @@ public enum TypeDescription: Codable, Hashable {
 
 extension TypeSyntax {
 
-    /// Returns the type description for the receiver.
+    /// - Returns: the type description for the receiver.
     var typeDescription: TypeDescription {
         if let typeIdentifier = IdentifierTypeSyntax(self) {
             let genericTypeVisitor = GenericArgumentVisitor(viewMode: .sourceAccurate)
@@ -422,6 +443,133 @@ extension TypeSyntax {
         } else {
             assertionFailure("TypeSyntax of unknown type. Defaulting to `description`.")
             // The description is a source-accurate description of this node, so it is a reasonable fallback.
+            return .unknown(text: description)
+        }
+    }
+}
+
+extension ExprSyntax {
+    var typeDescription: TypeDescription {
+        if let typeExpr = TypeExprSyntax(self) {
+            return typeExpr.type.typeDescription
+
+        } else if let declReferenceExpr = DeclReferenceExprSyntax(self) {
+            return TypeSyntax(
+                IdentifierTypeSyntax(
+                    name: declReferenceExpr.baseName,
+                    genericArgumentClause: nil
+                )
+            ).typeDescription
+        } else if let memberAccessExpr = MemberAccessExprSyntax(self) {
+            if memberAccessExpr.declName.baseName.text == "self" {
+                if let base = memberAccessExpr.base {
+                    return base.typeDescription
+                } else {
+                    return .unknown(text: memberAccessExpr.description)
+                }
+            } else {
+                if let base = memberAccessExpr.base {
+                    let declName = memberAccessExpr.declName.baseName.text
+                    if declName == "Type" {
+                        return .metatype(base.typeDescription, isType: true)
+                    } else if declName == "Protocol" {
+                        return .metatype(base.typeDescription, isType: false)
+                    } else {
+                        return .nested(
+                            name: declName,
+                            parentType: base.typeDescription,
+                            generics: []
+                        )
+                    }
+                } else {
+                    return .unknown(text: memberAccessExpr.description)
+                }
+            }
+        } else if let genericExpr = GenericSpecializationExprSyntax(self) {
+            let genericTypeVisitor = GenericArgumentVisitor(viewMode: .sourceAccurate)
+            genericTypeVisitor.walk(genericExpr.genericArgumentClause)
+            switch genericExpr.expression.typeDescription {
+            case let .simple(name, _):
+                return .simple(
+                    name: name,
+                    generics: genericTypeVisitor.genericArguments
+                )
+            case let .nested(name, parentType, _):
+                return .nested(
+                    name: name,
+                    parentType: parentType, generics: genericTypeVisitor.genericArguments
+                )
+            case .any,
+                    .array,
+                    .attributed,
+                    .closure,
+                    .composition,
+                    .dictionary,
+                    .implicitlyUnwrappedOptional,
+                    .metatype,
+                    .optional,
+                    .some,
+                    .tuple,
+                    .unknown:
+                return .unknown(text: description)
+            }
+        } else if let tupleExpr = TupleExprSyntax(self) {
+            let tupleTypes = tupleExpr.elements.map(\.expression.typeDescription)
+            if tupleTypes.count == 1 {
+                // Single-element tuple types must be unwrapped.
+                // Certain types can not be in a Any.Type list without being wrapped
+                // in a tuple. We care only about the underlying types in this case.
+                // A @Instantiable that fulfills an addition type `(some Collection).self`
+                // should be unwrapped as `some Collection` to enable the @Instantiable
+                // to fulfill `some Collection`.
+                return tupleTypes[0]
+            } else {
+                return .tuple(tupleTypes)
+            }
+        } else if let sequenceExpr = SequenceExprSyntax(self) {
+            if sequenceExpr.elements.contains(where: { BinaryOperatorExprSyntax($0) != nil }) {
+                return .composition(
+                    sequenceExpr
+                        .elements
+                        .filter { BinaryOperatorExprSyntax($0) == nil }
+                        .map(\.typeDescription)
+                )
+            } else if
+                sequenceExpr.elements.count == 3,
+                let arguments = TupleExprSyntax(sequenceExpr.elements.first),
+                let arrow = ArrowExprSyntax(sequenceExpr.elements[
+                    sequenceExpr.elements.index(after: sequenceExpr.elements.startIndex)
+                ]),
+                let returnType = sequenceExpr.elements.last
+            {
+                return .closure(
+                    arguments: arguments.elements.map(\.expression.typeDescription),
+                    isAsync: arrow.effectSpecifiers?.asyncSpecifier != nil,
+                    doesThrow: arrow.effectSpecifiers?.throwsSpecifier != nil,
+                    returnType: returnType.typeDescription
+                )
+            } else {
+                return .unknown(text: description)
+            }
+        } else if let optionalChainingExpr = OptionalChainingExprSyntax(self) {
+            return .optional(optionalChainingExpr.expression.typeDescription)
+        } else if
+            let arrayExpr = ArrayExprSyntax(self),
+            arrayExpr.elements.count == 1,
+            let onlyElement = arrayExpr.elements.first
+        {
+            return .array(element: onlyElement.expression.typeDescription)
+        } else if
+            let dictionaryExpr = DictionaryExprSyntax(self),
+            let content = DictionaryElementListSyntax(dictionaryExpr.content),
+            content.count == 1,
+            let onlyElement = DictionaryElementSyntax(content.first)
+        {
+            return .dictionary(
+                key: onlyElement.key.typeDescription,
+                value: onlyElement.value.typeDescription
+            )
+        } else {
             return .unknown(text: description)
         }
     }
