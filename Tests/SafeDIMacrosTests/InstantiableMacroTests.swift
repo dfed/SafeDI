@@ -180,7 +180,7 @@ final class InstantiableMacroTests: XCTestCase {
             }
             """,
             expandedSource: """
-            public struct DefaultExampleService: ExampleService {
+            public actor DefaultExampleService: ExampleService {
                 init(
                     invariantA: InvariantA,
                     invariantB: InvariantB,
