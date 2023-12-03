@@ -20,7 +20,6 @@
 
 import SwiftSyntax
 
-// @DAN TODO: write tests! cover nested @Instantiable types too
 /// A visitor that can read entire files. A single `FileVisitor` can be used to walk every file in a module.
 final class FileVisitor: SyntaxVisitor {
 
