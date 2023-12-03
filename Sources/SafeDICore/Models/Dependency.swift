@@ -23,6 +23,9 @@ import SwiftSyntax
 /// A representation of a dependency.
 /// e.g. `@Singleton let mySingleton: MySingleton`
 public struct Dependency: Codable, Hashable {
+
+    // MARK: Public
+
     public let property: Property
     public let source: Source
 

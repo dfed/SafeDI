@@ -21,73 +21,73 @@
 import SwiftSyntax
 
 /// A visitor that can read entire files. A single `FileVisitor` can be used to walk every file in a module.
-final class FileVisitor: SyntaxVisitor {
+public final class FileVisitor: SyntaxVisitor {
 
     // MARK: Initialization
 
-    init() {
+    public init() {
         super.init(viewMode: .sourceAccurate)
     }
 
     // MARK: SyntaxVisitor
 
-    override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
         .skipChildren
     }
 
-    override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
         .skipChildren
     }
 
-    override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
         .skipChildren
     }
 
-    override func visit(_ node: ImportDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_ node: ImportDeclSyntax) -> SyntaxVisitorContinueKind {
         .skipChildren
     }
 
-    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
         .skipChildren
     }
 
-    override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
         visitDecl(node)
     }
 
-    override func visitPost(_ node: ClassDeclSyntax) {
+    public override func visitPost(_ node: ClassDeclSyntax) {
         visitPostDecl(node)
     }
 
-    override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
         visitDecl(node)
     }
 
-    override func visitPost(_ node: ActorDeclSyntax) {
+    public override func visitPost(_ node: ActorDeclSyntax) {
         visitPostDecl(node)
     }
 
-    override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
         visitDecl(node)
     }
 
-    override func visitPost(_ node: StructDeclSyntax) {
+    public override func visitPost(_ node: StructDeclSyntax) {
         visitPostDecl(node)
     }
 
-    override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
         declSyntaxParentCount += 1
         return .visitChildren // Make sure there aren't `@Instantiable`s declared within an enum.
     }
 
-    override func visitPost(_ node: EnumDeclSyntax) {
+    public override func visitPost(_ node: EnumDeclSyntax) {
         declSyntaxParentCount -= 1
     }
 
-    // MARK: Internal
+    // MARK: Public
 
-    var instantiables = [Instantiable]()
-    var disallowedInstantiableDecoratedTypeDescriptions = [TypeDescription]()
+    public var instantiables = [Instantiable]()
+    public var nestedInstantiableDecoratedTypeDescriptions = [TypeDescription]()
 
     // MARK: Private
 
@@ -99,7 +99,7 @@ final class FileVisitor: SyntaxVisitor {
             let instantiableVisitor = InstantiableVisitor()
             instantiableVisitor.walk(node)
             if let instantiableType = instantiableVisitor.instantiableType {
-                disallowedInstantiableDecoratedTypeDescriptions.append(instantiableType)
+                nestedInstantiableDecoratedTypeDescriptions.append(instantiableType)
             }
             return .visitChildren
         }

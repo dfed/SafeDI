@@ -71,7 +71,7 @@ final class FileVisitorTests: XCTestCase {
             ]
         )
         XCTAssertEqual(
-            fileVisitor.disallowedInstantiableDecoratedTypeDescriptions,
+            fileVisitor.nestedInstantiableDecoratedTypeDescriptions,
             []
         )
     }
@@ -127,7 +127,7 @@ final class FileVisitorTests: XCTestCase {
             ]
         )
         XCTAssertEqual(
-            fileVisitor.disallowedInstantiableDecoratedTypeDescriptions,
+            fileVisitor.nestedInstantiableDecoratedTypeDescriptions,
             []
         )
     }
@@ -154,7 +154,7 @@ final class FileVisitorTests: XCTestCase {
             ]
         )
         XCTAssertEqual(
-            fileVisitor.disallowedInstantiableDecoratedTypeDescriptions,
+            fileVisitor.nestedInstantiableDecoratedTypeDescriptions,
             [
                 .simple(name: "InnerLevel")
             ]
@@ -174,7 +174,7 @@ final class FileVisitorTests: XCTestCase {
             []
         )
         XCTAssertEqual(
-            fileVisitor.disallowedInstantiableDecoratedTypeDescriptions,
+            fileVisitor.nestedInstantiableDecoratedTypeDescriptions,
             [
                 .simple(name: "InnerLevel")
             ]

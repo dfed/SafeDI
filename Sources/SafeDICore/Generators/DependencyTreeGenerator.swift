@@ -18,27 +18,21 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-public struct Instantiable: Codable, Hashable {
+public final class DependencyTreeGenerator {
 
     // MARK: Initialization
 
-    public init(
-        instantiableType: TypeDescription,
-        additionalInstantiableTypes: [TypeDescription]?,
-        dependencies: [Dependency])
-    {
-        self.instantiableTypes = [instantiableType] + (additionalInstantiableTypes ?? [])
-        self.dependencies = dependencies
+    public init(typeDescriptionToFulfillingInstantiable: [TypeDescription : Instantiable]) {
+        self.typeDescriptionToFulfillingInstantiable = typeDescriptionToFulfillingInstantiable
     }
 
     // MARK: Public
 
-    /// The types that can be fulfilled with this Instantiable.
-    public let instantiableTypes: [TypeDescription]
-    /// The concrete type that fulfills `instantiableTypes`.
-    public var concreteInstantiableType: TypeDescription {
-        instantiableTypes[0]
+    public func generate() async throws -> String {
+        "" // TODO: actually generate the type
     }
-    /// The ordered dependencies of this Instantiable.
-    public let dependencies: [Dependency]
+
+    // MARK: Private
+
+    private let typeDescriptionToFulfillingInstantiable: [TypeDescription : Instantiable]
 }

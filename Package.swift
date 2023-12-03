@@ -14,17 +14,34 @@ let package = Package(
         .macCatalyst(.v13)
     ],
     products: [
+        /// A library containing SafeDI macros, property wrappers, and types.
         .library(
             name: "SafeDI",
             targets: ["SafeDI"]
         ),
+        /// A SafeDI plugin that must be run on non-root source modules in a project.
+        .plugin(
+            name: "SafeDICollectInstantiables",
+            targets: ["SafeDICollectInstantiables"]
+        ),
+        /// A SafeDI plugin that must be run on the root source module in a project.
+        .plugin(
+            name: "SafeDIGenerateDependencyTree",
+            targets: ["SafeDIGenerateDependencyTree"]
+        )
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-syntax.git", from: "509.0.0"),
-        .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.2.0"),
+        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.0"),
+        .package(url: "https://github.com/michaeleisel/ZippyJSON.git", from: "1.2.0"),
+        .package(url: "https://github.com/pointfreeco/swift-macro-testing.git", from: "0.2.0"),
     ],
     targets: [
-        .target(name: "SafeDI", dependencies: ["SafeDIMacros"]),
+        // Macros
+        .target(
+            name: "SafeDI",
+            dependencies: ["SafeDIMacros"]
+        ),
         .testTarget(
             name: "SafeDITests",
             dependencies: [
@@ -52,6 +69,30 @@ let package = Package(
                 .product(name: "MacroTesting", package: "swift-macro-testing"),
             ]
         ),
+
+        // Plugins
+        .plugin(
+            name: "SafeDICollectInstantiables",
+            capability: .buildTool(),
+            dependencies: ["SafeDIPlugin"]
+        ),
+        .plugin(
+            name: "SafeDIGenerateDependencyTree",
+            capability: .buildTool(),
+            dependencies: ["SafeDIPlugin"]
+        ),
+        .executableTarget(
+            name: "SafeDIPlugin",
+            dependencies: [
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax"),
+                "ZippyJSON",
+                "SafeDICore",
+            ]
+        ),
+
+        // Core
         .target(
             name: "SafeDICore",
             dependencies: [
@@ -62,9 +103,7 @@ let package = Package(
         ),
         .testTarget(
             name: "SafeDICoreTests",
-            dependencies: [
-                "SafeDICore"
-            ]
+            dependencies: ["SafeDICore"]
         ),
     ]
 )
