@@ -41,4 +41,27 @@ public struct Instantiable: Codable, Hashable {
     }
     /// The ordered dependencies of this Instantiable.
     public let dependencies: [Dependency]
+
+    // MARK: Internal
+
+    var instantiatedProperties: [Property] {
+        dependencies
+            .filter { $0.source == .instantiated }
+            .map(\.property)
+    }
+    var lazyInstantiatedProperties: [Property] {
+        dependencies
+            .filter { $0.source == .lazyInstantiated }
+            .map(\.property)
+    }
+    var singletonProperties: [Property] {
+        dependencies
+            .filter { $0.source == .singleton }
+            .map(\.property)
+    }
+    var forwardedProperties: [Property] {
+        dependencies
+            .filter { $0.source == .forwarded }
+            .map(\.property)
+    }
 }

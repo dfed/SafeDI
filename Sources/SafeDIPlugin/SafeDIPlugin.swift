@@ -52,7 +52,8 @@ struct SafeDIPlugin: AsyncParsableCommand {
 
         if let dependencyTreeOutput {
             try await DependencyTreeGenerator(
-                typeDescriptionToFulfillingInstantiable: try await findSafeDIFulfilledTypes()
+                moduleNames: instantiablesPaths.map { $0.asFileURL.deletingPathExtension().lastPathComponent },
+                typeDescriptionToFulfillingInstantiableMap: try await findSafeDIFulfilledTypes()
             )
             .generate()
             .write(toPath: dependencyTreeOutput)
@@ -97,30 +98,24 @@ struct SafeDIPlugin: AsyncParsableCommand {
             returning: [TypeDescription: Instantiable].self
         ) { taskGroup in
             let decoder = ZippyJSONDecoder()
-            let instantiablesURLs: [URL]
-            if #available(macOS 13.0, *) {
-                instantiablesURLs = instantiablesPaths.map { URL(filePath: $0) }
-            } else {
-                instantiablesURLs = instantiablesPaths.map(URL.init(fileURLWithPath:))
-            }
-
+            let instantiablesURLs = instantiablesPaths.map(\.asFileURL)
             for instantiablesURL in instantiablesURLs {
                 taskGroup.addTask {
                     try decoder.decode([Instantiable].self, from: Data(contentsOf: instantiablesURL))
                 }
             }
-            var typeDescriptionToFulfillingInstantiable = [TypeDescription: Instantiable]()
+            var typeDescriptionToFulfillingInstantiableMap = [TypeDescription: Instantiable]()
             for try await moduleInstantiables in taskGroup {
                 for instantiable in moduleInstantiables {
                     for instantiableType in instantiable.instantiableTypes {
-                        if typeDescriptionToFulfillingInstantiable[instantiableType] != nil {
+                        if typeDescriptionToFulfillingInstantiableMap[instantiableType] != nil {
                             throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)
                         }
-                        typeDescriptionToFulfillingInstantiable[instantiableType] = instantiable
+                        typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
                     }
                 }
             }
-            return typeDescriptionToFulfillingInstantiable
+            return typeDescriptionToFulfillingInstantiableMap
         }
     }
 
@@ -157,5 +152,13 @@ extension Data {
 extension String {
     fileprivate func write(toPath filePath: String) throws {
         try Data(utf8).write(toPath: filePath)
+    }
+
+    fileprivate var asFileURL: URL {
+        if #available(macOS 13.0, *) {
+            URL(filePath: self)
+        } else {
+            URL(fileURLWithPath: self)
+        }
     }
 }
