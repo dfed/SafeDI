@@ -25,8 +25,8 @@ import Foundation
 
     // MARK: Initialization
 
-    public init(synchronization: SynchronizationBehavior = .main, _ builder: LazyInstantiator<InstantiableType>) {
-        self.lazyInstantiator = builder
+    public init(synchronization: SynchronizationBehavior = .main, _ builder: Instantiator<InstantiableType>) {
+        self.instantiator = builder
         self.synchronization = synchronization
     }
 
@@ -37,7 +37,7 @@ import Foundation
             if let instantiated = self._unsafeInstantiated {
                 return instantiated
             } else {
-                let instantiated = self.lazyInstantiator.instantiate()
+                let instantiated = self.instantiator.instantiate()
                 self._unsafeInstantiated = instantiated
                 return instantiated
             }
@@ -46,7 +46,7 @@ import Foundation
 
     // MARK: Private
 
-    private let lazyInstantiator: LazyInstantiator<InstantiableType>
+    private let instantiator: Instantiator<InstantiableType>
     private let synchronization: SynchronizationBehavior
     private var _unsafeInstantiated: InstantiableType?
 

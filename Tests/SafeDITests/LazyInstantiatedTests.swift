@@ -24,7 +24,7 @@ import XCTest
 
 final class LazyInstantiatedTests: XCTestCase {
     func test_wrappedValue_whenSynchronizingOnMainQueue_returnsSameInstanceEachTime() {
-        let systemUnderTest = LazyInstantiated<BuiltProduct>(synchronization: .main, LazyInstantiator { BuiltProduct() })
+        let systemUnderTest = LazyInstantiated<BuiltProduct>(synchronization: .main, Instantiator { BuiltProduct() })
         let firstBuiltProduct = systemUnderTest.wrappedValue
         let secondBuiltProduct = systemUnderTest.wrappedValue
         XCTAssertEqual(firstBuiltProduct, secondBuiltProduct)
@@ -32,7 +32,7 @@ final class LazyInstantiatedTests: XCTestCase {
     }
 
     func test_wrappedValue_whenSynchronizingWithLock_returnsSameInstanceEachTime() {
-        let systemUnderTest = LazyInstantiated<BuiltProduct>(synchronization: .lock(), LazyInstantiator { BuiltProduct() })
+        let systemUnderTest = LazyInstantiated<BuiltProduct>(synchronization: .lock(), Instantiator { BuiltProduct() })
         let firstBuiltProduct = systemUnderTest.wrappedValue
         let secondBuiltProduct = systemUnderTest.wrappedValue
         XCTAssertEqual(firstBuiltProduct, secondBuiltProduct)

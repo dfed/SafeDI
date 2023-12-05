@@ -65,7 +65,7 @@ public struct Dependency: Codable, Hashable {
         case .instantiated, .inherited, .singleton, .forwarded:
             return property.label
         case .lazyInstantiated:
-            return "\(property.label)\(Self.lazyInstantiatorType)"
+            return "\(property.label)\(Self.instantiatorType)"
         }
     }
 
@@ -77,12 +77,12 @@ public struct Dependency: Codable, Hashable {
         case .lazyInstantiated:
             // TODO: fully qualify this type with `SafeDI.` member prefix
             return .simple(
-                name: Self.lazyInstantiatorType,
+                name: Self.instantiatorType,
                 generics: [property.typeDescription]
             )
         }
     }
 
-    static let lazyInstantiatorType = "LazyInstantiator"
-    static let lazyForwardingInstantiatorType = "LazyForwardingInstantiator"
+    static let instantiatorType = "Instantiator"
+    static let forwardingInstantiatorType = "ForwardingInstantiator"
 }

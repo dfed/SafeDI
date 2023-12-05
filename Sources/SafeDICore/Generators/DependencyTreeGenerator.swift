@@ -332,9 +332,9 @@ extension Property {
     fileprivate var nonLazyPropertyType: Scope.PropertyToInstantiate.PropertyType {
         switch typeDescription {
         case let .simple(name, _):
-            if name == Dependency.lazyInstantiatorType {
+            if name == Dependency.instantiatorType {
                 return .instantiator
-            } else if name == Dependency.lazyForwardingInstantiatorType {
+            } else if name == Dependency.forwardingInstantiatorType {
                 return .forwardingInstantiator
             } else {
                 return .constant
@@ -368,11 +368,11 @@ extension TypeDescription {
     fileprivate var asInstantiatedType: TypeDescription {
         switch self {
         case let .simple(name, generics):
-            if name == Dependency.lazyInstantiatorType, let builtType = generics.first {
+            if name == Dependency.instantiatorType, let builtType = generics.first {
                 // This is a type that is lazily instantiated.
                 // The first generic is the built type.
                 return builtType
-            } else if name == Dependency.lazyForwardingInstantiatorType, let builtType = generics.last {
+            } else if name == Dependency.forwardingInstantiatorType, let builtType = generics.last {
                 // This is a type that is lazily instantiated with forwarded arguments.
                 // The last generic is the built type.
                 return builtType

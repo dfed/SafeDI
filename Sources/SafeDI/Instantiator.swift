@@ -18,13 +18,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A SafeDI dependency responsible for the lazy instantiation of an `@Instantiable` type.
+/// A SafeDI dependency responsible for the deferred instantiation of an `@Instantiable` type.
 /// This class facilitates the delayed creation of an `@Instantiable` instance, making it particularly
-/// useful in scenarios where immediate instantiation is not necessary or desirable. `LazyInstantiator`
+/// useful in scenarios where immediate instantiation is not necessary or desirable. `Instantiator`
 /// facilitates control over memory usage and enables just-in-time instantiation. Instantiation is thread-safe.
 ///
-/// - SeeAlso: `LazyForwardingInstantiator`
-public final class LazyInstantiator<InstantiableType> {
+/// - SeeAlso: `ForwardingInstantiator`
+public final class Instantiator<InstantiableType> {
     /// - Parameter instantiator: A closure that returns an instance of `InstantiableType`.
     public init(_ instantiator: @escaping () -> InstantiableType) {
         self.instantiator = instantiator

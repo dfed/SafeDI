@@ -129,8 +129,8 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService {
-                init(invariantALazyInstantiator: LazyInstantiator<InvariantA>) {
-                    _invariantA = LazyInstantiated(invariantALazyInstantiator)
+                init(invariantAInstantiator: Instantiator<InvariantA>) {
+                    _invariantA = LazyInstantiated(invariantAInstantiator)
                 }
 
                 @LazyInstantiated
@@ -139,16 +139,16 @@ final class InstantiableMacroTests: XCTestCase {
             """,
             expandedSource: """
             public struct ExampleService {
-                init(invariantALazyInstantiator: LazyInstantiator<InvariantA>) {
-                    _invariantA = LazyInstantiated(invariantALazyInstantiator)
+                init(invariantAInstantiator: Instantiator<InvariantA>) {
+                    _invariantA = LazyInstantiated(invariantAInstantiator)
                 }
 
                 @LazyInstantiated
                 private var invariantA: InvariantA
 
-                public init(buildSafeDIDependencies: () -> (LazyInstantiator<InvariantA>)) {
+                public init(buildSafeDIDependencies: () -> (Instantiator<InvariantA>)) {
                     let dependencies = buildSafeDIDependencies()
-                    self.init(invariantALazyInstantiator: dependencies)
+                    self.init(invariantAInstantiator: dependencies)
                 }
             }
             """,
@@ -791,13 +791,13 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
-    func test_fixit_addsFixitMissingRequiredInitializerWhenLazyInstantiatorDependencyMissingFromInit() {
+    func test_fixit_addsFixitMissingRequiredInitializerWhenInstantiatorDependencyMissingFromInit() {
         assertMacro {
             """
             @Instantiable
             public struct ExampleService {
                 @Instantiated
-                private let invariantALazyInstantiator: LazyInstantiator<InvariantA>
+                private let invariantAInstantiator: Instantiator<InvariantA>
             }
             """
         } diagnostics: {
@@ -807,32 +807,32 @@ final class InstantiableMacroTests: XCTestCase {
                                          ╰─ 🛑 @Instantiable-decorated type must have initializer for all injected parameters
                                             ✏️ Add required initializer
                 @Instantiated
-                private let invariantALazyInstantiator: LazyInstantiator<InvariantA>
+                private let invariantAInstantiator: Instantiator<InvariantA>
             }
             """
         } fixes: {
             """
             @Instantiable
             public struct ExampleService {
-            init(invariantALazyInstantiator: LazyInstantiator<InvariantA>) {
-            self.invariantALazyInstantiator = invariantALazyInstantiator
+            init(invariantAInstantiator: Instantiator<InvariantA>) {
+            self.invariantAInstantiator = invariantAInstantiator
             }
 
                 @Instantiated
-                private let invariantALazyInstantiator: LazyInstantiator<InvariantA>
+                private let invariantAInstantiator: Instantiator<InvariantA>
             }
             """
         } expansion: {
             """
             public struct ExampleService {
-            init(invariantALazyInstantiator: LazyInstantiator<InvariantA>) {
-            self.invariantALazyInstantiator = invariantALazyInstantiator
+            init(invariantAInstantiator: Instantiator<InvariantA>) {
+            self.invariantAInstantiator = invariantAInstantiator
             }
-                private let invariantALazyInstantiator: LazyInstantiator<InvariantA>
+                private let invariantAInstantiator: Instantiator<InvariantA>
 
-                public init(buildSafeDIDependencies: () -> (LazyInstantiator<InvariantA>)) {
+                public init(buildSafeDIDependencies: () -> (Instantiator<InvariantA>)) {
                     let dependencies = buildSafeDIDependencies()
-                    self.init(invariantALazyInstantiator: dependencies)
+                    self.init(invariantAInstantiator: dependencies)
                 }
             }
             """
@@ -863,8 +863,8 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService {
-            init(invariantALazyInstantiator: LazyInstantiator<InvariantA>) {
-            _invariantA = LazyInstantiated(invariantALazyInstantiator)
+            init(invariantAInstantiator: Instantiator<InvariantA>) {
+            _invariantA = LazyInstantiated(invariantAInstantiator)
             }
 
                 @LazyInstantiated
@@ -874,23 +874,23 @@ final class InstantiableMacroTests: XCTestCase {
         } expansion: {
             """
             public struct ExampleService {
-            init(invariantALazyInstantiator: LazyInstantiator<InvariantA>) {
-            _invariantA = LazyInstantiated(invariantALazyInstantiator)
+            init(invariantAInstantiator: Instantiator<InvariantA>) {
+            _invariantA = LazyInstantiated(invariantAInstantiator)
             }
 
                 @LazyInstantiated
                 private var invariantA: InvariantA
 
-                public init(buildSafeDIDependencies: () -> (LazyInstantiator<InvariantA>)) {
+                public init(buildSafeDIDependencies: () -> (Instantiator<InvariantA>)) {
                     let dependencies = buildSafeDIDependencies()
-                    self.init(invariantALazyInstantiator: dependencies)
+                    self.init(invariantAInstantiator: dependencies)
                 }
             }
             """
         }
     }
 
-    func test_fixit_addsFixitMissingRequiredInitializerWhenLazyConstructedAndLazyInstantiatorDependencyOfSameTypeMissingFromInit() {
+    func test_fixit_addsFixitMissingRequiredInitializerWhenLazyConstructedAndInstantiatorDependencyOfSameTypeMissingFromInit() {
         assertMacro {
             """
             @Instantiable
@@ -898,7 +898,7 @@ final class InstantiableMacroTests: XCTestCase {
                 @LazyInstantiated
                 private var invariantA: InvariantA
                 @Instantiated
-                let invariantALazyInstantiator: LazyInstantiator<InvariantA>
+                let invariantAInstantiator: Instantiator<InvariantA>
             }
             """
         } diagnostics: {
@@ -910,39 +910,39 @@ final class InstantiableMacroTests: XCTestCase {
                 @LazyInstantiated
                 private var invariantA: InvariantA
                 @Instantiated
-                let invariantALazyInstantiator: LazyInstantiator<InvariantA>
+                let invariantAInstantiator: Instantiator<InvariantA>
             }
             """
         } fixes: {
             """
             @Instantiable
             public struct ExampleService {
-            init(invariantALazyInstantiator: LazyInstantiator<InvariantA>) {
-            _invariantA = LazyInstantiated(invariantALazyInstantiator)
-            self.invariantALazyInstantiator = invariantALazyInstantiator
+            init(invariantAInstantiator: Instantiator<InvariantA>) {
+            _invariantA = LazyInstantiated(invariantAInstantiator)
+            self.invariantAInstantiator = invariantAInstantiator
             }
 
                 @LazyInstantiated
                 private var invariantA: InvariantA
                 @Instantiated
-                let invariantALazyInstantiator: LazyInstantiator<InvariantA>
+                let invariantAInstantiator: Instantiator<InvariantA>
             }
             """
         } expansion: {
             """
             public struct ExampleService {
-            init(invariantALazyInstantiator: LazyInstantiator<InvariantA>) {
-            _invariantA = LazyInstantiated(invariantALazyInstantiator)
-            self.invariantALazyInstantiator = invariantALazyInstantiator
+            init(invariantAInstantiator: Instantiator<InvariantA>) {
+            _invariantA = LazyInstantiated(invariantAInstantiator)
+            self.invariantAInstantiator = invariantAInstantiator
             }
 
                 @LazyInstantiated
                 private var invariantA: InvariantA
-                let invariantALazyInstantiator: LazyInstantiator<InvariantA>
+                let invariantAInstantiator: Instantiator<InvariantA>
 
-                public init(buildSafeDIDependencies: () -> (LazyInstantiator<InvariantA>)) {
+                public init(buildSafeDIDependencies: () -> (Instantiator<InvariantA>)) {
                     let dependencies = buildSafeDIDependencies()
-                    self.init(invariantALazyInstantiator: dependencies)
+                    self.init(invariantAInstantiator: dependencies)
                 }
             }
             """

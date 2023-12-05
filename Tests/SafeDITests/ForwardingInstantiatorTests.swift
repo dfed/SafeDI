@@ -22,19 +22,20 @@ import XCTest
 
 @testable import SafeDI
 
-final class LazyInstantiatorTests: XCTestCase {
+final class ForwardingInstantiatorTests: XCTestCase {
     func test_instantiate_returnsNewObjectEachTime() {
-        let systemUnderTest = LazyInstantiator() { BuiltProduct() }
-        let firstBuiltProduct = systemUnderTest.instantiate()
-        let secondBuiltProduct = systemUnderTest.instantiate()
-        XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
+        let systemUnderTest = ForwardingInstantiator() { id in BuiltProduct(id: id) }
+        let id = UUID().uuidString
+        let firstBuiltProduct = systemUnderTest.instantiate(id)
+        let secondBuiltProduct = systemUnderTest.instantiate(id)
+        XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
     }
 
-    private final class BuiltProduct: Equatable, Identifiable {
-        static func == (lhs: BuiltProduct, rhs: BuiltProduct) -> Bool {
-            lhs.id == rhs.id
+    private final class BuiltProduct: Identifiable {
+        init(id: String) {
+            self.id = id
         }
 
-        let id = UUID().uuidString
+        let id: String
     }
 }

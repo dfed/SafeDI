@@ -18,17 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A SafeDI dependency designed for the lazy instantiation of an `@Instantiable` type that contains
+/// A SafeDI dependency designed for the deferred instantiation of an `@Instantiable` type that contains
 /// `@Forwarded` properties. This class enables instantiation with specific arguments, facilitating
 /// the inheritance of these arguments by `@Instantiable` types that are `@Instantiated` within
 /// the `InstantiableType`, as well as by all types `@Instantiated` downstream.
 /// Instantiation is thread-safe.
 ///
-/// - SeeAlso: `LazyInstantiator`
+/// - SeeAlso: `Instantiator`
 /// - Note: This class is the sole means for instantiating an `@Instantiable` type with `@Forwarded`
 ///   properties within the SafeDI framework.
-public final class LazyForwardingInstantiator<ArgumentsToForward, InstantiableType> {
-    /// Initializes a new lazy forwarding instantiator with the provided instantiation closure.
+public final class ForwardingInstantiator<ArgumentsToForward, InstantiableType> {
+    /// Initializes a new forwarding instantiator with the provided instantiation closure.
     ///
     /// - Parameter instantiator: A closure that takes `ArgumentsToForward` and returns an instance of `InstantiableType`.
     public init(_ instantiator: @escaping (ArgumentsToForward) -> InstantiableType) {

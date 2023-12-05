@@ -755,9 +755,9 @@ final class InitializerTests: XCTestCase {
             hasGenericWhereClause: false,
             arguments: [
                 .init(
-                    innerLabel: "invariantLazyInstantiator",
+                    innerLabel: "invariantInstantiator",
                     typeDescription: .simple(
-                        name: "LazyInstantiator",
+                        name: "Instantiator",
                         generics: [.simple(name: "Invariant")]
                     )
                 ),
@@ -769,9 +769,9 @@ final class InitializerTests: XCTestCase {
                 fulfilling: [
                     .init(
                         property: .init(
-                            label: "invariantLazyInstantiator",
+                            label: "invariantInstantiator",
                             typeDescription: .simple(
-                                name: "LazyInstantiator",
+                                name: "Instantiator",
                                 generics: [.simple(name: "Invariant")]
                             )
                         ),
@@ -781,9 +781,9 @@ final class InitializerTests: XCTestCase {
                 typeIsClass: false,
                 trailingNewline: true).description,
             """
-            public init(buildSafeDIDependencies: () -> (LazyInstantiator<Invariant>)) {
+            public init(buildSafeDIDependencies: () -> (Instantiator<Invariant>)) {
                 let dependencies = buildSafeDIDependencies()
-                self.init(invariantLazyInstantiator: dependencies)
+                self.init(invariantInstantiator: dependencies)
             }
             """
         )
@@ -798,9 +798,9 @@ final class InitializerTests: XCTestCase {
             hasGenericWhereClause: false,
             arguments: [
                 .init(
-                    innerLabel: "invariantLazyInstantiator",
+                    innerLabel: "invariantInstantiator",
                     typeDescription: .simple(
-                        name: "LazyInstantiator",
+                        name: "Instantiator",
                         generics: [.simple(name: "Invariant")]
                     )
                 ),
@@ -821,9 +821,9 @@ final class InitializerTests: XCTestCase {
                 typeIsClass: false,
                 trailingNewline: true).description,
             """
-            public init(buildSafeDIDependencies: () -> (LazyInstantiator<Invariant>)) {
+            public init(buildSafeDIDependencies: () -> (Instantiator<Invariant>)) {
                 let dependencies = buildSafeDIDependencies()
-                self.init(invariantLazyInstantiator: dependencies)
+                self.init(invariantInstantiator: dependencies)
             }
             """
         )
@@ -838,9 +838,9 @@ final class InitializerTests: XCTestCase {
             hasGenericWhereClause: false,
             arguments: [
                 .init(
-                    innerLabel: "invariantLazyInstantiator",
+                    innerLabel: "invariantInstantiator",
                     typeDescription: .simple(
-                        name: "LazyInstantiator",
+                        name: "Instantiator",
                         generics: [.simple(name: "Invariant")]
                     )
                 ),
@@ -852,9 +852,9 @@ final class InitializerTests: XCTestCase {
                 fulfilling: [
                     .init(
                         property: .init(
-                            label: "invariantLazyInstantiator",
+                            label: "invariantInstantiator",
                             typeDescription: .simple(
-                                name: "LazyInstantiator",
+                                name: "Instantiator",
                                 generics: [.simple(name: "Invariant")]
                             )
                         ),
@@ -871,9 +871,9 @@ final class InitializerTests: XCTestCase {
                 typeIsClass: false,
                 trailingNewline: true).description,
             """
-            public init(buildSafeDIDependencies: () -> (LazyInstantiator<Invariant>)) {
+            public init(buildSafeDIDependencies: () -> (Instantiator<Invariant>)) {
                 let dependencies = buildSafeDIDependencies()
-                self.init(invariantLazyInstantiator: dependencies)
+                self.init(invariantInstantiator: dependencies)
             }
             """
         )
