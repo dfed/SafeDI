@@ -45,7 +45,35 @@ extension SafeDICollectInstantiables: XcodeBuildToolPlugin {
         target: XcodeProjectPlugin.XcodeTarget)
     throws -> [PackagePlugin.Command]
     {
-        [] // showstopper TODO: Support Xcode project plugin!
+        let inputSwiftFiles = target
+            .inputFiles
+            .filter { $0.path.extension == "swift" }
+            .map(\.path)
+        guard !inputSwiftFiles.isEmpty else {
+            // There are no Swift files in this module!
+            return []
+        }
+        let outputSafeDIFile = context.pluginWorkDirectory.appending(subpath: "\(target.displayName).safedi")
+        let arguments = inputSwiftFiles
+            .map(\.string)
+            .compactMap { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) }
+        + [
+            "--instantiables-output",
+            outputSafeDIFile
+                .string
+                .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+        ].compactMap { $0 }
+
+        return [
+            .buildCommand(
+                displayName: "SafeDIPlugin",
+                executable: try context.tool(named: "SafeDIPlugin").path,
+                arguments: arguments,
+                environment: [:],
+                inputFiles: inputSwiftFiles,
+                outputFiles: [outputSafeDIFile])
+        ]
+
     }
 }
 #endif
