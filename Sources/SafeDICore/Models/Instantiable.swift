@@ -54,11 +54,6 @@ public struct Instantiable: Codable, Hashable {
             .filter { $0.source == .lazyInstantiated }
             .map(\.property)
     }
-    var singletonProperties: [Property] {
-        dependencies
-            .filter { $0.source == .singleton }
-            .map(\.property)
-    }
     var forwardedProperties: [Property] {
         dependencies
             .filter { $0.source == .forwarded }

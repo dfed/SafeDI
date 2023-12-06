@@ -544,7 +544,7 @@ final class InitializerTests: XCTestCase {
                             label: "invariantC",
                             typeDescription: .simple(name: "InvariantC")
                         ),
-                        source: .singleton
+                        source: .instantiated
                     )
                 ],
                 typeIsClass: false,

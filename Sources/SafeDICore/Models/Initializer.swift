@@ -199,7 +199,6 @@ public struct Initializer: Codable, Equatable {
                     switch dependency.source {
                     case .instantiated,
                             .inherited,
-                            .singleton,
                             .forwarded:
                         CodeBlockItemSyntax(
                             item: .expr(ExprSyntax(InfixOperatorExprSyntax(

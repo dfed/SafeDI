@@ -34,7 +34,6 @@ final class InjectableMacroTests: XCTestCase {
     let testMacros: [String: Macro.Type] = [
         Dependency.Source.instantiated.rawValue: InjectableMacro.self,
         Dependency.Source.inherited.rawValue: InjectableMacro.self,
-        Dependency.Source.singleton.rawValue: InjectableMacro.self,
         Dependency.Source.forwarded.rawValue: InjectableMacro.self,
     ]
 

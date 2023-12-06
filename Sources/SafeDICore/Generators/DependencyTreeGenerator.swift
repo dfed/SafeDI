@@ -35,10 +35,8 @@ public final class DependencyTreeGenerator {
     public func generate() async throws -> String {
         try validateReachableTypeDescriptions()
         try validateAtLeastOneRootFound()
-        // showstopper TODO: Validate that all @Singleton properties are never @Constructed (or @Inherited??)
 
         let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
-        try assignSingletonsToScopes(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
         try propagateUndeclaredInheritedProperties(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
         let rootScopes = rootInstantiableTypes.compactMap({ typeDescriptionToScopeMap[$0] })
         _ = rootScopes
@@ -69,7 +67,6 @@ public final class DependencyTreeGenerator {
 
     /// A collection of `@Instantiable`-decorated types that do not explicitly inherit dependencies.
     /// - Note: These are not necessarily roots in the build graph, since these types may be instantiated by another `@Instantiable`.
-    ///         These types may also inherit (rather than construct) a `@Singleton` dependency.
     private lazy var possibleRootInstantiableTypes: Set<TypeDescription> = Set(
         typeDescriptionToFulfillingInstantiableMap
             .values
@@ -180,67 +177,7 @@ public final class DependencyTreeGenerator {
             }
             scope.propertiesToInstantiate.append(contentsOf: additionalPropertiesToInstantiate)
         }
-        // Note: Singletons have not been assigned to scopes yet!
         return typeDescriptionToScopeMap
-    }
-
-    private func assignSingletonsToScopes(typeDescriptionToScopeMap: [TypeDescription: Scope]) throws {
-        /// A mapping of singleton properties to the scopes that require this property.
-        var singletonPropertyToScopesCountMap: [Property: Int] = typeDescriptionToScopeMap
-            .values
-            .reduce(into: [Property: Int]()) { partialResult, scope in
-                for property in scope.instantiable.singletonProperties {
-                    partialResult[property, default: 0] += 1
-                }
-            }
-        var scopeIdentifierToSingletonPropertyToScopesInTreeCount = [ObjectIdentifier: [Property: Int]]()
-        func recordSingletonPropertiesOnScope(_ scope: Scope, parentScopes: [Scope]) {
-            let scopes = [scope] + parentScopes // parentScopes has root scope as last.
-            for singletonProperty in scope.instantiable.singletonProperties {
-                for (index, scope) in scopes.enumerated() {
-                    let scopesInTreeUtilizingSingletonProperty = (scopeIdentifierToSingletonPropertyToScopesInTreeCount[ObjectIdentifier(scope)]?[singletonProperty] ?? 0) + 1
-                    defer {
-                        scopeIdentifierToSingletonPropertyToScopesInTreeCount[ObjectIdentifier(scope), default: [Property: Int]()][singletonProperty] = scopesInTreeUtilizingSingletonProperty
-                    }
-                    if
-                        singletonPropertyToScopesCountMap[singletonProperty] == scopesInTreeUtilizingSingletonProperty,
-                        let singletonPropertyScope = typeDescriptionToScopeMap[singletonProperty.typeDescription.asInstantiatedType]
-                    {
-                        scope.propertiesToInstantiate.append(Scope.PropertyToInstantiate(
-                            property: singletonProperty,
-                            instantiable: singletonPropertyScope.instantiable,
-                            scope: singletonPropertyScope,
-                            type: singletonProperty.nonLazyPropertyType // Singletons can not be lazy
-                        ))
-                        // Remove the singleton property from our tracker so we can find orphaned singletons later.
-                        singletonPropertyToScopesCountMap[singletonProperty] = nil
-                        // Visit the scope we just placed.
-                        recordSingletonPropertiesOnScope(singletonPropertyScope, parentScopes: Array(scopes.dropFirst(index)))
-                        // We don't need to keep traversing up the tree because we found what we're looking for.
-                        break
-                    }
-                }
-            }
-            for childScope in scope.propertiesToInstantiate.map(\.scope) {
-                guard !parentScopes.contains(where: { $0 === childScope }) else {
-                    // We've previously visited this child scope.
-                    // There is a cycle in our scope tree. Do not re-enter it.
-                    continue
-                }
-                recordSingletonPropertiesOnScope(childScope, parentScopes: scopes)
-            }
-        }
-
-        let rootScopes = rootInstantiableTypes.compactMap({ typeDescriptionToScopeMap[$0] })
-        for rootScope in rootScopes {
-            recordSingletonPropertiesOnScope(rootScope, parentScopes: [])
-        }
-        if !singletonPropertyToScopesCountMap.isEmpty {
-            throw DependencyTreeGeneratorError.unsatisfiableSingletons(
-                Array(singletonPropertyToScopesCountMap.keys),
-                roots: rootScopes.map(\.instantiable.concreteInstantiableType)
-            )
-        }
     }
 
     private func propagateUndeclaredInheritedProperties(typeDescriptionToScopeMap: [TypeDescription: Scope]) throws {
@@ -320,7 +257,7 @@ public final class DependencyTreeGenerator {
 extension Dependency {
     fileprivate var isInstantiated: Bool {
         switch source {
-        case .instantiated, .lazyInstantiated, .singleton:
+        case .instantiated, .lazyInstantiated:
             return true
         case .forwarded, .inherited:
             return false

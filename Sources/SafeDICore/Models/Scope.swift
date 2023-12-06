@@ -73,9 +73,9 @@ final class Scope {
         }
     }
 
-    var instantiatedProperties = Set<Property>()
-    var lazyInstantiatedProperties = Set<Property>()
-    lazy var inheritedProperties = calculateInheritedProperties()
+    private(set) var instantiatedProperties = Set<Property>()
+    private(set) var lazyInstantiatedProperties = Set<Property>()
+    private(set) lazy var inheritedProperties = calculateInheritedProperties()
 
     var allInheritedProperties: Set<Property> {
         inheritedProperties.union(undeclaredInheritedProperties)
@@ -93,13 +93,11 @@ final class Scope {
                             .instantiated,
                             .lazyInstantiated:
                         return false
-                    case .inherited,
-                        // We will subtract out singletons created on this scope next.
-                            .singleton:
+                    case .inherited:
                         return true
                     }
                 }
                 .map(\.property)
-        ).subtracting(Set(propertiesToInstantiate.map(\.property)))
+        )
     }
 }

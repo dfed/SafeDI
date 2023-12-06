@@ -33,7 +33,6 @@ final class InstantiableMacroTests: XCTestCase {
         InstantiableVisitor.macroName: InstantiableMacro.self,
         Dependency.Source.instantiated.rawValue: InjectableMacro.self,
         Dependency.Source.inherited.rawValue: InjectableMacro.self,
-        Dependency.Source.singleton.rawValue: InjectableMacro.self,
         Dependency.Source.forwarded.rawValue: InjectableMacro.self,
     ]
 
@@ -175,7 +174,7 @@ final class InstantiableMacroTests: XCTestCase {
                 public let invariantA: InvariantA
                 @Inherited
                 let invariantB: InvariantB
-                @Singleton
+                @Instantiated
                 private let invariantC: InvariantC
             }
             """,
@@ -292,7 +291,7 @@ final class InstantiableMacroTests: XCTestCase {
                 private let invariantA: invariantA
                 @Inherited
                 private let invariantB: InvariantB
-                @Singleton
+                @Instantiated
                 private let invariantC: InvariantC
             }
             """,
@@ -417,7 +416,7 @@ final class InstantiableMacroTests: XCTestCase {
                 let variantB: VariantB
                 @Instantiated
                 private let invariantA: InvariantA
-                @Singleton
+                @Instantiated
                 public let invariantB: InvariantB
             }
             """,
@@ -487,7 +486,7 @@ final class InstantiableMacroTests: XCTestCase {
                 }
 
                 @Inherited
-                ╰─ 🛑 Dependency can have at most one of @Instantiated, @Inherited, @Singleton, or @Forwarded attached macro
+                ╰─ 🛑 Dependency can have at most one of @Instantiated, @Inherited, or @Forwarded attached macro
                    ✏️ Remove excessive attached macros
                 @Instantiated
                 let invariantA: InvariantA

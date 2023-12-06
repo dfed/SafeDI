@@ -29,7 +29,7 @@ public enum FixableInstantiableError: DiagnosticError {
     public var description: String {
         switch self {
         case .dependencyHasTooManyAttributes:
-            return "Dependency can have at most one of @\(Dependency.Source.instantiated), @\(Dependency.Source.inherited), @\(Dependency.Source.singleton), or @\(Dependency.Source.forwarded) attached macro"
+            return "Dependency can have at most one of @\(Dependency.Source.instantiated), @\(Dependency.Source.inherited), or @\(Dependency.Source.forwarded) attached macro"
         case .dependencyHasInitializer:
             return "Dependency must not have hand-written initializer"
         case .missingPublicOrOpenAttribute:

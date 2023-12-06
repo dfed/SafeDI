@@ -21,7 +21,7 @@
 import SwiftSyntax
 
 /// A representation of a dependency.
-/// e.g. `@Singleton let mySingleton: MySingleton`
+/// e.g. `@Instantiated let myService: MyService`
 public struct Dependency: Codable, Hashable {
 
     // MARK: Public
@@ -31,7 +31,7 @@ public struct Dependency: Codable, Hashable {
 
     public var isForwarded: Bool {
         switch source {
-        case .instantiated, .lazyInstantiated, .inherited, .singleton:
+        case .instantiated, .lazyInstantiated, .inherited:
             return false
         case .forwarded:
             return true
@@ -42,7 +42,6 @@ public struct Dependency: Codable, Hashable {
         case instantiated = "Instantiated"
         case lazyInstantiated = "LazyInstantiated"
         case inherited = "Inherited"
-        case singleton = "Singleton"
         case forwarded = "Forwarded"
 
         public var description: String {
@@ -62,7 +61,7 @@ public struct Dependency: Codable, Hashable {
     /// The label by which this property is referenced in an initializer.
     var initializerArgumentLabel: String {
         switch source {
-        case .instantiated, .inherited, .singleton, .forwarded:
+        case .instantiated, .inherited, .forwarded:
             return property.label
         case .lazyInstantiated:
             return "\(property.label)\(Self.instantiatorType)"
@@ -72,7 +71,7 @@ public struct Dependency: Codable, Hashable {
     /// The type description by which this property is referenced in an initializer.
     var initializerArgumentTypeDescription: TypeDescription {
         switch source {
-        case .instantiated, .inherited, .singleton, .forwarded:
+        case .instantiated, .inherited, .forwarded:
             return property.typeDescription
         case .lazyInstantiated:
             // TODO: fully qualify this type with `SafeDI.` member prefix
