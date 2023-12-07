@@ -40,7 +40,20 @@ struct SafeDIPlugin: AsyncParsableCommand {
     var dependencyTreeOutput: String?
 
     func run() async throws {
-        let module = parsedModule(try await loadSwiftFiles())
+        try await Self.run(
+            swiftFileContent: try await loadSwiftFiles(),
+            instantiablesOutput: instantiablesOutput,
+            instantiablesPaths: instantiablesPaths,
+            dependencyTreeOutput: dependencyTreeOutput)
+    }
+
+    static func run(
+        swiftFileContent: [String],
+        instantiablesOutput: String?,
+        instantiablesPaths: [String],
+        dependencyTreeOutput: String?
+    ) async throws {
+        let module = parsedModule(swiftFileContent)
         if let firstNestedInstantiableDecoratedTypeDescription = module.nestedInstantiableDecoratedTypeDescriptions.first {
             let nestedInstantiable = firstNestedInstantiableDecoratedTypeDescription.asSource
             throw CollectInstantiablesError.foundNestedInstantiable(nestedInstantiable)
@@ -53,7 +66,7 @@ struct SafeDIPlugin: AsyncParsableCommand {
         if let dependencyTreeOutput {
             try await DependencyTreeGenerator(
                 moduleNames: instantiablesPaths.map { $0.asFileURL.deletingPathExtension().lastPathComponent },
-                typeDescriptionToFulfillingInstantiableMap: try await findSafeDIFulfilledTypes()
+                typeDescriptionToFulfillingInstantiableMap: try await findSafeDIFulfilledTypes(atInstantiablesPaths: instantiablesPaths)
             )
             .generate()
             .write(toPath: dependencyTreeOutput)
@@ -78,7 +91,7 @@ struct SafeDIPlugin: AsyncParsableCommand {
         }
     }
 
-    private func parsedModule(_ swiftFileContent: [String]) -> ParsedModule {
+    private static func parsedModule(_ swiftFileContent: [String]) -> ParsedModule {
         let fileVisitor = FileVisitor()
         for swiftFileContent in swiftFileContent {
             fileVisitor.walk(Parser.parse(source: swiftFileContent))
@@ -88,11 +101,11 @@ struct SafeDIPlugin: AsyncParsableCommand {
             nestedInstantiableDecoratedTypeDescriptions: fileVisitor.nestedInstantiableDecoratedTypeDescriptions)
     }
 
-    private func writeInstantiables(_ instantiables: [Instantiable], toPath path: String) throws {
+    private static func writeInstantiables(_ instantiables: [Instantiable], toPath path: String) throws {
         try JSONEncoder().encode(instantiables).write(toPath: path)
     }
 
-    private func findSafeDIFulfilledTypes() async throws -> [TypeDescription: Instantiable] {
+    private static func findSafeDIFulfilledTypes(atInstantiablesPaths instantiablesPaths: [String]) async throws -> [TypeDescription: Instantiable] {
         try await withThrowingTaskGroup(
             of: [Instantiable].self,
             returning: [TypeDescription: Instantiable].self
