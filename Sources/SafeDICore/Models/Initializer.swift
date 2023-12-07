@@ -21,11 +21,12 @@
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
-public struct Initializer: Codable, Equatable {
+public struct Initializer: Codable, Hashable {
 
     // MARK: Initialization
 
     init(_ node: InitializerDeclSyntax) {
+        isPublicOrOpen = node.modifiers.containsPublicOrOpen
         isOptional = node.optionalMark != nil
         isAsync = node.signature.effectSpecifiers?.asyncSpecifier != nil
         doesThrow = node.signature.effectSpecifiers?.throwsSpecifier != nil
@@ -38,14 +39,16 @@ public struct Initializer: Codable, Equatable {
             .map(Argument.init)
     }
 
-    public init(
-        isOptional: Bool,
-        isAsync: Bool,
-        doesThrow: Bool,
-        hasGenericParameter: Bool,
-        hasGenericWhereClause: Bool,
+    init(
+        isPublicOrOpen: Bool = true,
+        isOptional: Bool = false,
+        isAsync: Bool = false,
+        doesThrow: Bool = false,
+        hasGenericParameter: Bool = false,
+        hasGenericWhereClause: Bool = false,
         arguments: [Initializer.Argument])
     {
+        self.isPublicOrOpen = isPublicOrOpen
         self.isOptional = isOptional
         self.isAsync = isAsync
         self.doesThrow = doesThrow
@@ -56,6 +59,7 @@ public struct Initializer: Codable, Equatable {
 
     // MARK: Public
 
+    public let isPublicOrOpen: Bool
     public let isOptional: Bool
     public let isAsync: Bool
     public let doesThrow: Bool
@@ -63,7 +67,19 @@ public struct Initializer: Codable, Equatable {
     public let hasGenericWhereClause: Bool
     public let arguments: [Argument]
 
-    public func generateSafeDIInitializer(fulfilling dependencies: [Dependency], typeIsClass: Bool, trailingNewline: Bool = false) throws -> InitializerDeclSyntax {
+    public func isValid(forFulfilling dependencies: [Dependency]) -> Bool {
+        do {
+            try validate(fulfilling: dependencies)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    public func validate(fulfilling dependencies: [Dependency]) throws {
+        guard isPublicOrOpen else {
+            throw GenerationError.inaccessibleInitializer
+        }
         guard !isOptional else {
             throw GenerationError.optionalInitializer
         }
@@ -80,110 +96,30 @@ public struct Initializer: Codable, Equatable {
             throw GenerationError.whereClauseOnInitializer
         }
 
-        let dependencyAndArgumentBinding = try arguments.reduce(into: [(dependency: Dependency, argument: Argument)]()) { partialResult, argument in
-            guard let dependency = dependencies.first(where: {
-                $0.asInitializerArgument.label == argument.innerLabel
-                && $0.asInitializerArgument.typeDescription == argument.typeDescription
-            }) else {
-                throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
-            }
-            partialResult.append((dependency: dependency, argument: argument))
-        }
+        let dependencyAndArgumentBinding = try createDependencyAndArgumentBinding(given: dependencies)
 
         let dependenciesWithDuplicateInitializerArgumentsRemoved = dependencies.removingDuplicateInitializerArguments
         let initializerFulfulledDependencies = Set(dependencyAndArgumentBinding.map(\.dependency))
         let missingArguments = Set(dependenciesWithDuplicateInitializerArgumentsRemoved).subtracting(initializerFulfulledDependencies)
+        
         guard missingArguments.isEmpty else {
             throw GenerationError.missingArguments(missingArguments.map(\.asInitializerArgument.asSource))
         }
-        guard !dependencies.isEmpty else {
-            throw GenerationError.noDependencies
-        }
 
-        let modifiers: DeclModifierListSyntax
-        let publicModifier = DeclModifierSyntax(
-            name: TokenSyntax(
-                TokenKind.identifier("public"),
-                presence: .present
-            ),
-            trailingTrivia: .space
-        )
-        if typeIsClass {
-            modifiers = DeclModifierListSyntax(
-                arrayLiteral: publicModifier,
-                DeclModifierSyntax(
+        // We're good!
+    }
+
+    public static func generateRequiredInitializer(for dependencies: [Dependency]) -> InitializerDeclSyntax {
+        InitializerDeclSyntax(
+            modifiers: DeclModifierListSyntax(
+                arrayLiteral: DeclModifierSyntax(
                     name: TokenSyntax(
-                        TokenKind.identifier("convenience"),
+                        TokenKind.identifier("public"),
                         presence: .present
                     ),
                     trailingTrivia: .space
                 )
-            )
-        } else {
-            modifiers = DeclModifierListSyntax(arrayLiteral: publicModifier)
-        }
-
-        let initFunctionCall = FunctionCallExprSyntax(
-            leadingTrivia: .spaces(4),
-            calledExpression: MemberAccessExprSyntax(
-                base: DeclReferenceExprSyntax(
-                    baseName: TokenSyntax.keyword(.`self`)
-                ),
-                name: TokenSyntax.keyword(.`init`)),
-            leftParen: .leftParenToken(),
-            arguments: LabeledExprListSyntax {
-                for (index, dependencyAndArgument) in dependencyAndArgumentBinding.enumerated() {
-                    if dependenciesWithDuplicateInitializerArgumentsRemoved.count > 1 {
-                        LabeledExprSyntax(
-                            leadingTrivia: index == 0 ? nil : .space,
-                            label: .identifier(dependencyAndArgument.argument.label),
-                            colon: .colonToken(trailingTrivia: .space),
-                            expression:
-                                MemberAccessExprSyntax(
-                                    base: DeclReferenceExprSyntax(baseName: Self.dependenciesToken),
-                                    name: .identifier(dependencyAndArgument.argument.innerLabel)
-                                )
-                        )
-                    } else {
-                        LabeledExprSyntax(
-                            leadingTrivia: index == 0 ? nil : .space,
-                            label: .identifier(dependencyAndArgument.argument.label),
-                            colon: .colonToken(trailingTrivia: .space),
-                            expression: DeclReferenceExprSyntax(baseName: Self.dependenciesToken)
-                        )
-                    }
-                }
-            },
-            rightParen: .rightParenToken()
-        )
-        return InitializerDeclSyntax(
-            modifiers: modifiers,
-            signature: FunctionSignatureSyntax(
-                parameterClause: FunctionParameterClauseSyntax(
-                    parameters: FunctionParameterListSyntax(itemsBuilder: {
-                        dependenciesWithDuplicateInitializerArgumentsRemoved.buildDependenciesFunctionParameter
-                        for forwardedFunctionParameter in dependencies.forwardedFunctionParameters {
-                            forwardedFunctionParameter
-                        }
-                    })
-                ),
-                trailingTrivia: .space
             ),
-            bodyBuilder: {
-                CodeBlockItemSyntax(
-                    leadingTrivia: .newline,
-                    item: .decl(DeclSyntax(dependencies.dependenciesDeclaration))
-                )
-                CodeBlockItemSyntax(
-                    item: .expr(ExprSyntax(initFunctionCall)),
-                    trailingTrivia: trailingNewline ? .newline : nil
-                )
-            }
-        )
-    }
-
-    public static func generateRequiredInitializer(for dependencies: [Dependency]) -> InitializerDeclSyntax {
-        return InitializerDeclSyntax(
             signature: FunctionSignatureSyntax(
                 parameterClause: FunctionParameterClauseSyntax(
                     parameters: FunctionParameterListSyntax(itemsBuilder: {
@@ -241,10 +177,31 @@ public struct Initializer: Codable, Equatable {
             }
         )
     }
+
+    // MARK: - Internal
+
+    func createDependencyAndArgumentBinding(given dependencies: [Dependency]) throws -> [(dependency: Dependency, argument: Argument)] {
+        try arguments.reduce(into: [(dependency: Dependency, argument: Argument)]()) { partialResult, argument in
+            guard let dependency = dependencies.first(where: {
+                $0.asInitializerArgument.label == argument.innerLabel
+                && $0.asInitializerArgument.typeDescription == argument.typeDescription
+            }) else {
+                throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
+            }
+            partialResult.append((dependency: dependency, argument: argument))
+        }
+    }
+
+    func createInitializerArgumentList(given dependencies: [Dependency]) throws -> String {
+        try createDependencyAndArgumentBinding(given: dependencies)
+            .map { "\($0.argument.label): \($0.argument.innerLabel)" }
+            .joined(separator: ", ")
+    }
+
     // MARK: - GenerationError
 
     public enum GenerationError: Error, Equatable {
-        case noDependencies
+        case inaccessibleInitializer
         case asyncInitializer
         case throwingInitializer
         case optionalInitializer
@@ -258,7 +215,7 @@ public struct Initializer: Codable, Equatable {
 
     // MARK: - Argument
 
-    public struct Argument: Codable, Equatable {
+    public struct Argument: Codable, Hashable {
         /// The outer label, if one exists, by which the argument is referenced at the call site.
         public let outerLabel: String?
         /// The label by which the argument is referenced.

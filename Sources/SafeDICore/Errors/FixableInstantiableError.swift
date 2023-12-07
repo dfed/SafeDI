@@ -35,7 +35,8 @@ public enum FixableInstantiableError: DiagnosticError {
         case .missingPublicOrOpenAttribute:
             return "@\(InstantiableVisitor.macroName)-decorated type must be `public` or `open`"
         case .missingRequiredInitializer:
-            return "@\(InstantiableVisitor.macroName)-decorated type must have initializer for all injected parameters"
+            // TODO: Create fixit just for `public` or `open` missing.
+            return "@\(InstantiableVisitor.macroName)-decorated type must have `public` or `open` initializer comprising all injected parameters"
         }
     }
 

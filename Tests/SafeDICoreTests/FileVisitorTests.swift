@@ -34,7 +34,7 @@ final class FileVisitorTests: XCTestCase {
         @Instantiable
         public final class LoggedInViewController: UIViewController {
 
-            init(user: User, networkService: NetworkService) {
+            public init(user: User, networkService: NetworkService) {
                 self.user = user
                 self.networkService = networkService
             }
@@ -51,6 +51,12 @@ final class FileVisitorTests: XCTestCase {
             [
                 Instantiable(
                     instantiableType: .simple(name: "LoggedInViewController"),
+                    initializer: Initializer(
+                        arguments: [
+                            .init(innerLabel: "user", typeDescription: .simple(name: "User")),
+                            .init(innerLabel: "networkService", typeDescription: .simple(name: "NetworkService")),
+                        ]
+                    ),
                     additionalInstantiableTypes: nil,
                     dependencies: [
                         Dependency(
@@ -67,7 +73,8 @@ final class FileVisitorTests: XCTestCase {
                             ),
                             source: .inherited
                         )
-                    ])
+                    ],
+                    isClass: true)
             ]
         )
         XCTAssertEqual(
@@ -82,7 +89,7 @@ final class FileVisitorTests: XCTestCase {
         @Instantiable
         public final class LoggedInViewController: UIViewController {
 
-            init(user: User, networkService: NetworkService) {
+            public init(user: User, networkService: NetworkService) {
                 self.user = user
                 self.networkService = networkService
             }
@@ -95,13 +102,21 @@ final class FileVisitorTests: XCTestCase {
         }
 
         @Instantiable
-        struct SomeOtherInstantiable {}
+        public struct SomeOtherInstantiable {
+            public init() {}
+        }
         """))
         XCTAssertEqual(
             fileVisitor.instantiables,
             [
                 Instantiable(
                     instantiableType: .simple(name: "LoggedInViewController"),
+                    initializer: Initializer(
+                        arguments: [
+                            .init(innerLabel: "user", typeDescription: .simple(name: "User")),
+                            .init(innerLabel: "networkService", typeDescription: .simple(name: "NetworkService")),
+                        ]
+                    ),
                     additionalInstantiableTypes: nil,
                     dependencies: [
                         Dependency(
@@ -118,11 +133,15 @@ final class FileVisitorTests: XCTestCase {
                             ),
                             source: .inherited
                         )
-                    ]),
+                    ],
+                    isClass: true
+                ),
                 Instantiable(
                     instantiableType: .simple(name: "SomeOtherInstantiable"),
+                    initializer: Initializer(arguments: []),
                     additionalInstantiableTypes: nil,
-                    dependencies: []
+                    dependencies: [],
+                    isClass: false
                 )
             ]
         )
@@ -137,8 +156,12 @@ final class FileVisitorTests: XCTestCase {
         fileVisitor.walk(Parser.parse(source: """
         @Instantiable(fulfillingAdditionalTypes: [SomeProtocol.self])
         public struct OuterLevel: SomeProtocol {
+            public init() {}
+
             @Instantiable
-            public struct InnerLevel {}
+            public struct InnerLevel {
+                public init() {}
+            }
         }
         """))
         XCTAssertEqual(
@@ -146,10 +169,12 @@ final class FileVisitorTests: XCTestCase {
             [
                 Instantiable(
                     instantiableType: .simple(name: "OuterLevel"),
+                    initializer: Initializer(arguments: []),
                     additionalInstantiableTypes: [
                         .simple(name: "SomeProtocol")
                     ],
-                    dependencies: []
+                    dependencies: [],
+                    isClass: false
                 )
             ]
         )

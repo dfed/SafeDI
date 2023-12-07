@@ -36,69 +36,6 @@ extension Array where Element == Dependency {
         }
     }
 
-    var buildDependenciesFunctionParameter: FunctionParameterSyntax {
-        FunctionParameterSyntax(
-            firstName: Initializer.Argument.dependenciesArgumentName,
-            colon: .colonToken(trailingTrivia: .space),
-            type: buildDependenciesFunctionSignature,
-            trailingComma: filter { $0.isForwarded }.isEmpty ? nil : .commaToken(trailingTrivia: .space)
-        )
-    }
-
-    var buildDependenciesFunctionSignature: FunctionTypeSyntax {
-        FunctionTypeSyntax(
-            parameters: buildDependenciesClosureArguments,
-            returnClause: ReturnClauseSyntax(
-                leadingTrivia: .space,
-                type: TupleTypeSyntax(
-                    leadingTrivia: .space,
-                    elements: buildDependenciesClosureReturnType
-                )
-            )
-        )
-    }
-
-    var buildDependenciesClosureArguments: TupleTypeElementListSyntax {
-        TupleTypeElementListSyntax {
-            for variantUnamedTuple in variantUnamedTuples {
-                variantUnamedTuple
-            }
-        }
-    }
-
-    var buildDependenciesClosureReturnType: TupleTypeElementListSyntax {
-        TupleTypeElementListSyntax {
-            for invariantNamedTuple in namedInitializerReturnTypeTuples {
-                invariantNamedTuple
-            }
-        }
-    }
-
-    var namedInitializerReturnTypeTuples: [TupleTypeElementSyntax] {
-        return map {
-            if count > 1 {
-                return $0.asInitializerArgument.asNamedTupleTypeElement
-            } else {
-                return $0.asInitializerArgument.asUnnamedTupleTypeElement
-            }
-        }
-        .transformUntilLast {
-            var node = $0
-            node.trailingComma = .commaToken(trailingTrivia: .space)
-            return node
-        }
-    }
-
-    var variantUnamedTuples: [TupleTypeElementSyntax] {
-        filter { $0.isForwarded }
-            .map(\.property.asUnnamedTupleTypeElement)
-            .transformUntilLast {
-                var node = $0
-                node.trailingComma = .commaToken(trailingTrivia: .space)
-                return node
-            }
-    }
-
     var initializerFunctionParameters: [FunctionParameterSyntax] {
         removingDuplicateInitializerArguments
             .map { $0.asInitializerArgument.asFunctionParamter }
@@ -107,54 +44,6 @@ extension Array where Element == Dependency {
                 node.trailingComma = .commaToken(trailingTrivia: .space)
                 return node
             }
-    }
-
-    var forwardedFunctionParameters: [FunctionParameterSyntax] {
-        filter { $0.isForwarded }
-            .map { $0.property.asFunctionParamter }
-            .transformUntilLast {
-                var node = $0
-                node.trailingComma = .commaToken(trailingTrivia: .space)
-                return node
-            }
-    }
-
-    var forwardedLabeledExpressions: [LabeledExprSyntax] {
-        filter { $0.isForwarded }
-            .map { $0.property.asUnnamedLabeledExpr }
-            .transformUntilLast {
-                var node = $0
-                node.trailingComma = .commaToken(trailingTrivia: .space)
-                return node
-            }
-    }
-
-    var dependenciesDeclaration: VariableDeclSyntax {
-        VariableDeclSyntax(
-            leadingTrivia: .spaces(4),
-            .let,
-            name: PatternSyntax(
-                IdentifierPatternSyntax(
-                    leadingTrivia: .space,
-                    identifier: isEmpty ? .identifier("_") : Initializer.dependenciesToken)
-            ),
-            initializer: InitializerClauseSyntax(
-                leadingTrivia: .space,
-                equal: .equalToken(trailingTrivia: .space),
-                value: FunctionCallExprSyntax(
-                    calledExpression: DeclReferenceExprSyntax(
-                        baseName: Initializer.Argument.dependenciesArgumentName),
-                    leftParen: .leftParenToken(),
-                    arguments: LabeledExprListSyntax {
-                        for forwardedLabeledExpression in forwardedLabeledExpressions {
-                            forwardedLabeledExpression
-                        }
-                    },
-                    rightParen: .rightParenToken()
-                ),
-                trailingTrivia: .newline
-            )
-        )
     }
 }
 

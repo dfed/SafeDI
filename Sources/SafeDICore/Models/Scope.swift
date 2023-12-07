@@ -18,12 +18,30 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+// TODO: There is likely a way to simplify this code and jump directly to CombinedScope that would yield a performance win.
+/// A model of the scoped dependencies required for an `@Instantiable` in the reachable dependency tree.
 final class Scope {
 
     // MARK: Initialization
 
     init(instantiable: Instantiable) {
         self.instantiable = instantiable
+
+        inheritedProperties = Set(
+            instantiable
+                .dependencies
+                .filter {
+                    switch $0.source {
+                    case .forwarded,
+                            .instantiated,
+                            .lazyInstantiated:
+                        return false
+                    case .inherited:
+                        return true
+                    }
+                }
+                .map(\.property)
+        )
     }
 
     // MARK: Internal
@@ -43,7 +61,6 @@ final class Scope {
                     .filter { $0.type == .lazy }
                     .map(\.property)
             )
-            inheritedProperties = calculateInheritedProperties()
         }
     }
     /// The properties that this scope inherits + passes to children that aren't declared on `instantiable`.
@@ -75,29 +92,51 @@ final class Scope {
 
     private(set) var instantiatedProperties = Set<Property>()
     private(set) var lazyInstantiatedProperties = Set<Property>()
-    private(set) lazy var inheritedProperties = calculateInheritedProperties()
+    let inheritedProperties: Set<Property>
 
     var allInheritedProperties: Set<Property> {
         inheritedProperties.union(undeclaredInheritedProperties)
     }
 
-    // MARK: Private
+    func createCombinedScope() -> CombinedScope {
+        var childPropertyToInstantiableConstant = [Property: Instantiable]()
+        var childPropertyToCombinedScopeMap = [Property: CombinedScope]()
 
-    func calculateInheritedProperties() -> Set<Property> {
-        Set(
-            instantiable
-                .dependencies
-                .filter {
-                    switch $0.source {
-                    case .forwarded,
-                            .instantiated,
-                            .lazyInstantiated:
-                        return false
-                    case .inherited:
-                        return true
+        func findCombinedScopeInformation(on scope: Scope) {
+            for propertyToInstantiate in scope.propertiesToInstantiate {
+                switch propertyToInstantiate.type {
+                case .constant:
+                    childPropertyToInstantiableConstant[propertyToInstantiate.property] = propertyToInstantiate.instantiable
+                    findCombinedScopeInformation(on: propertyToInstantiate.scope)
+                case .lazy,
+                        .instantiator,
+                        .forwardingInstantiator:
+                    let childCombinedScope = propertyToInstantiate
+                        .scope
+                        .createCombinedScope()
+                    Task {
+                        // Kick off code generation.
+                        try await childCombinedScope.generateCode()
                     }
+                    childPropertyToCombinedScopeMap[propertyToInstantiate.property] = propertyToInstantiate
+                        .scope
+                        .createCombinedScope()
                 }
-                .map(\.property)
+            }
+        }
+
+        findCombinedScopeInformation(on: self)
+
+        let combinedScope = CombinedScope(
+            instantiable: instantiable,
+            childPropertyToInstantiableConstant: childPropertyToInstantiableConstant,
+            childPropertyToCombinedScopeMap: childPropertyToCombinedScopeMap,
+            inheritedProperties: allInheritedProperties
         )
+        Task {
+            // Kick off code generation.
+            try await combinedScope.generateCode()
+        }
+        return combinedScope
     }
 }

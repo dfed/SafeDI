@@ -45,21 +45,11 @@ public struct InstantiableMacro: MemberMacro {
             context.diagnose(diagnostic)
         }
 
-        let initializerAndResultPairs = visitor.initializers.map { initializer in
-            (initializer: initializer, result: Result {
-                try initializer.generateSafeDIInitializer(
-                    fulfilling: visitor.dependencies,
-                    typeIsClass: concreteDeclaration.isClass
-                )
-            })
-        }
-
-        guard
-            let generatedInitializer = initializerAndResultPairs
-                .compactMap({ try? $0.result.get() })
-                .first
-        else {
-            if !visitor.dependencies.isEmpty || initializerAndResultPairs.isEmpty {
+        let hasMemberwiseInitializerForInjectableProperties = visitor
+            .initializers
+            .contains(where: { $0.isValid(forFulfilling: visitor.dependencies) })
+        guard hasMemberwiseInitializerForInjectableProperties else {
+            if !visitor.dependencies.isEmpty || visitor.initializers.isEmpty {
                 var membersWithInitializer = declaration.memberBlock.members
                 membersWithInitializer.insert(
                     MemberBlockItemSyntax(
@@ -81,9 +71,8 @@ public struct InstantiableMacro: MemberMacro {
             return []
         }
 
-        return [
-            DeclSyntax(generatedInitializer)
-        ]
+        // TODO: consider generating a memberwise initializer if none exists.
+        return []
     }
 
     // MARK: - BuilderError

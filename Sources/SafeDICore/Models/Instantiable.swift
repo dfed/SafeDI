@@ -24,11 +24,15 @@ public struct Instantiable: Codable, Hashable {
 
     public init(
         instantiableType: TypeDescription,
+        initializer: Initializer,
         additionalInstantiableTypes: [TypeDescription]?,
-        dependencies: [Dependency])
+        dependencies: [Dependency],
+        isClass: Bool)
     {
         self.instantiableTypes = [instantiableType] + (additionalInstantiableTypes ?? [])
+        self.initializer = initializer
         self.dependencies = dependencies
+        self.isClass = isClass
     }
 
     // MARK: Public
@@ -39,8 +43,12 @@ public struct Instantiable: Codable, Hashable {
     public var concreteInstantiableType: TypeDescription {
         instantiableTypes[0]
     }
+    /// A memberwise initializer for the concrete instantiable type.
+    public let initializer: Initializer
     /// The ordered dependencies of this Instantiable.
     public let dependencies: [Dependency]
+    /// Whether the concrete instantiable type is a class.
+    public let isClass: Bool
 
     // MARK: Internal
 

@@ -55,6 +55,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
         // Check the bindings.
         for binding in node.bindings {
             // Check that each variable has no initializer.
+            // TODO: Allow `@Forwarded` variables to have an initializer. This will require an initializer without the forwarded property, and a new Dependency.Source type (`case selfForwarding`?).
             if binding.initializer != nil {
                 var bindingWithoutInitializer = binding
                 bindingWithoutInitializer.initializer = nil
@@ -123,16 +124,23 @@ public final class InstantiableVisitor: SyntaxVisitor {
     // MARK: Internal
 
     var instantiable: Instantiable? {
-        guard let instantiableType else { return nil }
+        guard
+            let instantiableType,
+            let topLevelDeclarationType,
+            let initializer = initializers.first(where: { $0.isValid(forFulfilling: dependencies) })
+        else { return nil }
         return Instantiable(
-            instantiableType: instantiableType,
+            instantiableType: instantiableType, 
+            initializer: initializer,
             additionalInstantiableTypes: additionalInstantiableTypes,
-            dependencies: dependencies)
+            dependencies: dependencies,
+            isClass: topLevelDeclarationType.isClass)
     }
 
     // MARK: Private
 
     private var isInTopLevelDeclaration = false
+    private var topLevelDeclarationType: ConcreteDeclType?
 
     private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
         guard node.attributes.instantiableMacro != nil else {
@@ -143,6 +151,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
             return .skipChildren
         }
         isInTopLevelDeclaration = true
+        topLevelDeclarationType = node.declType
 
         instantiableType = .simple(
             name: node.name.text,

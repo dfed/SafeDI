@@ -309,6 +309,38 @@ public enum TypeDescription: Codable, Hashable {
         }
     }
 
+    /// The receiver as an `@Instantiable` type.
+    var asInstantiatedType: TypeDescription {
+        switch self {
+        case let .simple(name, generics):
+            if name == Dependency.instantiatorType, let builtType = generics.first {
+                // This is a type that is lazily instantiated.
+                // The first generic is the built type.
+                return builtType
+            } else if name == Dependency.forwardingInstantiatorType, let builtType = generics.last {
+                // This is a type that is lazily instantiated with forwarded arguments.
+                // The last generic is the built type.
+                return builtType
+            } else {
+                return self
+            }
+        case .any,
+                .array,
+                .attributed,
+                .closure,
+                .composition,
+                .dictionary,
+                .implicitlyUnwrappedOptional,
+                .metatype,
+                .nested,
+                .optional,
+                .some,
+                .tuple,
+                .unknown:
+            return self
+        }
+    }
+
     private var caseDescription: String {
         switch self {
         case .composition:

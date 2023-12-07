@@ -18,22 +18,30 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import SwiftSyntax
+public enum ConcreteDeclType {
+    case actorType
+    case classType
+    case structType
 
-public protocol ConcreteDeclSyntaxProtocol: SyntaxProtocol {
-    var attributes: AttributeListSyntax { get set }
-    var modifiers: DeclModifierListSyntax { get set }
-    var inheritanceClause: InheritanceClauseSyntax? { get set }
-    var name: TokenSyntax { get set }
-    var isClass: Bool { get }
-}
+    var isClass: Bool {
+        switch self {
+        case .actorType:
+            false
+        case .classType:
+            true
+        case .structType:
+            false
+        }
+    }
 
-extension ActorDeclSyntax: ConcreteDeclSyntaxProtocol {
-    public var isClass: Bool { false }
-}
-extension ClassDeclSyntax: ConcreteDeclSyntaxProtocol {
-    public var isClass: Bool { true }
-}
-extension StructDeclSyntax: ConcreteDeclSyntaxProtocol {
-    public var isClass: Bool { false }
+    var isStruct: Bool {
+        switch self {
+        case .actorType:
+            false
+        case .classType:
+            false
+        case .structType:
+            true
+        }
+    }
 }

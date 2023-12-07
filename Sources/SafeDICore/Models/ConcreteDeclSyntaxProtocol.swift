@@ -20,44 +20,20 @@
 
 import SwiftSyntax
 
-/// A representation of a property.
-/// e.g. `let myProperty: MyProperty`
-public struct Property: Codable, Hashable, Comparable {
+public protocol ConcreteDeclSyntaxProtocol: SyntaxProtocol {
+    var attributes: AttributeListSyntax { get set }
+    var modifiers: DeclModifierListSyntax { get set }
+    var inheritanceClause: InheritanceClauseSyntax? { get set }
+    var name: TokenSyntax { get set }
+    var declType: ConcreteDeclType { get }
+}
 
-    // MARK: Initialization
-
-    init(
-        label: String,
-        typeDescription: TypeDescription)
-    {
-        self.label = label
-        self.typeDescription = typeDescription
-    }
-
-    // MARK: Public
-
-    /// The label by which the property is referenced.
-    public let label: String
-    /// The type to which the property conforms.
-    public var typeDescription: TypeDescription
-
-    // MARK: Hashable
-
-    public static func < (lhs: Property, rhs: Property) -> Bool {
-        lhs.label < rhs.label
-    }
-
-    // MARK: Internal
-
-    var asSource: String {
-        "\(label): \(typeDescription.asSource)"
-    }
-
-    var asFunctionParamter: FunctionParameterSyntax {
-        FunctionParameterSyntax(
-            firstName: .identifier(label),
-            colon: .colonToken(trailingTrivia: .space),
-            type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
-        )
-    }
+extension ActorDeclSyntax: ConcreteDeclSyntaxProtocol {
+    public var declType: ConcreteDeclType { .actorType }
+}
+extension ClassDeclSyntax: ConcreteDeclSyntaxProtocol {
+    public var declType: ConcreteDeclType { .classType }
+}
+extension StructDeclSyntax: ConcreteDeclSyntaxProtocol {
+    public var declType: ConcreteDeclType { .structType }
 }
