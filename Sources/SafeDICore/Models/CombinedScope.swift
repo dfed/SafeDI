@@ -76,7 +76,7 @@ actor CombinedScope {
                         let argumentList = try instantiable.initializer.createInitializerArgumentList(given: instantiable.dependencies)
 
                         let leadingMemberWhitespace = "    "
-                        let generatedCode = try await combinedScope.generateCode(leadingWhitespace: leadingWhitespace + "    ")
+                        let generatedCode = try await combinedScope.generateCode(leadingWhitespace: leadingMemberWhitespace)
                         let returnLine = "\(returnTypeName)(\(argumentList))"
                         let memberStatements: String
                         if generatedCode.isEmpty {
