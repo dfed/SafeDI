@@ -31,10 +31,10 @@
 /// Marks a SafeDI dependency that is instantiated when its parent object is instantiated.
 @attached(peer) public macro Instantiated() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
 
-/// Marks a SafeDI dependency that is instantiated by an object higher up in the dependency tree.
-@attached(peer) public macro Inherited() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
-
 /// Marks a SafeDI dependency that is injected into the parent object's initializer and forwarded to objects further down in the dependency tree.
 @attached(peer) public macro Forwarded() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
+
+/// Marks a SafeDI dependency that is instantiated or forwarded by an object higher up in the dependency tree.
+@attached(peer) public macro Received() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
 
 #endif

@@ -264,7 +264,7 @@ final class SafeDIPluginTests: XCTestCase {
                         User()
                     }
 
-                    @Inherited
+                    @Received
                     let networkService: NetworkService
                 }
                 """,
@@ -323,7 +323,7 @@ final class SafeDIPluginTests: XCTestCase {
                     @Forwarded
                     private let user: User
 
-                    @Inherited
+                    @Received
                     let networkService: NetworkService
                 }
                 """,
@@ -378,7 +378,7 @@ final class SafeDIPluginTests: XCTestCase {
                         User()
                     }
 
-                    @Inherited
+                    @Received
                     let networkService: NetworkService
                 }
                 """,
@@ -430,7 +430,7 @@ final class SafeDIPluginTests: XCTestCase {
                         self.user = user
                     }
 
-                    @Inherited
+                    @Received
                     let user: User
                 }
                 """,
@@ -449,7 +449,7 @@ final class SafeDIPluginTests: XCTestCase {
                     @Forwarded
                     private let user: User
 
-                    @Inherited
+                    @Received
                     let networkService: NetworkService
 
                     @Instantiated
@@ -508,7 +508,7 @@ final class SafeDIPluginTests: XCTestCase {
                         User()
                     }
 
-                    @Inherited
+                    @Received
                     let networkService: NetworkService
                 }
                 """,
@@ -561,10 +561,10 @@ final class SafeDIPluginTests: XCTestCase {
                         self.user = user
                     }
 
-                    @Inherited
+                    @Received
                     let user: User
 
-                    @Inherited
+                    @Received
                     private let networkService: NetworkService
                 }
                 """,
@@ -638,7 +638,7 @@ final class SafeDIPluginTests: XCTestCase {
                         User()
                     }
 
-                    @Inherited
+                    @Received
                     let networkService: NetworkService
                 }
                 """,
@@ -691,10 +691,10 @@ final class SafeDIPluginTests: XCTestCase {
                         self.user = user
                     }
 
-                    @Inherited
+                    @Received
                     let user: User
 
-                    @Inherited
+                    @Received
                     private let networkService: NetworkService
                 }
                 """,
@@ -798,10 +798,10 @@ final class SafeDIPluginTests: XCTestCase {
         }
     }
 
-    func test_run_onCodeWithUnfulfillableInheritedProperty_throwsError() async {
+    func test_run_onCodeWithUnfulfillableReceivedProperty_throwsError() async {
         await assertThrowsError(
             """
-            The following inherited properties were never instantiated:
+            The following received properties were never instantiated:
             `urlSession: URLSession` is not instantiated in chain: RootViewController -> DefaultNetworkService
             """
         ) {
@@ -818,7 +818,7 @@ final class SafeDIPluginTests: XCTestCase {
                             self.urlSession = urlSession
                         }
 
-                        @Inherited
+                        @Received
                         let urlSession: URLSession // URLSession is not `@Instantiable`! This will fail!
                     }
                     """,

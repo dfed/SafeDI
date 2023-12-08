@@ -20,7 +20,7 @@
 
 /// A SafeDI dependency designed for the deferred instantiation of an `@Instantiable` type that contains
 /// `@Forwarded` properties. This class enables instantiation with specific arguments, facilitating
-/// the inheritance of these arguments by `@Instantiable` types that are `@Instantiated` within
+/// the receiving of these arguments by `@Instantiable` types that are `@Instantiated` within
 /// the `InstantiableType`, as well as by all types `@Instantiated` downstream.
 /// Instantiation is thread-safe.
 ///

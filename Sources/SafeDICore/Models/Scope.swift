@@ -49,7 +49,7 @@ final class Scope {
             .map(\.property)
     }
 
-    var inheritedProperties: [Property] {
+    var receivedProperties: [Property] {
         instantiable
             .dependencies
             .filter {
@@ -58,7 +58,7 @@ final class Scope {
                         .instantiated,
                         .lazyInstantiated:
                     return false
-                case .inherited:
+                case .received:
                     return true
                 }
             }
@@ -121,7 +121,7 @@ final class Scope {
             instantiable: instantiable,
             childPropertyToInstantiableConstant: childPropertyToInstantiableConstant,
             childPropertyToCombinedScopeMap: childPropertyToCombinedScopeMap,
-            inheritedProperties: Set(
+            receivedProperties: Set(
                 instantiableStack
                     .flatMap(\.dependencies)
                     .filter {

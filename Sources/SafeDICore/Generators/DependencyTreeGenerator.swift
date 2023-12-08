@@ -38,7 +38,7 @@ public final class DependencyTreeGenerator {
         try validateReachableTypeDescriptions()
 
         let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
-        try validateUndeclaredInheritedProperties(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
+        try validateUndeclaredReceivedProperties(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
         let rootCombinedScopes = try rootInstantiableTypes
             .sorted()
             .compactMap { try typeDescriptionToScopeMap[$0]?.createCombinedScope() }
@@ -94,7 +94,7 @@ public final class DependencyTreeGenerator {
                 "No `@\(InstantiableVisitor.macroName)`-decorated type found to fulfill `@\(Dependency.Source.instantiated.rawValue)` or  `@\(Dependency.Source.lazyInstantiated.rawValue)`-decorated property with type `\(typeDescription.asSource)`"
             case let .unfulfillableProperties(unfulfillableProperties):
                 """
-                The following inherited properties were never instantiated:
+                The following received properties were never instantiated:
                 \(unfulfillableProperties.map {
                     """
                     `\($0.property.asSource)` is not instantiated in chain: \(([$0.instantiable] + $0.parentStack)
@@ -130,7 +130,7 @@ public final class DependencyTreeGenerator {
             .joined(separator: "\n")
     }
 
-    /// A collection of `@Instantiable`-decorated types that do not explicitly inherit dependencies.
+    /// A collection of `@Instantiable`-decorated types that do not explicitly receive dependencies.
     /// - Note: These are not necessarily roots in the build graph, since these types may be instantiated by another `@Instantiable`.
     private lazy var possibleRootInstantiableTypes: Set<TypeDescription> = Set(
         typeDescriptionToFulfillingInstantiableMap
@@ -140,7 +140,7 @@ public final class DependencyTreeGenerator {
     )
 
     /// A collection of `@Instantiable`-decorated types that are instantiated by at least one other
-    /// `@Instantiable`-decorated type or do not explicitly inherit dependencies.
+    /// `@Instantiable`-decorated type or do not explicitly receive dependencies.
     private lazy var reachableTypeDescriptions: Set<TypeDescription> = {
         var reachableTypeDescriptions = Set<TypeDescription>()
 
@@ -245,18 +245,18 @@ public final class DependencyTreeGenerator {
         return typeDescriptionToScopeMap
     }
 
-    private func validateUndeclaredInheritedProperties(typeDescriptionToScopeMap: [TypeDescription: Scope]) throws {
+    private func validateUndeclaredReceivedProperties(typeDescriptionToScopeMap: [TypeDescription: Scope]) throws {
         var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
-        func propagateUndeclaredInheritedProperties(
+        func propagateUndeclaredReceivedProperties(
             on scope: Scope,
-            inheritableProperties: Set<Property>,
+            receivableProperties: Set<Property>,
             instantiables: OrderedSet<Instantiable>
         ) {
-            for inheritedProperty in scope.inheritedProperties {
-                let parentContainsProperty = inheritableProperties.contains(inheritedProperty)
+            for receivedProperty in scope.receivedProperties {
+                let parentContainsProperty = receivableProperties.contains(receivedProperty)
                 if !parentContainsProperty {
                     unfulfillableProperties.insert(.init(
-                        property: inheritedProperty,
+                        property: receivedProperty,
                         instantiable: scope.instantiable,
                         parentStack: instantiables.elements)
                     )
@@ -273,18 +273,18 @@ public final class DependencyTreeGenerator {
                 var instantiables = instantiables
                 instantiables.insert(scope.instantiable, at: 0)
 
-                propagateUndeclaredInheritedProperties(
+                propagateUndeclaredReceivedProperties(
                     on: childScope,
-                    inheritableProperties: inheritableProperties.union(scope.properties),
+                    receivableProperties: receivableProperties.union(scope.properties),
                     instantiables: instantiables
                 )
             }
         }
 
         for rootScope in rootInstantiableTypes.compactMap({ typeDescriptionToScopeMap[$0] }) {
-            propagateUndeclaredInheritedProperties(
+            propagateUndeclaredReceivedProperties(
                 on: rootScope,
-                inheritableProperties: Set(rootScope.properties),
+                receivableProperties: Set(rootScope.properties),
                 instantiables: []
             )
         }
@@ -310,7 +310,7 @@ extension Dependency {
         switch source {
         case .instantiated, .lazyInstantiated:
             return true
-        case .forwarded, .inherited:
+        case .forwarded, .received:
             return false
         }
     }

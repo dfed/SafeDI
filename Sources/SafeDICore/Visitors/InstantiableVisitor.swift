@@ -80,7 +80,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                         property: { 
                             switch dependencySource {
                             case .instantiated,
-                                    .inherited,
+                                    .received,
                                     .forwarded:
                                 Property(
                                     label: label,

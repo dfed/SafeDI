@@ -32,7 +32,7 @@ final class InstantiableMacroTests: XCTestCase {
     let testMacros: [String: Macro.Type] = [
         InstantiableVisitor.macroName: InstantiableMacro.self,
         Dependency.Source.instantiated.rawValue: InjectableMacro.self,
-        Dependency.Source.inherited.rawValue: InjectableMacro.self,
+        Dependency.Source.received.rawValue: InjectableMacro.self,
         Dependency.Source.forwarded.rawValue: InjectableMacro.self,
     ]
 
@@ -73,7 +73,7 @@ final class InstantiableMacroTests: XCTestCase {
                     self.invariantA = invariantA
                 }
 
-                @Inherited
+                @Received
                 @Instantiated
                 let invariantA: InvariantA
             }
@@ -88,8 +88,8 @@ final class InstantiableMacroTests: XCTestCase {
                     self.invariantA = invariantA
                 }
 
-                @Inherited
-                ╰─ 🛑 Dependency can have at most one of @Instantiated, @Inherited, or @Forwarded attached macro
+                @Received
+                ╰─ 🛑 Dependency can have at most one of @Instantiated, @Received, or @Forwarded attached macro
                    ✏️ Remove excessive attached macros
                 @Instantiated
                 let invariantA: InvariantA
@@ -105,7 +105,7 @@ final class InstantiableMacroTests: XCTestCase {
                     self.invariantA = invariantA
                 }
 
-                @Inherited
+                @Received
                 @Instantiated
                 let invariantA: InvariantA
             }
@@ -312,7 +312,7 @@ final class InstantiableMacroTests: XCTestCase {
                 let variantA: VariantA
                 @Forwarded
                 let variantB: VariantB
-                @Inherited
+                @Received
                 let invariantA: InvariantA
             }
             """
@@ -332,7 +332,7 @@ final class InstantiableMacroTests: XCTestCase {
                 let variantA: VariantA
                 @Forwarded
                 let variantB: VariantB
-                @Inherited
+                @Received
                 let invariantA: InvariantA
             }
             """
@@ -356,7 +356,7 @@ final class InstantiableMacroTests: XCTestCase {
                 let variantA: VariantA
                 @Forwarded
                 let variantB: VariantB
-                @Inherited
+                @Received
                 let invariantA: InvariantA
             }
             """

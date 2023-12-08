@@ -27,12 +27,12 @@ actor CombinedScope {
         instantiable: Instantiable,
         childPropertyToInstantiableConstant: [Property: Instantiable],
         childPropertyToCombinedScopeMap: [Property: CombinedScope],
-        inheritedProperties: Set<Property>
+        receivedProperties: Set<Property>
     ) {
         self.instantiable = instantiable
         self.childPropertyToInstantiableConstant = childPropertyToInstantiableConstant
         self.childPropertyToCombinedScopeMap = childPropertyToCombinedScopeMap
-        self.inheritedProperties = inheritedProperties
+        self.receivedProperties = receivedProperties
 
         propertiesToFulfill = (
             Array<Property>(childPropertyToInstantiableConstant.keys)
@@ -131,7 +131,7 @@ actor CombinedScope {
 
     private let childPropertyToInstantiableConstant: [Property: Instantiable]
     private let childPropertyToCombinedScopeMap: [Property: CombinedScope]
-    private let inheritedProperties: Set<Property>
+    private let receivedProperties: Set<Property>
 
     private let propertiesToFulfill: [Property]
     private var resolvedProperties = Set<Property>()
@@ -174,13 +174,13 @@ actor CombinedScope {
 
     private func hasResolvedAllPropertiesRequired(for combinedScope: CombinedScope) -> Bool {
         !combinedScope
-            .inheritedProperties
+            .receivedProperties
             .contains(where: { !isPropertyResolved($0) })
     }
 
     private func isPropertyResolved(_ property: Property) -> Bool {
         resolvedProperties.contains(property)
-        || inheritedProperties.contains(property)
+        || receivedProperties.contains(property)
         || forwardedProperties.contains(property)
     }
 

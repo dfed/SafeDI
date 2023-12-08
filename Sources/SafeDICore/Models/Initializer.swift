@@ -134,7 +134,7 @@ public struct Initializer: Codable, Hashable {
                 for dependency in dependencies {
                     switch dependency.source {
                     case .instantiated,
-                            .inherited,
+                            .received,
                             .forwarded:
                         CodeBlockItemSyntax(
                             item: .expr(ExprSyntax(InfixOperatorExprSyntax(

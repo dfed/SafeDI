@@ -42,7 +42,7 @@ final class FileVisitorTests: XCTestCase {
             @Forwarded
             private let user: User
 
-            @Inherited
+            @Received
             let networkService: NetworkService
         }
         """))
@@ -71,7 +71,7 @@ final class FileVisitorTests: XCTestCase {
                                 label: "networkService",
                                 typeDescription: .simple(name: "NetworkService")
                             ),
-                            source: .inherited
+                            source: .received
                         )
                     ],
                     isClass: true)
@@ -97,7 +97,7 @@ final class FileVisitorTests: XCTestCase {
             @Forwarded
             private let user: User
 
-            @Inherited
+            @Received
             let networkService: NetworkService
         }
 
@@ -131,7 +131,7 @@ final class FileVisitorTests: XCTestCase {
                                 label: "networkService",
                                 typeDescription: .simple(name: "NetworkService")
                             ),
-                            source: .inherited
+                            source: .received
                         )
                     ],
                     isClass: true

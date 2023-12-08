@@ -33,7 +33,7 @@ final class InjectableMacroTests: XCTestCase {
 
     let testMacros: [String: Macro.Type] = [
         Dependency.Source.instantiated.rawValue: InjectableMacro.self,
-        Dependency.Source.inherited.rawValue: InjectableMacro.self,
+        Dependency.Source.received.rawValue: InjectableMacro.self,
         Dependency.Source.forwarded.rawValue: InjectableMacro.self,
     ]
 
@@ -107,7 +107,7 @@ final class InjectableMacroTests: XCTestCase {
                     self.invariantA = invariantA
                 }
 
-                @Inherited
+                @Received
                 static let invariantA: InvariantA
             }
             """
@@ -118,8 +118,8 @@ final class InjectableMacroTests: XCTestCase {
                     self.invariantA = invariantA
                 }
 
-                @Inherited
-                ┬─────────
+                @Received
+                ┬────────
                 ╰─ 🛑 This macro can not decorate `static` variables
                 static let invariantA: InvariantA
             }
