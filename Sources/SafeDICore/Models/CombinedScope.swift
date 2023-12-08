@@ -169,10 +169,7 @@ actor CombinedScope {
     private func hasResolvedAllPropertiesRequired(for instantiable: Instantiable) -> Bool {
         !instantiable
             .dependencies
-            .filter {
-                $0.source != .instantiated
-                && $0.source != .forwarded
-            }
+            .filter { $0.source != .forwarded }
             .map(\.property)
             .contains(where: { !isPropertyResolved($0) })
     }
