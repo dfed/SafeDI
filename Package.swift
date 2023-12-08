@@ -88,13 +88,17 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
-                "ZippyJSON",
                 "SafeDICore",
+                "ZippyJSON",
             ]
         ),
         .testTarget(
             name: "SafeDIPluginTests",
-            dependencies: ["SafeDIPlugin"]
+            dependencies: [
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                "SafeDIPlugin",
+                "ZippyJSON",
+            ]
         ),
 
         // Core
