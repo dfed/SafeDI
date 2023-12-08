@@ -31,8 +31,9 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-syntax.git", from: "509.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.0"),
+        .package(url: "https://github.com/apple/swift-collections.git", from: "1.0.0"),
+        .package(url: "https://github.com/apple/swift-syntax.git", from: "509.0.0"),
         .package(url: "https://github.com/michaeleisel/ZippyJSON.git", from: "1.2.0"),
         .package(url: "https://github.com/pointfreeco/swift-macro-testing.git", from: "0.2.0"),
     ],
@@ -91,11 +92,16 @@ let package = Package(
                 "SafeDICore",
             ]
         ),
+        .testTarget(
+            name: "SafeDIPluginTests",
+            dependencies: ["SafeDIPlugin"]
+        ),
 
         // Core
         .target(
             name: "SafeDICore",
             dependencies: [
+                .product(name: "Collections", package: "swift-collections"),
                 .product(name: "SwiftDiagnostics", package: "swift-syntax"),
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),

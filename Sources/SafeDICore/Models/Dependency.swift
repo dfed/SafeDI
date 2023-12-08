@@ -29,15 +29,6 @@ public struct Dependency: Codable, Hashable {
     public let property: Property
     public let source: Source
 
-    public var isForwarded: Bool {
-        switch source {
-        case .instantiated, .lazyInstantiated, .inherited:
-            return false
-        case .forwarded:
-            return true
-        }
-    }
-
     public enum Source: String, CustomStringConvertible, Codable, Hashable {
         case instantiated = "Instantiated"
         case lazyInstantiated = "LazyInstantiated"
@@ -51,34 +42,22 @@ public struct Dependency: Codable, Hashable {
 
     // MARK: Internal
 
-    /// A version of the dependency as it looks in an initializer argument.
-    var asInitializerArgument: Property {
-        Property(
-            label: initializerArgumentLabel,
-            typeDescription: initializerArgumentTypeDescription)
-    }
-
-    /// The label by which this property is referenced in an initializer.
-    var initializerArgumentLabel: String {
+    /// The label by which this property is referenced inside the `init` method.
+    var propertyLabelInInit: String {
         switch source {
         case .instantiated, .inherited, .forwarded:
             return property.label
         case .lazyInstantiated:
-            return "\(property.label)\(Self.instantiatorType)"
-        }
-    }
-
-    /// The type description by which this property is referenced in an initializer.
-    var initializerArgumentTypeDescription: TypeDescription {
-        switch source {
-        case .instantiated, .inherited, .forwarded:
-            return property.typeDescription
-        case .lazyInstantiated:
-            // TODO: fully qualify this type with `SafeDI.` member prefix
-            return .simple(
-                name: Self.instantiatorType,
-                generics: [property.typeDescription]
-            )
+            return """
+                _\(property
+                    .label
+                    .replacingOccurrences(
+                        of: Self.instantiatorType,
+                        with: "",
+                        options: [.anchored, .backwards]
+                    )
+                )
+                """
         }
     }
 

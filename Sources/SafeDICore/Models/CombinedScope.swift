@@ -33,6 +33,12 @@ actor CombinedScope {
         self.childPropertyToInstantiableConstant = childPropertyToInstantiableConstant
         self.childPropertyToCombinedScopeMap = childPropertyToCombinedScopeMap
         self.inheritedProperties = inheritedProperties
+
+        propertiesToFulfill = (
+            Array<Property>(childPropertyToInstantiableConstant.keys)
+            + Array<Property>(childPropertyToCombinedScopeMap.keys)
+        )
+        .sorted()
     }
 
     // MARK: Internal
@@ -40,50 +46,75 @@ actor CombinedScope {
     let instantiable: Instantiable
 
     func generateCode(leadingWhitespace: String = "") async throws -> String {
-        do {
-            while let satisfiableProperty = try nextSatisfiableProperty() {
-                let satisfiedProperty: Property
-                let initializer: String
-                switch satisfiableProperty {
-                case let .constant(property, instantiable):
-                    satisfiedProperty = property
-                    let concreteTypeName = instantiable.concreteInstantiableType.asSource
-                    let argumentList = try instantiable.initializer.createInitializerArgumentList(given: instantiable.dependencies)
-                    initializer = "\(concreteTypeName)(\(argumentList))"
+        let generatedCode: String
+        if let generateCodeTask {
+            generatedCode = try await generateCodeTask.value
+        } else {
+            let generateCodeTask = Task {
+                var generatedCode = ""
+                while let satisfiableProperty = try nextSatisfiableProperty() {
+                    let labelAndType: String
+                    let initializer: String
+                    switch satisfiableProperty {
+                    case let .constant(property, instantiable):
+                        resolvedProperties.insert(property)
+                        let concreteTypeName = instantiable.concreteInstantiableType.asSource
+                        if concreteTypeName == property.typeDescription.asSource {
+                            labelAndType = property.label
+                        } else {
+                            labelAndType = "\(property.label): \(property.typeDescription.asSource)"
+                        }
+                        let argumentList = try instantiable.initializer.createInitializerArgumentList(given: instantiable.dependencies)
+                        initializer = "\(concreteTypeName)(\(argumentList))"
 
-                case let .combinedScope(property, combinedScope):
-                    satisfiedProperty = property
-                    let concreteTypeName = property.typeDescription.asSource
-                    let returnTypeName = property.typeDescription.asInstantiatedType.asSource
-                    let argumentList = try instantiable.initializer.createInitializerArgumentList(given: instantiable.dependencies)
-                    let generatedCode = try await combinedScope.generateCode(leadingWhitespace: leadingWhitespace + "    ")
-                    let returnLine = "return \(returnTypeName)(\(argumentList)"
+                    case let .combinedScope(property, combinedScope):
+                        let instantiable = combinedScope.instantiable
+                        resolvedProperties.insert(property)
+                        labelAndType = property.label
+                        let concreteTypeName = property.typeDescription.asSource
+                        let returnTypeName = property.typeDescription.asInstantiatedType.asSource
+                        let argumentList = try instantiable.initializer.createInitializerArgumentList(given: instantiable.dependencies)
 
-                    let closureArguments: String
-                    if concreteTypeName == Dependency.forwardingInstantiatorType {
-                        let forwardedProperties = instantiable.dependencies.filter { $0.source == .forwarded }
-                        // TODO: Would be better to match types rather than assuming property order for the forwarded properties.
-                        closureArguments = " \(forwardedProperties.map(\.property.label).joined(separator: ", ")) in"
-                    } else { // Dependency.instantiatorType
-                        closureArguments = ""
-                    }
+                        let leadingMemberWhitespace = "    "
+                        let generatedCode = try await combinedScope.generateCode(leadingWhitespace: leadingWhitespace + "    ")
+                        let returnLine = "\(returnTypeName)(\(argumentList))"
+                        let memberStatements: String
+                        if generatedCode.isEmpty {
+                            memberStatements = "\(leadingMemberWhitespace)\(returnLine)"
+                        } else {
+                            memberStatements = """
+                        \(generatedCode)
+                        \(leadingMemberWhitespace)return \(returnLine)
+                        """
+                        }
 
-                    initializer = """
+                        let closureArguments: String
+                        switch property.nonLazyPropertyType {
+                        case .forwardingInstantiator:
+                            let forwardedProperties = instantiable.dependencies.filter { $0.source == .forwarded }
+                            // TODO: Would be better to match types rather than assuming property order for the forwarded properties.
+                            // TODO: Throw error if forwardedProperties has multiple of the same type.
+                            closureArguments = " \(forwardedProperties.map(\.property.label).joined(separator: ", ")) in"
+                        case .instantiator, .lazy:
+                            closureArguments = ""
+                        case .constant:
+                            assertionFailure("Found unexpected constant `\(property.asSource)` while inspecting combined scope!")
+                            closureArguments = ""
+                        }
+
+                        initializer = """
                         \(concreteTypeName) {\(closureArguments)
-                            \(generatedCode)
-                            \(returnLine)
+                        \(memberStatements)
                         }
                         """
-                }
+                    }
 
-                resolvedProperties.insert(satisfiedProperty)
-                generatedCode.append("let \(satisfiedProperty.label): \(satisfiedProperty.typeDescription.asSource) = \(initializer))")
+                    generatedCode.append("let \(labelAndType) = \(initializer)\n")
+                }
+                return generatedCode
             }
-        } catch {
-            // Reset state so next time we call this we'll regenerate the error.
-            generatedCode = ""
-            remainingProperties = generateRemainingProperties()
-            throw error
+            self.generateCodeTask = generateCodeTask
+            generatedCode = try await generateCodeTask.value
         }
 
         if leadingWhitespace.isEmpty {
@@ -102,11 +133,12 @@ actor CombinedScope {
     private let childPropertyToCombinedScopeMap: [Property: CombinedScope]
     private let inheritedProperties: Set<Property>
 
-    private lazy var remainingProperties: [Property] = generateRemainingProperties()
+    private let propertiesToFulfill: [Property]
     private var resolvedProperties = Set<Property>()
-    private var generatedCode = ""
+    private var generateCodeTask: Task<String, Error>?
 
     private func nextSatisfiableProperty() throws -> SatisfiableProperty? {
+        let remainingProperties = propertiesToFulfill.filter { !resolvedProperties.contains($0) }
         guard !remainingProperties.isEmpty else {
             return nil
         }
@@ -119,85 +151,49 @@ actor CombinedScope {
                 return .constant(property, instantiable)
             } else if
                 let combinedScope = childPropertyToCombinedScopeMap[property],
-                hasResolvedAllPropertiesRequired(for: combinedScope.instantiable)
+                hasResolvedAllPropertiesRequired(for: combinedScope)
             {
                 return .combinedScope(property, combinedScope)
             }
         }
 
-        throw CombinedScopeError.unresolvableDependencies(
-            remainingProperties.compactMap { property in
-                if let instantiable = childPropertyToInstantiableConstant[property] {
-                    return .constant(property, instantiable)
-                } else if let combinedScope = childPropertyToCombinedScopeMap[property] {
-                    return .combinedScope(property, combinedScope)
-                } else {
-                    return nil
-                }
-            },
-            instantiable)
+        assertionFailure("Unexpected failure: unable to find next satisfiable property")
+        return nil
     }
 
     private func hasResolvedAllPropertiesRequired(for instantiable: Instantiable) -> Bool {
-        firstUnresolvedDependency(of: instantiable) == nil
+        !instantiable
+            .dependencies
+            .filter {
+                $0.source != .instantiated
+                && $0.source != .forwarded
+            }
+            .map(\.property)
+            .contains(where: { !isPropertyResolved($0) })
     }
 
-    private func firstUnresolvedDependency(of instantiable: Instantiable) -> Property? {
-        instantiable.dependencies.map(\.property).first(where: { property in
-            !(resolvedProperties.contains(property) || inheritedProperties.contains(property))
-        })
+    private func hasResolvedAllPropertiesRequired(for combinedScope: CombinedScope) -> Bool {
+        !combinedScope
+            .inheritedProperties
+            .contains(where: { !isPropertyResolved($0) })
     }
 
-    private func unresolvedDependencies(of instantiable: Instantiable) -> [Property] {
-        instantiable.dependencies.map(\.property).filter { property in
-            !(resolvedProperties.contains(property) || inheritedProperties.contains(property))
-        }
+    private func isPropertyResolved(_ property: Property) -> Bool {
+        resolvedProperties.contains(property)
+        || inheritedProperties.contains(property)
+        || forwardedProperties.contains(property)
     }
 
-    nonisolated
-    private func generateRemainingProperties() -> [Property] {
-        (
-            Array<Property>(childPropertyToInstantiableConstant.keys)
-            + Array<Property>(childPropertyToCombinedScopeMap.keys)
-        )
-        .sorted()
-    }
+    private lazy var forwardedProperties = instantiable
+        .dependencies
+        // Instantiated properties will self-resolve.
+        .filter { $0.source == .forwarded }
+        .map(\.property)
 
     // MARK: SatisfiableProperty
 
     private enum SatisfiableProperty {
         case constant(Property, Instantiable)
         case combinedScope(Property, CombinedScope)
-
-        var cycleErrorDescription: String {
-            let property: Property
-            let propertyDependencies: [Property]
-            switch self {
-            case let .constant(problematicProperty, instantiable):
-                property = problematicProperty
-                propertyDependencies = instantiable.dependencies.map(\.property)
-            case let .combinedScope(problematicProperty, combinedScope):
-                property = problematicProperty
-                propertyDependencies = combinedScope.instantiable.dependencies.map(\.property)
-            }
-            return "\(property.asSource) requires: \(propertyDependencies.sorted().map(\.asSource).joined(separator: ", "))"
-        }
-    }
-
-    // MARK: CombinedScopeError
-
-    private enum CombinedScopeError: Error, CustomStringConvertible {
-
-        case unresolvableDependencies([SatisfiableProperty], Instantiable)
-
-        var description: String {
-            switch self {
-            case let .unresolvableDependencies(properties, instantiable):
-                """
-                Unable to resolve dependencies of \(instantiable.concreteInstantiableType.asSource). There is at least one dependency cycle within the following properties:
-                \(properties.map(\.cycleErrorDescription).joined(separator: "\n"))
-                """
-            }
-        }
     }
 }

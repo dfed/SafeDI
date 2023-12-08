@@ -40,37 +40,65 @@ struct SafeDIPlugin: AsyncParsableCommand {
     var dependencyTreeOutput: String?
 
     func run() async throws {
-        try await Self.run(
+        let output = try await Self.run(
             swiftFileContent: try await loadSwiftFiles(),
             instantiablesOutput: instantiablesOutput,
-            instantiablesPaths: instantiablesPaths,
-            dependencyTreeOutput: dependencyTreeOutput)
+            dependentModuleNames: instantiablesPaths.map { $0.asFileURL.deletingPathExtension().lastPathComponent },
+            dependentInstantiables: Self.findSafeDIFulfilledTypes(atInstantiablesPaths: instantiablesPaths),
+            buildDependencyTreeOutput: dependencyTreeOutput != nil
+        )
+
+        if let instantiablesOutput {
+            try Self.writeInstantiables(output.instantiables, toPath: instantiablesOutput)
+        }
+
+        if let dependencyTreeOutput, let generatedCode = output.dependencyTree {
+            try generatedCode.write(toPath: dependencyTreeOutput)
+        }
     }
 
     static func run(
         swiftFileContent: [String],
         instantiablesOutput: String?,
-        instantiablesPaths: [String],
-        dependencyTreeOutput: String?
-    ) async throws {
+        dependentModuleNames: [String],
+        dependentInstantiables: [[Instantiable]],
+        buildDependencyTreeOutput: Bool
+    ) async throws -> Output {
         let module = parsedModule(swiftFileContent)
-        if let firstNestedInstantiableDecoratedTypeDescription = module.nestedInstantiableDecoratedTypeDescriptions.first {
-            let nestedInstantiable = firstNestedInstantiableDecoratedTypeDescription.asSource
-            throw CollectInstantiablesError.foundNestedInstantiable(nestedInstantiable)
+        if !module.nestedInstantiableDecoratedTypeDescriptions.isEmpty {
+            throw CollectInstantiablesError
+                .foundNestedInstantiables(
+                    module
+                        .nestedInstantiableDecoratedTypeDescriptions
+                        .map(\.asSource)
+                        .sorted()
+                )
         }
 
         if let instantiablesOutput {
             try writeInstantiables(module.instantiables, toPath: instantiablesOutput)
         }
 
-        if let dependencyTreeOutput {
-            try await DependencyTreeGenerator(
-                moduleNames: instantiablesPaths.map { $0.asFileURL.deletingPathExtension().lastPathComponent },
-                typeDescriptionToFulfillingInstantiableMap: try await findSafeDIFulfilledTypes(atInstantiablesPaths: instantiablesPaths)
+        let dependencyTree: String?
+        if buildDependencyTreeOutput {
+            dependencyTree = try await DependencyTreeGenerator(
+                moduleNames: dependentModuleNames,
+                typeDescriptionToFulfillingInstantiableMap: try resolveSafeDIFulfilledTypes(dependentInstantiables: dependentInstantiables + [module.instantiables])
             )
             .generate()
-            .write(toPath: dependencyTreeOutput)
+        } else {
+            dependencyTree = nil
         }
+
+        return Output(
+            instantiables: module.instantiables,
+            dependencyTree: dependencyTree
+        )
+    }
+
+    struct Output {
+        let instantiables: [Instantiable]
+        let dependencyTree: String?
     }
 
     private func loadSwiftFiles() async throws -> [String] {
@@ -105,10 +133,10 @@ struct SafeDIPlugin: AsyncParsableCommand {
         try JSONEncoder().encode(instantiables).write(toPath: path)
     }
 
-    private static func findSafeDIFulfilledTypes(atInstantiablesPaths instantiablesPaths: [String]) async throws -> [TypeDescription: Instantiable] {
+    private static func findSafeDIFulfilledTypes(atInstantiablesPaths instantiablesPaths: [String]) async throws -> [[Instantiable]] {
         try await withThrowingTaskGroup(
             of: [Instantiable].self,
-            returning: [TypeDescription: Instantiable].self
+            returning: [[Instantiable]].self
         ) { taskGroup in
             let decoder = ZippyJSONDecoder()
             let instantiablesURLs = instantiablesPaths.map(\.asFileURL)
@@ -117,19 +145,28 @@ struct SafeDIPlugin: AsyncParsableCommand {
                     try decoder.decode([Instantiable].self, from: Data(contentsOf: instantiablesURL))
                 }
             }
-            var typeDescriptionToFulfillingInstantiableMap = [TypeDescription: Instantiable]()
+            var dependentInstantiables = [[Instantiable]]()
             for try await moduleInstantiables in taskGroup {
-                for instantiable in moduleInstantiables {
-                    for instantiableType in instantiable.instantiableTypes {
-                        if typeDescriptionToFulfillingInstantiableMap[instantiableType] != nil {
-                            throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)
-                        }
-                        typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
+                dependentInstantiables.append(moduleInstantiables)
+            }
+
+            return dependentInstantiables
+        }
+    }
+
+    private static func resolveSafeDIFulfilledTypes(dependentInstantiables: [[Instantiable]]) throws -> [TypeDescription: Instantiable] {
+        var typeDescriptionToFulfillingInstantiableMap = [TypeDescription: Instantiable]()
+        for moduleInstantiables in dependentInstantiables {
+            for instantiable in moduleInstantiables {
+                for instantiableType in instantiable.instantiableTypes {
+                    if typeDescriptionToFulfillingInstantiableMap[instantiableType] != nil {
+                        throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)
                     }
+                    typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
                 }
             }
-            return typeDescriptionToFulfillingInstantiableMap
         }
+        return typeDescriptionToFulfillingInstantiableMap
     }
 
     private struct ParsedModule {
@@ -138,15 +175,15 @@ struct SafeDIPlugin: AsyncParsableCommand {
     }
 
     private enum CollectInstantiablesError: Error, CustomStringConvertible {
-        case foundNestedInstantiable(String)
+        case foundNestedInstantiables([String])
         case foundDuplicateInstantiable(String)
 
         var description: String {
             switch self {
-            case let .foundNestedInstantiable(nestedInstantiable):
-                "@Instantiable types must be top-level declarations. Found nested @Instantiable type: '\(nestedInstantiable)'"
+            case let .foundNestedInstantiables(nestedInstantiables):
+                "@\(InstantiableVisitor.macroName) types must be top-level declarations. Found the following nested @\(InstantiableVisitor.macroName) types: \(nestedInstantiables.joined(separator: ", "))"
             case let .foundDuplicateInstantiable(duplicateInstantiable):
-                "@Instantiable types must have globally unique names, and fulfill globally unqiue types. Found multiple @Instantiable types fulfilling type named '\(duplicateInstantiable)'"
+                "@\(InstantiableVisitor.macroName)-decorated types must have globally unique type names and fulfill globally unqiue types. Found multiple @\(InstantiableVisitor.macroName)-decorated types fulfilling `\(duplicateInstantiable)`"
             }
         }
     }

@@ -82,6 +82,8 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService {
+                                         ╰─ 🛑 @Instantiable-decorated type must have `public` or `open` initializer comprising all injected parameters
+                                            ✏️ Add required initializer
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
@@ -97,13 +99,17 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService {
+            public init() {}
+
                 init(invariantA: InvariantA) {
                     self.invariantA = invariantA
                 }
 
                 @Inherited
+                @Instantiated
+                let invariantA: InvariantA
             }
-            """ // fixes are super wrong here. We delete @Inherited not the rest.
+            """
         }
     }
 

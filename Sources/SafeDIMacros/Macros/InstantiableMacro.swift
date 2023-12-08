@@ -45,29 +45,30 @@ public struct InstantiableMacro: MemberMacro {
             context.diagnose(diagnostic)
         }
 
+        // TODO: Do not allow having multiple @Forwarded properties of the same type.
+
         let hasMemberwiseInitializerForInjectableProperties = visitor
             .initializers
             .contains(where: { $0.isValid(forFulfilling: visitor.dependencies) })
         guard hasMemberwiseInitializerForInjectableProperties else {
-            if !visitor.dependencies.isEmpty || visitor.initializers.isEmpty {
-                var membersWithInitializer = declaration.memberBlock.members
-                membersWithInitializer.insert(
-                    MemberBlockItemSyntax(
-                        leadingTrivia: .newline,
-                        decl: Initializer.generateRequiredInitializer(for: visitor.dependencies),
-                        trailingTrivia: .newline
-                    ),
-                    at: membersWithInitializer.startIndex
-                )
-                context.diagnose(Diagnostic(
-                    node: Syntax(declaration.memberBlock),
-                    error: FixableInstantiableError.missingRequiredInitializer,
-                    changes: [
-                        .replace(
-                            oldNode: Syntax(declaration.memberBlock.members),
-                            newNode: Syntax(membersWithInitializer))
-                    ]))
-            }
+            var membersWithInitializer = declaration.memberBlock.members
+            membersWithInitializer.insert(
+                MemberBlockItemSyntax(
+                    leadingTrivia: .newline,
+                    decl: Initializer.generateRequiredInitializer(for: visitor.dependencies),
+                    trailingTrivia: .newline
+                ),
+                at: membersWithInitializer.startIndex
+            )
+            context.diagnose(Diagnostic(
+                node: Syntax(declaration.memberBlock),
+                error: FixableInstantiableError.missingRequiredInitializer,
+                changes: [
+                    .replace(
+                        oldNode: Syntax(declaration.memberBlock.members),
+                        newNode: Syntax(membersWithInitializer))
+                ]
+            ))
             return []
         }
 

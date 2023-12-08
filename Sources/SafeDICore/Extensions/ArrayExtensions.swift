@@ -24,13 +24,13 @@ import SwiftSyntaxBuilder
 extension Array where Element == Dependency {
 
     var removingDuplicateInitializerArguments: Self {
+        // TODO: try using a Collections.OrderedSet here instead.
         var alreadySeenInitializerArgument = Set<Property>()
         return filter {
-            let initializerArgument = $0.asInitializerArgument
-            if alreadySeenInitializerArgument.contains(initializerArgument) {
+            if alreadySeenInitializerArgument.contains($0.property) {
                 return false
             } else {
-                alreadySeenInitializerArgument.insert(initializerArgument)
+                alreadySeenInitializerArgument.insert($0.property)
                 return true
             }
         }
@@ -38,7 +38,7 @@ extension Array where Element == Dependency {
 
     var initializerFunctionParameters: [FunctionParameterSyntax] {
         removingDuplicateInitializerArguments
-            .map { $0.asInitializerArgument.asFunctionParamter }
+            .map { $0.property.asFunctionParamter }
             .transformUntilLast {
                 var node = $0
                 node.trailingComma = .commaToken(trailingTrivia: .space)

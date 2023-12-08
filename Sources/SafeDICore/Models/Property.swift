@@ -60,4 +60,50 @@ public struct Property: Codable, Hashable, Comparable {
             type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
         )
     }
+
+    var nonLazyPropertyType: PropertyType {
+        switch typeDescription {
+        case let .simple(name, _):
+            if name == Dependency.instantiatorType {
+                return .instantiator
+            } else if name == Dependency.forwardingInstantiatorType {
+                return .forwardingInstantiator
+            } else {
+                return .constant
+            }
+        case .any,
+                .array,
+                .attributed,
+                .closure,
+                .composition,
+                .dictionary,
+                .implicitlyUnwrappedOptional,
+                .metatype,
+                .nested,
+                .optional,
+                .some,
+                .tuple,
+                .unknown:
+            return .constant
+        }
+    }
+
+    // MARK: PropertyType
+
+    enum PropertyType {
+        /// A `let` property.
+        case constant
+        // TODO: Enable lazy instantiated properties to forward themselves down their own scope.
+        //       We can enable this without an unexpected retain problem because lazy instantiated
+        //       properties are already retained.
+        /// A  lazily instantiated property. Backed by an `Instantiator`.
+        /// The instantiated product is not forwarded down the dependency tree.
+        case lazy
+        /// An `Instantiator` property.
+        /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
+        case instantiator
+        /// A `ForwardingInstantiator` property.
+        /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
+        case forwardingInstantiator
+    }
 }

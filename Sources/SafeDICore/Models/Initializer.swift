@@ -103,7 +103,7 @@ public struct Initializer: Codable, Hashable {
         let missingArguments = Set(dependenciesWithDuplicateInitializerArgumentsRemoved).subtracting(initializerFulfulledDependencies)
         
         guard missingArguments.isEmpty else {
-            throw GenerationError.missingArguments(missingArguments.map(\.asInitializerArgument.asSource))
+            throw GenerationError.missingArguments(missingArguments.map(\.property.asSource))
         }
 
         // We're good!
@@ -153,7 +153,7 @@ public struct Initializer: Codable, Hashable {
                         CodeBlockItemSyntax(
                             item: .expr(ExprSyntax(InfixOperatorExprSyntax(
                                 leadingTrivia: .newline,
-                                leftOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier("_\(dependency.property.label)")),
+                                leftOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(dependency.propertyLabelInInit)),
                                 operator: AssignmentExprSyntax(
                                     leadingTrivia: .space,
                                     trailingTrivia: .space),
@@ -163,7 +163,7 @@ public struct Initializer: Codable, Hashable {
                                     arguments: LabeledExprListSyntax {
                                         LabeledExprSyntax(
                                             expression: DeclReferenceExprSyntax(
-                                                baseName: TokenSyntax.identifier(dependency.asInitializerArgument.label)
+                                                baseName: TokenSyntax.identifier(dependency.property.label)
                                             )
                                         )
                                     },
@@ -183,8 +183,8 @@ public struct Initializer: Codable, Hashable {
     func createDependencyAndArgumentBinding(given dependencies: [Dependency]) throws -> [(dependency: Dependency, argument: Argument)] {
         try arguments.reduce(into: [(dependency: Dependency, argument: Argument)]()) { partialResult, argument in
             guard let dependency = dependencies.first(where: {
-                $0.asInitializerArgument.label == argument.innerLabel
-                && $0.asInitializerArgument.typeDescription == argument.typeDescription
+                $0.property.label == argument.innerLabel
+                && $0.property.typeDescription == argument.typeDescription
             }) else {
                 throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
             }

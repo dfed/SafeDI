@@ -18,7 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// TODO: There is likely a way to simplify this code and jump directly to CombinedScope that would yield a performance win.
+import Collections
+
 /// A model of the scoped dependencies required for an `@Instantiable` in the reachable dependency tree.
 final class Scope {
 
@@ -26,22 +27,6 @@ final class Scope {
 
     init(instantiable: Instantiable) {
         self.instantiable = instantiable
-
-        inheritedProperties = Set(
-            instantiable
-                .dependencies
-                .filter {
-                    switch $0.source {
-                    case .forwarded,
-                            .instantiated,
-                            .lazyInstantiated:
-                        return false
-                    case .inherited:
-                        return true
-                    }
-                }
-                .map(\.property)
-        )
     }
 
     // MARK: Internal
@@ -49,94 +34,127 @@ final class Scope {
     let instantiable: Instantiable
 
     /// The properties that this scope is responsible for instantiating.
-    var propertiesToInstantiate = [PropertyToInstantiate]() {
-        didSet {
-            instantiatedProperties = Set(
-                propertiesToInstantiate
-                    .filter { $0.type == .constant }
-                    .map(\.property)
-            )
-            lazyInstantiatedProperties = Set(
-                propertiesToInstantiate
-                    .filter { $0.type == .lazy }
-                    .map(\.property)
-            )
-        }
-    }
-    /// The properties that this scope inherits + passes to children that aren't declared on `instantiable`.
-    var undeclaredInheritedProperties = Set<Property>()
+    var propertiesToInstantiate = [PropertyToInstantiate]()
 
     struct PropertyToInstantiate {
         let property: Property
         let instantiable: Instantiable
         let scope: Scope
-        let type: PropertyType
-
-        enum PropertyType {
-            /// A `let` property.
-            case constant
-            // TODO: Enable lazy instantiated properties to forward themselves down their own scope.
-            //       We can enable this without an unexpected retain problem because lazy instantiated
-            //       properties are already retained.
-            /// A  lazily instantiated property. Backed by an `Instantiator`.
-            /// The instantiated product is not forwarded down the dependency tree.
-            case lazy
-            /// An `Instantiator` property.
-            /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
-            case instantiator
-            /// A `ForwardingInstantiator` property.
-            /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
-            case forwardingInstantiator
-        }
+        let type: Property.PropertyType
     }
 
-    private(set) var instantiatedProperties = Set<Property>()
-    private(set) var lazyInstantiatedProperties = Set<Property>()
-    let inheritedProperties: Set<Property>
-
-    var allInheritedProperties: Set<Property> {
-        inheritedProperties.union(undeclaredInheritedProperties)
+    var properties: [Property] {
+        instantiable
+            .dependencies
+            .map(\.property)
     }
 
-    func createCombinedScope() -> CombinedScope {
+    var inheritedProperties: [Property] {
+        instantiable
+            .dependencies
+            .filter {
+                switch $0.source {
+                case .forwarded,
+                        .instantiated,
+                        .lazyInstantiated:
+                    return false
+                case .inherited:
+                    return true
+                }
+            }
+            .map(\.property)
+    }
+
+    func createCombinedScope(
+        for property: Property? = nil,
+        instantiableStack: OrderedSet<Instantiable> = [],
+        propertyStack: OrderedSet<Property> = []
+    ) throws -> CombinedScope {
         var childPropertyToInstantiableConstant = [Property: Instantiable]()
         var childPropertyToCombinedScopeMap = [Property: CombinedScope]()
 
-        func findCombinedScopeInformation(on scope: Scope) {
-            for propertyToInstantiate in scope.propertiesToInstantiate {
-                switch propertyToInstantiate.type {
-                case .constant:
-                    childPropertyToInstantiableConstant[propertyToInstantiate.property] = propertyToInstantiate.instantiable
-                    findCombinedScopeInformation(on: propertyToInstantiate.scope)
-                case .lazy,
-                        .instantiator,
-                        .forwardingInstantiator:
-                    let childCombinedScope = propertyToInstantiate
-                        .scope
-                        .createCombinedScope()
-                    Task {
-                        // Kick off code generation.
-                        try await childCombinedScope.generateCode()
+        func findCombinedScopeInformation(
+            on scope: Scope,
+            instantiableStack: OrderedSet<Instantiable>,
+            propertyStack: OrderedSet<Property>
+        ) throws {
+            if let cycleIndex = instantiableStack.firstIndex(of: scope.instantiable) {
+                throw ScopeError.dependencyCycleDetected([scope.instantiable] + instantiableStack.elements[0...cycleIndex])
+            } else {
+                var instantiableStack = instantiableStack
+                instantiableStack.insert(scope.instantiable, at: 0)
+                var propertyStack = propertyStack
+                if let property {
+                    propertyStack.insert(property, at: 0)
+                }
+                for propertyToInstantiate in scope.propertiesToInstantiate {
+                    switch propertyToInstantiate.type {
+                    case .constant:
+                        childPropertyToInstantiableConstant[propertyToInstantiate.property] = propertyToInstantiate.instantiable
+                        try findCombinedScopeInformation(
+                            on: propertyToInstantiate.scope,
+                            instantiableStack: instantiableStack,
+                            propertyStack: propertyStack)
+                    case .lazy,
+                            .instantiator,
+                            .forwardingInstantiator:
+                        let childCombinedScope = try propertyToInstantiate
+                            .scope
+                            .createCombinedScope(
+                                for: propertyToInstantiate.property,
+                                instantiableStack: instantiableStack,
+                                propertyStack: propertyStack
+                            )
+                        childPropertyToCombinedScopeMap[propertyToInstantiate.property] = childCombinedScope
                     }
-                    childPropertyToCombinedScopeMap[propertyToInstantiate.property] = propertyToInstantiate
-                        .scope
-                        .createCombinedScope()
                 }
             }
         }
 
-        findCombinedScopeInformation(on: self)
+        try findCombinedScopeInformation(
+            on: self,
+            instantiableStack: instantiableStack,
+            propertyStack: propertyStack
+        )
 
         let combinedScope = CombinedScope(
             instantiable: instantiable,
             childPropertyToInstantiableConstant: childPropertyToInstantiableConstant,
             childPropertyToCombinedScopeMap: childPropertyToCombinedScopeMap,
-            inheritedProperties: allInheritedProperties
+            inheritedProperties: Set(
+                instantiableStack
+                    .flatMap(\.dependencies)
+                    .filter {
+                        ($0.source == .instantiated || $0.source == .forwarded)
+                        && !propertyStack.contains($0.property)
+                        && $0.property != property
+                    }
+                    .map(\.property)
+            )
         )
         Task {
             // Kick off code generation.
             try await combinedScope.generateCode()
         }
         return combinedScope
+    }
+
+    // MARK: ScopeError
+
+    private enum ScopeError: Error, CustomStringConvertible {
+
+        case dependencyCycleDetected([Instantiable])
+
+        var description: String {
+            switch self {
+            case let .dependencyCycleDetected(instantiables):
+                """
+                Dependency cycle detected!
+                \(instantiables
+                    .map(\.concreteInstantiableType.asSource)
+                    .joined(separator: " -> "))
+                """
+            }
+        }
     }
 }

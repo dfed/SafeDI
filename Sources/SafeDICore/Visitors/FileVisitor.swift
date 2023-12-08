@@ -95,6 +95,7 @@ public final class FileVisitor: SyntaxVisitor {
 
     private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
         // TODO: Allow Instantiable to be nested types. Accomplishing this task will require understanding when other nested types are being referenced.
+        defer { declSyntaxParentCount += 1 }
         guard declSyntaxParentCount == 0 else {
             let instantiableVisitor = InstantiableVisitor()
             instantiableVisitor.walk(node)
@@ -109,8 +110,6 @@ public final class FileVisitor: SyntaxVisitor {
         if let instantiable = instantiableVisitor.instantiable {
             instantiables.append(instantiable)
         }
-
-        declSyntaxParentCount += 1
 
         // Find nested Instantiable types.
         return .visitChildren
