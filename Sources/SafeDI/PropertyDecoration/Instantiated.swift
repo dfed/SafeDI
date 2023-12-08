@@ -23,18 +23,7 @@
 
 #else
 
-/// Marks a `class`, `struct`, or `actor` as capable of having properties that conform to this type decorated with `@Instantiated`
-///
-/// - Parameter fulfillingAdditionalTypes: The types (in addition to the type decorated with this macro) that can be decorated with `@Instantiated` and yield a result of this type. The types provided *must* be either superclasses of this type or protocols to which this type conforms.
-@attached(member, names: arbitrary) public macro Instantiable(fulfillingAdditionalTypes: [Any.Type] = []) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")
-
 /// Marks a SafeDI dependency that is instantiated when its parent object is instantiated.
 @attached(peer) public macro Instantiated() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
-
-/// Marks a SafeDI dependency that is injected into the parent object's initializer and forwarded to objects further down in the dependency tree.
-@attached(peer) public macro Forwarded() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
-
-/// Marks a SafeDI dependency that is instantiated or forwarded by an object higher up in the dependency tree.
-@attached(peer) public macro Received() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
 
 #endif
