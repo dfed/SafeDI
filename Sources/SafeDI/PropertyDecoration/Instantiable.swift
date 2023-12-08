@@ -18,14 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#if CI
-// We don't set `-load-plugin-library` when building with xcodebuild, so we can't use the macros in CI.
-
-#else
-
 /// Marks a `class`, `struct`, or `actor` as capable of having properties that conform to this type decorated with `@Instantiated`
 ///
 /// - Parameter fulfillingAdditionalTypes: The types (in addition to the type decorated with this macro) that can be decorated with `@Instantiated` and yield a result of this type. The types provided *must* be either superclasses of this type or protocols to which this type conforms.
 @attached(member, names: arbitrary) public macro Instantiable(fulfillingAdditionalTypes: [Any.Type] = []) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")
-
-#endif

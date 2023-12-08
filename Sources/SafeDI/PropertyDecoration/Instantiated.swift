@@ -18,12 +18,5 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#if CI
-// We don't set `-load-plugin-library` when building with xcodebuild, so we can't use the macros in CI.
-
-#else
-
 /// Marks a SafeDI dependency that is instantiated when its parent object is instantiated.
 @attached(peer) public macro Instantiated() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
-
-#endif
