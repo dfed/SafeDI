@@ -39,6 +39,11 @@ actor CombinedScope {
             + Array<Property>(childPropertyToCombinedScopeMap.keys)
         )
         .sorted()
+        forwardedProperties = instantiable
+            .dependencies
+            // Instantiated properties will self-resolve.
+            .filter { $0.source == .forwarded }
+            .map(\.property)
     }
 
     // MARK: Internal
@@ -91,10 +96,9 @@ actor CombinedScope {
                         let closureArguments: String
                         switch property.nonLazyPropertyType {
                         case .forwardingInstantiator:
-                            let forwardedProperties = instantiable.dependencies.filter { $0.source == .forwarded }
                             // TODO: Would be better to match types rather than assuming property order for the forwarded properties.
                             // TODO: Throw error if forwardedProperties has multiple of the same type.
-                            closureArguments = " \(forwardedProperties.map(\.property.label).joined(separator: ", ")) in"
+                            closureArguments = " \(combinedScope.forwardedProperties.map(\..label).joined(separator: ", ")) in"
                         case .instantiator, .lazy:
                             closureArguments = ""
                         case .constant:
@@ -132,8 +136,9 @@ actor CombinedScope {
     private let childPropertyToInstantiableConstant: [Property: Instantiable]
     private let childPropertyToCombinedScopeMap: [Property: CombinedScope]
     private let receivedProperties: Set<Property>
-
     private let propertiesToFulfill: [Property]
+    private let forwardedProperties: [Property]
+
     private var resolvedProperties = Set<Property>()
     private var generateCodeTask: Task<String, Error>?
 
@@ -183,12 +188,6 @@ actor CombinedScope {
         || receivedProperties.contains(property)
         || forwardedProperties.contains(property)
     }
-
-    private lazy var forwardedProperties = instantiable
-        .dependencies
-        // Instantiated properties will self-resolve.
-        .filter { $0.source == .forwarded }
-        .map(\.property)
 
     // MARK: SatisfiableProperty
 
