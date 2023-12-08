@@ -29,7 +29,6 @@ final class SafeDIPluginTests: XCTestCase {
     func test_run_successfullyGeneratesOutputFileWhenNoCodeInput() async throws {
         let output = try await SafeDIPlugin.run(
             swiftFileContent: [],
-            instantiablesOutput: nil,
             dependentModuleNames: [],
             dependentInstantiables: [[]],
             buildDependencyTreeOutput: true
@@ -63,7 +62,6 @@ final class SafeDIPluginTests: XCTestCase {
                 }
                 """,
             ],
-            instantiablesOutput: nil,
             dependentModuleNames: [],
             dependentInstantiables: [[]],
             buildDependencyTreeOutput: true
@@ -110,7 +108,6 @@ final class SafeDIPluginTests: XCTestCase {
                 }
                 """,
             ],
-            instantiablesOutput: nil,
             dependentModuleNames: [],
             dependentInstantiables: [[]],
             buildDependencyTreeOutput: true
@@ -164,7 +161,6 @@ final class SafeDIPluginTests: XCTestCase {
                 }
                 """,
             ],
-            instantiablesOutput: nil,
             dependentModuleNames: [],
             dependentInstantiables: [[]],
             buildDependencyTreeOutput: true
@@ -218,7 +214,6 @@ final class SafeDIPluginTests: XCTestCase {
                 }
                 """,
             ],
-            instantiablesOutput: nil,
             dependentModuleNames: [],
             dependentInstantiables: [[]],
             buildDependencyTreeOutput: true
@@ -329,7 +324,6 @@ final class SafeDIPluginTests: XCTestCase {
                 }
                 """,
             ],
-            instantiablesOutput: nil,
             dependentModuleNames: [],
             dependentInstantiables: [[]],
             buildDependencyTreeOutput: true
@@ -459,7 +453,6 @@ final class SafeDIPluginTests: XCTestCase {
                 }
                 """,
             ],
-            instantiablesOutput: nil,
             dependentModuleNames: [],
             dependentInstantiables: [[]],
             buildDependencyTreeOutput: true
@@ -590,7 +583,6 @@ final class SafeDIPluginTests: XCTestCase {
                 }
                 """,
             ],
-            instantiablesOutput: nil,
             dependentModuleNames: [],
             dependentInstantiables: [[]],
             buildDependencyTreeOutput: true
@@ -721,7 +713,6 @@ final class SafeDIPluginTests: XCTestCase {
                 }
                 """,
             ],
-            instantiablesOutput: nil,
             dependentModuleNames: [],
             dependentInstantiables: [[]],
             buildDependencyTreeOutput: true
@@ -796,7 +787,6 @@ final class SafeDIPluginTests: XCTestCase {
                     }
                     """,
                 ],
-                instantiablesOutput: nil,
                 dependentModuleNames: [],
                 dependentInstantiables: [[]],
                 buildDependencyTreeOutput: true
@@ -842,7 +832,6 @@ final class SafeDIPluginTests: XCTestCase {
                     }
                     """,
                 ],
-                instantiablesOutput: nil,
                 dependentModuleNames: [],
                 dependentInstantiables: [[]],
                 buildDependencyTreeOutput: true
@@ -872,7 +861,6 @@ final class SafeDIPluginTests: XCTestCase {
                     }
                     """,
                 ],
-                instantiablesOutput: nil,
                 dependentModuleNames: [],
                 dependentInstantiables: [[]],
                 buildDependencyTreeOutput: true
@@ -907,7 +895,6 @@ final class SafeDIPluginTests: XCTestCase {
                     }
                     """,
                 ],
-                instantiablesOutput: nil,
                 dependentModuleNames: [],
                 dependentInstantiables: [[]],
                 buildDependencyTreeOutput: true
@@ -940,7 +927,6 @@ final class SafeDIPluginTests: XCTestCase {
                     }
                     """,
                 ],
-                instantiablesOutput: nil,
                 dependentModuleNames: [],
                 dependentInstantiables: [[]],
                 buildDependencyTreeOutput: true
@@ -973,7 +959,6 @@ final class SafeDIPluginTests: XCTestCase {
                     }
                     """,
                 ],
-                instantiablesOutput: nil,
                 dependentModuleNames: [],
                 dependentInstantiables: [[]],
                 buildDependencyTreeOutput: true
@@ -1035,7 +1020,6 @@ final class SafeDIPluginTests: XCTestCase {
                     }
                     """,
                 ],
-                instantiablesOutput: nil,
                 dependentModuleNames: [],
                 dependentInstantiables: [[]],
                 buildDependencyTreeOutput: true
@@ -1092,14 +1076,13 @@ final class SafeDIPluginTests: XCTestCase {
                     }
                     """,
                 ],
-                instantiablesOutput: nil,
                 dependentModuleNames: [],
                 dependentInstantiables: [[]],
                 buildDependencyTreeOutput: true
             )
         }
     }
-
+    
     private func assertThrowsError<ReturnType>(
         _ errorDescription: String,
         line: UInt = #line,
