@@ -22,7 +22,7 @@ import SwiftSyntax
 
 /// A representation of a property.
 /// e.g. `let myProperty: MyProperty`
-public struct Property: Codable, Hashable, Comparable {
+public struct Property: Codable, Hashable, Comparable, Sendable {
 
     // MARK: Initialization
 
@@ -39,7 +39,7 @@ public struct Property: Codable, Hashable, Comparable {
     /// The label by which the property is referenced.
     public let label: String
     /// The type to which the property conforms.
-    public var typeDescription: TypeDescription
+    public let typeDescription: TypeDescription
 
     // MARK: Hashable
 
@@ -61,7 +61,7 @@ public struct Property: Codable, Hashable, Comparable {
         )
     }
 
-    var nonLazyPropertyType: PropertyType {
+    var propertyType: PropertyType {
         switch typeDescription {
         case let .simple(name, _):
             if name == Dependency.instantiatorType {

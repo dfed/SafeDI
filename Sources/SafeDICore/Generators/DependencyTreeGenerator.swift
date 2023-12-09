@@ -39,35 +39,22 @@ public final class DependencyTreeGenerator {
 
         let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
         try validateUndeclaredReceivedProperties(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
-        let rootCombinedScopes = try rootInstantiableTypes
+        let rootScopeGenerators = try rootInstantiableTypes
             .sorted()
-            .compactMap { try typeDescriptionToScopeMap[$0]?.createCombinedScope() }
+            .compactMap { try typeDescriptionToScopeMap[$0]?.createScopeGenerator() }
 
         let dependencyTree = try await withThrowingTaskGroup(
             of: String.self,
             returning: String.self
         ) { taskGroup in
-            for rootCombinedScope in rootCombinedScopes {
-                if rootCombinedScope.instantiable.dependencies.isEmpty {
-                    // Nothing to do here! We already have an empty initializer.
-                } else {
-                    taskGroup.addTask {
-                        try await """
-                            extension \(rootCombinedScope.instantiable.concreteInstantiableType.asSource) {
-                                \(rootCombinedScope.instantiable.isClass ? "@convenience " : "")init() {
-                            \(rootCombinedScope.generateCode(leadingWhitespace: "        "))
-                                    self.init(\(rootCombinedScope.instantiable.initializer.createInitializerArgumentList(given: rootCombinedScope.instantiable.dependencies)))
-                                }
-                            }
-                            """
-                    }
-                }
+            for rootScopeGenerator in rootScopeGenerators {
+                taskGroup.addTask { try await rootScopeGenerator.generateCode() }
             }
-            var generatedCombinedScopes = [String]()
-            for try await generatedCombinedScope in taskGroup {
-                generatedCombinedScopes.append(generatedCombinedScope)
+            var generatedRoots = [String]()
+            for try await generatedRoot in taskGroup {
+                generatedRoots.append(generatedRoot)
             }
-            return generatedCombinedScopes.sorted().joined(separator: "\n\n")
+            return generatedRoots.sorted().joined(separator: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
         return """
@@ -220,7 +207,7 @@ public final class DependencyTreeGenerator {
                     property: instantiatedProperty,
                     instantiable: instantiable,
                     scope: instantiatedScope,
-                    type: instantiatedProperty.nonLazyPropertyType
+                    type: instantiatedProperty.propertyType
                 ))
             }
             for instantiatedProperty in scope.instantiable.lazyInstantiatedProperties {
@@ -247,7 +234,7 @@ public final class DependencyTreeGenerator {
 
     private func validateUndeclaredReceivedProperties(typeDescriptionToScopeMap: [TypeDescription: Scope]) throws {
         var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
-        func propagateUndeclaredReceivedProperties(
+        func validateUndeclaredReceivedProperties(
             on scope: Scope,
             receivableProperties: Set<Property>,
             instantiables: OrderedSet<Instantiable>
@@ -273,7 +260,7 @@ public final class DependencyTreeGenerator {
                 var instantiables = instantiables
                 instantiables.insert(scope.instantiable, at: 0)
 
-                propagateUndeclaredReceivedProperties(
+                validateUndeclaredReceivedProperties(
                     on: childScope,
                     receivableProperties: receivableProperties.union(scope.properties),
                     instantiables: instantiables
@@ -282,7 +269,7 @@ public final class DependencyTreeGenerator {
         }
 
         for rootScope in rootInstantiableTypes.compactMap({ typeDescriptionToScopeMap[$0] }) {
-            propagateUndeclaredReceivedProperties(
+            validateUndeclaredReceivedProperties(
                 on: rootScope,
                 receivableProperties: Set(rootScope.properties),
                 instantiables: []

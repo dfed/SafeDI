@@ -128,7 +128,7 @@ final class SafeDIPluginTests: XCTestCase {
             import UIKit
 
             extension RootViewController {
-                @convenience init() {
+                convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     self.init(networkService: networkService)
                 }
@@ -344,7 +344,7 @@ final class SafeDIPluginTests: XCTestCase {
             import UIKit
 
             extension RootViewController {
-                @convenience init() {
+                convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> { user in
@@ -473,7 +473,7 @@ final class SafeDIPluginTests: XCTestCase {
             import UIKit
 
             extension RootViewController {
-                @convenience init() {
+                convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> { user in
@@ -603,7 +603,7 @@ final class SafeDIPluginTests: XCTestCase {
             import UIKit
 
             extension RootViewController {
-                @convenience init() {
+                convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> { user in
@@ -713,7 +713,7 @@ final class SafeDIPluginTests: XCTestCase {
                     private let user: User
 
                     @LazyInstantiated
-                    let userService: UserService
+                    var userService: UserService
                 }
                 """,
             ],
@@ -733,7 +733,7 @@ final class SafeDIPluginTests: XCTestCase {
             import UIKit
 
             extension RootViewController {
-                @convenience init() {
+                convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> { user in
@@ -749,7 +749,281 @@ final class SafeDIPluginTests: XCTestCase {
         )
     }
 
-    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSameProperty() async throws {
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatReceiveTheSameProperty() async throws {
+        let output = try await SafeDIPlugin.run(
+            swiftFileContent: [
+                """
+                @Instantiable()
+                public final class Root {
+                    public init(childA: ChildA, childB: ChildB, greatGrandchild: GreatGrandchild) {
+                        self.childA = childA
+                        self.childB = childB
+                        self.greatGrandchild = greatGrandchild
+                    }
+
+                    @Instantiated
+                    let childA: ChildA
+                    @Instantiated
+                    let childB: ChildB
+                    @Instantiated
+                    let greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class ChildA {
+                    public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB) {
+                        self.grandchildAA = grandchildAA
+                        self.grandchildAB = grandchildAB
+                    }
+
+                    @Instantiated
+                    let grandchildAA: GrandchildAA
+                    @Instantiated
+                    let grandchildAB: GrandchildAB
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GrandchildAA {
+                    public init(greatGrandchild: GreatGrandchild) {
+                        self.greatGrandchild = greatGrandchild
+                    }
+
+                    @Received
+                    let greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GrandchildAB {
+                    public init(greatGrandchild: GreatGrandchild) {
+                        self.greatGrandchild = greatGrandchild
+                    }
+
+                    @Received
+                    let greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class ChildB {
+                    public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB) {
+                        self.grandchildAA = grandchildAA
+                        self.grandchildAB = grandchildAB
+                    }
+
+                    @Instantiated
+                    let grandchildBA: GrandchildBA
+                    @Instantiated
+                    let grandchildBB: GrandchildBB
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GrandchildBA {
+                    public init(greatGrandchild: GreatGrandchild) {
+                        self.greatGrandchild = greatGrandchild
+                    }
+
+                    @Received
+                    let greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GrandchildBB {
+                    public init(greatGrandchild: GreatGrandchild) {
+                        self.greatGrandchild = greatGrandchild
+                    }
+
+                    @Received
+                    let greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GreatGrandchild {
+                    public init() {}
+                }
+                """,
+
+            ],
+            dependentModuleNames: [],
+            dependentInstantiables: [[]],
+            buildDependencyTreeOutput: true
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(output.dependencyTree),
+            """
+            // This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+            // Any modifications made to this file will be overwritten on subsequent builds.
+            // Please refrain from editing this file directly.
+
+            import SwiftUI
+            import UIKit
+
+            extension Root {
+                convenience init() {
+                    let greatGrandchild = GreatGrandchild()
+                    let childA = {
+                        let grandchildAA = GrandchildAA(greatGrandchild: greatGrandchild)
+                        let grandchildAB = GrandchildAB(greatGrandchild: greatGrandchild)
+                        return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
+                    }()
+                    let childB = {
+                        let grandchildBA = GrandchildBA(greatGrandchild: greatGrandchild)
+                        let grandchildBB = GrandchildBB(greatGrandchild: greatGrandchild)
+                        return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)
+                    }()
+                    self.init(childA: childA, childB: childB, greatGrandchild: greatGrandchild)
+                }
+            }
+            """
+        )
+    }
+
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyInMiddleLevel() async throws {
+        let output = try await SafeDIPlugin.run(
+            swiftFileContent: [
+                """
+                @Instantiable()
+                public final class Root {
+                    public init(childA: ChildA, childB: ChildB) {
+                        self.childA = childA
+                        self.childB = childB
+                    }
+
+                    @Instantiated
+                    let childA: ChildA
+                    @Instantiated
+                    let childB: ChildB
+                }
+                """,
+                """
+                @Instantiable()
+                public final class ChildA {
+                    public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB, greatGrandchild: GreatGrandchild) {
+                        self.grandchildAA = grandchildAA
+                        self.grandchildAB = grandchildAB
+                        self.greatGrandchild = greatGrandchild
+                    }
+
+                    @Instantiated
+                    let grandchildAA: GrandchildAA
+                    @Instantiated
+                    let grandchildAB: GrandchildAB
+                    @Instantiated
+                    let greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GrandchildAA {
+                    public init(greatGrandchild: GreatGrandchild) {
+                        self.greatGrandchild = greatGrandchild
+                    }
+
+                    @Received
+                    let greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GrandchildAB {
+                    public init(greatGrandchild: GreatGrandchild) {
+                        self.greatGrandchild = greatGrandchild
+                    }
+
+                    @Received
+                    let greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class ChildB {
+                    public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB, greatGrandchild: GreatGrandchild) {
+                        self.grandchildAA = grandchildAA
+                        self.grandchildAB = grandchildAB
+                        self.greatGrandchild = greatGrandchild
+                    }
+
+                    @Instantiated
+                    let grandchildBA: GrandchildBA
+                    @Instantiated
+                    let grandchildBB: GrandchildBB
+                    @Instantiated
+                    let greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GrandchildBA {
+                    public init(greatGrandchild: GreatGrandchild) {
+                        self.greatGrandchild = greatGrandchild
+                    }
+
+                    @Received
+                    let greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GrandchildBB {
+                    public init(greatGrandchild: GreatGrandchild) {
+                        self.greatGrandchild = greatGrandchild
+                    }
+
+                    @Received
+                    let greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GreatGrandchild {
+                    public init() {}
+                }
+                """,
+
+            ],
+            dependentModuleNames: [],
+            dependentInstantiables: [[]],
+            buildDependencyTreeOutput: true
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(output.dependencyTree),
+            """
+            // This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+            // Any modifications made to this file will be overwritten on subsequent builds.
+            // Please refrain from editing this file directly.
+
+            import SwiftUI
+            import UIKit
+
+            extension Root {
+                convenience init() {
+                    let childA = {
+                        let greatGrandchild = GreatGrandchild()
+                        let grandchildAA = GrandchildAA(greatGrandchild: greatGrandchild)
+                        let grandchildAB = GrandchildAB(greatGrandchild: greatGrandchild)
+                        return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB, greatGrandchild: greatGrandchild)
+                    }()
+                    let childB = {
+                        let greatGrandchild = GreatGrandchild()
+                        let grandchildBA = GrandchildBA(greatGrandchild: greatGrandchild)
+                        let grandchildBB = GrandchildBB(greatGrandchild: greatGrandchild)
+                        return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB, greatGrandchild: greatGrandchild)
+                    }()
+                    self.init(childA: childA, childB: childB)
+                }
+            }
+            """
+        )
+    }
+
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyMultipleLayersDeep() async throws {
         let output = try await SafeDIPlugin.run(
             swiftFileContent: [
                 """
@@ -862,18 +1136,179 @@ final class SafeDIPluginTests: XCTestCase {
             import UIKit
 
             extension Root {
-                @convenience init() {
-                    let greatGrandchild = GreatGrandchild()
-                    let grandchildAA = GrandchildAA(greatGrandchild: greatGrandchild)
-                    let grandchildAB = GrandchildAB(greatGrandchild: greatGrandchild)
-                    let childA = ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
-                    let grandchildBA = GrandchildBA(greatGrandchild: greatGrandchild)
-                    let grandchildBB = GrandchildBB(greatGrandchild: greatGrandchild)
-                    let childB = ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)
+                convenience init() {
+                    let childA = {
+                        let grandchildAA = {
+                            let greatGrandchild = GreatGrandchild()
+                            return GrandchildAA(greatGrandchild: greatGrandchild)
+                        }()
+                        let grandchildAB = {
+                            let greatGrandchild = GreatGrandchild()
+                            return GrandchildAB(greatGrandchild: greatGrandchild)
+                        }()
+                        return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
+                    }()
+                    let childB = {
+                        let grandchildBA = {
+                            let greatGrandchild = GreatGrandchild()
+                            return GrandchildBA(greatGrandchild: greatGrandchild)
+                        }()
+                        let grandchildBB = {
+                            let greatGrandchild = GreatGrandchild()
+                            return GrandchildBB(greatGrandchild: greatGrandchild)
+                        }()
+                        return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)
+                    }()
                     self.init(childA: childA, childB: childB)
                 }
             }
-            """ // showstopper TODO: Is this the output we want!? Multiple @Instantiated properties are shared... this doesn't seem right.
+            """
+        )
+    }
+
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateAndLazyInstantiateTheSameProperty() async throws {
+        let output = try await SafeDIPlugin.run(
+            swiftFileContent: [
+                """
+                @Instantiable()
+                public final class Root {
+                    public init(childA: ChildA, childB: ChildB) {
+                        self.childA = childA
+                        self.childB = childB
+                    }
+
+                    @Instantiated
+                    let childA: ChildA
+                    @Instantiated
+                    let childB: ChildB
+                }
+                """,
+                """
+                @Instantiable()
+                public final class ChildA {
+                    public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB) {
+                        self.grandchildAA = grandchildAA
+                        self.grandchildAB = grandchildAB
+                    }
+
+                    @Instantiated
+                    let grandchildAA: GrandchildAA
+                    @Instantiated
+                    let grandchildAB: GrandchildAB
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GrandchildAA {
+                    public init(greatGrandchild: GreatGrandchild) {
+                        self.greatGrandchild = greatGrandchild
+                    }
+
+                    @Instantiated
+                    let greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GrandchildAB {
+                    public init(greatGrandchild: GreatGrandchild) {
+                        self.greatGrandchild = greatGrandchild
+                    }
+
+                    @Instantiated
+                    let greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class ChildB {
+                    public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB) {
+                        self.grandchildAA = grandchildAA
+                        self.grandchildAB = grandchildAB
+                    }
+
+                    @Instantiated
+                    let grandchildBA: GrandchildBA
+                    @Instantiated
+                    let grandchildBB: GrandchildBB
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GrandchildBA {
+                    public init(greatGrandchildInstantiator: Instantiator<GreatGrandchild>) {
+                        _greatGrandchild = LazyInstantiated(greatGrandchildInstantiator)
+                    }
+
+                    @LazyInstantiated
+                    var greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GrandchildBB {
+                    public init(greatGrandchildInstantiator: Instantiator<GreatGrandchild>) {
+                        _greatGrandchild = LazyInstantiated(greatGrandchildInstantiator)
+                    }
+
+                    @LazyInstantiated
+                    var greatGrandchild: GreatGrandchild
+                }
+                """,
+                """
+                @Instantiable()
+                public final class GreatGrandchild {
+                    public init() {}
+                }
+                """,
+            ],
+            dependentModuleNames: [],
+            dependentInstantiables: [[]],
+            buildDependencyTreeOutput: true
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(output.dependencyTree),
+            """
+            // This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+            // Any modifications made to this file will be overwritten on subsequent builds.
+            // Please refrain from editing this file directly.
+
+            import SwiftUI
+            import UIKit
+
+            extension Root {
+                convenience init() {
+                    let childA = {
+                        let grandchildAA = {
+                            let greatGrandchild = GreatGrandchild()
+                            return GrandchildAA(greatGrandchild: greatGrandchild)
+                        }()
+                        let grandchildAB = {
+                            let greatGrandchild = GreatGrandchild()
+                            return GrandchildAB(greatGrandchild: greatGrandchild)
+                        }()
+                        return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
+                    }()
+                    let childB = {
+                        let grandchildBA = {
+                            let greatGrandchildInstantiator = Instantiator<GreatGrandchild> {
+                                GreatGrandchild()
+                            }
+                            return GrandchildBA(greatGrandchildInstantiator: greatGrandchildInstantiator)
+                        }()
+                        let grandchildBB = {
+                            let greatGrandchildInstantiator = Instantiator<GreatGrandchild> {
+                                GreatGrandchild()
+                            }
+                            return GrandchildBB(greatGrandchildInstantiator: greatGrandchildInstantiator)
+                        }()
+                        return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)
+                    }()
+                    self.init(childA: childA, childB: childB)
+                }
+            }
+            """
         )
     }
 

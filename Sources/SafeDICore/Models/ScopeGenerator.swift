@@ -1,0 +1,215 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+/// A model capable of generating code for a scope's dependency tree.
+actor ScopeGenerator {
+
+    // MARK: Initialization
+
+    init(
+        instantiable: Instantiable,
+        property: Property?,
+        propertiesToGenerate: [ScopeGenerator],
+        receivedProperties: Set<Property>
+    ) {
+        self.instantiable = instantiable
+        self.property = property
+        self.propertiesToGenerate = propertiesToGenerate
+        self.receivedProperties = receivedProperties
+
+        forwardedProperties = instantiable
+            .dependencies
+            // Instantiated properties will self-resolve.
+            .filter { $0.source == .forwarded }
+            .map(\.property)
+
+        propertiesMadeAvailableByChildren = Set(
+            instantiable
+                .dependencies
+                .filter { $0.source != .received }
+                .map(\.property)
+        ).union(propertiesToGenerate
+            .flatMap(\.propertiesMadeAvailableByChildren))
+
+        requiredReceivedProperties = Set(
+            instantiable
+                .dependencies
+                .filter { $0.source == .received }
+                .map(\.property)
+        ).union(propertiesToGenerate.flatMap(\.requiredReceivedProperties))
+            .subtracting(propertiesMadeAvailableByChildren)
+    }
+
+    // MARK: Internal
+
+    func generateCode(leadingWhitespace: String = "") async throws -> String {
+        let generatedCode: String
+        if let generateCodeTask {
+            generatedCode = try await generateCodeTask.value
+        } else {
+            let generateCodeTask = Task {
+                let argumentList = try instantiable
+                    .initializer
+                    .createInitializerArgumentList(
+                        given: instantiable.dependencies
+                    )
+
+                if let property {
+                    let concreteTypeName = instantiable.concreteInstantiableType.asSource
+                    let returnLineSansReturn = "\(concreteTypeName)(\(argumentList))"
+
+                    let isConstant: Bool
+                    let propertyDeclaration: String
+                    let leadingConcreteTypeName: String
+                    let closureArguments: String
+                    switch property.propertyType {
+                    case .forwardingInstantiator:
+                        isConstant = false
+                        propertyDeclaration = "let \(property.label)"
+                        leadingConcreteTypeName = property.typeDescription.asSource
+                        // TODO: Would be better to match types rather than assuming property order for the forwarded properties.
+                        // TODO: Throw error if forwardedProperties has multiple of the same type.
+                        closureArguments = " \(forwardedProperties.map(\.label).joined(separator: ", ")) in"
+                    case .instantiator, .lazy:
+                        isConstant = false
+                        propertyDeclaration = "let \(property.label)"
+                        leadingConcreteTypeName = property.typeDescription.asSource
+                        closureArguments = ""
+                    case .constant:
+                        isConstant = true
+                        if concreteTypeName == property.typeDescription.asSource {
+                            propertyDeclaration = "let \(property.label)"
+                        } else {
+                            propertyDeclaration = "let \(property.label): \(property.typeDescription.asSource)"
+                        }
+                        leadingConcreteTypeName = ""
+                        closureArguments = ""
+                    }
+
+                    let leadingMemberWhitespace = "    "
+                    let generatedProperties = try await generateProperties(leadingMemberWhitespace: leadingMemberWhitespace)
+                    let initializer: String
+                    if isConstant && generatedProperties.isEmpty {
+                        initializer = returnLineSansReturn
+                    } else {
+                        initializer = """
+                            \(leadingConcreteTypeName)\(leadingConcreteTypeName.isEmpty ? "" : " "){\(closureArguments)
+                            \(generatedProperties.joined(separator: "\n"))
+                            \(leadingMemberWhitespace)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
+                            }\(isConstant ? "()" : "")
+                            """
+                    }
+
+                    return "\(propertyDeclaration) = \(initializer)\n"
+                } else {
+                    if instantiable.dependencies.isEmpty {
+                        // Nothing to do here! We already have an empty initializer.
+                        return ""
+                    } else {
+                        return """
+                            extension \(instantiable.concreteInstantiableType.asSource) {
+                                \(instantiable.isClass ? "convenience " : "")init() {
+                            \(try await generateProperties(leadingMemberWhitespace: "        ").joined(separator: "\n"))
+                                    self.init(\(argumentList))
+                                }
+                            }
+                            """
+                    }
+                }
+            }
+            self.generateCodeTask = generateCodeTask
+            generatedCode = try await generateCodeTask.value
+        }
+        if leadingWhitespace.isEmpty {
+            return generatedCode
+        } else {
+            return generatedCode
+                .split(separator: "\n")
+                .map { leadingWhitespace + $0 }
+                .joined(separator: "\n")
+        }
+    }
+
+    // MARK: Private
+
+    private let instantiable: Instantiable
+    private let property: Property?
+    private let receivedProperties: Set<Property>
+    private let propertiesToGenerate: [ScopeGenerator]
+    private let forwardedProperties: [Property]
+    private let requiredReceivedProperties: Set<Property>
+    private let propertiesMadeAvailableByChildren: Set<Property>
+
+    private var resolvedProperties = Set<Property>()
+    private var generateCodeTask: Task<String, Error>?
+
+    private func generateProperties(leadingMemberWhitespace: String) async throws -> [String] {
+        var generatedProperties = [String]()
+        while
+            let childGenerator = try nextSatisfiableProperty(),
+            let childProperty = childGenerator.property
+        {
+            resolvedProperties.insert(childProperty)
+            generatedProperties.append(
+                try await childGenerator
+                    .generateCode(leadingWhitespace: leadingMemberWhitespace)
+            )
+        }
+        return generatedProperties
+    }
+
+    private func nextSatisfiableProperty() throws -> ScopeGenerator? {
+        let remainingProperties = propertiesToGenerate.filter {
+            if let property = $0.property {
+                !resolvedProperties.contains(property)
+            } else {
+                false
+            }
+        }
+        guard !remainingProperties.isEmpty else {
+            return nil
+        }
+
+        for propertyToGenerate in remainingProperties {
+            guard hasResolvedAllPropertiesRequired(for: propertyToGenerate) else {
+                continue
+            }
+            return propertyToGenerate
+        }
+
+        assertionFailure("Unexpected failure: unable to find next satisfiable property")
+        return nil
+    }
+
+    private func hasResolvedAllPropertiesRequired(for propertyToGenerate: ScopeGenerator) -> Bool {
+        !propertyToGenerate
+            .requiredReceivedProperties
+            .contains(where: {
+                !isPropertyResolved($0) 
+                && !propertyToGenerate.forwardedProperties.contains($0)
+            })
+    }
+
+    private func isPropertyResolved(_ property: Property) -> Bool {
+        resolvedProperties.contains(property)
+        || receivedProperties.contains(property)
+        || forwardedProperties.contains(property)
+    }
+}

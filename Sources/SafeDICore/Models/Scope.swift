@@ -65,78 +65,47 @@ final class Scope {
             .map(\.property)
     }
 
-    func createCombinedScope(
+    func createScopeGenerator(
         for property: Property? = nil,
         instantiableStack: OrderedSet<Instantiable> = [],
         propertyStack: OrderedSet<Property> = []
-    ) throws -> CombinedScope {
-        var childPropertyToInstantiableConstant = [Property: Instantiable]()
-        var childPropertyToCombinedScopeMap = [Property: CombinedScope]()
-
-        func findCombinedScopeInformation(
-            on scope: Scope,
-            instantiableStack: OrderedSet<Instantiable>,
-            propertyStack: OrderedSet<Property>
-        ) throws {
-            if let cycleIndex = instantiableStack.firstIndex(of: scope.instantiable) {
-                throw ScopeError.dependencyCycleDetected([scope.instantiable] + instantiableStack.elements[0...cycleIndex])
-            } else {
-                var instantiableStack = instantiableStack
-                instantiableStack.insert(scope.instantiable, at: 0)
-                var propertyStack = propertyStack
-                if let property {
-                    propertyStack.insert(property, at: 0)
-                }
-                for propertyToInstantiate in scope.propertiesToInstantiate {
-                    switch propertyToInstantiate.type {
-                    case .constant:
-                        childPropertyToInstantiableConstant[propertyToInstantiate.property] = propertyToInstantiate.instantiable
-                        try findCombinedScopeInformation(
-                            on: propertyToInstantiate.scope,
-                            instantiableStack: instantiableStack,
-                            propertyStack: propertyStack)
-                    case .lazy,
-                            .instantiator,
-                            .forwardingInstantiator:
-                        let childCombinedScope = try propertyToInstantiate
-                            .scope
-                            .createCombinedScope(
-                                for: propertyToInstantiate.property,
-                                instantiableStack: instantiableStack,
-                                propertyStack: propertyStack
-                            )
-                        childPropertyToCombinedScopeMap[propertyToInstantiate.property] = childCombinedScope
-                    }
-                }
+    ) throws -> ScopeGenerator {
+        if let cycleIndex = instantiableStack.firstIndex(of: instantiable) {
+            throw ScopeError.dependencyCycleDetected([instantiable] + instantiableStack.elements[0...cycleIndex])
+        } else {
+            var childInstantiableStack = instantiableStack
+            childInstantiableStack.insert(instantiable, at: 0)
+            var childPropertyStack = propertyStack
+            if let property {
+                childPropertyStack.insert(property, at: 0)
             }
-        }
-
-        try findCombinedScopeInformation(
-            on: self,
-            instantiableStack: instantiableStack,
-            propertyStack: propertyStack
-        )
-
-        let combinedScope = CombinedScope(
-            instantiable: instantiable,
-            childPropertyToInstantiableConstant: childPropertyToInstantiableConstant,
-            childPropertyToCombinedScopeMap: childPropertyToCombinedScopeMap,
-            receivedProperties: Set(
-                instantiableStack
-                    .flatMap(\.dependencies)
-                    .filter {
-                        ($0.source == .instantiated || $0.source == .forwarded)
-                        && !propertyStack.contains($0.property)
-                        && $0.property != property
-                    }
-                    .map(\.property)
+            let scopeGenerator = ScopeGenerator(
+                instantiable: instantiable,
+                property: property,
+                propertiesToGenerate: try propertiesToInstantiate.map {
+                    try $0.scope.createScopeGenerator(
+                        for: $0.property,
+                        instantiableStack: childInstantiableStack,
+                        propertyStack: childPropertyStack
+                    )
+                },
+                receivedProperties: Set(
+                    instantiableStack
+                        .flatMap(\.dependencies)
+                        .filter {
+                            ($0.source != .received)
+                            && !propertyStack.contains($0.property)
+                            && $0.property != property
+                        }
+                        .map(\.property)
+                )
             )
-        )
-        Task {
-            // Kick off code generation.
-            try await combinedScope.generateCode()
+            Task.detached {
+                // Kick off code generation.
+                try await scopeGenerator.generateCode()
+            }
+            return scopeGenerator
         }
-        return combinedScope
     }
 
     // MARK: ScopeError
