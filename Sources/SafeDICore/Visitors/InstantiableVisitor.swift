@@ -55,7 +55,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
         // Check the bindings.
         for binding in node.bindings {
             // Check that each variable has no initializer.
-            // TODO: Allow `@Forwarded` variables to have an initializer. This will require an initializer without the forwarded property, and a new Dependency.Source type (`case selfForwarding`?).
             if binding.initializer != nil {
                 var bindingWithoutInitializer = binding
                 bindingWithoutInitializer.initializer = nil
