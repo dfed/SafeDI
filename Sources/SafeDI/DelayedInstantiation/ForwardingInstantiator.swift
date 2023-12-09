@@ -25,13 +25,13 @@
 /// Instantiation is thread-safe.
 ///
 /// - SeeAlso: `Instantiator`
-/// - Note: This class is the sole means for instantiating an `@Instantiable` type with `@Forwarded`
-///   properties within the SafeDI framework.
-public final class ForwardingInstantiator<ArgumentsToForward, InstantiableType> {
+/// - Note: This class is the sole means for instantiating an `@Instantiable` type with a `@Forwarded`
+///   property within the SafeDI framework.
+public final class ForwardingInstantiator<ArgumentToForward, InstantiableType> {
     /// Initializes a new forwarding instantiator with the provided instantiation closure.
     ///
     /// - Parameter instantiator: A closure that takes `ArgumentsToForward` and returns an instance of `InstantiableType`.
-    public init(_ instantiator: @escaping (ArgumentsToForward) -> InstantiableType) {
+    public init(_ instantiator: @escaping (ArgumentToForward) -> InstantiableType) {
         self.instantiator = instantiator
     }
 
@@ -39,9 +39,9 @@ public final class ForwardingInstantiator<ArgumentsToForward, InstantiableType> 
     ///
     /// - Parameter arguments: Arguments required for instantiation.
     /// - Returns: An `InstantiableType` instance.
-    public func instantiate(_ arguments: ArgumentsToForward) -> InstantiableType {
-        instantiator(arguments)
+    public func instantiate(_ argument: ArgumentToForward) -> InstantiableType {
+        instantiator(argument)
     }
 
-    private let instantiator: (ArgumentsToForward) -> InstantiableType
+    private let instantiator: (ArgumentToForward) -> InstantiableType
 }

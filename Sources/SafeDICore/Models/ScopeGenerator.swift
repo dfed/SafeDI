@@ -34,11 +34,13 @@ actor ScopeGenerator {
         self.propertiesToGenerate = propertiesToGenerate
         self.receivedProperties = receivedProperties
 
-        forwardedProperties = instantiable
+        forwardedProperty = instantiable
             .dependencies
             // Instantiated properties will self-resolve.
             .filter { $0.source == .forwarded }
             .map(\.property)
+            // Our @Instantiable macro enforces that we have at most one forwarded property.
+            .first
 
         propertiesMadeAvailableByChildren = Set(
             instantiable
@@ -78,20 +80,12 @@ actor ScopeGenerator {
                     let isConstant: Bool
                     let propertyDeclaration: String
                     let leadingConcreteTypeName: String
-                    let closureArguments: String
+                    let closureArguments = if let forwardedProperty { " \(forwardedProperty.label) in" } else { "" }
                     switch property.propertyType {
-                    case .forwardingInstantiator:
+                    case .instantiator, .lazy, .forwardingInstantiator:
                         isConstant = false
                         propertyDeclaration = "let \(property.label)"
                         leadingConcreteTypeName = property.typeDescription.asSource
-                        // TODO: Would be better to match types rather than assuming property order for the forwarded properties.
-                        // TODO: Throw error if forwardedProperties has multiple of the same type.
-                        closureArguments = " \(forwardedProperties.map(\.label).joined(separator: ", ")) in"
-                    case .instantiator, .lazy:
-                        isConstant = false
-                        propertyDeclaration = "let \(property.label)"
-                        leadingConcreteTypeName = property.typeDescription.asSource
-                        closureArguments = ""
                     case .constant:
                         isConstant = true
                         if concreteTypeName == property.typeDescription.asSource {
@@ -100,7 +94,6 @@ actor ScopeGenerator {
                             propertyDeclaration = "let \(property.label): \(property.typeDescription.asSource)"
                         }
                         leadingConcreteTypeName = ""
-                        closureArguments = ""
                     }
 
                     let leadingMemberWhitespace = "    "
@@ -153,7 +146,7 @@ actor ScopeGenerator {
     private let property: Property?
     private let receivedProperties: Set<Property>
     private let propertiesToGenerate: [ScopeGenerator]
-    private let forwardedProperties: [Property]
+    private let forwardedProperty: Property?
     private let requiredReceivedProperties: Set<Property>
     private let propertiesMadeAvailableByChildren: Set<Property>
 
@@ -203,13 +196,13 @@ actor ScopeGenerator {
             .requiredReceivedProperties
             .contains(where: {
                 !isPropertyResolved($0) 
-                && !propertyToGenerate.forwardedProperties.contains($0)
+                && propertyToGenerate.forwardedProperty != $0
             })
     }
 
     private func isPropertyResolved(_ property: Property) -> Bool {
         resolvedProperties.contains(property)
         || receivedProperties.contains(property)
-        || forwardedProperties.contains(property)
+        || forwardedProperty == property
     }
 }

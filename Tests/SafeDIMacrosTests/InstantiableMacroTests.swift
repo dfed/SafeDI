@@ -50,14 +50,68 @@ final class InstantiableMacroTests: XCTestCase {
         assertMacro {
             """
             @Instantiable
-            protocol ExampleService {}
+            public protocol ExampleService {}
             """
         } diagnostics: {
             """
             @Instantiable
             ┬────────────
             ╰─ 🛑 @Instantiable must decorate a class, struct, or actor
-            protocol ExampleService {}
+            public protocol ExampleService {}
+            """
+        }
+    }
+
+    func test_throwsErrorWhenOnEnum() {
+        assertMacro {
+            """
+            @Instantiable
+            public enum ExampleService {}
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            ┬────────────
+            ╰─ 🛑 @Instantiable must decorate a class, struct, or actor
+            public enum ExampleService {}
+            """
+        }
+    }
+
+    func test_throwsErrorWhenMoreThanOneForwardedProperty() {
+        assertMacro {
+            """
+            @Instantiable
+            public final class UserService {
+                public init(userID: String, userName: String) {
+                    self.userID = userID
+                    self.userName = userName
+                }
+
+                @Forwarded
+                let userID: String
+
+                @Forwarded
+                let userName: String
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            ┬────────────
+            ╰─ 🛑 An @Instantiable type must have at most one @Forwarded property
+            public final class UserService {
+                public init(userID: String, userName: String) {
+                    self.userID = userID
+                    self.userName = userName
+                }
+
+                @Forwarded
+                let userID: String
+
+                @Forwarded
+                let userName: String
+            }
             """
         }
     }
@@ -69,13 +123,13 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService {
-                init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
                 }
 
                 @Received
                 @Instantiated
-                let invariantA: InvariantA
+                let receivedA: ReceivedA
             }
             """
         } diagnostics: {
@@ -84,15 +138,15 @@ final class InstantiableMacroTests: XCTestCase {
             public struct ExampleService {
                                          ╰─ 🛑 @Instantiable-decorated type must have `public` or `open` initializer comprising all injected parameters
                                             ✏️ Add required initializer
-                init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
                 }
 
                 @Received
                 ╰─ 🛑 Dependency can have at most one of @Instantiated, @Received, or @Forwarded attached macro
                    ✏️ Remove excessive attached macros
                 @Instantiated
-                let invariantA: InvariantA
+                let receivedA: ReceivedA
             }
             """
         } fixes: {
@@ -101,13 +155,13 @@ final class InstantiableMacroTests: XCTestCase {
             public struct ExampleService {
             public init() {}
 
-                init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
                 }
 
                 @Received
                 @Instantiated
-                let invariantA: InvariantA
+                let receivedA: ReceivedA
             }
             """
         }
@@ -118,47 +172,47 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService {
-                public init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
                 }
 
                 @Instantiated
-                let invariantA: InvariantA = .init()
+                let receivedA: ReceivedA = .init()
             }
             """
         } diagnostics: {
             """
             @Instantiable
             public struct ExampleService {
-                public init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
                 }
 
                 @Instantiated
                 ╰─ 🛑 Dependency must not have hand-written initializer
                    ✏️ Remove initializer
-                let invariantA: InvariantA = .init()
+                let receivedA: ReceivedA = .init()
             }
             """
         } fixes: {
             """
             @Instantiable
             public struct ExampleService {
-                public init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
                 }
 
                 @Instantiated
-                let invariantA: InvariantA 
+                let receivedA: ReceivedA 
             }
             """
         } expansion: {
             """
             public struct ExampleService {
-                public init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
                 }
-                let invariantA: InvariantA 
+                let receivedA: ReceivedA 
             }
             """
         }
@@ -169,12 +223,12 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             struct ExampleService {
-                public init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
                 }
 
                 @Instantiated
-                let invariantA: InvariantA
+                let receivedA: ReceivedA
             }
             """
         } diagnostics: {
@@ -183,12 +237,12 @@ final class InstantiableMacroTests: XCTestCase {
             ╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
                ✏️ Add `public` modifier
             struct ExampleService {
-                public init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
                 }
 
                 @Instantiated
-                let invariantA: InvariantA
+                let receivedA: ReceivedA
             }
             """
         } fixes: {
@@ -196,12 +250,12 @@ final class InstantiableMacroTests: XCTestCase {
             @Instantiable
             public 
             public ExampleService {
-                public init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
                 }
 
                 @Instantiated
-                let invariantA: InvariantA
+                let receivedA: ReceivedA
             }
             """ // this fixes are wrong (we aren't deleting 'struct'), but also the whitespace is wrong in Xcode.
             // TODO: fix Xcode spacing of this replacement.
@@ -210,12 +264,12 @@ final class InstantiableMacroTests: XCTestCase {
             @Instantiable
             public 
             public ExampleService {
-                public init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
                 }
 
                 @Instantiated
-                let invariantA: InvariantA
+                let receivedA: ReceivedA
             }
             """
         }
@@ -260,7 +314,7 @@ final class InstantiableMacroTests: XCTestCase {
             @Instantiable
             public struct ExampleService {
                 @Instantiated
-                let invariantA: InvariantA
+                let receivedA: ReceivedA
             }
             """
         } diagnostics: {
@@ -270,28 +324,28 @@ final class InstantiableMacroTests: XCTestCase {
                                          ╰─ 🛑 @Instantiable-decorated type must have `public` or `open` initializer comprising all injected parameters
                                             ✏️ Add required initializer
                 @Instantiated
-                let invariantA: InvariantA
+                let receivedA: ReceivedA
             }
             """
         } fixes: {
             """
             @Instantiable
             public struct ExampleService {
-            public init(invariantA: InvariantA) {
-            self.invariantA = invariantA
+            public init(receivedA: ReceivedA) {
+            self.receivedA = receivedA
             }
 
                 @Instantiated
-                let invariantA: InvariantA
+                let receivedA: ReceivedA
             }
             """ // Whitespace is correct in Xcode, but not here.
         } expansion: {
             """
             public struct ExampleService {
-            public init(invariantA: InvariantA) {
-            self.invariantA = invariantA
+            public init(receivedA: ReceivedA) {
+            self.receivedA = receivedA
             }
-                let invariantA: InvariantA
+                let receivedA: ReceivedA
             }
             """
         }
@@ -302,18 +356,18 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService {
-                public init(variantA: VariantA, variantB: VariantB) {
-                    self.variantA = variantA
-                    self.variantB = variantB
-                    invariantA = InvariantA()
+                public init(forwardedA: ForwardedA, forwardedB: ForwardedB) {
+                    self.forwardedA = forwardedA
+                    self.forwardedB = forwardedB
+                    receivedA = ReceivedA()
                 }
 
                 @Forwarded
-                let variantA: VariantA
-                @Forwarded
-                let variantB: VariantB
+                let forwardedA: ForwardedA
                 @Received
-                let invariantA: InvariantA
+                let forwardedB: ForwardedB
+                @Received
+                let receivedA: ReceivedA
             }
             """
         } diagnostics: {
@@ -322,61 +376,61 @@ final class InstantiableMacroTests: XCTestCase {
             public struct ExampleService {
                                          ╰─ 🛑 @Instantiable-decorated type must have `public` or `open` initializer comprising all injected parameters
                                             ✏️ Add required initializer
-                public init(variantA: VariantA, variantB: VariantB) {
-                    self.variantA = variantA
-                    self.variantB = variantB
-                    invariantA = InvariantA()
+                public init(forwardedA: ForwardedA, forwardedB: ForwardedB) {
+                    self.forwardedA = forwardedA
+                    self.forwardedB = forwardedB
+                    receivedA = ReceivedA()
                 }
 
                 @Forwarded
-                let variantA: VariantA
-                @Forwarded
-                let variantB: VariantB
+                let forwardedA: ForwardedA
                 @Received
-                let invariantA: InvariantA
+                let forwardedB: ForwardedB
+                @Received
+                let receivedA: ReceivedA
             }
             """
         } fixes: {
             """
             @Instantiable
             public struct ExampleService {
-            public init(variantA: VariantA, variantB: VariantB, invariantA: InvariantA) {
-            self.variantA = variantA
-            self.variantB = variantB
-            self.invariantA = invariantA
+            public init(forwardedA: ForwardedA, forwardedB: ForwardedB, receivedA: ReceivedA) {
+            self.forwardedA = forwardedA
+            self.forwardedB = forwardedB
+            self.receivedA = receivedA
             }
 
-                public init(variantA: VariantA, variantB: VariantB) {
-                    self.variantA = variantA
-                    self.variantB = variantB
-                    invariantA = InvariantA()
+                public init(forwardedA: ForwardedA, forwardedB: ForwardedB) {
+                    self.forwardedA = forwardedA
+                    self.forwardedB = forwardedB
+                    receivedA = ReceivedA()
                 }
 
                 @Forwarded
-                let variantA: VariantA
-                @Forwarded
-                let variantB: VariantB
+                let forwardedA: ForwardedA
                 @Received
-                let invariantA: InvariantA
+                let forwardedB: ForwardedB
+                @Received
+                let receivedA: ReceivedA
             }
             """
         } expansion: {
             """
             public struct ExampleService {
-            public init(variantA: VariantA, variantB: VariantB, invariantA: InvariantA) {
-            self.variantA = variantA
-            self.variantB = variantB
-            self.invariantA = invariantA
+            public init(forwardedA: ForwardedA, forwardedB: ForwardedB, receivedA: ReceivedA) {
+            self.forwardedA = forwardedA
+            self.forwardedB = forwardedB
+            self.receivedA = receivedA
             }
 
-                public init(variantA: VariantA, variantB: VariantB) {
-                    self.variantA = variantA
-                    self.variantB = variantB
-                    invariantA = InvariantA()
+                public init(forwardedA: ForwardedA, forwardedB: ForwardedB) {
+                    self.forwardedA = forwardedA
+                    self.forwardedB = forwardedB
+                    receivedA = ReceivedA()
                 }
-                let variantA: VariantA
-                let variantB: VariantB
-                let invariantA: InvariantA
+                let forwardedA: ForwardedA
+                let forwardedB: ForwardedB
+                let receivedA: ReceivedA
             }
             """
         }
@@ -388,7 +442,7 @@ final class InstantiableMacroTests: XCTestCase {
             @Instantiable
             public struct ExampleService {
                 @Instantiated
-                private let invariantAInstantiator: Instantiator<InvariantA>
+                private let instantiatableAInstantiator: Instantiator<ReceivedA>
             }
             """
         } diagnostics: {
@@ -398,28 +452,28 @@ final class InstantiableMacroTests: XCTestCase {
                                          ╰─ 🛑 @Instantiable-decorated type must have `public` or `open` initializer comprising all injected parameters
                                             ✏️ Add required initializer
                 @Instantiated
-                private let invariantAInstantiator: Instantiator<InvariantA>
+                private let instantiatableAInstantiator: Instantiator<ReceivedA>
             }
             """
         } fixes: {
             """
             @Instantiable
             public struct ExampleService {
-            public init(invariantAInstantiator: Instantiator<InvariantA>) {
-            self.invariantAInstantiator = invariantAInstantiator
+            public init(instantiatableAInstantiator: Instantiator<ReceivedA>) {
+            self.instantiatableAInstantiator = instantiatableAInstantiator
             }
 
                 @Instantiated
-                private let invariantAInstantiator: Instantiator<InvariantA>
+                private let instantiatableAInstantiator: Instantiator<ReceivedA>
             }
             """
         } expansion: {
             """
             public struct ExampleService {
-            public init(invariantAInstantiator: Instantiator<InvariantA>) {
-            self.invariantAInstantiator = invariantAInstantiator
+            public init(instantiatableAInstantiator: Instantiator<ReceivedA>) {
+            self.instantiatableAInstantiator = instantiatableAInstantiator
             }
-                private let invariantAInstantiator: Instantiator<InvariantA>
+                private let instantiatableAInstantiator: Instantiator<ReceivedA>
             }
             """
         }
@@ -432,7 +486,7 @@ final class InstantiableMacroTests: XCTestCase {
             @Instantiable
             public struct ExampleService {
                 @LazyInstantiated
-                private var invariantA: InvariantA
+                private var instantiatableA: ReceivedA
             }
             """
         } diagnostics: {
@@ -442,30 +496,30 @@ final class InstantiableMacroTests: XCTestCase {
                                          ╰─ 🛑 @Instantiable-decorated type must have `public` or `open` initializer comprising all injected parameters
                                             ✏️ Add required initializer
                 @LazyInstantiated
-                private var invariantA: InvariantA
+                private var instantiatableA: ReceivedA
             }
             """
         } fixes: {
             """
             @Instantiable
             public struct ExampleService {
-            public init(invariantAInstantiator: Instantiator<InvariantA>) {
-            _invariantA = LazyInstantiated(invariantAInstantiator)
+            public init(instantiatableAInstantiator: Instantiator<ReceivedA>) {
+            _instantiatableA = LazyInstantiated(instantiatableAInstantiator)
             }
 
                 @LazyInstantiated
-                private var invariantA: InvariantA
+                private var instantiatableA: ReceivedA
             }
             """
         } expansion: {
             """
             public struct ExampleService {
-            public init(invariantAInstantiator: Instantiator<InvariantA>) {
-            _invariantA = LazyInstantiated(invariantAInstantiator)
+            public init(instantiatableAInstantiator: Instantiator<ReceivedA>) {
+            _instantiatableA = LazyInstantiated(instantiatableAInstantiator)
             }
 
                 @LazyInstantiated
-                private var invariantA: InvariantA
+                private var instantiatableA: ReceivedA
             }
             """
         }
@@ -477,9 +531,9 @@ final class InstantiableMacroTests: XCTestCase {
             @Instantiable
             public struct ExampleService {
                 @LazyInstantiated
-                private var invariantA: InvariantA
+                private var instantiatableA: InstantiatableA
                 @Instantiated
-                let invariantAInstantiator: Instantiator<InvariantA>
+                let instantiatableAInstantiator: Instantiator<InstantiatableA>
             }
             """
         } diagnostics: {
@@ -489,37 +543,37 @@ final class InstantiableMacroTests: XCTestCase {
                                          ╰─ 🛑 @Instantiable-decorated type must have `public` or `open` initializer comprising all injected parameters
                                             ✏️ Add required initializer
                 @LazyInstantiated
-                private var invariantA: InvariantA
+                private var instantiatableA: InstantiatableA
                 @Instantiated
-                let invariantAInstantiator: Instantiator<InvariantA>
+                let instantiatableAInstantiator: Instantiator<InstantiatableA>
             }
             """
         } fixes: {
             """
             @Instantiable
             public struct ExampleService {
-            public init(invariantAInstantiator: Instantiator<InvariantA>) {
-            _invariantA = LazyInstantiated(invariantAInstantiator)
-            self.invariantAInstantiator = invariantAInstantiator
+            public init(instantiatableAInstantiator: Instantiator<InstantiatableA>) {
+            _instantiatableA = LazyInstantiated(instantiatableAInstantiator)
+            self.instantiatableAInstantiator = instantiatableAInstantiator
             }
 
                 @LazyInstantiated
-                private var invariantA: InvariantA
+                private var instantiatableA: InstantiatableA
                 @Instantiated
-                let invariantAInstantiator: Instantiator<InvariantA>
+                let instantiatableAInstantiator: Instantiator<InstantiatableA>
             }
             """
         } expansion: {
             """
             public struct ExampleService {
-            public init(invariantAInstantiator: Instantiator<InvariantA>) {
-            _invariantA = LazyInstantiated(invariantAInstantiator)
-            self.invariantAInstantiator = invariantAInstantiator
+            public init(instantiatableAInstantiator: Instantiator<InstantiatableA>) {
+            _instantiatableA = LazyInstantiated(instantiatableAInstantiator)
+            self.instantiatableAInstantiator = instantiatableAInstantiator
             }
 
                 @LazyInstantiated
-                private var invariantA: InvariantA
-                let invariantAInstantiator: Instantiator<InvariantA>
+                private var instantiatableA: InstantiatableA
+                let instantiatableAInstantiator: Instantiator<InstantiatableA>
             }
             """
         }

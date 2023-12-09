@@ -45,7 +45,9 @@ public struct InstantiableMacro: MemberMacro {
             context.diagnose(diagnostic)
         }
 
-        // TODO: Do not allow having multiple @Forwarded properties of the same type.
+        guard visitor.dependencies.filter({ $0.source == .forwarded }).count <= 1 else {
+            throw InstantiableError.tooManyForwardedProperties
+        }
 
         let hasMemberwiseInitializerForInjectableProperties = visitor
             .initializers
@@ -80,11 +82,14 @@ public struct InstantiableMacro: MemberMacro {
 
     private enum InstantiableError: Error, CustomStringConvertible {
         case decoratingIncompatibleType
+        case tooManyForwardedProperties
 
         var description: String {
             switch self {
             case .decoratingIncompatibleType:
-                return "@\(InstantiableVisitor.macroName) must decorate a class, struct, or actor"
+                "@\(InstantiableVisitor.macroName) must decorate a class, struct, or actor"
+            case .tooManyForwardedProperties:
+                "An @\(InstantiableVisitor.macroName) type must have at most one @\(Dependency.Source.forwarded.rawValue) property"
             }
         }
     }
