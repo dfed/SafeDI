@@ -46,7 +46,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
         return [
             .buildCommand(
                 displayName: "SafeDIGenerateDependencyTree",
-                executable: try context.tool(named: "GenerateDependencyTree").path,
+                executable: try context.tool(named: "SafeDIPlugin").path,
                 arguments: arguments,
                 environment: [:],
                 inputFiles: inputSwiftFiles + targetDependencySafeDIOutputFiles,
