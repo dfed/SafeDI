@@ -41,8 +41,12 @@ final class SafeDIPluginTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
+            #if canImport(SwiftUI)
             import SwiftUI
+            #endif
+            #if canImport(UIKit)
             import UIKit
+            #endif
 
             // No root @Instantiable-decorated types found.
             """
@@ -76,8 +80,12 @@ final class SafeDIPluginTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
+            #if canImport(SwiftUI)
             import SwiftUI
+            #endif
+            #if canImport(UIKit)
             import UIKit
+            #endif
 
             // No root @Instantiable-decorated types found.
             """
@@ -124,8 +132,12 @@ final class SafeDIPluginTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
+            #if canImport(SwiftUI)
             import SwiftUI
+            #endif
+            #if canImport(UIKit)
             import UIKit
+            #endif
 
             extension RootViewController {
                 convenience init() {
@@ -177,8 +189,12 @@ final class SafeDIPluginTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
+            #if canImport(SwiftUI)
             import SwiftUI
+            #endif
+            #if canImport(UIKit)
             import UIKit
+            #endif
 
             extension Root {
                 init() {
@@ -230,8 +246,12 @@ final class SafeDIPluginTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
+            #if canImport(SwiftUI)
             import SwiftUI
+            #endif
+            #if canImport(UIKit)
             import UIKit
+            #endif
 
             extension Root {
                 init() {
@@ -340,8 +360,12 @@ final class SafeDIPluginTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
+            #if canImport(SwiftUI)
             import SwiftUI
+            #endif
+            #if canImport(UIKit)
             import UIKit
+            #endif
 
             extension RootViewController {
                 convenience init() {
@@ -469,8 +493,12 @@ final class SafeDIPluginTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
+            #if canImport(SwiftUI)
             import SwiftUI
+            #endif
+            #if canImport(UIKit)
             import UIKit
+            #endif
 
             extension RootViewController {
                 convenience init() {
@@ -599,8 +627,12 @@ final class SafeDIPluginTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
+            #if canImport(SwiftUI)
             import SwiftUI
+            #endif
+            #if canImport(UIKit)
             import UIKit
+            #endif
 
             extension RootViewController {
                 convenience init() {
@@ -729,8 +761,12 @@ final class SafeDIPluginTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
+            #if canImport(SwiftUI)
             import SwiftUI
+            #endif
+            #if canImport(UIKit)
             import UIKit
+            #endif
 
             extension RootViewController {
                 convenience init() {
@@ -861,8 +897,12 @@ final class SafeDIPluginTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
+            #if canImport(SwiftUI)
             import SwiftUI
+            #endif
+            #if canImport(UIKit)
             import UIKit
+            #endif
 
             extension Root {
                 convenience init() {
@@ -999,8 +1039,12 @@ final class SafeDIPluginTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
+            #if canImport(SwiftUI)
             import SwiftUI
+            #endif
+            #if canImport(UIKit)
             import UIKit
+            #endif
 
             extension Root {
                 convenience init() {
@@ -1132,8 +1176,12 @@ final class SafeDIPluginTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
+            #if canImport(SwiftUI)
             import SwiftUI
+            #endif
+            #if canImport(UIKit)
             import UIKit
+            #endif
 
             extension Root {
                 convenience init() {
@@ -1274,8 +1322,12 @@ final class SafeDIPluginTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
+            #if canImport(SwiftUI)
             import SwiftUI
+            #endif
+            #if canImport(UIKit)
             import UIKit
+            #endif
 
             extension Root {
                 convenience init() {
@@ -1451,11 +1503,21 @@ final class SafeDIPluginTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
+            #if canImport(ChildModule)
             import ChildModule
+            #endif
+            #if canImport(GrandchildModule)
             import GrandchildModule
+            #endif
+            #if canImport(GreatGrandchildModule)
             import GreatGrandchildModule
+            #endif
+            #if canImport(SwiftUI)
             import SwiftUI
+            #endif
+            #if canImport(UIKit)
             import UIKit
+            #endif
 
             extension Root {
                 convenience init() {

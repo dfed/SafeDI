@@ -112,7 +112,13 @@ public final class DependencyTreeGenerator {
 
     private var imports: String {
         Set(moduleNames)
-            .map { "import \($0)" }
+            .map {
+                """
+                #if canImport(\($0))
+                import \($0)
+                #endif
+                """
+            }
             .sorted()
             .joined(separator: "\n")
     }
