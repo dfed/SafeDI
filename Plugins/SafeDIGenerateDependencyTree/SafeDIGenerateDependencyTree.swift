@@ -106,6 +106,19 @@ extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
                         "\($0.displayName).safedi" // SafeDICollectInstantiables output file.
                     ])
             }
+        + target
+            .productRecursiveDependencies
+            .map {
+                context
+                    .pluginWorkDirectory
+                    .removingLastComponent() // Remove `SafeDICollectInstantiables` from path.
+                    .removingLastComponent() // Remove current module name from path.
+                    .appending([
+                        $0.name, // Dependency module name.
+                        "SafeDICollectInstantiables", // SafeDICollectInstantiables working directory
+                        "\($0.name).safedi" // SafeDICollectInstantiables output file.
+                    ])
+            }
 
         let instantiablePaths = targetDependencySafeDIOutputFiles
             .map(\.string)
@@ -154,6 +167,21 @@ extension XcodeProjectPlugin.XcodeTarget {
                 }
             }
             .flatMap(\.sourceModuleRecursiveDependencies)
+    }
+
+    var productRecursiveDependencies: [PackagePlugin.Product] {
+        sourceModuleRecursiveDependencies
+            .flatMap(\.dependencies)
+            .compactMap { dependency in
+                switch dependency {
+                case let .product(product):
+                    return product
+                case .target:
+                    return nil
+                @unknown default:
+                    return nil
+                }
+            }
     }
 
 }
