@@ -1777,7 +1777,7 @@ final class SafeDIPluginTests: XCTestCase {
         await assertThrowsError(
             """
             Dependency cycle detected!
-            DefaultLoggingService -> DefaultNetworkService -> DefaultLoggingService
+            DefaultNetworkService -> DefaultLoggingService -> DefaultNetworkService
             """
         ) {
             try await SafeDIPlugin.run(
