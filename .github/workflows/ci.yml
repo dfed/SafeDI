@@ -22,3 +22,14 @@ jobs:
       - name: Upload Coverage Reports
         if: success()
         uses: codecov/codecov-action@v3
+
+  spm-integration-15:
+    name: Build and Test Package Integration on Xcode 15
+    runs-on: macos-13
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_15.0.1.app/Contents/Developer
+      - name: Build Package Integration
+        run: xcrun swift build -c release --package-path Examples/ExamplePackageIntegration
