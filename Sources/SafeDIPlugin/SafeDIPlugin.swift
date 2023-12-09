@@ -42,7 +42,7 @@ struct SafeDIPlugin: AsyncParsableCommand {
     func run() async throws {
         let output = try await Self.run(
             swiftFileContent: try await loadSwiftFiles(),
-            dependentModuleNames: Array(Set(instantiablesPaths.map { $0.asFileURL.deletingPathExtension().lastPathComponent })),
+            dependentModuleNames: instantiablesPaths.map { $0.asFileURL.deletingPathExtension().lastPathComponent },
             dependentInstantiables: Self.findSafeDIFulfilledTypes(atInstantiablesPaths: instantiablesPaths),
             buildDependencyTreeOutput: dependencyTreeOutput != nil
         )
@@ -136,11 +136,7 @@ struct SafeDIPlugin: AsyncParsableCommand {
             let instantiablesURLs = instantiablesPaths.map(\.asFileURL)
             for instantiablesURL in instantiablesURLs {
                 taskGroup.addTask {
-                    if FileManager.default.fileExists(atPath: instantiablesURL.absoluteString) {
-                        try decoder.decode([Instantiable].self, from: Data(contentsOf: instantiablesURL))
-                    } else {
-                        []
-                    }
+                    try decoder.decode([Instantiable].self, from: Data(contentsOf: instantiablesURL))
                 }
             }
             var dependentInstantiables = [[Instantiable]]()
