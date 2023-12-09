@@ -72,7 +72,7 @@ extension Target {
                 "SafeDI",
             ] + dependencies,
             plugins: [
-                .plugin(name: "SafeDIGenerateDependencyTree", package: "SafeDI"),
+                .plugin(name: "SafeDIGenerator", package: "SafeDI"),
             ]
         )
     }
@@ -82,10 +82,7 @@ extension Target {
             name: name,
             dependencies: [
                 "SafeDI",
-            ] + dependencies,
-            plugins: [
-                .plugin(name: "SafeDICollectInstantiables", package: "SafeDI"),
-            ]
+            ] + dependencies
         )
     }
 }

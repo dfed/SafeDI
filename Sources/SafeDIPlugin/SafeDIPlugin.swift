@@ -30,21 +30,25 @@ struct SafeDIPlugin: AsyncParsableCommand {
     @Argument(help: "The swift files to parse")
     var swiftFilePaths: [String]
 
-    @Option(help: "The desired output location of the <ModuleName>.safeDI file")
+    @Option(parsing: .upToNextOption, help: "The names of the source modules that must be imported for the generated code to compile.")
+    var otherModuleNames: [String] = []
+
+    @Option(help: "The desired output location of a file containing a representation of Instantiable types found in the input Swift files")
     var instantiablesOutput: String?
 
-    @Option(parsing: .upToNextOption, help: "The <ModuleName>.safeDI files from dependent targets")
+    @Option(parsing: .upToNextOption, help: "File paths to representations of Instantiable types found in other modules")
     var instantiablesPaths: [String] = []
 
-    @Option(help: "The desired output location of the swift dependency injection tree")
+    @Option(help: "The desired output location of the Swift dependency injection tree")
     var dependencyTreeOutput: String?
 
     func run() async throws {
-        let validInstantiableURLs = await Self.findValidInstantiablesURLs(possiblePaths: instantiablesPaths)
         let output = try await Self.run(
             swiftFileContent: try await loadSwiftFiles(),
-            dependentModuleNames: validInstantiableURLs.map { $0.deletingPathExtension().lastPathComponent },
-            dependentInstantiables: Self.findSafeDIFulfilledTypes(atInstantiablesURLs: validInstantiableURLs),
+            dependentModuleNames: otherModuleNames,
+            dependentInstantiables: Self.findSafeDIFulfilledTypes(
+                atInstantiablesURLs: await Self.findValidInstantiablesURLs(possiblePaths: instantiablesPaths)
+            ),
             buildDependencyTreeOutput: dependencyTreeOutput != nil
         )
 
