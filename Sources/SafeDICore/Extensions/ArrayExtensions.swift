@@ -24,7 +24,6 @@ import SwiftSyntaxBuilder
 extension Array where Element == Dependency {
 
     var removingDuplicateInitializerArguments: Self {
-        // TODO: try using a Collections.OrderedSet here instead.
         var alreadySeenInitializerArgument = Set<Property>()
         return filter {
             if alreadySeenInitializerArgument.contains($0.property) {
