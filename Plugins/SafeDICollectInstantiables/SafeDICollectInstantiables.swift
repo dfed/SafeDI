@@ -14,6 +14,10 @@ struct SafeDICollectInstantiables: BuildToolPlugin {
 
         let outputSafeDIFile = context.pluginWorkDirectory.appending(subpath: "\(sourceTarget.moduleName).safedi")
         let inputSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.path)
+        guard !inputSwiftFiles.isEmpty else {
+            return []
+        }
+
         let arguments = inputSwiftFiles
             .map(\.string)
             .compactMap { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) }
