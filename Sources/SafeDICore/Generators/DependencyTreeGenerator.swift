@@ -164,19 +164,18 @@ public final class DependencyTreeGenerator {
         return reachableTypeDescriptions
     }()
 
-    /// A collection of `@Instantiable`-decorated types that are instantiated by another
-    /// `@Instantiable`-decorated type that is reachable in the dependency tree.
-    private lazy var childInstantiableTypes: Set<TypeDescription> = Set(
-        reachableTypeDescriptions
-            .compactMap { typeDescriptionToFulfillingInstantiableMap[$0] }
-            .flatMap(\.dependencies)
-            .filter(\.isInstantiated)
-            .map(\.property.typeDescription.asInstantiatedType)
-    )
-
     /// A collection of `@Instantiable`-decorated types that are at the roots of their respective dependency trees.
     private lazy var rootInstantiableTypes: Set<TypeDescription> = possibleRootInstantiableTypes
-        .subtracting(childInstantiableTypes)
+        // Remove all `@Instantiable`-decorated types that are instantiated by another
+        // `@Instantiable`-decorated type.
+        .subtracting(Set(
+            reachableTypeDescriptions
+                .compactMap { typeDescriptionToFulfillingInstantiableMap[$0] }
+                .flatMap(\.dependencies)
+                .filter(\.isInstantiated)
+                .map(\.property.typeDescription.asInstantiatedType)
+                .compactMap { typeDescriptionToFulfillingInstantiableMap[$0]?.concreteInstantiableType }
+        ))
 
     private func createTypeDescriptionToScopeMapping() throws -> [TypeDescription: Scope] {
         // Create the mapping.
