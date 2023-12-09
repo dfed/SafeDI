@@ -107,6 +107,8 @@ extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
             }
 
         let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
+        // Note: Dependencies here are always an empty list. The XcodeTarget type seems broken.
+        // https://github.com/apple/swift-package-manager/issues/6003
         let instantiablePaths = (
             target
                 .sourceModuleRecursiveDependencies
