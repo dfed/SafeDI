@@ -31,7 +31,6 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                         "\($0.name).safedi" // SafeDICollectInstantiables output file.
                     ])
             }
-            .filter { FileManager.default.fileExists(atPath: $0.string) }
 
         let instantiablePaths = targetDependencySafeDIOutputFiles
             .map(\.string)
@@ -107,7 +106,6 @@ extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
                         "\($0.displayName).safedi" // SafeDICollectInstantiables output file.
                     ])
             }
-            .filter { FileManager.default.fileExists(atPath: $0.string) }
 
         let instantiablePaths = targetDependencySafeDIOutputFiles
             .map(\.string)
