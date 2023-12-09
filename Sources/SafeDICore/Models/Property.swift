@@ -93,9 +93,6 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
     enum PropertyType {
         /// A `let` property.
         case constant
-        // TODO: Enable lazy instantiated properties to forward themselves down their own scope.
-        //       We can enable this without an unexpected retain problem because lazy instantiated
-        //       properties are already retained.
         /// A  lazily instantiated property. Backed by an `Instantiator`.
         /// The instantiated product is not forwarded down the dependency tree.
         case lazy
