@@ -185,7 +185,7 @@ struct SafeDIPlugin: AsyncParsableCommand {
 
 extension Data {
     fileprivate func write(toPath filePath: String) throws {
-        if #available(macOS 13.0, *) {
+        if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
             try write(to: URL(filePath: filePath))
         } else {
             try write(to: URL(fileURLWithPath: filePath))
@@ -199,7 +199,7 @@ extension String {
     }
 
     fileprivate var asFileURL: URL {
-        if #available(macOS 13.0, *) {
+        if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
             URL(filePath: self)
         } else {
             URL(fileURLWithPath: self)
