@@ -18,7 +18,15 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
         }
 
         let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
-        let targetDependencySafeDIOutputFiles = sourceTarget
+        let targetDependencySourceFiles = sourceTarget
+            .sourceModuleRecursiveDependencies
+            .flatMap {
+                $0
+                    .sourceFiles(withSuffix: ".swift")
+                    .map(\.path)
+            }
+
+        let instantiablePaths = sourceTarget
             .sourceModuleRecursiveDependencies
             .map {
                 context
@@ -31,8 +39,6 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                         "\($0.name).safedi" // SafeDICollectInstantiables output file.
                     ])
             }
-
-        let instantiablePaths = targetDependencySafeDIOutputFiles
             .map(\.string)
             .compactMap { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) }
         let instantiablePathsArguments: [String] = if !instantiablePaths.isEmpty {
@@ -58,7 +64,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                 executable: try context.tool(named: "SafeDIPlugin").path,
                 arguments: arguments,
                 environment: [:],
-                inputFiles: inputSwiftFiles + targetDependencySafeDIOutputFiles,
+                inputFiles: inputSwiftFiles + targetDependencySourceFiles,
                 outputFiles: [outputSwiftFile])
         ]
     }
@@ -91,36 +97,44 @@ extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
             // There are no Swift files in this module!
             return []
         }
+        let targetDependencySourceFiles = target
+            .sourceModuleRecursiveDependencies
+            .flatMap {
+                $0
+                    .inputFiles
+                    .filter { $0.path.extension == "swift" }
+                    .map(\.path)
+            }
 
         let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
-        let targetDependencySafeDIOutputFiles = target
-            .sourceModuleRecursiveDependencies
-            .map {
-                context
-                    .pluginWorkDirectory
-                    .removingLastComponent() // Remove `SafeDICollectInstantiables` from path.
-                    .removingLastComponent() // Remove current module name from path.
-                    .appending([
-                        $0.displayName, // Dependency module name.
-                        "SafeDICollectInstantiables", // SafeDICollectInstantiables working directory
-                        "\($0.displayName).safedi" // SafeDICollectInstantiables output file.
-                    ])
-            }
-        + target
-            .productRecursiveDependencies
-            .map {
-                context
-                    .pluginWorkDirectory
-                    .removingLastComponent() // Remove `SafeDICollectInstantiables` from path.
-                    .removingLastComponent() // Remove current module name from path.
-                    .appending([
-                        $0.name, // Dependency module name.
-                        "SafeDICollectInstantiables", // SafeDICollectInstantiables working directory
-                        "\($0.name).safedi" // SafeDICollectInstantiables output file.
-                    ])
-            }
-
-        let instantiablePaths = targetDependencySafeDIOutputFiles
+        let instantiablePaths = (
+            target
+                .sourceModuleRecursiveDependencies
+                .map {
+                    context
+                        .pluginWorkDirectory
+                        .removingLastComponent() // Remove `SafeDICollectInstantiables` from path.
+                        .removingLastComponent() // Remove current module name from path.
+                        .appending([
+                            $0.displayName, // Dependency module name.
+                            "SafeDICollectInstantiables", // SafeDICollectInstantiables working directory
+                            "\($0.displayName).safedi" // SafeDICollectInstantiables output file.
+                        ])
+                }
+            + target
+                .productRecursiveDependencies
+                .map {
+                    context
+                        .pluginWorkDirectory
+                        .removingLastComponent() // Remove `SafeDICollectInstantiables` from path.
+                        .removingLastComponent() // Remove current module name from path.
+                        .appending([
+                            $0.name, // Dependency module name.
+                            "SafeDICollectInstantiables", // SafeDICollectInstantiables working directory
+                            "\($0.name).safedi" // SafeDICollectInstantiables output file.
+                        ])
+                }
+        )
             .map(\.string)
             .compactMap { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) }
         let instantiablePathsArguments: [String] = if !instantiablePaths.isEmpty {
@@ -146,7 +160,7 @@ extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
                 executable: try context.tool(named: "SafeDIPlugin").path,
                 arguments: arguments,
                 environment: [:],
-                inputFiles: inputSwiftFiles + targetDependencySafeDIOutputFiles,
+                inputFiles: inputSwiftFiles + targetDependencySourceFiles,
                 outputFiles: [outputSwiftFile])
         ]
     }

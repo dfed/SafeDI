@@ -40,10 +40,11 @@ struct SafeDIPlugin: AsyncParsableCommand {
     var dependencyTreeOutput: String?
 
     func run() async throws {
+        let validInstantiableURLs = await Self.findValidInstantiablesURLs(possiblePaths: instantiablesPaths)
         let output = try await Self.run(
             swiftFileContent: try await loadSwiftFiles(),
-            dependentModuleNames: instantiablesPaths.map { $0.asFileURL.deletingPathExtension().lastPathComponent },
-            dependentInstantiables: Self.findSafeDIFulfilledTypes(atInstantiablesPaths: instantiablesPaths),
+            dependentModuleNames: validInstantiableURLs.map { $0.deletingPathExtension().lastPathComponent },
+            dependentInstantiables: Self.findSafeDIFulfilledTypes(atInstantiablesURLs: validInstantiableURLs),
             buildDependencyTreeOutput: dependencyTreeOutput != nil
         )
 
@@ -127,13 +128,38 @@ struct SafeDIPlugin: AsyncParsableCommand {
         try JSONEncoder().encode(instantiables).write(toPath: path)
     }
 
-    private static func findSafeDIFulfilledTypes(atInstantiablesPaths instantiablesPaths: [String]) async throws -> [[Instantiable]] {
+    private static func findValidInstantiablesURLs(possiblePaths: [String]) async -> [URL] {
+        await withTaskGroup(
+            of: Optional<URL>.self,
+            returning: [URL].self
+        ) { taskGroup in
+            let instantiablesURLs = possiblePaths.map(\.asFileURL)
+            for instantiablesURL in instantiablesURLs {
+                taskGroup.addTask {
+                    if let resourceIsReachable = try? instantiablesURL.checkResourceIsReachable(), resourceIsReachable {
+                        instantiablesURL
+                    } else {
+                        nil
+                    }
+                }
+            }
+            var validInstantiablesURLs = [URL]()
+            for await validInstantiablesURL in taskGroup {
+                if let validInstantiablesURL {
+                    validInstantiablesURLs.append(validInstantiablesURL)
+                }
+            }
+
+            return validInstantiablesURLs
+        }
+    }
+
+    private static func findSafeDIFulfilledTypes(atInstantiablesURLs instantiablesURLs: [URL]) async throws -> [[Instantiable]] {
         try await withThrowingTaskGroup(
             of: [Instantiable].self,
             returning: [[Instantiable]].self
         ) { taskGroup in
             let decoder = ZippyJSONDecoder()
-            let instantiablesURLs = instantiablesPaths.map(\.asFileURL)
             for instantiablesURL in instantiablesURLs {
                 taskGroup.addTask {
                     try decoder.decode([Instantiable].self, from: Data(contentsOf: instantiablesURL))
