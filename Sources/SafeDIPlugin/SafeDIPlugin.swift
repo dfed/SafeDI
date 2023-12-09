@@ -118,11 +118,17 @@ struct SafeDIPlugin: AsyncParsableCommand {
         }
     }
 
-    private static func parsedModule(_ swiftFileContent: [String]) -> ParsedModule {
+    private static func parsedModule(_ swiftFileContent: [String])  -> ParsedModule {
         let fileVisitor = FileVisitor()
-        for swiftFileContent in swiftFileContent {
-            fileVisitor.walk(Parser.parse(source: swiftFileContent))
+        for content in swiftFileContent {
+            guard content.contains(#"@Instantiable"#) else {
+                // We don't care about this file.
+                continue
+            }
+
+            fileVisitor.walk(Parser.parse(source: content))
         }
+
         return ParsedModule(
             instantiables: fileVisitor.instantiables,
             nestedInstantiableDecoratedTypeDescriptions: fileVisitor.nestedInstantiableDecoratedTypeDescriptions)
