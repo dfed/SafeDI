@@ -24,7 +24,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                 // Find dependencies when building within a Package.swift file.
                 context
                     .pluginWorkDirectory
-                    .removingLastComponent() // Remove `SafeDIGenerateDependencyTree` or `SafeDICollectInstantiables` from path.
+                    .removingLastComponent() // Remove `SafeDICollectInstantiables` from path.
                     .removingLastComponent() // Remove current module name from path.
                     .appending([
                         $0.name, // Dependency module name.
@@ -40,7 +40,6 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                         "\($0.name).safedi" // SafeDICollectInstantiables output file.
                     ])
             ]}
-            .filter { FileManager.default.fileExists(atPath: $0.string) }
 
         let instantiablePaths = targetDependencySafeDIOutputFiles
             .map(\.string)
@@ -107,27 +106,18 @@ extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
         let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
         let targetDependencySafeDIOutputFiles = target
             .sourceModuleRecursiveDependencies
-            .flatMap {[
-                // Find dependencies when building within a Package.swift file.
+            .map {
+                // Find dependencies when building within a Xcodeproj file.
                 context
                     .pluginWorkDirectory
-                    .removingLastComponent() // Remove `SafeDIGenerateDependencyTree` or `SafeDICollectInstantiables` from path.
+                    .removingLastComponent() // Remove `SafeDICollectInstantiables` from path.
                     .removingLastComponent() // Remove current module name from path.
                     .appending([
                         $0.displayName, // Dependency module name.
                         "SafeDICollectInstantiables", // SafeDICollectInstantiables working directory
                         "\($0.displayName).safedi" // SafeDICollectInstantiables output file.
-                    ]),
-                // Find dependencies when building within `swift build` CLI.
-                context
-                    .pluginWorkDirectory
-                    .removingLastComponent() // Remove `<Package>_<Target>.bundle` from path.
-                    .appending([
-                        "\(context.xcodeProject.displayName)_\($0.displayName).bundle", // Dependency module bundle.
-                        "\($0.displayName).safedi" // SafeDICollectInstantiables output file.
-                    ]),
-            ]}
-            .filter { FileManager.default.fileExists(atPath: $0.string) }
+                    ])
+            }
 
         let instantiablePaths = targetDependencySafeDIOutputFiles
             .map(\.string)
