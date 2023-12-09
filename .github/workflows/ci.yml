@@ -43,4 +43,4 @@ jobs:
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_15.0.1.app/Contents/Developer
       - name: Build and Test Framework
-        run: pushd Examples/ExampleProjectIntegration; xcrun xcodebuild build -scheme ExampleProjectIntegration; popd
+        run: pushd Examples/ExampleProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -scheme ExampleProjectIntegration; popd
