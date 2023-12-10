@@ -76,7 +76,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         .nested(name: name, parentType: parentType, generics: [])
     }
 
-    /// A canonical representation of this type that can be used as source code.
+    /// A canonical representation of this type that can be used in source code.
     public var asSource: String {
         switch self {
         case let .simple(name, generics):

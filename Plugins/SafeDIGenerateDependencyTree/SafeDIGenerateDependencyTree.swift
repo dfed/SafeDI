@@ -19,9 +19,8 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
         // output of other plugins, we must forgo searching for
         // `.safeDI` files and instead parse the entire project at once.
         let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.path)
-        let allDependencies = sourceTarget
+        let dependenciesSourceFiles = sourceTarget
             .sourceModuleRecursiveDependencies
-        let dependenciesSourceFiles = allDependencies
             .flatMap {
                 $0
                     .sourceFiles(withSuffix: ".swift")
@@ -29,7 +28,6 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
             }
 
         let arguments = (targetSwiftFiles + dependenciesSourceFiles).map(\.string)
-        + ["--other-module-names"] + allDependencies.map(\.moduleName)
         + ["--dependency-tree-output", outputSwiftFile.string]
 
         return [

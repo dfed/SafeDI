@@ -145,7 +145,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
             let initializer = initializers.first(where: { $0.isValid(forFulfilling: dependencies) })
         else { return nil }
         return Instantiable(
-            instantiableType: instantiableType, 
+            instantiableType: instantiableType,
             initializer: initializer,
             additionalInstantiableTypes: additionalInstantiableTypes,
             dependencies: dependencies,

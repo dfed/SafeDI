@@ -20,7 +20,7 @@
 
 import SwiftSyntax
 
-/// A visitor that can read entire files. A single `FileVisitor` can be used to walk every file in a module.
+/// A syntax visitor that can read an entire file.
 public final class FileVisitor: SyntaxVisitor {
 
     // MARK: Initialization
@@ -44,7 +44,10 @@ public final class FileVisitor: SyntaxVisitor {
     }
 
     public override func visit(_ node: ImportDeclSyntax) -> SyntaxVisitorContinueKind {
-        .skipChildren
+        if let importStatement = node.asImportStatement {
+            imports.append(importStatement)
+        }
+        return .skipChildren
     }
 
     public override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -86,8 +89,9 @@ public final class FileVisitor: SyntaxVisitor {
 
     // MARK: Public
 
-    public var instantiables = [Instantiable]()
-    public var nestedInstantiableDecoratedTypeDescriptions = [TypeDescription]()
+    public private(set) var imports = [ImportStatement]()
+    public private(set) var instantiables = [Instantiable]()
+    public private(set) var nestedInstantiableDecoratedTypeDescriptions = [TypeDescription]()
 
     // MARK: Private
 
