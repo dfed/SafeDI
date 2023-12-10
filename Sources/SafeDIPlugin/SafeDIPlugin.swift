@@ -47,7 +47,7 @@ struct SafeDIPlugin: AsyncParsableCommand {
             swiftFileContent: try await loadSwiftFiles(),
             dependentModuleNames: otherModuleNames,
             dependentInstantiables: Self.findSafeDIFulfilledTypes(
-                atInstantiablesURLs: await Self.findValidInstantiablesURLs(possiblePaths: instantiablesPaths)
+                atInstantiablesURLs: instantiablesPaths.map(\.asFileURL)
             ),
             buildDependencyTreeOutput: dependencyTreeOutput != nil
         )
@@ -136,32 +136,6 @@ struct SafeDIPlugin: AsyncParsableCommand {
 
     private static func writeInstantiables(_ instantiables: [Instantiable], toPath path: String) throws {
         try JSONEncoder().encode(instantiables).write(toPath: path)
-    }
-
-    private static func findValidInstantiablesURLs(possiblePaths: [String]) async -> [URL] {
-        await withTaskGroup(
-            of: Optional<URL>.self,
-            returning: [URL].self
-        ) { taskGroup in
-            let instantiablesURLs = possiblePaths.map(\.asFileURL)
-            for instantiablesURL in instantiablesURLs {
-                taskGroup.addTask {
-                    if let resourceIsReachable = try? instantiablesURL.checkResourceIsReachable(), resourceIsReachable {
-                        instantiablesURL
-                    } else {
-                        nil
-                    }
-                }
-            }
-            var validInstantiablesURLs = [URL]()
-            for await validInstantiablesURL in taskGroup {
-                if let validInstantiablesURL {
-                    validInstantiablesURLs.append(validInstantiablesURL)
-                }
-            }
-
-            return validInstantiablesURLs
-        }
     }
 
     private static func findSafeDIFulfilledTypes(atInstantiablesURLs instantiablesURLs: [URL]) async throws -> [[Instantiable]] {
