@@ -234,12 +234,6 @@ public struct Initializer: Codable, Hashable {
             )
         }
 
-        public init(property: Property) {
-            outerLabel = nil
-            innerLabel = property.label
-            typeDescription = property.typeDescription
-        }
-
         init(_ node: FunctionParameterSyntax) {
             if let secondName = node.secondName {
                 outerLabel = node.firstName.text

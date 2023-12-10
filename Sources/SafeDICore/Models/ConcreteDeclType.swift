@@ -33,15 +33,4 @@ public enum ConcreteDeclType {
             false
         }
     }
-
-    var isStruct: Bool {
-        switch self {
-        case .actorType:
-            false
-        case .classType:
-            false
-        case .structType:
-            true
-        }
-    }
 }
