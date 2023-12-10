@@ -12,36 +12,25 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
             return []
         }
 
-        let inputSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.path)
         let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
-        let targetDependencySafeDIOutputFiles = sourceTarget
+        // Swift Package Plugins do not (as of Swift 5.9) allow for
+        // creating dependencies between plugin output. Since our
+        // current build system does not support depending on the
+        // output of other plugins, we must forgo searching for
+        // `.safeDI` files and instead parse the entire project at once.
+        let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.path)
+        let allDependencies = sourceTarget
             .sourceModuleRecursiveDependencies
-            .map {
-                context
-                    .pluginWorkDirectory
-                    .removingLastComponent() // Remove `SafeDIGenerateDependencyTree` from path.
-                    .removingLastComponent() // Remove current module name from path.
-                    .appending([
-                        $0.name, // Dependency module name.
-                        "SafeDICollectInstantiables", // SafeDICollectInstantiables working directory
-                        "\($0.name).safedi" // SafeDICollectInstantiables output file.
-                    ])
+        let dependenciesSourceFiles = allDependencies
+            .flatMap {
+                $0
+                    .sourceFiles(withSuffix: ".swift")
+                    .map(\.path)
             }
-            .filter { FileManager.default.fileExists(atPath: $0.string) }
 
-        let arguments = inputSwiftFiles
-            .map(\.string)
-            .compactMap { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) }
-        + ["--instantiables-paths"]
-        + targetDependencySafeDIOutputFiles
-            .map(\.string)
-            .compactMap { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) }
-        + [
-            "--dependency-tree-output",
-            outputSwiftFile
-                .string
-                .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
-        ].compactMap { $0 }
+        let arguments = (targetSwiftFiles + dependenciesSourceFiles).map(\.string)
+        + ["--other-module-names"] + allDependencies.map(\.moduleName)
+        + ["--dependency-tree-output", outputSwiftFile.string]
 
         return [
             .buildCommand(
@@ -49,7 +38,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                 executable: try context.tool(named: "GenerateDependencyTree").path,
                 arguments: arguments,
                 environment: [:],
-                inputFiles: inputSwiftFiles + targetDependencySafeDIOutputFiles,
+                inputFiles: targetSwiftFiles + dependenciesSourceFiles,
                 outputFiles: [outputSwiftFile])
         ]
     }
@@ -74,6 +63,11 @@ extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
         target: XcodeProjectPlugin.XcodeTarget)
     throws -> [PackagePlugin.Command]
     {
+        // As of Xcode 15.0.1, Swift Package Plugins in Xcode are unable
+        // to inspect target dependencies. As a result, this Xcode plugin
+        // only works if it is running on a single-module project, or if
+        // all `@Instantiable`-decorated types are in the target module.
+        // https://github.com/apple/swift-package-manager/issues/6003
         let inputSwiftFiles = target
             .inputFiles
             .filter { $0.path.extension == "swift" }
@@ -84,34 +78,12 @@ extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
         }
 
         let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
-        let targetDependencySafeDIOutputFiles = target
-            .sourceModuleRecursiveDependencies
-            .map {
-                context
-                    .pluginWorkDirectory
-                    .removingLastComponent() // Remove `SafeDIGenerateDependencyTree` from path.
-                    .removingLastComponent() // Remove current module name from path.
-                    .appending([
-                        $0.displayName, // Dependency module name.
-                        "SafeDICollectInstantiables", // SafeDICollectInstantiables working directory
-                        "\($0.displayName).safedi" // SafeDICollectInstantiables output file.
-                    ])
-            }
-            .filter { FileManager.default.fileExists(atPath: $0.string) }
-
         let arguments = inputSwiftFiles
             .map(\.string)
-            .compactMap { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) }
-        + ["--instantiables-paths"]
-        + targetDependencySafeDIOutputFiles
-            .map(\.string)
-            .compactMap { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) }
         + [
             "--dependency-tree-output",
-            outputSwiftFile
-                .string
-                .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
-        ].compactMap { $0 }
+            outputSwiftFile.string
+        ]
 
         return [
             .buildCommand(
@@ -119,28 +91,9 @@ extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
                 executable: try context.tool(named: "GenerateDependencyTree").path,
                 arguments: arguments,
                 environment: [:],
-                inputFiles: inputSwiftFiles + targetDependencySafeDIOutputFiles,
+                inputFiles: inputSwiftFiles,
                 outputFiles: [outputSwiftFile])
         ]
     }
-}
-
-extension XcodeProjectPlugin.XcodeTarget {
-
-    var sourceModuleRecursiveDependencies: [XcodeProjectPlugin.XcodeTarget] {
-        dependencies
-            .compactMap { dependency in
-                switch dependency {
-                case let .target(xcodeTarget):
-                    return xcodeTarget
-                case .product:
-                    return nil
-                @unknown default:
-                    return nil
-                }
-            }
-            .flatMap(\.sourceModuleRecursiveDependencies)
-    }
-
 }
 #endif

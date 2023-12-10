@@ -30,20 +30,25 @@ struct SafeDIPlugin: AsyncParsableCommand {
     @Argument(help: "The swift files to parse")
     var swiftFilePaths: [String]
 
-    @Option(help: "The desired output location of the <ModuleName>.safeDI file")
+    @Option(parsing: .upToNextOption, help: "The names of the source modules that must be imported for the generated code to compile.")
+    var otherModuleNames: [String] = []
+
+    @Option(help: "The desired output location of a file containing a representation of Instantiable types found in the input Swift files")
     var instantiablesOutput: String?
 
-    @Option(parsing: .upToNextOption, help: "The <ModuleName>.safeDI files from dependent targets")
+    @Option(parsing: .upToNextOption, help: "File paths to representations of Instantiable types found in other modules")
     var instantiablesPaths: [String] = []
 
-    @Option(help: "The desired output location of the swift dependency injection tree")
+    @Option(help: "The desired output location of the Swift dependency injection tree")
     var dependencyTreeOutput: String?
 
     func run() async throws {
         let output = try await Self.run(
             swiftFileContent: try await loadSwiftFiles(),
-            dependentModuleNames: instantiablesPaths.map { $0.asFileURL.deletingPathExtension().lastPathComponent },
-            dependentInstantiables: Self.findSafeDIFulfilledTypes(atInstantiablesPaths: instantiablesPaths),
+            dependentModuleNames: otherModuleNames,
+            dependentInstantiables: Self.findSafeDIFulfilledTypes(
+                atInstantiablesURLs: await Self.findValidInstantiablesURLs(possiblePaths: instantiablesPaths)
+            ),
             buildDependencyTreeOutput: dependencyTreeOutput != nil
         )
 
@@ -133,13 +138,38 @@ struct SafeDIPlugin: AsyncParsableCommand {
         try JSONEncoder().encode(instantiables).write(toPath: path)
     }
 
-    private static func findSafeDIFulfilledTypes(atInstantiablesPaths instantiablesPaths: [String]) async throws -> [[Instantiable]] {
+    private static func findValidInstantiablesURLs(possiblePaths: [String]) async -> [URL] {
+        await withTaskGroup(
+            of: Optional<URL>.self,
+            returning: [URL].self
+        ) { taskGroup in
+            let instantiablesURLs = possiblePaths.map(\.asFileURL)
+            for instantiablesURL in instantiablesURLs {
+                taskGroup.addTask {
+                    if let resourceIsReachable = try? instantiablesURL.checkResourceIsReachable(), resourceIsReachable {
+                        instantiablesURL
+                    } else {
+                        nil
+                    }
+                }
+            }
+            var validInstantiablesURLs = [URL]()
+            for await validInstantiablesURL in taskGroup {
+                if let validInstantiablesURL {
+                    validInstantiablesURLs.append(validInstantiablesURL)
+                }
+            }
+
+            return validInstantiablesURLs
+        }
+    }
+
+    private static func findSafeDIFulfilledTypes(atInstantiablesURLs instantiablesURLs: [URL]) async throws -> [[Instantiable]] {
         try await withThrowingTaskGroup(
             of: [Instantiable].self,
             returning: [[Instantiable]].self
         ) { taskGroup in
             let decoder = ZippyJSONDecoder()
-            let instantiablesURLs = instantiablesPaths.map(\.asFileURL)
             for instantiablesURL in instantiablesURLs {
                 taskGroup.addTask {
                     try decoder.decode([Instantiable].self, from: Data(contentsOf: instantiablesURL))

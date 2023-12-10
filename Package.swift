@@ -19,14 +19,9 @@ let package = Package(
             name: "SafeDI",
             targets: ["SafeDI"]
         ),
-        /// A SafeDI plugin that must be run on non-root source modules in a project.
-        .plugin(
-            name: "SafeDICollectInstantiables",
-            targets: ["SafeDICollectInstantiables"]
-        ),
         /// A SafeDI plugin that must be run on the root source module in a project.
         .plugin(
-            name: "SafeDIGenerateDependencyTree",
+            name: "SafeDIGenerator",
             targets: ["SafeDIGenerateDependencyTree"]
         )
     ],
@@ -72,11 +67,6 @@ let package = Package(
         ),
 
         // Plugins
-        .plugin(
-            name: "SafeDICollectInstantiables",
-            capability: .buildTool(),
-            dependencies: ["SafeDIPlugin"]
-        ),
         .plugin(
             name: "SafeDIGenerateDependencyTree",
             capability: .buildTool(),
