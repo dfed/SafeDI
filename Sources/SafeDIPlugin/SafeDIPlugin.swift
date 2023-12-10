@@ -46,6 +46,7 @@ struct SafeDIPlugin: AsyncParsableCommand {
 
     // MARK: Internal
 
+    @MainActor
     func run() async throws {
         async let dependentModuleInfo = try Self.findSafeDIModuleInfo(
             atModuleInfoURLs: moduleInfoPaths.map(\.asFileURL)
@@ -71,6 +72,7 @@ struct SafeDIPlugin: AsyncParsableCommand {
         }
     }
 
+    @MainActor
     static func run(
         swiftFileContent: [String],
         dependentImportStatements: [ImportStatement],
@@ -123,12 +125,20 @@ struct SafeDIPlugin: AsyncParsableCommand {
         ) { taskGroup in
             for filePath in swiftFilePaths {
                 taskGroup.addTask {
-                    try String(contentsOfFile: filePath)
+                    let swiftFile = try String(contentsOfFile: filePath)
+                    if swiftFile.contains(#"@Instantiable"#) {
+                        return swiftFile
+                    } else {
+                        // We don't care about this file.
+                        return ""
+                    }
                 }
             }
             var swiftFiles = [String]()
             for try await swiftFile in taskGroup {
-                swiftFiles.append(swiftFile)
+                if !swiftFile.isEmpty {
+                    swiftFiles.append(swiftFile)
+                }
             }
             return swiftFiles
         }
@@ -139,11 +149,6 @@ struct SafeDIPlugin: AsyncParsableCommand {
         var instantiables = [Instantiable]()
         var nestedInstantiableDecoratedTypeDescriptions = [TypeDescription]()
         for content in swiftFileContent {
-            guard content.contains(#"@Instantiable"#) else {
-                // We don't care about this file.
-                continue
-            }
-
             let fileVisitor = FileVisitor()
             fileVisitor.walk(Parser.parse(source: content))
             nestedInstantiableDecoratedTypeDescriptions.append(
