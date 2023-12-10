@@ -22,7 +22,7 @@ import SwiftSyntax
 
 extension AttributeListSyntax {
 
-    var instantiableMacro: AttributeSyntax? {
+    public var instantiableMacro: AttributeSyntax? {
         guard let attribute = first(where: { element in
             switch element {
             case let .attribute(attribute):

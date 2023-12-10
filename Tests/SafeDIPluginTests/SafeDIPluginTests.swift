@@ -61,7 +61,7 @@ final class SafeDIPluginTests: XCTestCase {
 
                 public protocol NetworkService {}
 
-                @Instantiable(fulfillingAdditionalType: [NetworkService.self])
+                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                 public final class DefaultNetworkService: NetworkService {
                     public init() {}
                     let urlSession: URLSession = .shared
@@ -100,7 +100,7 @@ final class SafeDIPluginTests: XCTestCase {
 
                 public protocol NetworkService {}
 
-                @Instantiable(fulfillingAdditionalType: [NetworkService.self])
+                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                 public final class DefaultNetworkService: NetworkService {
                     public init() {}
                     let urlSession: URLSession = .shared
@@ -157,7 +157,7 @@ final class SafeDIPluginTests: XCTestCase {
 
                 public protocol NetworkService {}
 
-                @Instantiable(fulfillingAdditionalType: [NetworkService.self])
+                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                 public final class DefaultNetworkService: NetworkService {
                     public init() {}
                     let urlSession: URLSession = .shared
@@ -214,7 +214,7 @@ final class SafeDIPluginTests: XCTestCase {
 
                 public protocol NetworkService {}
 
-                @Instantiable(fulfillingAdditionalType: [NetworkService.self])
+                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                 public final class DefaultNetworkService: NetworkService {
                     public init() {}
                     let urlSession: URLSession = .shared
@@ -1569,7 +1569,7 @@ final class SafeDIPluginTests: XCTestCase {
 
                     public protocol NetworkService {}
 
-                    @Instantiable(fulfillingAdditionalType: [NetworkService.self])
+                    @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                     public final class DefaultNetworkService: NetworkService {
                         public init(urlSession: URLSession) {
                             self.urlSession = urlSession
@@ -1614,7 +1614,7 @@ final class SafeDIPluginTests: XCTestCase {
 
                     public protocol NetworkService {}
 
-                    @Instantiable(fulfillingAdditionalType: [NetworkService.self])
+                    @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                     public final class DefaultNetworkService: NetworkService {
                         public init(urlSession: URLSession) {
                             self.urlSession = urlSession
@@ -1751,7 +1751,7 @@ final class SafeDIPluginTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable(fulfillingAdditionalType: [UIViewController.self])
+                    @Instantiable(fulfillingAdditionalTypes: [UIViewController.self])
                     public final class RootViewController: UIViewController {
                         public init() {}
                     }
@@ -1759,7 +1759,7 @@ final class SafeDIPluginTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable(fulfillingAdditionalType: [UIViewController.self])
+                    @Instantiable(fulfillingAdditionalTypes: [UIViewController.self])
                     public final class SplashViewController: UIViewController {
                         public init() {}
                     }
@@ -1787,7 +1787,7 @@ final class SafeDIPluginTests: XCTestCase {
 
                     public protocol NetworkService {}
 
-                    @Instantiable(fulfillingAdditionalType: [NetworkService.self])
+                    @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                     public final class DefaultNetworkService: NetworkService {
                         public init(loggingService: LoggingService) {
                             self.loggingService = loggingService
@@ -1802,7 +1802,7 @@ final class SafeDIPluginTests: XCTestCase {
 
                     public protocol LoggingService {}
 
-                    @Instantiable(fulfillingAdditionalType: [LoggingService.self])
+                    @Instantiable(fulfillingAdditionalTypes: [LoggingService.self])
                     public final class DefaultLoggingService: LoggingService {
                         public init(networkService: NetworkService) {
                             self.networkService = networkService

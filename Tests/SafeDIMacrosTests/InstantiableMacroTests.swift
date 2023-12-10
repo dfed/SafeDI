@@ -78,6 +78,40 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
+    func test_throwsErrorWhenFulfillingAdditionalTypesIsAPropertyReference() {
+        assertMacro {
+            """
+            let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
+            @Instantiable(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
+            public final class ExampleService {}
+            """
+        } diagnostics: {
+            """
+            let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
+            @Instantiable(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
+            ┬──────────────────────────────────────────────────────────────────
+            ╰─ 🛑 The argument `fulfillingAdditionalTypes` must be an inlined array
+            public final class ExampleService {}
+            """
+        }
+    }
+
+    func test_throwsErrorWhenFulfillingAdditionalTypesIsAClosure() {
+        assertMacro {
+            """
+            @Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
+            public final class ExampleService {}
+            """
+        } diagnostics: {
+            """
+            @Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
+            ┬───────────────────────────────────────────────────────────────
+            ╰─ 🛑 The argument `fulfillingAdditionalTypes` must be an inlined array
+            public final class ExampleService {}
+            """
+        }
+    }
+
     func test_throwsErrorWhenMoreThanOneForwardedProperty() {
         assertMacro {
             """
@@ -480,7 +514,7 @@ final class InstantiableMacroTests: XCTestCase {
     }
 
 
-    func test_fixit_addsFixitMissingRequiredInitializerWhenLazyConstructedDependencyMissingFromInit() {
+    func test_fixit_addsFixitMissingRequiredInitializerWhenLazyInstantiatedDependencyMissingFromInit() {
         assertMacro {
             """
             @Instantiable
@@ -525,7 +559,7 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
-    func test_fixit_addsFixitMissingRequiredInitializerWhenLazyConstructedAndInstantiatorDependencyOfSameTypeMissingFromInit() {
+    func test_fixit_addsFixitMissingRequiredInitializerWhenLazyInstantiatedAndInstantiatorDependencyOfSameTypeMissingFromInit() {
         assertMacro {
             """
             @Instantiable

@@ -180,13 +180,11 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
     private func processAttributes(_ attributes: AttributeListSyntax, on node: some ConcreteDeclSyntaxProtocol) {
         guard let macro = attributes.instantiableMacro else {
-            assertionFailure("Constructing macro not found despite processing top-level declaration")
+            assertionFailure("Instantiable macro not found despite processing top-level declaration")
             return
         }
         guard 
-            let fulfillingAdditionalTypesArgument = macro.arguments,
-            let fulfillingAdditionalTypesExpressionList = LabeledExprListSyntax(fulfillingAdditionalTypesArgument),
-            let fulfillingAdditionalTypesExpression = fulfillingAdditionalTypesExpressionList.first?.expression,
+            let fulfillingAdditionalTypesExpression = macro.fulfillingAdditionalTypes,
             let fulfillingAdditionalTypesArray = ArrayExprSyntax(fulfillingAdditionalTypesExpression)
         else {
             // Nothing to do here.

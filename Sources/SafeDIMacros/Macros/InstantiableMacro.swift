@@ -39,6 +39,12 @@ public struct InstantiableMacro: MemberMacro {
             throw InstantiableError.decoratingIncompatibleType
         }
 
+        if let fulfillingAdditionalTypesArgument = concreteDeclaration.attributes.instantiableMacro?.fulfillingAdditionalTypes {
+            if ArrayExprSyntax(fulfillingAdditionalTypesArgument) == nil {
+                throw InstantiableError.fulfillingAdditionalTypesArgumentInvalid
+            }
+        }
+
         let visitor = InstantiableVisitor()
         visitor.walk(concreteDeclaration)
         for diagnostic in visitor.diagnostics {
@@ -83,6 +89,7 @@ public struct InstantiableMacro: MemberMacro {
     private enum InstantiableError: Error, CustomStringConvertible {
         case decoratingIncompatibleType
         case tooManyForwardedProperties
+        case fulfillingAdditionalTypesArgumentInvalid
 
         var description: String {
             switch self {
@@ -90,6 +97,8 @@ public struct InstantiableMacro: MemberMacro {
                 "@\(InstantiableVisitor.macroName) must decorate a class, struct, or actor"
             case .tooManyForwardedProperties:
                 "An @\(InstantiableVisitor.macroName) type must have at most one @\(Dependency.Source.forwarded.rawValue) property"
+            case .fulfillingAdditionalTypesArgumentInvalid:
+                "The argument `fulfillingAdditionalTypes` must be an inlined array"
             }
         }
     }
