@@ -25,7 +25,7 @@ import SwiftParser
 import ZippyJSON
 
 @main
-struct SafeDIPlugin: AsyncParsableCommand {
+struct SafeDITool: AsyncParsableCommand {
 
     // MARK: Arguments
 

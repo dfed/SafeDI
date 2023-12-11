@@ -70,10 +70,10 @@ let package = Package(
         .plugin(
             name: "SafeDIGenerateDependencyTree",
             capability: .buildTool(),
-            dependencies: ["SafeDIPlugin"]
+            dependencies: ["SafeDITool"]
         ),
         .executableTarget(
-            name: "SafeDIPlugin",
+            name: "SafeDITool",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
@@ -83,10 +83,10 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "SafeDIPluginTests",
+            name: "SafeDIToolTests",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                "SafeDIPlugin",
+                "SafeDITool",
                 "ZippyJSON",
             ]
         ),

@@ -20,14 +20,14 @@
 
 import XCTest
 
-@testable import SafeDIPlugin
+@testable import SafeDITool
 
-final class SafeDIPluginTests: XCTestCase {
+final class SafeDIToolTests: XCTestCase {
 
     // MARK: Code Generation Tests
 
     func test_run_successfullyGeneratesOutputFileWhenNoCodeInput() async throws {
-        let output = try await SafeDIPlugin.run(
+        let output = try await SafeDITool.run(
             swiftFileContent: [],
             dependentImportStatements: [],
             dependentInstantiables: [],
@@ -47,7 +47,7 @@ final class SafeDIPluginTests: XCTestCase {
     }
 
     func test_run_doesNotWriteExtensionIfRootAlreadyHasEmptyInitializer() async throws {
-        let output = try await SafeDIPlugin.run(
+        let output = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 import Foundation
@@ -83,7 +83,7 @@ final class SafeDIPluginTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootIsClass() async throws {
-        let output = try await SafeDIPlugin.run(
+        let output = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 import Foundation
@@ -140,7 +140,7 @@ final class SafeDIPluginTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootIsActor() async throws {
-        let output = try await SafeDIPlugin.run(
+        let output = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 import class Foundation.URLSession
@@ -197,7 +197,7 @@ final class SafeDIPluginTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootIsStruct() async throws {
-        let output = try await SafeDIPlugin.run(
+        let output = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 import Foundation
@@ -254,7 +254,7 @@ final class SafeDIPluginTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootHasMultipleLayers() async throws {
-        let output = try await SafeDIPlugin.run(
+        let output = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 public struct User {}
@@ -369,7 +369,7 @@ final class SafeDIPluginTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizedForwardedPropertyInSubBuilders() async throws {
-        let output = try await SafeDIPlugin.run(
+        let output = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 public struct User {}
@@ -500,7 +500,7 @@ final class SafeDIPluginTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizePropertiesNotDirectlyProvidedByParent() async throws {
-        let output = try await SafeDIPlugin.run(
+        let output = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 public struct User {}
@@ -631,7 +631,7 @@ final class SafeDIPluginTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleLayersOfInstantiators() async throws {
-        let output = try await SafeDIPlugin.run(
+        let output = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 public struct User {}
@@ -764,7 +764,7 @@ final class SafeDIPluginTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatReceiveTheSameProperty() async throws {
-        let output = try await SafeDIPlugin.run(
+        let output = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 @Instantiable()
@@ -896,7 +896,7 @@ final class SafeDIPluginTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyInMiddleLevel() async throws {
-        let output = try await SafeDIPlugin.run(
+        let output = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 @Instantiable()
@@ -1032,7 +1032,7 @@ final class SafeDIPluginTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyMultipleLayersDeep() async throws {
-        let output = try await SafeDIPlugin.run(
+        let output = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 @Instantiable()
@@ -1172,7 +1172,7 @@ final class SafeDIPluginTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateAndLazyInstantiateTheSameProperty() async throws {
-        let output = try await SafeDIPlugin.run(
+        let output = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 @Instantiable()
@@ -1315,7 +1315,7 @@ final class SafeDIPluginTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateAndLazyInstantiateTheSamePropertyAcrossMultipleModules() async throws {
-        let greatGrandchildModuleOutput = try await SafeDIPlugin.run(
+        let greatGrandchildModuleOutput = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 @Instantiable()
@@ -1329,7 +1329,7 @@ final class SafeDIPluginTests: XCTestCase {
             buildDependencyTreeOutput: false
         )
 
-        let grandchildModuleOutput = try await SafeDIPlugin.run(
+        let grandchildModuleOutput = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 import GreatGrandchildModule
@@ -1389,7 +1389,7 @@ final class SafeDIPluginTests: XCTestCase {
             buildDependencyTreeOutput: false
         )
 
-        let childModuleOutput = try await SafeDIPlugin.run(
+        let childModuleOutput = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 import class GrandchildModule.GrandchildAA
@@ -1432,7 +1432,7 @@ final class SafeDIPluginTests: XCTestCase {
             buildDependencyTreeOutput: false
         )
 
-        let topLevelModuleOutput = try await SafeDIPlugin.run(
+        let topLevelModuleOutput = try await SafeDITool.run(
             swiftFileContent: [
                 """
                 import ChildModule
@@ -1520,7 +1520,7 @@ final class SafeDIPluginTests: XCTestCase {
             No `@Instantiable`-decorated type found to fulfill `@Instantiated` or  `@LazyInstantiated`-decorated property with type `DoesNotExist`
             """
         ) {
-            try await SafeDIPlugin.run(
+            try await SafeDITool.run(
                 swiftFileContent: [
                     """
                     import UIKit
@@ -1549,7 +1549,7 @@ final class SafeDIPluginTests: XCTestCase {
             No `@Instantiable`-decorated type found to fulfill `@Instantiated` or  `@LazyInstantiated`-decorated property with type `URLSession`
             """
         ) {
-            try await SafeDIPlugin.run(
+            try await SafeDITool.run(
                 swiftFileContent: [
                     """
                     import Foundation
@@ -1594,7 +1594,7 @@ final class SafeDIPluginTests: XCTestCase {
             `urlSession: URLSession` is not instantiated in chain: RootViewController -> DefaultNetworkService
             """
         ) {
-            try await SafeDIPlugin.run(
+            try await SafeDITool.run(
                 swiftFileContent: [
                     """
                     import Foundation
@@ -1638,7 +1638,7 @@ final class SafeDIPluginTests: XCTestCase {
             @Instantiable types must be top-level declarations. Found the following nested @Instantiable types: SplashViewController
             """
         ) {
-            try await SafeDIPlugin.run(
+            try await SafeDITool.run(
                 swiftFileContent: [
                     """
                     import UIKit
@@ -1667,7 +1667,7 @@ final class SafeDIPluginTests: XCTestCase {
             @Instantiable types must be top-level declarations. Found the following nested @Instantiable types: AuthenticatedViewController, SplashViewController
             """
         ) {
-            try await SafeDIPlugin.run(
+            try await SafeDITool.run(
                 swiftFileContent: [
                     """
                     import UIKit
@@ -1701,7 +1701,7 @@ final class SafeDIPluginTests: XCTestCase {
             @Instantiable-decorated types must have globally unique type names and fulfill globally unqiue types. Found multiple @Instantiable-decorated types fulfilling `RootViewController`
             """
         ) {
-            try await SafeDIPlugin.run(
+            try await SafeDITool.run(
                 swiftFileContent: [
                     """
                     import UIKit
@@ -1733,7 +1733,7 @@ final class SafeDIPluginTests: XCTestCase {
             @Instantiable-decorated types must have globally unique type names and fulfill globally unqiue types. Found multiple @Instantiable-decorated types fulfilling `UIViewController`
             """
         ) {
-            try await SafeDIPlugin.run(
+            try await SafeDITool.run(
                 swiftFileContent: [
                     """
                     import UIKit
@@ -1767,7 +1767,7 @@ final class SafeDIPluginTests: XCTestCase {
             DefaultNetworkService -> DefaultLoggingService -> DefaultNetworkService
             """
         ) {
-            try await SafeDIPlugin.run(
+            try await SafeDITool.run(
                 swiftFileContent: [
                     """
                     import Foundation
@@ -1827,7 +1827,7 @@ final class SafeDIPluginTests: XCTestCase {
             UserManager -> AuthenticatedViewController -> UserManager
             """
         ) {
-            try await SafeDIPlugin.run(
+            try await SafeDITool.run(
                 swiftFileContent: [
                     """
                     @Instantiable
