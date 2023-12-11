@@ -165,7 +165,7 @@ public final class DependencyTreeGenerator {
             let reachableChildTypeDescriptions = instantiable
                 .dependencies
                 .filter(\.isInstantiated)
-                .map(\.property.typeDescription.asInstantiatedType)
+                .map(\.asInstantiatedType)
             for reachableChildTypeDescription in reachableChildTypeDescriptions {
                 recordReachableTypeDescription(reachableChildTypeDescription)
             }
@@ -187,7 +187,7 @@ public final class DependencyTreeGenerator {
                 .compactMap { typeDescriptionToFulfillingInstantiableMap[$0] }
                 .flatMap(\.dependencies)
                 .filter(\.isInstantiated)
-                .map(\.property.typeDescription.asInstantiatedType)
+                .map(\.asInstantiatedType)
                 .compactMap { typeDescriptionToFulfillingInstantiableMap[$0]?.concreteInstantiableType }
         ))
 
@@ -213,20 +213,20 @@ public final class DependencyTreeGenerator {
         // Populate the propertiesToInstantiate on each scope.
         for scope in typeDescriptionToScopeMap.values {
             var additionalPropertiesToInstantiate = [Scope.PropertyToInstantiate]()
-            for instantiatedProperty in scope.instantiable.instantiatedProperties {
-                let instantiatedType = instantiatedProperty.typeDescription.asInstantiatedType
+            for instantiatedDependency in scope.instantiable.instantiatedDependencies {
+                let instantiatedType = instantiatedDependency.asInstantiatedType
                 guard
                     let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType],
                     let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
                 else {
-                    assertionFailure("Invalid state. Could not look up info for \(instantiatedProperty.typeDescription)")
+                    assertionFailure("Invalid state. Could not look up info for \(instantiatedType)")
                     continue
                 }
                 additionalPropertiesToInstantiate.append(Scope.PropertyToInstantiate(
-                    property: instantiatedProperty,
+                    property: instantiatedDependency.property,
                     instantiable: instantiable,
                     scope: instantiatedScope,
-                    type: instantiatedProperty.propertyType
+                    type: instantiatedDependency.property.propertyType
                 ))
             }
             for instantiatedProperty in scope.instantiable.lazyInstantiatedProperties {

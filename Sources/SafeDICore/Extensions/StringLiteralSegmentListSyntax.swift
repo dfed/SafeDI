@@ -18,7 +18,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// Marks a SafeDI dependency that is instantiated when its enclosing type is instantiated.
-///
-/// - Parameter concreteTypeName: The name of the concrete type that will be instantiated and assigned to this property. This parameter is only required when the decorated property's type does not match an `@Instantiable` type or its `additionalTypes`. This parameter is particularly useful when working with a type-erased property.
-@attached(peer) public macro Instantiated(fulfilledByType concreteTypeName: StaticString = "") = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
+import SwiftSyntax
+
+extension StringLiteralSegmentListSyntax {
+    public var firstStringSegment: String? {
+        guard let first else { return nil }
+        switch first {
+        case let .stringSegment(stringSegmentSyntax):
+            return stringSegmentSyntax.content.text
+        case .expressionSegment:
+            return nil
+        }
+    }
+}

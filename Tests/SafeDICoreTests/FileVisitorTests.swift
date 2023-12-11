@@ -64,14 +64,16 @@ final class FileVisitorTests: XCTestCase {
                                 label: "user",
                                 typeDescription: .simple(name: "User")
                             ),
-                            source: .forwarded
+                            source: .forwarded,
+                            fulfillingTypeDescription: nil
                         ),
                         Dependency(
                             property: Property(
                                 label: "networkService",
                                 typeDescription: .simple(name: "NetworkService")
                             ),
-                            source: .received
+                            source: .received,
+                            fulfillingTypeDescription: nil
                         )
                     ],
                     isClass: true)
@@ -124,14 +126,16 @@ final class FileVisitorTests: XCTestCase {
                                 label: "user",
                                 typeDescription: .simple(name: "User")
                             ),
-                            source: .forwarded
+                            source: .forwarded,
+                            fulfillingTypeDescription: nil
                         ),
                         Dependency(
                             property: Property(
                                 label: "networkService",
                                 typeDescription: .simple(name: "NetworkService")
                             ),
-                            source: .received
+                            source: .received,
+                            fulfillingTypeDescription: nil
                         )
                     ],
                     isClass: true

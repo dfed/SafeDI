@@ -52,10 +52,9 @@ public struct Instantiable: Codable, Hashable {
 
     // MARK: Internal
 
-    var instantiatedProperties: [Property] {
+    var instantiatedDependencies: [Dependency] {
         dependencies
             .filter { $0.source == .instantiated }
-            .map(\.property)
     }
     var lazyInstantiatedProperties: [Property] {
         dependencies

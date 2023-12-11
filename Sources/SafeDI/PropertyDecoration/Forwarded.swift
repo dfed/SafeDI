@@ -18,5 +18,5 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// Marks a SafeDI dependency that is injected into the parent object's initializer and forwarded to objects further down in the dependency tree.
+/// Marks a SafeDI dependency that is injected into the enclosing type's initializer and forwarded to objects further down in the dependency tree.
 @attached(peer) public macro Forwarded() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")

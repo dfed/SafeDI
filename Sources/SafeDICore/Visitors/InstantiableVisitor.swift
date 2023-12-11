@@ -74,6 +74,16 @@ public final class InstantiableVisitor: SyntaxVisitor {
                 let label = IdentifierPatternSyntax(binding.pattern)?.identifier.text,
                 let typeDescription = binding.typeAnnotation?.type.typeDescription
             {
+                let fulfillingTypeDescription: TypeDescription? = if
+                    let fulfilledByTypeExpression = node.attributes.instantiatedMacro?.fulfilledByType,
+                    let stringLiteral = StringLiteralExprSyntax(fulfilledByTypeExpression),
+                    let fulfilledByType = stringLiteral.segments.firstStringSegment
+                {
+                    TypeSyntax(stringLiteral: fulfilledByType).typeDescription
+                } else {
+                    nil
+                }
+
                 dependencies.append(
                     Dependency(
                         property: { 
@@ -96,7 +106,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
                                 )
                             }
                         }(),
-                        source: dependencySource
+                        source: dependencySource,
+                        fulfillingTypeDescription: fulfillingTypeDescription
                     )
                 )
             }
@@ -183,7 +194,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
             assertionFailure("Instantiable macro not found despite processing top-level declaration")
             return
         }
-        guard 
+        guard
             let fulfillingAdditionalTypesExpression = macro.fulfillingAdditionalTypes,
             let fulfillingAdditionalTypesArray = ArrayExprSyntax(fulfillingAdditionalTypesExpression)
         else {

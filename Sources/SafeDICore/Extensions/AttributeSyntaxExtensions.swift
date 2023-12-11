@@ -34,4 +34,17 @@ extension AttributeSyntax {
 
         return firstLabeledExpression.expression
     }
+
+    public var fulfilledByType: ExprSyntax? {
+        guard
+            let arguments,
+            let labeledExpressionList = LabeledExprListSyntax(arguments),
+            let firstLabeledExpression = labeledExpressionList.first,
+            firstLabeledExpression.label?.text == "fulfilledByType"
+        else {
+            return nil
+        }
+
+        return firstLabeledExpression.expression
+    }
 }

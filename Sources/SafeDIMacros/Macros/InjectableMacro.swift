@@ -38,6 +38,23 @@ public struct InjectableMacro: PeerMacro {
             throw InjectableError.decoratingStatic
         }
 
+        if let fulfilledByTypeExpression = variableDecl.attributes.instantiatedMacro?.fulfilledByType {
+            if
+                let stringLiteralExpression = StringLiteralExprSyntax(fulfilledByTypeExpression),
+                    stringLiteralExpression.segments.count == 1,
+                let stringLiteral = stringLiteralExpression.segments.firstStringSegment
+            {
+                switch TypeSyntax(stringLiteral: stringLiteral).typeDescription {
+                case .simple:
+                    break
+                case .nested, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown:
+                    throw InjectableError.fulfilledByTypeArgumentInvalidTypeDescription
+                }
+            } else {
+                throw InjectableError.fulfilledByTypeArgumentInvalidType
+            }
+        }
+
         if variableDecl.bindingSpecifier.text != TokenSyntax.keyword(.let).text {
             context.diagnose(Diagnostic(
                 node: variableDecl.bindingSpecifier,
@@ -65,13 +82,19 @@ public struct InjectableMacro: PeerMacro {
     private enum InjectableError: Error, CustomStringConvertible {
         case notDecoratingBinding
         case decoratingStatic
+        case fulfilledByTypeArgumentInvalidType
+        case fulfilledByTypeArgumentInvalidTypeDescription
 
         var description: String {
             switch self {
             case .notDecoratingBinding:
-                return "This macro must decorate a instance variable"
+                "This macro must decorate a instance variable"
             case .decoratingStatic:
-                return "This macro can not decorate `static` variables"
+                "This macro can not decorate `static` variables"
+            case .fulfilledByTypeArgumentInvalidType:
+                "The argument `fulfilledByType` must be a string literal"
+            case .fulfilledByTypeArgumentInvalidTypeDescription:
+                "The argument `fulfilledByType` must refer to a simple, unnested type"
             }
         }
     }

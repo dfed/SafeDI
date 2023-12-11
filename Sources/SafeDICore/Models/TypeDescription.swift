@@ -397,7 +397,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 extension TypeSyntax {
 
     /// - Returns: the type description for the receiver.
-    var typeDescription: TypeDescription {
+    public var typeDescription: TypeDescription {
         if let typeIdentifier = IdentifierTypeSyntax(self) {
             let genericTypeVisitor = GenericArgumentVisitor(viewMode: .sourceAccurate)
             if let genericArgumentClause = typeIdentifier.genericArgumentClause {

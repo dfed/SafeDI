@@ -28,6 +28,11 @@ public struct Dependency: Codable, Hashable {
 
     public let property: Property
     public let source: Source
+    public let fulfillingTypeDescription: TypeDescription?
+
+    public var asInstantiatedType: TypeDescription {
+        (fulfillingTypeDescription ?? property.typeDescription).asInstantiatedType
+    }
 
     public enum Source: String, CustomStringConvertible, Codable, Hashable {
         case instantiated = "Instantiated"

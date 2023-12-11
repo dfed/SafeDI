@@ -95,7 +95,8 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             typeDescription: .simple(name: "Variant")
                         ),
-                        source: .forwarded
+                        source: .forwarded,
+                        fulfillingTypeDescription: nil
                     )
                 ]
             )
@@ -123,7 +124,8 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             typeDescription: .simple(name: "Variant")
                         ),
-                        source: .forwarded
+                        source: .forwarded,
+                        fulfillingTypeDescription: nil
                     )
                 ]
             )
@@ -160,7 +162,8 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             typeDescription: .simple(name: "Variant")
                         ),
-                        source: .forwarded
+                        source: .forwarded,
+                        fulfillingTypeDescription: nil
                     )
                 ]
             )
@@ -187,7 +190,8 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             typeDescription: .simple(name: "Variant")
                         ),
-                        source: .forwarded
+                        source: .forwarded,
+                        fulfillingTypeDescription: nil
                     )
                 ]
             )
@@ -214,7 +218,8 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             typeDescription: .simple(name: "Variant")
                         ),
-                        source: .forwarded
+                        source: .forwarded,
+                        fulfillingTypeDescription: nil
                     )
                 ]
             )

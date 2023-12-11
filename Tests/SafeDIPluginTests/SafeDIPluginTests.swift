@@ -291,7 +291,7 @@ final class SafeDIPluginTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, UIViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -305,8 +305,8 @@ final class SafeDIPluginTests: XCTestCase {
                     @Instantiated
                     let authService: AuthService
 
-                    @Instantiated
-                    let loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>
+                    @Instantiated(fulfilledByType: "LoggedInViewController")
+                    let loggedInViewControllerBuilder: ForwardingInstantiator<User, UIViewController>
 
                     private let derivedValue: Bool
 
@@ -358,7 +358,7 @@ final class SafeDIPluginTests: XCTestCase {
                 convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> { user in
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, UIViewController> { user in
                         LoggedInViewController(user: user, networkService: networkService)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
@@ -1513,6 +1513,35 @@ final class SafeDIPluginTests: XCTestCase {
     }
 
     // MARK: Error Tests
+
+    func test_run_onCodeWithPropertyWithUnknownFulfilledType_throwsError() async {
+        await assertThrowsError(
+            """
+            No `@Instantiable`-decorated type found to fulfill `@Instantiated` or  `@LazyInstantiated`-decorated property with type `DoesNotExist`
+            """
+        ) {
+            try await SafeDIPlugin.run(
+                swiftFileContent: [
+                    """
+                    import UIKit
+
+                    @Instantiable
+                    public final class RootViewController: UIViewController {
+                        public init(networkService: NetworkService) {
+                            self.networkService = networkService
+                        }
+
+                        @Instantiated(fulfilledByType: "DoesNotExist")
+                        let networkService: NetworkService
+                    }
+                    """,
+                ],
+                dependentImportStatements: [],
+                dependentInstantiables: [],
+                buildDependencyTreeOutput: true
+            )
+        }
+    }
 
     func test_run_onCodeWithUnfulfillableInstantiatedProperty_throwsError() async {
         await assertThrowsError(

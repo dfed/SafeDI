@@ -28,7 +28,6 @@ import SafeDICore
 #if canImport(SafeDIMacros)
 @testable import SafeDIMacros
 
-
 final class InjectableMacroTests: XCTestCase {
 
     let testMacros: [String: Macro.Type] = [
@@ -51,23 +50,23 @@ final class InjectableMacroTests: XCTestCase {
         assertMacro {
             """
             public struct ExampleService {
-                init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
                 }
 
                 @Instantiated
-                var invariantA: InvariantA
+                var instantiatedA: InstantiatedA
             }
             """
         } diagnostics: {
             """
             public struct ExampleService {
-                init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
                 }
 
                 @Instantiated
-                var invariantA: InvariantA
+                var instantiatedA: InstantiatedA
                 ┬──
                 ╰─ 🛑 Dependency can not be mutable
                    ✏️ Replace `var` with `let`
@@ -76,21 +75,21 @@ final class InjectableMacroTests: XCTestCase {
         } fixes: {
             """
             public struct ExampleService {
-                init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
                 }
 
-                @Instantiated let  let invariantA: InvariantA
+                @Instantiated let  let instantiatedA: InstantiatedA
             }
             """ // fixes are wrong! It's duplicating the correction. not sure why.
         } expansion: {
             """
             public struct ExampleService {
-                init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
                 }
 
-                let  let invariantA: InvariantA
+                let  let instantiatedA: InstantiatedA
             }
             """ // expansion is wrong! It's duplicating the correction. not sure why.
         }
@@ -103,25 +102,25 @@ final class InjectableMacroTests: XCTestCase {
         assertMacro {
             """
             public struct ExampleService {
-                init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
                 }
 
                 @Received
-                static let invariantA: InvariantA
+                static let instantiatedA: InstantiatedA
             }
             """
         } diagnostics: {
             """
             public struct ExampleService {
-                init(invariantA: InvariantA) {
-                    self.invariantA = invariantA
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
                 }
 
                 @Received
                 ┬────────
                 ╰─ 🛑 This macro can not decorate `static` variables
-                static let invariantA: InvariantA
+                static let instantiatedA: InstantiatedA
             }
             """
         }
@@ -139,6 +138,120 @@ final class InjectableMacroTests: XCTestCase {
             ┬────────────
             ╰─ 🛑 This macro must decorate a instance variable
             protocol ExampleService {}
+            """
+        }
+    }
+
+    func test_throwsErrorWhenFulfilledByTypeIsNotALiteral() {
+        assertMacro {
+            """
+            public struct ExampleService {
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
+                }
+
+                static let fulfilledByType = "ConcreteType"
+                @Instantiated(fulfilledByType: fulfilledByType)
+                let instantiatedA: InstantiatedA
+            }
+            """
+        } diagnostics: {
+            """
+            public struct ExampleService {
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
+                }
+
+                static let fulfilledByType = "ConcreteType"
+                @Instantiated(fulfilledByType: fulfilledByType)
+                ┬──────────────────────────────────────────────
+                ╰─ 🛑 The argument `fulfilledByType` must be a string literal
+                let instantiatedA: InstantiatedA
+            }
+            """
+        }
+    }
+
+    func test_throwsErrorWhenFulfilledByTypeIsANestedType() {
+        assertMacro {
+            """
+            public struct ExampleService {
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
+                }
+
+                @Instantiated(fulfilledByType: "Module.ConcreteType")
+                let instantiatedA: InstantiatedA
+            }
+            """
+        } diagnostics: {
+            """
+            public struct ExampleService {
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
+                }
+
+                @Instantiated(fulfilledByType: "Module.ConcreteType")
+                ┬────────────────────────────────────────────────────
+                ╰─ 🛑 The argument `fulfilledByType` must refer to a simple, unnested type
+                let instantiatedA: InstantiatedA
+            }
+            """
+        }
+    }
+
+    func test_throwsErrorWhenFulfilledByTypeIsAnOptionalType() {
+        assertMacro {
+            """
+            public struct ExampleService {
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
+                }
+
+                @Instantiated(fulfilledByType: "ConcreteType?")
+                let instantiatedA: InstantiatedA
+            }
+            """
+        } diagnostics: {
+            """
+            public struct ExampleService {
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
+                }
+
+                @Instantiated(fulfilledByType: "ConcreteType?")
+                ┬──────────────────────────────────────────────
+                ╰─ 🛑 The argument `fulfilledByType` must refer to a simple, unnested type
+                let instantiatedA: InstantiatedA
+            }
+            """
+        }
+    }
+
+    func test_throwsErrorWhenFulfilledByTypeIsAnImplicitlyUnwrappedType() {
+        assertMacro {
+            """
+            public struct ExampleService {
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
+                }
+
+                @Instantiated(fulfilledByType: "ConcreteType!")
+                let instantiatedA: InstantiatedA
+            }
+            """
+        } diagnostics: {
+            """
+            public struct ExampleService {
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
+                }
+
+                @Instantiated(fulfilledByType: "ConcreteType!")
+                ┬──────────────────────────────────────────────
+                ╰─ 🛑 The argument `fulfilledByType` must refer to a simple, unnested type
+                let instantiatedA: InstantiatedA
+            }
             """
         }
     }
