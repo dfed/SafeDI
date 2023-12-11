@@ -44,12 +44,30 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 
 extension Target {
 
-    var sourceModuleRecursiveDependencies: [SourceModuleTarget] {
+    var sourceModuleRecursiveDependencies: [SwiftSourceModuleTarget] {
         recursiveTargetDependencies.compactMap {
-            $0 as? SourceModuleTarget
+            // Since we only understand Swift files, we only care about SwiftSourceModuleTargets.
+            guard let swiftModule = $0 as? SwiftSourceModuleTarget else {
+                return nil
+            }
+
+            // We only care about first-party code. Ignore third-party dependencies.
+            guard
+                swiftModule
+                    .directory
+                    // Removing the module name.
+                    .removingLastComponent()
+                    // Removing 'Sources'.
+                    .removingLastComponent()
+                    // Removing the package name.
+                    .removingLastComponent()
+                    .lastComponent != "checkouts"
+            else {
+                return nil
+            }
+            return swiftModule
         }
     }
-
 }
 
 #if canImport(XcodeProjectPlugin)
