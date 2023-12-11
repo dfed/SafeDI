@@ -283,7 +283,7 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public 
-            public ExampleService {
+            struct ExampleService {
                 public init(receivedA: ReceivedA) {
                     self.receivedA = receivedA
                 }
@@ -291,18 +291,14 @@ final class InstantiableMacroTests: XCTestCase {
                 @Instantiated
                 let receivedA: ReceivedA
             }
-            """ // this fixes are wrong (we aren't deleting 'struct'), but also the whitespace is wrong in Xcode.
-            // TODO: fix Xcode spacing of this replacement.
+            """
         } expansion: {
             """
-            @Instantiable
             public 
-            public ExampleService {
+            struct ExampleService {
                 public init(receivedA: ReceivedA) {
                     self.receivedA = receivedA
                 }
-
-                @Instantiated
                 let receivedA: ReceivedA
             }
             """
