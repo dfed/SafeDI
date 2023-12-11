@@ -126,7 +126,7 @@ struct SafeDITool: AsyncParsableCommand {
             for filePath in swiftFilePaths {
                 taskGroup.addTask {
                     let swiftFile = try String(contentsOfFile: filePath)
-                    if swiftFile.contains(#"@Instantiable"#) {
+                    if swiftFile.contains("@Instantiable") {
                         return swiftFile
                     } else {
                         // We don't care about this file.
