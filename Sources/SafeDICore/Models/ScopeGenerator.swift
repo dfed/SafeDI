@@ -68,10 +68,10 @@ actor ScopeGenerator {
         } else {
             let generateCodeTask = Task {
                 let argumentList = try instantiable
-                    .initializer
+                    .initializer?
                     .createInitializerArgumentList(
                         given: instantiable.dependencies
-                    )
+                    ) ?? "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
 
                 if let property {
                     let concreteTypeName = instantiable.concreteInstantiableType.asSource

@@ -152,12 +152,11 @@ public final class InstantiableVisitor: SyntaxVisitor {
     var instantiable: Instantiable? {
         guard
             let instantiableType,
-            let topLevelDeclarationType,
-            let initializer = initializers.first(where: { $0.isValid(forFulfilling: dependencies) })
+            let topLevelDeclarationType
         else { return nil }
         return Instantiable(
             instantiableType: instantiableType,
-            initializer: initializer,
+            initializer: initializers.first(where: { $0.isValid(forFulfilling: dependencies) }),
             additionalInstantiableTypes: additionalInstantiableTypes,
             dependencies: dependencies,
             isClass: topLevelDeclarationType.isClass)

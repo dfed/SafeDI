@@ -24,7 +24,7 @@ public struct Instantiable: Codable, Hashable {
 
     public init(
         instantiableType: TypeDescription,
-        initializer: Initializer,
+        initializer: Initializer?,
         additionalInstantiableTypes: [TypeDescription]?,
         dependencies: [Dependency],
         isClass: Bool)
@@ -44,7 +44,8 @@ public struct Instantiable: Codable, Hashable {
         instantiableTypes[0]
     }
     /// A memberwise initializer for the concrete instantiable type.
-    public let initializer: Initializer
+    /// If `nil`, the Instanitable type is incorrectly configured.
+    public let initializer: Initializer?
     /// The ordered dependencies of this Instantiable.
     public let dependencies: [Dependency]
     /// Whether the concrete instantiable type is a class.
