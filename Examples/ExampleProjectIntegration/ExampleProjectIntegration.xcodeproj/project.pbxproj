@@ -7,14 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		3210424E2B2533660088785D /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 3210424D2B2533660088785D /* SafeDI */; };
-		321042502B2533660088785D /* SafeDIPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = 3210424F2B2533660088785D /* SafeDIPlugin */; };
-		321042532B2533ED0088785D /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 321042522B2533ED0088785D /* SafeDI */; };
 		32756FE62B24C042006BDD24 /* ExampleProjectIntegrationApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FE52B24C042006BDD24 /* ExampleProjectIntegrationApp.swift */; };
 		32756FE82B24C042006BDD24 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FE72B24C042006BDD24 /* ContentView.swift */; };
 		32756FEA2B24C044006BDD24 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 32756FE92B24C044006BDD24 /* Assets.xcassets */; };
 		32756FEE2B24C044006BDD24 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 32756FED2B24C044006BDD24 /* Preview Assets.xcassets */; };
-		32756FF62B24C0F5006BDD24 /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 32756FF52B24C0F5006BDD24 /* SafeDI */; };
 		327570062B24C24C006BDD24 /* GrandchildA.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FFE2B24C24C006BDD24 /* GrandchildA.swift */; };
 		327570072B24C24C006BDD24 /* GrandchildB.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FFF2B24C24C006BDD24 /* GrandchildB.swift */; };
 		327570082B24C24C006BDD24 /* SharedThing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327570002B24C24C006BDD24 /* SharedThing.swift */; };
@@ -23,9 +19,7 @@
 		3275700B2B24C24C006BDD24 /* ChildB.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327570032B24C24C006BDD24 /* ChildB.swift */; };
 		3275700C2B24C24C006BDD24 /* ChildC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327570042B24C24C006BDD24 /* ChildC.swift */; };
 		3275700D2B24C24C006BDD24 /* Root.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327570052B24C24C006BDD24 /* Root.swift */; };
-		327570CE2B252C7B006BDD24 /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 327570CD2B252C7B006BDD24 /* SafeDI */; };
-		327570D02B252C7B006BDD24 /* SafeDIPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = 327570CF2B252C7B006BDD24 /* SafeDIPlugin */; };
-		327570D32B253294006BDD24 /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 327570D22B253294006BDD24 /* SafeDI */; };
+		32B280A32B28176D00A33FED /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 32B280A22B28176D00A33FED /* SafeDI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,13 +44,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				327570D32B253294006BDD24 /* SafeDI in Frameworks */,
-				321042532B2533ED0088785D /* SafeDI in Frameworks */,
-				3210424E2B2533660088785D /* SafeDI in Frameworks */,
-				327570CE2B252C7B006BDD24 /* SafeDI in Frameworks */,
-				32756FF62B24C0F5006BDD24 /* SafeDI in Frameworks */,
-				327570D02B252C7B006BDD24 /* SafeDIPlugin in Frameworks */,
-				321042502B2533660088785D /* SafeDIPlugin in Frameworks */,
+				32B280A32B28176D00A33FED /* SafeDI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -68,6 +56,7 @@
 			children = (
 				32756FE42B24C042006BDD24 /* ExampleProjectIntegration */,
 				32756FE32B24C042006BDD24 /* Products */,
+				32B280A12B28176D00A33FED /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -115,6 +104,13 @@
 			path = Dependencies;
 			sourceTree = "<group>";
 		};
+		32B280A12B28176D00A33FED /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -133,13 +129,7 @@
 			);
 			name = ExampleProjectIntegration;
 			packageProductDependencies = (
-				32756FF52B24C0F5006BDD24 /* SafeDI */,
-				327570CD2B252C7B006BDD24 /* SafeDI */,
-				327570CF2B252C7B006BDD24 /* SafeDIPlugin */,
-				327570D22B253294006BDD24 /* SafeDI */,
-				3210424D2B2533660088785D /* SafeDI */,
-				3210424F2B2533660088785D /* SafeDIPlugin */,
-				321042522B2533ED0088785D /* SafeDI */,
+				32B280A22B28176D00A33FED /* SafeDI */,
 			);
 			productName = ExampleProjectIntegration;
 			productReference = 32756FE22B24C042006BDD24 /* ExampleProjectIntegration.app */;
@@ -442,38 +432,14 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		3210424D2B2533660088785D /* SafeDI */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = SafeDI;
-		};
-		3210424F2B2533660088785D /* SafeDIPlugin */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = SafeDIPlugin;
-		};
-		321042522B2533ED0088785D /* SafeDI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 321042512B2533ED0088785D /* XCRemoteSwiftPackageReference "SafeDI" */;
-			productName = SafeDI;
-		};
 		321042542B2533F30088785D /* SafeDIGenerator */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 321042512B2533ED0088785D /* XCRemoteSwiftPackageReference "SafeDI" */;
 			productName = "plugin:SafeDIGenerator";
 		};
-		32756FF52B24C0F5006BDD24 /* SafeDI */ = {
+		32B280A22B28176D00A33FED /* SafeDI */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = SafeDI;
-		};
-		327570CD2B252C7B006BDD24 /* SafeDI */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = SafeDI;
-		};
-		327570CF2B252C7B006BDD24 /* SafeDIPlugin */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = SafeDIPlugin;
-		};
-		327570D22B253294006BDD24 /* SafeDI */ = {
-			isa = XCSwiftPackageProductDependency;
+			package = 321042512B2533ED0088785D /* XCRemoteSwiftPackageReference "SafeDI" */;
 			productName = SafeDI;
 		};
 /* End XCSwiftPackageProductDependency section */
