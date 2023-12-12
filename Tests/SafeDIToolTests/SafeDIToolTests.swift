@@ -1759,8 +1759,8 @@ final class SafeDIToolTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableReceivedProperty_throwsError() async {
         await assertThrowsError(
             """
-            The following received properties were never instantiated:
-            `urlSession: URLSession` is not instantiated in chain: RootViewController -> DefaultNetworkService
+            The following @Received properties were never @Instantiated or @Forwarded:
+            `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService
             """
         ) {
             try await SafeDITool.run(

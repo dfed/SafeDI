@@ -80,10 +80,10 @@ public final class DependencyTreeGenerator {
                 "No `@\(InstantiableVisitor.macroName)`-decorated type found to fulfill `@\(Dependency.Source.instantiated.rawValue)` or  `@\(Dependency.Source.lazyInstantiated.rawValue)`-decorated property with type `\(typeDescription.asSource)`"
             case let .unfulfillableProperties(unfulfillableProperties):
                 """
-                The following received properties were never instantiated:
+                The following @Received properties were never @Instantiated or @Forwarded:
                 \(unfulfillableProperties.map {
                     """
-                    `\($0.property.asSource)` is not instantiated in chain: \(([$0.instantiable] + $0.parentStack)
+                    `\($0.property.asSource)` is not @Instantiated or @Forwarded in chain: \(([$0.instantiable] + $0.parentStack)
                     .reversed()
                     .map(\.concreteInstantiableType.asSource)
                     .joined(separator: " -> "))
