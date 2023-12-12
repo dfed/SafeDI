@@ -137,6 +137,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
         visitDecl(node)
     }
 
+    public override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+        .skipChildren
+    }
+
     // MARK: Public
 
     public private(set) var dependencies = [Dependency]()

@@ -54,6 +54,10 @@ public final class FileVisitor: SyntaxVisitor {
         .skipChildren
     }
 
+    public override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+        .skipChildren
+    }
+
     public override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
         visitDecl(node)
     }
