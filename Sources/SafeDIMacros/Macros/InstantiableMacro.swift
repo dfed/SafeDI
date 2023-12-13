@@ -84,7 +84,7 @@ public struct InstantiableMacro: MemberMacro {
         return []
     }
 
-    // MARK: - BuilderError
+    // MARK: - InstantiableError
 
     private enum InstantiableError: Error, CustomStringConvertible {
         case decoratingIncompatibleType

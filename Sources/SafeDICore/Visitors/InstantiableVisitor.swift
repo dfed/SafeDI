@@ -163,7 +163,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
             initializer: initializers.first(where: { $0.isValid(forFulfilling: dependencies) }),
             additionalInstantiableTypes: additionalInstantiableTypes,
             dependencies: dependencies,
-            isClass: topLevelDeclarationType.isClass)
+            declarationType: topLevelDeclarationType.asDeclarationType
+        )
     }
 
     // MARK: Private
@@ -172,7 +173,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
     private var topLevelDeclarationType: ConcreteDeclType?
 
     private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
-        guard node.attributes.instantiableMacro != nil else {
+        guard let macro = node.attributes.instantiableMacro else {
             // Not an instantiable type. We do not care.
             return .skipChildren
         }
@@ -186,17 +187,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
             name: node.name.text,
             generics: []
         )
-        processAttributes(node.attributes, on: node)
+        processAttributes(node.attributes, on: macro)
         processModifiers(node.modifiers, on: node)
 
         return .visitChildren
     }
 
-    private func processAttributes(_ attributes: AttributeListSyntax, on node: some ConcreteDeclSyntaxProtocol) {
-        guard let macro = attributes.instantiableMacro else {
-            assertionFailure("Instantiable macro not found despite processing top-level declaration")
-            return
-        }
+    private func processAttributes(_ attributes: AttributeListSyntax, on macro: AttributeSyntax) {
         guard
             let fulfillingAdditionalTypesExpression = macro.fulfillingAdditionalTypes,
             let fulfillingAdditionalTypesArray = ArrayExprSyntax(fulfillingAdditionalTypesExpression)

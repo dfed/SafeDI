@@ -36,6 +36,20 @@ extension AttributeListSyntax {
         return AttributeSyntax(attribute)
     }
 
+    public var externalInstantiableMacro: AttributeSyntax? {
+        guard let attribute = first(where: { element in
+            switch element {
+            case let .attribute(attribute):
+                return attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text == ExternalInstantiableVisitor.macroName
+            case .ifConfigDecl:
+                return false
+            }
+        }) else {
+            return nil
+        }
+        return AttributeSyntax(attribute)
+    }
+
     public var instantiatedMacro: AttributeSyntax? {
         guard let attribute = first(where: { element in
             switch element {

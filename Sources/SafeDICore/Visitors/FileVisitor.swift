@@ -91,6 +91,16 @@ public final class FileVisitor: SyntaxVisitor {
         declSyntaxParentCount -= 1
     }
 
+    public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
+        let externalInstantiableVisitor = ExternalInstantiableVisitor()
+        externalInstantiableVisitor.walk(node)
+        if let instantiable = externalInstantiableVisitor.instantiable {
+            instantiables.append(instantiable)
+        }
+
+        return .skipChildren
+    }
+
     // MARK: Public
 
     public private(set) var imports = [ImportStatement]()

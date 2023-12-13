@@ -39,6 +39,20 @@ public struct Initializer: Codable, Hashable {
             .map(Argument.init)
     }
 
+    init(_ node: FunctionDeclSyntax) {
+        isPublicOrOpen = node.modifiers.containsPublicOrOpen
+        isOptional = false
+        isAsync = node.signature.effectSpecifiers?.asyncSpecifier != nil
+        doesThrow = node.signature.effectSpecifiers?.throwsSpecifier != nil
+        hasGenericParameter = node.genericParameterClause != nil
+        hasGenericWhereClause = node.genericWhereClause != nil
+        arguments = node
+            .signature
+            .parameterClause
+            .parameters
+            .map(Argument.init)
+    }
+
     init(
         isPublicOrOpen: Bool = true,
         isOptional: Bool = false,

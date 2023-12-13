@@ -76,7 +76,8 @@ final class FileVisitorTests: XCTestCase {
                             fulfillingTypeDescription: nil
                         )
                     ],
-                    isClass: true)
+                    declarationType: .classType
+                )
             ]
         )
         XCTAssertEqual(
@@ -138,14 +139,14 @@ final class FileVisitorTests: XCTestCase {
                             fulfillingTypeDescription: nil
                         )
                     ],
-                    isClass: true
+                    declarationType: .classType
                 ),
                 Instantiable(
                     instantiableType: .simple(name: "SomeOtherInstantiable"),
                     initializer: Initializer(arguments: []),
                     additionalInstantiableTypes: nil,
                     dependencies: [],
-                    isClass: false
+                    declarationType: .structType
                 )
             ]
         )
@@ -178,7 +179,7 @@ final class FileVisitorTests: XCTestCase {
                         .simple(name: "SomeProtocol")
                     ],
                     dependencies: [],
-                    isClass: false
+                    declarationType: .structType
                 )
             ]
         )

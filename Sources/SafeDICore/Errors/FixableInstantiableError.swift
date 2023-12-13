@@ -29,14 +29,14 @@ public enum FixableInstantiableError: DiagnosticError {
     public var description: String {
         switch self {
         case .dependencyHasTooManyAttributes:
-            return "Dependency can have at most one of @\(Dependency.Source.instantiated), @\(Dependency.Source.received), or @\(Dependency.Source.forwarded) attached macro"
+            "Dependency can have at most one of @\(Dependency.Source.instantiated), @\(Dependency.Source.received), or @\(Dependency.Source.forwarded) attached macro"
         case .dependencyHasInitializer:
-            return "Dependency must not have hand-written initializer"
+            "Dependency must not have hand-written initializer"
         case .missingPublicOrOpenAttribute:
-            return "@\(InstantiableVisitor.macroName)-decorated type must be `public` or `open`"
+            "@\(InstantiableVisitor.macroName)-decorated type must be `public` or `open`"
         case .missingRequiredInitializer:
             // TODO: Create fixit just for `public` or `open` missing.
-            return "@\(InstantiableVisitor.macroName)-decorated type must have `public` or `open` initializer comprising all injected parameters"
+            "@\(InstantiableVisitor.macroName)-decorated type must have `public` or `open` initializer comprising all injected parameters"
         }
     }
 
@@ -61,7 +61,7 @@ public enum FixableInstantiableError: DiagnosticError {
                     .dependencyHasInitializer,
                     .missingPublicOrOpenAttribute,
                     .missingRequiredInitializer:
-                return .error
+                .error
             }
         }
 
@@ -78,13 +78,13 @@ public enum FixableInstantiableError: DiagnosticError {
         var message: String {
             switch error {
             case .dependencyHasTooManyAttributes:
-                return "Remove excessive attached macros"
+                "Remove excessive attached macros"
             case .dependencyHasInitializer:
-                return "Remove initializer"
+                "Remove initializer"
             case .missingPublicOrOpenAttribute:
-                return "Add `public` modifier"
+                "Add `public` modifier"
             case .missingRequiredInitializer:
-                return "Add required initializer"
+                "Add required initializer"
             }
         }
 

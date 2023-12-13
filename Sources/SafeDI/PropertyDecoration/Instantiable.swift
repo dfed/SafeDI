@@ -21,6 +21,6 @@
 /// Marks a `class`, `struct`, or `actor` as capable of declaring `@Instantiated` or `@LazyInstantiated`-decorated properties of the type decorated with this macro, or conforming to types listed in the parameter.
 ///
 /// - Parameter additionalTypes: The types (in addition to the type decorated with this macro) of properties that can be decorated with `@Instantiated` and yield a result of this type. The types provided *must* be either superclasses of this type or protocols to which this type conforms.
-@attached(member, names: arbitrary) public macro Instantiable(
+@attached(member) public macro Instantiable(
     fulfillingAdditionalTypes additionalTypes: [Any.Type] = []
 ) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")

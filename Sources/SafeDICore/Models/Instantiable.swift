@@ -27,12 +27,12 @@ public struct Instantiable: Codable, Hashable {
         initializer: Initializer?,
         additionalInstantiableTypes: [TypeDescription]?,
         dependencies: [Dependency],
-        isClass: Bool)
+        declarationType: DeclarationType)
     {
         self.instantiableTypes = [instantiableType] + (additionalInstantiableTypes ?? [])
         self.initializer = initializer
         self.dependencies = dependencies
-        self.isClass = isClass
+        self.declarationType = declarationType
     }
 
     // MARK: Public
@@ -48,8 +48,16 @@ public struct Instantiable: Codable, Hashable {
     public let initializer: Initializer?
     /// The ordered dependencies of this Instantiable.
     public let dependencies: [Dependency]
-    /// Whether the concrete instantiable type is a class.
-    public let isClass: Bool
+    /// The declaration type of the Instantiable's concrete type.
+    public let declarationType: DeclarationType
+
+    /// The type of declaration where this Instantiable was defined.
+    public enum DeclarationType: Codable, Hashable {
+        case classType
+        case actorType
+        case structType
+        case extensionType
+    }
 
     // MARK: Internal
 

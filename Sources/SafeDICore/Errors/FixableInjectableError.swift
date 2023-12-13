@@ -26,7 +26,7 @@ public enum FixableInjectableError: DiagnosticError {
     public var description: String {
         switch self {
         case .unexpectedMutable:
-            return "Dependency can not be mutable"
+            "Dependency can not be mutable"
         }
     }
 
@@ -48,7 +48,7 @@ public enum FixableInjectableError: DiagnosticError {
         var severity: DiagnosticSeverity {
             switch error {
             case .unexpectedMutable:
-                return .error
+                .error
             }
         }
 
@@ -65,7 +65,7 @@ public enum FixableInjectableError: DiagnosticError {
         var message: String {
             switch error {
             case .unexpectedMutable:
-                return "Replace `var` with `let`"
+                "Replace `var` with `let`"
             }
         }
 

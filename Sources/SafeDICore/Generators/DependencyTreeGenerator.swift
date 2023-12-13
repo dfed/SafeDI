@@ -77,7 +77,7 @@ public final class DependencyTreeGenerator {
         var description: String {
             switch self {
             case let .noInstantiableFound(typeDescription):
-                "No `@\(InstantiableVisitor.macroName)`-decorated type found to fulfill `@\(Dependency.Source.instantiated.rawValue)` or  `@\(Dependency.Source.lazyInstantiated.rawValue)`-decorated property with type `\(typeDescription.asSource)`"
+                "No `@\(InstantiableVisitor.macroName)`-decorated type or @\(ExternalInstantiableVisitor.macroName)`-decorated extension found to fulfill `@\(Dependency.Source.instantiated.rawValue)` or  `@\(Dependency.Source.lazyInstantiated.rawValue)`-decorated property with type `\(typeDescription.asSource)`"
             case let .unfulfillableProperties(unfulfillableProperties):
                 """
                 The following @Received properties were never @Instantiated or @Forwarded:

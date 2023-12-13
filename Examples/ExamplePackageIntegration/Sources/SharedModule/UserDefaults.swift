@@ -18,38 +18,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import ChildAModule
-import ChildBModule
-import ChildCModule
 import Foundation
 import SafeDI
-import SharedModule
 
-@Instantiable
-public final class Root {
-
-    public init(childA: ChildA, childB: ChildB, childC: ChildC, shared: SharedThing, userDefaults: UserDefaults) {
-        self.childA = childA
-        self.childB = childB
-        self.childC = childC
-        self.shared = shared
-        self.userDefaults = userDefaults
+@ExternalInstantiable
+extension UserDefaults {
+    public static func instantiate() -> UserDefaults {
+        .standard
     }
-
-    static let shared = Root()
-
-    @Instantiated
-    let childA: ChildA
-
-    @Instantiated
-    let childB: ChildB
-
-    @Instantiated
-    let childC: ChildC
-
-    @Instantiated
-    let shared: SharedThing
-
-    @Instantiated
-    let userDefaults: UserDefaults
 }

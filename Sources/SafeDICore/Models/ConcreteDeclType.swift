@@ -23,14 +23,14 @@ public enum ConcreteDeclType {
     case classType
     case structType
 
-    var isClass: Bool {
+    var asDeclarationType: Instantiable.DeclarationType {
         switch self {
         case .actorType:
-            false
+            .actorType
         case .classType:
-            true
+            .classType
         case .structType:
-            false
+            .structType
         }
     }
 }

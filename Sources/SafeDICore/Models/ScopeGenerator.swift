@@ -75,7 +75,13 @@ actor ScopeGenerator {
 
                 if let property {
                     let concreteTypeName = instantiable.concreteInstantiableType.asSource
-                    let returnLineSansReturn = "\(concreteTypeName)(\(argumentList))"
+                    let instantiationDeclaration = switch instantiable.declarationType {
+                    case .actorType, .classType, .structType:
+                        concreteTypeName
+                    case .extensionType:
+                        "\(concreteTypeName).\(ExternalInstantiableVisitor.instantiateMethodName)"
+                    }
+                    let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
 
                     let isConstant: Bool
                     let propertyDeclaration: String
@@ -118,7 +124,7 @@ actor ScopeGenerator {
                     } else {
                         return """
                             extension \(instantiable.concreteInstantiableType.asSource) {
-                                \(instantiable.isClass ? "convenience " : "")init() {
+                                \(instantiable.declarationType == .classType ? "convenience " : "")init() {
                             \(try await generateProperties(leadingMemberWhitespace: "        ").joined(separator: "\n"))
                                     self.init(\(argumentList))
                                 }
