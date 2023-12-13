@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/michaeleisel/JJLISO8601DateFormatter",
       "state" : {
-        "revision" : "de422afd9a47b72703c30a81423c478337191390",
-        "version" : "0.1.6"
+        "revision" : "ed1d996123688bade6e895aa49595f0d862900e7",
+        "version" : "0.1.7"
       }
     },
     {
