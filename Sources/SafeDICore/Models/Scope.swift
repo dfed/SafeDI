@@ -55,8 +55,7 @@ final class Scope {
             .filter {
                 switch $0.source {
                 case .forwarded,
-                        .instantiated,
-                        .lazyInstantiated:
+                        .instantiated:
                     return false
                 case .received:
                     return true

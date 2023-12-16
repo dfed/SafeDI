@@ -95,15 +95,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
                                     label: label,
                                     typeDescription: typeDescription
                                 )
-                            case .lazyInstantiated:
-                                Property(
-                                    label: "\(label)\(Dependency.instantiatorType)",
-                                    // TODO: fully qualify this type with `SafeDI.` member prefix
-                                    typeDescription: .simple(
-                                        name: Dependency.instantiatorType,
-                                        generics: [typeDescription]
-                                    )
-                                )
                             }
                         }(),
                         source: dependencySource,

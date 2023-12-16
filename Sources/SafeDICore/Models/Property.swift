@@ -93,9 +93,6 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
     enum PropertyType {
         /// A `let` property.
         case constant
-        /// A  lazily instantiated property. Backed by an `Instantiator`.
-        /// The instantiated product is not forwarded down the dependency tree.
-        case lazy
         /// An `Instantiator` property.
         /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
         case instantiator

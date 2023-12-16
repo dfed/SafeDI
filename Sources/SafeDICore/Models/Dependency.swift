@@ -36,7 +36,6 @@ public struct Dependency: Codable, Hashable {
 
     public enum Source: String, CustomStringConvertible, Codable, Hashable {
         case instantiated = "Instantiated"
-        case lazyInstantiated = "LazyInstantiated"
         case received = "Received"
         case forwarded = "Forwarded"
 
@@ -49,21 +48,7 @@ public struct Dependency: Codable, Hashable {
 
     /// The label by which this property is referenced inside the `init` method.
     var propertyLabelInInit: String {
-        switch source {
-        case .instantiated, .received, .forwarded:
-            return property.label
-        case .lazyInstantiated:
-            return """
-                _\(property
-                    .label
-                    .replacingOccurrences(
-                        of: Self.instantiatorType,
-                        with: "",
-                        options: [.anchored, .backwards]
-                    )
-                )
-                """
-        }
+        property.label
     }
 
     static let instantiatorType = "Instantiator"

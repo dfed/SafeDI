@@ -77,7 +77,7 @@ public final class DependencyTreeGenerator {
         var description: String {
             switch self {
             case let .noInstantiableFound(typeDescription):
-                "No `@\(InstantiableVisitor.macroName)`-decorated type or @\(ExternalInstantiableVisitor.macroName)`-decorated extension found to fulfill `@\(Dependency.Source.instantiated.rawValue)` or  `@\(Dependency.Source.lazyInstantiated.rawValue)`-decorated property with type `\(typeDescription.asSource)`"
+                "No `@\(InstantiableVisitor.macroName)`-decorated type or `@\(ExternalInstantiableVisitor.macroName)`-decorated extension found to fulfill `@\(Dependency.Source.instantiated.rawValue)`-decorated property with type `\(typeDescription.asSource)`"
             case let .unfulfillableProperties(unfulfillableProperties):
                 """
                 The following @Received properties were never @Instantiated or @Forwarded:
@@ -229,23 +229,6 @@ public final class DependencyTreeGenerator {
                     type: instantiatedDependency.property.propertyType
                 ))
             }
-            for instantiatedProperty in scope.instantiable.lazyInstantiatedProperties {
-                let instantiatedType = instantiatedProperty.typeDescription.asInstantiatedType
-                guard
-                    let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType],
-                    let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
-                else {
-                    assertionFailure("Invalid state. Could not look up info for \(instantiatedProperty.typeDescription)")
-                    continue
-                }
-
-                additionalPropertiesToInstantiate.append(Scope.PropertyToInstantiate(
-                    property: instantiatedProperty,
-                    instantiable: instantiable,
-                    scope: instantiatedScope,
-                    type: .lazy
-                ))
-            }
             scope.propertiesToInstantiate.append(contentsOf: additionalPropertiesToInstantiate)
         }
         return typeDescriptionToScopeMap
@@ -314,7 +297,7 @@ public final class DependencyTreeGenerator {
 extension Dependency {
     fileprivate var isInstantiated: Bool {
         switch source {
-        case .instantiated, .lazyInstantiated:
+        case .instantiated:
             return true
         case .forwarded, .received:
             return false

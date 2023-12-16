@@ -163,29 +163,6 @@ public struct Initializer: Codable, Hashable {
                                 trailingTrivia: dependency == dependencies.last ? .newline : nil
                             )))
                         )
-                    case .lazyInstantiated:
-                        CodeBlockItemSyntax(
-                            item: .expr(ExprSyntax(InfixOperatorExprSyntax(
-                                leadingTrivia: .newline,
-                                leftOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(dependency.propertyLabelInInit)),
-                                operator: AssignmentExprSyntax(
-                                    leadingTrivia: .space,
-                                    trailingTrivia: .space),
-                                rightOperand: FunctionCallExprSyntax(
-                                    calledExpression: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(Dependency.Source.lazyInstantiated.rawValue)),
-                                    leftParen: .leftParenToken(),
-                                    arguments: LabeledExprListSyntax {
-                                        LabeledExprSyntax(
-                                            expression: DeclReferenceExprSyntax(
-                                                baseName: TokenSyntax.identifier(dependency.property.label)
-                                            )
-                                        )
-                                    },
-                                    rightParen: .rightParenToken()
-                                ),
-                                trailingTrivia: dependency == dependencies.last ? .newline : nil
-                            )))
-                        )
                     }
                 }
             }

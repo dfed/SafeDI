@@ -65,9 +65,4 @@ public struct Instantiable: Codable, Hashable {
         dependencies
             .filter { $0.source == .instantiated }
     }
-    var lazyInstantiatedProperties: [Property] {
-        dependencies
-            .filter { $0.source == .lazyInstantiated }
-            .map(\.property)
-    }
 }

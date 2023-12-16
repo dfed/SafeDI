@@ -88,7 +88,7 @@ actor ScopeGenerator {
                     let leadingConcreteTypeName: String
                     let closureArguments = if let forwardedProperty { " \(forwardedProperty.label) in" } else { "" }
                     switch property.propertyType {
-                    case .instantiator, .lazy, .forwardingInstantiator:
+                    case .instantiator, .forwardingInstantiator:
                         isConstant = false
                         propertyDeclaration = "let \(property.label)"
                         leadingConcreteTypeName = property.typeDescription.asSource
