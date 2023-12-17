@@ -124,7 +124,7 @@ actor ScopeGenerator {
                     } else {
                         return """
                             extension \(instantiable.concreteInstantiableType.asSource) {
-                                \(instantiable.declarationType == .classType ? "convenience " : "")init() {
+                                public \(instantiable.declarationType == .classType ? "convenience " : "")init() {
                             \(try await generateProperties(leadingMemberWhitespace: "        ").joined(separator: "\n"))
                                     self.init(\(argumentList))
                                 }

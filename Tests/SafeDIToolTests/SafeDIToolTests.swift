@@ -130,7 +130,7 @@ final class SafeDIToolTests: XCTestCase {
             #endif
 
             extension RootViewController {
-                convenience init() {
+                public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     self.init(networkService: networkService)
                 }
@@ -187,7 +187,7 @@ final class SafeDIToolTests: XCTestCase {
             #endif
 
             extension Root {
-                init() {
+                public init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     self.init(networkService: networkService)
                 }
@@ -244,7 +244,7 @@ final class SafeDIToolTests: XCTestCase {
             #endif
 
             extension Root {
-                init() {
+                public init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     self.init(networkService: networkService)
                 }
@@ -355,7 +355,7 @@ final class SafeDIToolTests: XCTestCase {
             #endif
 
             extension RootViewController {
-                convenience init() {
+                public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<User, UIViewController> { user in
@@ -485,7 +485,7 @@ final class SafeDIToolTests: XCTestCase {
             #endif
 
             extension RootViewController {
-                convenience init() {
+                public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> { user in
@@ -616,7 +616,7 @@ final class SafeDIToolTests: XCTestCase {
             #endif
 
             extension RootViewController {
-                convenience init() {
+                public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> { user in
@@ -747,7 +747,7 @@ final class SafeDIToolTests: XCTestCase {
             #endif
 
             extension RootViewController {
-                convenience init() {
+                public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> { user in
@@ -806,7 +806,7 @@ final class SafeDIToolTests: XCTestCase {
             // Please refrain from editing this file directly.
 
             extension Root {
-                convenience init() {
+                public convenience init() {
                     let child = {
                         let grandchild = Grandchild()
                         return Child(/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */)
@@ -863,7 +863,7 @@ final class SafeDIToolTests: XCTestCase {
             // Please refrain from editing this file directly.
 
             extension Root {
-                convenience init() {
+                public convenience init() {
                     let child = {
                         let grandchild = Grandchild()
                         return Child(grandchild: grandchild)
@@ -920,7 +920,7 @@ final class SafeDIToolTests: XCTestCase {
             // Please refrain from editing this file directly.
 
             extension Root {
-                convenience init() {
+                public convenience init() {
                     let child = {
                         let grandchild = Grandchild()
                         return Child(grandchild: grandchild)
@@ -1045,7 +1045,7 @@ final class SafeDIToolTests: XCTestCase {
             // Please refrain from editing this file directly.
 
             extension Root {
-                convenience init() {
+                public convenience init() {
                     let greatGrandchild = GreatGrandchild()
                     let childA = {
                         let grandchildAA = GrandchildAA(greatGrandchild: greatGrandchild)
@@ -1180,7 +1180,7 @@ final class SafeDIToolTests: XCTestCase {
             // Please refrain from editing this file directly.
 
             extension Root {
-                convenience init() {
+                public convenience init() {
                     let childA = {
                         let greatGrandchild = GreatGrandchild()
                         let grandchildAA = GrandchildAA(greatGrandchild: greatGrandchild)
@@ -1310,7 +1310,7 @@ final class SafeDIToolTests: XCTestCase {
             // Please refrain from editing this file directly.
 
             extension Root {
-                convenience init() {
+                public convenience init() {
                     let childA = {
                         let grandchildAA = {
                             let greatGrandchild = GreatGrandchild()
@@ -1408,7 +1408,7 @@ final class SafeDIToolTests: XCTestCase {
             #endif
 
             extension Root {
-                convenience init() {
+                public convenience init() {
                     let keyValueStore: KeyValueStore = UserDefaults.instantiate()
                     let child = Child(keyValueStore: keyValueStore)
                     self.init(child: child, keyValueStore: keyValueStore)
@@ -1546,7 +1546,7 @@ final class SafeDIToolTests: XCTestCase {
             #endif
 
             extension RootViewController {
-                convenience init() {
+                public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<User, UIViewController> { user in
@@ -1724,7 +1724,7 @@ final class SafeDIToolTests: XCTestCase {
             #endif
 
             extension Root {
-                convenience init() {
+                public convenience init() {
                     let childA = {
                         let grandchildAA = {
                             let greatGrandchild = GreatGrandchild()
