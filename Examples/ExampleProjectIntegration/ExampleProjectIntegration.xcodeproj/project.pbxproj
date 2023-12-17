@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		32756FE62B24C042006BDD24 /* ExampleProjectIntegrationApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FE52B24C042006BDD24 /* ExampleProjectIntegrationApp.swift */; };
+		32756FE62B24C042006BDD24 /* ExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FE52B24C042006BDD24 /* ExampleApp.swift */; };
 		32756FE82B24C042006BDD24 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FE72B24C042006BDD24 /* ContentView.swift */; };
 		32756FEA2B24C044006BDD24 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 32756FE92B24C044006BDD24 /* Assets.xcassets */; };
 		32756FEE2B24C044006BDD24 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 32756FED2B24C044006BDD24 /* Preview Assets.xcassets */; };
@@ -18,13 +18,12 @@
 		3275700A2B24C24C006BDD24 /* ChildA.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327570022B24C24C006BDD24 /* ChildA.swift */; };
 		3275700B2B24C24C006BDD24 /* ChildB.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327570032B24C24C006BDD24 /* ChildB.swift */; };
 		3275700C2B24C24C006BDD24 /* ChildC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327570042B24C24C006BDD24 /* ChildC.swift */; };
-		3275700D2B24C24C006BDD24 /* Root.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327570052B24C24C006BDD24 /* Root.swift */; };
 		32B280A32B28176D00A33FED /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 32B280A22B28176D00A33FED /* SafeDI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		32756FE22B24C042006BDD24 /* ExampleProjectIntegration.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ExampleProjectIntegration.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		32756FE52B24C042006BDD24 /* ExampleProjectIntegrationApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExampleProjectIntegrationApp.swift; sourceTree = "<group>"; };
+		32756FE52B24C042006BDD24 /* ExampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExampleApp.swift; sourceTree = "<group>"; };
 		32756FE72B24C042006BDD24 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		32756FE92B24C044006BDD24 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		32756FEB2B24C044006BDD24 /* ExampleProjectIntegration.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ExampleProjectIntegration.entitlements; sourceTree = "<group>"; };
@@ -36,7 +35,6 @@
 		327570022B24C24C006BDD24 /* ChildA.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChildA.swift; sourceTree = "<group>"; };
 		327570032B24C24C006BDD24 /* ChildB.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChildB.swift; sourceTree = "<group>"; };
 		327570042B24C24C006BDD24 /* ChildC.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChildC.swift; sourceTree = "<group>"; };
-		327570052B24C24C006BDD24 /* Root.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Root.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -72,7 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				32756FFD2B24C23D006BDD24 /* Dependencies */,
-				32756FE52B24C042006BDD24 /* ExampleProjectIntegrationApp.swift */,
+				32756FE52B24C042006BDD24 /* ExampleApp.swift */,
 				32756FE72B24C042006BDD24 /* ContentView.swift */,
 				32756FE92B24C044006BDD24 /* Assets.xcassets */,
 				32756FEB2B24C044006BDD24 /* ExampleProjectIntegration.entitlements */,
@@ -98,7 +96,6 @@
 				32756FFE2B24C24C006BDD24 /* GrandchildA.swift */,
 				32756FFF2B24C24C006BDD24 /* GrandchildB.swift */,
 				327570012B24C24C006BDD24 /* GrandchildC.swift */,
-				327570052B24C24C006BDD24 /* Root.swift */,
 				327570002B24C24C006BDD24 /* SharedThing.swift */,
 			);
 			path = Dependencies;
@@ -190,14 +187,13 @@
 			files = (
 				32756FE82B24C042006BDD24 /* ContentView.swift in Sources */,
 				3275700A2B24C24C006BDD24 /* ChildA.swift in Sources */,
-				32756FE62B24C042006BDD24 /* ExampleProjectIntegrationApp.swift in Sources */,
+				32756FE62B24C042006BDD24 /* ExampleApp.swift in Sources */,
 				3275700C2B24C24C006BDD24 /* ChildC.swift in Sources */,
 				327570072B24C24C006BDD24 /* GrandchildB.swift in Sources */,
 				327570062B24C24C006BDD24 /* GrandchildA.swift in Sources */,
 				3275700B2B24C24C006BDD24 /* ChildB.swift in Sources */,
 				327570082B24C24C006BDD24 /* SharedThing.swift in Sources */,
 				327570092B24C24C006BDD24 /* GrandchildC.swift in Sources */,
-				3275700D2B24C24C006BDD24 /* Root.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

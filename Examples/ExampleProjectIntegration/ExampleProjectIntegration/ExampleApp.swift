@@ -18,13 +18,35 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import SafeDI
 import SwiftUI
 
+@Instantiable
 @main
-struct ExampleProjectIntegrationApp: App {
-    var body: some Scene {
+public struct ExampleApp: App {
+    public var body: some Scene {
         WindowGroup {
             ContentView()
         }
     }
+
+    public init(childA: ChildA, childB: ChildB, childC: ChildC, shared: SharedThing) {
+        self.childA = childA
+        self.childB = childB
+        self.childC = childC
+        self.shared = shared
+    }
+
+    @Instantiated
+    let childA: ChildA
+
+    @Instantiated
+    let childB: ChildB
+
+    @Instantiated
+    let childC: ChildC
+
+    @Instantiated
+    let shared: SharedThing
+
 }
