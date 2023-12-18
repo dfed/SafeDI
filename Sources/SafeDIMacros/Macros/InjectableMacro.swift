@@ -55,23 +55,6 @@ public struct InjectableMacro: PeerMacro {
             }
         }
 
-        if variableDecl.bindingSpecifier.text != TokenSyntax.keyword(.let).text {
-            context.diagnose(Diagnostic(
-                node: variableDecl.bindingSpecifier,
-                error: FixableInjectableError.unexpectedMutable,
-                changes: [
-                    .replace(
-                        oldNode: Syntax(variableDecl.bindingSpecifier),
-                        newNode: Syntax(TokenSyntax.keyword(
-                            .let,
-                            leadingTrivia: .space,
-                            trailingTrivia: .space
-                        ))
-                    )
-                ]
-            ))
-        }
-
         // This macro purposefully does not expand.
         // This macro serves as a decorator, nothing more.
         return []

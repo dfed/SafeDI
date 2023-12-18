@@ -44,58 +44,6 @@ final class InjectableMacroTests: XCTestCase {
         }
     }
 
-    // MARK: Fixit Tests
-
-    func test_fixit_addsFixitWhenInjectableParameterIsMutable() {
-        assertMacro {
-            """
-            public struct ExampleService {
-                init(instantiatedA: InstantiatedA) {
-                    self.instantiatedA = instantiatedA
-                }
-
-                @Instantiated
-                var instantiatedA: InstantiatedA
-            }
-            """
-        } diagnostics: {
-            """
-            public struct ExampleService {
-                init(instantiatedA: InstantiatedA) {
-                    self.instantiatedA = instantiatedA
-                }
-
-                @Instantiated
-                var instantiatedA: InstantiatedA
-                ┬──
-                ╰─ 🛑 Dependency can not be mutable
-                   ✏️ Replace `var` with `let`
-            }
-            """
-        } fixes: {
-            """
-            public struct ExampleService {
-                init(instantiatedA: InstantiatedA) {
-                    self.instantiatedA = instantiatedA
-                }
-
-                @Instantiated let  let instantiatedA: InstantiatedA
-            }
-            """ // fixes are wrong! It's duplicating the correction. not sure why.
-        } expansion: {
-            """
-            public struct ExampleService {
-                init(instantiatedA: InstantiatedA) {
-                    self.instantiatedA = instantiatedA
-                }
-
-                let  let instantiatedA: InstantiatedA
-            }
-            """ // expansion is wrong! It's duplicating the correction. not sure why.
-        }
-    }
-
-
     // MARK: Error tests
 
     func test_throwsErrorWhenInjectableMacroAttachedtoStaticProperty() {
