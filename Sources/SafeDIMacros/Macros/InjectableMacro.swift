@@ -55,6 +55,26 @@ public struct InjectableMacro: PeerMacro {
             }
         }
 
+        if variableDecl.bindingSpecifier.text != TokenSyntax.keyword(.let).text,
+           // If there is only one attribute, we know the variable is not decorated with a property wrapper.
+            variableDecl.attributes.count == 1
+        {
+            context.diagnose(Diagnostic(
+                node: variableDecl.bindingSpecifier,
+                error: FixableInjectableError.unexpectedMutable,
+                changes: [
+                    .replace(
+                        oldNode: Syntax(variableDecl.bindingSpecifier),
+                        newNode: Syntax(TokenSyntax.keyword(
+                            .let,
+                            leadingTrivia: .space,
+                            trailingTrivia: .space
+                        ))
+                    )
+                ]
+            ))
+        }
+
         // This macro purposefully does not expand.
         // This macro serves as a decorator, nothing more.
         return []

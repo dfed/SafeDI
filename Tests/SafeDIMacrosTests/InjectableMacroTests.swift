@@ -44,6 +44,96 @@ final class InjectableMacroTests: XCTestCase {
         }
     }
 
+    // MARK: Fixit Tests
+
+    func test_fixit_addsFixitWhenInjectableParameterIsMutable() {
+        assertMacro {
+            """
+            public struct ExampleService {
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
+                }
+
+                @Instantiated
+                var instantiatedA: InstantiatedA
+            }
+            """
+        } diagnostics: {
+            """
+            public struct ExampleService {
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
+                }
+
+                @Instantiated
+                var instantiatedA: InstantiatedA
+                ┬──
+                ╰─ 🛑 Dependency can not be mutable unless it is decorated with a property wrapper. Mutations to a dependency are not propagated through the dependency tree.
+                   ✏️ Replace `var` with `let`
+            }
+            """
+        } fixes: {
+            """
+            public struct ExampleService {
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
+                }
+
+                @Instantiated let  let instantiatedA: InstantiatedA
+            }
+            """ // fixes are wrong! It's duplicating the correction. not sure why.
+        } expansion: {
+            """
+            public struct ExampleService {
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
+                }
+
+                let  let instantiatedA: InstantiatedA
+            }
+            """ // expansion is wrong! It's duplicating the correction. not sure why.
+        }
+    }
+
+    func test_fixit_doesNotAddFixitWhenInjectableParameterIsMutableWithPropertyWrapper() {
+        assertMacro {
+            """
+            import SwiftUI
+
+            public struct ExampleView {
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
+                }
+
+                @ObservedObject
+                @Instantiated
+                var instantiatedA: InstantiatedA
+
+                var body: some View {
+                    Text("\\(ObjectIdentifier(instantiatedA))")
+                }
+            }
+            """
+        } expansion: {
+            #"""
+            import SwiftUI
+
+            public struct ExampleView {
+                init(instantiatedA: InstantiatedA) {
+                    self.instantiatedA = instantiatedA
+                }
+
+                @ObservedObject
+                var instantiatedA: InstantiatedA
+
+                var body: some View {
+                    Text("\(ObjectIdentifier(instantiatedA))")
+                }
+            }
+            """#
+        }
+    }
+
     // MARK: Error tests
 
     func test_throwsErrorWhenInjectableMacroAttachedtoStaticProperty() {
