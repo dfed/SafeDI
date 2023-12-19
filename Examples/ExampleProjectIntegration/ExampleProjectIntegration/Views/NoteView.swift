@@ -22,31 +22,45 @@ import SafeDI
 import SwiftUI
 
 @Instantiable
-@main
-public struct ExampleApp: App {
-    public var body: some Scene {
-        WindowGroup {
-            ContentView()
+public struct NoteView: View {
+    public init(userName: String, userService: any UserService, stringStorage: StringStorage) {
+        self.userName = userName
+        self.userService = userService
+        self.stringStorage = stringStorage
+        _note = State(initialValue: stringStorage.string(forKey: userName) ?? "")
+    }
+    
+    public var body: some View {
+        VStack {
+            Text("\(userName)‘s note")
+            TextEditor(text: $note)
+                .onChange(of: note) { _, newValue in
+                    stringStorage.setString(newValue, forKey: userName)
+                }
+            Button(action: {
+                userService.userName = nil
+            }, label: {
+                Text("Log out")
+            })
         }
+        .padding()
     }
+    
+    @Forwarded
+    private let userName: String
+    @Received
+    private let userService: any UserService
+    @Received
+    private let stringStorage: StringStorage
 
-    public init(childA: ChildA, childB: ChildB, childC: ChildC, shared: SharedThing) {
-        self.childA = childA
-        self.childB = childB
-        self.childC = childC
-        self.shared = shared
-    }
+    @State
+    private var note: String = ""
+}
 
-    @Instantiated
-    let childA: ChildA
-
-    @Instantiated
-    let childB: ChildB
-
-    @Instantiated
-    let childC: ChildC
-
-    @Instantiated
-    let shared: SharedThing
-
+#Preview {
+    NoteView(
+        userName: "dfed",
+        userService: DefaultUserService(stringStorage: UserDefaults.standard),
+        stringStorage: UserDefaults.standard
+    )
 }

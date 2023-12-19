@@ -18,20 +18,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import SwiftUI
+import Combine
 
-struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
+final class AnyObservableObject: ObservableObject {
+    private let objectWillChangeClosure: () -> AnyPublisher<Void, Never>
+
+    var objectWillChange: AnyPublisher<Void, Never> {
+        objectWillChangeClosure()
     }
-}
 
-#Preview {
-    ContentView()
+    init<Observable: ObservableObject>(_ observable: Observable) {
+        self.objectWillChangeClosure = {
+            observable.objectWillChange
+                .map { _ in () }
+                .eraseToAnyPublisher()
+        }
+    }
 }

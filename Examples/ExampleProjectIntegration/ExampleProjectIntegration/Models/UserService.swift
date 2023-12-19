@@ -18,20 +18,36 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Combine
 import SafeDI
 
-@Instantiable
-public final class ChildA {
+public protocol UserService: ObservableObject {
+    var userName: String? { get set }
+    var observableObjectPublisher: ObservableObjectPublisher { get }
+}
 
-    public init(shared: SharedThing, grandchildA: GrandchildA) {
-        self.shared = shared
-        self.grandchildA = grandchildA
+@Instantiable(fulfillingAdditionalTypes: [UserService.self])
+public final class DefaultUserService: UserService {
+    public init(stringStorage: StringStorage) {
+        self.stringStorage = stringStorage
+    }
+
+    public var userName: String? {
+        get {
+            stringStorage.string(forKey: #function)
+        }
+        set {
+            objectWillChange.send()
+            stringStorage.setString(newValue, forKey: #function)
+        }
+    }
+
+    public var observableObjectPublisher: ObservableObjectPublisher {
+        objectWillChange
     }
 
     @Received
-    let shared: SharedThing
-
-    @Instantiated
-    let grandchildA: GrandchildA
-
+    @Published
+    private var stringStorage: StringStorage
 }
+

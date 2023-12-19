@@ -18,16 +18,26 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
 import SafeDI
 
-@Instantiable
-public struct GrandchildC {
+public protocol StringStorage {
+    func string(forKey key: String) -> String?
+    func setString(_ string: String?, forKey key: String)
+}
 
-    public init(shared: SharedThing) {
-        self.shared = shared
+@ExternalInstantiable(fulfillingAdditionalTypes: [StringStorage.self])
+extension UserDefaults: StringStorage {
+
+    public static func instantiate() -> UserDefaults {
+        .standard
     }
 
-    @Received
-    let shared: SharedThing
+    public func string(forKey key: String) -> String? {
+        object(forKey: key) as? String
+    }
 
+    public func setString(_ string: String?, forKey key: String) {
+        set(string, forKey: key)
+    }
 }

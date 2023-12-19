@@ -7,34 +7,29 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		324F1EC02B2F9ACC0001AC0C /* Valet in Frameworks */ = {isa = PBXBuildFile; productRef = 324F1EBF2B2F9ACC0001AC0C /* Valet */; };
+		324F1ECB2B314D8D0001AC0C /* UserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECA2B314D8D0001AC0C /* UserService.swift */; };
+		324F1ECD2B314DB20001AC0C /* StringStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECC2B314DB20001AC0C /* StringStorage.swift */; };
+		324F1ECF2B314E030001AC0C /* NameEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECE2B314E030001AC0C /* NameEntryView.swift */; };
+		324F1ED22B3150480001AC0C /* NoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ED12B3150480001AC0C /* NoteView.swift */; };
+		324F1ED72B3156810001AC0C /* AnyObservableObject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ED62B3156810001AC0C /* AnyObservableObject.swift */; };
 		32756FE62B24C042006BDD24 /* ExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FE52B24C042006BDD24 /* ExampleApp.swift */; };
-		32756FE82B24C042006BDD24 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FE72B24C042006BDD24 /* ContentView.swift */; };
 		32756FEA2B24C044006BDD24 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 32756FE92B24C044006BDD24 /* Assets.xcassets */; };
 		32756FEE2B24C044006BDD24 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 32756FED2B24C044006BDD24 /* Preview Assets.xcassets */; };
-		327570062B24C24C006BDD24 /* GrandchildA.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FFE2B24C24C006BDD24 /* GrandchildA.swift */; };
-		327570072B24C24C006BDD24 /* GrandchildB.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FFF2B24C24C006BDD24 /* GrandchildB.swift */; };
-		327570082B24C24C006BDD24 /* SharedThing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327570002B24C24C006BDD24 /* SharedThing.swift */; };
-		327570092B24C24C006BDD24 /* GrandchildC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327570012B24C24C006BDD24 /* GrandchildC.swift */; };
-		3275700A2B24C24C006BDD24 /* ChildA.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327570022B24C24C006BDD24 /* ChildA.swift */; };
-		3275700B2B24C24C006BDD24 /* ChildB.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327570032B24C24C006BDD24 /* ChildB.swift */; };
-		3275700C2B24C24C006BDD24 /* ChildC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327570042B24C24C006BDD24 /* ChildC.swift */; };
 		32B280A32B28176D00A33FED /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 32B280A22B28176D00A33FED /* SafeDI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		324F1ECA2B314D8D0001AC0C /* UserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserService.swift; sourceTree = "<group>"; };
+		324F1ECC2B314DB20001AC0C /* StringStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringStorage.swift; sourceTree = "<group>"; };
+		324F1ECE2B314E030001AC0C /* NameEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NameEntryView.swift; sourceTree = "<group>"; };
+		324F1ED12B3150480001AC0C /* NoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteView.swift; sourceTree = "<group>"; };
+		324F1ED62B3156810001AC0C /* AnyObservableObject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyObservableObject.swift; sourceTree = "<group>"; };
 		32756FE22B24C042006BDD24 /* ExampleProjectIntegration.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ExampleProjectIntegration.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		32756FE52B24C042006BDD24 /* ExampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExampleApp.swift; sourceTree = "<group>"; };
-		32756FE72B24C042006BDD24 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		32756FE92B24C044006BDD24 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		32756FEB2B24C044006BDD24 /* ExampleProjectIntegration.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ExampleProjectIntegration.entitlements; sourceTree = "<group>"; };
 		32756FED2B24C044006BDD24 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
-		32756FFE2B24C24C006BDD24 /* GrandchildA.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GrandchildA.swift; sourceTree = "<group>"; };
-		32756FFF2B24C24C006BDD24 /* GrandchildB.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GrandchildB.swift; sourceTree = "<group>"; };
-		327570002B24C24C006BDD24 /* SharedThing.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SharedThing.swift; sourceTree = "<group>"; };
-		327570012B24C24C006BDD24 /* GrandchildC.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GrandchildC.swift; sourceTree = "<group>"; };
-		327570022B24C24C006BDD24 /* ChildA.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChildA.swift; sourceTree = "<group>"; };
-		327570032B24C24C006BDD24 /* ChildB.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChildB.swift; sourceTree = "<group>"; };
-		327570042B24C24C006BDD24 /* ChildC.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChildC.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -43,12 +38,33 @@
 			buildActionMask = 2147483647;
 			files = (
 				32B280A32B28176D00A33FED /* SafeDI in Frameworks */,
+				324F1EC02B2F9ACC0001AC0C /* Valet in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		324F1EDA2B315AB20001AC0C /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				32756FE52B24C042006BDD24 /* ExampleApp.swift */,
+				324F1ECE2B314E030001AC0C /* NameEntryView.swift */,
+				324F1ED12B3150480001AC0C /* NoteView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		324F1EDC2B315ABB0001AC0C /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				324F1ECA2B314D8D0001AC0C /* UserService.swift */,
+				324F1ECC2B314DB20001AC0C /* StringStorage.swift */,
+				324F1ED62B3156810001AC0C /* AnyObservableObject.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 		32756FD92B24C042006BDD24 = {
 			isa = PBXGroup;
 			children = (
@@ -69,9 +85,8 @@
 		32756FE42B24C042006BDD24 /* ExampleProjectIntegration */ = {
 			isa = PBXGroup;
 			children = (
-				32756FFD2B24C23D006BDD24 /* Dependencies */,
-				32756FE52B24C042006BDD24 /* ExampleApp.swift */,
-				32756FE72B24C042006BDD24 /* ContentView.swift */,
+				324F1EDA2B315AB20001AC0C /* Views */,
+				324F1EDC2B315ABB0001AC0C /* Models */,
 				32756FE92B24C044006BDD24 /* Assets.xcassets */,
 				32756FEB2B24C044006BDD24 /* ExampleProjectIntegration.entitlements */,
 				32756FEC2B24C044006BDD24 /* Preview Content */,
@@ -85,20 +100,6 @@
 				32756FED2B24C044006BDD24 /* Preview Assets.xcassets */,
 			);
 			path = "Preview Content";
-			sourceTree = "<group>";
-		};
-		32756FFD2B24C23D006BDD24 /* Dependencies */ = {
-			isa = PBXGroup;
-			children = (
-				327570022B24C24C006BDD24 /* ChildA.swift */,
-				327570032B24C24C006BDD24 /* ChildB.swift */,
-				327570042B24C24C006BDD24 /* ChildC.swift */,
-				32756FFE2B24C24C006BDD24 /* GrandchildA.swift */,
-				32756FFF2B24C24C006BDD24 /* GrandchildB.swift */,
-				327570012B24C24C006BDD24 /* GrandchildC.swift */,
-				327570002B24C24C006BDD24 /* SharedThing.swift */,
-			);
-			path = Dependencies;
 			sourceTree = "<group>";
 		};
 		32B280A12B28176D00A33FED /* Frameworks */ = {
@@ -127,6 +128,7 @@
 			name = ExampleProjectIntegration;
 			packageProductDependencies = (
 				32B280A22B28176D00A33FED /* SafeDI */,
+				324F1EBF2B2F9ACC0001AC0C /* Valet */,
 			);
 			productName = ExampleProjectIntegration;
 			productReference = 32756FE22B24C042006BDD24 /* ExampleProjectIntegration.app */;
@@ -140,7 +142,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 1510;
 				TargetAttributes = {
 					32756FE12B24C042006BDD24 = {
 						CreatedOnToolsVersion = 15.0.1;
@@ -158,6 +160,7 @@
 			mainGroup = 32756FD92B24C042006BDD24;
 			packageReferences = (
 				321042512B2533ED0088785D /* XCRemoteSwiftPackageReference "SafeDI" */,
+				324F1EBE2B2F9ACC0001AC0C /* XCRemoteSwiftPackageReference "valet" */,
 			);
 			productRefGroup = 32756FE32B24C042006BDD24 /* Products */;
 			projectDirPath = "";
@@ -185,15 +188,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				32756FE82B24C042006BDD24 /* ContentView.swift in Sources */,
-				3275700A2B24C24C006BDD24 /* ChildA.swift in Sources */,
+				324F1ECF2B314E030001AC0C /* NameEntryView.swift in Sources */,
+				324F1ED22B3150480001AC0C /* NoteView.swift in Sources */,
 				32756FE62B24C042006BDD24 /* ExampleApp.swift in Sources */,
-				3275700C2B24C24C006BDD24 /* ChildC.swift in Sources */,
-				327570072B24C24C006BDD24 /* GrandchildB.swift in Sources */,
-				327570062B24C24C006BDD24 /* GrandchildA.swift in Sources */,
-				3275700B2B24C24C006BDD24 /* ChildB.swift in Sources */,
-				327570082B24C24C006BDD24 /* SharedThing.swift in Sources */,
-				327570092B24C24C006BDD24 /* GrandchildC.swift in Sources */,
+				324F1ECD2B314DB20001AC0C /* StringStorage.swift in Sources */,
+				324F1ECB2B314D8D0001AC0C /* UserService.swift in Sources */,
+				324F1ED72B3156810001AC0C /* AnyObservableObject.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -241,6 +241,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -302,6 +303,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -329,6 +331,7 @@
 				CODE_SIGN_ENTITLEMENTS = ExampleProjectIntegration/ExampleProjectIntegration.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"ExampleProjectIntegration/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -365,6 +368,7 @@
 				CODE_SIGN_ENTITLEMENTS = ExampleProjectIntegration/ExampleProjectIntegration.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"ExampleProjectIntegration/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -425,6 +429,14 @@
 				kind = branch;
 			};
 		};
+		324F1EBE2B2F9ACC0001AC0C /* XCRemoteSwiftPackageReference "valet" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/square/valet";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.2.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -432,6 +444,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 321042512B2533ED0088785D /* XCRemoteSwiftPackageReference "SafeDI" */;
 			productName = "plugin:SafeDIGenerator";
+		};
+		324F1EBF2B2F9ACC0001AC0C /* Valet */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 324F1EBE2B2F9ACC0001AC0C /* XCRemoteSwiftPackageReference "valet" */;
+			productName = Valet;
 		};
 		32B280A22B28176D00A33FED /* SafeDI */ = {
 			isa = XCSwiftPackageProductDependency;

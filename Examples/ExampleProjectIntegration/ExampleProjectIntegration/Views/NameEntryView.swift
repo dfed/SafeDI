@@ -19,15 +19,36 @@
 // SOFTWARE.
 
 import SafeDI
+import SwiftUI
 
 @Instantiable
-public final class GrandchildA {
-
-    public init(shared: SharedThing) {
-        self.shared = shared
+public struct NameEntryView: View {
+    public init(userService: any UserService) {
+        self.userService = userService
     }
 
-    @Received
-    let shared: SharedThing
+    public var body: some View {
+        VStack {
+            TextField(
+                text: $name,
+                prompt: Text("Enter your name"),
+                label: {})
+            Button(action: {
+                userService.userName = name
+            }, label: {
+                Text("Log in")
+            })
+        }
+        .padding()
+    }
 
+    @State
+    private var name: String = ""
+
+    @Received
+    private let userService: any UserService
+}
+
+#Preview {
+    NameEntryView(userService: DefaultUserService(stringStorage: UserDefaults.standard))
 }
