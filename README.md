@@ -35,9 +35,13 @@ Compile-time safe dependency injection for Swift projects.
 
 ## Using SafeDI
 
-SafeDI utilizes Swift Macros and build plugins to read your code and generate a dependency tree that is validated at compile time. Dependencies can either be instantiated by SafeDI or forwarded into the SafeDI dependency tree.
+SafeDI utilizes Swift Macros and Swift Package Manager plugins to read your code and generate a dependency tree that is validated at compile time. Dependencies can either be instantiated by SafeDI or forwarded into the SafeDI dependency tree.
 
-SafeDI relies on Swift Macros to opt types and their properties into the dependency injection (DI) system. SafeDI macros decorate types or extensions to mark the decorated type as being capable of being instantiated by SafeDI, and decorate properties of `@Instantiable`-decorated types to mark them as being part of the SafeDI dependency hierarchy.
+Opting a type into the SafeDI dependency tree is straightforward: add the `@Instantiable` macro to your type declaration, and decorate your type‘s dependencies with macros that signal the lifecycle of each property. Decorate a property with `@Instantiated` if you want to initialize it when the enclosing type is initialized; `@Forwarded` if you want to propagate a runtime-determine value down the dependency tree; or `@Received` if you want to receive the property from an `@Instantiated` or `@Forwarded` property further up the dependency tree.
+
+If a type is declared in third-party code, you can declare an extension the type in your code and decorate it with the `@ExternalInstantiable` macro to opt it into SafeDI.
+
+Let‘s walk through each of these macros in detail.
 
 ### @Instantiable
 
