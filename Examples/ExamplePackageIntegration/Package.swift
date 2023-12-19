@@ -24,65 +24,53 @@ let package = Package(
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
-        .rootTarget(
+        .target(
             name: "RootModule",
             dependencies: [
+                "SafeDI",
                 "SharedModule",
                 "ChildAModule",
                 "ChildBModule",
                 "ChildCModule",
-            ]
-        ),
-        .nonRootTarget(
-            name: "ChildAModule",
-            dependencies: [
-                "SharedModule",
-                "GrandchildrenModule",
-            ]
-        ),
-        .nonRootTarget(
-            name: "ChildBModule",
-            dependencies: [
-                "SharedModule",
-                "GrandchildrenModule",
-            ]
-        ),
-        .nonRootTarget(
-            name: "ChildCModule",
-            dependencies: [
-                "SharedModule",
-                "GrandchildrenModule",
-            ]
-        ),
-        .nonRootTarget(
-            name: "GrandchildrenModule",
-            dependencies: [
-                "SharedModule"
-            ]
-        ),
-        .nonRootTarget(name: "SharedModule"),
-    ]
-)
-
-extension Target {
-    static func rootTarget(name: String, dependencies: [Target.Dependency] = []) -> Target {
-        .target(
-            name: name,
-            dependencies: [
-                "SafeDI",
-            ] + dependencies,
+            ],
             plugins: [
                 .plugin(name: "SafeDIGenerator", package: "SafeDI"),
             ]
-        )
-    }
-
-    static func nonRootTarget(name: String, dependencies: [Target.Dependency] = []) -> Target {
+        ),
         .target(
-            name: name,
+            name: "ChildAModule",
             dependencies: [
                 "SafeDI",
-            ] + dependencies
-        )
-    }
-}
+                "SharedModule",
+                "GrandchildrenModule",
+            ]
+        ),
+        .target(
+            name: "ChildBModule",
+            dependencies: [
+                "SafeDI",
+                "SharedModule",
+                "GrandchildrenModule",
+            ]
+        ),
+        .target(
+            name: "ChildCModule",
+            dependencies: [
+                "SafeDI",
+                "SharedModule",
+                "GrandchildrenModule",
+            ]
+        ),
+        .target(
+            name: "GrandchildrenModule",
+            dependencies: [
+                "SafeDI",
+                "SharedModule"
+            ]
+        ),
+        .target(
+            name: "SharedModule",
+            dependencies: ["SafeDI"]
+        ),
+    ]
+)
