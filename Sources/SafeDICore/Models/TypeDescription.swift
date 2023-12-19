@@ -328,17 +328,18 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             } else {
                 return self
             }
-        case .any,
-                .array,
+        case let .any(typeDescription),
+            let .implicitlyUnwrappedOptional(typeDescription),
+            let .optional(typeDescription),
+            let .some(typeDescription):
+            return typeDescription.asInstantiatedType
+        case .array,
                 .attributed,
                 .closure,
                 .composition,
                 .dictionary,
-                .implicitlyUnwrappedOptional,
                 .metatype,
                 .nested,
-                .optional,
-                .some,
                 .tuple,
                 .unknown:
             return self
