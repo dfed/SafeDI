@@ -21,17 +21,12 @@
 import Combine
 
 final class AnyObservableObject: ObservableObject {
-    private let objectWillChangeClosure: () -> AnyPublisher<Void, Never>
-
-    var objectWillChange: AnyPublisher<Void, Never> {
-        objectWillChangeClosure()
+    init(_ observable: some ObservableObject) {
+        objectWillChange = observable
+            .objectWillChange
+            .map { _ in () }
+            .eraseToAnyPublisher()
     }
 
-    init<Observable: ObservableObject>(_ observable: Observable) {
-        self.objectWillChangeClosure = {
-            observable.objectWillChange
-                .map { _ in () }
-                .eraseToAnyPublisher()
-        }
-    }
+    let objectWillChange: AnyPublisher<Void, Never>
 }
