@@ -2363,6 +2363,103 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
     
+    func test_run_onCodeWithIncorrectInstantiableFirstGeneric_throwsError() async throws {
+        await assertThrowsError(
+            """
+            Property `loggedInViewControllerBuilder: ForwardingInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ForwardingInstantiator<User, UIViewController>`. First generic argument must match type of @Forwarded property.
+            """
+        ) {
+            try await SafeDITool.run(
+                swiftFileContent: [
+                """
+                public struct User {}
+                """,
+                """
+                public protocol AuthService {
+                    func login(username: String, password: String) async -> User
+                }
+
+                @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+                public final class DefaultAuthService: AuthService {
+                    public init(networkService: NetworkService) {
+                        self.networkService = networkService
+                    }
+
+                    public func login(username: String, password: String) async -> User {
+                        User()
+                    }
+
+                    @Received
+                    let networkService: NetworkService
+                }
+                """,
+                """
+                public protocol NetworkService {}
+
+                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                public final class DefaultNetworkService: NetworkService {
+                    public init() {}
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class RootViewController: UIViewController {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<String, UIViewController>) {
+                        self.authService = authService
+                        self.networkService = networkService
+                        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
+                        derivedValue = false
+                        super.init(nibName: nil, bundle: nil)
+                    }
+
+                    @Instantiated
+                    let networkService: NetworkService
+
+                    @Instantiated
+                    let authService: AuthService
+
+                    @Instantiated(fulfilledByType: "LoggedInViewController")
+                    let loggedInViewControllerBuilder: ForwardingInstantiator<String, UIViewController>
+
+                    private let derivedValue: Bool
+
+                    func login(username: String, password: String) {
+                        Task { @MainActor in
+                            let loggedInViewController = loggedInViewControllerBuilder.instantiate(username)
+                            pushViewController(loggedInViewController)
+                        }
+                    }
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class LoggedInViewController: UIViewController {
+
+                    public init(user: User, networkService: NetworkService) {
+                        self.user = user
+                        self.networkService = networkService
+                    }
+
+                    @Forwarded
+                    private let user: User
+
+                    @Received
+                    let networkService: NetworkService
+                }
+                """,
+                ],
+                dependentImportStatements: [],
+                dependentInstantiables: [],
+                buildDependencyTreeOutput: true
+            )
+        }
+    }
+
+
     private func assertThrowsError<ReturnType>(
         _ errorDescription: String,
         line: UInt = #line,

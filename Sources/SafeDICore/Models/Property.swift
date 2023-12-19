@@ -88,6 +88,27 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
         }
     }
 
+    var generics: [TypeDescription] {
+        switch typeDescription {
+        case let .simple(_, generics),
+            let .nested(_, _, generics):
+            return generics
+        case .any,
+                .array,
+                .attributed,
+                .closure,
+                .composition,
+                .dictionary,
+                .implicitlyUnwrappedOptional,
+                .metatype,
+                .optional,
+                .some,
+                .tuple,
+                .unknown:
+            return []
+        }
+    }
+
     // MARK: PropertyType
 
     enum PropertyType {

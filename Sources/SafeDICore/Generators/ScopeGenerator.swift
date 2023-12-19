@@ -86,7 +86,19 @@ actor ScopeGenerator {
                     let isConstant: Bool
                     let propertyDeclaration: String
                     let leadingConcreteTypeName: String
-                    let closureArguments = if let forwardedProperty { " \(forwardedProperty.label) in" } else { "" }
+                    let closureArguments: String
+                    if let forwardedProperty {
+                        guard property.generics.first == forwardedProperty.typeDescription else {
+                            throw GenerationError.forwardingInstantiatorGenericDoesNotMatch(
+                                property: property,
+                                expectedType: forwardedProperty.typeDescription,
+                                instantiable: instantiable
+                            )
+                        }
+                        closureArguments = " \(forwardedProperty.label) in"
+                    } else {
+                        closureArguments = ""
+                    }
                     switch property.propertyType {
                     case .instantiator, .forwardingInstantiator:
                         isConstant = false
@@ -162,7 +174,7 @@ actor ScopeGenerator {
     private func generateProperties(leadingMemberWhitespace: String) async throws -> [String] {
         var generatedProperties = [String]()
         while
-            let childGenerator = try nextSatisfiableProperty(),
+            let childGenerator = nextSatisfiableProperty(),
             let childProperty = childGenerator.property
         {
             resolvedProperties.insert(childProperty)
@@ -174,7 +186,7 @@ actor ScopeGenerator {
         return generatedProperties
     }
 
-    private func nextSatisfiableProperty() throws -> ScopeGenerator? {
+    private func nextSatisfiableProperty() -> ScopeGenerator? {
         let remainingProperties = propertiesToGenerate.filter {
             if let property = $0.property {
                 !resolvedProperties.contains(property)
@@ -210,5 +222,18 @@ actor ScopeGenerator {
         resolvedProperties.contains(property)
         || receivedProperties.contains(property)
         || forwardedProperty == property
+    }
+
+    // MARK: GenerationError
+
+    private enum GenerationError: Error, CustomStringConvertible {
+        case forwardingInstantiatorGenericDoesNotMatch(property: Property, expectedType: TypeDescription, instantiable: Instantiable)
+
+        var description: String {
+            switch self {
+            case let .forwardingInstantiatorGenericDoesNotMatch(property, expectedType, instantiable):
+                "Property `\(property.asSource)` on \(instantiable.concreteInstantiableType.asSource) incorrectly configured. Property should instead be of type `\(Dependency.forwardingInstantiatorType)<\(expectedType.asSource), \(property.typeDescription.asInstantiatedType.asSource)>`. First generic argument must match type of @\(Dependency.Source.forwarded.rawValue) property."
+            }
+        }
     }
 }
