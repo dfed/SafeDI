@@ -405,7 +405,7 @@ Other Swift DI libraries like [Swinject](https://github.com/Swinject/Swinject) a
 
 ## Acknowledgements
 
-Huge thanks to @kierajmumick for helping hone the early design of SafeDI.
+Huge thanks to [@kierajmumick](http://github.com/kierajmumick) for helping hone the early design of SafeDI.
 
 ## Developing
 
