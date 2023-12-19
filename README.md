@@ -49,7 +49,7 @@ Every `@Instantiable`-decorated type must be:
 
 2. Have a `public init(…)` or `open init(…)` method that receives every injectable property
 
-The `@Instantiable` guides engineers through satisfying these requirements with build-time FixIts. 
+The `@Instantiable` guides engineers through satisfying these requirements with build-time FixIts.
 
 #### Example
 
@@ -100,7 +100,7 @@ public final class DefaultUserService: UserService {
     @Instantiated
     private let authService: AuthService
 
-    /// An instance of secure, persistent storage that is instantiated further up the SafeDI dependency tree. 
+    /// An instance of secure, persistent storage that is instantiated further up the SafeDI dependency tree.
     @Received
     private let securePersistentStorage: SecurePersistentStorage
 
@@ -207,13 +207,13 @@ public struct ParentView: View {
 
 ### @Forwarded
 
-Property declarations within [`@Instantiable`](#instantiable) types decorated with the [`@Forwarded` macro](Sources/SafeDI/PropertyDecoration/Forwarded.swift) are forwarded into the SafeDI dependency tree by a [`ForwardingInstantiator`](Sources/SafeDI/DelayedInstantiation/ForwardingInstantiator.swift) instance’s `instantiate(…)` method. A `@Forwarded`-decorated property is available to be [`@Received`](#received) by objects instantiated further down the dependency tree. 
+Property declarations within [`@Instantiable`](#instantiable) types decorated with the [`@Forwarded` macro](Sources/SafeDI/PropertyDecoration/Forwarded.swift) are forwarded into the SafeDI dependency tree by a [`ForwardingInstantiator`](Sources/SafeDI/DelayedInstantiation/ForwardingInstantiator.swift) instance’s `instantiate(…)` method. A `@Forwarded`-decorated property is available to be [`@Received`](#received) by objects instantiated further down the dependency tree.
 
 A single `@Instantiable` type may have at most one `@Forwarded`-decorated property.
 
 ### @Received
 
-Property declarations within [`@Instantiable`](#instantiable) types decorated with the [`@Received` macro](Sources/SafeDI/PropertyDecoration/Received.swift) are injected into the enclosing type‘s initializer. Received properties must be [`@Instantiated`](#instantiated) or [`@Forwarded`](#forwarded) by an object higher up in the dependency tree. 
+Property declarations within [`@Instantiable`](#instantiable) types decorated with the [`@Received` macro](Sources/SafeDI/PropertyDecoration/Received.swift) are injected into the enclosing type‘s initializer. Received properties must be [`@Instantiated`](#instantiated) or [`@Forwarded`](#forwarded) by an object higher up in the dependency tree.
 
 ### Delayed instantiation
 
@@ -243,7 +243,7 @@ public struct MyApp: App {
 }
 ```
 
-It is possible to write a `Instantiator` with a type-erased generic by utilizing `@Instantiated`‘s `fulfilledByType` parameter. 
+It is possible to write a `Instantiator` with a type-erased generic by utilizing `@Instantiated`‘s `fulfilledByType` parameter.
 
 #### ForwardingInstantiator
 
@@ -284,7 +284,7 @@ public struct MyApp: App {
 }
 ```
 
-It is possible to write a `ForwardingInstantiator` with a type-erased second generic by utilizing `@Instantiated`‘s `fulfilledByType` parameter. 
+It is possible to write a `ForwardingInstantiator` with a type-erased second generic by utilizing `@Instantiated`‘s `fulfilledByType` parameter.
 
 ### Creating the root of your dependency tree
 
@@ -297,7 +297,7 @@ An `@Instantiable` type qualifies as the root of a dependency tree if and only i
 
 ### Comparing SafeDI and Manual Injection: Key Differences
 
-SafeDI is designed to be simple to adopt and minimize architectural changes required to get the benefits of a compile-time safe DI system. Despite this design goal, there are a few key differences between projects that utilize SafeDI and projects that don‘t. As the benefits of this system are clearly outlined in the [Features](#features) section above, this section outlines the pattern changes required to utilize a DI system like SafeDI. 
+SafeDI is designed to be simple to adopt and minimize architectural changes required to get the benefits of a compile-time safe DI system. Despite this design goal, there are a few key differences between projects that utilize SafeDI and projects that don‘t. As the benefits of this system are clearly outlined in the [Features](#features) section above, this section outlines the pattern changes required to utilize a DI system like SafeDI.
 
 #### Instantiating objects
 
