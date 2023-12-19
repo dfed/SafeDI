@@ -35,13 +35,13 @@ struct SafeDITool: AsyncParsableCommand {
     @Option(parsing: .upToNextOption, help: "The names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.")
     var additionalImportedModules: [String] = []
 
-    @Option(help: "The desired output location of a file a SafeDI representation of this module")
+    @Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project‘s non-root module")
     var moduleInfoOutput: String?
 
-    @Option(parsing: .upToNextOption, help: "File paths to SafeDI representations of other modules")
+    @Option(parsing: .upToNextOption, help: "File paths to SafeDI representations of other modules. Only include this option when running on a project‘s root module.")
     var moduleInfoPaths: [String] = []
 
-    @Option(help: "The desired output location of the Swift dependency injection tree")
+    @Option(help: "The desired output location of the Swift dependency injection tree. Only include this option when running on a project‘s root module.")
     var dependencyTreeOutput: String?
 
     // MARK: Internal
