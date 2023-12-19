@@ -280,7 +280,7 @@ public struct MyApp: App {
 
     @ObservedObject
     @Instantiated
-    private let userService: UserService
+    private var userService: UserService
 }
 ```
 
