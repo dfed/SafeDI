@@ -25,6 +25,12 @@ public enum FixableInstantiableError: DiagnosticError {
     case dependencyHasInitializer
     case missingPublicOrOpenAttribute
     case missingRequiredInitializer
+    case missingRequiredInstantiateMethod(typeName: String)
+    case missingAttributes
+    case disallowedGenericParameter
+    case disallowedEffectSpecifiers
+    case incorrectReturnType
+    case disallowedGenericWhereClause
 
     public var description: String {
         switch self {
@@ -37,6 +43,18 @@ public enum FixableInstantiableError: DiagnosticError {
         case .missingRequiredInitializer:
             // TODO: Create fixit just for `public` or `open` missing.
             "@\(InstantiableVisitor.macroName)-decorated type must have `public` or `open` initializer comprising all injected parameters"
+        case let .missingRequiredInstantiateMethod(typeName):
+            "@\(InstantiableVisitor.macroName)-decorated extension of \(typeName) must have a `public static func instantiate() -> \(typeName)` method"
+        case .missingAttributes:
+            "@\(InstantiableVisitor.macroName)-decorated extension must have an `instantiate()` method that is both `public` and `static`"
+        case .disallowedGenericParameter:
+            "@\(InstantiableVisitor.macroName)-decorated extension's `instantiate()` method must not have a generic parameter"
+        case .disallowedEffectSpecifiers:
+            "@\(InstantiableVisitor.macroName)-decorated extension's `instantiate()` method must not throw or be async"
+        case .incorrectReturnType:
+            "@\(InstantiableVisitor.macroName)-decorated extension's `instantiate()` method must return the same type as the extended type"
+        case .disallowedGenericWhereClause:
+            "@\(InstantiableVisitor.macroName)-decorated extension must not have a generic `where` clause"
         }
     }
 
@@ -60,7 +78,13 @@ public enum FixableInstantiableError: DiagnosticError {
             case .dependencyHasTooManyAttributes,
                     .dependencyHasInitializer,
                     .missingPublicOrOpenAttribute,
-                    .missingRequiredInitializer:
+                    .missingRequiredInitializer,
+                    .missingRequiredInstantiateMethod,
+                            .missingAttributes,
+                            .disallowedGenericParameter,
+                            .disallowedEffectSpecifiers,
+                            .incorrectReturnType,
+                            .disallowedGenericWhereClause:
                 .error
             }
         }
@@ -85,6 +109,18 @@ public enum FixableInstantiableError: DiagnosticError {
                 "Add `public` modifier"
             case .missingRequiredInitializer:
                 "Add required initializer"
+            case let .missingRequiredInstantiateMethod(typeName):
+                "Add `public static func instantiate() -> \(typeName)` method"
+            case .missingAttributes:
+                "Set `public static` modifiers"
+            case .disallowedGenericParameter:
+                "Remove generic parameter"
+            case .disallowedEffectSpecifiers:
+                "Remove effect specifiers"
+            case .incorrectReturnType:
+                "Make `instantiate()`'s return type the same as the extended type"
+            case .disallowedGenericWhereClause:
+                "Remove generic `where` clause"
             }
         }
 

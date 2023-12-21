@@ -46,7 +46,7 @@ final class InstantiableMacroTests: XCTestCase {
 
     // MARK: Error tests
 
-    func test_throwsErrorWhenOnProtocol() {
+    func test_declaration_throwsErrorWhenOnProtocol() {
         assertMacro {
             """
             @Instantiable
@@ -56,13 +56,13 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             ┬────────────
-            ╰─ 🛑 @Instantiable must decorate a class, struct, or actor
+            ╰─ 🛑 @Instantiable must decorate an extension on a type or a class, struct, or actor declaration
             public protocol ExampleService {}
             """
         }
     }
 
-    func test_throwsErrorWhenOnEnum() {
+    func test_declaration_throwsErrorWhenOnEnum() {
         assertMacro {
             """
             @Instantiable
@@ -72,13 +72,13 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             ┬────────────
-            ╰─ 🛑 @Instantiable must decorate a class, struct, or actor
+            ╰─ 🛑 @Instantiable must decorate an extension on a type or a class, struct, or actor declaration
             public enum ExampleService {}
             """
         }
     }
 
-    func test_throwsErrorWhenFulfillingAdditionalTypesIsAPropertyReference() {
+    func test_declaration_throwsErrorWhenFulfillingAdditionalTypesIsAPropertyReference() {
         assertMacro {
             """
             let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
@@ -96,7 +96,7 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
-    func test_throwsErrorWhenFulfillingAdditionalTypesIsAClosure() {
+    func test_declaration_throwsErrorWhenFulfillingAdditionalTypesIsAClosure() {
         assertMacro {
             """
             @Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
@@ -112,7 +112,7 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
-    func test_throwsErrorWhenMoreThanOneForwardedProperty() {
+    func test_declaration_throwsErrorWhenMoreThanOneForwardedProperty() {
         assertMacro {
             """
             @Instantiable
@@ -150,9 +150,73 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
+    func test_extension_throwsErrorWhenFulfillingAdditionalTypesIsAPropertyReference() {
+        assertMacro {
+            """
+            let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
+            @Instantiable(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
+            @Instantiable(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
+            ┬──────────────────────────────────────────────────────────────────
+            ╰─ 🛑 The argument `fulfillingAdditionalTypes` must be an inlined array
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        }
+    }
+
+    func test_extension_throwsErrorWhenFulfillingAdditionalTypesIsAClosure() {
+        assertMacro {
+            """
+            @Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
+            ┬───────────────────────────────────────────────────────────────
+            ╰─ 🛑 The argument `fulfillingAdditionalTypes` must be an inlined array
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        }
+    }
+
+    func test_extension_throwsErrorWhenMoreThanOneInstantiateMethod() {
+        assertMacro {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+                public static func instantiate(user: User) -> ExampleService { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            ┬────────────
+            ╰─ 🛑 @Instantiable-decorated extension must have a single `instantiate()` method
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+                public static func instantiate(user: User) -> ExampleService { fatalError() }
+            }
+            """
+        }
+    }
+
     // MARK: FixIt tests
 
-    func test_fixit_addsFixitWhenMultipleInjectableMacrosOnTopOfSingleProperty() {
+    func test_declaration_fixit_addsFixitWhenMultipleInjectableMacrosOnTopOfSingleProperty() {
         assertMacro {
             """
             @Instantiable
@@ -201,7 +265,7 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
-    func test_fixit_addsFixitWhenInjectableParameterHasInitializer() {
+    func test_declaration_fixit_addsFixitWhenInjectableParameterHasInitializer() {
         assertMacro {
             """
             @Instantiable
@@ -252,7 +316,7 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
-    func test_fixit_addsFixitWhenInjectableTypeIsNotPublicOrOpen() {
+    func test_declaration_fixit_addsFixitWhenInjectableTypeIsNotPublicOrOpen() {
         assertMacro {
             """
             @Instantiable
@@ -305,7 +369,7 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
-    func test_fixit_addsFixitMissingRequiredInitializerWithoutAnyDependencies() {
+    func test_declaration_fixit_addsFixitMissingRequiredInitializerWithoutAnyDependencies() {
         assertMacro {
             """
             @Instantiable
@@ -338,7 +402,7 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
-    func test_fixit_addsFixitMissingRequiredInitializerWithDependencies() {
+    func test_declaration_fixit_addsFixitMissingRequiredInitializerWithDependencies() {
         assertMacro {
             """
             @Instantiable
@@ -381,7 +445,7 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
-    func test_fixit_addsFixitMissingRequiredInitializerWhenDependencyMissingFromInit() {
+    func test_declaration_fixit_addsFixitMissingRequiredInitializerWhenDependencyMissingFromInit() {
         assertMacro {
             """
             @Instantiable
@@ -466,7 +530,7 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
-    func test_fixit_addsFixitMissingRequiredInitializerWhenInstantiatorDependencyMissingFromInit() {
+    func test_declaration_fixit_addsFixitMissingRequiredInitializerWhenInstantiatorDependencyMissingFromInit() {
         assertMacro {
             """
             @Instantiable
@@ -504,6 +568,377 @@ final class InstantiableMacroTests: XCTestCase {
             self.instantiatableAInstantiator = instantiatableAInstantiator
             }
                 private let instantiatableAInstantiator: Instantiator<ReceivedA>
+            }
+            """
+        }
+    }
+
+    func test_extension_fixit_addsFixitWhenInstantiateMethodMissing() {
+        assertMacro {
+            """
+            @Instantiable
+            extension ExampleService {
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            extension ExampleService {
+                                      ╰─ 🛑 @Instantiable-decorated extension of ExampleService must have a `public static func instantiate() -> ExampleService` method
+                                         ✏️ Add `public static func instantiate() -> ExampleService` method
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            extension ExampleService {
+            public static func instantiate() -> ExampleService
+            {}
+
+
+            public static func instantiate() -> ExampleService
+            {}
+            """ // This is correct in Xcode: we only write the `instantiate()` method once.
+        }
+    }
+
+    func test_extension_fixit_addsFixitWhenInstantiateMethodIsNotPublic() {
+        assertMacro {
+            """
+            @Instantiable
+            extension ExampleService {
+                static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            extension ExampleService {
+                static func instantiate() -> ExampleService { fatalError() }
+                ┬───────────────────────────────────────────────────────────
+                ╰─ 🛑 @Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`
+                   ✏️ Set `public static` modifiers
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            extension ExampleService {
+            public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } expansion: {
+            """
+            extension ExampleService {
+            public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        }
+    }
+
+    func test_extension_fixit_addsFixitWhenInstantiateMethodIsNotStatic() {
+        assertMacro {
+            """
+            @Instantiable
+            extension ExampleService {
+                public func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            extension ExampleService {
+                public func instantiate() -> ExampleService { fatalError() }
+                ┬───────────────────────────────────────────────────────────
+                ╰─ 🛑 @Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`
+                   ✏️ Set `public static` modifiers
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            extension ExampleService {
+            public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } expansion: {
+            """
+            extension ExampleService {
+            public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        }
+    }
+
+    func test_extension_fixit_addsFixitWhenInstantiateMethodIsNotStaticOrPublic() {
+        assertMacro {
+            """
+            @Instantiable
+            extension ExampleService {
+                func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            extension ExampleService {
+                func instantiate() -> ExampleService { fatalError() }
+                ┬────────────────────────────────────────────────────
+                ╰─ 🛑 @Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`
+                   ✏️ Set `public static` modifiers
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            extension ExampleService {
+            public static 
+                func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } expansion: {
+            """
+            extension ExampleService {
+            public static 
+                func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        }
+    }
+
+    func test_extension_fixit_addsFixitWhenInstantiateMethodReturnsIncorrectType() {
+        assertMacro {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate() -> OtherExampleService { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate() -> OtherExampleService { fatalError() }
+                ┬───────────────────────────────────────────────────────────────────────
+                ╰─ 🛑 @Instantiable-decorated extension's `instantiate()` method must return the same type as the extended type
+                   ✏️ Make `instantiate()`'s return type the same as the extended type
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } expansion: {
+            """
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        }
+    }
+
+    func test_extension_fixit_addsFixitWhenInstantiateMethodIsAsync() {
+        assertMacro {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate() async -> ExampleService { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate() async -> ExampleService { fatalError() }
+                ┬────────────────────────────────────────────────────────────────────────
+                ╰─ 🛑 @Instantiable-decorated extension's `instantiate()` method must not throw or be async
+                   ✏️ Remove effect specifiers
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } expansion: {
+            """
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        }
+    }
+
+    func test_extension_fixit_addsFixitWhenInstantiateMethodThrows() {
+        assertMacro {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate() throws -> ExampleService { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate() throws -> ExampleService { fatalError() }
+                ┬─────────────────────────────────────────────────────────────────────────
+                ╰─ 🛑 @Instantiable-decorated extension's `instantiate()` method must not throw or be async
+                   ✏️ Remove effect specifiers
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } expansion: {
+            """
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        }
+    }
+
+    func test_extension_fixit_addsFixitWhenInstantiateMethodIsAsyncAndThrows() {
+        assertMacro {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate() async throws -> ExampleService { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate() async throws -> ExampleService { fatalError() }
+                ┬───────────────────────────────────────────────────────────────────────────────
+                ╰─ 🛑 @Instantiable-decorated extension's `instantiate()` method must not throw or be async
+                   ✏️ Remove effect specifiers
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } expansion: {
+            """
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        }
+    }
+
+    func test_extension_fixit_addsFixitWhenInstantiateMethodHasGenericParameter() {
+        assertMacro {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate<T>() -> ExampleService { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate<T>() -> ExampleService { fatalError() }
+                ┬─────────────────────────────────────────────────────────────────────
+                ╰─ 🛑 @Instantiable-decorated extension's `instantiate()` method must not have a generic parameter
+                   ✏️ Remove generic parameter
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } expansion: {
+            """
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        }
+    }
+
+    func test_extension_fixit_addsFixitWhenInstantiateMethodHasGenericWhereClause() {
+        assertMacro {
+            """
+            @Instantiable
+            extension Array {
+                public static func instantiate() -> Array where Element == String { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            extension Array {
+                public static func instantiate() -> Array where Element == String { fatalError() }
+                ┬─────────────────────────────────────────────────────────────────────────────────
+                ╰─ 🛑 @Instantiable-decorated extension must not have a generic `where` clause
+                   ✏️ Remove generic `where` clause
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            extension Array {
+                public static func instantiate() -> Array { fatalError() }
+            }
+            """
+        } expansion: {
+            """
+            extension Array {
+                public static func instantiate() -> Array { fatalError() }
+            }
+            """
+        }
+    }
+
+    func test_extension_fixit_addsFixitWhenExtensionHasGenericWhereClause() {
+        assertMacro {
+            """
+            @Instantiable
+            extension Array where Element == String {
+                public static func instantiate() -> Array { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            ┬────────────
+            ╰─ 🛑 @Instantiable-decorated extension must not have a generic `where` clause
+               ✏️ Remove generic `where` clause
+            extension Array where Element == String {
+                public static func instantiate() -> Array { fatalError() }
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            extension Array {
+                public static func instantiate() -> Array { fatalError() }
+            }
+            """
+        } expansion: {
+            """
+            extension Array {
+                public static func instantiate() -> Array { fatalError() }
             }
             """
         }

@@ -79,7 +79,7 @@ actor ScopeGenerator {
                     case .actorType, .classType, .structType:
                         concreteTypeName
                     case .extensionType:
-                        "\(concreteTypeName).\(ExternalInstantiableVisitor.instantiateMethodName)"
+                        "\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
                     }
                     let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
 

@@ -21,7 +21,7 @@
 import Foundation
 import SafeDI
 
-@ExternalInstantiable
+@Instantiable
 extension UserDefaults {
     public static func instantiate() -> UserDefaults {
         .standard

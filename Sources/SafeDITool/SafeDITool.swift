@@ -126,7 +126,7 @@ struct SafeDITool: AsyncParsableCommand {
             for filePath in swiftFilePaths {
                 taskGroup.addTask {
                     let swiftFile = try String(contentsOfFile: filePath)
-                    if swiftFile.contains(InstantiableVisitor.macroName) {
+                    if swiftFile.contains("@\(InstantiableVisitor.macroName)") {
                         return swiftFile
                     } else {
                         // We don't care about this file.
@@ -224,7 +224,7 @@ struct SafeDITool: AsyncParsableCommand {
             case let .foundNestedInstantiables(nestedInstantiables):
                 "@\(InstantiableVisitor.macroName) types must be top-level declarations. Found the following nested @\(InstantiableVisitor.macroName) types: \(nestedInstantiables.joined(separator: ", "))"
             case let .foundDuplicateInstantiable(duplicateInstantiable):
-                "@\(InstantiableVisitor.macroName)-decorated types and @\(ExternalInstantiableVisitor.macroName)-decorated extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `\(duplicateInstantiable)`"
+                "@\(InstantiableVisitor.macroName)-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `\(duplicateInstantiable)`"
             }
         }
     }

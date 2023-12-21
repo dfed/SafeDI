@@ -26,6 +26,5 @@ struct SafeDIMacroPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         InstantiableMacro.self,
         InjectableMacro.self,
-        ExternalInstantiableMacro.self,
     ]
 }

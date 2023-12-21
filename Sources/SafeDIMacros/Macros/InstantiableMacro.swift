@@ -31,53 +31,143 @@ public struct InstantiableMacro: MemberMacro {
         in context: some MacroExpansionContext)
     throws -> [DeclSyntax]
     {
-        guard
-            let concreteDeclaration: ConcreteDeclSyntaxProtocol 
-                = ActorDeclSyntax(declaration)
-                ?? ClassDeclSyntax(declaration)
-                ?? StructDeclSyntax(declaration) else {
-            throw InstantiableError.decoratingIncompatibleType
-        }
-
-        if let fulfillingAdditionalTypesArgument = concreteDeclaration.attributes.instantiableMacro?.fulfillingAdditionalTypes {
+        if let fulfillingAdditionalTypesArgument = declaration.attributes.instantiableMacro?.fulfillingAdditionalTypes {
             if ArrayExprSyntax(fulfillingAdditionalTypesArgument) == nil {
                 throw InstantiableError.fulfillingAdditionalTypesArgumentInvalid
             }
         }
 
-        let visitor = InstantiableVisitor()
-        visitor.walk(concreteDeclaration)
-        for diagnostic in visitor.diagnostics {
-            context.diagnose(diagnostic)
-        }
+        if
+            let concreteDeclaration: ConcreteDeclSyntaxProtocol
+                = ActorDeclSyntax(declaration)
+                ?? ClassDeclSyntax(declaration)
+                ?? StructDeclSyntax(declaration) {
+            let visitor = InstantiableVisitor(declarationType: .concreteDecl)
+            visitor.walk(concreteDeclaration)
+            for diagnostic in visitor.diagnostics {
+                context.diagnose(diagnostic)
+            }
 
-        guard visitor.dependencies.filter({ $0.source == .forwarded }).count <= 1 else {
-            throw InstantiableError.tooManyForwardedProperties
-        }
+            guard visitor.dependencies.filter({ $0.source == .forwarded }).count <= 1 else {
+                throw InstantiableError.tooManyForwardedProperties
+            }
 
-        let hasMemberwiseInitializerForInjectableProperties = visitor
-            .initializers
-            .contains(where: { $0.isValid(forFulfilling: visitor.dependencies) })
-        guard hasMemberwiseInitializerForInjectableProperties else {
-            var membersWithInitializer = declaration.memberBlock.members
-            membersWithInitializer.insert(
-                MemberBlockItemSyntax(
-                    leadingTrivia: .newline,
-                    decl: Initializer.generateRequiredInitializer(for: visitor.dependencies),
-                    trailingTrivia: .newline
-                ),
-                at: membersWithInitializer.startIndex
-            )
-            context.diagnose(Diagnostic(
-                node: Syntax(declaration.memberBlock),
-                error: FixableInstantiableError.missingRequiredInitializer,
-                changes: [
-                    .replace(
-                        oldNode: Syntax(declaration.memberBlock.members),
-                        newNode: Syntax(membersWithInitializer))
-                ]
-            ))
-            return []
+            let hasMemberwiseInitializerForInjectableProperties = visitor
+                .initializers
+                .contains(where: { $0.isValid(forFulfilling: visitor.dependencies) })
+            guard hasMemberwiseInitializerForInjectableProperties else {
+                var membersWithInitializer = declaration.memberBlock.members
+                membersWithInitializer.insert(
+                    MemberBlockItemSyntax(
+                        leadingTrivia: .newline,
+                        decl: Initializer.generateRequiredInitializer(for: visitor.dependencies),
+                        trailingTrivia: .newline
+                    ),
+                    at: membersWithInitializer.startIndex
+                )
+                context.diagnose(Diagnostic(
+                    node: Syntax(declaration.memberBlock),
+                    error: FixableInstantiableError.missingRequiredInitializer,
+                    changes: [
+                        .replace(
+                            oldNode: Syntax(declaration.memberBlock.members),
+                            newNode: Syntax(membersWithInitializer))
+                    ]
+                ))
+                return []
+            }
+
+        } else if let extensionDeclaration = ExtensionDeclSyntax(declaration) {
+            if extensionDeclaration.genericWhereClause != nil {
+                var modifiedDeclaration = extensionDeclaration
+                modifiedDeclaration.genericWhereClause = nil
+                context.diagnose(Diagnostic(
+                    node: node,
+                    error: FixableInstantiableError.disallowedGenericWhereClause,
+                    changes: [
+                        .replace(
+                            oldNode: Syntax(extensionDeclaration),
+                            newNode: Syntax(modifiedDeclaration)
+                        )
+                    ]
+                ))
+            }
+
+            let visitor = InstantiableVisitor(declarationType: .extensionDecl)
+            visitor.walk(extensionDeclaration)
+            for diagnostic in visitor.diagnostics {
+                context.diagnose(diagnostic)
+            }
+
+            let initializersCount = visitor.initializers.count
+            if initializersCount > 1 {
+                throw InstantiableError.tooManyInstantiateMethods
+            } else if initializersCount == 0 {
+                let extendedTypeName = extensionDeclaration.extendedType.typeDescription.asSource
+                var membersWithInitializer = declaration.memberBlock.members
+                membersWithInitializer.insert(
+                    MemberBlockItemSyntax(
+                        leadingTrivia: .newline,
+                        decl: FunctionDeclSyntax(
+                            modifiers: DeclModifierListSyntax(
+                                arrayLiteral: DeclModifierSyntax(
+                                    name: TokenSyntax(
+                                        TokenKind.keyword(.public),
+                                        presence: .present
+                                    ),
+                                    trailingTrivia: .space
+                                ),
+                                DeclModifierSyntax(
+                                    name: TokenSyntax(
+                                        TokenKind.keyword(.static),
+                                        presence: .present
+                                    ),
+                                    trailingTrivia: .space
+                                )
+                            ),
+                            name: TokenSyntax(
+                                TokenKind.identifier(InstantiableVisitor.instantiateMethodName),
+                                leadingTrivia: .space,
+                                presence: .present
+                            ),
+                            signature: FunctionSignatureSyntax(
+                                parameterClause: FunctionParameterClauseSyntax(
+                                    parameters: FunctionParameterListSyntax([])
+                                ),
+                                returnClause: ReturnClauseSyntax(
+                                    arrow: .arrowToken(
+                                        leadingTrivia: .space,
+                                        trailingTrivia: .space
+                                    ),
+                                    type: IdentifierTypeSyntax(
+                                        name: .identifier(extendedTypeName)
+                                    )
+                                )
+                            ),
+                            body: CodeBlockSyntax(
+                                leadingTrivia: .newline,
+                                statements: CodeBlockItemListSyntax([]),
+                                trailingTrivia: .newline
+                            )
+                        ),
+                        trailingTrivia: .newline
+                    ),
+                    at: membersWithInitializer.startIndex
+                )
+                context.diagnose(Diagnostic(
+                    node: Syntax(extensionDeclaration.memberBlock.members),
+                    error: FixableInstantiableError.missingRequiredInstantiateMethod(
+                        typeName: extendedTypeName
+                    ),
+                    changes: [
+                        .replace(
+                            oldNode: Syntax(declaration.memberBlock.members),
+                            newNode: Syntax(membersWithInitializer))
+                    ]
+                ))
+            }
+        } else {
+            throw InstantiableError.decoratingIncompatibleType
         }
 
         // TODO: consider generating a memberwise initializer if none exists.
@@ -90,17 +180,19 @@ public struct InstantiableMacro: MemberMacro {
         case decoratingIncompatibleType
         case tooManyForwardedProperties
         case fulfillingAdditionalTypesArgumentInvalid
+        case tooManyInstantiateMethods
 
         var description: String {
             switch self {
             case .decoratingIncompatibleType:
-                "@\(InstantiableVisitor.macroName) must decorate a class, struct, or actor"
+                "@\(InstantiableVisitor.macroName) must decorate an extension on a type or a class, struct, or actor declaration"
             case .tooManyForwardedProperties:
                 "An @\(InstantiableVisitor.macroName) type must have at most one @\(Dependency.Source.forwarded.rawValue) property"
             case .fulfillingAdditionalTypesArgumentInvalid:
                 "The argument `fulfillingAdditionalTypes` must be an inlined array"
+            case .tooManyInstantiateMethods:
+                "@\(InstantiableVisitor.macroName)-decorated extension must have a single `instantiate()` method"
             }
         }
     }
-
 }

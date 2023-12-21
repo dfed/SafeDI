@@ -92,9 +92,9 @@ public final class FileVisitor: SyntaxVisitor {
     }
 
     public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
-        let externalInstantiableVisitor = ExternalInstantiableVisitor()
-        externalInstantiableVisitor.walk(node)
-        if let instantiable = externalInstantiableVisitor.instantiable {
+        let instantiableVisitor = InstantiableVisitor(declarationType: .extensionDecl)
+        instantiableVisitor.walk(node)
+        if let instantiable = instantiableVisitor.instantiable {
             instantiables.append(instantiable)
         }
 
@@ -115,7 +115,7 @@ public final class FileVisitor: SyntaxVisitor {
         // TODO: Allow Instantiable to be nested types. Accomplishing this task will require understanding when other nested types are being referenced.
         defer { declSyntaxParentCount += 1 }
         guard declSyntaxParentCount == 0 else {
-            let instantiableVisitor = InstantiableVisitor()
+            let instantiableVisitor = InstantiableVisitor(declarationType: .concreteDecl)
             instantiableVisitor.walk(node)
             if let instantiableType = instantiableVisitor.instantiableType {
                 nestedInstantiableDecoratedTypeDescriptions.append(instantiableType)
@@ -123,7 +123,7 @@ public final class FileVisitor: SyntaxVisitor {
             return .visitChildren
         }
 
-        let instantiableVisitor = InstantiableVisitor()
+        let instantiableVisitor = InstantiableVisitor(declarationType: .concreteDecl)
         instantiableVisitor.walk(node)
         if let instantiable = instantiableVisitor.instantiable {
             instantiables.append(instantiable)
