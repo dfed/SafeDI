@@ -183,6 +183,8 @@ Property declarations within [`@Instantiable`](#instantiable) types decorated wi
 
 When you want to instantiate a type-erased property, you may specify which concrete type you expect to fulfill your property by utilizing `@Instantiated`‘s `fulfilledByType` parameter.
 
+The `fulfilledByType` parameter takes a `String` of the name of the concrete type that will be assigned to the type-erased property. Representing the type as a string literal allows for dependency inversion: the code that receives the concrete type does not need to have a dependency on the module that defines the concrete type.
+
 ```swift
 import SwiftUI
 
