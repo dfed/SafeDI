@@ -26,7 +26,7 @@ public protocol StringStorage {
     func setString(_ string: String?, forKey key: String)
 }
 
-@ExternalInstantiable(fulfillingAdditionalTypes: [StringStorage.self])
+@Instantiable(fulfillingAdditionalTypes: [StringStorage.self])
 extension UserDefaults: StringStorage {
 
     public static func instantiate() -> UserDefaults {

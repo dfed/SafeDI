@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		324F1EC02B2F9ACC0001AC0C /* Valet in Frameworks */ = {isa = PBXBuildFile; productRef = 324F1EBF2B2F9ACC0001AC0C /* Valet */; };
 		324F1ECB2B314D8D0001AC0C /* UserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECA2B314D8D0001AC0C /* UserService.swift */; };
 		324F1ECD2B314DB20001AC0C /* StringStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECC2B314DB20001AC0C /* StringStorage.swift */; };
 		324F1ECF2B314E030001AC0C /* NameEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECE2B314E030001AC0C /* NameEntryView.swift */; };
@@ -38,7 +37,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				32B280A32B28176D00A33FED /* SafeDI in Frameworks */,
-				324F1EC02B2F9ACC0001AC0C /* Valet in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -128,7 +126,6 @@
 			name = ExampleProjectIntegration;
 			packageProductDependencies = (
 				32B280A22B28176D00A33FED /* SafeDI */,
-				324F1EBF2B2F9ACC0001AC0C /* Valet */,
 			);
 			productName = ExampleProjectIntegration;
 			productReference = 32756FE22B24C042006BDD24 /* ExampleProjectIntegration.app */;
@@ -160,7 +157,6 @@
 			mainGroup = 32756FD92B24C042006BDD24;
 			packageReferences = (
 				321042512B2533ED0088785D /* XCRemoteSwiftPackageReference "SafeDI" */,
-				324F1EBE2B2F9ACC0001AC0C /* XCRemoteSwiftPackageReference "valet" */,
 			);
 			productRefGroup = 32756FE32B24C042006BDD24 /* Products */;
 			projectDirPath = "";
@@ -429,14 +425,6 @@
 				kind = branch;
 			};
 		};
-		324F1EBE2B2F9ACC0001AC0C /* XCRemoteSwiftPackageReference "valet" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/square/valet";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 4.2.0;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -444,11 +432,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 321042512B2533ED0088785D /* XCRemoteSwiftPackageReference "SafeDI" */;
 			productName = "plugin:SafeDIGenerator";
-		};
-		324F1EBF2B2F9ACC0001AC0C /* Valet */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 324F1EBE2B2F9ACC0001AC0C /* XCRemoteSwiftPackageReference "valet" */;
-			productName = Valet;
 		};
 		32B280A22B28176D00A33FED /* SafeDI */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -15,7 +15,7 @@
       "location" : "https://github.com/dfed/SafeDI",
       "state" : {
         "branch" : "main",
-        "revision" : "4f13e18ecaa574f060c1fcfe7f0a78050a18b67f"
+        "revision" : "0574004a5e3901707ad00790e5cac03644b8c7d8"
       }
     },
     {
@@ -43,15 +43,6 @@
       "state" : {
         "revision" : "6ad4ea24b01559dde0773e3d091f1b9e36175036",
         "version" : "509.0.2"
-      }
-    },
-    {
-      "identity" : "valet",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/square/valet",
-      "state" : {
-        "revision" : "89f12b93553055f4908c0d2548c9b8655926940a",
-        "version" : "4.2.0"
       }
     },
     {
