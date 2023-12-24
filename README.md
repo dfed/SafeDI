@@ -193,11 +193,11 @@ public struct ParentView: View {
 
 ### @Forwarded
 
-Property declarations within `@Instantiable` types decorated with [`@Forwarded`](Sources/SafeDI/PropertyDecoration/Forwarded.swift) are forwarded into the SafeDI dependency tree by a [`ForwardingInstantiator`](Sources/SafeDI/DelayedInstantiation/ForwardingInstantiator.swift) instance’s `instantiate(…)` function. A `@Forwarded`-decorated property is available to be `@Received` by objects instantiated further down the dependency tree.
+Property declarations within `@Instantiable` types decorated with [`@Forwarded`](Sources/SafeDI/PropertyDecoration/Forwarded.swift) represent dependencies that come from the runtime, e.g. user input or backend-delivered content. Like an `@Instantiated`-decorated property, a `@Forwarded`-decorated property is available to be `@Received` by objects instantiated further down the dependency tree.
 
-`@Forwarded` enables the injection of runtime-created instances and values into the SafeDI dependency tree. `@Forwarded` properties are often representations of user input or backend-delivered content. `@Forwarded` property types do not need to be decorated with the `@Instantiable` macro.
+A `@Forwarded` property is forwarded into the SafeDI dependency tree by a [`ForwardingInstantiator`](#forwardinginstantiator)’s `instantiate(_ argument: ArgumentToForward) -> InstantiableType` function that creates an instance of the property’s enclosing type. `@Instantiable` types with a `@Forwarded`-decorated property can _only_ be instantiated utilizing a `ForwardingInstantiator`.
 
-`@Instantiable` types with a `@Forwarded`-decorated property can only be instantiated utilizing a `ForwardingInstantiator`. A `ForwardingInstantiator` has an `instantiate(_ argument: ArgumentToForward) -> InstantiableType` function that injects the forwarded property into the SafeDI tree and instantiates the type. This single-argument function necessitates that an `@Instantiable` type may have at most one `@Forwarded`-decorated property. If you need to forward multiple properties, create a new container type that stores both properties and forward the container type.
+A `ForwardingInstantiator`‘s single-argument `instantiate` function necessitates that an `@Instantiable` type may have at most one `@Forwarded`-decorated property. If you need to forward multiple properties, create a new container type that stores both properties and forward the container type. Forwarded property types do not need to be decorated with the `@Instantiable` macro.
 
 ### @Received
 
