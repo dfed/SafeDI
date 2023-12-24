@@ -43,10 +43,10 @@ There are a total of four macros in the SafeDI library:
 
 | Macro  | Decorating | Usage |
 | ------ | ----------- | ----- |
-| `@Instantiable` | Type or extension declaration | Makes a type capable of being instantiated by SafeDI. |
-| `@Instantiated` | Property declaration | Instantiates an instance or value when the enclosing `@Instantiable`-decorated type is instantiated. |
-| `@Forwarded` | Property declaration | Propagates a runtime-created instance or value (e.g. a User object, network response, or customer input) down the dependency tree. |
-| `@Received` | Property declaration | Receives an instance or value from an `@Instantiated` or `@Forwarded` property further up the dependency tree. |
+| [`@Instantiable`](#instantiable) | Type or extension declaration | Makes a type capable of being instantiated by SafeDI. |
+| [`@Instantiated`](#instantiated) | Property declaration | Instantiates an instance or value when the enclosing `@Instantiable`-decorated type is instantiated. |
+| [`@Forwarded`](#forwarded) | Property declaration | Propagates a runtime-created instance or value (e.g. a User object, network response, or customer input) down the dependency tree. |
+| [`@Received`](#received) | Property declaration | Receives an instance or value from an `@Instantiated` or `@Forwarded` property further up the dependency tree. |
 
 Let‘s walk through each of these macros in detail.
 
@@ -156,7 +156,7 @@ extension SecurePersistentStorage {
 
 ### @Instantiated
 
-Property declarations within [`@Instantiable`](#instantiable) types decorated with [`@Instantiated`](Sources/SafeDI/PropertyDecoration/Instantiated.swift) are instantiated when its enclosing type is instantiated. `@Instantiated`-decorated properties are available to be [`@Received`](#received) by objects instantiated further down the dependency tree.
+Property declarations within `@Instantiable` types decorated with [`@Instantiated`](Sources/SafeDI/PropertyDecoration/Instantiated.swift) are instantiated when its enclosing type is instantiated. `@Instantiated`-decorated properties are available to be `@Received` by objects instantiated further down the dependency tree.
 
 `@Instantiated`-decorated properties must be declared as an `@Instantiable` type, or of an `additionalType` listed in a `@Instantiable(fulfillingAdditionalTypes:)`‘s declaration.
 
@@ -194,7 +194,7 @@ public struct ParentView: View {
 
 ### @Forwarded
 
-Property declarations within [`@Instantiable`](#instantiable) types decorated with [`@Forwarded`](Sources/SafeDI/PropertyDecoration/Forwarded.swift) are forwarded into the SafeDI dependency tree by a [`ForwardingInstantiator`](Sources/SafeDI/DelayedInstantiation/ForwardingInstantiator.swift) instance’s `instantiate(…)` function. A `@Forwarded`-decorated property is available to be [`@Received`](#received) by objects instantiated further down the dependency tree.
+Property declarations within `@Instantiable` types decorated with [`@Forwarded`](Sources/SafeDI/PropertyDecoration/Forwarded.swift) are forwarded into the SafeDI dependency tree by a [`ForwardingInstantiator`](Sources/SafeDI/DelayedInstantiation/ForwardingInstantiator.swift) instance’s `instantiate(…)` function. A `@Forwarded`-decorated property is available to be `@Received` by objects instantiated further down the dependency tree.
 
 `@Forwarded` enables injecting runtime-created instances and values into the SafeDI dependency tree. `@Forwarded` properties are often representations of user input or backend-delivered content. `@Forwarded` properties are unlikely to conform to types decorated with the `@Instantiable` macro.
 
@@ -202,7 +202,7 @@ Property declarations within [`@Instantiable`](#instantiable) types decorated wi
 
 ### @Received
 
-Property declarations within [`@Instantiable`](#instantiable) types decorated with [`@Received`](Sources/SafeDI/PropertyDecoration/Received.swift) are injected into the enclosing type‘s initializer. Received properties must be [`@Instantiated`](#instantiated) or [`@Forwarded`](#forwarded) by an object higher up in the dependency tree.
+Property declarations within `@Instantiable` types decorated with [`@Received`](Sources/SafeDI/PropertyDecoration/Received.swift) are injected into the enclosing type‘s initializer. Received properties must be `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree.
 
 ### Delayed instantiation
 
