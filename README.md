@@ -69,6 +69,7 @@ Here is a sample `UserService` implementation that is `@Instantiable`:
 ```swift
 import SafeDI
 
+@Instantiable
 public final class UserService {
 
     // MARK: Initialization
