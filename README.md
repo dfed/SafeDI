@@ -5,7 +5,7 @@
 [![codecov](https://codecov.io/gh/dfed/SafeDI/branch/main/graph/badge.svg)](https://codecov.io/gh/dfed/SafeDI)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://spdx.org/licenses/MIT.html)
 
-Compile-time safe dependency injection for Swift projects. SafeDI is built for engineers who crave the safety and simplicity of manual dependency injection without the overhead of boilerplate code.
+Compile-time safe dependency injection for Swift projects. SafeDI is built for engineers who want the safety and simplicity of manual dependency injection without the overhead of boilerplate code.
 
 ## Features
 
@@ -37,13 +37,16 @@ Compile-time safe dependency injection for Swift projects. SafeDI is built for e
 
 SafeDI utilizes Swift Macros and Swift Package Manager plugins to read your code and generate a dependency tree that is validated at compile time. Dependencies can either be instantiated by SafeDI or forwarded into the SafeDI dependency tree.
 
-Opting a type into the SafeDI dependency tree is straightforward: add the `@Instantiable` macro to your type declaration, and decorate your type‘s dependencies with macros that signal the lifecycle of each property. There are just three macros that decorate properties:
+Opting a type into the SafeDI dependency tree is straightforward: add the `@Instantiable` macro to your type declaration, and decorate your type‘s dependencies with macros that signal the lifecycle of each property. If a type is declared in third-party code, you can opt it into SafeDI by declaring an extension of the type in your code and decorating it with the same `@Instantiable` macro.
 
-* `@Instantiated`: instantiates an instance or value when the enclosing type is instantiated
-* `@Forwarded`: propagates a runtime-created instance or value (e.g. a User object, network response, or customer input) down the dependency tree
-* `@Received`: receives an instance or value from an `@Instantiated` or `@Forwarded` property further up the dependency tree.
+There are a total of four macros in the SafeDI library:
 
-If a type is declared in third-party code, you can declare an extension of the type in your code and decorate it with the same `@Instantiable` macro to opt it into SafeDI.
+| Macro  | Decorating | Usage |
+| ------ | ----------- | ----- |
+| `@Instantiable` | Type or extension declaration | Makes a type capable of being instantiated by SafeDI. |
+| `@Instantiated` | Property declaration | Instantiates an instance or value when the enclosing `@Instantiable`-decorated type is instantiated. |
+| `@Forwarded` | Property declaration | Propagates a runtime-created instance or value (e.g. a User object, network response, or customer input) down the dependency tree. |
+| `@Received` | Property declaration | Receives an instance or value from an `@Instantiated` or `@Forwarded` property further up the dependency tree. |
 
 Let‘s walk through each of these macros in detail.
 
@@ -195,20 +198,11 @@ Property declarations within [`@Instantiable`](#instantiable) types decorated wi
 
 `@Forwarded` enables injecting runtime-created instances and values into the SafeDI dependency tree. `@Forwarded` properties are often representations of user input or backend-delivered content. `@Forwarded` properties are unlikely to conform to types decorated with the `@Instantiable` macro.
 
-A single `@Instantiable` type may have at most one `@Forwarded`-decorated property. `@Instantiable` types with a `@Forwarded`-decorated property can only be instantiated utilizing a `ForwardingInstantiator`.
+`@Instantiable` types with a `@Forwarded`-decorated property can only be instantiated utilizing a `ForwardingInstantiator`. A `ForwardingInstantiator` has an `instantiate(_ argument: ArgumentToForward) -> InstantiableType` method that injects the forwarded property into the SafeDI tree and instantiates the type. This single-argument API requires that an `@Instantiable` type may have at most one `@Forwarded`-decorated property. If you need to forward multiple properties, create a new container type that stores both properties and forward the container type.
 
 ### @Received
 
 Property declarations within [`@Instantiable`](#instantiable) types decorated with [`@Received`](Sources/SafeDI/PropertyDecoration/Received.swift) are injected into the enclosing type‘s initializer. Received properties must be [`@Instantiated`](#instantiated) or [`@Forwarded`](#forwarded) by an object higher up in the dependency tree.
-
-### Macro cheat sheet
-
-| Macro  | Decorating | Usage |
-| ------ | ----------- | ----- |
-| `@Instantiable` | Type declaration | Makes a type capable of being instantiated by SafeDI. |
-| `@Instantiated` | Property declaration | Instantiates an instance or value when the enclosing type is instantiated. |
-| `@Forwarded` | Property declaration | Propagates a runtime-created instance or value (e.g. a User object, network response, or customer input) down the dependency tree. |
-| `@Received` | Property declaration | Receives an instance or value from an `@Instantiated` or `@Forwarded` property further up the dependency tree. |
 
 ### Delayed instantiation
 
@@ -250,7 +244,7 @@ public struct MyApp: App {
     public var body: some Scene {
         WindowGroup {
             if let user = userService.user {
-                // Returns a new instance of a `LoggedInContentView`.
+                // Returns a new instance of a `LoggedInContentView` that has a forwarded, non-optional User property.
                 loggedInContentViewInstantiator.instantiate(user)
             } else {
                 // Returns a new instance of a `LoggedOutContentView`.
@@ -273,7 +267,7 @@ public struct MyApp: App {
     @Instantiated
     private let loggedOutContentViewInstantiator: Instantiator<LoggedOutContentView>
 
-    /// An instance of an observable `UserService` that is instantiated when `MyApp` is instantiated.
+    /// An instance of an observable `UserService` that is instantiated when `MyApp` is instantiated. This object updates whenever the user changes.
     @ObservedObject
     @Instantiated
     private var userService: UserService
@@ -303,7 +297,7 @@ To instantiate a dependency after a property‘s enclosing type is initialized, 
 
 #### SwiftUI
 
-It is important to avoid decorating initializer-injected dependencies with the [`@State`](https://developer.apple.com/documentation/swiftui/state) and [`@StateObject`](https://developer.apple.com/documentation/swiftui/stateobject) property wrappers. Apple‘s documentation for both of these property wrappers makes it clear.
+Per Apple‘s documentation, it is important to avoid decorating initializer-injected dependencies with the [`@State`](https://developer.apple.com/documentation/swiftui/state) or [`@StateObject`](https://developer.apple.com/documentation/swiftui/stateobject) property wrappers.
 
 The `@State` documentation reads:
 
@@ -313,7 +307,7 @@ The `@StateObject` documentation reads:
 
 > Declare state objects as private to prevent setting them from a memberwise initializer, which can conflict with the storage management that SwiftUI provides
 
-`@Instantiated`, `@Forwarded`, or `@Received` objects may be decorated with [`@ObservedObject`](https://developer.apple.com/documentation/swiftui/ObservedObject) instead of `@StateObject`. Note that `@Instantiated` objects will be re-initialized when a view‘s parent view is invalidated.
+`@Instantiated`, `@Forwarded`, or `@Received` objects may be decorated with [`@ObservedObject`](https://developer.apple.com/documentation/swiftui/ObservedObject). Note that `@Instantiated` objects declared on a `View` will be re-initialized when the view is re-initialized. You can find a deep dive on SwiftUI view lifecycles [here](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
 
 ### Migrating to SafeDI
 
