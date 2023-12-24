@@ -209,7 +209,7 @@ When you want to instantiate a dependency after `init(…)`, you need to declare
 
 #### Instantiator
 
-The `Instantiator` type is how SafeDI enables deferred instantiation of an `@Instantiable` type that has no `@Forwarded`-decorated properties. `Instantiator` has a single generic that matches the type of the to-be-instantiated instance. Creating an `Instantiator` property is as simple as creating any other property in the SafeDI ecosystem:
+The [`Instantiator`](Sources/SafeDI/DelayedInstantiation/Instantiator.swift) type is how SafeDI enables deferred instantiation of an `@Instantiable` type that has no `@Forwarded`-decorated properties. `Instantiator` has a single generic that matches the type of the to-be-instantiated instance. Creating an `Instantiator` property is as simple as creating any other property in the SafeDI ecosystem:
 
 ```swift
 @Instantiable
@@ -235,7 +235,7 @@ It is possible to write a `Instantiator` with a type-erased generic by utilizing
 
 #### ForwardingInstantiator
 
-The `ForwardingInstantiator` type is how SafeDI enables instantiating any `@Instantiable` type with a `@Forwarded`-decorated property. `ForwardingInstantiator` has two generics. The first generic must match the type of the `@Forwarded`-decorated property. The second generic matches the type of the to-be-instantiated instance.
+The [`ForwardingInstantiator`](Sources/SafeDI/DelayedInstantiation/ForwardingInstantiator.swift) type is how SafeDI enables instantiating any `@Instantiable` type with a `@Forwarded`-decorated property. `ForwardingInstantiator` has two generics. The first generic must match the type of the `@Forwarded`-decorated property. The second generic matches the type of the to-be-instantiated instance.
 
 ```swift
 @Instantiable
