@@ -62,7 +62,7 @@ Every `@Instantiable`-decorated type must be:
 
 2. Have a `public init(…)` or `open init(…)` that receives every injectable property
 
-The `@Instantiable` guides engineers through satisfying these requirements with build-time FixIts.
+The `@Instantiable` macro guides engineers through satisfying these requirements with build-time FixIts.
 
 Here is a sample `UserService` implementation that is `@Instantiable`:
 
@@ -95,7 +95,7 @@ public final class UserService {
 
     // MARK: Private
 
-    /// An auth service instance that is instantiated when the `DefaultUserService` is instantiated.
+    /// An auth service instance that is instantiated when the `UserService` is instantiated.
     @Instantiated
     private let authService: AuthService
 
@@ -158,13 +158,13 @@ extension SecurePersistentStorage {
 
 Property declarations within `@Instantiable` types decorated with [`@Instantiated`](Sources/SafeDI/PropertyDecoration/Instantiated.swift) are instantiated when its enclosing type is instantiated. `@Instantiated`-decorated properties are available to be `@Received` by objects instantiated further down the dependency tree.
 
-`@Instantiated`-decorated properties must be declared as an `@Instantiable` type, or of an `additionalType` listed in a `@Instantiable(fulfillingAdditionalTypes:)`‘s declaration.
+`@Instantiated`-decorated properties must be an `@Instantiable` type, or of an `additionalType` listed in an `@Instantiable(fulfillingAdditionalTypes:)`‘s declaration.
 
 #### Utilizing @Instantiated with type erased properties
 
 When you want to instantiate a type-erased property, you may specify which concrete type you expect to fulfill your property by utilizing `@Instantiated`‘s `fulfilledByType` parameter.
 
-The `fulfilledByType` parameter takes a `String` of the name of the concrete type that will be assigned to the type-erased property. Representing the type as a string literal allows for dependency inversion: the code that receives the concrete type does not need to have a dependency on the module that defines the concrete type.
+The `fulfilledByType` parameter takes a `String` identical to the type name of the concrete type that will be assigned to the type-erased property. Representing the type as a string literal allows for dependency inversion: the code that receives the concrete type does not need to have a dependency on the module that defines the concrete type.
 
 ```swift
 import SwiftUI
@@ -183,9 +183,7 @@ public struct ParentView: View {
     }
 
     // The Instantiator‘s `instantiate()` function will build a view of type `ChildView`.
-    // Because the type is passed in as a string literal, this code does not need to
-    // have a dependency on the module that defines `ChildView`. All that is required
-    // for this code to compile is for there to be an
+    // All that is required for this code to compile is for there to be an
     // `@Instantiable public struct ChildView: View` in the codebase.
     @Instantiated(fulfilledByType: "ChildView")
     private let childViewBuilder: Instantiator<some View>
@@ -196,9 +194,9 @@ public struct ParentView: View {
 
 Property declarations within `@Instantiable` types decorated with [`@Forwarded`](Sources/SafeDI/PropertyDecoration/Forwarded.swift) are forwarded into the SafeDI dependency tree by a [`ForwardingInstantiator`](Sources/SafeDI/DelayedInstantiation/ForwardingInstantiator.swift) instance’s `instantiate(…)` function. A `@Forwarded`-decorated property is available to be `@Received` by objects instantiated further down the dependency tree.
 
-`@Forwarded` enables injecting runtime-created instances and values into the SafeDI dependency tree. `@Forwarded` properties are often representations of user input or backend-delivered content. `@Forwarded` properties are unlikely to conform to types decorated with the `@Instantiable` macro.
+`@Forwarded` enables the injection of runtime-created instances and values into the SafeDI dependency tree. `@Forwarded` properties are often representations of user input or backend-delivered content. `@Forwarded` property types do not need to be decorated with the `@Instantiable` macro.
 
-`@Instantiable` types with a `@Forwarded`-decorated property can only be instantiated utilizing a `ForwardingInstantiator`. A `ForwardingInstantiator` has an `instantiate(_ argument: ArgumentToForward) -> InstantiableType` method that injects the forwarded property into the SafeDI tree and instantiates the type. This single-argument API requires that an `@Instantiable` type may have at most one `@Forwarded`-decorated property. If you need to forward multiple properties, create a new container type that stores both properties and forward the container type.
+`@Instantiable` types with a `@Forwarded`-decorated property can only be instantiated utilizing a `ForwardingInstantiator`. A `ForwardingInstantiator` has an `instantiate(_ argument: ArgumentToForward) -> InstantiableType` function that injects the forwarded property into the SafeDI tree and instantiates the type. This single-argument function necessitates that an `@Instantiable` type may have at most one `@Forwarded`-decorated property. If you need to forward multiple properties, create a new container type that stores both properties and forward the container type.
 
 ### @Received
 
