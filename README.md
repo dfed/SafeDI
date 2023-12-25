@@ -290,7 +290,7 @@ SafeDI is designed to be simple to adopt and minimize architectural changes requ
 
 #### Instantiating objects
 
-In a manual DI system, it is common to directly call your dependencies‘ `init(…)` functions. When utilizing SafeDI, you must rely on `@Instantiated`-decorated properties to instantiate your dependencies for you. Calling a dependency‘s `init(…)` function directly effectively exits the SafeDI-built dependency tree, which removes property lifecycle guarantees.
+In a manual DI system, it is common to directly call your dependencies‘ `init(…)` functions. When utilizing SafeDI, you must rely on `@Instantiated`-decorated properties to instantiate your dependencies for you. Calling a dependency‘s `init(…)` function directly effectively exits the SafeDI-built dependency tree, which removes property lifecycle guarantees. Similarly, you must call the generated `init()` function on your dependency tree‘s root and not its memberwise `init(…)` function in order to create the SafeDI dependency tree.
 
 To instantiate a dependency after a property‘s enclosing type is initialized, you must utilize an instantiated or received `Instantiator` or `ForwardingInstantiator` instance.  
 
