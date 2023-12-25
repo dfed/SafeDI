@@ -21,6 +21,7 @@
 import SafeDI
 import SwiftUI
 
+@MainActor
 @Instantiable
 public struct NoteView: View {
     public init(userName: String, userService: any UserService, stringStorage: StringStorage) {
