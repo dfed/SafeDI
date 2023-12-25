@@ -203,6 +203,60 @@ A `ForwardingInstantiator`‘s single-argument `instantiate` function necessitat
 
 Property declarations within `@Instantiable` types decorated with [`@Received`](Sources/SafeDI/PropertyDecoration/Received.swift) are injected into the enclosing type‘s initializer. Received properties must be `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree.
 
+Here we have a `LoggedInContentView` whose forwarded `user` property is received by an `UpdateUserService` further down the dependency tree.
+
+```
+@Instantiable
+public struct LoggedInContentView: View {
+    public init(user: User, userDetailsService: UserDetailsService) {
+        self.user = user
+        self.userService = userService
+    }
+
+    public var body: some View {
+        ... // Instantiates and displays a ProfileView when a button is pressed.
+    }
+
+    @Forwarded
+    private let user: User
+
+    @Instantiated(fulfilledByType: "ProfileView")
+    private let profileViewBuilder: Instantiator<some View>
+}
+
+@Instantiable
+public struct ProfileView: View {
+    public init(updateUserService: UpdateUserService) {
+        self.updateUserService = updateUserService
+    }
+
+    public var body: some View {
+        ... // Allows for updating user information.
+    }
+
+    @Instantiated
+    private let updateUserService: UpdateUserService
+}
+
+@Instantiable
+public final class UpdateUserService {
+    public init(user: User) {
+        self.user = user
+        urlSession = .shared
+    }
+
+    public func updateUserName(to newName: String) async {
+        // Updates the user name.
+    }
+
+    // The user object which is received from the LoggedInContentView.
+    @Received
+    private let user: User
+
+    private let urlSession: URLSession
+}
+```
+
 ### Delayed instantiation
 
 When you want to instantiate a dependency after `init(…)`, you need to declare an `Instantiator<Dependency>`-typed property as `@Instantiated` or `@Received`.
