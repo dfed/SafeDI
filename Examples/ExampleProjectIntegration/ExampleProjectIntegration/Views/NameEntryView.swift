@@ -21,6 +21,7 @@
 import SafeDI
 import SwiftUI
 
+@MainActor
 @Instantiable
 public struct NameEntryView: View {
     public init(userService: any UserService) {

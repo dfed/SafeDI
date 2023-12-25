@@ -24,6 +24,7 @@ import SwiftUI
 
 // @Instantiable macro marks this type as capable of being instantiated by SafeDI.
 @Instantiable
+@MainActor
 @main
 public struct NotesApp: App {
     public var body: some Scene {
