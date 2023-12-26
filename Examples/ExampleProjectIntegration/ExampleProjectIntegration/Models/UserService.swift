@@ -50,4 +50,3 @@ public final class DefaultUserService: UserService {
     @Published
     private var stringStorage: StringStorage
 }
-
