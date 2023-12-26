@@ -56,26 +56,38 @@ public struct InstantiableMacro: MemberMacro {
                 .initializers
                 .contains(where: { $0.isValid(forFulfilling: visitor.dependencies) })
             guard hasMemberwiseInitializerForInjectableProperties else {
-                var membersWithInitializer = declaration.memberBlock.members
-                membersWithInitializer.insert(
-                    MemberBlockItemSyntax(
-                        leadingTrivia: .newline,
-                        decl: Initializer.generateRequiredInitializer(for: visitor.dependencies),
-                        trailingTrivia: .newline
-                    ),
-                    at: membersWithInitializer.startIndex
-                )
-                context.diagnose(Diagnostic(
-                    node: Syntax(declaration.memberBlock),
-                    error: FixableInstantiableError.missingRequiredInitializer,
-                    changes: [
-                        .replace(
-                            oldNode: Syntax(declaration.memberBlock.members),
-                            newNode: Syntax(membersWithInitializer))
+                if visitor.uninitializedPropertyNames.isEmpty {
+                    return [
+                        DeclSyntax(
+                            Initializer.generateRequiredInitializer(for: visitor.dependencies)
+                        )
                     ]
-                ))
-                return []
+                } else {
+                    var membersWithInitializer = declaration.memberBlock.members
+                    membersWithInitializer.insert(
+                        MemberBlockItemSyntax(
+                            leadingTrivia: .newline,
+                            decl: Initializer.generateRequiredInitializer(
+                                for: visitor.dependencies,
+                                andAdditionalPropertiesWithLabels: visitor.uninitializedPropertyNames
+                            ),
+                            trailingTrivia: .newline
+                        ),
+                        at: membersWithInitializer.startIndex
+                    )
+                    context.diagnose(Diagnostic(
+                        node: Syntax(declaration.memberBlock),
+                        error: FixableInstantiableError.missingRequiredInitializer,
+                        changes: [
+                            .replace(
+                                oldNode: Syntax(declaration.memberBlock.members),
+                                newNode: Syntax(membersWithInitializer))
+                        ]
+                    ))
+                    return []
+                }
             }
+            return []
 
         } else if let extensionDeclaration = ExtensionDeclSyntax(declaration) {
             if extensionDeclaration.genericWhereClause != nil {
@@ -166,12 +178,10 @@ public struct InstantiableMacro: MemberMacro {
                     ]
                 ))
             }
+            return []
         } else {
             throw InstantiableError.decoratingIncompatibleType
         }
-
-        // TODO: consider generating a memberwise initializer if none exists.
-        return []
     }
 
     // MARK: - InstantiableError
