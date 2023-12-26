@@ -9,29 +9,29 @@ Compile-time safe dependency injection for Swift projects. SafeDI is built for e
 
 ## Features
 
-✅ Compile-time safe
+- [x] Compile-time safe
 
-✅ Thread safe
+- [x] Thread safe
 
-✅ Hierarchical dependency scoping
+- [x] Hierarchical dependency scoping
 
-✅ Constructor injection
+- [x] Constructor injection
 
-✅ Multi-module support
+- [x] Multi-module support
 
-✅ Dependency inversion support
+- [x] Dependency inversion support
 
-✅ Transitive dependency solving
+- [x] Transitive dependency solving
 
-✅ Cycle detection
+- [x] Cycle detection
 
-✅ Architecture independent
+- [x] Architecture independent
 
-✅ Simple integration: no DI-specific types or generics required
+- [x] Simple integration: no DI-specific types or generics required
 
-✅ Easy testing: every type has a memberwise initializer
+- [x] Easy testing: every type has a memberwise initializer
 
-✅ Clear error messages: never debug generated code
+- [x] Clear error messages: never debug generated code
 
 ## Using SafeDI
 
