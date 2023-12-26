@@ -25,11 +25,6 @@ import SharedModule
 @Instantiable
 public final class ChildB {
 
-    public init(shared: SharedThing, grandchildB: GrandchildB) {
-        self.shared = shared
-        self.grandchildB = grandchildB
-    }
-
     @Received
     let shared: SharedThing
 

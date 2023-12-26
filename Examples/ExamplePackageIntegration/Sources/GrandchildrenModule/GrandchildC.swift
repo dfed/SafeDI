@@ -24,10 +24,6 @@ import SharedModule
 @Instantiable
 public struct GrandchildC {
 
-    public init(shared: SharedThing) {
-        self.shared = shared
-    }
-
     @Received
     let shared: SharedThing
 

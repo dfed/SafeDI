@@ -28,14 +28,6 @@ import SharedModule
 @Instantiable
 public final class Root {
 
-    public init(childA: ChildA, childB: ChildB, childC: ChildC, shared: SharedThing, userDefaults: UserDefaults) {
-        self.childA = childA
-        self.childB = childB
-        self.childC = childC
-        self.shared = shared
-        self.userDefaults = userDefaults
-    }
-
     static let shared = Root()
 
     @Instantiated

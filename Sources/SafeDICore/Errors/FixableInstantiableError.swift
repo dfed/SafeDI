@@ -42,7 +42,7 @@ public enum FixableInstantiableError: DiagnosticError {
             "@\(InstantiableVisitor.macroName)-decorated type must be `public` or `open`"
         case .missingRequiredInitializer:
             // TODO: Create fixit just for `public` or `open` missing.
-            "@\(InstantiableVisitor.macroName)-decorated type must have `public` or `open` initializer comprising all injected parameters"
+            "@\(InstantiableVisitor.macroName)-decorated type with uninitialized property must have `public` or `open` initializer comprising all injected parameters"
         case let .missingRequiredInstantiateMethod(typeName):
             "@\(InstantiableVisitor.macroName)-decorated extension of \(typeName) must have a `public static func instantiate() -> \(typeName)` method"
         case .missingAttributes:

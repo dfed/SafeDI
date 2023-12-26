@@ -123,7 +123,10 @@ public struct Initializer: Codable, Hashable {
         // We're good!
     }
 
-    public static func generateRequiredInitializer(for dependencies: [Dependency]) -> InitializerDeclSyntax {
+    public static func generateRequiredInitializer(
+        for dependencies: [Dependency],
+        andAdditionalPropertiesWithLabels additionalPropertyLabels: [String] = []
+    ) -> InitializerDeclSyntax {
         InitializerDeclSyntax(
             modifiers: DeclModifierListSyntax(
                 arrayLiteral: DeclModifierSyntax(
@@ -159,11 +162,23 @@ public struct Initializer: Codable, Hashable {
                                 operator: AssignmentExprSyntax(
                                     leadingTrivia: .space,
                                     trailingTrivia: .space),
-                                rightOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(dependency.property.label)),
-                                trailingTrivia: dependency == dependencies.last ? .newline : nil
+                                rightOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(dependency.property.label))
                             )))
                         )
                     }
+                }
+                for additionalPropertyLabel in additionalPropertyLabels {
+                    CodeBlockItemSyntax(
+                        item: .expr(ExprSyntax(InfixOperatorExprSyntax(
+                            leadingTrivia: .newline,
+                            leftOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(additionalPropertyLabel)),
+                            operator: AssignmentExprSyntax(
+                                leadingTrivia: .space,
+                                trailingTrivia: .space),
+                            rightOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier("<#T##assign_\(additionalPropertyLabel)#>")),
+                            trailingTrivia: additionalPropertyLabel == additionalPropertyLabels.last ? .newline : nil
+                        )))
+                    )
                 }
             }
         )

@@ -914,6 +914,8 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiated
                     let grandchild: Grandchild
+
+                    let uninitializedProperty: Int
                 }
                 """,
                 """

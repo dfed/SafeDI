@@ -53,6 +53,14 @@ public final class InstantiableVisitor: SyntaxVisitor {
         }
         guard let dependencySource = dependencySources.first?.source else {
             // This dependency is not part of the DI system.
+            // If this variable declaration is missing a binding, we need a custom initializer.
+            let patterns = node.bindings.filter { $0.initializer == nil && $0.accessorBlock == nil }.map(\.pattern)
+            uninitializedPropertyNames += patterns
+                .compactMap(IdentifierPatternSyntax.init)
+                .map(\.identifier.text)
+            + patterns
+                .compactMap(TuplePatternSyntax.init)
+                .map(\.trimmedDescription)
             return .skipChildren
         }
 
@@ -290,6 +298,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
     public private(set) var instantiableType: TypeDescription?
     public private(set) var additionalInstantiableTypes: [TypeDescription]?
     public private(set) var diagnostics = [Diagnostic]()
+    public private(set) var uninitializedPropertyNames = [String]()
 
     public static let macroName = "Instantiable"
     public static let instantiateMethodName = "instantiate"
@@ -330,7 +339,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
             guard let topLevelDeclarationType else { return nil }
             return Instantiable(
                 instantiableType: instantiableType,
-                initializer: initializers.first(where: { $0.isValid(forFulfilling: dependencies) }),
+                initializer: initializers.first(where: { $0.isValid(forFulfilling: dependencies) }) ?? initializerToGenerate(),
                 additionalInstantiableTypes: additionalInstantiableTypes,
                 dependencies: dependencies,
                 declarationType: topLevelDeclarationType.asDeclarationType
@@ -417,5 +426,18 @@ public final class InstantiableVisitor: SyntaxVisitor {
                 ]
             ))
         }
+    }
+
+    private func initializerToGenerate() -> Initializer? {
+        guard uninitializedPropertyNames.isEmpty else {
+            // There's an uninitialized property, so we can't generate an initializer.
+            return nil
+        }
+        return Initializer(arguments: dependencies.map {
+            Initializer.Argument(
+                innerLabel: $0.property.label,
+                typeDescription: $0.property.typeDescription
+            )
+        })
     }
 }
