@@ -54,7 +54,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
         guard let dependencySource = dependencySources.first?.source else {
             // This dependency is not part of the DI system.
             // If this variable declaration is missing a binding, we need a custom initializer.
-            let patterns = node.bindings.filter { $0.initializer == nil }.map(\.pattern)
+            let patterns = node.bindings.filter { $0.initializer == nil && $0.accessorBlock == nil }.map(\.pattern)
             uninitializedPropertyNames += patterns
                 .compactMap(IdentifierPatternSyntax.init)
                 .map(\.identifier.text)

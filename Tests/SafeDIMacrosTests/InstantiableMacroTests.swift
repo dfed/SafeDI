@@ -64,6 +64,46 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
+    func test_declaration_generatesRequiredInitializerWithoutAnyDependenciesAndInitializedVariable() {
+        assertMacro {
+            """
+            @Instantiable
+            public struct ExampleService {
+                var initializedVariable = "test"
+            }
+            """
+        } expansion: {
+            """
+            public struct ExampleService {
+                var initializedVariable = "test"
+
+                public init() {
+                }
+            }
+            """
+        }
+    }
+
+    func test_declaration_generatesRequiredInitializerWithoutAnyDependenciesAndVariableWithAccessor() {
+        assertMacro {
+            """
+            @Instantiable
+            public struct ExampleService {
+                var initializedVariable { "test" }
+            }
+            """
+        } expansion: {
+            """
+            public struct ExampleService {
+                var initializedVariable { "test" }
+
+                public init() {
+                }
+            }
+            """
+        }
+    }
+
     func test_declaration_generatesRequiredInitializerWithDependencies() {
         assertMacro {
             """
