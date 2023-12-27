@@ -144,7 +144,6 @@ Types that are declared outside of your project can be instantiated by SafeDI if
 Here we have a sample `@Instantiable` `SecurePersistentStorage` whose concrete type is defined in a third-party dependency:
 
 ```swift
-import Foundation
 import SafeDI
 import SecurePersistentStorage // A third-party library that provides secure, persistent storage.
 
