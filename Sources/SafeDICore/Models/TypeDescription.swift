@@ -51,21 +51,6 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     /// A type that can't be represented by the above cases.
     case unknown(text: String)
 
-    /// Creates a type description of case `.nested` with the given name as the name and the receiver as the parent type.
-    /// If no parent is provided, creates a type description of case `.simple`.
-    ///
-    /// - Parameters:
-    ///   - name: The simple name of the returned type.
-    ///   - parent: The parent type for the returned type.
-    /// - Note: This method only makes sense when the `parent` is of case  `simple`, `nested`, `optional`, and `implicitlyUnwrappedOptional`.
-    init(name: String, parent: TypeDescription?) {
-        if let parent = parent {
-            self = .nested(name: name, parentType: parent)
-        } else {
-            self = .simple(name: name)
-        }
-    }
-
     /// A shortcut for creating a `simple` case without any generic types.
     public static func simple(name: String) -> TypeDescription {
         .simple(name: name, generics: [])
@@ -333,15 +318,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             let .optional(typeDescription),
             let .some(typeDescription):
             return typeDescription.asInstantiatedType
-        case .array,
-                .attributed,
-                .closure,
-                .composition,
-                .dictionary,
-                .metatype,
-                .nested,
-                .tuple,
-                .unknown:
+        case .array, .attributed,  .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown:
             return self
         }
     }
@@ -536,18 +513,7 @@ extension ExprSyntax {
                     name: name,
                     parentType: parentType, generics: genericTypeVisitor.genericArguments
                 )
-            case .any,
-                    .array,
-                    .attributed,
-                    .closure,
-                    .composition,
-                    .dictionary,
-                    .implicitlyUnwrappedOptional,
-                    .metatype,
-                    .optional,
-                    .some,
-                    .tuple,
-                    .unknown:
+            case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown:
                 return .unknown(text: description)
             }
         } else if let tupleExpr = TupleExprSyntax(self) {

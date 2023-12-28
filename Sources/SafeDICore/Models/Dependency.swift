@@ -46,11 +46,6 @@ public struct Dependency: Codable, Hashable {
 
     // MARK: Internal
 
-    /// The label by which this property is referenced inside the `init` method.
-    var propertyLabelInInit: String {
-        property.label
-    }
-
     static let instantiatorType = "Instantiator"
     static let forwardingInstantiatorType = "ForwardingInstantiator"
 }
