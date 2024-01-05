@@ -53,9 +53,16 @@ public final class InstantiableVisitor: SyntaxVisitor {
         }
         guard let dependencySource = dependencySources.first?.source else {
             // This dependency is not part of the DI system.
-            // If this variable declaration is missing a binding, we need a custom initializer.
-            let patterns = node.bindings.filter { $0.initializer == nil && $0.accessorBlock == nil }.map(\.pattern)
-            uninitializedPropertyNames += patterns
+            // If this variable declaration is missing a binding and is non-optional, we need a custom initializer.
+            let patterns = node
+                .bindings
+                .filter {
+                    $0.initializer == nil
+                    && $0.accessorBlock == nil
+                    && !$0.isOptionalAndUninitialized
+                }
+                .map(\.pattern)
+            uninitializedNonOptionalPropertyNames += patterns
                 .compactMap(IdentifierPatternSyntax.init)
                 .map(\.identifier.text)
             + patterns
@@ -298,7 +305,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
     public private(set) var instantiableType: TypeDescription?
     public private(set) var additionalInstantiableTypes: [TypeDescription]?
     public private(set) var diagnostics = [Diagnostic]()
-    public private(set) var uninitializedPropertyNames = [String]()
+    public private(set) var uninitializedNonOptionalPropertyNames = [String]()
 
     public static let macroName = "Instantiable"
     public static let instantiateMethodName = "instantiate"
@@ -429,7 +436,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
     }
 
     private func initializerToGenerate() -> Initializer? {
-        guard uninitializedPropertyNames.isEmpty else {
+        guard uninitializedNonOptionalPropertyNames.isEmpty else {
             // There's an uninitialized property, so we can't generate an initializer.
             return nil
         }

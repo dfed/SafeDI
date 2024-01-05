@@ -277,6 +277,27 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         lhs.asSource < rhs.asSource
     }
 
+    var isOptional: Bool {
+        switch self {
+        case .any,
+                .array,
+                .attributed,
+                .closure,
+                .composition,
+                .dictionary,
+                .implicitlyUnwrappedOptional,
+                .metatype,
+                .nested,
+                .simple,
+                .some,
+                .tuple,
+                .unknown:
+            return false
+        case .optional:
+            return true
+        }
+    }
+
     var isUnknown: Bool {
         switch self {
         case .any,

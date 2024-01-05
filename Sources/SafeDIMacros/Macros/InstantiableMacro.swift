@@ -56,7 +56,7 @@ public struct InstantiableMacro: MemberMacro {
                 .initializers
                 .contains(where: { $0.isValid(forFulfilling: visitor.dependencies) })
             guard hasMemberwiseInitializerForInjectableProperties else {
-                if visitor.uninitializedPropertyNames.isEmpty {
+                if visitor.uninitializedNonOptionalPropertyNames.isEmpty {
                     var initializer = Initializer.generateRequiredInitializer(for: visitor.dependencies)
                     initializer.leadingTrivia = Trivia(stringLiteral: """
                         // A generated initializer that has one argument per SafeDI-injected property.
@@ -74,7 +74,7 @@ public struct InstantiableMacro: MemberMacro {
                             leadingTrivia: .newline,
                             decl: Initializer.generateRequiredInitializer(
                                 for: visitor.dependencies,
-                                andAdditionalPropertiesWithLabels: visitor.uninitializedPropertyNames
+                                andAdditionalPropertiesWithLabels: visitor.uninitializedNonOptionalPropertyNames
                             ),
                             trailingTrivia: .newline
                         ),
