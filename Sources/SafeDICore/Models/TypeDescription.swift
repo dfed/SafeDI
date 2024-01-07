@@ -158,7 +158,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 
         case Self.compositionDescription:
             let typeDescriptions = try values.decodeIfPresent(Set<Self>.self, forKey: .unorderedTypeDescriptions)
-            // For backwards compatibility for when compositions were ordered.
+            // For backwards compatibility from when compositions were ordered.
             // TODO: Delete this backwards compatibility line when we make our next breaking change.
             ?? values.decode(Set<Self>.self, forKey: .typeDescriptions)
             self = .composition(typeDescriptions)
