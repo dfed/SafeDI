@@ -157,10 +157,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             self = .implicitlyUnwrappedOptional(typeDescription)
 
         case Self.compositionDescription:
-            let typeDescriptions = try values.decodeIfPresent(Set<Self>.self, forKey: .unorderedTypeDescriptions)
-            // For backwards compatibility from when compositions were ordered.
-            // TODO: Delete this backwards compatibility line when we make our next breaking change.
-            ?? values.decode(Set<Self>.self, forKey: .typeDescriptions)
+            let typeDescriptions = try values.decode(Set<Self>.self, forKey: .typeDescriptions)
             self = .composition(typeDescriptions)
 
         case Self.someDescription:
@@ -225,7 +222,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         case let .tuple(types):
             try container.encode(types, forKey: .typeDescriptions)
         case let .composition(types):
-            try container.encode(types, forKey: .unorderedTypeDescriptions)
+            try container.encode(types, forKey: .typeDescriptions)
         case let .metatype(type, isType):
             try container.encode(type, forKey: .typeDescription)
             try container.encode(isType, forKey: .isType)
@@ -255,10 +252,8 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         case text
         /// The value for this key is the associated value of type TypeDescription
         case typeDescription
-        /// The value for this key is the associated value of type [TypeDescription]
+        /// The value for this key is the associated value of type [TypeDescription] or Set<TypeDescription>
         case typeDescriptions
-        /// The value for this key is the associated value of type Set<TypeDescription>
-        case unorderedTypeDescriptions
         /// The value for this key represents whether a metatype is a Type (as opposed to a Protocol) and is of type Bool
         case isType
         /// The value for this key is the specifier on an attributed type of type String

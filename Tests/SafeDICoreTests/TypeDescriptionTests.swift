@@ -106,7 +106,7 @@ final class TypeDescriptionTests: XCTestCase {
     let compositionTestCaseData = """
         {
             "caseDescription": "composition",
-            "unorderedTypeDescriptions": [
+            "typeDescriptions": [
                 {
                     "caseDescription": "simple",
                     "text": "Foo",
