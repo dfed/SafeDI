@@ -27,7 +27,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     /// A nested type with possible generics. e.g. Array.Element or Swift.Array<Element>
     indirect case nested(name: String, parentType: TypeDescription, generics: [TypeDescription])
     /// A composed type. e.g. Identifiable & Equatable
-    indirect case composition([TypeDescription])
+    indirect case composition(Set<TypeDescription>)
     /// An optional type. e.g. Int?
     indirect case optional(TypeDescription)
     /// An implicitly unwrapped optional type. e.g. Int!
@@ -71,7 +71,11 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 return "\(name)<\(generics.map { $0.asSource }.joined(separator: ", "))>"
             }
         case let .composition(types):
-            return types.map { $0.asSource }.joined(separator: " & ")
+            return types
+                .map { $0.asSource }
+                // Sort the result to ensure stable code generation.
+                .sorted()
+                .joined(separator: " & ")
         case let .optional(type):
             return "\(type.asSource)?"
         case let .implicitlyUnwrappedOptional(type):
@@ -153,7 +157,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             self = .implicitlyUnwrappedOptional(typeDescription)
 
         case Self.compositionDescription:
-            let typeDescriptions = try values.decode([Self].self, forKey: .typeDescriptions)
+            let typeDescriptions = try values.decode(Set<Self>.self, forKey: .unorderedTypeDescriptions)
             self = .composition(typeDescriptions)
 
         case Self.someDescription:
@@ -215,9 +219,10 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             let .some(type),
             let .any(type):
             try container.encode(type, forKey: .typeDescription)
-        case let .tuple(types),
-            let .composition(types):
+        case let .tuple(types):
             try container.encode(types, forKey: .typeDescriptions)
+        case let .composition(types):
+            try container.encode(types, forKey: .unorderedTypeDescriptions)
         case let .metatype(type, isType):
             try container.encode(type, forKey: .typeDescription)
             try container.encode(isType, forKey: .isType)
@@ -249,6 +254,8 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         case typeDescription
         /// The value for this key is the associated value of type [TypeDescription]
         case typeDescriptions
+        /// The value for this key is the associated value of type Set<TypeDescription>
+        case unorderedTypeDescriptions
         /// The value for this key represents whether a metatype is a Type (as opposed to a Protocol) and is of type Bool
         case isType
         /// The value for this key is the specifier on an attributed type of type String
@@ -417,7 +424,7 @@ extension TypeSyntax {
                 generics: genericTypeVisitor.genericArguments)
 
         } else if let typeIdentifiers = CompositionTypeSyntax(self) {
-            return .composition(typeIdentifiers.elements.map { $0.type.typeDescription })
+            return .composition(Set(typeIdentifiers.elements.map { $0.type.typeDescription }))
 
         } else if let typeIdentifier = OptionalTypeSyntax(self) {
             return .optional(typeIdentifier.wrappedType.typeDescription)
@@ -552,12 +559,12 @@ extension ExprSyntax {
             }
         } else if let sequenceExpr = SequenceExprSyntax(self) {
             if sequenceExpr.elements.contains(where: { BinaryOperatorExprSyntax($0) != nil }) {
-                return .composition(
+                return .composition(Set(
                     sequenceExpr
                         .elements
                         .filter { BinaryOperatorExprSyntax($0) == nil }
                         .map(\.typeDescription)
-                )
+                ))
             } else if
                 sequenceExpr.elements.count == 3,
                 let arguments = TupleExprSyntax(sequenceExpr.elements.first),
