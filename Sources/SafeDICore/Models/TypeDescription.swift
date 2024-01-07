@@ -27,7 +27,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     /// A nested type with possible generics. e.g. Array.Element or Swift.Array<Element>
     indirect case nested(name: String, parentType: TypeDescription, generics: [TypeDescription])
     /// A composed type. e.g. Identifiable & Equatable
-    indirect case composition([TypeDescription])
+    indirect case composition(Set<TypeDescription>)
     /// An optional type. e.g. Int?
     indirect case optional(TypeDescription)
     /// An implicitly unwrapped optional type. e.g. Int!
@@ -71,7 +71,11 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 return "\(name)<\(generics.map { $0.asSource }.joined(separator: ", "))>"
             }
         case let .composition(types):
-            return types.map { $0.asSource }.joined(separator: " & ")
+            return types
+                .map { $0.asSource }
+                // Sort the result to ensure stable code generation.
+                .sorted()
+                .joined(separator: " & ")
         case let .optional(type):
             return "\(type.asSource)?"
         case let .implicitlyUnwrappedOptional(type):
@@ -221,7 +225,7 @@ extension TypeSyntax {
                 generics: genericTypeVisitor.genericArguments)
 
         } else if let typeIdentifiers = CompositionTypeSyntax(self) {
-            return .composition(typeIdentifiers.elements.map { $0.type.typeDescription })
+            return .composition(Set(typeIdentifiers.elements.map { $0.type.typeDescription }))
 
         } else if let typeIdentifier = OptionalTypeSyntax(self) {
             return .optional(typeIdentifier.wrappedType.typeDescription)
@@ -355,12 +359,12 @@ extension ExprSyntax {
             }
         } else if let sequenceExpr = SequenceExprSyntax(self) {
             if sequenceExpr.elements.contains(where: { BinaryOperatorExprSyntax($0) != nil }) {
-                return .composition(
+                return .composition(Set(
                     sequenceExpr
                         .elements
                         .filter { BinaryOperatorExprSyntax($0) == nil }
                         .map(\.typeDescription)
-                )
+                ))
             } else if
                 sequenceExpr.elements.count == 3,
                 let arguments = TupleExprSyntax(sequenceExpr.elements.first),
