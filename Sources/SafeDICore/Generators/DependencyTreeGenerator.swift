@@ -38,7 +38,7 @@ public final class DependencyTreeGenerator {
         try validateReachableTypeDescriptions()
 
         let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
-        try validateUndeclaredReceivedProperties(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
+        try validateReceivedProperties(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
         let rootScopeGenerators = try rootInstantiableTypes
             .sorted()
             .compactMap { try typeDescriptionToScopeMap[$0]?.createScopeGenerator() }
@@ -234,9 +234,9 @@ public final class DependencyTreeGenerator {
         return typeDescriptionToScopeMap
     }
 
-    private func validateUndeclaredReceivedProperties(typeDescriptionToScopeMap: [TypeDescription: Scope]) throws {
+    private func validateReceivedProperties(typeDescriptionToScopeMap: [TypeDescription: Scope]) throws {
         var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
-        func validateUndeclaredReceivedProperties(
+        func validateReceivedProperties(
             on scope: Scope,
             receivableProperties: Set<Property>,
             instantiables: OrderedSet<Instantiable>
@@ -262,7 +262,7 @@ public final class DependencyTreeGenerator {
                 var instantiables = instantiables
                 instantiables.insert(scope.instantiable, at: 0)
 
-                validateUndeclaredReceivedProperties(
+                validateReceivedProperties(
                     on: childScope,
                     receivableProperties: receivableProperties.union(scope.properties),
                     instantiables: instantiables
@@ -271,7 +271,7 @@ public final class DependencyTreeGenerator {
         }
 
         for rootScope in rootInstantiableTypes.compactMap({ typeDescriptionToScopeMap[$0] }) {
-            validateUndeclaredReceivedProperties(
+            validateReceivedProperties(
                 on: rootScope,
                 receivableProperties: Set(rootScope.properties),
                 instantiables: []
