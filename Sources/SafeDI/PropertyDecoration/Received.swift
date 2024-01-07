@@ -18,6 +18,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// Marks a SafeDI dependency that is instantiated or forwarded by an object higher up in the dependency tree.
+/// Marks a SafeDI dependency that is instantiated or forwarded by an `@Instantiable` instance higher up in the dependency tree.
+///
+/// An example of the macro in use:
+///
+///     @Received
+///     private let dependency: DependencyType
+///
+/// Note that the access level of the dependency in the above example does not affect the dependency tree – a `private` dependency can still be `@Received` by `@Instantiable`-decorated types further down the dependency tree.
 @attached(peer) public macro Received() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
 

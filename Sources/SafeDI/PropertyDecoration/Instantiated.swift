@@ -20,5 +20,12 @@
 
 /// Marks a SafeDI dependency that is instantiated when its enclosing type is instantiated.
 ///
+/// An example of the macro in use:
+///
+///     @Instantiated
+///     private let dependency: DependencyType
+///
+/// Note that the access level of the dependency in the above example does not affect the dependency tree – a `private` dependency can still be `@Received` by `@Instantiable`-decorated types further down the dependency tree.
+///
 /// - Parameter concreteTypeName: The name of the concrete type that will be instantiated and assigned to this property. This parameter is only required when the decorated property's type does not match an `@Instantiable` type or its `additionalTypes`. This parameter is particularly useful when working with a type-erased property.
 @attached(peer) public macro Instantiated(fulfilledByType concreteTypeName: StaticString = "") = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")

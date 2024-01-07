@@ -19,4 +19,11 @@
 // SOFTWARE.
 
 /// Marks a SafeDI dependency that is injected into the enclosing type's initializer and forwarded to objects further down in the dependency tree.
+///
+/// An example of the macro in use:
+///
+///     @Forwarded
+///     private let dependency: DependencyType
+///
+/// Note that the access level of the dependency in the above example does not affect the dependency tree – a `private` dependency can still be `@Received` by `@Instantiable`-decorated types further down the dependency tree.
 @attached(peer) public macro Forwarded() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
