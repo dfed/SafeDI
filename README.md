@@ -256,11 +256,11 @@ public struct User {
     ... // User information.  
 }
 
-protocol UserVendor {
+public protocol UserVendor {
     var user: User { get }
 }
 
-protocol UserManager: UserVendor {
+public protocol UserManager: UserVendor {
     var user: User { get set }
 }
 
@@ -302,7 +302,6 @@ public struct ProfileView: View {
 
 @Instantiable
 public struct EditProfileView: View {
-
     public var body: some View {
         ... // A profile editing experience
     }
