@@ -463,7 +463,12 @@ final class TypeDescriptionTests: XCTestCase {
 
         let typeDescription = try XCTUnwrap(visitor.composedTypeIdentifier)
         XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
-        XCTAssertEqual(typeDescription.asSource, "Foo & Bar")
+        XCTAssertEqual(
+            typeDescription.asSource,
+            // Composition elements are sorted when creating source code in order to
+            // ensure stable code generation, since composition ordering is arbitrary.
+            "Bar & Foo"
+        )
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAOptionalTypeSyntax_findsTheType() throws {
@@ -884,6 +889,32 @@ final class TypeDescriptionTests: XCTestCase {
     func test_asSource_whenDescribingAnUnknownCase_returnsTheProvidedStringWithWhitespaceStripped() {
         let sut = TypeDescription.unknown(text: " SomeTypeThatIsFormattedOddly    ")
         XCTAssertEqual(sut.asSource, "SomeTypeThatIsFormattedOddly")
+    }
+
+    func test_equality_isTrueWhenComparingLexigraphicallyEquivalentCompositions() {
+        XCTAssertEqual(
+            TypeDescription.composition([
+                .simple(name: "Foo"),
+                .simple(name: "Bar"),
+            ]),
+            TypeDescription.composition([
+                .simple(name: "Foo"),
+                .simple(name: "Bar"),
+            ])
+        )
+    }
+
+    func test_equality_isTrueWhenComparingReversedCompositions() {
+        XCTAssertEqual(
+            TypeDescription.composition([
+                .simple(name: "Foo"),
+                .simple(name: "Bar"),
+            ]),
+            TypeDescription.composition([
+                .simple(name: "Bar"),
+                .simple(name: "Foo"),
+            ])
+        )
     }
 
     // MARK: - Visitors
