@@ -103,7 +103,8 @@ final class Scope {
                     return ScopeGenerator(
                         property: $0.property,
                         fulfillingProperty: fulfillingProperty,
-                        receivedProperties: receivedProperties)
+                        receivedProperties: receivedProperties
+                    )
                 },
                 receivedProperties: receivedProperties
             )
