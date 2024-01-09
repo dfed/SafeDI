@@ -284,7 +284,7 @@ public struct LoggedInView: View {
     private let userManager: UserManager 
 
     @Instantiated
-    private let profileViewControllerBuilder: Instantiator<ProfileViewController>
+    private let profileViewBuilder: Instantiator<ProfileView>
 }
 
 @Instantiable
@@ -297,7 +297,7 @@ public struct ProfileView: View {
     private let userVendor: UserVendor
 
     @Instantiated
-    private let editProfileViewControllerBuilder: Instantiator<EditProfileViewController>
+    private let editProfileViewBuilder: Instantiator<EditProfileView>
 }
 
 @Instantiable
