@@ -51,7 +51,12 @@ actor ScopeGenerator {
         propertiesMadeAvailableByChildren = Set(
             instantiable
                 .dependencies
-                .filter { $0.source != .received || $0.fulfillingProperty != nil }
+                .filter {
+                    // If the source is not received, the property is being made available.
+                    $0.source != .received
+                    // If the dependency has a fulfilling property, the property is being aliased.
+                    || $0.fulfillingProperty != nil
+                }
                 .map(\.property)
         ).union(propertiesToGenerate
             .flatMap(\.propertiesMadeAvailableByChildren))
