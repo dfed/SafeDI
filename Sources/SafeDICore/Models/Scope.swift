@@ -105,16 +105,7 @@ final class Scope {
                         fulfillingProperty: fulfillingProperty,
                         receivedProperties: receivedProperties)
                 },
-                receivedProperties: Set(
-                    instantiableStack
-                        .flatMap(\.dependencies)
-                        .filter {
-                            ($0.source != .received)
-                            && !propertyStack.contains($0.property)
-                            && $0.property != property
-                        }
-                        .map(\.property)
-                )
+                receivedProperties: receivedProperties
             )
             Task.detached {
                 // Kick off code generation.
