@@ -293,5 +293,55 @@ final class InjectableMacroTests: XCTestCase {
             """
         }
     }
+
+    func test_throwsErrorWhenfulfilledByDependencyNamedIsNotAStringLiteral() {
+        assertMacro {
+            """
+            @Instantiable
+            public struct ExampleService {
+                static let instantiatedAName: StaticString = "instantiatedA"
+                @Received(fulfilledByDependencyNamed: instantiatedAName, ofType: InstantiatedA.self)
+                let receivedA: ReceivedA
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            public struct ExampleService {
+                static let instantiatedAName: StaticString = "instantiatedA"
+                @Received(fulfilledByDependencyNamed: instantiatedAName, ofType: InstantiatedA.self)
+                ┬───────────────────────────────────────────────────────────────────────────────────
+                ╰─ 🛑 The argument `fulfilledByDependencyNamed` must be a string literal
+                let receivedA: ReceivedA
+            }
+            """
+        }
+    }
+
+    func test_throwsErrorWhenOfTypeIsAnInvalidType() {
+        assertMacro {
+            """
+            @Instantiable
+            public struct ExampleService {
+                @Received(fulfilledByDependencyNamed: "instantiatedA", ofType: []])
+                let receivedA: ReceivedA
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            public struct ExampleService {
+                @Received(fulfilledByDependencyNamed: "instantiatedA", ofType: []])
+                                                                                 ┬─
+                │                                                                ├─ 🛑 expected ')' to end attribute
+                │                                                                │  ✏️ insert ')'
+                │                                                                ╰─ 🛑 unexpected code '])' in variable
+                ┬────────────────────────────────────────────────────────────────
+                ╰─ 🛑 The argument `ofType` must be a type literal
+                let receivedA: ReceivedA
+            }
+            """
+        }
+    }
 }
 #endif

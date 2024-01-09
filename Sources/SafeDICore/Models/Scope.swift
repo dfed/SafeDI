@@ -52,16 +52,15 @@ final class Scope {
     var receivedProperties: [Property] {
         instantiable
             .dependencies
-            .filter {
+            .compactMap {
                 switch $0.source {
+                case .received:
+                    return $0.fulfillingProperty ?? $0.property
                 case .forwarded,
                         .instantiated:
-                    return false
-                case .received:
-                    return true
+                    return nil
                 }
             }
-            .map(\.property)
     }
 
     func createScopeGenerator(
@@ -78,6 +77,16 @@ final class Scope {
             if let property {
                 childPropertyStack.insert(property, at: 0)
             }
+            let receivedProperties = Set(
+                instantiableStack
+                    .flatMap(\.dependencies)
+                    .filter {
+                        ($0.source != .received)
+                        && !propertyStack.contains($0.property)
+                        && $0.property != property
+                    }
+                    .map(\.property)
+            )
             let scopeGenerator = ScopeGenerator(
                 instantiable: instantiable,
                 property: property,
@@ -87,6 +96,14 @@ final class Scope {
                         instantiableStack: childInstantiableStack,
                         propertyStack: childPropertyStack
                     )
+                } + instantiable.dependencies.compactMap {
+                    guard let fulfillingProperty = $0.fulfillingProperty else {
+                        return nil
+                    }
+                    return ScopeGenerator(
+                        property: $0.property,
+                        fulfillingProperty: fulfillingProperty,
+                        receivedProperties: receivedProperties)
                 },
                 receivedProperties: Set(
                     instantiableStack
