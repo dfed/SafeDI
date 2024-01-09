@@ -96,6 +96,7 @@ final class InitializerTests: XCTestCase {
                             typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded,
+                        fulfillingPropertyName: nil,
                         fulfillingTypeDescription: nil
                     )
                 ]
@@ -125,6 +126,7 @@ final class InitializerTests: XCTestCase {
                             typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded,
+                        fulfillingPropertyName: nil,
                         fulfillingTypeDescription: nil
                     )
                 ]
@@ -163,6 +165,7 @@ final class InitializerTests: XCTestCase {
                             typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded,
+                        fulfillingPropertyName: nil,
                         fulfillingTypeDescription: nil
                     )
                 ]
@@ -191,6 +194,7 @@ final class InitializerTests: XCTestCase {
                             typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded,
+                        fulfillingPropertyName: nil,
                         fulfillingTypeDescription: nil
                     )
                 ]
@@ -219,6 +223,7 @@ final class InitializerTests: XCTestCase {
                             typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded,
+                        fulfillingPropertyName: nil,
                         fulfillingTypeDescription: nil
                     )
                 ]

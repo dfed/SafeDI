@@ -28,3 +28,14 @@
 /// Note that the access level of the dependency in the above example does not affect the dependency tree – a `private` dependency can still be `@Received` by `@Instantiable`-decorated types further down the dependency tree.
 @attached(peer) public macro Received() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
 
+/// Marks a SafeDI dependency that is instantiated or forwarded by an `@Instantiable` instance higher up in the dependency tree whose name and/or type is being changed from the dependency‘s initial declaration.
+///
+/// An example of the macro in use:
+///
+///     @Received(fulfilledByDependencyNamed: "dependency", ofType: "DependencyType")
+///     private let renamedDependency: DependencySuperType
+///
+/// Note that the access level of the dependency in the above example does not affect the dependency tree – a `private` dependency can still be `@Received` by `@Instantiable`-decorated types further down the dependency tree.
+///
+/// Renamed and retyped dependencies can be `@Received` by their new name and type by `@Instantiable` types further down the dependency tree.
+@attached(peer) public macro Received<T>(fulfilledByDependencyNamed: StaticString, ofType: T.Type) = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")

@@ -35,6 +35,30 @@ extension AttributeSyntax {
         return firstLabeledExpression.expression
     }
 
+    public var fulfilledByDependencyNamed: ExprSyntax? {
+        guard 
+            let arguments,
+            let labeledExpressionList = LabeledExprListSyntax(arguments),
+            let firstLabeledExpression = labeledExpressionList.first,
+            firstLabeledExpression.label?.text == "fulfilledByDependencyNamed"
+        else {
+            return nil
+        }
+
+        return firstLabeledExpression.expression
+    }
+
+    public var fulfillingPropertyName: String? {
+        guard
+            let fulfilledByDependencyNamed,
+            let stringLiteral = StringLiteralExprSyntax(fulfilledByDependencyNamed)
+        else {
+            return nil
+        }
+
+        return stringLiteral.segments.firstStringSegment
+    }
+
     public var fulfilledByType: ExprSyntax? {
         guard
             let arguments,
@@ -47,4 +71,30 @@ extension AttributeSyntax {
 
         return firstLabeledExpression.expression
     }
+
+    public var ofType: ExprSyntax? {
+        guard
+            let arguments,
+            let labeledExpressionList = LabeledExprListSyntax(arguments),
+            let lastLabeledExpression = labeledExpressionList.last,
+            lastLabeledExpression.label?.text == "ofType"
+        else {
+            return nil
+        }
+
+        return lastLabeledExpression.expression
+    }
+
+    public var fulfillingTypeDescription: TypeDescription? {
+        if
+            let expression = fulfilledByType,
+            let stringLiteral = StringLiteralExprSyntax(expression),
+            let firstStringSegement = stringLiteral.segments.firstStringSegment
+        {
+            return TypeSyntax(stringLiteral: firstStringSegement).typeDescription
+        } else {
+            return ofType?.typeDescription
+        }
+    }
+
 }

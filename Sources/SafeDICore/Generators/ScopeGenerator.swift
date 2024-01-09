@@ -29,23 +29,34 @@ actor ScopeGenerator {
         propertiesToGenerate: [ScopeGenerator],
         receivedProperties: Set<Property>
     ) {
-        self.instantiable = instantiable
+        if let property {
+            scopeData = .property(
+                instantiable: instantiable,
+                property: property,
+                forwardedProperty: instantiable
+                    .dependencies
+                    // Instantiated properties will self-resolve.
+                    .filter { $0.source == .forwarded }
+                    .map(\.property)
+                    // Our @Instantiable macro enforces that we have at most one forwarded property.
+                    .first
+            )
+        } else {
+            scopeData = .root(instantiable: instantiable)
+        }
         self.property = property
-        self.propertiesToGenerate = propertiesToGenerate
         self.receivedProperties = receivedProperties
-
-        forwardedProperty = instantiable
-            .dependencies
-            // Instantiated properties will self-resolve.
-            .filter { $0.source == .forwarded }
-            .map(\.property)
-            // Our @Instantiable macro enforces that we have at most one forwarded property.
-            .first
-
+        self.propertiesToGenerate = propertiesToGenerate
+        forwardedProperty = scopeData.forwardedProperty
         propertiesMadeAvailableByChildren = Set(
             instantiable
                 .dependencies
-                .filter { $0.source != .received }
+                .filter {
+                    // If the source is not received, the property is being made available.
+                    $0.source != .received
+                    // If the dependency has a fulfilling property, the property is being aliased.
+                    || $0.fulfillingProperty != nil
+                }
                 .map(\.property)
         ).union(propertiesToGenerate
             .flatMap(\.propertiesMadeAvailableByChildren))
@@ -59,6 +70,20 @@ actor ScopeGenerator {
             .subtracting(propertiesMadeAvailableByChildren)
     }
 
+    init(
+        property: Property,
+        fulfillingProperty: Property,
+        receivedProperties: Set<Property>
+    ) {
+        scopeData = .alias(property: property, fulfillingProperty: fulfillingProperty)
+        requiredReceivedProperties = [fulfillingProperty]
+        propertiesToGenerate = []
+        forwardedProperty = nil
+        propertiesMadeAvailableByChildren = []
+        self.receivedProperties = receivedProperties
+        self.property = property
+    }
+
     // MARK: Internal
 
     func generateCode(leadingWhitespace: String = "") async throws -> String {
@@ -67,13 +92,28 @@ actor ScopeGenerator {
             generatedCode = try await generateCodeTask.value
         } else {
             let generateCodeTask = Task {
-                let argumentList = try instantiable
-                    .initializer?
-                    .createInitializerArgumentList(
-                        given: instantiable.dependencies
-                    ) ?? "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
-
-                if let property {
+                switch scopeData {
+                case let .root(instantiable):
+                    let argumentList = try instantiable.generateArgumentList()
+                    if instantiable.dependencies.isEmpty {
+                        // Nothing to do here! We already have an empty initializer.
+                        return ""
+                    } else {
+                        return """
+                            extension \(instantiable.concreteInstantiableType.asSource) {
+                                public \(instantiable.declarationType == .classType ? "convenience " : "")init() {
+                            \(try await generateProperties(leadingMemberWhitespace: "        ").joined(separator: "\n"))
+                                    self.init(\(argumentList))
+                                }
+                            }
+                            """
+                    }
+                case let .property(
+                    instantiable,
+                    property,
+                    forwardedProperty
+                ):
+                    let argumentList = try instantiable.generateArgumentList()
                     let concreteTypeName = instantiable.concreteInstantiableType.asSource
                     let instantiationDeclaration = switch instantiable.declarationType {
                     case .actorType, .classType, .structType:
@@ -129,20 +169,8 @@ actor ScopeGenerator {
                     }
 
                     return "\(propertyDeclaration) = \(initializer)\n"
-                } else {
-                    if instantiable.dependencies.isEmpty {
-                        // Nothing to do here! We already have an empty initializer.
-                        return ""
-                    } else {
-                        return """
-                            extension \(instantiable.concreteInstantiableType.asSource) {
-                                public \(instantiable.declarationType == .classType ? "convenience " : "")init() {
-                            \(try await generateProperties(leadingMemberWhitespace: "        ").joined(separator: "\n"))
-                                    self.init(\(argumentList))
-                                }
-                            }
-                            """
-                    }
+                case let .alias(property, fulfillingProperty):
+                    return "let \(property.asSource) = \(fulfillingProperty.label)"
                 }
             }
             self.generateCodeTask = generateCodeTask
@@ -160,13 +188,35 @@ actor ScopeGenerator {
 
     // MARK: Private
 
-    private let instantiable: Instantiable
-    private let property: Property?
-    private let receivedProperties: Set<Property>
-    private let propertiesToGenerate: [ScopeGenerator]
-    private let forwardedProperty: Property?
+    private enum ScopeData {
+        case root(instantiable: Instantiable)
+        case property(
+            instantiable: Instantiable,
+            property: Property,
+            forwardedProperty: Property?
+        )
+        case alias(
+            property: Property,
+            fulfillingProperty: Property
+        )
+
+        var forwardedProperty: Property? {
+            switch self {
+            case let .property(_, _, forwardedProperty):
+                return forwardedProperty
+            case .root, .alias:
+                return nil
+            }
+        }
+    }
+
+    private let scopeData: ScopeData
     private let requiredReceivedProperties: Set<Property>
     private let propertiesMadeAvailableByChildren: Set<Property>
+    private let receivedProperties: Set<Property>
+    private let propertiesToGenerate: [ScopeGenerator]
+    private let property: Property?
+    private let forwardedProperty: Property?
 
     private var resolvedProperties = Set<Property>()
     private var generateCodeTask: Task<String, Error>?
@@ -235,5 +285,14 @@ actor ScopeGenerator {
                 "Property `\(property.asSource)` on \(instantiable.concreteInstantiableType.asSource) incorrectly configured. Property should instead be of type `\(Dependency.forwardingInstantiatorType)<\(expectedType.asSource), \(property.typeDescription.asInstantiatedType.asSource)>`. First generic argument must match type of @\(Dependency.Source.forwarded.rawValue) property."
             }
         }
+    }
+}
+
+extension Instantiable {
+    fileprivate func generateArgumentList() throws -> String {
+        try initializer?
+            .createInitializerArgumentList(
+                given: dependencies
+            ) ?? "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
     }
 }

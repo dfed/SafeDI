@@ -65,6 +65,7 @@ final class FileVisitorTests: XCTestCase {
                                 typeDescription: .simple(name: "User")
                             ),
                             source: .forwarded,
+                            fulfillingPropertyName: nil,
                             fulfillingTypeDescription: nil
                         ),
                         Dependency(
@@ -73,6 +74,7 @@ final class FileVisitorTests: XCTestCase {
                                 typeDescription: .simple(name: "NetworkService")
                             ),
                             source: .received,
+                            fulfillingPropertyName: nil,
                             fulfillingTypeDescription: nil
                         )
                     ],
@@ -128,6 +130,7 @@ final class FileVisitorTests: XCTestCase {
                                 typeDescription: .simple(name: "User")
                             ),
                             source: .forwarded,
+                            fulfillingPropertyName: nil,
                             fulfillingTypeDescription: nil
                         ),
                         Dependency(
@@ -136,6 +139,7 @@ final class FileVisitorTests: XCTestCase {
                                 typeDescription: .simple(name: "NetworkService")
                             ),
                             source: .received,
+                            fulfillingPropertyName: nil,
                             fulfillingTypeDescription: nil
                         )
                     ],

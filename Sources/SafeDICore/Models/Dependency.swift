@@ -24,15 +24,44 @@ import SwiftSyntax
 /// e.g. `@Instantiated let myService: MyService`
 public struct Dependency: Codable, Hashable {
 
+    // MARK: Initialization
+
+    public init(
+        property: Property,
+        source: Dependency.Source,
+        fulfillingPropertyName: String? = nil,
+        fulfillingTypeDescription: TypeDescription? = nil
+    ) {
+        self.property = property
+        self.source = source
+        self.fulfillingPropertyName = fulfillingPropertyName
+        self.fulfillingTypeDescription = fulfillingTypeDescription
+
+        if let fulfillingPropertyName, let fulfillingTypeDescription {
+            fulfillingProperty = Property(
+                label: fulfillingPropertyName,
+                typeDescription: fulfillingTypeDescription)
+        } else {
+            fulfillingProperty = nil
+        }
+        asInstantiatedType = (fulfillingTypeDescription ?? property.typeDescription).asInstantiatedType
+    }
+
     // MARK: Public
 
+    /// A representation of the dependency as it is declared on its `@Instantiable` type.
     public let property: Property
+    /// The source of the dependency within the dependency tree.
     public let source: Source
+    /// The name of the property that will be used to fulfill this property.
+    public let fulfillingPropertyName: String?
+    /// The type description of the type that will be used to fulfill this property.
+    /// This type must be the same as or a parent type of `property.typeDescription`.
     public let fulfillingTypeDescription: TypeDescription?
-
-    public var asInstantiatedType: TypeDescription {
-        (fulfillingTypeDescription ?? property.typeDescription).asInstantiatedType
-    }
+    /// The property that will be used to fulfill this property.
+    public let fulfillingProperty: Property?
+    /// The receiver's type description as an `@Instantiable`-decorated type.
+    public let asInstantiatedType: TypeDescription
 
     public enum Source: String, CustomStringConvertible, Codable, Hashable {
         case instantiated = "Instantiated"

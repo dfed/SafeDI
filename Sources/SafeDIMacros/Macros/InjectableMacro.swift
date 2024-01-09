@@ -38,10 +38,10 @@ public struct InjectableMacro: PeerMacro {
             throw InjectableError.decoratingStatic
         }
 
-        if let fulfilledByTypeExpression = variableDecl.attributes.instantiatedMacro?.fulfilledByType {
+        if let fulfilledByType = variableDecl.attributes.instantiatedMacro?.fulfilledByType {
             if
-                let stringLiteralExpression = StringLiteralExprSyntax(fulfilledByTypeExpression),
-                    stringLiteralExpression.segments.count == 1,
+                let stringLiteralExpression = StringLiteralExprSyntax(fulfilledByType),
+                stringLiteralExpression.segments.count == 1,
                 let stringLiteral = stringLiteralExpression.segments.firstStringSegment
             {
                 switch TypeSyntax(stringLiteral: stringLiteral).typeDescription {
@@ -52,6 +52,21 @@ public struct InjectableMacro: PeerMacro {
                 }
             } else {
                 throw InjectableError.fulfilledByTypeArgumentInvalidType
+            }
+        }
+
+        if let fulfilledByDependencyNamed = variableDecl.attributes.receivedMacro?.fulfilledByDependencyNamed {
+            guard
+                let stringLiteralExpression = StringLiteralExprSyntax(fulfilledByDependencyNamed),
+                stringLiteralExpression.segments.count == 1
+            else {
+                throw InjectableError.fulfilledByDependencyNamedInvalidType
+            }
+        }
+
+        if let fulfilledByType = variableDecl.attributes.receivedMacro?.ofType {
+            if case .unknown = fulfilledByType.typeDescription {
+                throw InjectableError.ofTypeArgumentInvalidType
             }
         }
 
@@ -87,6 +102,8 @@ public struct InjectableMacro: PeerMacro {
         case decoratingStatic
         case fulfilledByTypeArgumentInvalidType
         case fulfilledByTypeArgumentInvalidTypeDescription
+        case fulfilledByDependencyNamedInvalidType
+        case ofTypeArgumentInvalidType
 
         var description: String {
             switch self {
@@ -98,6 +115,10 @@ public struct InjectableMacro: PeerMacro {
                 "The argument `fulfilledByType` must be a string literal"
             case .fulfilledByTypeArgumentInvalidTypeDescription:
                 "The argument `fulfilledByType` must refer to a simple, unnested type"
+            case .fulfilledByDependencyNamedInvalidType:
+                "The argument `fulfilledByDependencyNamed` must be a string literal"
+            case .ofTypeArgumentInvalidType:
+                "The argument `ofType` must be a type literal"
             }
         }
     }
