@@ -81,7 +81,7 @@ final class Scope {
                 instantiableStack
                     .flatMap(\.dependencies)
                     .filter {
-                        ($0.source != .received)
+                        $0.source != .received
                         && !propertyStack.contains($0.property)
                         && $0.property != property
                     }
