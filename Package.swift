@@ -85,7 +85,11 @@ let package = Package(
         ),
         .testTarget(
             name: "SafeDIToolTests",
-            dependencies: ["SafeDITool"]
+            dependencies: [
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .byNameItem(name: "ZippyJSON", condition: .when(platforms: [.iOS, .tvOS, .macOS])),
+                "SafeDITool",
+            ]
         ),
 
         // Core
