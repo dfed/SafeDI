@@ -484,7 +484,7 @@ extension TypeSyntax {
 }
 
 extension ExprSyntax {
-    var typeDescription: TypeDescription {
+    public var typeDescription: TypeDescription {
         if let typeExpr = TypeExprSyntax(self) {
             return typeExpr.type.typeDescription
 
