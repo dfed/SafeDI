@@ -69,7 +69,7 @@ public final class DependencyTreeGenerator {
 
     // MARK: - DependencyTreeGeneratorError
 
-    enum DependencyTreeGeneratorError: Error, CustomStringConvertible {
+    private enum DependencyTreeGeneratorError: Error, CustomStringConvertible {
 
         case noInstantiableFound(TypeDescription)
         case unfulfillableProperties([UnfulfillableProperty])
