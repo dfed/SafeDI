@@ -54,7 +54,7 @@ public final class DependencyTreeGenerator {
             for try await generatedRoot in taskGroup {
                 generatedRoots.append(generatedRoot)
             }
-            return generatedRoots.sorted().joined(separator: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            return generatedRoots.sorted().joined(separator: "\n\n")
         }
 
         let importsWhitespace = imports.isEmpty ? "" : "\n"
