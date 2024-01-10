@@ -195,54 +195,6 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             return self
         }
     }
-
-    private var caseDescription: String {
-        switch self {
-        case .composition:
-            return Self.compositionDescription
-        case .implicitlyUnwrappedOptional:
-            return Self.implicitlyUnwrappedOptionalDescription
-        case .nested:
-            return Self.nestedDescription
-        case .optional:
-            return Self.optionalDescription
-        case .simple:
-            return Self.simpleDescription
-        case .some:
-            return Self.someDescription
-        case .any:
-            return Self.anyDescription
-        case .metatype:
-            return Self.metatypeDescription
-        case .attributed:
-            return Self.attributedDescription
-        case .array:
-            return Self.arrayDescription
-        case .dictionary:
-            return Self.dictionaryDescription
-        case .tuple:
-            return Self.tupleDescription
-        case .closure:
-            return Self.closureDescription
-        case .unknown:
-            return Self.unknownDescription
-        }
-    }
-
-    private static let simpleDescription = "simple"
-    private static let nestedDescription = "nested"
-    private static let compositionDescription = "composition"
-    private static let optionalDescription = "optional"
-    private static let implicitlyUnwrappedOptionalDescription = "implicitlyUnwrappedOptional"
-    private static let someDescription = "some"
-    private static let anyDescription = "any"
-    private static let metatypeDescription = "metatype"
-    private static let attributedDescription = "attributed"
-    private static let arrayDescription = "array"
-    private static let dictionaryDescription = "dictionary"
-    private static let tupleDescription = "tuple"
-    private static let closureDescription = "closure"
-    private static let unknownDescription = "unknown"
 }
 
 extension TypeSyntax {
