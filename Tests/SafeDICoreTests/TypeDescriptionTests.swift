@@ -625,7 +625,7 @@ final class TypeDescriptionTests: XCTestCase {
         // Note: ideally we'd visit a node of type FunctionTypeSyntax
         // but there's no way to get a TypeSyntax from an object of that type.
         override func visit(_ node: TypeAnnotationSyntax) -> SyntaxVisitorContinueKind {
-            functionIdentifier = node.type.as(TypeSyntax.self)?.typeDescription
+            functionIdentifier = TypeSyntax(node.type)?.typeDescription
             return .skipChildren
         }
     }
