@@ -476,7 +476,6 @@ extension TypeSyntax {
                 returnType: typeIdentifier.returnClause.type.typeDescription)
 
         } else {
-            assertionFailure("TypeSyntax of unknown type. Defaulting to `description`.")
             // The description is a source-accurate description of this node, so it is a reasonable fallback.
             return .unknown(text: trimmedDescription)
         }
