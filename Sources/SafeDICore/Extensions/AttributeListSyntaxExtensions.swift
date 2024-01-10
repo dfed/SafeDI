@@ -26,7 +26,7 @@ extension AttributeListSyntax {
         guard let attribute = first(where: { element in
             switch element {
             case let .attribute(attribute):
-                return attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text == InstantiableVisitor.macroName
+                return IdentifierTypeSyntax(attribute.attributeName)?.name.text == InstantiableVisitor.macroName
             case .ifConfigDecl:
                 return false
             }
@@ -40,7 +40,7 @@ extension AttributeListSyntax {
         guard let attribute = first(where: { element in
             switch element {
             case let .attribute(attribute):
-                return attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text == Dependency.Source.instantiated.rawValue
+                return IdentifierTypeSyntax(attribute.attributeName)?.name.text == Dependency.Source.instantiated.rawValue
             case .ifConfigDecl:
                 return false
             }
@@ -54,7 +54,7 @@ extension AttributeListSyntax {
         guard let attribute = first(where: { element in
             switch element {
             case let .attribute(attribute):
-                return attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text == Dependency.Source.received.rawValue
+                return IdentifierTypeSyntax(attribute.attributeName)?.name.text == Dependency.Source.received.rawValue
             case .ifConfigDecl:
                 return false
             }
@@ -68,7 +68,7 @@ extension AttributeListSyntax {
         compactMap { element in
             switch element {
             case let .attribute(attribute):
-                guard let identifierText = attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text else {
+                guard let identifierText = IdentifierTypeSyntax(attribute.attributeName)?.name.text else {
                     return nil
                 }
                 return (attribute: identifierText, node: element)
