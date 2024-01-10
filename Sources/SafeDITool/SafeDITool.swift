@@ -22,7 +22,9 @@ import ArgumentParser
 import Foundation
 import SafeDICore
 import SwiftParser
+#if canImport(ZippyJSON)
 import ZippyJSON
+#endif
 
 @main
 struct SafeDITool: AsyncParsableCommand {
@@ -173,7 +175,11 @@ struct SafeDITool: AsyncParsableCommand {
             of: ModuleInfo.self,
             returning: [ModuleInfo].self
         ) { taskGroup in
+#if canImport(ZippyJSON)
             let decoder = ZippyJSONDecoder()
+#else
+            let decoder = JSONDecoder()
+#endif
             for moduleInfoURL in moduleInfoURLs {
                 taskGroup.addTask {
                     try decoder.decode(
