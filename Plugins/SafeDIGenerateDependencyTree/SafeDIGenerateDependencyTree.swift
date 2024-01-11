@@ -1,3 +1,4 @@
+import Foundation
 import PackagePlugin
 
 @main
@@ -26,8 +27,20 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                     .map(\.path)
             }
 
-        let arguments = (targetSwiftFiles + dependenciesSourceFiles).map(\.string)
-        + ["--dependency-tree-output", outputSwiftFile.string]
+        let inputSwiftFilesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.txt").string
+        try Data(
+            (targetSwiftFiles + dependenciesSourceFiles)
+                .map(\.string)
+                .joined(separator: "\n")
+                .utf8
+        )
+        .write(toPath: inputSwiftFilesFilePath)
+        let arguments = [
+            "--swift-file-paths-file-path",
+            inputSwiftFilesFilePath,
+            "--dependency-tree-output",
+            outputSwiftFile.string
+        ]
 
         return [
             .buildCommand(
@@ -93,9 +106,17 @@ extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
         }
 
         let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
-        let arguments = inputSwiftFiles
-            .map(\.string)
-        + [
+        let inputSwiftFilesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.txt").string
+        try Data(
+            inputSwiftFiles
+                .map(\.string)
+                .joined(separator: "\n")
+                .utf8
+        )
+        .write(toPath: inputSwiftFilesFilePath)
+        let arguments = [
+            "--swift-file-paths-file-path",
+            inputSwiftFilesFilePath,
             "--dependency-tree-output",
             outputSwiftFile.string
         ]
@@ -112,3 +133,17 @@ extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
     }
 }
 #endif
+
+extension Data {
+    fileprivate func write(toPath filePath: String) throws {
+#if os(Linux)
+        try write(to: URL(fileURLWithPath: filePath))
+#else
+        if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
+            try write(to: URL(filePath: filePath))
+        } else {
+            try write(to: URL(fileURLWithPath: filePath))
+        }
+#endif
+    }
+}

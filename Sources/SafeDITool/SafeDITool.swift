@@ -29,8 +29,11 @@ struct SafeDITool: AsyncParsableCommand {
 
     // MARK: Arguments
 
-    @Argument(help: "The swift files to parse")
-    var swiftFilePaths: [String]
+    @Argument(help: "The Swift files to parse.")
+    var swiftFilePaths: [String] = []
+
+    @Option(help: "A path to a file containing newline-separated Swift files to parse.")
+    var swiftFilePathsFilePath: String?
 
     @Option(parsing: .upToNextOption, help: "The names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.")
     var additionalImportedModules: [String] = []
@@ -123,6 +126,14 @@ struct SafeDITool: AsyncParsableCommand {
             of: String.self,
             returning: [String].self
         ) { taskGroup in
+            let swiftFilePaths: [String]
+            if let swiftFilePathsFilePath {
+                swiftFilePaths = try String(contentsOfFile: swiftFilePathsFilePath)
+                    .components(separatedBy: .newlines)
+                + self.swiftFilePaths
+            } else {
+                swiftFilePaths = self.swiftFilePaths
+            }
             for filePath in swiftFilePaths {
                 taskGroup.addTask {
                     let swiftFile = try String(contentsOfFile: filePath)
