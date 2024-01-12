@@ -2732,13 +2732,11 @@ final class SafeDIToolTests: XCTestCase {
         line: UInt = #line,
         block: () async throws -> ReturnType
     ) async {
-        var didThrow = false
         do {
             _ = try await block()
+            XCTFail("Did not throw error!", line: line)
         } catch {
-            didThrow = true
-            XCTAssertEqual((error as CustomStringConvertible).description, errorDescription, line: line)
+            XCTAssertEqual("\(error)", errorDescription, line: line)
         }
-        XCTAssertTrue(didThrow, "Did not throw error!", line: line)
     }
 }

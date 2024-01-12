@@ -521,8 +521,8 @@ final class TypeDescriptionTests: XCTestCase {
     }
 
     func test_asSource_whenDescribingAnUnknownCase_returnsTheProvidedStringWithWhitespaceStripped() {
-        let sut = TypeDescription.unknown(text: " SomeTypeThatIsFormattedOddly    ")
-        XCTAssertEqual(sut.asSource, "SomeTypeThatIsFormattedOddly")
+        let typeDescription = TypeSyntax(stringLiteral: " SomeTypeThatIsFormattedOddly    ").typeDescription
+        XCTAssertEqual(typeDescription.asSource, "SomeTypeThatIsFormattedOddly")
     }
 
     // MARK: - Visitors

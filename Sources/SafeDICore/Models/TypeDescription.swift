@@ -121,7 +121,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         case let .closure(arguments, isAsync, doesThrow, returnType):
             return "(\(arguments.map { $0.asSource }.joined(separator: ", ")))\([isAsync ? " async" : "", doesThrow ? " throws" : ""].filter { !$0.isEmpty }.joined()) -> \(returnType.asSource)"
         case let .unknown(text):
-            return text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text
         }
     }
 
@@ -280,9 +280,8 @@ extension TypeSyntax {
                 returnType: typeIdentifier.returnClause.type.typeDescription)
 
         } else {
-            assertionFailure("TypeSyntax of unknown type. Defaulting to `description`.")
             // The description is a source-accurate description of this node, so it is a reasonable fallback.
-            return .unknown(text: description)
+            return .unknown(text: trimmedDescription)
         }
     }
 }
@@ -304,7 +303,7 @@ extension ExprSyntax {
                 if let base = memberAccessExpr.base {
                     return base.typeDescription
                 } else {
-                    return .unknown(text: memberAccessExpr.description)
+                    return .unknown(text: memberAccessExpr.trimmedDescription)
                 }
             } else {
                 if let base = memberAccessExpr.base {
@@ -321,7 +320,7 @@ extension ExprSyntax {
                         )
                     }
                 } else {
-                    return .unknown(text: memberAccessExpr.description)
+                    return .unknown(text: memberAccessExpr.trimmedDescription)
                 }
             }
         } else if let genericExpr = GenericSpecializationExprSyntax(self) {
@@ -339,7 +338,7 @@ extension ExprSyntax {
                     parentType: parentType, generics: genericTypeVisitor.genericArguments
                 )
             case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown:
-                return .unknown(text: description)
+                return .unknown(text: trimmedDescription)
             }
         } else if let tupleExpr = TupleExprSyntax(self) {
             let tupleTypes = tupleExpr.elements.map(\.expression.typeDescription)
@@ -377,7 +376,7 @@ extension ExprSyntax {
                     returnType: returnType.typeDescription
                 )
             } else {
-                return .unknown(text: description)
+                return .unknown(text: trimmedDescription)
             }
         } else if let optionalChainingExpr = OptionalChainingExprSyntax(self) {
             return .optional(optionalChainingExpr.expression.typeDescription)
@@ -398,7 +397,7 @@ extension ExprSyntax {
                 value: onlyElement.value.typeDescription
             )
         } else {
-            return .unknown(text: description)
+            return .unknown(text: trimmedDescription)
         }
     }
 }

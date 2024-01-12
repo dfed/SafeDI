@@ -79,16 +79,16 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
+                .byNameItem(name: "ZippyJSON", condition: .when(platforms: [.iOS, .tvOS, .macOS])),
                 "SafeDICore",
-                "ZippyJSON",
             ]
         ),
         .testTarget(
             name: "SafeDIToolTests",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .byNameItem(name: "ZippyJSON", condition: .when(platforms: [.iOS, .tvOS, .macOS])),
                 "SafeDITool",
-                "ZippyJSON",
             ]
         ),
 

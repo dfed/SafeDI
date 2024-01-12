@@ -54,7 +54,7 @@ public final class DependencyTreeGenerator {
             for try await generatedRoot in taskGroup {
                 generatedRoots.append(generatedRoot)
             }
-            return generatedRoots.sorted().joined(separator: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            return generatedRoots.sorted().joined(separator: "\n\n")
         }
 
         let importsWhitespace = imports.isEmpty ? "" : "\n"
@@ -69,7 +69,7 @@ public final class DependencyTreeGenerator {
 
     // MARK: - DependencyTreeGeneratorError
 
-    enum DependencyTreeGeneratorError: Error, CustomStringConvertible {
+    private enum DependencyTreeGeneratorError: Error, CustomStringConvertible {
 
         case noInstantiableFound(TypeDescription)
         case unfulfillableProperties([UnfulfillableProperty])
