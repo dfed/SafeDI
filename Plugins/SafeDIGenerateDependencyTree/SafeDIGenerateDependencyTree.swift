@@ -27,17 +27,16 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                     .map(\.path)
             }
 
-        let inputSwiftFilesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.txt").string
+        let inputSourcesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.csv").string
         try Data(
             (targetSwiftFiles + dependenciesSourceFiles)
                 .map(\.string)
-                .joined(separator: "\n")
+                .joined(separator: ",")
                 .utf8
         )
-        .write(toPath: inputSwiftFilesFilePath)
+        .write(toPath: inputSourcesFilePath)
         let arguments = [
-            "--swift-file-paths-file-path",
-            inputSwiftFilesFilePath,
+            inputSourcesFilePath,
             "--dependency-tree-output",
             outputSwiftFile.string
         ]
@@ -106,17 +105,16 @@ extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
         }
 
         let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
-        let inputSwiftFilesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.txt").string
+        let inputSourcesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.csv").string
         try Data(
             inputSwiftFiles
                 .map(\.string)
-                .joined(separator: "\n")
+                .joined(separator: ",")
                 .utf8
         )
-        .write(toPath: inputSwiftFilesFilePath)
+        .write(toPath: inputSourcesFilePath)
         let arguments = [
-            "--swift-file-paths-file-path",
-            inputSwiftFilesFilePath,
+            inputSourcesFilePath,
             "--dependency-tree-output",
             outputSwiftFile.string
         ]
