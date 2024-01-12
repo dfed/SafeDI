@@ -33,13 +33,13 @@ actor ScopeGenerator {
             scopeData = .property(
                 instantiable: instantiable,
                 property: property,
-                forwardedProperty: instantiable
-                    .dependencies
+                forwardedProperties: Set(
+                    instantiable
+                        .dependencies
                     // Instantiated properties will self-resolve.
-                    .filter { $0.source == .forwarded }
-                    .map(\.property)
-                    // Our @Instantiable macro enforces that we have at most one forwarded property.
-                    .first
+                        .filter { $0.source == .forwarded }
+                        .map(\.property)
+                )
             )
         } else {
             scopeData = .root(instantiable: instantiable)
@@ -47,7 +47,7 @@ actor ScopeGenerator {
         self.property = property
         self.receivedProperties = receivedProperties
         self.propertiesToGenerate = propertiesToGenerate
-        forwardedProperty = scopeData.forwardedProperty
+        forwardedProperties = scopeData.forwardedProperties
         propertiesMadeAvailableByChildren = Set(
             instantiable
                 .dependencies
@@ -78,7 +78,7 @@ actor ScopeGenerator {
         scopeData = .alias(property: property, fulfillingProperty: fulfillingProperty)
         requiredReceivedProperties = [fulfillingProperty]
         propertiesToGenerate = []
-        forwardedProperty = nil
+        forwardedProperties = []
         propertiesMadeAvailableByChildren = []
         self.receivedProperties = receivedProperties
         self.property = property
@@ -111,7 +111,7 @@ actor ScopeGenerator {
                 case let .property(
                     instantiable,
                     property,
-                    forwardedProperty
+                    forwardedProperties
                 ):
                     let argumentList = try instantiable.generateArgumentList()
                     let concreteTypeName = instantiable.concreteInstantiableType.asSource
@@ -127,17 +127,32 @@ actor ScopeGenerator {
                     let propertyDeclaration: String
                     let leadingConcreteTypeName: String
                     let closureArguments: String
-                    if let forwardedProperty {
-                        guard property.generics.first == forwardedProperty.typeDescription else {
+                    if forwardedProperties.isEmpty {
+                        closureArguments = ""
+                    } else {
+                        if
+                            let firstForwardedProperty = forwardedProperties.first,
+                            let forwardedArgument = property.generics.first,
+                            !(
+                                // The forwarded argument is the same type as our only `@Forwarded` property.
+                                (forwardedProperties.count == 1 && forwardedArgument == firstForwardedProperty.typeDescription)
+                                // The forwarded argument is the same as `InstantiableTypeName.ForwardedArguments`.
+                                || forwardedArgument == .nested(name: "ForwardedArguments", parentType: instantiable.concreteInstantiableType)
+                                // The forwarded argument is the same as the tuple we generated for `InstantiableTypeName.ForwardedArguments`.
+                                || forwardedArgument == forwardedProperties.asTupleTypeDescription
+                            )
+                        {
                             throw GenerationError.forwardingInstantiatorGenericDoesNotMatch(
                                 property: property,
-                                expectedType: forwardedProperty.typeDescription,
                                 instantiable: instantiable
                             )
                         }
-                        closureArguments = " \(forwardedProperty.label) in"
-                    } else {
-                        closureArguments = ""
+
+                        let forwardedArgumentList = forwardedProperties
+                            .sorted()
+                            .map(\.label)
+                            .joined(separator: ", ")
+                        closureArguments = " \(forwardedArgumentList) in"
                     }
                     switch property.propertyType {
                     case .instantiator, .forwardingInstantiator:
@@ -193,19 +208,19 @@ actor ScopeGenerator {
         case property(
             instantiable: Instantiable,
             property: Property,
-            forwardedProperty: Property?
+            forwardedProperties: Set<Property>
         )
         case alias(
             property: Property,
             fulfillingProperty: Property
         )
 
-        var forwardedProperty: Property? {
+        var forwardedProperties: Set<Property> {
             switch self {
-            case let .property(_, _, forwardedProperty):
-                return forwardedProperty
+            case let .property(_, _, forwardedProperties):
+                return forwardedProperties
             case .root, .alias:
-                return nil
+                return []
             }
         }
     }
@@ -216,7 +231,7 @@ actor ScopeGenerator {
     private let receivedProperties: Set<Property>
     private let propertiesToGenerate: [ScopeGenerator]
     private let property: Property?
-    private let forwardedProperty: Property?
+    private let forwardedProperties: Set<Property>
 
     private var resolvedProperties = Set<Property>()
     private var generateCodeTask: Task<String, Error>?
@@ -264,25 +279,25 @@ actor ScopeGenerator {
             .requiredReceivedProperties
             .contains(where: {
                 !isPropertyResolved($0) 
-                && propertyToGenerate.forwardedProperty != $0
+                && !propertyToGenerate.forwardedProperties.contains($0)
             })
     }
 
     private func isPropertyResolved(_ property: Property) -> Bool {
         resolvedProperties.contains(property)
         || receivedProperties.contains(property)
-        || forwardedProperty == property
+        || forwardedProperties.contains(property)
     }
 
     // MARK: GenerationError
 
     private enum GenerationError: Error, CustomStringConvertible {
-        case forwardingInstantiatorGenericDoesNotMatch(property: Property, expectedType: TypeDescription, instantiable: Instantiable)
+        case forwardingInstantiatorGenericDoesNotMatch(property: Property, instantiable: Instantiable)
 
         var description: String {
             switch self {
-            case let .forwardingInstantiatorGenericDoesNotMatch(property, expectedType, instantiable):
-                "Property `\(property.asSource)` on \(instantiable.concreteInstantiableType.asSource) incorrectly configured. Property should instead be of type `\(Dependency.forwardingInstantiatorType)<\(expectedType.asSource), \(property.typeDescription.asInstantiatedType.asSource)>`. First generic argument must match type of @\(Dependency.Source.forwarded.rawValue) property."
+            case let .forwardingInstantiatorGenericDoesNotMatch(property, instantiable):
+                "Property `\(property.asSource)` on \(instantiable.concreteInstantiableType.asSource) incorrectly configured. Property should instead be of type `\(Dependency.forwardingInstantiatorType)<\(instantiable.concreteInstantiableType.asSource).ForwardedArguments, \(property.typeDescription.asInstantiatedType.asSource)>`."
             }
         }
     }
