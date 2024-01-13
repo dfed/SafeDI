@@ -3078,10 +3078,10 @@ final class SafeDIToolTests: XCTestCase {
         dependentModuleOutputPaths: [String] = [],
         buildDependencyTreeOutput: Bool
     ) async throws -> TestOutput {
-        let swiftFileCSV = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        let swiftFileCSV = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         let swiftFiles = try swiftFileContent
             .map {
-                let location = URL.temporaryDirectory.appending(path: UUID().uuidString)
+                let location = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
                 try $0.write(to: location, atomically: true, encoding: .utf8)
                 return location
             }
@@ -3090,8 +3090,8 @@ final class SafeDIToolTests: XCTestCase {
             .joined(separator: ",")
             .write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
-        let moduleInfoOutput = URL.temporaryDirectory.appending(path: UUID().uuidString)
-        let dependencyTreeOutput = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        let moduleInfoOutput = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let dependencyTreeOutput = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         var tool = SafeDITool()
         tool.swiftSourcesFilePath = swiftFileCSV.path()
         tool.additionalImportedModules = []

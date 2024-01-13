@@ -50,17 +50,23 @@ struct SafeDITool: AsyncParsableCommand {
 
     @MainActor
     func run() async throws {
-        async let asyncDependentModuleInfo = try loadSafeDIModuleInfo(
-            atModuleInfoURLs: moduleInfoPaths.map(\.asFileURL)
+        let (dependentModuleInfo, module) = try await (
+            loadSafeDIModuleInfo(atModuleInfoURLs: moduleInfoPaths.map(\.asFileURL)),
+            parsedModule(loadSwiftFiles())
         )
-        async let asyncSwiftFiles = try loadSwiftFiles()
-        let (dependentModuleInfo, swiftFiles) = try await (asyncDependentModuleInfo, asyncSwiftFiles)
 
-        let dependentImportStatements = dependentModuleInfo.flatMap(\.imports) + additionalImportedModules.map { ImportStatement(moduleName: $0) }
-        let dependentInstantiables = dependentModuleInfo.flatMap(\.instantiables)
-        let buildDependencyTreeOutput = dependencyTreeOutput != nil
+        async let generatedCode: String? = if dependencyTreeOutput != nil {
+            DependencyTreeGenerator(
+                importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
+                typeDescriptionToFulfillingInstantiableMap: try resolveSafeDIFulfilledTypes(
+                    instantiables: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
+                )
+            )
+            .generate()
+        } else {
+            nil
+        }
 
-        let module = parsedModule(swiftFiles)
         if !module.nestedInstantiableDecoratedTypeDescriptions.isEmpty {
             throw CollectInstantiablesError
                 .foundNestedInstantiables(
@@ -70,20 +76,6 @@ struct SafeDITool: AsyncParsableCommand {
                         .sorted()
                 )
         }
-
-        let dependencyTree: String?
-        if buildDependencyTreeOutput {
-            dependencyTree = try await DependencyTreeGenerator(
-                importStatements: dependentImportStatements + module.imports,
-                typeDescriptionToFulfillingInstantiableMap: try resolveSafeDIFulfilledTypes(
-                    instantiables: dependentInstantiables + module.instantiables
-                )
-            )
-            .generate()
-        } else {
-            dependencyTree = nil
-        }
-
         if let moduleInfoOutput {
             try JSONEncoder().encode(ModuleInfo(
                 imports: module.imports,
@@ -91,7 +83,7 @@ struct SafeDITool: AsyncParsableCommand {
             )).write(toPath: moduleInfoOutput)
         }
 
-        if let dependencyTreeOutput, let generatedCode = dependencyTree {
+        if let dependencyTreeOutput, let generatedCode = try await generatedCode {
             try generatedCode.write(toPath: dependencyTreeOutput)
         }
     }
@@ -157,29 +149,33 @@ struct SafeDITool: AsyncParsableCommand {
     }
 
     private func loadSafeDIModuleInfo(atModuleInfoURLs moduleInfoURLs: [URL]) async throws -> [ModuleInfo] {
-        try await withThrowingTaskGroup(
-            of: ModuleInfo.self,
-            returning: [ModuleInfo].self
-        ) { taskGroup in
+        if moduleInfoURLs.isEmpty {
+            []
+        } else {
+            try await withThrowingTaskGroup(
+                of: ModuleInfo.self,
+                returning: [ModuleInfo].self
+            ) { taskGroup in
 #if canImport(ZippyJSON)
-            let decoder = ZippyJSONDecoder()
+                let decoder = ZippyJSONDecoder()
 #else
-            let decoder = JSONDecoder()
+                let decoder = JSONDecoder()
 #endif
-            for moduleInfoURL in moduleInfoURLs {
-                taskGroup.addTask {
-                    try decoder.decode(
-                        ModuleInfo.self,
-                        from: Data(contentsOf: moduleInfoURL)
-                    )
+                for moduleInfoURL in moduleInfoURLs {
+                    taskGroup.addTask {
+                        try decoder.decode(
+                            ModuleInfo.self,
+                            from: Data(contentsOf: moduleInfoURL)
+                        )
+                    }
                 }
-            }
-            var allModuleInfo = [ModuleInfo]()
-            for try await moduleInfo in taskGroup {
-                allModuleInfo.append(moduleInfo)
-            }
+                var allModuleInfo = [ModuleInfo]()
+                for try await moduleInfo in taskGroup {
+                    allModuleInfo.append(moduleInfo)
+                }
 
-            return allModuleInfo
+                return allModuleInfo
+            }
         }
     }
 
