@@ -573,6 +573,21 @@ final class TypeDescriptionTests: XCTestCase {
         )
     }
 
+    func test_UnorderedComparingCollection_makeIterator_iteratesInOrder() {
+        for (index, value) in UnorderedComparingCollection([1, 2, 3]).enumerated() {
+            switch index {
+            case 0:
+                XCTAssertEqual(value, 1)
+            case 1:
+                XCTAssertEqual(value, 2)
+            case 2:
+                XCTAssertEqual(value, 3)
+            case _:
+                XCTFail("Unexpected index \(index)")
+            }
+        }
+    }
+
     // MARK: - Visitors
 
     private final class TypeIdentifierSyntaxVisitor: SyntaxVisitor {
