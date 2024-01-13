@@ -55,17 +55,14 @@ struct SafeDITool: AsyncParsableCommand {
             parsedModule(loadSwiftFiles())
         )
 
-        async let generatedCode: String? = if dependencyTreeOutput != nil {
-            DependencyTreeGenerator(
-                importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
-                typeDescriptionToFulfillingInstantiableMap: try resolveSafeDIFulfilledTypes(
-                    instantiables: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
-                )
+        async let generatedCode: String? = dependencyTreeOutput != nil
+        ? DependencyTreeGenerator(
+            importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
+            typeDescriptionToFulfillingInstantiableMap: try resolveSafeDIFulfilledTypes(
+                instantiables: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
             )
-            .generate()
-        } else {
-            nil
-        }
+        ).generate()
+        : nil
 
         if !module.nestedInstantiableDecoratedTypeDescriptions.isEmpty {
             throw CollectInstantiablesError
