@@ -547,6 +547,32 @@ final class TypeDescriptionTests: XCTestCase {
         XCTAssertEqual(typeDescription.asSource, "SomeTypeThatIsFormattedOddly")
     }
 
+    func test_equality_isTrueWhenComparingLexigraphicallyEquivalentCompositions() {
+        XCTAssertEqual(
+            TypeDescription.composition([
+                .simple(name: "Foo"),
+                .simple(name: "Bar"),
+            ]),
+            TypeDescription.composition([
+                .simple(name: "Foo"),
+                .simple(name: "Bar"),
+            ])
+        )
+    }
+
+    func test_equality_isTrueWhenComparingReversedCompositions() {
+        XCTAssertEqual(
+            TypeDescription.composition([
+                .simple(name: "Foo"),
+                .simple(name: "Bar"),
+            ]),
+            TypeDescription.composition([
+                .simple(name: "Bar"),
+                .simple(name: "Foo"),
+            ])
+        )
+    }
+
     // MARK: - Visitors
 
     private final class TypeIdentifierSyntaxVisitor: SyntaxVisitor {
