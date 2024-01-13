@@ -468,7 +468,7 @@ final class TypeDescriptionTests: XCTestCase {
         XCTAssertEqual(typeDescription.asSource, "Dictionary<Int, String>")
     }
 
-    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingATupleType_findsTheType() throws {
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingATupleTypeWithoutLabels_findsTheType() throws {
         let content = """
             let test: Any.Type = (Int, String).self
             """
@@ -477,6 +477,28 @@ final class TypeDescriptionTests: XCTestCase {
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
         XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
         XCTAssertEqual(typeDescription.asSource, "(Int, String)")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingATupleTypeWithOneLabel_findsTheType() throws {
+        let content = """
+            let test: Any.Type = (int: Int, String).self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "(int: Int, String)")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingATupleTypeWithLabels_findsTheType() throws {
+        let content = """
+            let test: Any.Type = (int: Int, string: String).self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "(int: Int, string: String)")
     }
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAClosureType_findsTheType() throws {

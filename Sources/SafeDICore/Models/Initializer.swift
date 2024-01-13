@@ -112,10 +112,9 @@ public struct Initializer: Codable, Hashable {
 
         let dependencyAndArgumentBinding = try createDependencyAndArgumentBinding(given: dependencies)
 
-        let dependenciesWithDuplicateInitializerArgumentsRemoved = dependencies.removingDuplicateInitializerArguments
         let initializerFulfulledDependencies = Set(dependencyAndArgumentBinding.map(\.dependency))
-        let missingArguments = Set(dependenciesWithDuplicateInitializerArgumentsRemoved).subtracting(initializerFulfulledDependencies)
-        
+        let missingArguments = Set(dependencies).subtracting(initializerFulfulledDependencies)
+
         guard missingArguments.isEmpty else {
             throw GenerationError.missingArguments(missingArguments.map(\.property.asSource))
         }

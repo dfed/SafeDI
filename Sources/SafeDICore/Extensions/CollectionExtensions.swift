@@ -21,23 +21,37 @@
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
-extension Array where Element == Dependency {
+extension Collection where Element == Dependency {
 
-    var removingDuplicateInitializerArguments: Self {
-        var alreadySeenInitializerArgument = Set<Property>()
-        return filter {
-            if alreadySeenInitializerArgument.contains($0.property) {
-                return false
-            } else {
-                alreadySeenInitializerArgument.insert($0.property)
-                return true
+    var initializerFunctionParameters: [FunctionParameterSyntax] {
+        map(\.property)
+            .initializerFunctionParameters
+    }
+}
+
+extension Collection where Element == Property {
+
+    public var asTuple: TupleTypeSyntax {
+        let tupleElements = sorted()
+            .map(\.asTupleElement)
+            .transformUntilLast {
+                var node = $0
+                node.trailingComma = .commaToken(trailingTrivia: .space)
+                return node
             }
+        var tuple = TupleTypeSyntax(elements: TupleTypeElementListSyntax())
+        for element in tupleElements {
+            tuple.elements.append(element)
         }
+        return tuple
+    }
+
+    var asTupleTypeDescription: TypeDescription {
+        TypeSyntax(asTuple).typeDescription
     }
 
     var initializerFunctionParameters: [FunctionParameterSyntax] {
-        removingDuplicateInitializerArguments
-            .map { $0.property.asFunctionParamter }
+        map { $0.asFunctionParamter }
             .transformUntilLast {
                 var node = $0
                 node.trailingComma = .commaToken(trailingTrivia: .space)
@@ -46,12 +60,12 @@ extension Array where Element == Dependency {
     }
 }
 
-extension Array {
+extension Collection {
     fileprivate func transformUntilLast(_ transform: (Element) throws -> Element) rethrows -> [Element] {
-        var arrayToTransform = self
+        var arrayToTransform = Array(self)
         guard let lastItem = arrayToTransform.popLast() else {
             // Array is empty.
-            return self
+            return []
         }
         return try arrayToTransform.map { try transform($0) } + [lastItem]
     }
