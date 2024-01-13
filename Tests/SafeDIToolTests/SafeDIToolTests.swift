@@ -3078,10 +3078,10 @@ final class SafeDIToolTests: XCTestCase {
         dependentModuleOutputPaths: [String] = [],
         buildDependencyTreeOutput: Bool
     ) async throws -> TestOutput {
-        let swiftFileCSV = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let swiftFileCSV = makeTempFile()
         let swiftFiles = try swiftFileContent
             .map {
-                let location = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+                let location = makeTempFile()
                 try $0.write(to: location, atomically: true, encoding: .utf8)
                 return location
             }
@@ -3090,8 +3090,8 @@ final class SafeDIToolTests: XCTestCase {
             .joined(separator: ",")
             .write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
-        let moduleInfoOutput = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-        let dependencyTreeOutput = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let moduleInfoOutput = makeTempFile()
+        let dependencyTreeOutput = makeTempFile()
         var tool = SafeDITool()
         tool.swiftSourcesFilePath = swiftFileCSV.path()
         tool.additionalImportedModules = []
@@ -3123,4 +3123,12 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     private var filesToDelete = [URL]()
+
+    private func makeTempFile() -> URL {
+#if os(Linux)
+        FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+#else
+        URL.temporaryDirectory.appending(path: UUID().uuidString)
+#endif
+    }
 }
