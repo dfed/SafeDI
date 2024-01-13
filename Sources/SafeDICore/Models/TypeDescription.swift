@@ -71,9 +71,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 return "\(name)<\(generics.map { $0.asSource }.joined(separator: ", "))>"
             }
         case let .composition(types):
-            return types
-                .map { $0.asSource }
-                .joined(separator: " & ")
+            return types.map { $0.asSource }.joined(separator: " & ")
         case let .optional(type):
             return "\(type.asSource)?"
         case let .implicitlyUnwrappedOptional(type):
