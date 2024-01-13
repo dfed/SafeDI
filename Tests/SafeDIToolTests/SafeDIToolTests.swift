@@ -692,7 +692,7 @@ final class SafeDIToolTests: XCTestCase {
                     func login(username: String, password: String) {
                         Task { @MainActor in
                             let user = await authService.login(username: username, password: password)
-                            let loggedInViewController = loggedInViewControllerBuilder.instantiate((user.id, user.name))
+                            let loggedInViewController = loggedInViewControllerBuilder.instantiate((userID: user.id, userName: user.name))
                             pushViewController(loggedInViewController)
                         }
                     }
@@ -821,7 +821,7 @@ final class SafeDIToolTests: XCTestCase {
                     func login(username: String, password: String) {
                         Task { @MainActor in
                             let user = await authService.login(username: username, password: password)
-                            let loggedInViewController = loggedInViewControllerBuilder.instantiate((user.id, user.name))
+                            let loggedInViewController = loggedInViewControllerBuilder.instantiate((userID: user.id, userName: user.name))
                             pushViewController(loggedInViewController)
                         }
                     }

@@ -25,8 +25,8 @@
 /// Instantiation is thread-safe.
 ///
 /// - SeeAlso: `Instantiator`
-/// - Note: This class is the sole means for instantiating an `@Instantiable` type with a `@Forwarded`
-///   property within the SafeDI framework.
+/// - Note: This class is the sole means for instantiating an `@Instantiable` type with `@Forwarded`
+///   properties within the SafeDI framework.
 public final class ForwardingInstantiator<ArgumentsToForward, InstantiableType> {
     /// Initializes a new forwarding instantiator with the provided instantiation closure.
     ///
