@@ -27,7 +27,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     /// A nested type with possible generics. e.g. Array.Element or Swift.Array<Element>
     indirect case nested(name: String, parentType: TypeDescription, generics: [TypeDescription])
     /// A composed type. e.g. Identifiable & Equatable
-    indirect case composition(UnorderedComparingArray<TypeDescription>)
+    indirect case composition(UnorderedComparingCollection<TypeDescription>)
     /// An optional type. e.g. Int?
     indirect case optional(TypeDescription)
     /// An implicitly unwrapped optional type. e.g. Int!
@@ -236,7 +236,7 @@ extension TypeSyntax {
                 generics: genericTypeVisitor.genericArguments)
 
         } else if let typeIdentifiers = CompositionTypeSyntax(self) {
-            return .composition(UnorderedComparingArray(typeIdentifiers.elements.map { $0.type.typeDescription }))
+            return .composition(UnorderedComparingCollection(typeIdentifiers.elements.map { $0.type.typeDescription }))
 
         } else if let typeIdentifier = OptionalTypeSyntax(self) {
             return .optional(typeIdentifier.wrappedType.typeDescription)
@@ -382,7 +382,7 @@ extension ExprSyntax {
             }
         } else if let sequenceExpr = SequenceExprSyntax(self) {
             if sequenceExpr.elements.contains(where: { BinaryOperatorExprSyntax($0) != nil }) {
-                return .composition(UnorderedComparingArray(
+                return .composition(UnorderedComparingCollection(
                     sequenceExpr
                         .elements
                         .filter { BinaryOperatorExprSyntax($0) == nil }
@@ -429,21 +429,24 @@ extension ExprSyntax {
     }
 }
 
-// MARK: - UnorderedComparingArray
+// MARK: - UnorderedComparingCollection
 
-public struct UnorderedComparingArray<Element: Codable & Hashable & Sendable>: Codable, Hashable, Sendable, Collection {
+public struct UnorderedComparingCollection<Element: Codable & Hashable & Sendable>: Codable, Hashable, Sendable, Collection, ExpressibleByArrayLiteral {
 
-    init(_ array: [Element]) {
+    // MARK: Initialization
+
+    public init(_ array: [Element]) {
         self.array = array
         set = Set(array)
     }
 
-    let array: [Element]
-    private let set: Set<Element>
+    // MARK: Equatable
 
-    public static func == (lhs: UnorderedComparingArray, rhs: UnorderedComparingArray) -> Bool {
+    public static func == (lhs: UnorderedComparingCollection, rhs: UnorderedComparingCollection) -> Bool {
         lhs.set == rhs.set
     }
+
+    // MARK: Collection
 
     public func makeIterator() -> IndexingIterator<Array<Element>> {
         array.makeIterator()
@@ -453,10 +456,22 @@ public struct UnorderedComparingArray<Element: Codable & Hashable & Sendable>: C
     public func index(after i: Int) -> Int {
         array.index(after: i)
     }
-
     public subscript(position: Int) -> Element {
         array[position]
     }
+
+    // MARK: ExpressibleByArrayLiteral
+
+    public init(arrayLiteral elements: Element...) {
+        self.init(elements)
+    }
+
+    public typealias ArrayLiteralElement = Element
+
+    // MARK: Private
+
+    private let array: [Element]
+    private let set: Set<Element>
 }
 
 // MARK: - GenericArgumentVisitor

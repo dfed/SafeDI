@@ -552,27 +552,27 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_equality_isTrueWhenComparingLexigraphicallyEquivalentCompositions() {
         XCTAssertEqual(
-            TypeDescription.composition(.init([
+            TypeDescription.composition([
                 .simple(name: "Foo"),
                 .simple(name: "Bar"),
-            ])),
-            TypeDescription.composition(.init([
+            ]),
+            TypeDescription.composition([
                 .simple(name: "Foo"),
                 .simple(name: "Bar"),
-            ]))
+            ])
         )
     }
 
     func test_equality_isTrueWhenComparingReversedCompositions() {
         XCTAssertEqual(
-            TypeDescription.composition(.init([
+            TypeDescription.composition([
                 .simple(name: "Foo"),
                 .simple(name: "Bar"),
-            ])),
-            TypeDescription.composition(.init([
+            ]),
+            TypeDescription.composition([
                 .simple(name: "Bar"),
                 .simple(name: "Foo"),
-            ]))
+            ])
         )
     }
 
