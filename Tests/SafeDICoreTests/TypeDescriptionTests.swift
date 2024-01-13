@@ -542,9 +542,9 @@ final class TypeDescriptionTests: XCTestCase {
         XCTAssertEqual(typeDescription.asSource, "() async throws -> ()")
     }
 
-    func test_asSource_whenDescribingAnUnknownCase_returnsTheProvidedStringWithWhitespaceStripped() {
-        let typeDescription = TypeSyntax(stringLiteral: " SomeTypeThatIsFormattedOddly    ").typeDescription
-        XCTAssertEqual(typeDescription.asSource, "SomeTypeThatIsFormattedOddly")
+    func test_asSource_whenDescribingAnUnknownCase_returnsTheProvidedStringWithTrailingWhitespaceStripped() {
+        let typeDescription = TypeSyntax(stringLiteral: "<[]>    ").typeDescription
+        XCTAssertEqual(typeDescription.asSource, "<[]>")
     }
 
     func test_equality_isTrueWhenComparingLexigraphicallyEquivalentCompositions() {

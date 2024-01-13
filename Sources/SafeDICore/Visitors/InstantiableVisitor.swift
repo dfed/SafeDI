@@ -57,9 +57,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
             let patterns = node
                 .bindings
                 .filter {
-                    $0.initializer == nil
-                    && $0.accessorBlock == nil
-                    && !$0.isOptionalAndUninitialized
+                    $0.accessorBlock == nil
+                    && !$0.isOptionalOrInitialized
                 }
                 .map(\.pattern)
             uninitializedNonOptionalPropertyNames += patterns

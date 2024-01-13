@@ -109,7 +109,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 // Reference manual: https://docs.swift.org/swift-book/ReferenceManual/Types.html#grammar_type
                 return "\(specifier) \(attributesFromList(attributes)) \(type.asSource)"
             case (.none, .none):
-                // This case represents an error that has previously caused an assertion.
+                // This case represents an error.
                 return type.asSource
             }
         case let .array(element):
@@ -258,13 +258,7 @@ extension TypeSyntax {
 
         } else if let typeIdentifier = AttributedTypeSyntax(self) {
             let attributes: [String] = typeIdentifier.attributes.compactMap {
-                guard
-                    let attributeName = AttributeSyntax($0)?.attributeName,
-                    let attributeIdentifier = IdentifierTypeSyntax(attributeName)
-                else {
-                    return nil
-                }
-                return attributeIdentifier.name.text
+                AttributeSyntax($0)?.attributeName.as(IdentifierTypeSyntax.self)?.name.text
             }
             return .attributed(
                 typeIdentifier.baseType.typeDescription,
@@ -448,9 +442,7 @@ public struct UnorderedComparingCollection<Element: Codable & Hashable & Sendabl
 
     // MARK: Collection
 
-    public func makeIterator() -> IndexingIterator<Array<Element>> {
-        array.makeIterator()
-    }
+    public func makeIterator() -> IndexingIterator<Array<Element>> { array.makeIterator() }
     public var startIndex: Int { array.startIndex }
     public var endIndex: Int { array.endIndex }
     public func index(after i: Int) -> Int {

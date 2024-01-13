@@ -63,7 +63,7 @@ public final class DependencyTreeGenerator {
         // Any modifications made to this file will be overwritten on subsequent builds.
         // Please refrain from editing this file directly.
         \(importsWhitespace)\(imports)\(importsWhitespace)
-        \(dependencyTree.isEmpty ? "// No root @\(InstantiableVisitor.macroName)-decorated types found." : dependencyTree)
+        \(dependencyTree.isEmpty ? "// No root @\(InstantiableVisitor.macroName)-decorated types found, or root types already had a `public init()` method." : dependencyTree)
         """
     }
 
