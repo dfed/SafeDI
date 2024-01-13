@@ -21,7 +21,6 @@
 import SafeDICore
 import XCTest
 
-@testable import ArgumentParser
 @testable import SafeDITool
 
 final class SafeDIToolTests: XCTestCase {
