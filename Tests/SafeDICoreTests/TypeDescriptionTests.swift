@@ -102,10 +102,7 @@ final class TypeDescriptionTests: XCTestCase {
 
         let typeDescription = try XCTUnwrap(visitor.composedTypeIdentifier)
         XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
-        XCTAssertEqual(
-            typeDescription.asSource,
-            "Foo & Bar"
-        )
+        XCTAssertEqual(typeDescription.asSource, "Foo & Bar")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAOptionalTypeSyntax_findsTheType() throws {
