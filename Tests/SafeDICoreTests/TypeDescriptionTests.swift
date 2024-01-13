@@ -542,9 +542,9 @@ final class TypeDescriptionTests: XCTestCase {
         XCTAssertEqual(typeDescription.asSource, "() async throws -> ()")
     }
 
-    func test_asSource_whenDescribingAnUnknownCase_returnsTheProvidedStringWithWhitespaceStripped() {
-        let typeDescription = TypeSyntax(stringLiteral: " SomeTypeThatIsFormattedOddly    ").typeDescription
-        XCTAssertEqual(typeDescription.asSource, "SomeTypeThatIsFormattedOddly")
+    func test_asSource_whenDescribingAnUnknownCase_returnsTheProvidedStringWithTrailingWhitespaceStripped() {
+        let typeDescription = TypeSyntax(stringLiteral: "<[]>    ").typeDescription
+        XCTAssertEqual(typeDescription.asSource, "<[]>")
     }
 
     func test_equality_isTrueWhenComparingLexigraphicallyEquivalentCompositions() {
@@ -571,6 +571,21 @@ final class TypeDescriptionTests: XCTestCase {
                 .simple(name: "Foo"),
             ])
         )
+    }
+
+    func test_UnorderedComparingCollection_makeIterator_iteratesInOrder() {
+        for (index, value) in UnorderedComparingCollection([1, 2, 3]).enumerated() {
+            switch index {
+            case 0:
+                XCTAssertEqual(value, 1)
+            case 1:
+                XCTAssertEqual(value, 2)
+            case 2:
+                XCTAssertEqual(value, 3)
+            case _:
+                XCTFail("Unexpected index \(index)")
+            }
+        }
     }
 
     // MARK: - Visitors

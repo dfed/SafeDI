@@ -50,38 +50,20 @@ struct SafeDITool: AsyncParsableCommand {
 
     @MainActor
     func run() async throws {
-        async let dependentModuleInfo = try Self.findSafeDIModuleInfo(
-            atModuleInfoURLs: moduleInfoPaths.map(\.asFileURL)
-        )
-        async let swiftFiles = try loadSwiftFiles()
-        let output = try await Self.run(
-            swiftFileContent: swiftFiles,
-            dependentImportStatements: dependentModuleInfo.flatMap(\.imports)
-            + additionalImportedModules.map { ImportStatement(moduleName: $0) },
-            dependentInstantiables: dependentModuleInfo.flatMap(\.instantiables),
-            buildDependencyTreeOutput: dependencyTreeOutput != nil
+        let (dependentModuleInfo, module) = try await (
+            loadSafeDIModuleInfo(atModuleInfoURLs: moduleInfoPaths.map(\.asFileURL)),
+            parsedModule(loadSwiftFiles())
         )
 
-        if let moduleInfoOutput {
-            try JSONEncoder().encode(ModuleInfo(
-                imports: output.imports,
-                instantiables: output.instantiables
-            )).write(toPath: moduleInfoOutput)
-        }
+        async let generatedCode: String? = dependencyTreeOutput != nil
+        ? DependencyTreeGenerator(
+            importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
+            typeDescriptionToFulfillingInstantiableMap: try resolveSafeDIFulfilledTypes(
+                instantiables: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
+            )
+        ).generate()
+        : nil
 
-        if let dependencyTreeOutput, let generatedCode = output.dependencyTree {
-            try generatedCode.write(toPath: dependencyTreeOutput)
-        }
-    }
-
-    @MainActor
-    static func run(
-        swiftFileContent: [String],
-        dependentImportStatements: [ImportStatement],
-        dependentInstantiables: [Instantiable],
-        buildDependencyTreeOutput: Bool
-    ) async throws -> Output {
-        let module = parsedModule(swiftFileContent)
         if !module.nestedInstantiableDecoratedTypeDescriptions.isEmpty {
             throw CollectInstantiablesError
                 .foundNestedInstantiables(
@@ -91,31 +73,21 @@ struct SafeDITool: AsyncParsableCommand {
                         .sorted()
                 )
         }
-
-        let dependencyTree: String?
-        if buildDependencyTreeOutput {
-            dependencyTree = try await DependencyTreeGenerator(
-                importStatements: dependentImportStatements + module.imports,
-                typeDescriptionToFulfillingInstantiableMap: try resolveSafeDIFulfilledTypes(
-                    instantiables: dependentInstantiables + module.instantiables
-                )
-            )
-            .generate()
-        } else {
-            dependencyTree = nil
+        if let moduleInfoOutput {
+            try JSONEncoder().encode(ModuleInfo(
+                imports: module.imports,
+                instantiables: module.instantiables
+            )).write(toPath: moduleInfoOutput)
         }
 
-        return Output(
-            imports: module.imports,
-            instantiables: module.instantiables,
-            dependencyTree: dependencyTree
-        )
+        if let dependencyTreeOutput, let generatedCode = try await generatedCode {
+            try generatedCode.write(toPath: dependencyTreeOutput)
+        }
     }
 
-    struct Output {
+    struct ModuleInfo: Codable {
         let imports: [ImportStatement]
         let instantiables: [Instantiable]
-        let dependencyTree: String?
     }
 
     // MARK: Private
@@ -128,6 +100,7 @@ struct SafeDITool: AsyncParsableCommand {
             let swiftFilePaths = try String(contentsOfFile: swiftSourcesFilePath)
                 .components(separatedBy: CharacterSet(arrayLiteral: ","))
             for filePath in swiftFilePaths {
+                guard !filePath.isEmpty else { continue }
                 taskGroup.addTask {
                     let swiftFile = try String(contentsOfFile: filePath)
                     if swiftFile.contains("@\(InstantiableVisitor.macroName)") {
@@ -148,7 +121,7 @@ struct SafeDITool: AsyncParsableCommand {
         }
     }
 
-    private static func parsedModule(_ swiftFileContent: [String]) -> ParsedModule {
+    private func parsedModule(_ swiftFileContent: [String]) -> ParsedModule {
         var imports = [ImportStatement]()
         var instantiables = [Instantiable]()
         var nestedInstantiableDecoratedTypeDescriptions = [TypeDescription]()
@@ -172,34 +145,38 @@ struct SafeDITool: AsyncParsableCommand {
         )
     }
 
-    private static func findSafeDIModuleInfo(atModuleInfoURLs moduleInfoURLs: [URL]) async throws -> [ModuleInfo] {
-        try await withThrowingTaskGroup(
-            of: ModuleInfo.self,
-            returning: [ModuleInfo].self
-        ) { taskGroup in
+    private func loadSafeDIModuleInfo(atModuleInfoURLs moduleInfoURLs: [URL]) async throws -> [ModuleInfo] {
+        if moduleInfoURLs.isEmpty {
+            []
+        } else {
+            try await withThrowingTaskGroup(
+                of: ModuleInfo.self,
+                returning: [ModuleInfo].self
+            ) { taskGroup in
 #if canImport(ZippyJSON)
-            let decoder = ZippyJSONDecoder()
+                let decoder = ZippyJSONDecoder()
 #else
-            let decoder = JSONDecoder()
+                let decoder = JSONDecoder()
 #endif
-            for moduleInfoURL in moduleInfoURLs {
-                taskGroup.addTask {
-                    try decoder.decode(
-                        ModuleInfo.self,
-                        from: Data(contentsOf: moduleInfoURL)
-                    )
+                for moduleInfoURL in moduleInfoURLs {
+                    taskGroup.addTask {
+                        try decoder.decode(
+                            ModuleInfo.self,
+                            from: Data(contentsOf: moduleInfoURL)
+                        )
+                    }
                 }
-            }
-            var allModuleInfo = [ModuleInfo]()
-            for try await moduleInfo in taskGroup {
-                allModuleInfo.append(moduleInfo)
-            }
+                var allModuleInfo = [ModuleInfo]()
+                for try await moduleInfo in taskGroup {
+                    allModuleInfo.append(moduleInfo)
+                }
 
-            return allModuleInfo
+                return allModuleInfo
+            }
         }
     }
 
-    private static func resolveSafeDIFulfilledTypes(instantiables: [Instantiable]) throws -> [TypeDescription: Instantiable] {
+    private func resolveSafeDIFulfilledTypes(instantiables: [Instantiable]) throws -> [TypeDescription: Instantiable] {
         var typeDescriptionToFulfillingInstantiableMap = [TypeDescription: Instantiable]()
         for instantiable in instantiables {
             for instantiableType in instantiable.instantiableTypes {
@@ -210,11 +187,6 @@ struct SafeDITool: AsyncParsableCommand {
             }
         }
         return typeDescriptionToFulfillingInstantiableMap
-    }
-
-    private struct ModuleInfo: Codable {
-        let imports: [ImportStatement]
-        let instantiables: [Instantiable]
     }
 
     private struct ParsedModule {
