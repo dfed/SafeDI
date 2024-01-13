@@ -28,9 +28,8 @@ public struct InstantiableMacro: MemberMacro {
     public static func expansion(
         of node: AttributeSyntax,
         providingMembersOf declaration: some DeclGroupSyntax,
-        in context: some MacroExpansionContext)
-    throws -> [DeclSyntax]
-    {
+        in context: some MacroExpansionContext
+    ) throws -> [DeclSyntax] {
         if let fulfillingAdditionalTypesArgument = declaration.attributes.instantiableMacro?.fulfillingAdditionalTypes {
             if ArrayExprSyntax(fulfillingAdditionalTypesArgument) == nil {
                 throw InstantiableError.fulfillingAdditionalTypesArgumentInvalid
@@ -48,10 +47,10 @@ public struct InstantiableMacro: MemberMacro {
                 context.diagnose(diagnostic)
             }
 
-            guard visitor.dependencies.filter({ $0.source == .forwarded }).count <= 1 else {
-                throw InstantiableError.tooManyForwardedProperties
-            }
-
+            let forwardedProperties = visitor
+                .dependencies
+                .filter({ $0.source == .forwarded })
+                .map(\.property)
             let hasMemberwiseInitializerForInjectableProperties = visitor
                 .initializers
                 .contains(where: { $0.isValid(forFulfilling: visitor.dependencies) })
@@ -64,9 +63,10 @@ public struct InstantiableMacro: MemberMacro {
                         // As a result, this initializer can not be used within a #Preview macro closure.
                         // This initializer is only generated because you have not written this macro yourself.
                         // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                        
+
                         """)
                     return [DeclSyntax(initializer)]
+                    + generateForwardedArguments(from: forwardedProperties)
                 } else {
                     var membersWithInitializer = declaration.memberBlock.members
                     membersWithInitializer.insert(
@@ -92,7 +92,7 @@ public struct InstantiableMacro: MemberMacro {
                     return []
                 }
             }
-            return []
+            return generateForwardedArguments(from: forwardedProperties)
 
         } else if let extensionDeclaration = ExtensionDeclSyntax(declaration) {
             if extensionDeclaration.genericWhereClause != nil {
@@ -189,11 +189,59 @@ public struct InstantiableMacro: MemberMacro {
         }
     }
 
+    private static func generateForwardedArguments(
+        from forwardedProperties: [Property]
+    ) -> [DeclSyntax] {
+        if forwardedProperties.isEmpty {
+            []
+        } else if forwardedProperties.count == 1, let forwardedProperty = forwardedProperties.first {
+            [
+                DeclSyntax(
+                    TypeAliasDeclSyntax(
+                        modifiers: DeclModifierListSyntax(
+                            arrayLiteral: DeclModifierSyntax(
+                                name: TokenSyntax(
+                                    TokenKind.identifier("public"),
+                                    presence: .present
+                                ),
+                                trailingTrivia: .space
+                            )
+                        ),
+                        name: .identifier("ForwardedArguments"),
+                        initializer: TypeInitializerClauseSyntax(
+                            value: IdentifierTypeSyntax(
+                                name: .identifier(forwardedProperty.typeDescription.asSource)
+                            )
+                        )
+
+                    )
+                )
+            ]
+        } else {
+            [
+                DeclSyntax(
+                    TypeAliasDeclSyntax(
+                        modifiers: DeclModifierListSyntax(
+                            arrayLiteral: DeclModifierSyntax(
+                                name: TokenSyntax(
+                                    TokenKind.identifier("public"),
+                                    presence: .present
+                                ),
+                                trailingTrivia: .space
+                            )
+                        ),
+                        name: .identifier("ForwardedArguments"),
+                        initializer: TypeInitializerClauseSyntax(value: forwardedProperties.asTuple)
+                    )
+                )
+            ]
+        }
+    }
+
     // MARK: - InstantiableError
 
     private enum InstantiableError: Error, CustomStringConvertible {
         case decoratingIncompatibleType
-        case tooManyForwardedProperties
         case fulfillingAdditionalTypesArgumentInvalid
         case tooManyInstantiateMethods
 
@@ -201,8 +249,6 @@ public struct InstantiableMacro: MemberMacro {
             switch self {
             case .decoratingIncompatibleType:
                 "@\(InstantiableVisitor.macroName) must decorate an extension on a type or a class, struct, or actor declaration"
-            case .tooManyForwardedProperties:
-                "An @\(InstantiableVisitor.macroName) type must have at most one @\(Dependency.Source.forwarded.rawValue) property"
             case .fulfillingAdditionalTypesArgumentInvalid:
                 "The argument `fulfillingAdditionalTypes` must be an inlined array"
             case .tooManyInstantiateMethods:

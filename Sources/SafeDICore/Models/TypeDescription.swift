@@ -44,8 +44,8 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     indirect case array(element: TypeDescription)
     /// A dictionary. e.g. [Int: String]
     indirect case dictionary(key: TypeDescription, value: TypeDescription)
-    /// A tuple. e.g. (Int, String)
-    indirect case tuple([TypeDescription])
+    /// A tuple. e.g. (Int, string: String)
+    indirect case tuple([TupleElement])
     /// A closure. e.g. (Int, Double) throws -> String
     indirect case closure(arguments: [TypeDescription], isAsync: Bool, doesThrow: Bool, returnType: TypeDescription)
     /// A type that can't be represented by the above cases.
@@ -117,7 +117,15 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         case let .dictionary(key, value):
             return "Dictionary<\(key.asSource), \(value.asSource)>"
         case let .tuple(types):
-            return "(\(types.map { $0.asSource }.joined(separator: ", ")))"
+            return """
+                (\(types.map {
+                    if let label = $0.label {
+                        "\(label): \($0.typeDescription.asSource)"
+                    } else {
+                        $0.typeDescription.asSource
+                    }
+                }.joined(separator: ", ")))
+                """
         case let .closure(arguments, isAsync, doesThrow, returnType):
             return "(\(arguments.map { $0.asSource }.joined(separator: ", ")))\([isAsync ? " async" : "", doesThrow ? " throws" : ""].filter { !$0.isEmpty }.joined()) -> \(returnType.asSource)"
         case let .unknown(text):
@@ -127,6 +135,11 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 
     public static func < (lhs: TypeDescription, rhs: TypeDescription) -> Bool {
         lhs.asSource < rhs.asSource
+    }
+
+    public struct TupleElement: Codable, Hashable, Sendable {
+        public let label: String?
+        public let typeDescription: TypeDescription
     }
 
     var isOptional: Bool {
@@ -179,9 +192,9 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 // This is a type that is lazily instantiated.
                 // The first generic is the built type.
                 return builtType
-            } else if name == Dependency.forwardingInstantiatorType, let builtType = generics.last {
+            } else if name == Dependency.forwardingInstantiatorType, let builtType = generics.dropFirst().first {
                 // This is a type that is lazily instantiated with forwarded arguments.
-                // The last generic is the built type.
+                // The second generic is the built type.
                 return builtType
             } else {
                 return self
@@ -264,8 +277,13 @@ extension TypeSyntax {
                 key: typeIdentifier.key.typeDescription,
                 value: typeIdentifier.value.typeDescription)
 
-        } else if let typeIdentifiers = TupleTypeSyntax(self) {
-            return .tuple(typeIdentifiers.elements.map { $0.type.typeDescription })
+        } else if let typeIdentifier = TupleTypeSyntax(self) {
+            return .tuple(typeIdentifier.elements.map {
+                TypeDescription.TupleElement(
+                    label: $0.secondName?.text ?? $0.firstName?.text,
+                    typeDescription: $0.type.typeDescription
+                )
+            })
 
         } else if ClassRestrictionTypeSyntax(self) != nil {
             // A class restriction is the same as requiring inheriting from AnyObject:
@@ -341,17 +359,22 @@ extension ExprSyntax {
                 return .unknown(text: trimmedDescription)
             }
         } else if let tupleExpr = TupleExprSyntax(self) {
-            let tupleTypes = tupleExpr.elements.map(\.expression.typeDescription)
-            if tupleTypes.count == 1 {
+            let tupleElements = tupleExpr.elements
+            if tupleElements.count == 1 {
                 // Single-element tuple types must be unwrapped.
                 // Certain types can not be in a Any.Type list without being wrapped
                 // in a tuple. We care only about the underlying types in this case.
                 // A @Instantiable that fulfills an addition type `(some Collection).self`
                 // should be unwrapped as `some Collection` to enable the @Instantiable
                 // to fulfill `some Collection`.
-                return tupleTypes[0]
+                return tupleElements.lazy.map(\.expression)[0].typeDescription
             } else {
-                return .tuple(tupleTypes)
+                return .tuple(tupleElements.map {
+                    TypeDescription.TupleElement(
+                        label: $0.label?.text,
+                        typeDescription: $0.expression.typeDescription
+                    )
+                })
             }
         } else if let sequenceExpr = SequenceExprSyntax(self) {
             if sequenceExpr.elements.contains(where: { BinaryOperatorExprSyntax($0) != nil }) {

@@ -192,9 +192,9 @@ public struct ParentView: View {
 
 Property declarations within `@Instantiable` types decorated with [`@Forwarded`](Sources/SafeDI/PropertyDecoration/Forwarded.swift) represent dependencies that come from the runtime, e.g. user input or backend-delivered content. Like an `@Instantiated`-decorated property, a `@Forwarded`-decorated property is available to be `@Received` by objects instantiated further down the dependency tree.
 
-A `@Forwarded` property is forwarded into the SafeDI dependency tree by a [`ForwardingInstantiator`](#forwardinginstantiator)’s `instantiate(_ argument: ArgumentToForward) -> InstantiableType` function that creates an instance of the property’s enclosing type. `@Instantiable` types with a `@Forwarded`-decorated property can _only_ be instantiated utilizing a `ForwardingInstantiator`.
+A `@Forwarded` property is forwarded into the SafeDI dependency tree by a [`ForwardingInstantiator`](#forwardinginstantiator)’s `instantiate(_ arguments: ArgumentsToForward) -> InstantiableType` function that creates an instance of the property’s enclosing type. `@Instantiable` types with a `@Forwarded`-decorated property can _only_ be instantiated utilizing a `ForwardingInstantiator`.
 
-A `ForwardingInstantiator`‘s single-argument `instantiate` function necessitates that an `@Instantiable` type may have at most one `@Forwarded`-decorated property. If you need to forward multiple properties, create a new container type that stores both properties and forward the container type. Forwarded property types do not need to be decorated with the `@Instantiable` macro.
+Forwarded property types do not need to be decorated with the `@Instantiable` macro.
 
 ### @Received
 

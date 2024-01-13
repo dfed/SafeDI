@@ -49,6 +49,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 
     // MARK: Internal
 
+    /// The property represented as source code.
     var asSource: String {
         "\(label): \(typeDescription.asSource)"
     }
@@ -57,6 +58,14 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
         FunctionParameterSyntax(
             firstName: .identifier(label),
             colon: .colonToken(trailingTrivia: .space),
+            type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
+        )
+    }
+
+    var asTupleElement: TupleTypeElementSyntax {
+        TupleTypeElementSyntax(
+            firstName: .identifier(label),
+            colon: .colonToken(),
             type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
         )
     }
