@@ -3086,18 +3086,18 @@ final class SafeDIToolTests: XCTestCase {
                 return location
             }
         try swiftFiles
-            .map { $0.path() }
+            .map { $0.filePath }
             .joined(separator: ",")
             .write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
         let moduleInfoOutput = makeTempFile()
         let dependencyTreeOutput = makeTempFile()
         var tool = SafeDITool()
-        tool.swiftSourcesFilePath = swiftFileCSV.path()
+        tool.swiftSourcesFilePath = swiftFileCSV.filePath
         tool.additionalImportedModules = []
-        tool.moduleInfoOutput = moduleInfoOutput.path()
+        tool.moduleInfoOutput = moduleInfoOutput.filePath
         tool.moduleInfoPaths = dependentModuleOutputPaths
-        tool.dependencyTreeOutput = buildDependencyTreeOutput ? dependencyTreeOutput.path() : nil
+        tool.dependencyTreeOutput = buildDependencyTreeOutput ? dependencyTreeOutput.filePath : nil
         try await tool.run()
         
         filesToDelete.append(swiftFileCSV)
@@ -3109,9 +3109,9 @@ final class SafeDIToolTests: XCTestCase {
 
         return TestOutput(
             moduleInfo: try JSONDecoder().decode(SafeDITool.ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
-            moduleInfoOutputPath: moduleInfoOutput.path(),
+            moduleInfoOutputPath: moduleInfoOutput.filePath,
             dependencyTree: buildDependencyTreeOutput ? String(data: try Data(contentsOf: dependencyTreeOutput), encoding: .utf8) : nil,
-            dependencyTreeOutputPath: buildDependencyTreeOutput ? dependencyTreeOutput.path() : nil
+            dependencyTreeOutputPath: buildDependencyTreeOutput ? dependencyTreeOutput.filePath : nil
         )
     }
 
@@ -3129,6 +3129,16 @@ final class SafeDIToolTests: XCTestCase {
         FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
 #else
         URL.temporaryDirectory.appending(path: UUID().uuidString)
+#endif
+    }
+}
+
+extension URL {
+    fileprivate var filePath: String {
+#if os(Linux)
+        path
+#else
+        path()
 #endif
     }
 }
