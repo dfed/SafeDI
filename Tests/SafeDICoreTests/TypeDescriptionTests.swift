@@ -104,9 +104,7 @@ final class TypeDescriptionTests: XCTestCase {
         XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
         XCTAssertEqual(
             typeDescription.asSource,
-            // Composition elements are sorted when creating source code in order to
-            // ensure stable code generation, since composition ordering is arbitrary.
-            "Bar & Foo"
+            "Foo & Bar"
         )
     }
 
@@ -532,27 +530,27 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_equality_isTrueWhenComparingLexigraphicallyEquivalentCompositions() {
         XCTAssertEqual(
-            TypeDescription.composition([
+            TypeDescription.composition(.init([
                 .simple(name: "Foo"),
                 .simple(name: "Bar"),
-            ]),
-            TypeDescription.composition([
+            ])),
+            TypeDescription.composition(.init([
                 .simple(name: "Foo"),
                 .simple(name: "Bar"),
-            ])
+            ]))
         )
     }
 
     func test_equality_isTrueWhenComparingReversedCompositions() {
         XCTAssertEqual(
-            TypeDescription.composition([
+            TypeDescription.composition(.init([
                 .simple(name: "Foo"),
                 .simple(name: "Bar"),
-            ]),
-            TypeDescription.composition([
+            ])),
+            TypeDescription.composition(.init([
                 .simple(name: "Bar"),
                 .simple(name: "Foo"),
-            ])
+            ]))
         )
     }
 

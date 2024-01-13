@@ -27,7 +27,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     /// A nested type with possible generics. e.g. Array.Element or Swift.Array<Element>
     indirect case nested(name: String, parentType: TypeDescription, generics: [TypeDescription])
     /// A composed type. e.g. Identifiable & Equatable
-    indirect case composition(Set<TypeDescription>)
+    indirect case composition(UnorderedComparingArray<TypeDescription>)
     /// An optional type. e.g. Int?
     indirect case optional(TypeDescription)
     /// An implicitly unwrapped optional type. e.g. Int!
@@ -73,8 +73,6 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         case let .composition(types):
             return types
                 .map { $0.asSource }
-                // Sort the result to ensure stable code generation.
-                .sorted()
                 .joined(separator: " & ")
         case let .optional(type):
             return "\(type.asSource)?"
@@ -201,6 +199,8 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     }
 }
 
+// MARK: - TypeSyntax
+
 extension TypeSyntax {
 
     /// - Returns: the type description for the receiver.
@@ -225,7 +225,7 @@ extension TypeSyntax {
                 generics: genericTypeVisitor.genericArguments)
 
         } else if let typeIdentifiers = CompositionTypeSyntax(self) {
-            return .composition(Set(typeIdentifiers.elements.map { $0.type.typeDescription }))
+            return .composition(UnorderedComparingArray(typeIdentifiers.elements.map { $0.type.typeDescription }))
 
         } else if let typeIdentifier = OptionalTypeSyntax(self) {
             return .optional(typeIdentifier.wrappedType.typeDescription)
@@ -289,6 +289,8 @@ extension TypeSyntax {
         }
     }
 }
+
+// MARK: - ExprSyntax
 
 extension ExprSyntax {
     public var typeDescription: TypeDescription {
@@ -359,7 +361,7 @@ extension ExprSyntax {
             }
         } else if let sequenceExpr = SequenceExprSyntax(self) {
             if sequenceExpr.elements.contains(where: { BinaryOperatorExprSyntax($0) != nil }) {
-                return .composition(Set(
+                return .composition(UnorderedComparingArray(
                     sequenceExpr
                         .elements
                         .filter { BinaryOperatorExprSyntax($0) == nil }
@@ -405,6 +407,38 @@ extension ExprSyntax {
         }
     }
 }
+
+// MARK: - UnorderedComparingArray
+
+public struct UnorderedComparingArray<Element: Codable & Hashable & Sendable>: Codable, Hashable, Sendable, Collection {
+
+    init(_ array: [Element]) {
+        self.array = array
+        set = Set(array)
+    }
+
+    let array: [Element]
+    private let set: Set<Element>
+
+    public static func == (lhs: UnorderedComparingArray, rhs: UnorderedComparingArray) -> Bool {
+        lhs.set == rhs.set
+    }
+
+    public func makeIterator() -> IndexingIterator<Array<Element>> {
+        array.makeIterator()
+    }
+    public var startIndex: Int { array.startIndex }
+    public var endIndex: Int { array.endIndex }
+    public func index(after i: Int) -> Int {
+        array.index(after: i)
+    }
+
+    public subscript(position: Int) -> Element {
+        array[position]
+    }
+}
+
+// MARK: - GenericArgumentVisitor
 
 private final class GenericArgumentVisitor: SyntaxVisitor {
 
