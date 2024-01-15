@@ -3130,7 +3130,11 @@ extension URL {
 #if os(Linux)
         FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
 #else
-        URL.temporaryDirectory.appending(path: UUID().uuidString)
+        if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
+            URL.temporaryDirectory.appending(path: UUID().uuidString)
+        } else {
+            FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        }
 #endif
     }
 }
