@@ -1,0 +1,23 @@
+name: Build CLI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-release-cli:
+    name: Build Release CLI
+    runs-on: macos-13
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_15.0.1.app/Contents/Developer
+      - name: Build SafeDITool
+        run: xcrun swift build -c release --product SafeDITool
+      - name: Upload SafeDITool
+        uses: actions/upload-artifact@v4
+        with:
+          name: SafeDITool
+          path: .build/*/release/SafeDITool
