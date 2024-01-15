@@ -3086,18 +3086,18 @@ final class SafeDIToolTests: XCTestCase {
                 return location
             }
         try swiftFiles
-            .map { $0.filePath }
+            .map { $0.relativePath }
             .joined(separator: ",")
             .write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
         let moduleInfoOutput = URL.temporaryFile
         let dependencyTreeOutput = URL.temporaryFile
         var tool = SafeDITool()
-        tool.swiftSourcesFilePath = swiftFileCSV.filePath
+        tool.swiftSourcesFilePath = swiftFileCSV.relativePath
         tool.additionalImportedModules = []
-        tool.moduleInfoOutput = moduleInfoOutput.filePath
+        tool.moduleInfoOutput = moduleInfoOutput.relativePath
         tool.moduleInfoPaths = dependentModuleOutputPaths
-        tool.dependencyTreeOutput = buildDependencyTreeOutput ? dependencyTreeOutput.filePath : nil
+        tool.dependencyTreeOutput = buildDependencyTreeOutput ? dependencyTreeOutput.relativePath : nil
         try await tool.run()
         
         filesToDelete.append(swiftFileCSV)
@@ -3109,9 +3109,9 @@ final class SafeDIToolTests: XCTestCase {
 
         return TestOutput(
             moduleInfo: try JSONDecoder().decode(SafeDITool.ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
-            moduleInfoOutputPath: moduleInfoOutput.filePath,
+            moduleInfoOutputPath: moduleInfoOutput.relativePath,
             dependencyTree: buildDependencyTreeOutput ? String(data: try Data(contentsOf: dependencyTreeOutput), encoding: .utf8) : nil,
-            dependencyTreeOutputPath: buildDependencyTreeOutput ? dependencyTreeOutput.filePath : nil
+            dependencyTreeOutputPath: buildDependencyTreeOutput ? dependencyTreeOutput.relativePath : nil
         )
     }
 
@@ -3130,15 +3130,11 @@ extension URL {
 #if os(Linux)
         FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
 #else
-        URL.temporaryDirectory.appending(path: UUID().uuidString)
-#endif
-    }
-
-    fileprivate var filePath: String {
-#if os(Linux)
-        path
-#else
-        path()
+        if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
+            URL.temporaryDirectory.appending(path: UUID().uuidString)
+        } else {
+            FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        }
 #endif
     }
 }
