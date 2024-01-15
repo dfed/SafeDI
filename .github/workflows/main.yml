@@ -3,7 +3,7 @@ name: Build CLI
 on:
   push:
     branches:
-      - dfed--build-release-in-ci
+      - main
 
 jobs:
   build-release-cli:
