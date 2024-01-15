@@ -25,7 +25,7 @@ jobs:
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_15.0.1.app/Contents/Developer
       - name: Build Framework
-        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -configuration release -scheme SafeDI-Package -destination ${{ matrix.platforms }}
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
 
   spm-package-integration-15:
     name: Build Package Integration on Xcode 15
