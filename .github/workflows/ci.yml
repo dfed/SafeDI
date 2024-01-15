@@ -23,6 +23,26 @@ jobs:
         if: success()
         uses: codecov/codecov-action@v3
 
+  xcodebuild-15:
+    name: Build with xcodebuild on Xcode 15
+    runs-on: macOS-13-arm64
+    strategy:
+      matrix:
+        platforms: [
+          'generic/platform=ios',
+          'platform=macos,arch=arm64',
+          'generic/platform=tvos',
+          'generic/platform=watchos',
+        ]
+      fail-fast: false
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_15.0.1.app/Contents/Developer
+      - name: Build Framework
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
+
   spm-package-integration-15:
     name: Build Package Integration on Xcode 15
     runs-on: macos-13
