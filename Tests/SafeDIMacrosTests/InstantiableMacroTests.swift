@@ -235,7 +235,7 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
-    func test_declaration_generatesRequiredInitializerWithDependenciesWhenNestedTypeHasUninitializedProperty() {
+    func test_declaration_generatesRequiredInitializerWithDependenciesWhenNestedTypesHaveUninitializedProperties() {
         assertMacro {
             """
             @Instantiable
@@ -243,7 +243,19 @@ final class InstantiableMacroTests: XCTestCase {
                 @Instantiated
                 let instantiatedA: InstantiatedA
 
-                public enum NestedType {
+                public enum NestedEnum {
+                    // This won't compile but we should still generate an initializer.
+                    static let uninitializedProperty: Any
+                }
+                public struct NestedStruct {
+                    // This won't compile but we should still generate an initializer.
+                    static let uninitializedProperty: Any
+                }
+                public actor NestedActor {
+                    // This won't compile but we should still generate an initializer.
+                    static let uninitializedProperty: Any
+                }
+                public final class NestedClass {
                     // This won't compile but we should still generate an initializer.
                     static let uninitializedProperty: Any
                 }
@@ -254,7 +266,19 @@ final class InstantiableMacroTests: XCTestCase {
             public final class ExampleService {
                 let instantiatedA: InstantiatedA
 
-                public enum NestedType {
+                public enum NestedEnum {
+                    // This won't compile but we should still generate an initializer.
+                    static let uninitializedProperty: Any
+                }
+                public struct NestedStruct {
+                    // This won't compile but we should still generate an initializer.
+                    static let uninitializedProperty: Any
+                }
+                public actor NestedActor {
+                    // This won't compile but we should still generate an initializer.
+                    static let uninitializedProperty: Any
+                }
+                public final class NestedClass {
                     // This won't compile but we should still generate an initializer.
                     static let uninitializedProperty: Any
                 }
