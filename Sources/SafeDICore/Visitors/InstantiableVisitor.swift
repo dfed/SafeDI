@@ -381,11 +381,11 @@ public final class InstantiableVisitor: SyntaxVisitor {
         guard declarationType.isTypeDefinition else {
             return .skipChildren
         }
-        guard !isInTopLevelDeclaration else {
-            return .skipChildren
-        }
         guard let macro = node.attributes.instantiableMacro else {
             // Not an instantiable type. We do not care.
+            return .skipChildren
+        }
+        guard !isInTopLevelDeclaration else {
             return .skipChildren
         }
         isInTopLevelDeclaration = true
