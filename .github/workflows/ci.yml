@@ -27,6 +27,19 @@ jobs:
       - name: Build Framework
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
 
+  xcodebuild-15-2:
+    name: Build with xcodebuild on Xcode 15 (generic/platform=visionos)
+    runs-on: macos-14
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
+      - name: Download visionOS
+        run: xcrun xcodebuild -downloadPlatform visionOS
+      - name: Build Framework
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=visionos
+
   spm-package-integration-15:
     name: Build Package Integration on Xcode 15
     runs-on: macos-13
