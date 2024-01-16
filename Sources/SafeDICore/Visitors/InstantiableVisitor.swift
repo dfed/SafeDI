@@ -151,6 +151,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
         .skipChildren
     }
 
+    public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+        .skipChildren
+    }
+
     public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
         guard declarationType.isExtension else {
             return .skipChildren
@@ -377,11 +381,11 @@ public final class InstantiableVisitor: SyntaxVisitor {
         guard declarationType.isTypeDefinition else {
             return .skipChildren
         }
-        guard let macro = node.attributes.instantiableMacro else {
-            // Not an instantiable type. We do not care.
+        guard !isInTopLevelDeclaration else {
             return .skipChildren
         }
-        guard !isInTopLevelDeclaration else {
+        guard let macro = node.attributes.instantiableMacro else {
+            // Not an instantiable type. We do not care.
             return .skipChildren
         }
         isInTopLevelDeclaration = true
