@@ -33,7 +33,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
     // MARK: SyntaxVisitor
 
     public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
-        guard declarationType.isTypeDefinition else {
+        guard
+            declarationType.isTypeDefinition
+                && node.modifiers.staticModifier == nil
+        else {
             return .skipChildren
         }
         // Check attributes and extract dependency source.
