@@ -310,12 +310,7 @@ final class SafeDIToolTests: XCTestCase {
             swiftFileContent: [
                 """
                 @Instantiable
-                @main
                 public struct Root {
-                    public init(userService: any UserService) {
-                        self.userService = userService
-                    }
-
                     @Instantiated
                     private let userService: any UserService
                 }
@@ -323,7 +318,7 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 import Foundation
 
-                public protocol UserService: ObservableObject {
+                public protocol UserService {
                     var userName: String? { get set }
                 }
 
@@ -331,16 +326,7 @@ final class SafeDIToolTests: XCTestCase {
                 public final class DefaultUserService: UserService {
                     public init() {}
 
-                    public var userName: String? {
-                        get {
-                            userDefaults.object(forKey: #function) as? String
-                        }
-                        set {
-                            userDefaults.setString(newValue, forKey: #function)
-                        }
-                    }
-
-                    private let userDefaults: UserDefaults = .shared
+                    public var userName: String?
                 }
                 """,
             ],
@@ -373,12 +359,7 @@ final class SafeDIToolTests: XCTestCase {
             swiftFileContent: [
                 """
                 @Instantiable
-                @main
                 public struct Root {
-                    public init(userService: UserService?) {
-                        self.userService = userService
-                    }
-
                     @Instantiated
                     private let userService: UserService?
                 }
@@ -386,7 +367,7 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 import Foundation
 
-                public protocol UserService: ObservableObject {
+                public protocol UserService {
                     var userName: String? { get set }
                 }
 
@@ -394,16 +375,7 @@ final class SafeDIToolTests: XCTestCase {
                 public final class DefaultUserService: UserService {
                     public init() {}
 
-                    public var userName: String? {
-                        get {
-                            userDefaults.object(forKey: #function) as? String
-                        }
-                        set {
-                            userDefaults.setString(newValue, forKey: #function)
-                        }
-                    }
-
-                    private let userDefaults: UserDefaults = .shared
+                    public var userName: String?
                 }
                 """,
             ],
