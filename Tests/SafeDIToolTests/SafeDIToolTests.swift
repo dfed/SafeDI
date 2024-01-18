@@ -2796,7 +2796,7 @@ final class SafeDIToolTests: XCTestCase {
         await assertThrowsError(
             """
             Dependency cycle detected!
-            UserManager -> AuthenticatedViewController -> UserManager
+            UserManager -> ProfileViewController -> UserManager
             """
         ) {
             try await executeSystemUnderTest(
@@ -2804,25 +2804,17 @@ final class SafeDIToolTests: XCTestCase {
                     """
                     @Instantiable
                     public final class UserManager {
-                        public init(authenticatedViewControllerBuilder: ForwardingInstantiator<User, AuthenticatedViewController>) {
-                            self.authenticatedViewControllerBuilder = authenticatedViewControllerBuilder
-                        }
-
                         @Instantiated
-                        let authenticatedViewControllerBuilder: ForwardingInstantiator<User, AuthenticatedViewController>
+                        let profileViewControllerBuilder: Instantiator<ProfileViewController>
 
-                        var user: User
+                        var user: User?
                     }
                     """,
                     """
                     import UIKit
 
                     @Instantiable
-                    public final class AuthenticatedViewController: UIViewController {
-                        public init(userManager: UserManager) {
-                            self.userManager = userManager
-                        }
-
+                    public final class ProfileViewController: UIViewController {
                         @Instantiated
                         let userManager: UserManager
                     }
@@ -2832,10 +2824,6 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable
                     public final class RootViewController: UIViewController {
-                        public init(userManager: UserManager) {
-                            self.userManager = userManager
-                        }
-
                         @Instantiated
                         let userManager: UserManager
                     }
