@@ -256,9 +256,17 @@ public final class DependencyTreeGenerator {
             receivableProperties: Set<Property>,
             instantiables: OrderedSet<Instantiable>
         ) {
+            let forwardedProperties = Set(
+                scope
+                    .instantiable
+                    .dependencies
+                    .filter(\.isForwarded)
+                    .map(\.property)
+            )
             for receivedProperty in scope.receivedProperties {
                 let parentContainsProperty = receivableProperties.contains(receivedProperty)
-                if !parentContainsProperty {
+                let propertyIsForwarded = forwardedProperties.contains(receivedProperty)
+                if !parentContainsProperty && !propertyIsForwarded {
                     unfulfillableProperties.insert(.init(
                         property: receivedProperty,
                         instantiable: scope.instantiable,
