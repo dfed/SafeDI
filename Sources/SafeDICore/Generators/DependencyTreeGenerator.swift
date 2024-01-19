@@ -214,8 +214,8 @@ public final class DependencyTreeGenerator {
             })
 
         // Populate the propertiesToInstantiate on each scope.
-        for scope in typeDescriptionToScopeMap.values {
-            var additionalPropertiesToInstantiate = [Scope.PropertyToInstantiate]()
+        for scope in Set(typeDescriptionToScopeMap.values) {
+            var propertiesToInstantiate = [Scope.PropertyToInstantiate]()
             for instantiatedDependency in scope.instantiable.dependencies {
                 switch instantiatedDependency.source {
                 case .instantiated:
@@ -238,12 +238,12 @@ public final class DependencyTreeGenerator {
                     case .constant, .instantiator:
                         break
                     }
-                    additionalPropertiesToInstantiate.append(.instantiated(
+                    propertiesToInstantiate.append(.instantiated(
                         instantiatedDependency.property,
                         instantiatedScope
                     ))
                 case let .aliased(fulfillingProperty):
-                    additionalPropertiesToInstantiate.append(.aliased(
+                    propertiesToInstantiate.append(.aliased(
                         instantiatedDependency.property,
                         fulfilledBy: fulfillingProperty
                     ))
@@ -251,7 +251,7 @@ public final class DependencyTreeGenerator {
                     continue
                 }
             }
-            scope.propertiesToInstantiate.append(contentsOf: additionalPropertiesToInstantiate)
+            scope.propertiesToInstantiate.append(contentsOf: propertiesToInstantiate)
         }
         return typeDescriptionToScopeMap
     }

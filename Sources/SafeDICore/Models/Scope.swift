@@ -21,12 +21,25 @@
 import Collections
 
 /// A model of the scoped dependencies required for an `@Instantiable` in the reachable dependency tree.
-final class Scope {
+final class Scope: Hashable {
 
     // MARK: Initialization
 
     init(instantiable: Instantiable) {
         self.instantiable = instantiable
+    }
+
+    // MARK: Equatable
+
+    static func == (lhs: Scope, rhs: Scope) -> Bool {
+        // Scopes are only identicial if they are the same object
+        lhs === rhs
+    }
+
+    // MARK: Hashable
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(ObjectIdentifier(self))
     }
 
     // MARK: Internal
@@ -39,24 +52,6 @@ final class Scope {
     enum PropertyToInstantiate {
         case instantiated(Property, Scope)
         case aliased(Property, fulfilledBy: Property)
-
-        var property: Property {
-            switch self {
-            case
-                let .instantiated(property, _),
-                let .aliased(property, _):
-                property
-            }
-        }
-
-        var scope: Scope? {
-            switch self {
-            case let .instantiated(_, scope):
-                scope
-            case .aliased:
-                nil
-            }
-        }
     }
 
     var properties: [Property] {
@@ -76,7 +71,7 @@ final class Scope {
                     fulfillingProperty
                 case .forwarded,
                         .instantiated:
-                    return nil
+                    nil
                 }
             }
     }
@@ -95,26 +90,6 @@ final class Scope {
             if let property {
                 childPropertyStack.insert(property, at: 0)
             }
-            let receivedProperties = Set(
-                instantiableStack
-                    .flatMap(\.dependencies)
-                    .filter {
-                        switch $0.source {
-                        // The source has been injected into the dependency tree.
-                        case .instantiated,
-                                .forwarded,
-                            // This property has been re-injected into the dependency tree under a new alias.
-                                .aliased:
-                            return !propertyStack.contains($0.property) && $0.property != property
-                        case .received:
-                            return false
-                        }
-                    }
-                    .map(\.property)
-            ).subtracting(
-                // We want the local version of any instantiated property.
-                propertiesToInstantiate.map(\.property)
-            )
             let scopeGenerator = ScopeGenerator(
                 instantiable: instantiable,
                 property: property,
@@ -129,12 +104,10 @@ final class Scope {
                     case let .aliased(property, fulfilledBy: fulfillingProperty):
                         ScopeGenerator(
                             property: property,
-                            fulfillingProperty: fulfillingProperty,
-                            receivedProperties: receivedProperties
+                            fulfillingProperty: fulfillingProperty
                         )
                     }
-                },
-                receivedProperties: receivedProperties
+                }
             )
             Task.detached {
                 // Kick off code generation.

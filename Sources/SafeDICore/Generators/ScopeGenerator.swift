@@ -26,8 +26,7 @@ actor ScopeGenerator {
     init(
         instantiable: Instantiable,
         property: Property?,
-        propertiesToGenerate: [ScopeGenerator],
-        receivedProperties: Set<Property>
+        propertiesToGenerate: [ScopeGenerator]
     ) {
         if let property {
             scopeData = .property(
@@ -45,7 +44,6 @@ actor ScopeGenerator {
             scopeData = .root(instantiable: instantiable)
         }
         self.property = property
-        self.receivedProperties = receivedProperties
         self.propertiesToGenerate = propertiesToGenerate
         forwardedProperties = scopeData.forwardedProperties
         propertiesMadeAvailableByChildren = Set(
@@ -86,15 +84,13 @@ actor ScopeGenerator {
 
     init(
         property: Property,
-        fulfillingProperty: Property,
-        receivedProperties: Set<Property>
+        fulfillingProperty: Property
     ) {
         scopeData = .alias(property: property, fulfillingProperty: fulfillingProperty)
         requiredReceivedProperties = [fulfillingProperty]
         propertiesToGenerate = []
         forwardedProperties = []
         propertiesMadeAvailableByChildren = []
-        self.receivedProperties = receivedProperties
         self.property = property
     }
 
@@ -242,65 +238,29 @@ actor ScopeGenerator {
     private let scopeData: ScopeData
     private let requiredReceivedProperties: Set<Property>
     private let propertiesMadeAvailableByChildren: Set<Property>
-    private let receivedProperties: Set<Property>
     private let propertiesToGenerate: [ScopeGenerator]
     private let property: Property?
     private let forwardedProperties: Set<Property>
 
-    private var resolvedProperties = Set<Property>()
     private var generateCodeTask: Task<String, Error>?
 
     private func generateProperties(leadingMemberWhitespace: String) async throws -> [String] {
         var generatedProperties = [String]()
-        while
-            let childGenerator = nextSatisfiableProperty(),
-            let childProperty = childGenerator.property
-        {
-            resolvedProperties.insert(childProperty)
+        let orderedPropertiesToGenerate = propertiesToGenerate.sorted(by: { lhs, rhs in
+            guard let lhsProperty = lhs.property else {
+                return true
+            }
+            // We must generate properties that are required by other properties first
+            return rhs.requiredReceivedProperties.contains(lhsProperty)
+        })
+
+        for childGenerator in orderedPropertiesToGenerate {
             generatedProperties.append(
                 try await childGenerator
                     .generateCode(leadingWhitespace: leadingMemberWhitespace)
             )
         }
         return generatedProperties
-    }
-
-    private func nextSatisfiableProperty() -> ScopeGenerator? {
-        let remainingProperties = propertiesToGenerate.filter {
-            if let property = $0.property {
-                !resolvedProperties.contains(property)
-            } else {
-                false
-            }
-        }
-        guard !remainingProperties.isEmpty else {
-            return nil
-        }
-
-        for propertyToGenerate in remainingProperties {
-            guard hasResolvedAllPropertiesRequired(for: propertyToGenerate) else {
-                continue
-            }
-            return propertyToGenerate
-        }
-
-        assertionFailure("Unexpected failure: unable to find next satisfiable property")
-        return nil
-    }
-
-    private func hasResolvedAllPropertiesRequired(for propertyToGenerate: ScopeGenerator) -> Bool {
-        !propertyToGenerate
-            .requiredReceivedProperties
-            .contains(where: {
-                !isPropertyResolved($0)
-                && !propertyToGenerate.forwardedProperties.contains($0)
-            })
-    }
-
-    private func isPropertyResolved(_ property: Property) -> Bool {
-        resolvedProperties.contains(property)
-        || receivedProperties.contains(property)
-        || forwardedProperties.contains(property)
     }
 
     // MARK: GenerationError
