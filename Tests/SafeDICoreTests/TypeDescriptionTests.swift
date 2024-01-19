@@ -588,6 +588,13 @@ final class TypeDescriptionTests: XCTestCase {
         }
     }
 
+    func test_UnorderedComparingCollection_hashesEquivalentCollectionsIdentically() {
+        XCTAssertEqual(
+            UnorderedComparingCollection([1, 2, 3]).hashValue,
+            UnorderedComparingCollection([2, 1, 3]).hashValue
+        )
+    }
+
     // MARK: - Visitors
 
     private final class TypeIdentifierSyntaxVisitor: SyntaxVisitor {
