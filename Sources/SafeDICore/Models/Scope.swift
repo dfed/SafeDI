@@ -86,6 +86,14 @@ final class Scope {
                         && $0.property != property
                     }
                     .map(\.property)
+            ).subtracting(
+                // We want the local version of any instantiated property.
+                propertiesToInstantiate.map(\.property)
+                + instantiable
+                    .dependencies
+                    // We want the local version of any aliased property.
+                    .filter { $0.fulfillingProperty != nil }
+                    .map(\.property)
             )
             let scopeGenerator = ScopeGenerator(
                 instantiable: instantiable,
