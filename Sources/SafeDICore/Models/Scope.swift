@@ -21,7 +21,7 @@
 import Collections
 
 /// A model of the scoped dependencies required for an `@Instantiable` in the reachable dependency tree.
-final class Scope {
+final class Scope: Hashable {
 
     // MARK: Initialization
 
@@ -29,18 +29,29 @@ final class Scope {
         self.instantiable = instantiable
     }
 
+    // MARK: Equatable
+
+    static func == (lhs: Scope, rhs: Scope) -> Bool {
+        // Scopes are only identicial if they are the same object
+        lhs === rhs
+    }
+
+    // MARK: Hashable
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(ObjectIdentifier(self))
+    }
+
     // MARK: Internal
 
     let instantiable: Instantiable
 
     /// The properties that this scope is responsible for instantiating.
-    var propertiesToInstantiate = [PropertyToInstantiate]()
+    var propertiesToGenerate = [PropertyToGenerate]()
 
-    struct PropertyToInstantiate {
-        let property: Property
-        let instantiable: Instantiable
-        let scope: Scope
-        let type: Property.PropertyType
+    enum PropertyToGenerate {
+        case instantiated(Property, Scope)
+        case aliased(Property, fulfilledBy: Property)
     }
 
     var properties: [Property] {
@@ -55,10 +66,12 @@ final class Scope {
             .compactMap {
                 switch $0.source {
                 case .received:
-                    return $0.fulfillingProperty ?? $0.property
+                    $0.property
+                case let .aliased(fulfillingProperty):
+                    fulfillingProperty
                 case .forwarded,
                         .instantiated:
-                    return nil
+                    nil
                 }
             }
     }
@@ -77,44 +90,24 @@ final class Scope {
             if let property {
                 childPropertyStack.insert(property, at: 0)
             }
-            let receivedProperties = Set(
-                instantiableStack
-                    .flatMap(\.dependencies)
-                    .filter {
-                        $0.source != .received
-                        && !propertyStack.contains($0.property)
-                        && $0.property != property
-                    }
-                    .map(\.property)
-            ).subtracting(
-                // We want the local version of any instantiated property.
-                propertiesToInstantiate.map(\.property)
-                + instantiable
-                    .dependencies
-                    // We want the local version of any aliased property.
-                    .filter { $0.fulfillingProperty != nil }
-                    .map(\.property)
-            )
             let scopeGenerator = ScopeGenerator(
                 instantiable: instantiable,
                 property: property,
-                propertiesToGenerate: try propertiesToInstantiate.map {
-                    try $0.scope.createScopeGenerator(
-                        for: $0.property,
-                        instantiableStack: childInstantiableStack,
-                        propertyStack: childPropertyStack
-                    )
-                } + instantiable.dependencies.compactMap {
-                    guard let fulfillingProperty = $0.fulfillingProperty else {
-                        return nil
+                propertiesToGenerate: try propertiesToGenerate.map {
+                    switch $0 {
+                    case let .instantiated(property, scope):
+                        try scope.createScopeGenerator(
+                            for: property,
+                            instantiableStack: childInstantiableStack,
+                            propertyStack: childPropertyStack
+                        )
+                    case let .aliased(property, fulfilledBy: fulfillingProperty):
+                        ScopeGenerator(
+                            property: property,
+                            fulfillingProperty: fulfillingProperty
+                        )
                     }
-                    return ScopeGenerator(
-                        property: $0.property,
-                        fulfillingProperty: fulfillingProperty,
-                        receivedProperties: receivedProperties
-                    )
-                },
-                receivedProperties: receivedProperties
+                }
             )
             Task.detached {
                 // Kick off code generation.

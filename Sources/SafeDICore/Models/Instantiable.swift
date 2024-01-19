@@ -58,11 +58,4 @@ public struct Instantiable: Codable, Hashable {
         case structType
         case extensionType
     }
-
-    // MARK: Internal
-
-    var instantiatedDependencies: [Dependency] {
-        dependencies
-            .filter { $0.source == .instantiated }
-    }
 }

@@ -95,9 +95,7 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             typeDescription: .simple(name: "Variant")
                         ),
-                        source: .forwarded,
-                        fulfillingPropertyName: nil,
-                        fulfillingTypeDescription: nil
+                        source: .forwarded
                     )
                 ]
             )
@@ -125,9 +123,7 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             typeDescription: .simple(name: "Variant")
                         ),
-                        source: .forwarded,
-                        fulfillingPropertyName: nil,
-                        fulfillingTypeDescription: nil
+                        source: .forwarded
                     )
                 ]
             )
@@ -164,9 +160,7 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             typeDescription: .simple(name: "Variant")
                         ),
-                        source: .forwarded,
-                        fulfillingPropertyName: nil,
-                        fulfillingTypeDescription: nil
+                        source: .forwarded
                     )
                 ]
             )
@@ -193,9 +187,7 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             typeDescription: .simple(name: "Variant")
                         ),
-                        source: .forwarded,
-                        fulfillingPropertyName: nil,
-                        fulfillingTypeDescription: nil
+                        source: .forwarded
                     )
                 ]
             )
@@ -222,9 +214,7 @@ final class InitializerTests: XCTestCase {
                             label: "variant",
                             typeDescription: .simple(name: "Variant")
                         ),
-                        source: .forwarded,
-                        fulfillingPropertyName: nil,
-                        fulfillingTypeDescription: nil
+                        source: .forwarded
                     )
                 ]
             )

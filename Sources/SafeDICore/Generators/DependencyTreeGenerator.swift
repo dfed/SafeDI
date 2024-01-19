@@ -78,7 +78,7 @@ public final class DependencyTreeGenerator {
         var description: String {
             switch self {
             case let .noInstantiableFound(typeDescription):
-                "No `@\(InstantiableVisitor.macroName)`-decorated type or extension found to fulfill `@\(Dependency.Source.instantiated.rawValue)`-decorated property with type `\(typeDescription.asSource)`"
+                "No `@\(InstantiableVisitor.macroName)`-decorated type or extension found to fulfill `@\(Dependency.Source.instantiatedRawValue)`-decorated property with type `\(typeDescription.asSource)`"
             case let .unfulfillableProperties(unfulfillableProperties):
                 """
                 The following @Received properties were never @Instantiated or @Forwarded:
@@ -213,38 +213,45 @@ public final class DependencyTreeGenerator {
                 }
             })
 
-        // Populate the propertiesToInstantiate on each scope.
-        for scope in typeDescriptionToScopeMap.values {
-            var additionalPropertiesToInstantiate = [Scope.PropertyToInstantiate]()
-            for instantiatedDependency in scope.instantiable.instantiatedDependencies {
-                let instantiatedType = instantiatedDependency.asInstantiatedType
-                guard
-                    let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType],
-                    let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
-                else {
-                    assertionFailure("Invalid state. Could not look up info for \(instantiatedType)")
+        // Populate the propertiesToGenerate on each scope.
+        for scope in Set(typeDescriptionToScopeMap.values) {
+            var propertiesToGenerate = [Scope.PropertyToGenerate]()
+            for dependency in scope.instantiable.dependencies {
+                switch dependency.source {
+                case .instantiated:
+                    let instantiatedType = dependency.asInstantiatedType
+                    guard
+                        let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType],
+                        let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
+                    else {
+                        assertionFailure("Invalid state. Could not look up info for \(instantiatedType)")
+                        continue
+                    }
+                    let type = dependency.property.propertyType
+                    switch type {
+                    case .forwardingInstantiator:
+                        guard !instantiable.dependencies.filter(\.isForwarded).isEmpty else {
+                            throw DependencyTreeGeneratorError.forwardingInstantiatorInstntiableHasNoForwardedProperty(
+                                property: dependency.property,
+                                instantiableWithoutForwardedProperty: instantiable)
+                        }
+                    case .constant, .instantiator:
+                        break
+                    }
+                    propertiesToGenerate.append(.instantiated(
+                        dependency.property,
+                        instantiatedScope
+                    ))
+                case let .aliased(fulfillingProperty):
+                    propertiesToGenerate.append(.aliased(
+                        dependency.property,
+                        fulfilledBy: fulfillingProperty
+                    ))
+                case .forwarded, .received:
                     continue
                 }
-                let type = instantiatedDependency.property.propertyType
-                switch type {
-                case .forwardingInstantiator:
-                    guard !instantiable.dependencies.filter(\.isForwarded).isEmpty else {
-                        throw DependencyTreeGeneratorError.forwardingInstantiatorInstntiableHasNoForwardedProperty(
-                            property: instantiatedDependency.property,
-                            instantiableWithoutForwardedProperty: instantiable)
-                    }
-
-                case .constant, .instantiator:
-                    break
-                }
-                additionalPropertiesToInstantiate.append(Scope.PropertyToInstantiate(
-                    property: instantiatedDependency.property,
-                    instantiable: instantiable,
-                    scope: instantiatedScope,
-                    type: type
-                ))
             }
-            scope.propertiesToInstantiate.append(contentsOf: additionalPropertiesToInstantiate)
+            scope.propertiesToGenerate.append(contentsOf: propertiesToGenerate)
         }
         return typeDescriptionToScopeMap
     }
@@ -256,9 +263,28 @@ public final class DependencyTreeGenerator {
             receivableProperties: Set<Property>,
             instantiables: OrderedSet<Instantiable>
         ) {
+            let createdProperties = Set(
+                scope
+                    .instantiable
+                    .dependencies
+                    .filter {
+                        switch $0.source {
+                        case .instantiated, .forwarded:
+                            // The source is being injected into the dependency tree.
+                            return true
+                        case .aliased:
+                            // This property is being re-injected into the dependency tree under a new alias.
+                            return true
+                        case .received:
+                            return false
+                        }
+                    }
+                    .map(\.property)
+            )
             for receivedProperty in scope.receivedProperties {
                 let parentContainsProperty = receivableProperties.contains(receivedProperty)
-                if !parentContainsProperty {
+                let propertyIsCreatedAtThisScope = createdProperties.contains(receivedProperty)
+                if !parentContainsProperty && !propertyIsCreatedAtThisScope {
                     unfulfillableProperties.insert(.init(
                         property: receivedProperty,
                         instantiable: scope.instantiable,
@@ -267,21 +293,28 @@ public final class DependencyTreeGenerator {
                 }
             }
 
-            for childScope in scope.propertiesToInstantiate.map(\.scope) {
-                guard !instantiables.contains(childScope.instantiable) else {
-                    // We've previously visited this child scope.
-                    // There is a cycle in our scope tree. Do not re-enter it.
-                    continue
-                }
-                
-                var instantiables = instantiables
-                instantiables.insert(scope.instantiable, at: 0)
+            for childPropertyToGenerate in scope.propertiesToGenerate {
+                switch childPropertyToGenerate {
+                case let .instantiated(childProperty, childScope):
+                    guard !instantiables.contains(childScope.instantiable) else {
+                        // We've previously visited this child scope.
+                        // There is a cycle in our scope tree. Do not re-enter it.
+                        continue
+                    }
+                    var instantiables = instantiables
+                    instantiables.insert(scope.instantiable, at: 0)
 
-                validateReceivedProperties(
-                    on: childScope,
-                    receivableProperties: receivableProperties.union(scope.properties),
-                    instantiables: instantiables
-                )
+                    validateReceivedProperties(
+                        on: childScope,
+                        receivableProperties: receivableProperties
+                            .union(scope.properties)
+                            .removing(childProperty),
+                        instantiables: instantiables
+                    )
+
+                case .aliased:
+                    break
+                }
             }
         }
 
@@ -314,7 +347,7 @@ extension Dependency {
         switch source {
         case .instantiated:
             return true
-        case .forwarded, .received:
+        case .aliased, .forwarded, .received:
             return false
         }
     }
@@ -322,7 +355,7 @@ extension Dependency {
         switch source {
         case .forwarded:
             return true
-        case .instantiated, .received:
+        case .aliased, .instantiated, .received:
             return false
         }
     }
@@ -333,5 +366,15 @@ extension Dependency {
 extension Array where Element == Dependency {
     fileprivate var areAllInstantiated: Bool {
         first(where: { !$0.isInstantiated }) == nil
+    }
+}
+
+// MARK: - Set
+
+extension Set {
+    fileprivate func removing(_ element: Element) -> Self {
+        var setWithoutElement = self
+        setWithoutElement.remove(element)
+        return setWithoutElement
     }
 }
