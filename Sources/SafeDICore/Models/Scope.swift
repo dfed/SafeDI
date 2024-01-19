@@ -55,10 +55,10 @@ final class Scope {
             .compactMap {
                 switch $0.source {
                 case .received:
-                    return $0.fulfillingProperty ?? $0.property
+                    $0.fulfillingProperty ?? $0.property
                 case .forwarded,
                         .instantiated:
-                    return nil
+                    nil
                 }
             }
     }
@@ -81,7 +81,12 @@ final class Scope {
                 instantiableStack
                     .flatMap(\.dependencies)
                     .filter {
-                        $0.source != .received
+                        (
+                            // If the source is not received, the property has been made available.
+                            $0.source != .received
+                            // If the dependency has a fulfilling property, the property has been aliased.
+                            || $0.fulfillingProperty != nil
+                        )
                         && !propertyStack.contains($0.property)
                         && $0.property != property
                     }
