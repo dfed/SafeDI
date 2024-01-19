@@ -68,13 +68,10 @@ jobs:
   linux:
     name: Build and Test on Linux
     runs-on: ubuntu-latest
+    container: swift:5.9
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
-      - name: Setup Swift Environment
-        uses: swift-actions/setup-swift@v1
-        with:
-          swift-version: 5.9
       - name: Build and Test Framework
         run: swift test -c release --enable-code-coverage -Xswiftc -enable-testing
       - name: Prepare Coverage Reports
