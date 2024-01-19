@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-public struct UnorderedComparingCollection<Element: Codable & Hashable & Sendable>: Codable, Hashable, Sendable, Collection, ExpressibleByArrayLiteral {
+public struct UnorderedEquatingCollection<Element: Codable & Hashable & Sendable>: Codable, Hashable, Sendable, Collection, ExpressibleByArrayLiteral {
 
     // MARK: Initialization
 
@@ -40,7 +40,7 @@ public struct UnorderedComparingCollection<Element: Codable & Hashable & Sendabl
 
     // MARK: Equatable
 
-    public static func == (lhs: UnorderedComparingCollection, rhs: UnorderedComparingCollection) -> Bool {
+    public static func == (lhs: UnorderedEquatingCollection, rhs: UnorderedEquatingCollection) -> Bool {
         lhs.set == rhs.set
     }
 

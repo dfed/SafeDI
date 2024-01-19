@@ -27,7 +27,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     /// A nested type with possible generics. e.g. Array.Element or Swift.Array<Element>
     indirect case nested(name: String, parentType: TypeDescription, generics: [TypeDescription])
     /// A composed type. e.g. Identifiable & Equatable
-    indirect case composition(UnorderedComparingCollection<TypeDescription>)
+    indirect case composition(UnorderedEquatingCollection<TypeDescription>)
     /// An optional type. e.g. Int?
     indirect case optional(TypeDescription)
     /// An implicitly unwrapped optional type. e.g. Int!
@@ -236,7 +236,7 @@ extension TypeSyntax {
                 generics: genericTypeVisitor.genericArguments)
 
         } else if let typeIdentifiers = CompositionTypeSyntax(self) {
-            return .composition(UnorderedComparingCollection(typeIdentifiers.elements.map { $0.type.typeDescription }))
+            return .composition(UnorderedEquatingCollection(typeIdentifiers.elements.map { $0.type.typeDescription }))
 
         } else if let typeIdentifier = OptionalTypeSyntax(self) {
             return .optional(typeIdentifier.wrappedType.typeDescription)
@@ -376,7 +376,7 @@ extension ExprSyntax {
             }
         } else if let sequenceExpr = SequenceExprSyntax(self) {
             if sequenceExpr.elements.contains(where: { BinaryOperatorExprSyntax($0) != nil }) {
-                return .composition(UnorderedComparingCollection(
+                return .composition(UnorderedEquatingCollection(
                     sequenceExpr
                         .elements
                         .filter { BinaryOperatorExprSyntax($0) == nil }

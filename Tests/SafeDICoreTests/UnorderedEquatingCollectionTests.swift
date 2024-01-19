@@ -25,10 +25,10 @@ import XCTest
 
 @testable import SafeDICore
 
-final class UnorderedComparingCollectionTests: XCTestCase {
+final class UnorderedEquatingCollectionTests: XCTestCase {
 
     func test_makeIterator_iteratesInOrder() {
-        for (index, value) in UnorderedComparingCollection([1, 2, 3]).enumerated() {
+        for (index, value) in UnorderedEquatingCollection([1, 2, 3]).enumerated() {
             switch index {
             case 0:
                 XCTAssertEqual(value, 1)
@@ -44,17 +44,17 @@ final class UnorderedComparingCollectionTests: XCTestCase {
 
     func test_hashInto_hashesEquivalentCollectionsIdentically() {
         XCTAssertEqual(
-            UnorderedComparingCollection([1, 2, 3]).hashValue,
-            UnorderedComparingCollection([2, 1, 3]).hashValue
+            UnorderedEquatingCollection([1, 2, 3]).hashValue,
+            UnorderedEquatingCollection([2, 1, 3]).hashValue
         )
     }
 
     func test_codable_canDecodeFromEncodedValue() throws {
-        let originalCollection = UnorderedComparingCollection([1, 2, 3])
+        let originalCollection = UnorderedEquatingCollection([1, 2, 3])
         XCTAssertEqual(
             originalCollection,
             try JSONDecoder().decode(
-                UnorderedComparingCollection.self,
+                UnorderedEquatingCollection.self,
                 from: JSONEncoder().encode(originalCollection)
             )
         )
