@@ -2205,7 +2205,7 @@ final class SafeDIToolTests: XCTestCase {
         )
     }
 
-    func test_run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsRenamed() async throws {
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliased() async throws {
         let output = try await executeSystemUnderTest(
             swiftFileContent: [
                 """
@@ -2350,6 +2350,600 @@ final class SafeDIToolTests: XCTestCase {
         )
     }
 
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedALevelAboveWhereItIsReceived() async throws {
+        let output = try await executeSystemUnderTest(
+            swiftFileContent: [
+                """
+                public struct User {}
+                """,
+                """
+                public protocol UserVendor {
+                    var user: User { get }
+                }
+
+                public protocol UserManager: UserVendor {
+                    var user: User { get set }
+                }
+
+                public final class DefaultUserManager: UserManager {
+                    public init(user: User) {
+                        self.user = user
+                    }
+
+                    public var user: User
+                }
+                """,
+                """
+                public protocol NetworkService {}
+
+                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                public final class DefaultNetworkService: NetworkService {}
+                """,
+                """
+                public protocol AuthService {
+                    func login(username: String, password: String) async -> User
+                }
+
+                @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+                public final class DefaultAuthService: AuthService {
+                    public func login(username: String, password: String) async -> User {
+                        User(username: username)
+                    }
+
+                    @Received
+                    let networkService: NetworkService
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class RootViewController: UIViewController {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                        self.authService = authService
+                        self.networkService = networkService
+                        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
+                        super.init(nibName: nil, bundle: nil)
+                    }
+
+                    @Instantiated
+                    let authService: AuthService
+
+                    @Instantiated
+                    let networkService: NetworkService
+
+                    @Instantiated
+                    let loggedInViewControllerBuilder: ForwardingInstantiator<UserManager, LoggedInViewController>
+
+                    func login(username: String, password: String) {
+                        Task { @MainActor in
+                            let user = await authService.login(username: username, password: password)
+                            let loggedInViewController = loggedInViewControllerBuilder.instantiate(UserManager(user: user))
+                            pushViewController(loggedInViewController)
+                        }
+                    }
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class LoggedInViewController: UIViewController {
+                    @Forwarded
+                    private let userManager: UserManager
+
+                    @Received(fulfilledByDependencyNamed: "networkService", ofType: NetworkService.self)
+                    private let userNetworkService: NetworkService
+
+                    @Instantiated
+                    private let profileViewControllerBuilder: Instantiator<ProfileViewController>
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class ProfileViewController: UIViewController {
+                    @Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self)
+                    private let userVendor: UserVendor
+
+                    @Instantiated
+                    private let editProfileViewControllerBuilder: Instantiator<EditProfileViewController>
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class EditProfileViewController: UIViewController {
+                    @Received
+                    private let userVendor: UserVendor
+                    @Received
+                    private let userManager: UserManager
+                    @Received
+                    private let userNetworkService: NetworkService
+                }
+                """,
+            ],
+            buildDependencyTreeOutput: true
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(output.dependencyTree),
+            """
+            // This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+            // Any modifications made to this file will be overwritten on subsequent builds.
+            // Please refrain from editing this file directly.
+
+            #if canImport(UIKit)
+            import UIKit
+            #endif
+
+            extension RootViewController {
+                public convenience init() {
+                    let networkService: NetworkService = DefaultNetworkService()
+                    let authService: AuthService = DefaultAuthService(networkService: networkService)
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
+                        let userNetworkService: NetworkService = networkService
+                        let profileViewControllerBuilder = Instantiator<ProfileViewController> {
+                            let userVendor: UserVendor = userManager
+                            let editProfileViewControllerBuilder = Instantiator<EditProfileViewController> {
+                                EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: userNetworkService)
+                            }
+                            return ProfileViewController(userVendor: userVendor, editProfileViewControllerBuilder: editProfileViewControllerBuilder)
+                        }
+                        return LoggedInViewController(userManager: userManager, userNetworkService: userNetworkService, profileViewControllerBuilder: profileViewControllerBuilder)
+                    }
+                    self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
+                }
+            }
+            """
+        )
+    }
+
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWhenInstantiated() async throws {
+        let output = try await executeSystemUnderTest(
+            swiftFileContent: [
+                """
+                public struct User {}
+                """,
+                """
+                public protocol NetworkService {}
+
+                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                public final class DefaultNetworkService: NetworkService {}
+                """,
+                """
+                public protocol AuthService {
+                    func login(username: String, password: String) async -> User
+                }
+
+                @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+                public final class DefaultAuthService: AuthService {
+                    public func login(username: String, password: String) async -> User {
+                        User(username: username)
+                    }
+
+                    @Instantiated
+                    let networkService: NetworkService
+
+                    @Received(fulfilledByDependencyNamed: "networkService", ofType: NetworkService.self)
+                    let renamedNetworkService: NetworkService
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class RootViewController: UIViewController {
+                    public init(authService: AuthService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                        self.authService = authService
+                        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
+                        super.init(nibName: nil, bundle: nil)
+                    }
+
+                    @Instantiated
+                    let authService: AuthService
+                }
+                """,
+            ],
+            buildDependencyTreeOutput: true
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(output.dependencyTree),
+            """
+            // This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+            // Any modifications made to this file will be overwritten on subsequent builds.
+            // Please refrain from editing this file directly.
+
+            #if canImport(UIKit)
+            import UIKit
+            #endif
+
+            extension RootViewController {
+                public convenience init() {
+                    let authService: AuthService = {
+                        let networkService: NetworkService = DefaultNetworkService()
+                        let renamedNetworkService: NetworkService = networkService
+                        return DefaultAuthService(networkService: networkService, renamedNetworkService: renamedNetworkService)
+                    }()
+                    self.init(authService: authService)
+                }
+            }
+            """
+        )
+    }
+
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedTwice() async throws {
+        let output = try await executeSystemUnderTest(
+            swiftFileContent: [
+                """
+                public struct User {}
+                """,
+                """
+                public protocol NetworkService {}
+
+                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                public final class DefaultNetworkService: NetworkService {}
+                """,
+                """
+                public protocol AuthService {
+                    func login(username: String, password: String) async -> User
+                }
+
+                @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+                public final class DefaultAuthService: AuthService {
+                    public func login(username: String, password: String) async -> User {
+                        User(username: username)
+                    }
+
+                    @Received
+                    let networkService: NetworkService
+
+                    @Received(fulfilledByDependencyNamed: "networkService", ofType: NetworkService.self)
+                    let renamedNetworkService: NetworkService
+
+                    @Received(fulfilledByDependencyNamed: "renamedNetworkService", ofType: NetworkService.self)
+                    let renamedAgainNetworkService: NetworkService
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class RootViewController: UIViewController {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                        self.authService = authService
+                        self.networkService = networkService
+                        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
+                        super.init(nibName: nil, bundle: nil)
+                    }
+
+                    @Instantiated
+                    let authService: AuthService
+
+                    @Instantiated
+                    let networkService: NetworkService
+                }
+                """,
+            ],
+            buildDependencyTreeOutput: true
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(output.dependencyTree),
+            """
+            // This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+            // Any modifications made to this file will be overwritten on subsequent builds.
+            // Please refrain from editing this file directly.
+
+            #if canImport(UIKit)
+            import UIKit
+            #endif
+
+            extension RootViewController {
+                public convenience init() {
+                    let networkService: NetworkService = DefaultNetworkService()
+                    let authService: AuthService = {
+                        let renamedNetworkService: NetworkService = networkService
+                        let renamedAgainNetworkService: NetworkService = renamedNetworkService
+                        return DefaultAuthService(networkService: networkService, renamedNetworkService: renamedNetworkService, renamedAgainNetworkService: renamedAgainNetworkService)
+                    }()
+                    self.init(authService: authService, networkService: networkService)
+                }
+            }
+            """
+        )
+    }
+
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWhenForwarded() async throws {
+        let output = try await executeSystemUnderTest(
+            swiftFileContent: [
+                """
+                public struct User {}
+                """,
+                """
+                public protocol UserVendor {
+                    var user: User { get }
+                }
+
+                public protocol UserManager: UserVendor {
+                    var user: User { get set }
+                }
+
+                public final class DefaultUserManager: UserManager {
+                    public init(user: User) {
+                        self.user = user
+                    }
+
+                    public var user: User
+                }
+                """,
+                """
+                public protocol NetworkService {}
+
+                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                public final class DefaultNetworkService: NetworkService {}
+                """,
+                """
+                public protocol AuthService {
+                    func login(username: String, password: String) async -> User
+                }
+
+                @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+                public final class DefaultAuthService: AuthService {
+                    public func login(username: String, password: String) async -> User {
+                        User(username: username)
+                    }
+
+                    @Received
+                    let networkService: NetworkService
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class RootViewController: UIViewController {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                        self.authService = authService
+                        self.networkService = networkService
+                        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
+                        super.init(nibName: nil, bundle: nil)
+                    }
+
+                    @Instantiated
+                    let authService: AuthService
+
+                    @Instantiated
+                    let networkService: NetworkService
+
+                    @Instantiated
+                    let loggedInViewControllerBuilder: ForwardingInstantiator<UserManager, LoggedInViewController>
+
+                    func login(username: String, password: String) {
+                        Task { @MainActor in
+                            let user = await authService.login(username: username, password: password)
+                            let loggedInViewController = loggedInViewControllerBuilder.instantiate(UserManager(user: user))
+                            pushViewController(loggedInViewController)
+                        }
+                    }
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class LoggedInViewController: UIViewController {
+                    @Forwarded
+                    private let userManager: UserManager
+
+                    @Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self)
+                    private let userVendor: UserVendor
+
+                    @Instantiated
+                    private let profileViewControllerBuilder: Instantiator<ProfileViewController>
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class ProfileViewController: UIViewController {
+                    @Instantiated
+                    private let editProfileViewControllerBuilder: Instantiator<EditProfileViewController>
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class EditProfileViewController: UIViewController {
+                    @Received
+                    private let userVendor: UserVendor
+                    @Received
+                    private let userManager: UserManager
+                }
+                """,
+            ],
+            buildDependencyTreeOutput: true
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(output.dependencyTree),
+            """
+            // This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+            // Any modifications made to this file will be overwritten on subsequent builds.
+            // Please refrain from editing this file directly.
+
+            #if canImport(UIKit)
+            import UIKit
+            #endif
+
+            extension RootViewController {
+                public convenience init() {
+                    let networkService: NetworkService = DefaultNetworkService()
+                    let authService: AuthService = DefaultAuthService(networkService: networkService)
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
+                        let userVendor: UserVendor = userManager
+                        let profileViewControllerBuilder = Instantiator<ProfileViewController> {
+                            let editProfileViewControllerBuilder = Instantiator<EditProfileViewController> {
+                                EditProfileViewController(userVendor: userVendor, userManager: userManager)
+                            }
+                            return ProfileViewController(editProfileViewControllerBuilder: editProfileViewControllerBuilder)
+                        }
+                        return LoggedInViewController(userManager: userManager, userVendor: userVendor, profileViewControllerBuilder: profileViewControllerBuilder)
+                    }
+                    self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
+                }
+            }
+            """
+        )
+    }
+
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWasALevelBelowWhereItWasForwarded() async throws {
+        let output = try await executeSystemUnderTest(
+            swiftFileContent: [
+                """
+                public struct User {}
+                """,
+                """
+                public protocol UserVendor {
+                    var user: User { get }
+                }
+
+                public protocol UserManager: UserVendor {
+                    var user: User { get set }
+                }
+
+                public final class DefaultUserManager: UserManager {
+                    public init(user: User) {
+                        self.user = user
+                    }
+
+                    public var user: User
+                }
+                """,
+                """
+                public protocol NetworkService {}
+
+                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                public final class DefaultNetworkService: NetworkService {}
+                """,
+                """
+                public protocol AuthService {
+                    func login(username: String, password: String) async -> User
+                }
+
+                @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+                public final class DefaultAuthService: AuthService {
+                    public func login(username: String, password: String) async -> User {
+                        User(username: username)
+                    }
+
+                    @Received
+                    let networkService: NetworkService
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class RootViewController: UIViewController {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                        self.authService = authService
+                        self.networkService = networkService
+                        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
+                        super.init(nibName: nil, bundle: nil)
+                    }
+
+                    @Instantiated
+                    let authService: AuthService
+
+                    @Instantiated
+                    let networkService: NetworkService
+
+                    @Instantiated
+                    let loggedInViewControllerBuilder: ForwardingInstantiator<UserManager, LoggedInViewController>
+
+                    func login(username: String, password: String) {
+                        Task { @MainActor in
+                            let user = await authService.login(username: username, password: password)
+                            let loggedInViewController = loggedInViewControllerBuilder.instantiate(UserManager(user: user))
+                            pushViewController(loggedInViewController)
+                        }
+                    }
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class LoggedInViewController: UIViewController {
+                    @Forwarded
+                    private let userManager: UserManager
+
+                    @Instantiated
+                    private let profileViewControllerBuilder: Instantiator<ProfileViewController>
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class ProfileViewController: UIViewController {
+                    @Instantiated
+                    private let editProfileViewControllerBuilder: Instantiator<EditProfileViewController>
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class EditProfileViewController: UIViewController {
+                    @Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self)
+                    private let userVendor: UserVendor
+                    @Received
+                    private let userManager: UserManager
+                }
+                """,
+            ],
+            buildDependencyTreeOutput: true
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(output.dependencyTree),
+            """
+            // This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+            // Any modifications made to this file will be overwritten on subsequent builds.
+            // Please refrain from editing this file directly.
+
+            #if canImport(UIKit)
+            import UIKit
+            #endif
+
+            extension RootViewController {
+                public convenience init() {
+                    let networkService: NetworkService = DefaultNetworkService()
+                    let authService: AuthService = DefaultAuthService(networkService: networkService)
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
+                        let profileViewControllerBuilder = Instantiator<ProfileViewController> {
+                            let editProfileViewControllerBuilder = Instantiator<EditProfileViewController> {
+                                let userVendor: UserVendor = userManager
+                                return EditProfileViewController(userVendor: userVendor, userManager: userManager)
+                            }
+                            return ProfileViewController(editProfileViewControllerBuilder: editProfileViewControllerBuilder)
+                        }
+                        return LoggedInViewController(userManager: userManager, profileViewControllerBuilder: profileViewControllerBuilder)
+                    }
+                    self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
+                }
+            }
+            """
+        )
+    }
+
     // MARK: Error Tests
 
     func test_run_onCodeWithPropertyWithUnknownFulfilledType_throwsError() async {
@@ -2464,7 +3058,64 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
-    func test_run_onCodeWithUnfulfillableRenamedReceivedPropertyName_throwsError() async {
+    func test_run_onCodeWithReceivedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
+        await assertThrowsError(
+            """
+            The following @Received properties were never @Instantiated or @Forwarded:
+            `authService: AuthService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
+            """
+        ) {
+            try await executeSystemUnderTest(
+                swiftFileContent: [
+                """
+                public struct User {}
+                """,
+                """
+                public protocol NetworkService {}
+
+                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                public final class DefaultNetworkService: NetworkService {}
+                """,
+                """
+                public protocol AuthService {
+                    func login(username: String, password: String) async -> User
+                }
+
+                @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+                public final class DefaultAuthService: AuthService {
+                    public func login(username: String, password: String) async -> User {
+                        User(username: username)
+                    }
+
+                    @Instantiated
+                    let networkService: NetworkService
+
+                    @Received
+                    let authService: AuthService
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class RootViewController: UIViewController {
+                    public init(authService: AuthService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                        self.authService = authService
+                        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
+                        super.init(nibName: nil, bundle: nil)
+                    }
+
+                    @Instantiated
+                    let authService: AuthService
+                }
+                """,
+                ],
+                buildDependencyTreeOutput: true
+            )
+        }
+    }
+
+    func test_run_onCodeWithUnfulfillableAliasedReceivedPropertyName_throwsError() async {
         await assertThrowsError(
             """
             The following @Received properties were never @Instantiated or @Forwarded:
@@ -2521,7 +3172,7 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
-    func test_run_onCodeWithUnfulfillableRenamedReceivedPropertyType_throwsError() async {
+    func test_run_onCodeWithUnfulfillableAliasedReceivedPropertyType_throwsError() async {
         await assertThrowsError(
             """
             The following @Received properties were never @Instantiated or @Forwarded:
@@ -2572,6 +3223,63 @@ final class SafeDIToolTests: XCTestCase {
                         let networking: NetworkService
                     }
                     """
+                ],
+                buildDependencyTreeOutput: true
+            )
+        }
+    }
+
+    func test_run_onCodeWhereAliasedReceivedPropertyRefersToCurrentInstantiable_throwsError() async throws {
+        await assertThrowsError(
+            """
+            The following @Received properties were never @Instantiated or @Forwarded:
+            `authService: AuthService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
+            """
+        ) {
+            try await executeSystemUnderTest(
+                swiftFileContent: [
+                """
+                public struct User {}
+                """,
+                """
+                public protocol NetworkService {}
+
+                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                public final class DefaultNetworkService: NetworkService {}
+                """,
+                """
+                public protocol AuthService {
+                    func login(username: String, password: String) async -> User
+                }
+
+                @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+                public final class DefaultAuthService: AuthService {
+                    public func login(username: String, password: String) async -> User {
+                        User(username: username)
+                    }
+
+                    @Instantiated
+                    let networkService: NetworkService
+
+                    @Received(fulfilledByDependencyNamed: "authService", ofType: AuthService.self)
+                    let renamedAuthService: AuthService
+                }
+                """,
+                """
+                import UIKit
+
+                @Instantiable
+                public final class RootViewController: UIViewController {
+                    public init(authService: AuthService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                        self.authService = authService
+                        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
+                        super.init(nibName: nil, bundle: nil)
+                    }
+
+                    @Instantiated
+                    let authService: AuthService
+                }
+                """,
                 ],
                 buildDependencyTreeOutput: true
             )
