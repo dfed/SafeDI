@@ -263,9 +263,28 @@ public final class DependencyTreeGenerator {
             receivableProperties: Set<Property>,
             instantiables: OrderedSet<Instantiable>
         ) {
+            let createdProperties = Set(
+                scope
+                    .instantiable
+                    .dependencies
+                    .filter {
+                        switch $0.source {
+                        case .instantiated, .forwarded:
+                            // The source is being injected into the dependency tree.
+                            return true
+                        case .aliased:
+                            // This property is being re-injected into the dependency tree under a new alias.
+                            return true
+                        case .received:
+                            return false
+                        }
+                    }
+                    .map(\.property)
+            )
             for receivedProperty in scope.receivedProperties {
                 let parentContainsProperty = receivableProperties.contains(receivedProperty)
-                if !parentContainsProperty {
+                let propertyIsCreatedAtThisScope = createdProperties.contains(receivedProperty)
+                if !parentContainsProperty && !propertyIsCreatedAtThisScope {
                     unfulfillableProperties.insert(.init(
                         property: receivedProperty,
                         instantiable: scope.instantiable,
