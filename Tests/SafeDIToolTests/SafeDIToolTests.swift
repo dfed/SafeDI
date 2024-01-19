@@ -3058,6 +3058,57 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
+    func test_run_onCodeWithDiamondDependencyWhereAReceivedPropertyIsUnfulfillableOnOneBranch_throwsError() async {
+        await assertThrowsError(
+            """
+            The following @Received properties were never @Instantiated or @Forwarded:
+            `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
+            """
+        ) {
+            try await executeSystemUnderTest(
+                swiftFileContent: [
+                """
+                @Instantiable
+                public final class Root {
+                    @Instantiated
+                    let childA: ChildA
+                    @Instantiated
+                    let childB: ChildB
+                }
+                """,
+                """
+                @Instantiable
+                public final class ChildA {
+                    @Instantiated
+                    let grandchild: Grandchild
+                    @Instantiated
+                    let blankie: Blankie
+                }
+                """,
+                """
+                @Instantiable
+                public final class ChildB {
+                    @Instantiated
+                    let grandchild: Grandchild
+                }
+                """,
+                """
+                @Instantiable
+                public final class Grandchild {
+                    @Received
+                    let blankie: Blankie
+                }
+                """,
+                """
+                @Instantiable
+                public final class Blankie {}
+                """
+                ],
+                buildDependencyTreeOutput: true
+            )
+        }
+    }
+
     func test_run_onCodeWithReceivedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """
