@@ -28,23 +28,18 @@ public struct Dependency: Codable, Hashable {
 
     public init(
         property: Property,
-        source: Dependency.Source,
-        fulfillingPropertyName: String? = nil,
-        fulfillingTypeDescription: TypeDescription? = nil
+        source: Dependency.Source
     ) {
         self.property = property
         self.source = source
-        self.fulfillingPropertyName = fulfillingPropertyName
-        self.fulfillingTypeDescription = fulfillingTypeDescription
-
-        if let fulfillingPropertyName, let fulfillingTypeDescription {
-            fulfillingProperty = Property(
-                label: fulfillingPropertyName,
-                typeDescription: fulfillingTypeDescription)
-        } else {
-            fulfillingProperty = nil
+        switch source {
+        case .received, .forwarded:
+            asInstantiatedType = property.typeDescription.asInstantiatedType
+        case let .instantiated(fulfillingTypeDescription):
+            asInstantiatedType = (fulfillingTypeDescription ?? property.typeDescription).asInstantiatedType
+        case let .aliased(fulfillingProperty):
+            asInstantiatedType = fulfillingProperty.typeDescription.asInstantiatedType
         }
-        asInstantiatedType = (fulfillingTypeDescription ?? property.typeDescription).asInstantiatedType
     }
 
     // MARK: Public
@@ -53,24 +48,42 @@ public struct Dependency: Codable, Hashable {
     public let property: Property
     /// The source of the dependency within the dependency tree.
     public let source: Source
-    /// The name of the property that will be used to fulfill this property.
-    public let fulfillingPropertyName: String?
-    /// The type description of the type that will be used to fulfill this property.
-    /// This type must be the same as or a parent type of `property.typeDescription`.
-    public let fulfillingTypeDescription: TypeDescription?
-    /// The property that will be used to fulfill this property.
-    public let fulfillingProperty: Property?
     /// The receiver's type description as an `@Instantiable`-decorated type.
     public let asInstantiatedType: TypeDescription
 
-    public enum Source: String, CustomStringConvertible, Codable, Hashable {
-        case instantiated = "Instantiated"
-        case received = "Received"
-        case forwarded = "Forwarded"
+    public enum Source: Codable, Hashable {
+        case instantiated(fulfillingTypeDescription: TypeDescription?)
+        case received
+        case aliased(fulfillingProperty: Property)
+        case forwarded
 
-        public var description: String {
-            rawValue
+        public init?(node: AttributeListSyntax.Element) {
+            if let instantiatedMacro = node.instantiatedMacro {
+                self = .instantiated(fulfillingTypeDescription: instantiatedMacro.fulfillingTypeDescription)
+            } else if let receivedMacro = node.receivedMacro {
+                if
+                    let fulfillingPropertyName = receivedMacro.fulfillingPropertyName,
+                    let fulfillingTypeDescription = receivedMacro.fulfillingTypeDescription
+                {
+                    self = .aliased(
+                        fulfillingProperty: Property(
+                            label: fulfillingPropertyName,
+                            typeDescription: fulfillingTypeDescription
+                        )
+                    )
+                } else {
+                    self = .received
+                }
+            } else if node.forwardedMacro != nil {
+                self = .forwarded
+            } else {
+                return nil
+            }
         }
+
+        public static let instantiatedRawValue = "Instantiated"
+        public static let receivedRawValue = "Received"
+        public static let forwardedRawValue = "Forwarded"
     }
 
     // MARK: Internal

@@ -31,9 +31,9 @@ import SafeDICore
 final class InjectableMacroTests: XCTestCase {
 
     let testMacros: [String: Macro.Type] = [
-        Dependency.Source.instantiated.rawValue: InjectableMacro.self,
-        Dependency.Source.received.rawValue: InjectableMacro.self,
-        Dependency.Source.forwarded.rawValue: InjectableMacro.self,
+        Dependency.Source.instantiatedRawValue: InjectableMacro.self,
+        Dependency.Source.receivedRawValue: InjectableMacro.self,
+        Dependency.Source.forwardedRawValue: InjectableMacro.self,
     ]
 
     // MARK: XCTestCase

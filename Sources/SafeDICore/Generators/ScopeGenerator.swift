@@ -52,10 +52,16 @@ actor ScopeGenerator {
             instantiable
                 .dependencies
                 .filter {
-                    // If the source is not received, the property is being made available.
-                    $0.source != .received
-                    // If the dependency has a fulfilling property, the property is being aliased.
-                    || $0.fulfillingProperty != nil
+                    switch $0.source {
+                    case .instantiated, .forwarded:
+                        // The source is being injected into the dependency tree.
+                        return true
+                    case .aliased:
+                        // This property is being re-injected into the dependency tree under a new alias.
+                        return true
+                    case .received:
+                        return false
+                    }
                 }
                 .map(\.property)
         ).union(propertiesToGenerate
@@ -64,8 +70,16 @@ actor ScopeGenerator {
         requiredReceivedProperties = Set(
             instantiable
                 .dependencies
-                .filter { $0.source == .received }
-                .map(\.property)
+                .compactMap {
+                    switch $0.source {
+                    case .instantiated, .forwarded:
+                        return nil
+                    case .received:
+                        return $0.property
+                    case let .aliased(fulfillingProperty):
+                        return fulfillingProperty
+                    }
+                }
         ).union(propertiesToGenerate.flatMap(\.requiredReceivedProperties))
             .subtracting(propertiesMadeAvailableByChildren)
     }
@@ -278,7 +292,7 @@ actor ScopeGenerator {
         !propertyToGenerate
             .requiredReceivedProperties
             .contains(where: {
-                !isPropertyResolved($0) 
+                !isPropertyResolved($0)
                 && !propertyToGenerate.forwardedProperties.contains($0)
             })
     }

@@ -36,11 +36,27 @@ final class Scope {
     /// The properties that this scope is responsible for instantiating.
     var propertiesToInstantiate = [PropertyToInstantiate]()
 
-    struct PropertyToInstantiate {
-        let property: Property
-        let instantiable: Instantiable
-        let scope: Scope
-        let type: Property.PropertyType
+    enum PropertyToInstantiate {
+        case instantiated(Property, Scope)
+        case aliased(Property, fulfilledBy: Property)
+
+        var property: Property {
+            switch self {
+            case
+                let .instantiated(property, _),
+                let .aliased(property, _):
+                property
+            }
+        }
+
+        var scope: Scope? {
+            switch self {
+            case let .instantiated(_, scope):
+                scope
+            case .aliased:
+                nil
+            }
+        }
     }
 
     var properties: [Property] {
@@ -55,7 +71,9 @@ final class Scope {
             .compactMap {
                 switch $0.source {
                 case .received:
-                    $0.fulfillingProperty ?? $0.property
+                    $0.property
+                case let .aliased(fulfillingProperty):
+                    fulfillingProperty
                 case .forwarded,
                         .instantiated:
                     nil
@@ -81,43 +99,40 @@ final class Scope {
                 instantiableStack
                     .flatMap(\.dependencies)
                     .filter {
-                        (
-                            // If the source is not received, the property has been made available.
-                            $0.source != .received
-                            // If the dependency has a fulfilling property, the property has been aliased.
-                            || $0.fulfillingProperty != nil
-                        )
-                        && !propertyStack.contains($0.property)
-                        && $0.property != property
+                        switch $0.source {
+                        // The source has been injected into the dependency tree.
+                        case .instantiated,
+                                .forwarded,
+                            // This property has been re-injected into the dependency tree under a new alias.
+                                .aliased:
+                            return !propertyStack.contains($0.property) && $0.property != property
+                        case .received:
+                            return false
+                        }
                     }
                     .map(\.property)
             ).subtracting(
                 // We want the local version of any instantiated property.
                 propertiesToInstantiate.map(\.property)
-                + instantiable
-                    .dependencies
-                    // We want the local version of any aliased property.
-                    .filter { $0.fulfillingProperty != nil }
-                    .map(\.property)
             )
             let scopeGenerator = ScopeGenerator(
                 instantiable: instantiable,
                 property: property,
                 propertiesToGenerate: try propertiesToInstantiate.map {
-                    try $0.scope.createScopeGenerator(
-                        for: $0.property,
-                        instantiableStack: childInstantiableStack,
-                        propertyStack: childPropertyStack
-                    )
-                } + instantiable.dependencies.compactMap {
-                    guard let fulfillingProperty = $0.fulfillingProperty else {
-                        return nil
+                    switch $0 {
+                    case let .instantiated(property, scope):
+                        try scope.createScopeGenerator(
+                            for: property,
+                            instantiableStack: childInstantiableStack,
+                            propertyStack: childPropertyStack
+                        )
+                    case let .aliased(property, fulfilledBy: fulfillingProperty):
+                        ScopeGenerator(
+                            property: property,
+                            fulfillingProperty: fulfillingProperty,
+                            receivedProperties: receivedProperties
+                        )
                     }
-                    return ScopeGenerator(
-                        property: $0.property,
-                        fulfillingProperty: fulfillingProperty,
-                        receivedProperties: receivedProperties
-                    )
                 },
                 receivedProperties: receivedProperties
             )

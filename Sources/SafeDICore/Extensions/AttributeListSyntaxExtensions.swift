@@ -24,12 +24,7 @@ extension AttributeListSyntax {
 
     public var instantiableMacro: AttributeSyntax? {
         guard let attribute = first(where: { element in
-            switch element {
-            case let .attribute(attribute):
-                return IdentifierTypeSyntax(attribute.attributeName)?.name.text == InstantiableVisitor.macroName
-            case .ifConfigDecl:
-                return false
-            }
+            element.instantiableMacro != nil
         }) else {
             return nil
         }
@@ -38,12 +33,7 @@ extension AttributeListSyntax {
 
     public var instantiatedMacro: AttributeSyntax? {
         guard let attribute = first(where: { element in
-            switch element {
-            case let .attribute(attribute):
-                return IdentifierTypeSyntax(attribute.attributeName)?.name.text == Dependency.Source.instantiated.rawValue
-            case .ifConfigDecl:
-                return false
-            }
+            element.instantiatedMacro != nil
         }) else {
             return nil
         }
@@ -52,38 +42,24 @@ extension AttributeListSyntax {
 
     public var receivedMacro: AttributeSyntax? {
         guard let attribute = first(where: { element in
-            switch element {
-            case let .attribute(attribute):
-                return IdentifierTypeSyntax(attribute.attributeName)?.name.text == Dependency.Source.received.rawValue
-            case .ifConfigDecl:
-                return false
-            }
+            element.receivedMacro != nil
         }) else {
             return nil
         }
         return AttributeSyntax(attribute)
     }
 
-    public var attributedNodes: [(attribute: String, node: AttributeListSyntax.Element)] {
-        compactMap { element in
-            switch element {
-            case let .attribute(attribute):
-                guard let identifierText = IdentifierTypeSyntax(attribute.attributeName)?.name.text else {
+    public var dependencySources: [(source: Dependency.Source, node: AttributeListSyntax.Element)] {
+        compactMap {
+            switch $0 {
+            case .attribute:
+                guard let source = Dependency.Source(node: $0) else {
                     return nil
                 }
-                return (attribute: identifierText, node: element)
+                return (source: source, node: $0)
             case .ifConfigDecl:
                 return nil
             }
-        }
-    }
-
-    public var dependencySources: [(source: Dependency.Source, node: AttributeListSyntax.Element)] {
-        attributedNodes.compactMap {
-            guard let source = Dependency.Source.init(rawValue: $0.attribute) else {
-                return nil
-            }
-            return (source: source, node: $0.node)
         }
     }
 }

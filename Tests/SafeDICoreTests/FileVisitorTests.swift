@@ -64,18 +64,14 @@ final class FileVisitorTests: XCTestCase {
                                 label: "user",
                                 typeDescription: .simple(name: "User")
                             ),
-                            source: .forwarded,
-                            fulfillingPropertyName: nil,
-                            fulfillingTypeDescription: nil
+                            source: .forwarded
                         ),
                         Dependency(
                             property: Property(
                                 label: "networkService",
                                 typeDescription: .simple(name: "NetworkService")
                             ),
-                            source: .received,
-                            fulfillingPropertyName: nil,
-                            fulfillingTypeDescription: nil
+                            source: .received
                         )
                     ],
                     declarationType: .classType
@@ -129,18 +125,14 @@ final class FileVisitorTests: XCTestCase {
                                 label: "user",
                                 typeDescription: .simple(name: "User")
                             ),
-                            source: .forwarded,
-                            fulfillingPropertyName: nil,
-                            fulfillingTypeDescription: nil
+                            source: .forwarded
                         ),
                         Dependency(
                             property: Property(
                                 label: "networkService",
                                 typeDescription: .simple(name: "NetworkService")
                             ),
-                            source: .received,
-                            fulfillingPropertyName: nil,
-                            fulfillingTypeDescription: nil
+                            source: .received
                         )
                     ],
                     declarationType: .classType

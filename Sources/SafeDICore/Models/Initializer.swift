@@ -141,23 +141,18 @@ public struct Initializer: Codable, Hashable {
             ),
             bodyBuilder: {
                 for dependency in dependencies {
-                    switch dependency.source {
-                    case .instantiated,
-                            .received,
-                            .forwarded:
-                        CodeBlockItemSyntax(
-                            item: .expr(ExprSyntax(InfixOperatorExprSyntax(
-                                leadingTrivia: .newline,
-                                leftOperand: MemberAccessExprSyntax(
-                                    base: DeclReferenceExprSyntax(baseName: TokenSyntax.keyword(.`self`)),
-                                    name: TokenSyntax.identifier(dependency.property.label)),
-                                operator: AssignmentExprSyntax(
-                                    leadingTrivia: .space,
-                                    trailingTrivia: .space),
-                                rightOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(dependency.property.label))
-                            )))
-                        )
-                    }
+                    CodeBlockItemSyntax(
+                        item: .expr(ExprSyntax(InfixOperatorExprSyntax(
+                            leadingTrivia: .newline,
+                            leftOperand: MemberAccessExprSyntax(
+                                base: DeclReferenceExprSyntax(baseName: TokenSyntax.keyword(.`self`)),
+                                name: TokenSyntax.identifier(dependency.property.label)),
+                            operator: AssignmentExprSyntax(
+                                leadingTrivia: .space,
+                                trailingTrivia: .space),
+                            rightOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(dependency.property.label))
+                        )))
+                    )
                 }
                 for additionalPropertyLabel in additionalPropertyLabels {
                     CodeBlockItemSyntax(
