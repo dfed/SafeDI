@@ -267,8 +267,8 @@ actor ScopeGenerator {
 
     private func nextSatisfiableProperty() -> ScopeGenerator? {
         let remainingProperties = propertiesToGenerate.filter {
-            if let property = $0.property {
-                !resolvedProperties.contains(property)
+            if let property = $0.property, !resolvedProperties.contains(property) {
+                true
             } else {
                 false
             }
