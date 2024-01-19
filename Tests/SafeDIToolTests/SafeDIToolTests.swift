@@ -2796,7 +2796,7 @@ final class SafeDIToolTests: XCTestCase {
         await assertThrowsError(
             """
             Dependency cycle detected!
-            UserManager -> AuthenticatedViewController -> UserManager
+            UserManager -> ProfileViewController -> UserManager
             """
         ) {
             try await executeSystemUnderTest(
@@ -2804,25 +2804,17 @@ final class SafeDIToolTests: XCTestCase {
                     """
                     @Instantiable
                     public final class UserManager {
-                        public init(authenticatedViewControllerBuilder: ForwardingInstantiator<User, AuthenticatedViewController>) {
-                            self.authenticatedViewControllerBuilder = authenticatedViewControllerBuilder
-                        }
-
                         @Instantiated
-                        let authenticatedViewControllerBuilder: ForwardingInstantiator<User, AuthenticatedViewController>
+                        let profileViewControllerBuilder: Instantiator<ProfileViewController>
 
-                        var user: User
+                        var user: User?
                     }
                     """,
                     """
                     import UIKit
 
                     @Instantiable
-                    public final class AuthenticatedViewController: UIViewController {
-                        public init(userManager: UserManager) {
-                            self.userManager = userManager
-                        }
-
+                    public final class ProfileViewController: UIViewController {
                         @Instantiated
                         let userManager: UserManager
                     }
@@ -2832,10 +2824,6 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable
                     public final class RootViewController: UIViewController {
-                        public init(userManager: UserManager) {
-                            self.userManager = userManager
-                        }
-
                         @Instantiated
                         let userManager: UserManager
                     }
@@ -2846,7 +2834,47 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
     
-    func test_run_onCodeWithIncorrectInstantiableFirstGeneric_whenInstantiableHasSingleForwardedProperty_throwsError() async throws {
+    func test_run_onCodeWithForwardingInstantiatorSecondGeneric_hasNoForwardedProperty_throwsError() async throws {
+        await assertThrowsError(
+            """
+            Property `noteViewBuilder: ForwardingInstantiator<String, NoteView>` on RootView has no @Forwarded property. Property should instead be of type `Instantiator<NoteView>`.
+            """
+        ) {
+            try await executeSystemUnderTest(
+                swiftFileContent: [
+                """
+                import SwiftUI
+
+                @Instantiable
+                public struct RootView: View {
+                    public var view: some View {
+                        noteViewBuilder.instantiate("my note")
+                    }
+
+                    @Instantiated
+                    let noteViewBuilder: ForwardingInstantiator<String, NoteView>
+                }
+                """,
+                """
+                import SwiftUI
+
+                @Instantiable
+                public struct NoteView: View {
+                    public var view: some View {
+                        TextField(note)
+                    }
+
+                    @State
+                    var note: String = ""
+                }
+                """,
+                ],
+                buildDependencyTreeOutput: true
+            )
+        }
+    }
+
+    func test_run_onCodeWithIncorrectForwardingInstantiatorFirstGeneric_whenInstantiableHasSingleForwardedProperty_throwsError() async throws {
         await assertThrowsError(
             """
             Property `loggedInViewControllerBuilder: ForwardingInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ForwardingInstantiator<LoggedInViewController.ForwardedArguments, UIViewController>`.
@@ -2940,7 +2968,7 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
-    func test_run_onCodeWithIncorrectInstantiableFirstGeneric_whenInstantiableHasMultipleForwardedProperty_throwsError() async throws {
+    func test_run_onCodeWithIncorrectForwardingInstantiatorFirstGeneric_whenInstantiableHasMultipleForwardedProperty_throwsError() async throws {
         await assertThrowsError(
             """
             Property `loggedInViewControllerBuilder: ForwardingInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ForwardingInstantiator<LoggedInViewController.ForwardedArguments, UIViewController>`.
