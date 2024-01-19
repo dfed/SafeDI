@@ -47,9 +47,9 @@ final class Scope: Hashable {
     let instantiable: Instantiable
 
     /// The properties that this scope is responsible for instantiating.
-    var propertiesToInstantiate = [PropertyToInstantiate]()
+    var propertiesToGenerate = [PropertyToGenerate]()
 
-    enum PropertyToInstantiate {
+    enum PropertyToGenerate {
         case instantiated(Property, Scope)
         case aliased(Property, fulfilledBy: Property)
     }
@@ -93,7 +93,7 @@ final class Scope: Hashable {
             let scopeGenerator = ScopeGenerator(
                 instantiable: instantiable,
                 property: property,
-                propertiesToGenerate: try propertiesToInstantiate.map {
+                propertiesToGenerate: try propertiesToGenerate.map {
                     switch $0 {
                     case let .instantiated(property, scope):
                         try scope.createScopeGenerator(

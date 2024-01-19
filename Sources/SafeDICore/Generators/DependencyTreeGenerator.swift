@@ -213,13 +213,13 @@ public final class DependencyTreeGenerator {
                 }
             })
 
-        // Populate the propertiesToInstantiate on each scope.
+        // Populate the propertiesToGenerate on each scope.
         for scope in Set(typeDescriptionToScopeMap.values) {
-            var propertiesToInstantiate = [Scope.PropertyToInstantiate]()
-            for instantiatedDependency in scope.instantiable.dependencies {
-                switch instantiatedDependency.source {
+            var propertiesToGenerate = [Scope.PropertyToGenerate]()
+            for dependency in scope.instantiable.dependencies {
+                switch dependency.source {
                 case .instantiated:
-                    let instantiatedType = instantiatedDependency.asInstantiatedType
+                    let instantiatedType = dependency.asInstantiatedType
                     guard
                         let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType],
                         let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
@@ -227,31 +227,31 @@ public final class DependencyTreeGenerator {
                         assertionFailure("Invalid state. Could not look up info for \(instantiatedType)")
                         continue
                     }
-                    let type = instantiatedDependency.property.propertyType
+                    let type = dependency.property.propertyType
                     switch type {
                     case .forwardingInstantiator:
                         guard !instantiable.dependencies.filter(\.isForwarded).isEmpty else {
                             throw DependencyTreeGeneratorError.forwardingInstantiatorInstntiableHasNoForwardedProperty(
-                                property: instantiatedDependency.property,
+                                property: dependency.property,
                                 instantiableWithoutForwardedProperty: instantiable)
                         }
                     case .constant, .instantiator:
                         break
                     }
-                    propertiesToInstantiate.append(.instantiated(
-                        instantiatedDependency.property,
+                    propertiesToGenerate.append(.instantiated(
+                        dependency.property,
                         instantiatedScope
                     ))
                 case let .aliased(fulfillingProperty):
-                    propertiesToInstantiate.append(.aliased(
-                        instantiatedDependency.property,
+                    propertiesToGenerate.append(.aliased(
+                        dependency.property,
                         fulfilledBy: fulfillingProperty
                     ))
                 case .forwarded, .received:
                     continue
                 }
             }
-            scope.propertiesToInstantiate.append(contentsOf: propertiesToInstantiate)
+            scope.propertiesToGenerate.append(contentsOf: propertiesToGenerate)
         }
         return typeDescriptionToScopeMap
     }
@@ -293,8 +293,8 @@ public final class DependencyTreeGenerator {
                 }
             }
 
-            for childPropertyToInstantiate in scope.propertiesToInstantiate {
-                switch childPropertyToInstantiate {
+            for childPropertyToGenerate in scope.propertiesToGenerate {
+                switch childPropertyToGenerate {
                 case let .instantiated(childProperty, childScope):
                     guard !instantiables.contains(childScope.instantiable) else {
                         // We've previously visited this child scope.
