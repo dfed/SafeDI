@@ -293,21 +293,28 @@ public final class DependencyTreeGenerator {
                 }
             }
 
-            for childScope in scope.propertiesToInstantiate.compactMap(\.scope) {
-                guard !instantiables.contains(childScope.instantiable) else {
-                    // We've previously visited this child scope.
-                    // There is a cycle in our scope tree. Do not re-enter it.
-                    continue
-                }
-                
-                var instantiables = instantiables
-                instantiables.insert(scope.instantiable, at: 0)
+            for childPropertyToInstantiate in scope.propertiesToInstantiate {
+                switch childPropertyToInstantiate {
+                case let .instantiated(childProperty, childScope):
+                    guard !instantiables.contains(childScope.instantiable) else {
+                        // We've previously visited this child scope.
+                        // There is a cycle in our scope tree. Do not re-enter it.
+                        continue
+                    }
+                    var instantiables = instantiables
+                    instantiables.insert(scope.instantiable, at: 0)
 
-                validateReceivedProperties(
-                    on: childScope,
-                    receivableProperties: receivableProperties.union(scope.properties),
-                    instantiables: instantiables
-                )
+                    validateReceivedProperties(
+                        on: childScope,
+                        receivableProperties: receivableProperties
+                            .union(scope.properties)
+                            .removing(childProperty),
+                        instantiables: instantiables
+                    )
+
+                case .aliased:
+                    break
+                }
             }
         }
 
@@ -359,5 +366,15 @@ extension Dependency {
 extension Array where Element == Dependency {
     fileprivate var areAllInstantiated: Bool {
         first(where: { !$0.isInstantiated }) == nil
+    }
+}
+
+// MARK: - Set
+
+extension Set {
+    fileprivate func removing(_ element: Element) -> Self {
+        var setWithoutElement = self
+        setWithoutElement.remove(element)
+        return setWithoutElement
     }
 }
