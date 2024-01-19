@@ -73,6 +73,7 @@ public final class DependencyTreeGenerator {
 
         case noInstantiableFound(TypeDescription)
         case unfulfillableProperties([UnfulfillableProperty])
+        case forwardingInstantiatorInstntiableHasNoForwardedProperty(property: Property, instantiableWithoutForwardedProperty: Instantiable)
 
         var description: String {
             switch self {
@@ -90,6 +91,8 @@ public final class DependencyTreeGenerator {
                     """
                 }.joined(separator: "\n"))
                 """
+            case let .forwardingInstantiatorInstntiableHasNoForwardedProperty(property, instantiable):
+                "Property `\(property.asSource)` on RootView has no @Forwarded property. Property should instead be of type `\(Dependency.instantiatorType)<\(instantiable.concreteInstantiableType.asSource)>`."
             }
         }
 
@@ -222,11 +225,23 @@ public final class DependencyTreeGenerator {
                     assertionFailure("Invalid state. Could not look up info for \(instantiatedType)")
                     continue
                 }
+                let type = instantiatedDependency.property.propertyType
+                switch type {
+                case .forwardingInstantiator:
+                    guard !instantiable.dependencies.filter(\.isForwarded).isEmpty else {
+                        throw DependencyTreeGeneratorError.forwardingInstantiatorInstntiableHasNoForwardedProperty(
+                            property: instantiatedDependency.property,
+                            instantiableWithoutForwardedProperty: instantiable)
+                    }
+
+                case .constant, .instantiator:
+                    break
+                }
                 additionalPropertiesToInstantiate.append(Scope.PropertyToInstantiate(
                     property: instantiatedDependency.property,
                     instantiable: instantiable,
                     scope: instantiatedScope,
-                    type: instantiatedDependency.property.propertyType
+                    type: type
                 ))
             }
             scope.propertiesToInstantiate.append(contentsOf: additionalPropertiesToInstantiate)
@@ -300,6 +315,14 @@ extension Dependency {
         case .instantiated:
             return true
         case .forwarded, .received:
+            return false
+        }
+    }
+    fileprivate var isForwarded: Bool {
+        switch source {
+        case .forwarded:
+            return true
+        case .instantiated, .received:
             return false
         }
     }
