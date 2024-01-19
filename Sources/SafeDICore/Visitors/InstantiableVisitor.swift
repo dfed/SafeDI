@@ -95,32 +95,15 @@ public final class InstantiableVisitor: SyntaxVisitor {
                 let label = IdentifierPatternSyntax(binding.pattern)?.identifier.text,
                 let typeDescription = binding.typeAnnotation?.type.typeDescription
             {
-                let fulfillingPropertyName = node.attributes.receivedMacro?.fulfillingPropertyName
-                let fulfillingTypeDescription: TypeDescription? = node
-                    .attributes
-                    .instantiatedMacro?
-                    .fulfillingTypeDescription
-                ?? node
-                    .attributes
-                    .receivedMacro?
-                    .fulfillingTypeDescription
-
                 dependencies.append(
                     Dependency(
                         property: { 
-                            switch dependencySource {
-                            case .instantiated,
-                                    .received,
-                                    .forwarded:
-                                Property(
-                                    label: label,
-                                    typeDescription: typeDescription
-                                )
-                            }
+                            Property(
+                                label: label,
+                                typeDescription: typeDescription
+                            )
                         }(),
-                        source: dependencySource,
-                        fulfillingPropertyName: fulfillingPropertyName,
-                        fulfillingTypeDescription: fulfillingTypeDescription
+                        source: dependencySource
                     )
                 )
             }
@@ -221,13 +204,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
         dependencies = initializer.arguments.map {
             Dependency(
                 property: $0.asProperty,
-                source: .received,
-                // We do not support type injecting renamed properties into external instantiable's initializer method.
-                // We can add this functionality in the future, possibly with a freestanding macro used to declare an argument within the method declaration.
-                fulfillingPropertyName: nil,
-                // We do not support type injecting type-erased properties into external instantiable's initializer method.
-                // We can add this functionality in the future, possibly with a freestanding macro used to declare an argument within the method declaration.
-                fulfillingTypeDescription: nil
+                source: .received
             )
         }
 
