@@ -440,6 +440,12 @@ public struct UnorderedComparingCollection<Element: Codable & Hashable & Sendabl
         lhs.set == rhs.set
     }
 
+    // MARK: Hashable
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(set)
+    }
+
     // MARK: Collection
 
     public func makeIterator() -> IndexingIterator<Array<Element>> { array.makeIterator() }
