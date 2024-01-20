@@ -27,6 +27,8 @@ public final class List<Element>: Sequence {
         self.value = value
         self.previous = previous
         self.next = next
+        previous?.next = self
+        next?.previous = self
     }
 
     public convenience init?(_ collection: some Collection<Element>) {
@@ -55,15 +57,11 @@ public final class List<Element>: Sequence {
     /// - Returns: The inserted element in the list.
     @discardableResult
     public func insert(_ value: Element) -> List<Element> {
-        let nextToInsert = List(
+        List(
             value: value,
             previous: self,
             next: next
         )
-        next?.previous = nextToInsert
-        next = nextToInsert
-
-        return nextToInsert
     }
 
     /// Removes the receiver from the list.
