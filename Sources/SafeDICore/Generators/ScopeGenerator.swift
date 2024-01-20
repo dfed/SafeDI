@@ -35,7 +35,6 @@ actor ScopeGenerator {
                 forwardedProperties: Set(
                     instantiable
                         .dependencies
-                        // Instantiated properties will self-resolve.
                         .filter { $0.source == .forwarded }
                         .map(\.property)
                 )
