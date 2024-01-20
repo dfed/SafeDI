@@ -244,8 +244,8 @@ actor ScopeGenerator {
 
     private var generateCodeTask: Task<String, Error>?
 
-    private func generateProperties(leadingMemberWhitespace: String) async throws -> [String] {
-        guard var orderedPropertiesToGenerate = List(propertiesToGenerate) else { return [] }
+    private var orderedPropertiesToGenerate: [ScopeGenerator] {
+        guard var orderedPropertiesToGenerate = List(self.propertiesToGenerate) else { return [] }
         let propertiesToGenerate = Set(propertiesToGenerate.compactMap(\.property))
         for propertyToGenerate in orderedPropertiesToGenerate {
             let hasDependenciesGeneratedByCurrentScope = !propertyToGenerate
@@ -276,9 +276,12 @@ actor ScopeGenerator {
                 }
             }
         }
+        return orderedPropertiesToGenerate.map(\.value)
+    }
 
+    private func generateProperties(leadingMemberWhitespace: String) async throws -> [String] {
         var generatedProperties = [String]()
-        for childGenerator in orderedPropertiesToGenerate.map(\.value) {
+        for childGenerator in orderedPropertiesToGenerate {
             generatedProperties.append(
                 try await childGenerator
                     .generateCode(leadingWhitespace: leadingMemberWhitespace)
