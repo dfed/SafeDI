@@ -45,7 +45,6 @@ actor ScopeGenerator {
         }
         self.property = property
         self.propertiesToGenerate = propertiesToGenerate
-        forwardedProperties = scopeData.forwardedProperties
         propertiesMadeAvailableByChildren = Set(
             instantiable
                 .dependencies
@@ -64,7 +63,6 @@ actor ScopeGenerator {
                 .map(\.property)
         ).union(propertiesToGenerate
             .flatMap(\.propertiesMadeAvailableByChildren))
-
         requiredReceivedProperties = Set(
             instantiable
                 .dependencies
@@ -89,7 +87,6 @@ actor ScopeGenerator {
         scopeData = .alias(property: property, fulfillingProperty: fulfillingProperty)
         requiredReceivedProperties = [fulfillingProperty]
         propertiesToGenerate = []
-        forwardedProperties = []
         propertiesMadeAvailableByChildren = []
         self.property = property
     }
@@ -240,7 +237,6 @@ actor ScopeGenerator {
     private let propertiesMadeAvailableByChildren: Set<Property>
     private let propertiesToGenerate: [ScopeGenerator]
     private let property: Property?
-    private let forwardedProperties: Set<Property>
 
     private var generateCodeTask: Task<String, Error>?
 
