@@ -249,7 +249,6 @@ actor ScopeGenerator {
         let propertiesToGenerate = Set(propertiesToGenerate.compactMap(\.property))
         for propertyToGenerateNode in orderedPropertiesToGenerate {
             let hasDependenciesGeneratedByCurrentScope = !propertyToGenerateNode
-                .value
                 .requiredReceivedProperties
                 .isDisjoint(with: propertiesToGenerate)
             guard hasDependenciesGeneratedByCurrentScope else {
@@ -259,10 +258,9 @@ actor ScopeGenerator {
             var lastDependency: List<ScopeGenerator>?
             for nextPropertyToGenerate in propertyToGenerateNode.dropFirst() {
                 if
-                    let nextProperty = nextPropertyToGenerate.value.property,
+                    let nextProperty = nextPropertyToGenerate.property,
                     // The property to generate depends on the next property!
                     propertyToGenerateNode
-                        .value
                         .requiredReceivedProperties
                         .contains(nextProperty)
                 {

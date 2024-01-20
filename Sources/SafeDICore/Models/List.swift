@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+@dynamicMemberLookup
 public final class List<Element>: Sequence {
 
     // MARK: Initialization
@@ -44,6 +45,10 @@ public final class List<Element>: Sequence {
     // MARK: Public
 
     public let value: Element
+
+    public subscript<T>(dynamicMember keyPath: KeyPath<Element, T>) -> T {
+        value[keyPath: keyPath]
+    }
 
     /// Inserts the value after the current element.
     /// - Parameter value: The value to insert into the list.
