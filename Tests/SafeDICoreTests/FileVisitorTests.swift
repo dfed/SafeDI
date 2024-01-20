@@ -26,19 +26,13 @@ import XCTest
 
 final class FileVisitorTests: XCTestCase {
 
-    func test_walk_findsTopLevelInstantiable() {
+    func test_walk_findsInstantiable() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         import UIKit
 
         @Instantiable
         public final class LoggedInViewController: UIViewController {
-
-            public init(user: User, networkService: NetworkService) {
-                self.user = user
-                self.networkService = networkService
-            }
-
             @Forwarded
             private let user: User
 
@@ -84,17 +78,11 @@ final class FileVisitorTests: XCTestCase {
         )
     }
 
-    func test_walk_findsMultipleTopLevelInstantiables() {
+    func test_walk_findsMultipleInstantiables() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         @Instantiable
         public final class LoggedInViewController: UIViewController {
-
-            public init(user: User, networkService: NetworkService) {
-                self.user = user
-                self.networkService = networkService
-            }
-
             @Forwarded
             private let user: User
 
@@ -103,9 +91,7 @@ final class FileVisitorTests: XCTestCase {
         }
 
         @Instantiable
-        public struct SomeOtherInstantiable {
-            public init() {}
-        }
+        public struct SomeOtherInstantiable {}
         """))
         XCTAssertEqual(
             fileVisitor.instantiables,
