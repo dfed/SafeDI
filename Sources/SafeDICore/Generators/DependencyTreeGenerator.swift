@@ -73,7 +73,8 @@ public final class DependencyTreeGenerator {
 
         case noInstantiableFound(TypeDescription)
         case unfulfillableProperties([UnfulfillableProperty])
-        case forwardingInstantiatorInstntiableHasNoForwardedProperty(property: Property, instantiableWithoutForwardedProperty: Instantiable)
+        case instantiableHasForwardedProperty(property: Property, instantiableWithForwardedProperty: Instantiable, parent: Instantiable)
+        case forwardingInstantiatorInstantiableHasNoForwardedProperty(property: Property, instantiableWithoutForwardedProperty: Instantiable, parent: Instantiable)
 
         var description: String {
             switch self {
@@ -91,8 +92,10 @@ public final class DependencyTreeGenerator {
                     """
                 }.joined(separator: "\n"))
                 """
-            case let .forwardingInstantiatorInstntiableHasNoForwardedProperty(property, instantiable):
-                "Property `\(property.asSource)` on RootView has no @Forwarded property. Property should instead be of type `\(Dependency.instantiatorType)<\(instantiable.concreteInstantiableType.asSource)>`."
+            case let .instantiableHasForwardedProperty(property, instantiable, parent):
+                "Property `\(property.asSource)` on \(parent.concreteInstantiableType.asSource) has at least one @\(Dependency.Source.forwardedRawValue) property. Property should instead be of type `\(Dependency.forwardingInstantiatorType)<\(instantiable.concreteInstantiableType.asSource).ForwardedArguments, \(instantiable.concreteInstantiableType.asSource)>`."
+            case let .forwardingInstantiatorInstantiableHasNoForwardedProperty(property, instantiable, parent):
+                "Property `\(property.asSource)` on \(parent.concreteInstantiableType.asSource) has no @\(Dependency.Source.forwardedRawValue) property. Property should instead be of type `\(Dependency.instantiatorType)<\(instantiable.concreteInstantiableType.asSource)>`."
             }
         }
 
@@ -230,12 +233,22 @@ public final class DependencyTreeGenerator {
                     switch type {
                     case .forwardingInstantiator:
                         guard !instantiable.dependencies.filter(\.isForwarded).isEmpty else {
-                            throw DependencyTreeGeneratorError.forwardingInstantiatorInstntiableHasNoForwardedProperty(
-                                property: dependency.property,
-                                instantiableWithoutForwardedProperty: instantiable)
+                            throw DependencyTreeGeneratorError
+                                .forwardingInstantiatorInstantiableHasNoForwardedProperty(
+                                    property: dependency.property,
+                                    instantiableWithoutForwardedProperty: instantiable,
+                                    parent: scope.instantiable
+                                )
                         }
                     case .constant, .instantiator:
-                        break
+                        guard instantiable.dependencies.filter(\.isForwarded).isEmpty else {
+                            throw DependencyTreeGeneratorError
+                                .instantiableHasForwardedProperty(
+                                    property: dependency.property,
+                                    instantiableWithForwardedProperty: instantiable,
+                                    parent: scope.instantiable
+                                )
+                        }
                     }
                     scope.propertiesToGenerate.append(.instantiated(
                         dependency.property,

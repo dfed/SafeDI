@@ -3779,6 +3779,68 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
+    func test_run_onCodeWhereInstantiableWithForwardedPropertyIsInstantiatedOutsideOfForwardingInstantiator_throwsError() async throws {
+        await assertThrowsError(
+            """
+            Property `child: Child` on Root has at least one @Forwarded property. Property should instead be of type `ForwardingInstantiator<Child.ForwardedArguments, Child>`.
+            """
+        ) {
+            try await executeSystemUnderTest(
+                swiftFileContent: [
+                """
+                @Instantiable
+                public final class Root {
+                    @Instantiated
+                    let child: Child
+                }
+                """,
+                """
+                public struct Forwarded {}
+                """,
+                """
+                @Instantiable
+                public final class Child {
+                    @Forwarded
+                    let forwarded: Forwarded
+                }
+                """,
+                ],
+                buildDependencyTreeOutput: true
+            )
+        }
+    }
+
+    func test_run_onCodeWhereInstantiableWithForwardedPropertyIsInstantiatedWithAnInstantiator_throwsError() async throws {
+        await assertThrowsError(
+            """
+            Property `childBuilder: Instantiator<Child>` on Root has at least one @Forwarded property. Property should instead be of type `ForwardingInstantiator<Child.ForwardedArguments, Child>`.
+            """
+        ) {
+            try await executeSystemUnderTest(
+                swiftFileContent: [
+                """
+                @Instantiable
+                public final class Root {
+                    @Instantiated
+                    let childBuilder: Instantiator<Child>
+                }
+                """,
+                """
+                public struct Forwarded {}
+                """,
+                """
+                @Instantiable
+                public final class Child {
+                    @Forwarded
+                    let forwarded: Forwarded
+                }
+                """,
+                ],
+                buildDependencyTreeOutput: true
+            )
+        }
+    }
+
     func test_run_onCodeWithIncorrectForwardingInstantiatorFirstGeneric_whenInstantiableHasSingleForwardedProperty_throwsError() async throws {
         await assertThrowsError(
             """
