@@ -50,9 +50,9 @@ actor ScopeGenerator {
             propertiesToGenerate.flatMap { [propertiesToFulfill] propertyToGenerate in
                 // All the properties this child and its children require be passed in.
                 propertyToGenerate.requiredReceivedProperties
-                    // Minus all the properties this child makes for themselves.
+                    // Minus all the properties this child fulfills for themselves.
                     .subtracting(propertyToGenerate.propertiesToFulfill)
-                    // Minus all the properties we create.
+                    // Minus all the properties we fulfill.
                     .subtracting(propertiesToFulfill)
             }
         )
