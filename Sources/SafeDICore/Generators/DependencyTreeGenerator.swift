@@ -215,7 +215,6 @@ public final class DependencyTreeGenerator {
 
         // Populate the propertiesToGenerate on each scope.
         for scope in Set(typeDescriptionToScopeMap.values) {
-            var propertiesToGenerate = [Scope.PropertyToGenerate]()
             for dependency in scope.instantiable.dependencies {
                 switch dependency.source {
                 case .instantiated:
@@ -238,12 +237,12 @@ public final class DependencyTreeGenerator {
                     case .constant, .instantiator:
                         break
                     }
-                    propertiesToGenerate.append(.instantiated(
+                    scope.propertiesToGenerate.append(.instantiated(
                         dependency.property,
                         instantiatedScope
                     ))
                 case let .aliased(fulfillingProperty):
-                    propertiesToGenerate.append(.aliased(
+                    scope.propertiesToGenerate.append(.aliased(
                         dependency.property,
                         fulfilledBy: fulfillingProperty
                     ))
@@ -251,7 +250,6 @@ public final class DependencyTreeGenerator {
                     continue
                 }
             }
-            scope.propertiesToGenerate.append(contentsOf: propertiesToGenerate)
         }
         return typeDescriptionToScopeMap
     }
