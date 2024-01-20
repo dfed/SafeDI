@@ -71,7 +71,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                 public final class DefaultNetworkService: NetworkService {
-                    public init() {}
                     let urlSession: URLSession = .shared
                 }
                 """,
@@ -105,17 +104,12 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                 public final class DefaultNetworkService: NetworkService {
-                    public init() {}
                     let urlSession: URLSession = .shared
                 }
                 """,
                 """
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(networkService: NetworkService) {
-                        self.networkService = networkService
-                    }
-
                     @Instantiated
                     let networkService: NetworkService
                 }
@@ -155,17 +149,12 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                 public final class DefaultNetworkService: NetworkService {
-                    public init() {}
                     let urlSession: URLSession = .shared
                 }
                 """,
                 """
                 @Instantiable
                 public actor Root {
-                    public init(networkService: NetworkService) {
-                        self.networkService = networkService
-                    }
-
                     @Instantiated
                     let networkService: NetworkService
                 }
@@ -205,17 +194,12 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                 public final class DefaultNetworkService: NetworkService {
-                    public init() {}
                     let urlSession: URLSession = .shared
                 }
                 """,
                 """
                 @Instantiable
                 public struct Root {
-                    public init(networkService: NetworkService) {
-                        self.networkService = networkService
-                    }
-
                     @Instantiated
                     let networkService: NetworkService
                 }
@@ -255,7 +239,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                 public final class DefaultNetworkService: NetworkService {
-                    public init() {}
                     let urlSession: URLSession = .shared
                 }
                 """,
@@ -416,10 +399,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
                 public final class DefaultAuthService: AuthService {
-                    public init(networkService: NetworkService) {
-                        self.networkService = networkService
-                    }
-
                     public func login(username: String, password: String) async -> User {
                         User()
                     }
@@ -432,9 +411,7 @@ final class SafeDIToolTests: XCTestCase {
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {
-                    public init() {}
-                }
+                public final class DefaultNetworkService: NetworkService {}
                 """,
                 """
                 import UIKit
@@ -474,12 +451,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class LoggedInViewController: UIViewController {
-
-                    public init(user: User, networkService: NetworkService) {
-                        self.user = user
-                        self.networkService = networkService
-                    }
-
                     @Forwarded
                     private let user: User
 
@@ -529,10 +500,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
                 public final class DefaultAuthService: AuthService {
-                    public init(networkService: NetworkService) {
-                        self.networkService = networkService
-                    }
-
                     public func login(username: String, password: String) async -> User {
                         User()
                     }
@@ -545,9 +512,7 @@ final class SafeDIToolTests: XCTestCase {
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {
-                    public init() {}
-                }
+                public final class DefaultNetworkService: NetworkService {}
                 """,
                 """
                 import UIKit
@@ -585,10 +550,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable
                 public final class UserService {
-                    public init(user: User) {
-                        self.user = user
-                    }
-
                     @Received
                     let user: User
                 }
@@ -598,13 +559,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class LoggedInViewController: UIViewController {
-
-                    public init(user: User, networkService: NetworkService, userService: UserService) {
-                        self.user = user
-                        self.networkService = networkService
-                        self.userService = userService
-                    }
-
                     @Forwarded
                     private let user: User
 
@@ -661,10 +615,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
                 public final class DefaultAuthService: AuthService {
-                    public init(networkService: NetworkService) {
-                        self.networkService = networkService
-                    }
-
                     public func login(username: String, password: String) async -> User {
                         User()
                     }
@@ -677,9 +627,7 @@ final class SafeDIToolTests: XCTestCase {
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {
-                    public init() {}
-                }
+                public final class DefaultNetworkService: NetworkService {}
                 """,
                 """
                 import UIKit
@@ -788,10 +736,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
                 public final class DefaultAuthService: AuthService {
-                    public init(networkService: NetworkService) {
-                        self.networkService = networkService
-                    }
-
                     public func login(username: String, password: String) async -> User {
                         User()
                     }
@@ -804,9 +748,7 @@ final class SafeDIToolTests: XCTestCase {
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {
-                    public init() {}
-                }
+                public final class DefaultNetworkService: NetworkService {}
                 """,
                 """
                 import UIKit
@@ -912,10 +854,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
                 public final class DefaultAuthService: AuthService {
-                    public init(networkService: NetworkService) {
-                        self.networkService = networkService
-                    }
-
                     public func login(username: String, password: String) async -> User {
                         User()
                     }
@@ -928,9 +866,7 @@ final class SafeDIToolTests: XCTestCase {
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {
-                    public init() {}
-                }
+                public final class DefaultNetworkService: NetworkService {}
                 """,
                 """
                 import UIKit
@@ -968,11 +904,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable
                 public final class UserService {
-                    public init(networkService: NetworkService, user: User) {
-                        self.networkService = networkService
-                        self.user = user
-                    }
-
                     @Received
                     let user: User
 
@@ -985,12 +916,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class LoggedInViewController: UIViewController {
-
-                    public init(user: User, userService: UserService) {
-                        self.user = user
-                        self.userService = userService
-                    }
-
                     @Forwarded
                     private let user: User
 
@@ -1018,7 +943,7 @@ final class SafeDIToolTests: XCTestCase {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> { user in
-                        let userService = UserService(networkService: networkService, user: user)
+                        let userService = UserService(user: user, networkService: networkService)
                         return LoggedInViewController(user: user, userService: userService)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
@@ -1041,10 +966,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
                 public final class DefaultAuthService: AuthService {
-                    public init(networkService: NetworkService) {
-                        self.networkService = networkService
-                    }
-
                     public func login(username: String, password: String) async -> User {
                         User()
                     }
@@ -1057,9 +978,7 @@ final class SafeDIToolTests: XCTestCase {
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {
-                    public init() {}
-                }
+                public final class DefaultNetworkService: NetworkService {}
                 """,
                 """
                 import UIKit
@@ -1097,11 +1016,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable
                 public final class UserService {
-                    public init(networkService: NetworkService, user: User) {
-                        self.networkService = networkService
-                        self.user = user
-                    }
-
                     @Received
                     let user: User
 
@@ -1114,12 +1028,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class LoggedInViewController: UIViewController {
-
-                    public init(user: User, userServiceInstantiator: Instantiator<UserService>) {
-                        self.user = user
-                        self.userServiceInstantiator = userServiceInstantiator
-                    }
-
                     @Forwarded
                     private let user: User
 
@@ -1148,7 +1056,7 @@ final class SafeDIToolTests: XCTestCase {
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> { user in
                         let userServiceInstantiator = Instantiator<UserService> {
-                            UserService(networkService: networkService, user: user)
+                            UserService(user: user, networkService: networkService)
                         }
                         return LoggedInViewController(user: user, userServiceInstantiator: userServiceInstantiator)
                     }
@@ -1165,10 +1073,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class Root {
-                    public init(child: Child) {
-                        self.child = child
-                    }
-
                     @Instantiated
                     let child: Child
                 }
@@ -1186,9 +1090,7 @@ final class SafeDIToolTests: XCTestCase {
                 """,
                 """
                 @Instantiable()
-                public final class Grandchild {
-                    public init() {}
-                }
+                public final class Grandchild {}
                 """,
             ],
             buildDependencyTreeOutput: true
@@ -1220,10 +1122,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class Root {
-                    public init(child: Child) {
-                        self.child = child
-                    }
-
                     @Instantiated
                     let child: Child
                 }
@@ -1231,19 +1129,13 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 final class Child {
-                    public init(grandchild: Grandchild) {
-                        self.grandchild = grandchild
-                    }
-
                     @Instantiated
                     let grandchild: Grandchild
                 }
                 """,
                 """
                 @Instantiable()
-                public final class Grandchild {
-                    public init() {}
-                }
+                public final class Grandchild {}
                 """,
             ],
             buildDependencyTreeOutput: true
@@ -1275,10 +1167,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class Root {
-                    public init(child: Child) {
-                        self.child = child
-                    }
-
                     @Instantiated
                     let child: Child
                 }
@@ -1286,19 +1174,13 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 final class Child {
-                    public init(grandchild: Grandchild) {
-                        self.grandchild = grandchild
-                    }
-
                     @Instantiated
                     let grandchild: Grandchild
                 }
                 """,
                 """
                 @Instantiable()
-                public final class Grandchild {
-                    public init() {}
-                }
+                public final class Grandchild {}
                 """,
             ],
             buildDependencyTreeOutput: true
@@ -1330,12 +1212,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class Root {
-                    public init(childA: ChildA, childB: ChildB, greatGrandchild: GreatGrandchild) {
-                        self.childA = childA
-                        self.childB = childB
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Instantiated
                     let childA: ChildA
                     @Instantiated
@@ -1347,11 +1223,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class ChildA {
-                    public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB) {
-                        self.grandchildAA = grandchildAA
-                        self.grandchildAB = grandchildAB
-                    }
-
                     @Instantiated
                     let grandchildAA: GrandchildAA
                     @Instantiated
@@ -1361,10 +1232,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class GrandchildAA {
-                    public init(greatGrandchild: GreatGrandchild) {
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
@@ -1372,10 +1239,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class GrandchildAB {
-                    public init(greatGrandchild: GreatGrandchild) {
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
@@ -1383,11 +1246,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class ChildB {
-                    public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB) {
-                        self.grandchildAA = grandchildAA
-                        self.grandchildAB = grandchildAB
-                    }
-
                     @Instantiated
                     let grandchildBA: GrandchildBA
                     @Instantiated
@@ -1397,10 +1255,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class GrandchildBA {
-                    public init(greatGrandchild: GreatGrandchild) {
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
@@ -1408,19 +1262,13 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class GrandchildBB {
-                    public init(greatGrandchild: GreatGrandchild) {
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable()
-                public final class GreatGrandchild {
-                    public init() {}
-                }
+                public final class GreatGrandchild {}
                 """,
 
             ],
@@ -1460,11 +1308,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class Root {
-                    public init(childA: ChildA, childB: ChildB) {
-                        self.childA = childA
-                        self.childB = childB
-                    }
-
                     @Instantiated
                     let childA: ChildA
                     @Instantiated
@@ -1474,12 +1317,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class ChildA {
-                    public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB, greatGrandchild: GreatGrandchild) {
-                        self.grandchildAA = grandchildAA
-                        self.grandchildAB = grandchildAB
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Instantiated
                     let grandchildAA: GrandchildAA
                     @Instantiated
@@ -1491,10 +1328,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class GrandchildAA {
-                    public init(greatGrandchild: GreatGrandchild) {
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
@@ -1502,10 +1335,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class GrandchildAB {
-                    public init(greatGrandchild: GreatGrandchild) {
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
@@ -1513,12 +1342,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class ChildB {
-                    public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB, greatGrandchild: GreatGrandchild) {
-                        self.grandchildAA = grandchildAA
-                        self.grandchildAB = grandchildAB
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Instantiated
                     let grandchildBA: GrandchildBA
                     @Instantiated
@@ -1530,10 +1353,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class GrandchildBA {
-                    public init(greatGrandchild: GreatGrandchild) {
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
@@ -1541,19 +1360,13 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class GrandchildBB {
-                    public init(greatGrandchild: GreatGrandchild) {
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable()
-                public final class GreatGrandchild {
-                    public init() {}
-                }
+                public final class GreatGrandchild {}
                 """,
 
             ],
@@ -1909,11 +1722,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class Root {
-                    public init(childA: ChildA, childB: ChildB) {
-                        self.childA = childA
-                        self.childB = childB
-                    }
-
                     @Instantiated
                     let childA: ChildA
                     @Instantiated
@@ -1923,11 +1731,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class ChildA {
-                    public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB) {
-                        self.grandchildAA = grandchildAA
-                        self.grandchildAB = grandchildAB
-                    }
-
                     @Instantiated
                     let grandchildAA: GrandchildAA
                     @Instantiated
@@ -1937,10 +1740,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class GrandchildAA {
-                    public init(greatGrandchild: GreatGrandchild) {
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Instantiated
                     let greatGrandchild: GreatGrandchild
                 }
@@ -1948,10 +1747,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class GrandchildAB {
-                    public init(greatGrandchild: GreatGrandchild) {
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Instantiated
                     let greatGrandchild: GreatGrandchild
                 }
@@ -1959,11 +1754,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class ChildB {
-                    public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB) {
-                        self.grandchildAA = grandchildAA
-                        self.grandchildAB = grandchildAB
-                    }
-
                     @Instantiated
                     let grandchildBA: GrandchildBA
                     @Instantiated
@@ -1973,10 +1763,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class GrandchildBA {
-                    public init(greatGrandchild: GreatGrandchild) {
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Instantiated
                     let greatGrandchild: GreatGrandchild
                 }
@@ -1984,19 +1770,13 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class GrandchildBB {
-                    public init(greatGrandchild: GreatGrandchild) {
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Instantiated
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable()
-                public final class GreatGrandchild {
-                    public init() {}
-                }
+                public final class GreatGrandchild {}
                 """,
 
             ],
@@ -2047,11 +1827,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class Root {
-                    public init(child: Child, keyValueStore: KeyValueStore) {
-                        self.child = child
-                        self.keyValueStore = keyValueStore
-                    }
-
                     @Instantiated
                     let child: Child
                     @Instantiated
@@ -2061,10 +1836,6 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 @Instantiable()
                 public final class Child {
-                    public init(keyValueStore: KeyValueStore) {
-                        self.keyValueStore = keyValueStore
-                    }
-
                     @Received
                     let keyValueStore: KeyValueStore
                 }
@@ -2132,10 +1903,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
                 public final class DefaultAuthService: AuthService {
-                    public init(networkService: NetworkService) {
-                        self.networkService = networkService
-                    }
-
                     public func login(username: String, password: String) async -> User {
                         User(username: username)
                     }
@@ -2148,9 +1915,7 @@ final class SafeDIToolTests: XCTestCase {
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {
-                    public init() {}
-                }
+                public final class DefaultNetworkService: NetworkService {}
                 """,
                 """
                 import UIKit
@@ -2190,13 +1955,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class LoggedInViewController: UIViewController {
-
-                    public init(user: User, networkService: NetworkService, keyValueStore: KeyValueStore) {
-                        self.user = user
-                        self.networkService = networkService
-                        self.keyValueStore = keyValueStore
-                    }
-
                     @Forwarded
                     private let user: User
 
@@ -2262,9 +2020,7 @@ final class SafeDIToolTests: XCTestCase {
             swiftFileContent: [
                 """
                 @Instantiable()
-                public final class GreatGrandchild {
-                    public init() {}
-                }
+                public final class GreatGrandchild {}
                 """,
             ],
             buildDependencyTreeOutput: false
@@ -2277,10 +2033,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable()
                 public final class GrandchildAA {
-                    public init(greatGrandchild: GreatGrandchild) {
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Instantiated
                     let greatGrandchild: GreatGrandchild
                 }
@@ -2290,10 +2042,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable()
                 public final class GrandchildAB {
-                    public init(greatGrandchild: GreatGrandchild) {
-                        self.greatGrandchild = greatGrandchild
-                    }
-
                     @Instantiated
                     let greatGrandchild: GreatGrandchild
                 }
@@ -2303,10 +2051,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable()
                 public final class GrandchildBA {
-                    public init(greatGrandchildInstantiator: Instantiator<GreatGrandchild>) {
-                        self.greatGrandchildInstantiator = greatGrandchildInstantiator
-                    }
-
                     @Instantiated
                     var greatGrandchildInstantiator: Instantiator<GreatGrandchild>
                 }
@@ -2316,10 +2060,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable()
                 public final class GrandchildBB {
-                    public init(greatGrandchildInstantiator: Instantiator<GreatGrandchild>) {
-                        self.greatGrandchildInstantiator = greatGrandchildInstantiator
-                    }
-
                     @Instantiated
                     greatGrandchildInstantiator: Instantiator<GreatGrandchild>
                 }
@@ -2337,11 +2077,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable()
                 public final class ChildA {
-                    public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB) {
-                        self.grandchildAA = grandchildAA
-                        self.grandchildAB = grandchildAB
-                    }
-
                     @Instantiated
                     let grandchildAA: GrandchildAA
                     @Instantiated
@@ -2353,11 +2088,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable()
                 public final class ChildB {
-                    public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB) {
-                        self.grandchildAA = grandchildAA
-                        self.grandchildAB = grandchildAB
-                    }
-
                     @Instantiated
                     let grandchildBA: GrandchildBA
                     @Instantiated
@@ -2379,11 +2109,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable()
                 public final class Root {
-                    public init(childA: ChildA, childB: ChildB) {
-                        self.childA = childA
-                        self.childB = childB
-                    }
-
                     @Instantiated
                     let childA: ChildA
                     @Instantiated
@@ -3267,10 +2992,6 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable
                     public final class RootViewController: UIViewController {
-                        public init(networkService: NetworkService) {
-                            self.networkService = networkService
-                        }
-
                         @Instantiated(fulfilledByType: "DoesNotExist")
                         let networkService: NetworkService
                     }
@@ -3296,10 +3017,6 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                     public final class DefaultNetworkService: NetworkService {
-                        public init(urlSession: URLSession) {
-                            self.urlSession = urlSession
-                        }
-
                         @Instantiated
                         let urlSession: URLSession // URLSession is not `@Instantiable`! This will fail!
                     }
@@ -3309,10 +3026,6 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable
                     public final class RootViewController: UIViewController {
-                        public init(networkService: NetworkService) {
-                            self.networkService = networkService
-                        }
-
                         @Instantiated
                         let networkService: NetworkService
                     }
@@ -3339,10 +3052,6 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                     public final class DefaultNetworkService: NetworkService {
-                        public init(urlSession: URLSession) {
-                            self.urlSession = urlSession
-                        }
-
                         @Received
                         let urlSession: URLSession // URLSession is not `@Instantiable`! This will fail!
                     }
@@ -3352,10 +3061,6 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable
                     public final class RootViewController: UIViewController {
-                        public init(networkService: NetworkService) {
-                            self.networkService = networkService
-                        }
-
                         @Instantiated
                         let networkService: NetworkService
                     }
@@ -3496,10 +3201,6 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable
                     public final class RootViewController: UIViewController {
-                        public init(networkService: NetworkService) {
-                            self.networkService = networkService
-                        }
-
                         @Instantiated
                         let networkService: NetworkService
 
@@ -3553,10 +3254,6 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable
                     public final class RootViewController: UIViewController {
-                        public init(networkService: NetworkService) {
-                            self.networkService = networkService
-                        }
-
                         @Instantiated
                         let networkService: NetworkService
 
@@ -3669,10 +3366,6 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable
                     public final class RootViewController: UIViewController {
-                        public init(urlSessionWrapper: URLSessionWrapper) {
-                            self.urlSessionWrapper = urlSessionWrapper
-                        }
-
                         @Instantiated
                         let urlSessionWrapper: URLSessionWrapper
                     }
@@ -3697,12 +3390,8 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable
                     public final class RootViewController: UIViewController {
-                        public init() {}
-
                         @Instantiable
-                        public final class SplashViewController: UIViewController {
-                            public init() {}
-                        }
+                        public final class SplashViewController: UIViewController {}
                     }
                     """,
                 ],
@@ -3724,17 +3413,11 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable
                     public final class RootViewController: UIViewController {
-                        public init() {}
+                        @Instantiable
+                        public final class SplashViewController: UIViewController {}
 
                         @Instantiable
-                        public final class SplashViewController: UIViewController {
-                            public init() {}
-                        }
-
-                        @Instantiable
-                        public final class AuthenticatedViewController: UIViewController {
-                            public init() {}
-                        }
+                        public final class AuthenticatedViewController: UIViewController {}
                     }
                     """,
                 ],
@@ -3755,17 +3438,13 @@ final class SafeDIToolTests: XCTestCase {
                     import UIKit
 
                     @Instantiable
-                    public final class RootViewController: UIViewController {
-                        public init() {}
-                    }
+                    public final class RootViewController: UIViewController {}
                     """,
                     """
                     import UIKit
 
                     @Instantiable
-                    public final class RootViewController: UIViewController {
-                        public init() {}
-                    }
+                    public final class RootViewController: UIViewController {}
                     """,
                 ],
                 buildDependencyTreeOutput: true
@@ -3785,9 +3464,7 @@ final class SafeDIToolTests: XCTestCase {
                     import UIKit
 
                     @Instantiable
-                    public final class RootViewController: UIViewController {
-                        public init() {}
-                    }
+                    public final class RootViewController: UIViewController {}
                     """,
                     """
                     import UIKit
@@ -3851,17 +3528,13 @@ final class SafeDIToolTests: XCTestCase {
                     import UIKit
 
                     @Instantiable(fulfillingAdditionalTypes: [UIViewController.self])
-                    public final class RootViewController: UIViewController {
-                        public init() {}
-                    }
+                    public final class RootViewController: UIViewController {}
                     """,
                     """
                     import UIKit
 
                     @Instantiable(fulfillingAdditionalTypes: [UIViewController.self])
-                    public final class SplashViewController: UIViewController {
-                        public init() {}
-                    }
+                    public final class SplashViewController: UIViewController {}
                     """,
                 ],
                 buildDependencyTreeOutput: true
@@ -3886,10 +3559,6 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                     public final class DefaultNetworkService: NetworkService {
-                        public init(loggingService: LoggingService) {
-                            self.loggingService = loggingService
-                        }
-
                         @Instantiated
                         let loggingService: LoggingService
                     }
@@ -3901,10 +3570,6 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable(fulfillingAdditionalTypes: [LoggingService.self])
                     public final class DefaultLoggingService: LoggingService {
-                        public init(networkService: NetworkService) {
-                            self.networkService = networkService
-                        }
-
                         @Instantiated
                         let networkService: NetworkService
                     }
@@ -3914,10 +3579,6 @@ final class SafeDIToolTests: XCTestCase {
 
                     @Instantiable
                     public final class RootViewController: UIViewController {
-                        public init(networkService: NetworkService) {
-                            self.networkService = networkService
-                        }
-
                         @Instantiated
                         let networkService: NetworkService
                     }
@@ -4028,10 +3689,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
                 public final class DefaultAuthService: AuthService {
-                    public init(networkService: NetworkService) {
-                        self.networkService = networkService
-                    }
-
                     public func login(username: String, password: String) async -> User {
                         User()
                     }
@@ -4044,9 +3701,7 @@ final class SafeDIToolTests: XCTestCase {
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {
-                    public init() {}
-                }
+                public final class DefaultNetworkService: NetworkService {}
                 """,
                 """
                 import UIKit
@@ -4085,12 +3740,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class LoggedInViewController: UIViewController {
-
-                    public init(user: User, networkService: NetworkService) {
-                        self.user = user
-                        self.networkService = networkService
-                    }
-
                     @Forwarded
                     private let user: User
 
@@ -4122,10 +3771,6 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
                 public final class DefaultAuthService: AuthService {
-                    public init(networkService: NetworkService) {
-                        self.networkService = networkService
-                    }
-
                     public func login(username: String, password: String) async -> User {
                         User()
                     }
@@ -4138,9 +3783,7 @@ final class SafeDIToolTests: XCTestCase {
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {
-                    public init() {}
-                }
+                public final class DefaultNetworkService: NetworkService {}
                 """,
                 """
                 import UIKit
