@@ -18,24 +18,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-public struct UnorderedEquatingCollection<Element: Codable & Hashable & Sendable>: Codable, Hashable, Sendable, Collection, ExpressibleByArrayLiteral {
+public struct UnorderedEquatingCollection<Element: Hashable>: Hashable, Collection, ExpressibleByArrayLiteral {
 
     // MARK: Initialization
 
     public init(_ array: [Element]) {
         self.array = array
         set = Set(array)
-    }
-
-    // MARK: Codable
-
-    public init(from decoder: Decoder) throws {
-        self.init(try decoder.singleValueContainer().decode([Element].self))
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(array)
     }
 
     // MARK: Equatable
@@ -75,3 +64,24 @@ public struct UnorderedEquatingCollection<Element: Codable & Hashable & Sendable
     private let array: [Element]
     private let set: Set<Element>
 }
+
+// MARK: - Encodable
+
+extension UnorderedEquatingCollection: Encodable where Element: Encodable {
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(array)
+    }
+}
+
+// MARK: - Decodable
+
+extension UnorderedEquatingCollection: Decodable where Element: Decodable {
+    public init(from decoder: Decoder) throws {
+        self.init(try decoder.singleValueContainer().decode([Element].self))
+    }
+}
+
+// MARK: - Sendable
+
+extension UnorderedEquatingCollection: Sendable where Element: Sendable {}

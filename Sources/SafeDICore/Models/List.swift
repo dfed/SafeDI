@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+@dynamicMemberLookup
 public final class List<Element>: Sequence {
 
     // MARK: Initialization
@@ -26,6 +27,8 @@ public final class List<Element>: Sequence {
         self.value = value
         self.previous = previous
         self.next = next
+        previous?.next = self
+        next?.previous = self
     }
 
     public convenience init?(_ collection: some Collection<Element>) {
@@ -45,22 +48,20 @@ public final class List<Element>: Sequence {
 
     public let value: Element
 
+    public subscript<T>(dynamicMember keyPath: KeyPath<Element, T>) -> T {
+        value[keyPath: keyPath]
+    }
+
     /// Inserts the value after the current element.
     /// - Parameter value: The value to insert into the list.
     /// - Returns: The inserted element in the list.
     @discardableResult
     public func insert(_ value: Element) -> List<Element> {
-        let next = next
-
-        let nextToInsert = List(value: value)
-        self.next = nextToInsert
-
-        nextToInsert.next = next
-        nextToInsert.previous = self
-
-        next?.previous = nextToInsert
-
-        return nextToInsert
+        List(
+            value: value,
+            previous: self,
+            next: next
+        )
     }
 
     /// Removes the receiver from the list.
