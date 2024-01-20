@@ -59,12 +59,6 @@ public struct UnorderedEquatingCollection<Element: Hashable>: Hashable, Collecti
 
     public typealias ArrayLiteralElement = Element
 
-    // MARK: Public
-
-    public func contains(_ member: Element) -> Bool {
-        set.contains(member)
-    }
-
     // MARK: Private
 
     private let array: [Element]
