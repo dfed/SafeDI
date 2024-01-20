@@ -48,7 +48,7 @@ public struct Dependency: Codable, Hashable {
     public let property: Property
     /// The source of the dependency within the dependency tree.
     public let source: Source
-    /// The receiver's type description as an `@Instantiable`-decorated type.
+    /// The receiver’s type description as an `@Instantiable`-decorated type.
     public let asInstantiatedType: TypeDescription
 
     public enum Source: Codable, Hashable {

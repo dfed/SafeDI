@@ -1073,8 +1073,8 @@ final class InstantiableMacroTests: XCTestCase {
             extension ExampleService {
                 public static func instantiate() -> OtherExampleService { fatalError() }
                 ┬───────────────────────────────────────────────────────────────────────
-                ╰─ 🛑 @Instantiable-decorated extension's `instantiate()` method must return the same type as the extended type
-                   ✏️ Make `instantiate()`'s return type the same as the extended type
+                ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must return the same type as the extended type
+                   ✏️ Make `instantiate()`’s return type the same as the extended type
             }
             """
         } fixes: {
@@ -1107,7 +1107,7 @@ final class InstantiableMacroTests: XCTestCase {
             extension ExampleService {
                 public static func instantiate() async -> ExampleService { fatalError() }
                 ┬────────────────────────────────────────────────────────────────────────
-                ╰─ 🛑 @Instantiable-decorated extension's `instantiate()` method must not throw or be async
+                ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must not throw or be async
                    ✏️ Remove effect specifiers
             }
             """
@@ -1141,7 +1141,7 @@ final class InstantiableMacroTests: XCTestCase {
             extension ExampleService {
                 public static func instantiate() throws -> ExampleService { fatalError() }
                 ┬─────────────────────────────────────────────────────────────────────────
-                ╰─ 🛑 @Instantiable-decorated extension's `instantiate()` method must not throw or be async
+                ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must not throw or be async
                    ✏️ Remove effect specifiers
             }
             """
@@ -1175,7 +1175,7 @@ final class InstantiableMacroTests: XCTestCase {
             extension ExampleService {
                 public static func instantiate() async throws -> ExampleService { fatalError() }
                 ┬───────────────────────────────────────────────────────────────────────────────
-                ╰─ 🛑 @Instantiable-decorated extension's `instantiate()` method must not throw or be async
+                ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must not throw or be async
                    ✏️ Remove effect specifiers
             }
             """
@@ -1209,7 +1209,7 @@ final class InstantiableMacroTests: XCTestCase {
             extension ExampleService {
                 public static func instantiate<T>() -> ExampleService { fatalError() }
                 ┬─────────────────────────────────────────────────────────────────────
-                ╰─ 🛑 @Instantiable-decorated extension's `instantiate()` method must not have a generic parameter
+                ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must not have a generic parameter
                    ✏️ Remove generic parameter
             }
             """

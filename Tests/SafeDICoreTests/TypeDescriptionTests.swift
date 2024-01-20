@@ -592,7 +592,7 @@ final class TypeDescriptionTests: XCTestCase {
     private final class CompositionTypeSyntaxVisitor: SyntaxVisitor {
         var composedTypeIdentifier: TypeDescription?
         // Note: ideally we'd visit a node of type CompositionTypeElementListSyntax
-        // but there's no easy way to get a TypeSyntax from an object of that type.
+        // but there’s no easy way to get a TypeSyntax from an object of that type.
         override func visit(_ node: InheritedTypeSyntax) -> SyntaxVisitorContinueKind {
             composedTypeIdentifier = node.type.typeDescription
             return .skipChildren
@@ -653,7 +653,7 @@ final class TypeDescriptionTests: XCTestCase {
     private final class TupleTypeSyntaxVisitor: SyntaxVisitor {
         var tupleTypeIdentifier: TypeDescription?
         // Note: ideally we'd visit a node of type TupleTypeElementListSyntax
-        // but there's no easy way to get a TypeSyntax from an object of that type.
+        // but there’s no easy way to get a TypeSyntax from an object of that type.
         override func visit(_ node: TypeAnnotationSyntax) -> SyntaxVisitorContinueKind {
             tupleTypeIdentifier = node.type.typeDescription
             return .skipChildren
@@ -662,7 +662,7 @@ final class TypeDescriptionTests: XCTestCase {
     private final class ClassRestrictionTypeSyntaxVisitor: SyntaxVisitor {
         var classRestrictionIdentifier: TypeDescription?
         // Note: ideally we'd visit a node of type ClassRestrictionTypeSyntax
-        // but there's no way to get a TypeSyntax from an object of that type.
+        // but there’s no way to get a TypeSyntax from an object of that type.
         override func visit(_ node: InheritedTypeSyntax) -> SyntaxVisitorContinueKind {
             classRestrictionIdentifier = node.type.typeDescription
             return .skipChildren
@@ -671,7 +671,7 @@ final class TypeDescriptionTests: XCTestCase {
     private final class FunctionTypeSyntaxVisitor: SyntaxVisitor {
         var functionIdentifier: TypeDescription?
         // Note: ideally we'd visit a node of type FunctionTypeSyntax
-        // but there's no way to get a TypeSyntax from an object of that type.
+        // but there’s no way to get a TypeSyntax from an object of that type.
         override func visit(_ node: TypeAnnotationSyntax) -> SyntaxVisitorContinueKind {
             functionIdentifier = TypeSyntax(node.type)?.typeDescription
             return .skipChildren

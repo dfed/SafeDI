@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A model capable of generating code for a scope's dependency tree.
+/// A model capable of generating code for a scope’s dependency tree.
 actor ScopeGenerator {
 
     // MARK: Initialization

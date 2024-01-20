@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// Marks a SafeDI dependency that is injected into the enclosing type's initializer and forwarded to objects further down in the dependency tree.
+/// Marks a SafeDI dependency that is injected into the enclosing type’s initializer and forwarded to objects further down in the dependency tree.
 ///
 /// An example of the macro in use:
 ///

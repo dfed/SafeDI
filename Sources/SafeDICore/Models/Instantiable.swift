@@ -48,7 +48,7 @@ public struct Instantiable: Codable, Hashable {
     public let initializer: Initializer?
     /// The ordered dependencies of this Instantiable.
     public let dependencies: [Dependency]
-    /// The declaration type of the Instantiable's concrete type.
+    /// The declaration type of the Instantiable’s concrete type.
     public let declarationType: DeclarationType
 
     /// The type of declaration where this Instantiable was defined.

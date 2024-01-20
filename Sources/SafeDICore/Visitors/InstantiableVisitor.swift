@@ -424,7 +424,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
     private func initializerToGenerate() -> Initializer? {
         guard uninitializedNonOptionalPropertyNames.isEmpty else {
-            // There's an uninitialized property, so we can't generate an initializer.
+            // There’s an uninitialized property, so we can't generate an initializer.
             return nil
         }
         return Initializer(arguments: dependencies.map {

@@ -81,7 +81,7 @@ final class InjectableMacroTests: XCTestCase {
 
                 @Instantiated let  let instantiatedA: InstantiatedA
             }
-            """ // fixes are wrong! It's duplicating the correction. not sure why.
+            """ // fixes are wrong! It’s duplicating the correction. not sure why.
         } expansion: {
             """
             public struct ExampleService {
@@ -91,7 +91,7 @@ final class InjectableMacroTests: XCTestCase {
 
                 let  let instantiatedA: InstantiatedA
             }
-            """ // expansion is wrong! It's duplicating the correction. not sure why.
+            """ // expansion is wrong! It’s duplicating the correction. not sure why.
         }
     }
 

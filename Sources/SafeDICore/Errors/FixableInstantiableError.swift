@@ -48,11 +48,11 @@ public enum FixableInstantiableError: DiagnosticError {
         case .missingAttributes:
             "@\(InstantiableVisitor.macroName)-decorated extension must have an `instantiate()` method that is both `public` and `static`"
         case .disallowedGenericParameter:
-            "@\(InstantiableVisitor.macroName)-decorated extension's `instantiate()` method must not have a generic parameter"
+            "@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must not have a generic parameter"
         case .disallowedEffectSpecifiers:
-            "@\(InstantiableVisitor.macroName)-decorated extension's `instantiate()` method must not throw or be async"
+            "@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must not throw or be async"
         case .incorrectReturnType:
-            "@\(InstantiableVisitor.macroName)-decorated extension's `instantiate()` method must return the same type as the extended type"
+            "@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must return the same type as the extended type"
         case .disallowedGenericWhereClause:
             "@\(InstantiableVisitor.macroName)-decorated extension must not have a generic `where` clause"
         }
@@ -118,7 +118,7 @@ public enum FixableInstantiableError: DiagnosticError {
             case .disallowedEffectSpecifiers:
                 "Remove effect specifiers"
             case .incorrectReturnType:
-                "Make `instantiate()`'s return type the same as the extended type"
+                "Make `instantiate()`’s return type the same as the extended type"
             case .disallowedGenericWhereClause:
                 "Remove generic `where` clause"
             }
