@@ -55,15 +55,13 @@ public final class List<Element>: Sequence {
     /// - Returns: The inserted element in the list.
     @discardableResult
     public func insert(_ value: Element) -> List<Element> {
-        let next = next
-
-        let nextToInsert = List(value: value)
-        self.next = nextToInsert
-
-        nextToInsert.next = next
-        nextToInsert.previous = self
-
+        let nextToInsert = List(
+            value: value,
+            previous: self,
+            next: next
+        )
         next?.previous = nextToInsert
+        next = nextToInsert
 
         return nextToInsert
     }
