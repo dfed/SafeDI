@@ -45,11 +45,9 @@ actor ScopeGenerator {
         }
         self.property = property
         self.propertiesToGenerate = propertiesToGenerate
-        let propertiesToFulfill = Set(propertiesToGenerate.compactMap(\.property))
-        self.propertiesToFulfill = propertiesToFulfill
-
+        propertiesToFulfill = Set(propertiesToGenerate.compactMap(\.property))
         requiredReceivedProperties = Set(
-            propertiesToGenerate.flatMap { propertyToGenerate in
+            propertiesToGenerate.flatMap { [propertiesToFulfill] propertyToGenerate in
                 // All the properties this child and its children require be passed in.
                 propertyToGenerate.requiredReceivedProperties
                     // Minus all the properties this child makes for themselves.
