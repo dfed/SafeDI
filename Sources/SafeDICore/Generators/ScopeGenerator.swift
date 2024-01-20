@@ -216,15 +216,6 @@ actor ScopeGenerator {
             property: Property,
             fulfillingProperty: Property
         )
-
-        var forwardedProperties: Set<Property> {
-            switch self {
-            case let .property(_, _, forwardedProperties):
-                return forwardedProperties
-            case .root, .alias:
-                return []
-            }
-        }
     }
 
     private let scopeData: ScopeData
