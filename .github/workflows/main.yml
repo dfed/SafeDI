@@ -16,6 +16,8 @@ jobs:
         run: sudo xcode-select --switch /Applications/Xcode_15.0.1.app/Contents/Developer
       - name: Build SafeDITool
         run: xcrun swift build -c release --product SafeDITool
+      - name: Give SafeDITool executable permissions
+        run: chmod +x .build/*/release/SafeDITool
       - name: Upload SafeDITool
         uses: actions/upload-artifact@v4
         with:
