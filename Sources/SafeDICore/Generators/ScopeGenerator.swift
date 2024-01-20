@@ -64,6 +64,13 @@ actor ScopeGenerator {
         ).union(propertiesToGenerate
             .flatMap(\.propertiesMadeAvailableByChildren))
         requiredReceivedProperties = Set(
+            // All the properties our children required to be passed in.
+            propertiesToGenerate.flatMap(\.requiredReceivedProperties)
+        )
+        // Minus all the properties our children make for themselves.
+        .subtracting(propertiesMadeAvailableByChildren)
+        // Unioned with the properties we require to fulfill our own dependencies.
+        .union(Set(
             instantiable
                 .dependencies
                 .compactMap {
@@ -76,8 +83,7 @@ actor ScopeGenerator {
                         return fulfillingProperty
                     }
                 }
-        ).union(propertiesToGenerate.flatMap(\.requiredReceivedProperties))
-            .subtracting(propertiesMadeAvailableByChildren)
+        ))
     }
 
     init(
