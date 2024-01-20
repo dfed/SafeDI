@@ -18,9 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
-import SwiftParser
-import SwiftSyntax
 import XCTest
 
 @testable import SafeDICore
@@ -29,15 +26,13 @@ final class UnorderedEquatingCollectionTests: XCTestCase {
 
     func test_makeIterator_iteratesInOrder() {
         for (index, value) in UnorderedEquatingCollection([1, 2, 3]).enumerated() {
-            switch index {
-            case 0:
+            if index == 0 {
                 XCTAssertEqual(value, 1)
-            case 1:
+            } else if index == 1 {
                 XCTAssertEqual(value, 2)
-            case 2:
+            } else {
+                XCTAssertEqual(index, 2)
                 XCTAssertEqual(value, 3)
-            case _:
-                XCTFail("Unexpected index \(index)")
             }
         }
     }

@@ -245,16 +245,35 @@ actor ScopeGenerator {
     private var generateCodeTask: Task<String, Error>?
 
     private func generateProperties(leadingMemberWhitespace: String) async throws -> [String] {
-        var generatedProperties = [String]()
-        let orderedPropertiesToGenerate = propertiesToGenerate.sorted(by: { lhs, rhs in
-            guard let lhsProperty = lhs.property else {
-                return true
-            }
-            // We must generate properties that are required by other properties first
-            return rhs.requiredReceivedProperties.contains(lhsProperty)
-        })
+        guard var orderedPropertiesToGenerate = List(propertiesToGenerate) else { return [] }
+        for propertyToGenerateNode in orderedPropertiesToGenerate {
+            var lastDependency: List<ScopeGenerator>?
+            for nextPropertyToGenerate in propertyToGenerateNode.dropFirst() {
+                guard let nextProperty = nextPropertyToGenerate.value.property else {
+                    continue
+                }
+                let propertyToGenerateDependsOnNextProperty = propertyToGenerateNode
+                    .value
+                    .requiredReceivedProperties
+                    .contains(nextProperty)
 
-        for childGenerator in orderedPropertiesToGenerate {
+                if propertyToGenerateDependsOnNextProperty {
+                    lastDependency = nextPropertyToGenerate
+                }
+            }
+
+            if let lastDependency {
+                // We depend on a (at least one) item further ahead in the list!
+                // Make sure we are created after our dependencies.
+                lastDependency.insert(propertyToGenerateNode.value)
+                if let head = propertyToGenerateNode.remove() {
+                    orderedPropertiesToGenerate = head
+                }
+            }
+        }
+
+        var generatedProperties = [String]()
+        for childGenerator in orderedPropertiesToGenerate.map(\.value) {
             generatedProperties.append(
                 try await childGenerator
                     .generateCode(leadingWhitespace: leadingMemberWhitespace)
