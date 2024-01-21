@@ -19,20 +19,20 @@
 // SOFTWARE.
 
 @dynamicMemberLookup
-public final class List<Element>: Sequence {
+final class List<Element>: Sequence {
 
     // MARK: Initialization
 
-    public init(_ value: Element, next: List? = nil) {
+    init(_ value: Element, next: List? = nil) {
         self.value = value
         self.next = next
     }
 
-    // MARK: Public
+    // MARK: Internal
 
-    public let value: Element
+    let value: Element
 
-    public subscript<T>(dynamicMember keyPath: KeyPath<Element, T>) -> T {
+    subscript<T>(dynamicMember keyPath: KeyPath<Element, T>) -> T {
         value[keyPath: keyPath]
     }
 
@@ -40,7 +40,7 @@ public final class List<Element>: Sequence {
     /// - Parameter value: The value to insert into the list.
     /// - Returns: The inserted element in the list.
     @discardableResult
-    public func insert(_ value: Element) -> List<Element> {
+    func insert(_ value: Element) -> List<Element> {
         let itemToInsert = List(value, next: next)
         next = itemToInsert
         return itemToInsert
@@ -53,22 +53,22 @@ public final class List<Element>: Sequence {
     ///
     /// - Warning: Only call this method on the head of a list.
     @discardableResult
-    public func prepend(_ value: Element) -> List<Element> {
+    func prepend(_ value: Element) -> List<Element> {
         List(value, next: self)
     }
 
     // MARK: Sequence
 
-    public func makeIterator() -> Iterator {
+    func makeIterator() -> Iterator {
         Iterator(node: self)
     }
 
-    public struct Iterator: IteratorProtocol {
+    struct Iterator: IteratorProtocol {
         init(node: List?) {
             self.node = node
         }
 
-        public mutating func next() -> List? {
+        mutating func next() -> List? {
             defer { node = node?.next }
             return node
         }

@@ -247,7 +247,7 @@ actor ScopeGenerator {
                 var lastDependencyFound: List<ScopeGenerator>?
                 for otherPropertyToGenerate in orderedPropertiesToGenerate {
                     if
-                        let otherProperty = otherPropertyToGenerate.value.property,
+                        let otherProperty = otherPropertyToGenerate.property,
                         propertyToGenerate
                             .requiredReceivedProperties
                             .contains(otherProperty)
