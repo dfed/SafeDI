@@ -2410,8 +2410,6 @@ final class SafeDIToolTests: XCTestCase {
 
             extension RootViewController {
                 public convenience init() {
-                    let networkService: NetworkService = DefaultNetworkService()
-                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
                         let profileViewControllerBuilder = Instantiator<ProfileViewController> {
                             let userVendor: UserVendor = userManager
@@ -2422,6 +2420,8 @@ final class SafeDIToolTests: XCTestCase {
                         }
                         return LoggedInViewController(userManager: userManager, profileViewControllerBuilder: profileViewControllerBuilder)
                     }
+                    let networkService: NetworkService = DefaultNetworkService()
+                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
             }
@@ -2862,8 +2862,6 @@ final class SafeDIToolTests: XCTestCase {
 
             extension RootViewController {
                 public convenience init() {
-                    let networkService: NetworkService = DefaultNetworkService()
-                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
                         let userVendor: UserVendor = userManager
                         let profileViewControllerBuilder = Instantiator<ProfileViewController> {
@@ -2874,6 +2872,8 @@ final class SafeDIToolTests: XCTestCase {
                         }
                         return LoggedInViewController(userManager: userManager, userVendor: userVendor, profileViewControllerBuilder: profileViewControllerBuilder)
                     }
+                    let networkService: NetworkService = DefaultNetworkService()
+                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
             }
@@ -3004,8 +3004,6 @@ final class SafeDIToolTests: XCTestCase {
 
             extension RootViewController {
                 public convenience init() {
-                    let networkService: NetworkService = DefaultNetworkService()
-                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
                         let profileViewControllerBuilder = Instantiator<ProfileViewController> {
                             let editProfileViewControllerBuilder = Instantiator<EditProfileViewController> {
@@ -3016,6 +3014,8 @@ final class SafeDIToolTests: XCTestCase {
                         }
                         return LoggedInViewController(userManager: userManager, profileViewControllerBuilder: profileViewControllerBuilder)
                     }
+                    let networkService: NetworkService = DefaultNetworkService()
+                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
             }
@@ -3073,8 +3073,8 @@ final class SafeDIToolTests: XCTestCase {
             extension Root {
                 public convenience init() {
                     let child = {
-                        let unrelated = Unrelated()
                         let greatGrandchild = GreatGrandchild()
+                        let unrelated = Unrelated()
                         let grandchild = Grandchild(greatGrandchild: greatGrandchild)
                         return Child(grandchild: grandchild, unrelated: unrelated, greatGrandchild: greatGrandchild)
                     }()
