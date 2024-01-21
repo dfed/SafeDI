@@ -23,25 +23,9 @@ public final class List<Element>: Sequence {
 
     // MARK: Initialization
 
-    public init(value: Element, previous: List? = nil, next: List? = nil) {
+    public init(_ value: Element, next: List? = nil) {
         self.value = value
-        self.previous = previous
         self.next = next
-        previous?.next = self
-        next?.previous = self
-    }
-
-    public convenience init?(_ collection: some Collection<Element>) {
-        guard let first = collection.first else { return nil }
-        self.init(first: first, remaining: collection.dropFirst())
-    }
-
-    public convenience init(first: Element, remaining: some Collection<Element>) {
-        self.init(value: first)
-        var next = self
-        for element in remaining {
-            next = next.insert(element)
-        }
     }
 
     // MARK: Public
@@ -57,20 +41,20 @@ public final class List<Element>: Sequence {
     /// - Returns: The inserted element in the list.
     @discardableResult
     public func insert(_ value: Element) -> List<Element> {
-        List(
-            value: value,
-            previous: self,
-            next: next
-        )
+        let itemToInsert = List(value, next: next)
+        next = itemToInsert
+        return itemToInsert
     }
 
-    /// Removes the receiver from the list.
-    /// - Returns: The next element in the list, if the current element is the head of the list.
+    /// Prepends the value before the current element.
+    /// This method does not modify previous elements in the list.
+    /// - Parameter value: The value to prepend into the list.
+    /// - Returns: The inserted element in the list.
+    ///
+    /// - Warning: Only call this method on the head of a list.
     @discardableResult
-    public func remove() -> List<Element>? {
-        previous?.next = next
-        next?.previous = previous
-        return previous == nil ? next : nil
+    public func prepend(_ value: Element) -> List<Element> {
+        List(value, next: self)
     }
 
     // MARK: Sequence
@@ -95,5 +79,4 @@ public final class List<Element>: Sequence {
     // MARK: Private
 
     private var next: List? = nil
-    private var previous: List? = nil
 }

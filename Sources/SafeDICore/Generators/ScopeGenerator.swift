@@ -236,39 +236,36 @@ actor ScopeGenerator {
     private var generateCodeTask: Task<String, Error>?
 
     private var orderedPropertiesToGenerate: [ScopeGenerator] {
-        let (propertiesWithoutDependencyOnThisScope, propertiesWithDependencyOnThisScope) = propertiesToGenerate
-            .split { propertyToGenerate in
-                !propertiesToDeclare.isDisjoint(
-                    with: propertyToGenerate.requiredReceivedProperties
-                )
-            }
-        guard var propertiesWithDependencyOnThisScope = List(propertiesWithDependencyOnThisScope) else {
-            return propertiesToGenerate
-        }
-        for propertyToGenerate in propertiesWithDependencyOnThisScope {
-            if let lastDependencyToGenerate = propertyToGenerate
-                // Ignore our own property.
-                .dropFirst()
-                .lazy
-                // Find our dependencies in the remainder of the list.
-                .filter({ futurePropertyToGenerate in
-                    if let futureProperty = futurePropertyToGenerate.property,
-                       propertyToGenerate
-                        .requiredReceivedProperties
-                        .contains(futureProperty)
-                    { true } else { false }
-                })
-                .last
-            {
-                // We depend on (at least) one item further ahead in the list!
-                // Make sure we are created after our dependencies.
-                lastDependencyToGenerate.insert(propertyToGenerate.value)
-                if let head = propertyToGenerate.remove() {
-                    propertiesWithDependencyOnThisScope = head
+        guard let firstPropertyToGenerate = propertiesToGenerate.first else { return [] }
+        var orderedPropertiesToGenerate = List(firstPropertyToGenerate)
+        // Use an interstion-sort algorithm to insert the remaining elements into the ordered list.
+        for propertyToGenerate in propertiesToGenerate.dropFirst() {
+            if propertyToGenerate.requiredReceivedProperties.isEmpty {
+                // This property has no dependencies, so put it at the beginning of the list.
+                orderedPropertiesToGenerate = orderedPropertiesToGenerate.prepend(propertyToGenerate)
+            } else {
+                var lastDependencyFound: List<ScopeGenerator>?
+                for otherPropertyToGenerate in orderedPropertiesToGenerate {
+                    if
+                        let otherProperty = otherPropertyToGenerate.value.property,
+                        propertyToGenerate
+                            .requiredReceivedProperties
+                            .contains(otherProperty)
+                    {
+                        lastDependencyFound = otherPropertyToGenerate
+                    }
+                }
+                if let lastDependencyFound {
+                    // We depend on (at least) one property in the ordered list!
+                    // Make sure we are created after our dependencies.
+                    lastDependencyFound.insert(propertyToGenerate)
+                } else {
+                    // We don't depend on any properties in the ordered list.
+                    orderedPropertiesToGenerate = orderedPropertiesToGenerate.prepend(propertyToGenerate)
                 }
             }
         }
-        return propertiesWithoutDependencyOnThisScope + propertiesWithDependencyOnThisScope.map(\.value)
+        return orderedPropertiesToGenerate.map(\.value)
     }
 
     private func generateProperties(leadingMemberWhitespace: String) async throws -> [String] {
@@ -304,20 +301,5 @@ extension Instantiable {
             .createInitializerArgumentList(
                 given: dependencies
             ) ?? "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
-    }
-}
-
-// MARK: Collection
-
-extension Collection where Index: Hashable {
-    /// Splits a collection into two collections with stable relative ordering of elements based on a predicate.
-    /// - Parameter predicate: A predicate used to split the collection. All elements satisfying this predicate are in the matching partition.
-    /// - Returns: Two collections, where the first contains elements that do not satisfy the predicate, and the second contains elements that satisfy the predicate.
-    fileprivate func split(by predicate: (Element) throws -> Bool) rethrows -> (doesNotMatch: some Collection<Element>, matches: some Collection<Element>) {
-        let matching = try map { (matches: try predicate($0), element: $0) }
-        return (
-            doesNotMatch: matching.lazy.filter { !$0.matches }.map(\.element),
-            matches: matching.lazy.filter(\.matches).map(\.element)
-        )
     }
 }
