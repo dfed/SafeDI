@@ -1,9 +1,8 @@
-name: Build CLI
-
+name: Publish
 on:
   push:
-    branches:
-      - main
+    tags:
+      - '*'
 
 jobs:
   build-release-cli:
@@ -16,8 +15,18 @@ jobs:
         run: sudo xcode-select --switch /Applications/Xcode_15.0.1.app/Contents/Developer
       - name: Build SafeDITool
         run: xcrun swift build -c release --product SafeDITool
-      - name: Upload SafeDITool
+      - name: Give SafeDITool executable permissions
+        run: chmod +x .build/*/release/SafeDITool
+      - name: Upload SafeDITool artifact
         uses: actions/upload-artifact@v4
         with:
           name: SafeDITool
           path: .build/*/release/SafeDITool
+      - name: Upload SafeDITool as release binary
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.RELEASE_UPLOADER }}
+          file: .build/*/release/SafeDITool
+          tag: ${{ github.ref }}
+          overwrite: false
+          file_glob: true
