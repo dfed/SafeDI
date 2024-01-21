@@ -315,11 +315,11 @@ extension Collection where Index: Hashable {
     /// Splits a collection into two collections with stable relative ordering of elements based on a predicate.
     /// - Parameter predicate: A predicate used to split the collection. All elements satisfying this predicate are in the matching partition.
     /// - Returns: Two collections, where the first contains elements that do not satisfy the predicate, and the second contains elements that satisfy the predicate.
-    fileprivate func split(by predicate: (Self.Element) throws -> Bool) rethrows -> (doesNotMatch: some Collection<Element>, matches: some Collection<Element>) {
-        let matchingIndices = try OrderedSet(indices.filter { try predicate(self[$0]) })
+    fileprivate func split(by predicate: (Element) throws -> Bool) rethrows -> (doesNotMatch: some Collection<Element>, matches: some Collection<Element>) {
+        let matching = try map { (matches: try predicate($0), element: $0) }
         return (
-            doesNotMatch: indices.compactMap { matchingIndices.contains($0) ? nil : self[$0] },
-            matches: matchingIndices.map { self[$0] }
+            doesNotMatch: matching.lazy.filter { !$0.matches }.map(\.element),
+            matches: matching.lazy.filter(\.matches).map(\.element)
         )
     }
 }
