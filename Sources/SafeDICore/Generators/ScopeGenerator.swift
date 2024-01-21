@@ -45,13 +45,14 @@ actor ScopeGenerator {
         self.property = property
         self.propertiesToGenerate = propertiesToGenerate
         propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property))
-        propertiesToFulfill = propertiesToDeclare.union(scopeData.forwardedProperties)
         requiredReceivedProperties = Set(
-            propertiesToGenerate.flatMap { [propertiesToFulfill] propertyToGenerate in
+            propertiesToGenerate.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
                 // All the properties this child and its children require be passed in.
                 propertyToGenerate.requiredReceivedProperties
-                    // Minus all the properties we fulfill.
-                    .subtracting(propertiesToFulfill)
+                    // Minus the properties we declare.
+                    .subtracting(propertiesToDeclare)
+                    // Minus the properties we forward.
+                    .subtracting(scopeData.forwardedProperties)
             }
         )
         // Unioned with the properties we require to fulfill our own dependencies.
@@ -79,7 +80,6 @@ actor ScopeGenerator {
         requiredReceivedProperties = [fulfillingProperty]
         propertiesToGenerate = []
         propertiesToDeclare = []
-        propertiesToFulfill = []
         self.property = property
     }
 
@@ -231,8 +231,6 @@ actor ScopeGenerator {
     private let propertiesToGenerate: [ScopeGenerator]
     /// Properties that this scope declares as a `let` constant.
     private let propertiesToDeclare: Set<Property>
-    /// Properties that this scope declares as a `let` constant as well as properties this scope forwards as a closure argument.
-    private let propertiesToFulfill: Set<Property>
     private let property: Property?
 
     private var generateCodeTask: Task<String, Error>?
