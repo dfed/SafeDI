@@ -240,29 +240,24 @@ actor ScopeGenerator {
         var orderedPropertiesToGenerate = List(firstPropertyToGenerate)
         // Use an insertion-sort algorithm to insert the remaining elements into the ordered list.
         for propertyToGenerate in propertiesToGenerate.dropFirst() {
-            if propertyToGenerate.requiredReceivedProperties.isEmpty {
-                // This property has no dependencies, so put it at the beginning of the list.
-                orderedPropertiesToGenerate = orderedPropertiesToGenerate.prepend(propertyToGenerate)
+            if
+                !propertyToGenerate.requiredReceivedProperties.isEmpty,
+                let lastDependencyFound = orderedPropertiesToGenerate.lazy
+                    .filter({ otherPropertyToGenerate in
+                        if
+                            let otherProperty = otherPropertyToGenerate.property,
+                            propertyToGenerate
+                                .requiredReceivedProperties
+                                .contains(otherProperty)
+                        { true } else { false }
+                    }).last
+            {
+                // We depend on (at least) one property in the ordered list!
+                // Make sure we are created after our dependencies.
+                lastDependencyFound.insert(propertyToGenerate)
             } else {
-                var lastDependencyFound: List<ScopeGenerator>?
-                for otherPropertyToGenerate in orderedPropertiesToGenerate {
-                    if
-                        let otherProperty = otherPropertyToGenerate.property,
-                        propertyToGenerate
-                            .requiredReceivedProperties
-                            .contains(otherProperty)
-                    {
-                        lastDependencyFound = otherPropertyToGenerate
-                    }
-                }
-                if let lastDependencyFound {
-                    // We depend on (at least) one property in the ordered list!
-                    // Make sure we are created after our dependencies.
-                    lastDependencyFound.insert(propertyToGenerate)
-                } else {
-                    // We don't depend on any properties in the ordered list.
-                    orderedPropertiesToGenerate = orderedPropertiesToGenerate.prepend(propertyToGenerate)
-                }
+                // We don't depend on any properties in the ordered list.
+                orderedPropertiesToGenerate = orderedPropertiesToGenerate.prepend(propertyToGenerate)
             }
         }
         return orderedPropertiesToGenerate.map(\.value)
