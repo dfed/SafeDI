@@ -238,7 +238,7 @@ actor ScopeGenerator {
     private var orderedPropertiesToGenerate: [ScopeGenerator] {
         guard let firstPropertyToGenerate = propertiesToGenerate.first else { return [] }
         var orderedPropertiesToGenerate = List(firstPropertyToGenerate)
-        // Use an interstion-sort algorithm to insert the remaining elements into the ordered list.
+        // Use an insertion-sort algorithm to insert the remaining elements into the ordered list.
         for propertyToGenerate in propertiesToGenerate.dropFirst() {
             if propertyToGenerate.requiredReceivedProperties.isEmpty {
                 // This property has no dependencies, so put it at the beginning of the list.
