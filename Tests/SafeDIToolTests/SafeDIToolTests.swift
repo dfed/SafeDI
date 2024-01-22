@@ -2411,6 +2411,7 @@ final class SafeDIToolTests: XCTestCase {
             extension RootViewController {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
+                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
                         let profileViewControllerBuilder = Instantiator<ProfileViewController> {
                             let userVendor: UserVendor = userManager
@@ -2421,7 +2422,6 @@ final class SafeDIToolTests: XCTestCase {
                         }
                         return LoggedInViewController(userManager: userManager, profileViewControllerBuilder: profileViewControllerBuilder)
                     }
-                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
             }
@@ -2863,6 +2863,7 @@ final class SafeDIToolTests: XCTestCase {
             extension RootViewController {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
+                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
                         let userVendor: UserVendor = userManager
                         let profileViewControllerBuilder = Instantiator<ProfileViewController> {
@@ -2873,7 +2874,6 @@ final class SafeDIToolTests: XCTestCase {
                         }
                         return LoggedInViewController(userManager: userManager, userVendor: userVendor, profileViewControllerBuilder: profileViewControllerBuilder)
                     }
-                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
             }
@@ -3005,6 +3005,7 @@ final class SafeDIToolTests: XCTestCase {
             extension RootViewController {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
+                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
                         let profileViewControllerBuilder = Instantiator<ProfileViewController> {
                             let editProfileViewControllerBuilder = Instantiator<EditProfileViewController> {
@@ -3015,7 +3016,6 @@ final class SafeDIToolTests: XCTestCase {
                         }
                         return LoggedInViewController(userManager: userManager, profileViewControllerBuilder: profileViewControllerBuilder)
                     }
-                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
             }
@@ -3073,9 +3073,9 @@ final class SafeDIToolTests: XCTestCase {
             extension Root {
                 public convenience init() {
                     let child = {
-                        let unrelated = Unrelated()
                         let greatGrandchild = GreatGrandchild()
                         let grandchild = Grandchild(greatGrandchild: greatGrandchild)
+                        let unrelated = Unrelated()
                         return Child(grandchild: grandchild, unrelated: unrelated, greatGrandchild: greatGrandchild)
                     }()
                     self.init(child: child)
@@ -3430,31 +3430,31 @@ final class SafeDIToolTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    let g = G()
                     let x = X()
-                    let e = E(g: g)
                     let a = A(x: x)
+                    let g = G()
+                    let e = E(g: g)
                     let m = M(e: e)
-                    let f = F(a: a, x: x)
-                    let j = J(a: a, g: g)
                     let o = O(m: m, e: e, g: g, a: a)
-                    let i = I(f: f)
                     let d = D(o: o, g: g)
+                    let f = F(a: a, x: x)
+                    let i = I(f: f)
                     let p = P(i: i, x: x)
                     let n = N(o: o, p: p, e: e)
                     let r = R(a: a, m: m, o: o, n: n, e: e)
                     let t = T(e: e, n: n)
-                    let w = W(a: a, x: x, o: o, n: n)
-                    let k = K(i: i, t: t)
                     let s = S(a: a, t: t, o: o, r: r)
+                    let w = W(a: a, x: x, o: o, n: n)
                     let u = U(p: p, d: d, o: o, w: w, n: n)
-                    let h = H(u: u, g: g)
-                    let q = Q(u: u, t: t, e: e)
                     let y = Y(u: u, p: p)
                     let b = B(a: a, d: d, t: t, o: o, y: y, s: s)
                     let c = C(u: u, n: n, y: y)
+                    let h = H(u: u, g: g)
+                    let j = J(a: a, g: g)
+                    let k = K(i: i, t: t)
                     let v = V(a: a, t: t, o: o, f: f, c: c, i: i, d: d)
                     let l = L(o: o, v: v, e: e)
+                    let q = Q(u: u, t: t, e: e)
                     let z = Z(e: e, p: p, l: l, i: i, n: n)
                     self.init(a: a, b: b, c: c, d: d, e: e, f: f, g: g, h: h, i: i, j: j, k: k, l: l, m: m, n: n, o: o, p: p, q: q, r: r, s: s, t: t, u: u, v: v, w: w, x: x, y: y, z: z)
                 }

@@ -21,7 +21,7 @@
 import Collections
 
 /// A model capable of generating code for a scope’s dependency tree.
-actor ScopeGenerator: CustomStringConvertible, Hashable {
+actor ScopeGenerator: CustomStringConvertible {
 
     // MARK: Initialization
 
@@ -60,7 +60,7 @@ actor ScopeGenerator: CustomStringConvertible, Hashable {
             }
         )
         // Unioned with the properties we require to fulfill our own dependencies.
-        .union(Set(
+        .union(
             instantiable
                 .dependencies
                 .compactMap {
@@ -73,7 +73,7 @@ actor ScopeGenerator: CustomStringConvertible, Hashable {
                         return fulfillingProperty
                     }
                 }
-        ))
+        )
     }
 
     init(
@@ -91,19 +91,6 @@ actor ScopeGenerator: CustomStringConvertible, Hashable {
     // MARK: CustomStringConvertible
 
     let description: String
-
-    // MARK: Equatable
-
-    static func == (lhs: ScopeGenerator, rhs: ScopeGenerator) -> Bool {
-        lhs.scopeData == rhs.scopeData
-    }
-
-    // MARK: Hashable
-
-    nonisolated
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(scopeData)
-    }
 
     // MARK: Internal
 
@@ -259,67 +246,46 @@ actor ScopeGenerator: CustomStringConvertible, Hashable {
 
     private var orderedPropertiesToGenerate: [ScopeGenerator] {
         get throws {
-            // Step 1: Build dependency graph
-            var scopeToIncomingDependencyScopes = [ScopeGenerator: [ScopeGenerator]]()
-            var scopeToOutgoingUnresolvedDependenciesCount = OrderedDictionary<ScopeGenerator, Int>()
+            var orderedPropertiesToGenerate = [ScopeGenerator]()
+            var propertyToUnfulfilledScopeMap = propertiesToGenerate
+                .reduce(into: OrderedDictionary<Property, ScopeGenerator>()) { partialResult, scope in
+                    if let property = scope.property {
+                        partialResult[property] = scope
+                    }
+                }
+            func visit(_ scope: ScopeGenerator, stack: OrderedSet<Property> = []) throws {
+                guard
+                    let property = scope.property,
+                    propertyToUnfulfilledScopeMap[property] != nil
+                else {
+                    return
+                }
+                guard !stack.contains(property) else {
+                    throw GenerationError.dependencyCycleDetected(
+                        stack.drop(while: { $0 != property }) + [property],
+                        scope: self
+                    )
+                }
+
+                let scopeDependencies = propertyToUnfulfilledScopeMap
+                    .keys
+                    .intersection(scope.requiredReceivedProperties)
+                    .compactMap { propertyToUnfulfilledScopeMap[$0] }
+                for dependentScope in scopeDependencies {
+                    var stack = stack
+                    stack.append(property)
+                    try visit(dependentScope, stack: stack)
+                }
+                // This scope has no unfulfilled dependencies!
+                orderedPropertiesToGenerate.append(scope)
+                // Remove the scope since it is now fulfilled.
+                propertyToUnfulfilledScopeMap[property] = nil
+            }
 
             for scope in propertiesToGenerate {
-                // Find dependencies.
-                for otherScope in propertiesToGenerate {
-                    if
-                        let property = otherScope.property,
-                        scope.requiredReceivedProperties.contains(property)
-                    {
-                        scopeToOutgoingUnresolvedDependenciesCount[scope, default: 0] += 1
-                        scopeToIncomingDependencyScopes[otherScope, default: []] += [scope]
-                    }
-                }
+                try visit(scope)
             }
 
-            // Step 2: Topological Sort
-            var nextPropertiesToGenerate = propertiesToGenerate
-                .filter { scopeToOutgoingUnresolvedDependenciesCount[$0] == nil }
-
-            var orderedPropertiesToGenerate = [ScopeGenerator]()
-            while !nextPropertiesToGenerate.isEmpty {
-                let nextProperty = nextPropertiesToGenerate.removeFirst()
-                orderedPropertiesToGenerate.append(nextProperty)
-
-                if let incomingDependencyScopes = scopeToIncomingDependencyScopes[nextProperty] {
-                    for dependantScope in incomingDependencyScopes {
-                        if let dependenciesCount = scopeToOutgoingUnresolvedDependenciesCount[dependantScope] {
-                            let newDependenciesCount = dependenciesCount - 1
-                            scopeToOutgoingUnresolvedDependenciesCount[dependantScope] = newDependenciesCount
-
-                            if newDependenciesCount == 0 {
-                                nextPropertiesToGenerate.append(dependantScope)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Step 3: Check for cycle
-            if !scopeToOutgoingUnresolvedDependenciesCount.isEmpty {
-                func detectCycle(from scope: ScopeGenerator, stack: OrderedSet<Property> = []) throws {
-                    var stack = stack
-                    if let property = scope.property {
-                        if stack.contains(property) {
-                            throw GenerationError.dependencyCycleDetected(
-                                [property] + stack.drop(while: { $0 != property }).reversed(),
-                                scope: self
-                            )
-                        }
-                        stack.append(property)
-                        for nextScope in scopeToIncomingDependencyScopes[scope, default: []] {
-                            try detectCycle(from: nextScope, stack: stack)
-                        }
-                    }
-                }
-                for scope in scopeToOutgoingUnresolvedDependenciesCount.keys {
-                    try detectCycle(from: scope)
-                }
-            }
             return orderedPropertiesToGenerate
         }
     }
