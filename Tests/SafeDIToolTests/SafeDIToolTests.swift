@@ -41,6 +41,7 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
+#if !os(Linux) // Linux does not support multiple invokations of the same test.
     override func invokeTest() {
         // Stop test execution on the first failure so we don't get repeated failures per repeated test run.
         continueAfterFailure = false
@@ -49,6 +50,7 @@ final class SafeDIToolTests: XCTestCase {
             super.invokeTest()
         }
     }
+#endif
 
     // MARK: Code Generation Tests
 
