@@ -1285,15 +1285,15 @@ final class SafeDIToolTests: XCTestCase {
             extension Root {
                 public convenience init() {
                     let greatGrandchild = GreatGrandchild()
-                    let childB = {
-                        let grandchildBA = GrandchildBA(greatGrandchild: greatGrandchild)
-                        let grandchildBB = GrandchildBB(greatGrandchild: greatGrandchild)
-                        return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)
-                    }()
                     let childA = {
                         let grandchildAA = GrandchildAA(greatGrandchild: greatGrandchild)
                         let grandchildAB = GrandchildAB(greatGrandchild: greatGrandchild)
                         return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
+                    }()
+                    let childB = {
+                        let grandchildBA = GrandchildBA(greatGrandchild: greatGrandchild)
+                        let grandchildBB = GrandchildBB(greatGrandchild: greatGrandchild)
+                        return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)
                     }()
                     self.init(childA: childA, childB: childB, greatGrandchild: greatGrandchild)
                 }
@@ -1384,14 +1384,14 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let childA = {
                         let greatGrandchild = GreatGrandchild()
-                        let grandchildAB = GrandchildAB(greatGrandchild: greatGrandchild)
                         let grandchildAA = GrandchildAA(greatGrandchild: greatGrandchild)
+                        let grandchildAB = GrandchildAB(greatGrandchild: greatGrandchild)
                         return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB, greatGrandchild: greatGrandchild)
                     }()
                     let childB = {
                         let greatGrandchild = GreatGrandchild()
-                        let grandchildBB = GrandchildBB(greatGrandchild: greatGrandchild)
                         let grandchildBA = GrandchildBA(greatGrandchild: greatGrandchild)
+                        let grandchildBB = GrandchildBB(greatGrandchild: greatGrandchild)
                         return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB, greatGrandchild: greatGrandchild)
                     }()
                     self.init(childA: childA, childB: childB)
@@ -2411,7 +2411,6 @@ final class SafeDIToolTests: XCTestCase {
             extension RootViewController {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
-                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
                         let profileViewControllerBuilder = Instantiator<ProfileViewController> {
                             let userVendor: UserVendor = userManager
@@ -2422,6 +2421,7 @@ final class SafeDIToolTests: XCTestCase {
                         }
                         return LoggedInViewController(userManager: userManager, profileViewControllerBuilder: profileViewControllerBuilder)
                     }
+                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
             }
@@ -2863,7 +2863,6 @@ final class SafeDIToolTests: XCTestCase {
             extension RootViewController {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
-                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
                         let userVendor: UserVendor = userManager
                         let profileViewControllerBuilder = Instantiator<ProfileViewController> {
@@ -2874,6 +2873,7 @@ final class SafeDIToolTests: XCTestCase {
                         }
                         return LoggedInViewController(userManager: userManager, userVendor: userVendor, profileViewControllerBuilder: profileViewControllerBuilder)
                     }
+                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
             }
@@ -3005,7 +3005,6 @@ final class SafeDIToolTests: XCTestCase {
             extension RootViewController {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
-                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
                         let profileViewControllerBuilder = Instantiator<ProfileViewController> {
                             let editProfileViewControllerBuilder = Instantiator<EditProfileViewController> {
@@ -3016,6 +3015,7 @@ final class SafeDIToolTests: XCTestCase {
                         }
                         return LoggedInViewController(userManager: userManager, profileViewControllerBuilder: profileViewControllerBuilder)
                     }
+                    let authService: AuthService = DefaultAuthService(networkService: networkService)
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
             }
@@ -3079,6 +3079,338 @@ final class SafeDIToolTests: XCTestCase {
                         return Child(grandchild: grandchild, unrelated: unrelated, greatGrandchild: greatGrandchild)
                     }()
                     self.init(child: child)
+                }
+            }
+            """
+        )
+    }
+
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootHasLotsOfDependenciesThatDependOnOneAnother() async throws {
+        let output = try await executeSystemUnderTest(
+            swiftFileContent: [
+                """
+                @Instantiable
+                public final class Root {
+                    @Instantiated
+                    let a: A
+                    @Instantiated
+                    let b: B
+                    @Instantiated
+                    let c: C
+                    @Instantiated
+                    let d: D
+                    @Instantiated
+                    let e: E
+                    @Instantiated
+                    let f: F
+                    @Instantiated
+                    let g: G
+                    @Instantiated
+                    let h: H
+                    @Instantiated
+                    let i: I
+                    @Instantiated
+                    let j: J
+                    @Instantiated
+                    let k: K
+                    @Instantiated
+                    let l: L
+                    @Instantiated
+                    let m: M
+                    @Instantiated
+                    let n: N
+                    @Instantiated
+                    let o: O
+                    @Instantiated
+                    let p: P
+                    @Instantiated
+                    let q: Q
+                    @Instantiated
+                    let r: R
+                    @Instantiated
+                    let s: S
+                    @Instantiated
+                    let t: T
+                    @Instantiated
+                    let u: U
+                    @Instantiated
+                    let v: V
+                    @Instantiated
+                    let w: W
+                    @Instantiated
+                    let x: X
+                    @Instantiated
+                    let y: Y
+                    @Instantiated
+                    let z: Z
+                }
+                """,
+                """
+                @Instantiable
+                public final class A {
+                    @Received
+                    let x: X
+                }
+                """,
+                """
+                @Instantiable
+                public final class B {
+                    @Received
+                    let a: A
+                    @Received
+                    let d: D
+                }
+                """,
+                """
+                @Instantiable
+                public final class C {
+                    @Received
+                    let u: U
+                }
+                """,
+                """
+                @Instantiable
+                public final class D {}
+                """,
+                """
+                @Instantiable
+                public final class E {
+                    @Received
+                    let g: G
+                }
+                """,
+                """
+                @Instantiable
+                public final class F {
+                    @Received
+                    let a: A
+                    @Received
+                    let x: X
+                }
+                """,
+                """
+                @Instantiable
+                public final class G {}
+                """,
+                """
+                @Instantiable
+                public final class H {
+                    @Received
+                    let i: I
+                }
+                """,
+                """
+                @Instantiable
+                public final class I {
+                    @Received
+                    let f: F
+                }
+                """,
+                """
+                @Instantiable
+                public final class J {}
+                """,
+                """
+                @Instantiable
+                public final class K {
+                    @Received
+                    let i: I
+                    @Received
+                    let t: T
+                }
+                """,
+                """
+                @Instantiable
+                public final class L {
+                    @Received
+                    let o: O
+                    @Received
+                    let v: V
+                    @Received
+                    let e: E
+                }
+                """,
+                """
+                @Instantiable
+                public final class M {
+                    @Received
+                    let e: E
+                }
+                """,
+                """
+                @Instantiable
+                public final class N {
+                    @Received
+                    let o: O
+                    @Received
+                    let p: P
+                    @Received
+                    let e: E
+                }
+                """,
+                """
+                @Instantiable
+                public final class O {
+                    @Received
+                    let m: M
+                }
+                """,
+                """
+                @Instantiable
+                public final class P {
+                    @Received
+                    let i: I
+                    @Received
+                    let x: X
+                }
+                """,
+                """
+                @Instantiable
+                public final class Q {
+                    @Received
+                    let u: U
+                }
+                """,
+                """
+                @Instantiable
+                public final class R {
+                    @Received
+                    let a: A
+                    @Received
+                    let m: M
+                    @Received
+                    let o: O
+                    @Received
+                    let n: N
+                    @Received
+                    let e: E
+                }
+                """,
+                """
+                @Instantiable
+                public final class S {
+                    @Received
+                    let a: A
+                    @Received
+                    let t: T
+                    @Received
+                    let o: O
+                    @Received
+                    let r: R
+                }
+                """,
+                """
+                @Instantiable
+                public final class T {
+                    @Received
+                    let e: E
+                    @Received
+                    let n: N
+                }
+                """,
+                """
+                @Instantiable
+                public final class U {
+                    @Received
+                    let p: P
+                }
+                """,
+                """
+                @Instantiable
+                public final class V {
+                    @Received
+                    let a: A
+                    @Received
+                    let t: T
+                    @Received
+                    let o: O
+                    @Received
+                    let f: F
+                    @Received
+                    let c: C
+                    @Received
+                    let i: I
+                    @Received
+                    let d: D
+                }
+                """,
+                """
+                @Instantiable
+                public final class W {
+                    @Received
+                    let a: A
+                    @Received
+                    let x: X
+                }
+                """,
+                """
+                @Instantiable
+                public final class X {}
+                """,
+                """
+                @Instantiable
+                public final class Y {
+                    @Received
+                    let u: U
+                    @Received
+                    let p: P
+                }
+                """,
+                """
+                @Instantiable
+                public final class Z {
+                    @Received
+                    let e: E
+                    @Received
+                    let p: P
+                    @Received
+                    let l: L
+                    @Received
+                    let i: I
+                    @Received
+                    let n: N
+                }
+                """,
+            ],
+            buildDependencyTreeOutput: true
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(output.dependencyTree),
+            """
+            // This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+            // Any modifications made to this file will be overwritten on subsequent builds.
+            // Please refrain from editing this file directly.
+
+            extension Root {
+                public convenience init() {
+                    let d = D()
+                    let g = G()
+                    let j = J()
+                    let x = X()
+                    let e = E(g: g)
+                    let a = A(x: x)
+                    let m = M(e: e)
+                    let b = B(a: a, d: d)
+                    let f = F(a: a, x: x)
+                    let w = W(a: a, x: x)
+                    let o = O(m: m)
+                    let i = I(f: f)
+                    let h = H(i: i)
+                    let p = P(i: i, x: x)
+                    let n = N(o: o, p: p, e: e)
+                    let u = U(p: p)
+                    let r = R(a: a, m: m, o: o, n: n, e: e)
+                    let t = T(e: e, n: n)
+                    let c = C(u: u)
+                    let q = Q(u: u)
+                    let y = Y(u: u, p: p)
+                    let k = K(i: i, t: t)
+                    let s = S(a: a, t: t, o: o, r: r)
+                    let v = V(a: a, t: t, o: o, f: f, c: c, i: i, d: d)
+                    let l = L(o: o, v: v, e: e)
+                    let z = Z(e: e, p: p, l: l, i: i, n: n)
+                    self.init(a: a, b: b, c: c, d: d, e: e, f: f, g: g, h: h, i: i, j: j, k: k, l: l, m: m, n: n, o: o, p: p, q: q, r: r, s: s, t: t, u: u, v: v, w: w, x: x, y: y, z: z)
                 }
             }
             """
@@ -3738,7 +4070,101 @@ final class SafeDIToolTests: XCTestCase {
             )
         }
     }
-    
+
+    func test_run_onCodeWithCircularReceivedDependencies_throwsError() async {
+        await assertThrowsError(
+            """
+            Dependency cycle detected on Root!
+            a: A -> c: C -> b: B -> a: A
+            """
+        ) {
+            try await executeSystemUnderTest(
+                swiftFileContent: [
+                    """
+                    @Instantiable
+                    public struct Root {
+                        @Instantiated
+                        private let a: A
+                        @Instantiated
+                        private let b: B
+                        @Instantiated
+                        private let c: C
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public struct A {
+                        @Received
+                        private let b: B
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public struct B {
+                        @Received
+                        private let c: C
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public struct C {
+                        @Received
+                        private let a: A
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true
+            )
+        }
+    }
+
+    func test_run_onCodeWithCircularReceivedRenamedDependencies_throwsError() async {
+        await assertThrowsError(
+            """
+            Dependency cycle detected on A!
+            b: B -> renamedB: B -> c: C -> b: B
+            """
+        ) {
+            try await executeSystemUnderTest(
+                swiftFileContent: [
+                    """
+                    @Instantiable
+                    public struct Root {
+                        @Instantiated
+                        private let a: A
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public struct A {
+                        @Instantiated
+                        private let b: B
+                        @Received(fulfilledByDependencyNamed: "b", ofType: B.self)
+                        private let renamedB: B
+                        @Instantiated
+                        private let c: C
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public struct B {
+                        @Received
+                        private let c: C
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public struct C {
+                        @Received
+                        private let renamedB: B
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true
+            )
+        }
+    }
+
     func test_run_onCodeWithForwardingInstantiatorSecondGeneric_hasNoForwardedProperty_throwsError() async throws {
         await assertThrowsError(
             """
