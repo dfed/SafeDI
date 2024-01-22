@@ -3159,6 +3159,14 @@ final class SafeDIToolTests: XCTestCase {
                     let a: A
                     @Received
                     let d: D
+                    @Received
+                    let t: T
+                    @Received
+                    let o: O
+                    @Received
+                    let y: Y
+                    @Received
+                    let s: S
                 }
                 """,
                 """
@@ -3166,11 +3174,20 @@ final class SafeDIToolTests: XCTestCase {
                 public final class C {
                     @Received
                     let u: U
+                    @Received
+                    let n: N
+                    @Received
+                    let y: Y
                 }
                 """,
                 """
                 @Instantiable
-                public final class D {}
+                public final class D {
+                    @Received
+                    let o: O
+                    @Received
+                    let g: G
+                }
                 """,
                 """
                 @Instantiable
@@ -3196,7 +3213,9 @@ final class SafeDIToolTests: XCTestCase {
                 @Instantiable
                 public final class H {
                     @Received
-                    let i: I
+                    let u: U
+                    @Received
+                    let g: G
                 }
                 """,
                 """
@@ -3208,7 +3227,12 @@ final class SafeDIToolTests: XCTestCase {
                 """,
                 """
                 @Instantiable
-                public final class J {}
+                public final class J {
+                    @Received
+                    let a: A
+                    @Received
+                    let g: G
+                }
                 """,
                 """
                 @Instantiable
@@ -3253,6 +3277,12 @@ final class SafeDIToolTests: XCTestCase {
                 public final class O {
                     @Received
                     let m: M
+                    @Received
+                    let e: E
+                    @Received
+                    let g: G
+                    @Received
+                    let a: A
                 }
                 """,
                 """
@@ -3269,6 +3299,10 @@ final class SafeDIToolTests: XCTestCase {
                 public final class Q {
                     @Received
                     let u: U
+                    @Received
+                    let t: T
+                    @Received
+                    let e: E
                 }
                 """,
                 """
@@ -3313,6 +3347,14 @@ final class SafeDIToolTests: XCTestCase {
                 public final class U {
                     @Received
                     let p: P
+                    @Received
+                    let d: D
+                    @Received
+                    let o: O
+                    @Received
+                    let w: W
+                    @Received
+                    let n: N
                 }
                 """,
                 """
@@ -3341,6 +3383,10 @@ final class SafeDIToolTests: XCTestCase {
                     let a: A
                     @Received
                     let x: X
+                    @Received
+                    let o: O
+                    @Received
+                    let n: N
                 }
                 """,
                 """
@@ -3384,29 +3430,29 @@ final class SafeDIToolTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    let d = D()
                     let g = G()
-                    let j = J()
                     let x = X()
                     let e = E(g: g)
                     let a = A(x: x)
                     let m = M(e: e)
-                    let b = B(a: a, d: d)
                     let f = F(a: a, x: x)
-                    let w = W(a: a, x: x)
-                    let o = O(m: m)
+                    let j = J(a: a, g: g)
+                    let o = O(m: m, e: e, g: g, a: a)
                     let i = I(f: f)
-                    let h = H(i: i)
+                    let d = D(o: o, g: g)
                     let p = P(i: i, x: x)
                     let n = N(o: o, p: p, e: e)
-                    let u = U(p: p)
                     let r = R(a: a, m: m, o: o, n: n, e: e)
                     let t = T(e: e, n: n)
-                    let c = C(u: u)
-                    let q = Q(u: u)
-                    let y = Y(u: u, p: p)
+                    let w = W(a: a, x: x, o: o, n: n)
                     let k = K(i: i, t: t)
                     let s = S(a: a, t: t, o: o, r: r)
+                    let u = U(p: p, d: d, o: o, w: w, n: n)
+                    let h = H(u: u, g: g)
+                    let q = Q(u: u, t: t, e: e)
+                    let y = Y(u: u, p: p)
+                    let b = B(a: a, d: d, t: t, o: o, y: y, s: s)
+                    let c = C(u: u, n: n, y: y)
                     let v = V(a: a, t: t, o: o, f: f, c: c, i: i, d: d)
                     let l = L(o: o, v: v, e: e)
                     let z = Z(e: e, p: p, l: l, i: i, n: n)
