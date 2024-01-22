@@ -39,9 +39,21 @@ final class InstantiableMacroTests: XCTestCase {
     // MARK: XCTestCase
 
     override func invokeTest() {
-        withMacroTesting(macros: testMacros) {
-            super.invokeTest()
+        func executeTest() {
+            withMacroTesting(macros: testMacros) {
+                super.invokeTest()
+            }
         }
+#if os(Linux) // Linux does not support multiple invokations of the same test.
+        executeTest()
+#else
+        // Stop test execution on the first failure so we don't get repeated failures per repeated test run.
+        continueAfterFailure = false
+        // Run each test five times to ensure ordering is consistent.
+        for _ in 0..<5 {
+            executeTest()
+        }
+#endif
     }
 
     // MARK: Generation tests
