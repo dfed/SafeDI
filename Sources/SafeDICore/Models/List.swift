@@ -19,20 +19,36 @@
 // SOFTWARE.
 
 @dynamicMemberLookup
-final class List<Element>: Sequence {
+public final class List<Element>: Sequence {
 
     // MARK: Initialization
 
-    init(_ value: Element, next: List? = nil) {
+    public init(value: Element, previous: List? = nil, next: List? = nil) {
         self.value = value
+        self.previous = previous
         self.next = next
+        previous?.next = self
+        next?.previous = self
     }
 
-    // MARK: Internal
+    public convenience init?(_ collection: some Collection<Element>) {
+        guard let first = collection.first else { return nil }
+        self.init(first: first, remaining: collection.dropFirst())
+    }
 
-    let value: Element
+    public convenience init(first: Element, remaining: some Collection<Element>) {
+        self.init(value: first)
+        var next = self
+        for element in remaining {
+            next = next.insert(element)
+        }
+    }
 
-    subscript<T>(dynamicMember keyPath: KeyPath<Element, T>) -> T {
+    // MARK: Public
+
+    public let value: Element
+
+    public subscript<T>(dynamicMember keyPath: KeyPath<Element, T>) -> T {
         value[keyPath: keyPath]
     }
 
@@ -40,35 +56,35 @@ final class List<Element>: Sequence {
     /// - Parameter value: The value to insert into the list.
     /// - Returns: The inserted element in the list.
     @discardableResult
-    func insert(_ value: Element) -> List<Element> {
-        let itemToInsert = List(value, next: next)
-        next = itemToInsert
-        return itemToInsert
+    public func insert(_ value: Element) -> List<Element> {
+        List(
+            value: value,
+            previous: self,
+            next: next
+        )
     }
 
-    /// Prepends the value before the current element.
-    /// This method does not modify previous elements in the list.
-    /// - Parameter value: The value to prepend into the list.
-    /// - Returns: The inserted element in the list.
-    ///
-    /// - Warning: Only call this method on the head of a list.
+    /// Removes the receiver from the list.
+    /// - Returns: The next element in the list, if the current element is the head of the list.
     @discardableResult
-    func prepend(_ value: Element) -> List<Element> {
-        List(value, next: self)
+    public func remove() -> List<Element>? {
+        previous?.next = next
+        next?.previous = previous
+        return previous == nil ? next : nil
     }
 
     // MARK: Sequence
 
-    func makeIterator() -> Iterator {
+    public func makeIterator() -> Iterator {
         Iterator(node: self)
     }
 
-    struct Iterator: IteratorProtocol {
+    public struct Iterator: IteratorProtocol {
         init(node: List?) {
             self.node = node
         }
 
-        mutating func next() -> List? {
+        public mutating func next() -> List? {
             defer { node = node?.next }
             return node
         }
@@ -79,4 +95,5 @@ final class List<Element>: Sequence {
     // MARK: Private
 
     private var next: List? = nil
+    private var previous: List? = nil
 }
