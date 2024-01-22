@@ -211,7 +211,7 @@ actor ScopeGenerator: CustomStringConvertible {
 
     // MARK: Private
 
-    private enum ScopeData: Hashable {
+    private enum ScopeData {
         case root(instantiable: Instantiable)
         case property(
             instantiable: Instantiable,
