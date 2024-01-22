@@ -41,6 +41,15 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
+    override func invokeTest() {
+        // Stop test execution on the first failure so we don't get repeated failures per repeated test run.
+        continueAfterFailure = false
+        // Run each test five times to ensure ordering is consistent.
+        for _ in 0..<5 {
+            super.invokeTest()
+        }
+    }
+
     // MARK: Code Generation Tests
 
     func test_run_successfullyGeneratesOutputFileWhenNoCodeInput() async throws {
