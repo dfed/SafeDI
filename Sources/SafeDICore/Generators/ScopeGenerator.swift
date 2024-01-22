@@ -253,7 +253,7 @@ actor ScopeGenerator: CustomStringConvertible {
                         partialResult[property] = scope
                     }
                 }
-            func visit(_ scope: ScopeGenerator, stack: OrderedSet<Property> = []) throws {
+            func fulfill(_ scope: ScopeGenerator, stack: OrderedSet<Property> = []) throws {
                 guard
                     let property = scope.property,
                     propertyToUnfulfilledScopeMap[property] != nil
@@ -271,19 +271,19 @@ actor ScopeGenerator: CustomStringConvertible {
                     .keys
                     .intersection(scope.requiredReceivedProperties)
                     .compactMap { propertyToUnfulfilledScopeMap[$0] }
+                // Fulfill the scopes we depend upon.
                 for dependentScope in scopeDependencies {
                     var stack = stack
                     stack.append(property)
-                    try visit(dependentScope, stack: stack)
+                    try fulfill(dependentScope, stack: stack)
                 }
-                // This scope has no unfulfilled dependencies!
+                // We can now be marked as fulfilled!
                 orderedPropertiesToGenerate.append(scope)
-                // Remove the scope since it is now fulfilled.
                 propertyToUnfulfilledScopeMap[property] = nil
             }
 
             for scope in propertiesToGenerate {
-                try visit(scope)
+                try fulfill(scope)
             }
 
             return orderedPropertiesToGenerate
