@@ -306,7 +306,7 @@ actor ScopeGenerator: CustomStringConvertible, Hashable {
                     if let property = scope.property {
                         if stack.contains(property) {
                             throw GenerationError.dependencyCycleDetected(
-                                stack.drop(while: { $0 != property }) + [property],
+                                [property] + stack.drop(while: { $0 != property }).reversed(),
                                 scope: self
                             )
                         }

@@ -4075,7 +4075,7 @@ final class SafeDIToolTests: XCTestCase {
         await assertThrowsError(
             """
             Dependency cycle detected on Root!
-            a: A -> c: C -> b: B -> a: A
+            a: A -> b: B -> c: C -> a: A
             """
         ) {
             try await executeSystemUnderTest(
@@ -4122,7 +4122,7 @@ final class SafeDIToolTests: XCTestCase {
         await assertThrowsError(
             """
             Dependency cycle detected on A!
-            b: B -> renamedB: B -> c: C -> b: B
+            b: B -> c: C -> renamedB: B -> b: B
             """
         ) {
             try await executeSystemUnderTest(
