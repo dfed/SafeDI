@@ -23,8 +23,8 @@ let package = Package(
         /// A SafeDI plugin that must be run on the root source module in a project.
         .plugin(
             name: "SafeDIGenerator",
-            targets: ["SafeDIGenerateDependencyTree"]
-        )
+            targets: ["SafeDIGenerator"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.0"),
@@ -69,7 +69,7 @@ let package = Package(
 
         // Plugins
         .plugin(
-            name: "SafeDIGenerateDependencyTree",
+            name: "SafeDIGenerator",
             capability: .buildTool(),
             dependencies: ["SafeDITool"]
         ),

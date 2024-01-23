@@ -41,16 +41,31 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
             outputSwiftFile.string
         ]
 
+        let toolPath: PackagePlugin.Path
+        if FileManager.default.fileExists(atPath: Self.armMacBrewInstallLocation) {
+            // SafeDITool has been installed via homebrew on an ARM Mac.
+            toolPath = PackagePlugin.Path(Self.armMacBrewInstallLocation)
+        } else if FileManager.default.fileExists(atPath: Self.intelMacBrewInstallLocation) {
+            // SafeDITool has been installed via homebrew on an Intel Mac.
+            toolPath = PackagePlugin.Path(Self.intelMacBrewInstallLocation)
+        } else {
+            // Fall back to the just-in-time built tool.
+            toolPath = try context.tool(named: "SafeDITool").path
+        }
+
         return [
             .buildCommand(
                 displayName: "SafeDIGenerateDependencyTree",
-                executable: try context.tool(named: "SafeDITool").path,
+                executable: toolPath,
                 arguments: arguments,
                 environment: [:],
                 inputFiles: targetSwiftFiles + dependenciesSourceFiles,
                 outputFiles: [outputSwiftFile])
         ]
     }
+
+    private static let armMacBrewInstallLocation = "/opt/homebrew/bin/safeditool"
+    private static let intelMacBrewInstallLocation = "/usr/local/bin/safeditool"
 }
 
 extension Target {
