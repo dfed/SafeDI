@@ -17,16 +17,54 @@ jobs:
         run: xcrun swift build -c release --product SafeDITool
       - name: Give SafeDITool executable permissions
         run: chmod +x .build/*/release/SafeDITool
+      - name: Make codesigning folder
+        run:  |
+          mkdir codesign
+          cp .build/*/release/SafeDITool codesign/
+      - name: Codesign
+        run: |
+          # Decode the p12 certificate
+          echo "${{ secrets.BASE_64_ENCODED_P12 }}" | base64 --decode > codesign/certificate.p12
+          # Create a new keychain
+          security create-keychain -p "" build.keychain
+          # Import the p12 into the keychain
+          security import codesign/certificate.p12 -k build.keychain -P "${{ secrets.P12_PASSWORD }}" -T /usr/bin/codesign
+          # Add the new keychain to the list of keychains to search
+          security list-keychains -s build.keychain
+          # Make the new keychain the default keychain
+          security default-keychain -s build.keychain
+          # Unlock the keychain so it can be used
+          security unlock-keychain -p "" build.keychain
+          # Allows codesign access to the keys in the keychain without user interaction
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          # Codesign
+          codesign --force --options runtime --timestamp --sign "${{ secrets.DEVELOPER_ID_CERTIFICATE }}" codesign/SafeDITool
+      - name: Notarize
+        run: |
+          # Create zip
+          pushd codesign && zip -r SafeDITool.zip SafeDITool && popd
+          # Delete original, unsigned tool
+          rm codesign/SafeDITool
+          # Create p8 file
+          echo "${{ secrets.NOTARY_P8 }}" > codesign/AuthKey_${{ secrets.NOTARY_KEY_ID }}.p8
+          # Notarize
+          xcrun notarytool submit codesign/SafeDITool.zip --key codesign/AuthKey_${{ secrets.NOTARY_KEY_ID }}.p8 --key-id ${{ secrets.NOTARY_KEY_ID }} --issuer ${{ secrets.NOTARY_ISSUER_ID }}
+      - name: Unzip notarized tool
+        run: pushd codesign && unzip SafeDITool.zip && popd
       - name: Upload SafeDITool artifact
         uses: actions/upload-artifact@v4
         with:
           name: SafeDITool
-          path: .build/*/release/SafeDITool
+          path: codesign/SafeDITool
       - name: Upload SafeDITool as release binary
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.RELEASE_UPLOADER }}
-          file: .build/*/release/SafeDITool
+          file: codesign/SafeDITool
           tag: ${{ github.ref }}
           overwrite: false
-          file_glob: true
+      - name: Cleanup
+        if: always() # This ensures that the cleanup step runs even if earlier steps fail
+        run: |
+          security delete-keychain build.keychain
+          rm -rf codesign

@@ -3,3 +3,4 @@ xcuserdata/
 checkout/
 .swiftpm
 .build/
+codesign/
