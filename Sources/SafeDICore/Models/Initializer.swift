@@ -306,11 +306,11 @@ extension TypeDescription {
                     .tuple,
                     .closure,
                     .unknown:
-                return self == argumentTypeDescription
+                self == argumentTypeDescription
                 && argumentSpecifier == nil
                 && (argumentAttributes ?? []).contains("escaping")
             case let .attributed(parameterTypeDescription, parameterSpecifier, parameterAttributes):
-                return parameterTypeDescription == argumentTypeDescription
+                parameterTypeDescription == argumentTypeDescription
                 && parameterSpecifier == argumentSpecifier
                 && Set(argumentAttributes ?? []).subtracting(parameterAttributes ?? []) == ["escaping"]
             }
@@ -327,7 +327,7 @@ extension TypeDescription {
                 .dictionary,
                 .tuple,
                 .unknown:
-            return self == argument
+            self == argument
         }
     }
 }
