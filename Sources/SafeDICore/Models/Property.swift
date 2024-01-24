@@ -55,11 +55,37 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
     }
 
     var asFunctionParamter: FunctionParameterSyntax {
-        FunctionParameterSyntax(
-            firstName: .identifier(label),
-            colon: .colonToken(trailingTrivia: .space),
-            type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
-        )
+        switch typeDescription {
+        case .closure:
+            FunctionParameterSyntax(
+                firstName: .identifier(label),
+                colon: .colonToken(trailingTrivia: .space),
+                type: AttributedTypeSyntax(
+                    attributes: AttributeListSyntax {
+                        AttributeSyntax(attributeName: IdentifierTypeSyntax(name: "escaping"))
+                    },
+                    baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
+                )
+            )
+        case .simple,
+                .nested,
+                .composition,
+                .optional,
+                .implicitlyUnwrappedOptional,
+                .some,
+                .any,
+                .metatype,
+                .attributed,
+                .array,
+                .dictionary,
+                .tuple,
+                .unknown:
+            FunctionParameterSyntax(
+                firstName: .identifier(label),
+                colon: .colonToken(trailingTrivia: .space),
+                type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
+            )
+        }
     }
 
     var asTupleElement: TupleTypeElementSyntax {
