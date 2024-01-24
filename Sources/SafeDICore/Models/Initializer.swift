@@ -177,7 +177,7 @@ public struct Initializer: Codable, Hashable {
         try arguments.reduce(into: [(dependency: Dependency, argument: Argument)]()) { partialResult, argument in
             guard let dependency = dependencies.first(where: {
                 $0.property.label == argument.innerLabel
-                && $0.property.typeDescription == argument.typeDescription
+                && $0.property.typeDescription.isEqualToFunctionArgument(argument.typeDescription)
             }) else {
                 throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
             }
@@ -282,6 +282,52 @@ extension ConcreteDeclType {
                     trailingTrivia: .space
                 )
             )
+        }
+    }
+}
+
+// MARK: - TypeDescription
+
+extension TypeDescription {
+    fileprivate func isEqualToFunctionArgument(_ argument: TypeDescription) -> Bool {
+        switch argument {
+        case let .attributed(argumentTypeDescription, argumentSpecifier, argumentAttributes):
+            switch self {
+            case .simple,
+                    .nested,
+                    .composition,
+                    .optional,
+                    .implicitlyUnwrappedOptional,
+                    .some,
+                    .any,
+                    .metatype,
+                    .array,
+                    .dictionary,
+                    .tuple,
+                    .closure,
+                    .unknown:
+                self == argumentTypeDescription
+                && argumentSpecifier == nil
+                && (argumentAttributes ?? []).contains("escaping")
+            case let .attributed(parameterTypeDescription, parameterSpecifier, parameterAttributes):
+                parameterTypeDescription == argumentTypeDescription
+                && parameterSpecifier == argumentSpecifier
+                && Set(argumentAttributes ?? []).subtracting(parameterAttributes ?? []) == ["escaping"]
+            }
+        case .simple,
+                .nested,
+                .composition,
+                .optional,
+                .implicitlyUnwrappedOptional,
+                .some,
+                .any,
+                .metatype,
+                .closure,
+                .array,
+                .dictionary,
+                .tuple,
+                .unknown:
+            self == argument
         }
     }
 }

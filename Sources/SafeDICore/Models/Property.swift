@@ -55,11 +55,54 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
     }
 
     var asFunctionParamter: FunctionParameterSyntax {
-        FunctionParameterSyntax(
-            firstName: .identifier(label),
-            colon: .colonToken(trailingTrivia: .space),
-            type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
-        )
+        switch typeDescription {
+        case .closure:
+            FunctionParameterSyntax(
+                firstName: .identifier(label),
+                colon: .colonToken(trailingTrivia: .space),
+                type: AttributedTypeSyntax(
+                    attributes: AttributeListSyntax {
+                        AttributeSyntax(attributeName: IdentifierTypeSyntax(name: "escaping"))
+                    },
+                    baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
+                )
+            )
+        case let .attributed(typeDescription, _, attributes):
+            FunctionParameterSyntax(
+                firstName: .identifier(label),
+                colon: .colonToken(trailingTrivia: .space),
+                type: AttributedTypeSyntax(
+                    // It is not possible for a property declaration to have specifiers today.
+                    specifier: nil,
+                    attributes: AttributeListSyntax {
+                        AttributeSyntax(attributeName: IdentifierTypeSyntax(name: "escaping"))
+                        if let attributes {
+                            for attribute in attributes {
+                                AttributeSyntax(attributeName: IdentifierTypeSyntax(name: .identifier(attribute)))
+                            }
+                        }
+                    },
+                    baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
+                )
+            )
+        case .simple,
+                .nested,
+                .composition,
+                .optional,
+                .implicitlyUnwrappedOptional,
+                .some,
+                .any,
+                .metatype,
+                .array,
+                .dictionary,
+                .tuple,
+                .unknown:
+            FunctionParameterSyntax(
+                firstName: .identifier(label),
+                colon: .colonToken(trailingTrivia: .space),
+                type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
+            )
+        }
     }
 
     var asTupleElement: TupleTypeElementSyntax {
