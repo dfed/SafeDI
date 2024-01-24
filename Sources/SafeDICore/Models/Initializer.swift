@@ -293,10 +293,6 @@ extension TypeDescription {
         switch argument {
         case let .attributed(argumentTypeDescription, argumentSpecifier, argumentAttributes):
             switch self {
-            case .closure:
-                return self == argumentTypeDescription
-                && argumentSpecifier == nil
-                && argumentAttributes == ["escaping"]
             case .simple,
                     .nested,
                     .composition,
@@ -305,12 +301,18 @@ extension TypeDescription {
                     .some,
                     .any,
                     .metatype,
-                    .attributed,
                     .array,
                     .dictionary,
                     .tuple,
+                    .closure,
                     .unknown:
-                return self == argument
+                return self == argumentTypeDescription
+                && argumentSpecifier == nil
+                && (argumentAttributes ?? []).contains("escaping")
+            case let .attributed(parameterTypeDescription, parameterSpecifier, parameterAttributes):
+                return parameterTypeDescription == argumentTypeDescription
+                && parameterSpecifier == argumentSpecifier
+                && Set(argumentAttributes ?? []).subtracting(parameterAttributes ?? []) == ["escaping"]
             }
         case .simple,
                 .nested,

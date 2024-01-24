@@ -67,6 +67,24 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
                     baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
                 )
             )
+        case let .attributed(typeDescription, _, attributes):
+            FunctionParameterSyntax(
+                firstName: .identifier(label),
+                colon: .colonToken(trailingTrivia: .space),
+                type: AttributedTypeSyntax(
+                    // It is not possible for a property declaration to have specifiers today.
+                    specifier: nil,
+                    attributes: AttributeListSyntax {
+                        AttributeSyntax(attributeName: IdentifierTypeSyntax(name: "escaping"))
+                        if let attributes {
+                            for attribute in attributes {
+                                AttributeSyntax(attributeName: IdentifierTypeSyntax(name: .identifier(attribute)))
+                            }
+                        }
+                    },
+                    baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
+                )
+            )
         case .simple,
                 .nested,
                 .composition,
@@ -75,7 +93,6 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
                 .some,
                 .any,
                 .metatype,
-                .attributed,
                 .array,
                 .dictionary,
                 .tuple,
