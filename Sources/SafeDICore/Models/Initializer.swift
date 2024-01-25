@@ -305,7 +305,8 @@ extension TypeDescription {
                     .dictionary,
                     .tuple,
                     .closure,
-                    .unknown:
+                    .unknown,
+                    .void:
                 self == argumentTypeDescription
                 && argumentSpecifier == nil
                 && (argumentAttributes ?? []).contains("escaping")
@@ -326,7 +327,8 @@ extension TypeDescription {
                 .array,
                 .dictionary,
                 .tuple,
-                .unknown:
+                .unknown,
+                .void:
             self == argument
         }
     }

@@ -96,7 +96,8 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
                 .array,
                 .dictionary,
                 .tuple,
-                .unknown:
+                .unknown,
+                .void:
             FunctionParameterSyntax(
                 firstName: .identifier(label),
                 colon: .colonToken(trailingTrivia: .space),
@@ -123,7 +124,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
             } else {
                 return .constant
             }
-        case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .optional, .some, .tuple, .unknown:
+        case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .optional, .some, .tuple, .unknown, .void:
             return .constant
         }
     }
@@ -133,7 +134,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
         case let .simple(_, generics),
             let .nested(_, _, generics):
             return generics
-        case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown:
+        case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
             return []
         }
     }

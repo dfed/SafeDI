@@ -27,6 +27,19 @@ import XCTest
 
 final class TypeDescriptionTests: XCTestCase {
 
+    func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAVoidTypeIdentifierSyntax_findsTheType() throws {
+        let content = """
+            var void: Void = ()
+            """
+
+        let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+
+        let typeDescription = try XCTUnwrap(visitor.typeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Void")
+    }
+
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingATypeIdentifierSyntax_findsTheType() throws {
         let content = """
             var int: Int = 1
@@ -302,6 +315,45 @@ final class TypeDescriptionTests: XCTestCase {
         XCTAssertEqual(typeDescription.asSource, "Dictionary<Int, Dictionary<Int, String>>")
     }
 
+    func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAVoidTupleTypeSyntax_findsTheType() throws {
+        let content = """
+            var voidTuple: ()
+            """
+
+        let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+
+        let typeDescription = try XCTUnwrap(visitor.tupleTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "()")
+    }
+
+    func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingASpelledOutVoidWrappedInTupleTypeSyntax_findsTheType() throws {
+        let content = """
+            var voidTuple: (Void)
+            """
+
+        let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+
+        let typeDescription = try XCTUnwrap(visitor.tupleTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Void")
+    }
+
+    func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAVoidWrappedInTupleTypeSyntax_findsTheType() throws {
+        let content = """
+            var voidTuple: (())
+            """
+
+        let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+
+        let typeDescription = try XCTUnwrap(visitor.tupleTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "()")
+    }
+
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingATupleTypeSyntax_findsTheType() throws {
         let content = """
             var tuple: (Int, String)
@@ -313,6 +365,19 @@ final class TypeDescriptionTests: XCTestCase {
         let typeDescription = try XCTUnwrap(visitor.tupleTypeIdentifier)
         XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
         XCTAssertEqual(typeDescription.asSource, "(Int, String)")
+    }
+
+    func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingASigleElementTupleTypeSyntax_findsTheType() throws {
+        let content = """
+            var tupleWrappedString: (String)
+            """
+
+        let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+
+        let typeDescription = try XCTUnwrap(visitor.tupleTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "String")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAClassRestrictionTypeSyntax_findsTheType() throws {
@@ -351,6 +416,18 @@ final class TypeDescriptionTests: XCTestCase {
         let typeDescription = try XCTUnwrap(visitor.functionIdentifier)
         XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
         XCTAssertEqual(typeDescription.asSource, "(Int, Double) throws -> String")
+    }
+
+    func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAVoidType_findsTheType() throws {
+        let content = """
+            let type: Void.Type = Void.self
+            """
+        let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+
+        let typeDescription = try XCTUnwrap(visitor.typeDescription)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "Void")
     }
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingASimpleType_findsTheType() throws {
@@ -511,7 +588,7 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAThrowingClosureType_findsTheType() throws {
         let content = """
-            let test: Any.Type = (() throws -> ()).self
+            let test: Any.Type = (((() throws -> ()))).self
             """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -545,6 +622,20 @@ final class TypeDescriptionTests: XCTestCase {
     func test_asSource_whenDescribingAnUnknownCase_returnsTheProvidedStringWithTrailingWhitespaceStripped() {
         let typeDescription = TypeSyntax(stringLiteral: "<[]>    ").typeDescription
         XCTAssertEqual(typeDescription.asSource, "<[]>")
+    }
+
+    func test_equality_isTrueWhenComparingDifferentVoidSpellings() {
+        XCTAssertEqual(
+            TypeDescription.void(.identifier),
+            TypeDescription.void(.tuple)
+        )
+    }
+
+    func test_equality_isTrueWhenComparingDifferentVoidSpellingsInHashedCollections() {
+        XCTAssertEqual(
+            Set([TypeDescription.void(.identifier)]),
+            Set([TypeDescription.void(.tuple)])
+        )
     }
 
     func test_equality_isTrueWhenComparingLexigraphicallyEquivalentCompositions() {

@@ -47,7 +47,7 @@ public struct InjectableMacro: PeerMacro {
                 switch TypeSyntax(stringLiteral: stringLiteral).typeDescription {
                 case .simple:
                     break
-                case .nested, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown:
+                case .nested, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown, .void:
                     throw InjectableError.fulfilledByTypeArgumentInvalidTypeDescription
                 }
             } else {
