@@ -142,8 +142,9 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     }
 
     public enum VoidRepresentation: String, Codable, Hashable, Sendable, CustomStringConvertible {
-        /// Whether the Void is represented by a tuple or spelling.
+        /// The `()` representation
         case tuple
+        /// The `Void` representation
         case identifier
 
         public static func == (lhs: VoidRepresentation, rhs: VoidRepresentation) -> Bool {
