@@ -296,11 +296,17 @@ public final class DependencyTreeGenerator {
                 let parentContainsProperty = receivableProperties.contains(receivedProperty)
                 let propertyIsCreatedAtThisScope = createdProperties.contains(receivedProperty)
                 if !parentContainsProperty && !propertyIsCreatedAtThisScope {
-                    unfulfillableProperties.insert(.init(
-                        property: receivedProperty,
-                        instantiable: scope.instantiable,
-                        parentStack: instantiables.elements)
-                    )
+                    if instantiables.elements.isEmpty {
+                        // This property's scope is not a real root instantiable! Remove it from the list.
+                        rootInstantiableTypes.remove(scope.instantiable.concreteInstantiableType)
+                    } else {
+                        // This property is in a dependency tree and is unfulfillable. Record the problem.
+                        unfulfillableProperties.insert(.init(
+                            property: receivedProperty,
+                            instantiable: scope.instantiable,
+                            parentStack: instantiables.elements)
+                        )
+                    }
                 }
             }
 
@@ -338,21 +344,7 @@ public final class DependencyTreeGenerator {
         }
 
         if !unfulfillableProperties.isEmpty {
-            var unfulfillableProperties = Array(unfulfillableProperties)
-            let indexOfFirstThrowableProperty = unfulfillableProperties.partition {
-                // If the parent stack is empty, then the issue must be an unsatisfiable aliased property on a potential root.
-                !$0.parentStack.isEmpty
-            }
-            // Remove instantiables with unsatisfiable aliases from the root instantiable types list.
-            for unfulfillableProperty in unfulfillableProperties[0..<indexOfFirstThrowableProperty] {
-                rootInstantiableTypes.remove(unfulfillableProperty.instantiable.concreteInstantiableType)
-            }
-            // If we have unsatisfiable properties on instantiated types, throw the error.
-            let throwableUnfulfillableProperties = unfulfillableProperties[indexOfFirstThrowableProperty..<unfulfillableProperties.count]
-            guard !throwableUnfulfillableProperties.isEmpty else {
-                return
-            }
-            throw DependencyTreeGeneratorError.unfulfillableProperties(throwableUnfulfillableProperties.sorted())
+            throw DependencyTreeGeneratorError.unfulfillableProperties(unfulfillableProperties.sorted())
         }
     }
 
