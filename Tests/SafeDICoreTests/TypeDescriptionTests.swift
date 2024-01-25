@@ -624,6 +624,20 @@ final class TypeDescriptionTests: XCTestCase {
         XCTAssertEqual(typeDescription.asSource, "<[]>")
     }
 
+    func test_equality_isTrueWhenComparingDifferentVoidSpellings() {
+        XCTAssertEqual(
+            TypeDescription.void(.identifier),
+            TypeDescription.void(.tuple)
+        )
+    }
+
+    func test_equality_isTrueWhenComparingDifferentVoidSpellingsInHashedCollections() {
+        XCTAssertEqual(
+            Set([TypeDescription.void(.identifier)]),
+            Set([TypeDescription.void(.tuple)])
+        )
+    }
+
     func test_equality_isTrueWhenComparingLexigraphicallyEquivalentCompositions() {
         XCTAssertEqual(
             TypeDescription.composition([
