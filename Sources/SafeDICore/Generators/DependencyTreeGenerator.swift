@@ -148,7 +148,7 @@ public final class DependencyTreeGenerator {
     private lazy var possibleRootInstantiableTypes: Set<TypeDescription> = Set(
         typeDescriptionToFulfillingInstantiableMap
             .values
-            .filter(\.dependencies.areAllInstantiated)
+            .filter(\.dependencies.couldRepresentRoot)
             .map(\.concreteInstantiableType)
     )
 
@@ -296,11 +296,17 @@ public final class DependencyTreeGenerator {
                 let parentContainsProperty = receivableProperties.contains(receivedProperty)
                 let propertyIsCreatedAtThisScope = createdProperties.contains(receivedProperty)
                 if !parentContainsProperty && !propertyIsCreatedAtThisScope {
-                    unfulfillableProperties.insert(.init(
-                        property: receivedProperty,
-                        instantiable: scope.instantiable,
-                        parentStack: instantiables.elements)
-                    )
+                    if instantiables.elements.isEmpty {
+                        // This property's scope is not a real root instantiable! Remove it from the list.
+                        rootInstantiableTypes.remove(scope.instantiable.concreteInstantiableType)
+                    } else {
+                        // This property is in a dependency tree and is unfulfillable. Record the problem.
+                        unfulfillableProperties.insert(.init(
+                            property: receivedProperty,
+                            instantiable: scope.instantiable,
+                            parentStack: instantiables.elements)
+                        )
+                    }
                 }
             }
 
@@ -357,26 +363,33 @@ extension Dependency {
     fileprivate var isInstantiated: Bool {
         switch source {
         case .instantiated:
-            return true
+            true
         case .aliased, .forwarded, .received:
-            return false
+            false
         }
     }
     fileprivate var isForwarded: Bool {
         switch source {
         case .forwarded:
-            return true
+            true
         case .aliased, .instantiated, .received:
-            return false
+            false
         }
     }
 }
 
-// MARK: - Array
+// MARK: - Collection
 
-extension Array where Element == Dependency {
-    fileprivate var areAllInstantiated: Bool {
-        first(where: { !$0.isInstantiated }) == nil
+extension Collection where Element == Dependency {
+    fileprivate var couldRepresentRoot: Bool {
+        first(where: {
+            switch $0.source {
+            case .instantiated, .aliased:
+                false
+            case .forwarded, .received:
+                true
+            }
+        }) == nil
     }
 }
 
