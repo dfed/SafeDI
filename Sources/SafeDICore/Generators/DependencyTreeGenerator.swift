@@ -343,10 +343,11 @@ public final class DependencyTreeGenerator {
                 // If the parent stack is empty, then the issue must be an unsatisfiable aliased property on a potential root.
                 !$0.parentStack.isEmpty
             }
-            // Remove instantiables with unsatisfiable aliases from the root instantiable types.
+            // Remove instantiables with unsatisfiable aliases from the root instantiable types list.
             for unfulfillableProperty in unfulfillableProperties[0..<indexOfFirstThrowableProperty] {
                 rootInstantiableTypes.remove(unfulfillableProperty.instantiable.concreteInstantiableType)
             }
+            // If we have unsatisfiable properties on instantiated types, throw the error.
             let throwableUnfulfillableProperties = unfulfillableProperties[indexOfFirstThrowableProperty..<unfulfillableProperties.count]
             guard !throwableUnfulfillableProperties.isEmpty else {
                 return
