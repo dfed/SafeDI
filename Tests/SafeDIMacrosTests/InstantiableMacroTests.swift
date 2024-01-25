@@ -272,6 +272,32 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
+    func test_declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithTupleWrappedClosureDependency() {
+        assertMacro {
+            """
+            @Instantiable
+            public struct ExampleService {
+                public init(closure: @escaping @Sendable () -> Void) {
+                    self.closure = closure
+                }
+                @Forwarded
+                let closure: (() -> Void)
+            }
+            """
+        } expansion: {
+            """
+            public struct ExampleService {
+                public init(closure: @escaping @Sendable () -> Void) {
+                    self.closure = closure
+                }
+                let closure: (() -> Void)
+
+                public typealias ForwardedArguments = () -> Void
+            }
+            """
+        }
+    }
+
     func test_declaration_generatesRequiredInitializerWithDependencies() {
         assertMacro {
             """

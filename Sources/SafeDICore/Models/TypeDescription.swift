@@ -22,6 +22,8 @@ import SwiftSyntax
 
 /// An enum that describes a parsed type in a canonical form.
 public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
+    /// The Void or () type.
+    case void(VoidRepresentation)
     /// A root type with possible generics. e.g. Int, or Array<Int>
     indirect case simple(name: String, generics: [TypeDescription])
     /// A nested type with possible generics. e.g. Array.Element or Swift.Array<Element>
@@ -64,6 +66,8 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     /// A canonical representation of this type that can be used in source code.
     public var asSource: String {
         switch self {
+        case let .void(representation):
+            return representation.description
         case let .simple(name, generics):
             if generics.isEmpty {
                 return name
@@ -137,6 +141,30 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         lhs.asSource < rhs.asSource
     }
 
+    public enum VoidRepresentation: String, Codable, Hashable, Sendable, CustomStringConvertible {
+        /// Whether the Void is represented by a tuple or spelling.
+        case tuple
+        case identifier
+
+        public static func == (lhs: VoidRepresentation, rhs: VoidRepresentation) -> Bool {
+            // Void is functionally equivalent no matter how it is spelled
+            true
+        }
+
+        public func hash(into hasher: inout Hasher) {
+            hasher.combine(0) // All Void data has an equivalent hash
+        }
+
+        public var description: String {
+            switch self {
+            case .identifier:
+                "Void"
+            case .tuple:
+                "()"
+            }
+        }
+    }
+
     public struct TupleElement: Codable, Hashable, Sendable {
         public let label: String?
         public let typeDescription: TypeDescription
@@ -156,7 +184,8 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 .simple,
                 .some,
                 .tuple,
-                .unknown:
+                .unknown,
+                .void:
             return false
         case .optional:
             return true
@@ -177,7 +206,8 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 .optional,
                 .simple,
                 .some,
-                .tuple:
+                .tuple,
+                .void:
             return false
         case .unknown:
             return true
@@ -204,7 +234,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             let .optional(typeDescription),
             let .some(typeDescription):
             return typeDescription.asInstantiatedType
-        case .array, .attributed,  .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown:
+        case .array, .attributed,  .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown, .void:
             return self
         }
     }
@@ -221,9 +251,13 @@ extension TypeSyntax {
             if let genericArgumentClause = typeIdentifier.genericArgumentClause {
                 genericTypeVisitor.walk(genericArgumentClause)
             }
-            return .simple(
-                name: typeIdentifier.name.text,
-                generics: genericTypeVisitor.genericArguments)
+            if genericTypeVisitor.genericArguments.isEmpty && typeIdentifier.name.text == "Void" {
+                return .void(.identifier)
+            } else {
+                return .simple(
+                    name: typeIdentifier.name.text,
+                    generics: genericTypeVisitor.genericArguments)
+            }
 
         } else if let typeIdentifier = MemberTypeSyntax(self) {
             let genericTypeVisitor = GenericArgumentVisitor(viewMode: .sourceAccurate)
@@ -274,12 +308,21 @@ extension TypeSyntax {
                 value: typeIdentifier.value.typeDescription)
 
         } else if let typeIdentifier = TupleTypeSyntax(self) {
-            return .tuple(typeIdentifier.elements.map {
+            let elements = typeIdentifier.elements.map {
                 TypeDescription.TupleElement(
                     label: $0.secondName?.text ?? $0.firstName?.text,
                     typeDescription: $0.type.typeDescription
                 )
-            })
+            }
+            if elements.isEmpty {
+                return .void(.tuple)
+            } else if let element = elements.first, elements.count == 1 {
+                // A type wrapped in a tuple is equivalent to the underlying type.
+                // To avoid handling complex comparisons later, just strip the type.
+                return element.typeDescription
+            } else {
+                return .tuple(elements)
+            }
 
         } else if ClassRestrictionTypeSyntax(self) != nil {
             // A class restriction is the same as requiring inheriting from AnyObject:
@@ -353,7 +396,7 @@ extension ExprSyntax {
                     name: name,
                     parentType: parentType, generics: genericTypeVisitor.genericArguments
                 )
-            case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown:
+            case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
                 return .unknown(text: trimmedDescription)
             }
         } else if let tupleExpr = TupleExprSyntax(self) {
