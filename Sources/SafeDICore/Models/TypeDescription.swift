@@ -23,7 +23,7 @@ import SwiftSyntax
 /// An enum that describes a parsed type in a canonical form.
 public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     /// The Void or () type.
-    case void(VoidRepresentation)
+    case void(VoidSpelling)
     /// A root type with possible generics. e.g. Int, or Array<Int>
     indirect case simple(name: String, generics: [TypeDescription])
     /// A nested type with possible generics. e.g. Array.Element or Swift.Array<Element>
@@ -141,13 +141,13 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         lhs.asSource < rhs.asSource
     }
 
-    public enum VoidRepresentation: String, Codable, Hashable, Sendable, CustomStringConvertible {
+    public enum VoidSpelling: String, Codable, Hashable, Sendable, CustomStringConvertible {
         /// The `()` representation.
         case tuple
         /// The `Void` representation.
         case identifier
 
-        public static func == (lhs: VoidRepresentation, rhs: VoidRepresentation) -> Bool {
+        public static func == (lhs: VoidSpelling, rhs: VoidSpelling) -> Bool {
             // Void is functionally equivalent no matter how it is spelled.
             true
         }
