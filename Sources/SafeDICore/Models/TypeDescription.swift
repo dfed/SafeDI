@@ -142,18 +142,19 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     }
 
     public enum VoidRepresentation: String, Codable, Hashable, Sendable, CustomStringConvertible {
-        /// The `()` representation
+        /// The `()` representation.
         case tuple
-        /// The `Void` representation
+        /// The `Void` representation.
         case identifier
 
         public static func == (lhs: VoidRepresentation, rhs: VoidRepresentation) -> Bool {
-            // Void is functionally equivalent no matter how it is spelled
+            // Void is functionally equivalent no matter how it is spelled.
             true
         }
 
         public func hash(into hasher: inout Hasher) {
-            hasher.combine(0) // All Void data has an equivalent hash
+            // Void representations have an equivalent hash because they are equivalent types.
+            hasher.combine(0)
         }
 
         public var description: String {
