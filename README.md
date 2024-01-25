@@ -247,7 +247,7 @@ public final class UpdateUserService {
 
 #### Renaming and retyping dependencies
 
-It is possible to rename or retype a dependency that is `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree with the `@Received` macro. Renamed or retyped dependencies are able to be received with their new name and type by objects instantiated further down the dependency tree.
+It is possible to rename or retype a dependency that is `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree with the `@Received(fulfilledByDependencyNamed:ofType:)` macro. Renamed or retyped dependencies are able to be received with their new name and type by objects instantiated further down the dependency tree.
 
 Here we have an example of a `UserManager` type that is received as a `UserVendor` further down the dependency tree.
 
@@ -379,8 +379,9 @@ SafeDI automatically finds the root(s) of your dependency tree, and creates an e
 
 An `@Instantiable` type qualifies as the root of a dependency tree if and only if:
 
-1. The type‘s SafeDI-injected properties are all `@Instantiated`
-2. The type is not instantiated by another `@Instantiable` type
+1. The type‘s SafeDI-injected properties are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`
+2. The type‘s `@Received(fulfilledByDependencyNamed:ofType:)` properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type
+3. The type is not instantiated by another `@Instantiable` type
 
 ### Comparing SafeDI and Manual Injection: Key Differences
 
