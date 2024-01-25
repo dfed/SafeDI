@@ -256,7 +256,8 @@ extension TypeSyntax {
             } else {
                 return .simple(
                     name: typeIdentifier.name.text,
-                    generics: genericTypeVisitor.genericArguments)
+                    generics: genericTypeVisitor.genericArguments
+                )
             }
 
         } else if let typeIdentifier = MemberTypeSyntax(self) {
@@ -267,7 +268,8 @@ extension TypeSyntax {
             return .nested(
                 name: typeIdentifier.name.text,
                 parentType: typeIdentifier.baseType.typeDescription,
-                generics: genericTypeVisitor.genericArguments)
+                generics: genericTypeVisitor.genericArguments
+            )
 
         } else if let typeIdentifiers = CompositionTypeSyntax(self) {
             return .composition(UnorderedEquatingCollection(typeIdentifiers.elements.map { $0.type.typeDescription }))
@@ -297,7 +299,8 @@ extension TypeSyntax {
             return .attributed(
                 typeIdentifier.baseType.typeDescription,
                 specifier: typeIdentifier.specifier?.text,
-                attributes: attributes.isEmpty ? nil : attributes)
+                attributes: attributes.isEmpty ? nil : attributes
+            )
 
         } else if let typeIdentifier = ArrayTypeSyntax(self) {
             return .array(element: typeIdentifier.element.typeDescription)
@@ -305,7 +308,8 @@ extension TypeSyntax {
         } else if let typeIdentifier = DictionaryTypeSyntax(self) {
             return .dictionary(
                 key: typeIdentifier.key.typeDescription,
-                value: typeIdentifier.value.typeDescription)
+                value: typeIdentifier.value.typeDescription
+            )
 
         } else if let typeIdentifier = TupleTypeSyntax(self) {
             let elements = typeIdentifier.elements.map {
@@ -316,10 +320,10 @@ extension TypeSyntax {
             }
             if elements.isEmpty {
                 return .void(.tuple)
-            } else if let element = elements.first, elements.count == 1 {
+            } else if elements.count == 1 {
                 // A type wrapped in a tuple is equivalent to the underlying type.
                 // To avoid handling complex comparisons later, just strip the type.
-                return element.typeDescription
+                return elements[0].typeDescription
             } else {
                 return .tuple(elements)
             }
@@ -334,7 +338,8 @@ extension TypeSyntax {
                 arguments: typeIdentifier.parameters.map { $0.type.typeDescription },
                 isAsync: typeIdentifier.effectSpecifiers?.asyncSpecifier != nil,
                 doesThrow: typeIdentifier.effectSpecifiers?.throwsSpecifier != nil,
-                returnType: typeIdentifier.returnClause.type.typeDescription)
+                returnType: typeIdentifier.returnClause.type.typeDescription
+            )
 
         } else {
             // The description is a source-accurate description of this node, so it is a reasonable fallback.
