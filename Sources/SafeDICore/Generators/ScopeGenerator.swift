@@ -165,8 +165,14 @@ actor ScopeGenerator: CustomStringConvertible {
                     switch property.propertyType {
                     case .instantiator, .forwardingInstantiator:
                         isConstant = false
-                        propertyDeclaration = "let \(property.label)"
-                        leadingConcreteTypeName = property.typeDescription.asSource
+                        let typeDescription = property.typeDescription.asSource
+                        let unwrappedTypeDescription = property.typeDescription.unwrappedTypeDescription.asSource
+                        if typeDescription == unwrappedTypeDescription {
+                            propertyDeclaration = "let \(property.label)"
+                        } else {
+                            propertyDeclaration = "let \(property.label): \(typeDescription)"
+                        }
+                        leadingConcreteTypeName = unwrappedTypeDescription
                     case .constant:
                         isConstant = true
                         if concreteTypeName == property.typeDescription.asSource {
@@ -329,5 +335,20 @@ extension Instantiable {
             .createInitializerArgumentList(
                 given: dependencies
             ) ?? "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
+    }
+}
+
+// MARK: TypeDescription
+
+extension TypeDescription {
+    fileprivate var unwrappedTypeDescription: TypeDescription {
+        switch self {
+        case
+            let .optional(type),
+            let .implicitlyUnwrappedOptional(type):
+            return type.unwrappedTypeDescription
+        case .any, .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .simple, .some, .tuple, .unknown, .void:
+            return self
+        }
     }
 }
