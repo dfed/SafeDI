@@ -3612,7 +3612,6 @@ final class SafeDIToolTests: XCTestCase {
         )
     }
 
-
     // MARK: Error Tests
 
     func test_run_onCodeWithPropertyWithUnknownFulfilledType_throwsError() async {
