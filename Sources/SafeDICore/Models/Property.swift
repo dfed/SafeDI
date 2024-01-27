@@ -115,18 +115,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
     }
 
     var propertyType: PropertyType {
-        switch typeDescription {
-        case let .simple(name, _):
-            if name == Dependency.instantiatorType {
-                return .instantiator
-            } else if name == Dependency.forwardingInstantiatorType {
-                return .forwardingInstantiator
-            } else {
-                return .constant
-            }
-        case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .optional, .some, .tuple, .unknown, .void:
-            return .constant
-        }
+        typeDescription.propertyType
     }
 
     var generics: [TypeDescription] {
@@ -150,5 +139,28 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
         /// A `ForwardingInstantiator` property.
         /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
         case forwardingInstantiator
+    }
+}
+
+// MARK: TypeDescription
+
+extension TypeDescription {
+    fileprivate var propertyType: Property.PropertyType {
+        switch self {
+        case let .simple(name, _):
+            if name == Dependency.instantiatorType {
+                return .instantiator
+            } else if name == Dependency.forwardingInstantiatorType {
+                return .forwardingInstantiator
+            } else {
+                return .constant
+            }
+        case
+            let .optional(type),
+            let .implicitlyUnwrappedOptional(type):
+            return type.propertyType
+        case .any, .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .some, .tuple, .unknown, .void:
+            return .constant
+        }
     }
 }
