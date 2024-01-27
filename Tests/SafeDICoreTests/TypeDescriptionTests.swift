@@ -258,7 +258,7 @@ final class TypeDescriptionTests: XCTestCase {
 
         let typeDescription = try XCTUnwrap(visitor.arrayTypeIdentifier)
         XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
-        XCTAssertEqual(typeDescription.asSource, "Array<Int>")
+        XCTAssertEqual(typeDescription.asSource, "[Int]")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnArray_notOfFormArrayTypeSyntax_findsTheType() throws {
@@ -297,7 +297,7 @@ final class TypeDescriptionTests: XCTestCase {
 
         let typeDescription = try XCTUnwrap(visitor.dictionaryTypeIdentifier)
         XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
-        XCTAssertEqual(typeDescription.asSource, "Dictionary<Int, String>")
+        XCTAssertEqual(typeDescription.asSource, "[Int: String]")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingADictionary_notOfFormDictionaryTypeSyntax_findsTheType() throws {
@@ -539,7 +539,7 @@ final class TypeDescriptionTests: XCTestCase {
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
         XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
-        XCTAssertEqual(typeDescription.asSource, "Array<Int>")
+        XCTAssertEqual(typeDescription.asSource, "[Int]")
     }
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingADictionaryType_findsTheType() throws {
@@ -550,7 +550,7 @@ final class TypeDescriptionTests: XCTestCase {
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
         XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
-        XCTAssertEqual(typeDescription.asSource, "Dictionary<Int, String>")
+        XCTAssertEqual(typeDescription.asSource, "[Int: String]")
     }
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingATupleTypeWithoutLabels_findsTheType() throws {

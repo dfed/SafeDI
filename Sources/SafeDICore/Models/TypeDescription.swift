@@ -117,9 +117,9 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 return type.asSource
             }
         case let .array(element):
-            return "Array<\(element.asSource)>"
+            return "[\(element.asSource)]"
         case let .dictionary(key, value):
-            return "Dictionary<\(key.asSource), \(value.asSource)>"
+            return "[\(key.asSource): \(value.asSource)]"
         case let .tuple(types):
             return """
                 (\(types.map {
