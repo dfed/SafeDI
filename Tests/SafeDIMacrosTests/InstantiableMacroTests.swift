@@ -901,11 +901,11 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
-    func test_declaration_fixit_addsFixitWhenInjectableTypeIsNotPublicOrOpen() {
+    func test_declaration_fixit_addsFixitWhenInjectableActorIsNotPublicOrOpen() {
         assertMacro {
             """
             @Instantiable
-            struct ExampleService {
+            actor ExampleService {
                 public init(receivedA: ReceivedA) {
                     self.receivedA = receivedA
                 }
@@ -919,7 +919,7 @@ final class InstantiableMacroTests: XCTestCase {
             @Instantiable
             ╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
                ✏️ Add `public` modifier
-            struct ExampleService {
+            actor ExampleService {
                 public init(receivedA: ReceivedA) {
                     self.receivedA = receivedA
                 }
@@ -931,8 +931,7 @@ final class InstantiableMacroTests: XCTestCase {
         } fixes: {
             """
             @Instantiable
-            public 
-            struct ExampleService {
+            public actor ExampleService {
                 public init(receivedA: ReceivedA) {
                     self.receivedA = receivedA
                 }
@@ -943,8 +942,7 @@ final class InstantiableMacroTests: XCTestCase {
             """
         } expansion: {
             """
-            public 
-            struct ExampleService {
+            public actor ExampleService {
                 public init(receivedA: ReceivedA) {
                     self.receivedA = receivedA
                 }
@@ -954,7 +952,58 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
-    func test_declaration_fixit_addsFixitWhenInjectableClassTypeIsNotPublicOrOpen() {
+    func test_declaration_fixit_addsFixitWhenInjectableClassIsNotPublicOrOpen() {
+        assertMacro {
+            """
+            @Instantiable
+            class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            ╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
+               ✏️ Add `public` modifier
+            class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            public class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } expansion: {
+            """
+            public class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+                let receivedA: ReceivedA
+            }
+            """
+        }
+    }
+
+    func test_declaration_fixit_addsFixitWhenInjectableFinalClassIsNotPublicOrOpen() {
         assertMacro {
             """
             @Instantiable
@@ -996,6 +1045,210 @@ final class InstantiableMacroTests: XCTestCase {
         } expansion: {
             """
             public final class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+                let receivedA: ReceivedA
+            }
+            """
+        }
+    }
+
+    func test_declaration_fixit_addsFixitWhenInjectableClassIsInternal() {
+        assertMacro {
+            """
+            @Instantiable
+            internal class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            ╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
+               ✏️ Add `public` modifier
+            internal class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            public class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } expansion: {
+            """
+            public class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+                let receivedA: ReceivedA
+            }
+            """
+        }
+    }
+
+    func test_declaration_fixit_addsFixitWhenInjectableClassIsFileprivate() {
+        assertMacro {
+            """
+            @Instantiable
+            fileprivate class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            ╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
+               ✏️ Add `public` modifier
+            fileprivate class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            public class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } expansion: {
+            """
+            public class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+                let receivedA: ReceivedA
+            }
+            """
+        }
+    }
+
+    func test_declaration_fixit_addsFixitWhenInjectableClassIsPrivate() {
+        assertMacro {
+            """
+            @Instantiable
+            private class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            ╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
+               ✏️ Add `public` modifier
+            private class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            public class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } expansion: {
+            """
+            public class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+                let receivedA: ReceivedA
+            }
+            """
+        }
+    }
+
+    func test_declaration_fixit_addsFixitWhenInjectableStructIsNotPublicOrOpen() {
+        assertMacro {
+            """
+            @Instantiable
+            struct ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            ╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
+               ✏️ Add `public` modifier
+            struct ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            public struct ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } expansion: {
+            """
+            public struct ExampleService {
                 public init(receivedA: ReceivedA) {
                     self.receivedA = receivedA
                 }
@@ -1176,13 +1429,13 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             extension ExampleService {
-            public static func instantiate() -> ExampleService { fatalError() }
+                public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         } expansion: {
             """
             extension ExampleService {
-            public static func instantiate() -> ExampleService { fatalError() }
+                public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         }
@@ -1210,13 +1463,13 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             extension ExampleService {
-            public static func instantiate() -> ExampleService { fatalError() }
+                public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         } expansion: {
             """
             extension ExampleService {
-            public static func instantiate() -> ExampleService { fatalError() }
+                public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         }
@@ -1244,15 +1497,13 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             extension ExampleService {
-            public static 
-                func instantiate() -> ExampleService { fatalError() }
+                public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         } expansion: {
             """
             extension ExampleService {
-            public static 
-                func instantiate() -> ExampleService { fatalError() }
+                public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         }

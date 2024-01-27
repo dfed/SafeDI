@@ -215,7 +215,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     DeclModifierSyntax(
                         name: TokenSyntax(
                             TokenKind.keyword(.public),
-                            leadingTrivia: .newline,
+                            leadingTrivia: node.modifiers.first?.leadingTrivia ?? node.funcKeyword.leadingTrivia,
                             presence: .present
                         )
                     ),
@@ -228,6 +228,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     )
                 )
             )
+            modifiedNode.funcKeyword.leadingTrivia = .spaces(0)
             diagnostics.append(Diagnostic(
                 node: node,
                 error: FixableInstantiableError.missingAttributes,
@@ -411,8 +412,12 @@ public final class InstantiableVisitor: SyntaxVisitor {
                 modifiedNode.modifiers.replaceSubrange(
                     modifiedNode.modifiers.startIndex..<modifiedNode.attributes.index(after: modifiedNode.attributes.startIndex),
                     with: [publicModifier, firstModifier])
+                modifiedNode.modifiers = modifiedNode.modifiers.filter {
+                    $0.name.text != "internal" && $0.name.text != "fileprivate" && $0.name.text != "private"
+                }
             } else {
                 modifiedNode.modifiers = [publicModifier]
+                modifiedNode.keyword.leadingTrivia = .spaces(0)
             }
             diagnostics.append(Diagnostic(
                 node: node,
