@@ -389,7 +389,7 @@ SafeDI is designed to be simple to adopt and minimize architectural changes requ
 
 #### Instantiating objects
 
-In a manual DI system, it is common to directly call your dependencies‘ `init(…)` functions. When utilizing SafeDI, you must rely on `@Instantiated`-decorated properties to instantiate your dependencies for you. Calling a dependency‘s `init(…)` function directly effectively exits the SafeDI-built dependency tree, which removes property lifecycle guarantees. Similarly, you must call the generated `init()` function on your dependency tree‘s root and not its memberwise `init(…)` function in order to create the SafeDI dependency tree.
+In a manual DI system it is common to directly call your dependencies‘ `init(…)` functions. When utilizing SafeDI, you must rely on `@Instantiated`-decorated properties to instantiate your dependencies for you. Calling a dependency‘s `init(…)` function directly effectively exits the SafeDI-built dependency tree, which removes property lifecycle guarantees. Similarly, you must call the generated `init()` function on your dependency tree‘s root and not its memberwise `init(…)` function in order to create the SafeDI dependency tree.
 
 To instantiate a dependency after a property‘s enclosing type is initialized, you must utilize an instantiated or received `Instantiator` or `ForwardingInstantiator` instance.  
 
@@ -406,6 +406,18 @@ The `@StateObject` documentation reads:
 > Declare state objects as private to prevent setting them from a memberwise initializer, which can conflict with the storage management that SwiftUI provides
 
 `@Instantiated`, `@Forwarded`, or `@Received` objects may be decorated with [`@ObservedObject`](https://developer.apple.com/documentation/swiftui/ObservedObject). Note that `@Instantiated` objects declared on a `View` will be re-initialized when the view is re-initialized. You can find a deep dive on SwiftUI view lifecycles [here](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
+
+#### Dependency cycles
+
+In a manual DI system it is easy to instantiate an object that can instantiate another object that can then instantiate the first object again. Instantiable objects in SafeDI, however, are not able to generate this kind of circular dependency. Instantiable objects can achieve this kind of circular dependency manually: one object in the cycle must call other cycle objects‘ memberwise initializers directly, rather than utilizing generated `Instantiator`s or `ForwardingInstantiator`s.
+
+#### Inheritance
+
+In a manual DI system it is simple for superclasses to receive injected dependencies. SafeDI‘s utilization of macros means that SafeDI is not aware of dependencies required due to inheritance trees. Due to this limitation, superclass types should not be decorated with `@Instantiable`: instead, subclasses should declare the properties their superclasses need, and pass them upwards via a call to `super.init(…)`.
+
+#### Nested types
+
+While manually written dependency injection code can work seamlessly with [nested types](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/nestedtypes/), SafeDI currently prevents nested types from being decorated with the `@Instantiable` macro.
 
 ### Migrating to SafeDI
 
