@@ -168,12 +168,13 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     }
 
     public struct TupleElement: Codable, Hashable, Sendable {
+        init(label: String? = nil, _ typeDescription: TypeDescription) {
+            self.label = label
+            self.typeDescription = typeDescription
+        }
+
         public let label: String?
         public let typeDescription: TypeDescription
-
-        static func singleElement(_ typeDescription: TypeDescription) -> Self {
-            self.init(label: nil, typeDescription: typeDescription)
-        }
     }
 
     var isOptional: Bool {
@@ -253,7 +254,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             self
         case .composition, .some, .any, .attributed, .closure:
             // These types contain spaces and may be ambigous without being wrapped.
-            .tuple([.singleElement(self)])
+            .tuple([.init(self)])
         }
     }
 }
@@ -333,7 +334,7 @@ extension TypeSyntax {
             let elements = typeIdentifier.elements.map {
                 TypeDescription.TupleElement(
                     label: $0.secondName?.text ?? $0.firstName?.text,
-                    typeDescription: $0.type.typeDescription
+                    $0.type.typeDescription
                 )
             }
             if elements.isEmpty {
@@ -436,7 +437,7 @@ extension ExprSyntax {
                 return .tuple(tupleElements.map {
                     TypeDescription.TupleElement(
                         label: $0.label?.text,
-                        typeDescription: $0.expression.typeDescription
+                        $0.expression.typeDescription
                     )
                 })
             }
