@@ -120,17 +120,28 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAOptionalTypeSyntax_findsTheType() throws {
         let content = """
-            protocol FooBar: Foo where Something == AnyObject? {}
+            var optionalAnyObject: AnyObject?
             """
 
         let visitor = OptionalTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
-        for optionalTypeIdentifier in visitor.optionalTypeIdentifiers {
-            guard optionalTypeIdentifier.asSource != "Something" else { continue }
-            XCTAssertFalse(optionalTypeIdentifier.isUnknown, "Type description is not of known type!")
-            XCTAssertTrue(optionalTypeIdentifier.asSource.contains("AnyObject?"))
-        }
+        let optionalTypeIdentifier = try XCTUnwrap(visitor.optionalTypeIdentifier)
+        XCTAssertFalse(optionalTypeIdentifier.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(optionalTypeIdentifier.asSource, "AnyObject?")
+    }
+
+    func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAOptionalClosureTypeSyntax_findsTheType() throws {
+        let content = """
+            var optionalClosure: (() -> Void)?
+            """
+
+        let visitor = OptionalTypeSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
+
+        let optionalTypeIdentifier = try XCTUnwrap(visitor.optionalTypeIdentifier)
+        XCTAssertFalse(optionalTypeIdentifier.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(optionalTypeIdentifier.asSource, "(() -> Void)?")
     }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAImplicitlyUnwrappedOptionalTypeSyntax_findsTheType() throws {
@@ -690,12 +701,9 @@ final class TypeDescriptionTests: XCTestCase {
         }
     }
     private final class OptionalTypeSyntaxVisitor: SyntaxVisitor {
-        var optionalTypeIdentifiers = [TypeDescription]()
-        override func visit(_ node: SameTypeRequirementSyntax) -> SyntaxVisitorContinueKind {
-            optionalTypeIdentifiers += [
-                node.leftType.typeDescription,
-                node.rightType.typeDescription
-            ]
+        var optionalTypeIdentifier: TypeDescription?
+        override func visit(_ node: OptionalTypeSyntax) -> SyntaxVisitorContinueKind {
+            optionalTypeIdentifier = TypeSyntax(node).typeDescription
             return .skipChildren
         }
     }

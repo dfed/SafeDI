@@ -77,9 +77,9 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         case let .composition(types):
             return types.map { $0.asSource }.joined(separator: " & ")
         case let .optional(type):
-            return "\(type.asSource)?"
+            return "\(type.wrappedIfAmbiguous.asSource)?"
         case let .implicitlyUnwrappedOptional(type):
-            return "\(type.asSource)!"
+            return "\(type.wrappedIfAmbiguous.asSource)!"
         case let .nested(name, parentType, generics):
             if generics.isEmpty {
                 return "\(parentType.asSource).\(name)"
@@ -87,11 +87,11 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 return "\(parentType.asSource).\(name)<\(generics.map { $0.asSource }.joined(separator: ", "))>"
             }
         case let .metatype(type, isType):
-            return "\(type.asSource).\(isType ? "Type" : "Protocol")"
+            return "\(type.wrappedIfAmbiguous.asSource).\(isType ? "Type" : "Protocol")"
         case let .some(type):
-            return "some \(type.asSource)"
+            return "some \(type.wrappedIfAmbiguous.asSource)"
         case let .any(type):
-            return "any \(type.asSource)"
+            return "any \(type.wrappedIfAmbiguous.asSource)"
         case let .attributed(type, specifier, attributes):
             func attributesFromList(_ attributes: [String]) -> String {
                 attributes
@@ -170,6 +170,10 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     public struct TupleElement: Codable, Hashable, Sendable {
         public let label: String?
         public let typeDescription: TypeDescription
+
+        static func singleElement(_ typeDescription: TypeDescription) -> Self {
+            self.init(label: nil, typeDescription: typeDescription)
+        }
     }
 
     var isOptional: Bool {
@@ -238,6 +242,18 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             return typeDescription.asInstantiatedType
         case .array, .attributed,  .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown, .void:
             return self
+        }
+    }
+
+    /// A representation of this type that is wrapped in a single element tuple to ensure cohesiveness of the type description. Can be used in source code.
+    private var wrappedIfAmbiguous: Self {
+        switch self {
+        case .void, .simple, .optional, .implicitlyUnwrappedOptional, .metatype, .nested, .array, .dictionary, .tuple, .unknown:
+            // These types contain no spaces, and are therefore unambiguous without being wrapped.
+            self
+        case .composition, .some, .any, .attributed, .closure:
+            // These types contain spaces and may be ambigous without being wrapped.
+            .tuple([.singleElement(self)])
         }
     }
 }
