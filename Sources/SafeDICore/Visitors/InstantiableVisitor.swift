@@ -412,10 +412,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     modifiedNode.modifiers.startIndex..<modifiedNode.attributes.index(after: modifiedNode.attributes.startIndex),
                     with: [publicModifier, firstModifier])
             } else {
-                modifiedNode.modifiers.insert(
-                    publicModifier,
-                    at: modifiedNode.modifiers.startIndex
-                )
+                modifiedNode.modifiers = [publicModifier]
             }
             diagnostics.append(Diagnostic(
                 node: node,
