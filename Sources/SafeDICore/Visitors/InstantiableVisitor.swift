@@ -397,18 +397,26 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
     private func processModifiers(_ modifiers: DeclModifierListSyntax, on node: some ConcreteDeclSyntaxProtocol) {
         if !node.modifiers.containsPublicOrOpen {
-            var modifiedNode = node
-            modifiedNode.modifiers = DeclModifierListSyntax(
-                arrayLiteral:
-                    DeclModifierSyntax(
-                        name: TokenSyntax(
-                            TokenKind.keyword(.public),
-                            leadingTrivia: .newline,
-                            trailingTrivia: .space,
-                            presence: .present
-                        )
-                    )
+            let publicModifier = DeclModifierSyntax(
+                name: TokenSyntax(
+                    TokenKind.keyword(.public),
+                    leadingTrivia: node.modifiers.first?.leadingTrivia ?? .newline,
+                    trailingTrivia: node.modifiers.first?.trailingTrivia ?? .space,
+                    presence: .present
+                )
             )
+            var modifiedNode = node
+            if var firstModifier = modifiedNode.modifiers.first {
+                firstModifier.name.leadingTrivia = .spaces(0)
+                modifiedNode.modifiers.replaceSubrange(
+                    modifiedNode.modifiers.startIndex..<modifiedNode.attributes.index(after: modifiedNode.attributes.startIndex),
+                    with: [publicModifier, firstModifier])
+            } else {
+                modifiedNode.modifiers.insert(
+                    publicModifier,
+                    at: modifiedNode.modifiers.startIndex
+                )
+            }
             diagnostics.append(Diagnostic(
                 node: node,
                 error: FixableInstantiableError.missingPublicOrOpenAttribute,

@@ -954,6 +954,57 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
+    func test_declaration_fixit_addsFixitWhenInjectableClassTypeIsNotPublicOrOpen() {
+        assertMacro {
+            """
+            @Instantiable
+            final class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            ╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
+               ✏️ Add `public` modifier
+            final class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            public final class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+
+                @Instantiated
+                let receivedA: ReceivedA
+            }
+            """
+        } expansion: {
+            """
+            public final class ExampleService {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+                let receivedA: ReceivedA
+            }
+            """
+        }
+    }
+
     func test_declaration_fixit_addsFixitMissingRequiredInitializerWhenPropertyIsMissingInitializer() {
         assertMacro {
             """
