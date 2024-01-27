@@ -146,7 +146,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
             return .skipChildren
         }
         guard let instantiableMacro = node.attributes.instantiableMacro else {
-            // Not an external instantiable type. We do not care.
+            // Not an instantiable type. We do not care.
             return .skipChildren
         }
 
@@ -160,12 +160,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
         guard declarationType.isExtension else {
             return .skipChildren
         }
-        guard let instantiableType else {
-            // We're being called on code that will not compile.
-            // We are visiting a function but we haven't visited the extension yet.
-            // Just move on.
-            return .skipChildren
-        }
         guard node.name.text == Self.instantiateMethodName else {
             // We don't care about this method.
             return .skipChildren
@@ -173,7 +167,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
         if
             let returnClause = node.signature.returnClause,
-            returnClause.type.typeDescription != instantiableType {
+            returnClause.type.typeDescription != instantiableType,
+            let instantiableType
+        {
             var modifiedSignature = node.signature
             modifiedSignature.returnClause = ReturnClauseSyntax(
                 arrow: .arrowToken(
