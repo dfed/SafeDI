@@ -246,7 +246,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         }
     }
 
-    /// A representation of this type that is wrapped in a single element tuple to ensure cohesiveness of the type description. Can be used in source code.
+    /// A representation of this type that may be wrapped in a single element tuple to ensure cohesiveness of the type description.
     private var wrappedIfAmbiguous: Self {
         switch self {
         case .void, .simple, .optional, .implicitlyUnwrappedOptional, .metatype, .nested, .array, .dictionary, .tuple, .unknown:
