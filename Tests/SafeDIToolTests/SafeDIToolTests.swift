@@ -4182,7 +4182,7 @@ final class SafeDIToolTests: XCTestCase {
         await assertThrowsError(
             """
             Dependency cycle detected!
-            DefaultNetworkService -> DefaultLoggingService -> DefaultNetworkService
+            B -> C -> D -> B
             """
         ) {
             try await executeSystemUnderTest(
@@ -4190,32 +4190,37 @@ final class SafeDIToolTests: XCTestCase {
                     """
                     import Foundation
 
-                    public protocol NetworkService {}
-
-                    @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                    public final class DefaultNetworkService: NetworkService {
+                    @Instantiable
+                    public final class A {
                         @Instantiated
-                        let loggingService: LoggingService
+                        let b: B
                     }
                     """,
                     """
                     import Foundation
 
-                    public protocol LoggingService {}
-
-                    @Instantiable(fulfillingAdditionalTypes: [LoggingService.self])
-                    public final class DefaultLoggingService: LoggingService {
+                    @Instantiable
+                    public final class B {
                         @Instantiated
-                        let networkService: NetworkService
+                        let c: C
                     }
                     """,
                     """
                     import UIKit
 
                     @Instantiable
-                    public final class RootViewController: UIViewController {
+                    public final class C {
                         @Instantiated
-                        let networkService: NetworkService
+                        let d: D
+                    }
+                    """,
+                    """
+                    import UIKit
+
+                    @Instantiable
+                    public final class D {
+                        @Instantiated
+                        let b: B
                     }
                     """,
                 ],
