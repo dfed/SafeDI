@@ -4187,8 +4187,6 @@ final class SafeDIToolTests: XCTestCase {
             try await executeSystemUnderTest(
                 swiftFileContent: [
                     """
-                    import Foundation
-
                     @Instantiable
                     public final class Root {
                         @Instantiated
@@ -4196,8 +4194,6 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                     """
-                    import Foundation
-
                     @Instantiable
                     public final class A {
                         @Instantiated
@@ -4205,8 +4201,6 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                     """
-                    import UIKit
-
                     @Instantiable
                     public final class B {
                         @Instantiated
@@ -4214,8 +4208,6 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                     """
-                    import UIKit
-
                     @Instantiable
                     public final class C {
                         @Instantiated
