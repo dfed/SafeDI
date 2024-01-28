@@ -78,27 +78,32 @@ final class Scope: Hashable {
 
     func createScopeGenerator(
         for property: Property? = nil,
-        instantiableStack: OrderedSet<Instantiable> = [],
         propertyStack: OrderedSet<Property> = []
     ) throws -> ScopeGenerator {
-        if let cycleIndex = instantiableStack.firstIndex(of: instantiable) {
-            throw ScopeError.dependencyCycleDetected([instantiable] + instantiableStack.elements[0...cycleIndex])
+        if
+            let property,
+            property.propertyType.isConstant,
+            let cycleIndex = propertyStack.firstIndex(of: property),
+            !propertyStack.elements[0...cycleIndex].contains(where: { !$0.propertyType.isConstant })
+        {
+            throw ScopeError.dependencyCycleDetected([property.typeDescription] + propertyStack.elements[0...cycleIndex].map(\.typeDescription))
         } else {
-            var childInstantiableStack = instantiableStack
-            childInstantiableStack.insert(instantiable, at: 0)
             var childPropertyStack = propertyStack
+            let isPropertyCycle: Bool
             if let property {
+                isPropertyCycle = propertyStack.contains(property)
                 childPropertyStack.insert(property, at: 0)
+            } else {
+                isPropertyCycle = false
             }
             let scopeGenerator = ScopeGenerator(
                 instantiable: instantiable,
                 property: property,
-                propertiesToGenerate: try propertiesToGenerate.map {
+                propertiesToGenerate: isPropertyCycle ? [] : try propertiesToGenerate.map {
                     switch $0 {
                     case let .instantiated(property, scope):
                         try scope.createScopeGenerator(
                             for: property,
-                            instantiableStack: childInstantiableStack,
                             propertyStack: childPropertyStack
                         )
                     case let .aliased(property, fulfilledBy: fulfillingProperty):
@@ -107,7 +112,8 @@ final class Scope: Hashable {
                             fulfillingProperty: fulfillingProperty
                         )
                     }
-                }
+                },
+                isPropertyCycle: isPropertyCycle
             )
             Task.detached {
                 // Kick off code generation.
@@ -121,7 +127,7 @@ final class Scope: Hashable {
 
     private enum ScopeError: Error, CustomStringConvertible {
 
-        case dependencyCycleDetected([Instantiable])
+        case dependencyCycleDetected([TypeDescription])
 
         var description: String {
             switch self {
@@ -129,7 +135,7 @@ final class Scope: Hashable {
                 """
                 Dependency cycle detected!
                 \(instantiables
-                    .map(\.concreteInstantiableType.asSource)
+                    .map(\.asSource)
                     .reversed()
                     .joined(separator: " -> "))
                 """

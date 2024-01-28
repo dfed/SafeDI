@@ -28,7 +28,8 @@ actor ScopeGenerator: CustomStringConvertible {
     init(
         instantiable: Instantiable,
         property: Property?,
-        propertiesToGenerate: [ScopeGenerator]
+        propertiesToGenerate: [ScopeGenerator],
+        isPropertyCycle: Bool
     ) {
         if let property {
             scopeData = .property(
@@ -39,7 +40,8 @@ actor ScopeGenerator: CustomStringConvertible {
                         .dependencies
                         .filter { $0.source == .forwarded }
                         .map(\.property)
-                )
+                ),
+                isPropertyCycle: isPropertyCycle
             )
             description = instantiable.concreteInstantiableType.asSource
         } else {
@@ -119,7 +121,8 @@ actor ScopeGenerator: CustomStringConvertible {
                 case let .property(
                     instantiable,
                     property,
-                    forwardedProperties
+                    forwardedProperties,
+                    isPropertyCycle
                 ):
                     let argumentList = try instantiable.generateArgumentList()
                     let concreteTypeName = instantiable.concreteInstantiableType.asSource
@@ -165,11 +168,12 @@ actor ScopeGenerator: CustomStringConvertible {
                         let generatedProperties = try await generateProperties(leadingMemberWhitespace: Self.standardIndent)
                         let functionArguments = forwardedProperties.isEmpty ? "" : forwardedProperties.initializerFunctionParameters.map(\.description).joined()
                         let functionName = self.functionName(toBuild: property)
-                        let functionDeclaration = """
+                        let functionDeclaration = isPropertyCycle ? "" : """
                             func \(functionName)(\(functionArguments)) -> \(instantiable.concreteInstantiableType.asSource) {
                             \(generatedProperties.joined(separator: "\n"))
                             \(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
                             }
+
                             """
 
                         let typeDescription = property.typeDescription.asSource
@@ -189,8 +193,7 @@ actor ScopeGenerator: CustomStringConvertible {
                             """
                         }
                         return """
-                            \(functionDeclaration)
-                            \(propertyDeclaration) = \(instantiatorInstantiation)
+                            \(functionDeclaration)\(propertyDeclaration) = \(instantiatorInstantiation)
                             """
                     case .constant:
                         let propertyDeclaration = if concreteTypeName == property.typeDescription.asSource {
@@ -237,7 +240,8 @@ actor ScopeGenerator: CustomStringConvertible {
         case property(
             instantiable: Instantiable,
             property: Property,
-            forwardedProperties: Set<Property>
+            forwardedProperties: Set<Property>,
+            isPropertyCycle: Bool
         )
         case alias(
             property: Property,
@@ -246,7 +250,7 @@ actor ScopeGenerator: CustomStringConvertible {
 
         var forwardedProperties: Set<Property> {
             switch self {
-            case let .property(_, _, forwardedProperties):
+            case let .property(_, _, forwardedProperties, _):
                 return forwardedProperties
             case .root, .alias:
                 return []
