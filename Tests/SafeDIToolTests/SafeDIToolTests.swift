@@ -488,8 +488,11 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, UIViewController> { user in
+                    func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
                         LoggedInViewController(user: user, networkService: networkService)
+                    }
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, UIViewController> {
+                        __safeDI_loggedInViewControllerBuilder(user: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
@@ -599,9 +602,12 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> { user in
+                    func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
                         let userService = UserService(user: user)
                         return LoggedInViewController(user: user, networkService: networkService, userService: userService)
+                    }
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> {
+                        __safeDI_loggedInViewControllerBuilder(user: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
@@ -720,9 +726,12 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<(userID: String, userName: String), UIViewController> { userID, userName in
+                    func __safeDI_loggedInViewControllerBuilder(userID: String, userName: String) -> LoggedInViewController {
                         let userService = UserService(userName: userName, userID: userID)
                         return LoggedInViewController(userName: userName, userID: userID, networkService: networkService, userService: userService)
+                    }
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<(userID: String, userName: String), UIViewController> {
+                        __safeDI_loggedInViewControllerBuilder(userID: $0.userID, userName: $0.userName)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
@@ -841,9 +850,12 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<LoggedInViewController.ForwardedArguments, UIViewController> { userID, userName in
+                    func __safeDI_loggedInViewControllerBuilder(userID: String, userName: String) -> LoggedInViewController {
                         let userService = UserService(userName: userName, userID: userID)
                         return LoggedInViewController(userName: userName, userID: userID, networkService: networkService, userService: userService)
+                    }
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<LoggedInViewController.ForwardedArguments, UIViewController> {
+                        __safeDI_loggedInViewControllerBuilder(userID: $0.userID, userName: $0.userName)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
@@ -953,9 +965,12 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> { user in
+                    func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
                         let userService = UserService(user: user, networkService: networkService)
                         return LoggedInViewController(user: user, userService: userService)
+                    }
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> {
+                        __safeDI_loggedInViewControllerBuilder(user: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
@@ -1065,11 +1080,15 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> { user in
-                        let userServiceInstantiator = Instantiator<UserService> {
+                    func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
+                        func __safeDI_userServiceInstantiator() -> UserService {
                             UserService(user: user, networkService: networkService)
                         }
+                        let userServiceInstantiator = Instantiator<UserService>(__safeDI_userServiceInstantiator)
                         return LoggedInViewController(user: user, userServiceInstantiator: userServiceInstantiator)
+                    }
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> {
+                        __safeDI_loggedInViewControllerBuilder(user: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
@@ -1803,7 +1822,7 @@ final class SafeDIToolTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    let childABuilder = ForwardingInstantiator<Recreated, ChildA> { recreated in
+                    func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
                         let grandchildA = {
                             let recreated = Recreated()
                             let greatGrandchild = GreatGrandchild(recreated: recreated)
@@ -1814,6 +1833,9 @@ final class SafeDIToolTests: XCTestCase {
                             return GrandchildB(greatGrandchild: greatGrandchild)
                         }()
                         return ChildA(grandchildA: grandchildA, grandchildB: grandchildB, recreated: recreated)
+                    }
+                    let childABuilder = ForwardingInstantiator<Recreated, ChildA> {
+                        __safeDI_childABuilder(recreated: $0)
                     }
                     let recreated = Recreated()
                     let childB = {
@@ -2123,9 +2145,12 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, UIViewController> { user in
+                    func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
                         let keyValueStore: KeyValueStore = UserDefaults.instantiate(user: user)
                         return LoggedInViewController(user: user, networkService: networkService, keyValueStore: keyValueStore)
+                    }
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, UIViewController> {
+                        __safeDI_loggedInViewControllerBuilder(user: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
@@ -2275,15 +2300,17 @@ final class SafeDIToolTests: XCTestCase {
                     }()
                     let childB = {
                         let grandchildBA = {
-                            let greatGrandchildInstantiator = Instantiator<GreatGrandchild> {
+                            func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
                                 GreatGrandchild()
                             }
+                            let greatGrandchildInstantiator = Instantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
                             return GrandchildBA(greatGrandchildInstantiator: greatGrandchildInstantiator)
                         }()
                         let grandchildBB = {
-                            let greatGrandchildInstantiator = Instantiator<GreatGrandchild> {
+                            func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
                                 GreatGrandchild()
                             }
+                            let greatGrandchildInstantiator = Instantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
                             return GrandchildBB(greatGrandchildInstantiator: greatGrandchildInstantiator)
                         }()
                         return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)
@@ -2524,15 +2551,20 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
-                        let profileViewControllerBuilder = Instantiator<ProfileViewController> {
+                    func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
+                        func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
                             let userVendor: UserVendor = userManager
-                            let editProfileViewControllerBuilder = Instantiator<EditProfileViewController> {
+                            func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
                                 EditProfileViewController(userVendor: userVendor, userManager: userManager)
                             }
+                            let editProfileViewControllerBuilder = Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
                             return ProfileViewController(userVendor: userVendor, editProfileViewControllerBuilder: editProfileViewControllerBuilder)
                         }
+                        let profileViewControllerBuilder = Instantiator<ProfileViewController>(__safeDI_profileViewControllerBuilder)
                         return LoggedInViewController(userManager: userManager, profileViewControllerBuilder: profileViewControllerBuilder)
+                    }
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> {
+                        __safeDI_loggedInViewControllerBuilder(userManager: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
@@ -2674,16 +2706,21 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
+                    func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
                         let userNetworkService: NetworkService = networkService
-                        let profileViewControllerBuilder = Instantiator<ProfileViewController> {
+                        func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
                             let userVendor: UserVendor = userManager
-                            let editProfileViewControllerBuilder = Instantiator<EditProfileViewController> {
+                            func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
                                 EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: userNetworkService)
                             }
+                            let editProfileViewControllerBuilder = Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
                             return ProfileViewController(userVendor: userVendor, editProfileViewControllerBuilder: editProfileViewControllerBuilder)
                         }
+                        let profileViewControllerBuilder = Instantiator<ProfileViewController>(__safeDI_profileViewControllerBuilder)
                         return LoggedInViewController(userManager: userManager, userNetworkService: userNetworkService, profileViewControllerBuilder: profileViewControllerBuilder)
+                    }
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> {
+                        __safeDI_loggedInViewControllerBuilder(userManager: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
@@ -2976,15 +3013,20 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
+                    func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
                         let userVendor: UserVendor = userManager
-                        let profileViewControllerBuilder = Instantiator<ProfileViewController> {
-                            let editProfileViewControllerBuilder = Instantiator<EditProfileViewController> {
+                        func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
+                            func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
                                 EditProfileViewController(userVendor: userVendor, userManager: userManager)
                             }
+                            let editProfileViewControllerBuilder = Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
                             return ProfileViewController(editProfileViewControllerBuilder: editProfileViewControllerBuilder)
                         }
+                        let profileViewControllerBuilder = Instantiator<ProfileViewController>(__safeDI_profileViewControllerBuilder)
                         return LoggedInViewController(userManager: userManager, userVendor: userVendor, profileViewControllerBuilder: profileViewControllerBuilder)
+                    }
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> {
+                        __safeDI_loggedInViewControllerBuilder(userManager: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
@@ -3118,15 +3160,20 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> { userManager in
-                        let profileViewControllerBuilder = Instantiator<ProfileViewController> {
-                            let editProfileViewControllerBuilder = Instantiator<EditProfileViewController> {
+                    func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
+                        func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
+                            func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
                                 let userVendor: UserVendor = userManager
                                 return EditProfileViewController(userVendor: userVendor, userManager: userManager)
                             }
+                            let editProfileViewControllerBuilder = Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
                             return ProfileViewController(editProfileViewControllerBuilder: editProfileViewControllerBuilder)
                         }
+                        let profileViewControllerBuilder = Instantiator<ProfileViewController>(__safeDI_profileViewControllerBuilder)
                         return LoggedInViewController(userManager: userManager, profileViewControllerBuilder: profileViewControllerBuilder)
+                    }
+                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> {
+                        __safeDI_loggedInViewControllerBuilder(userManager: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
                 }
@@ -3602,9 +3649,10 @@ final class SafeDIToolTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    let childBuilder: Instantiator<Child>? = Instantiator<Child> {
+                    func __safeDI_childBuilder() -> Child {
                         Child()
                     }
+                    let childBuilder: Instantiator<Child>? = Instantiator<Child>(__safeDI_childBuilder)
                     self.init(childBuilder: childBuilder)
                 }
             }

@@ -131,73 +131,88 @@ actor ScopeGenerator: CustomStringConvertible {
                     }
                     let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
 
-                    let isConstant: Bool
-                    let propertyDeclaration: String
-                    let leadingConcreteTypeName: String
-                    let closureArguments: String
-                    if forwardedProperties.isEmpty {
-                        closureArguments = ""
-                    } else {
-                        if
-                            let firstForwardedProperty = forwardedProperties.first,
-                            let forwardedArgument = property.generics.first,
-                            !(
-                                // The forwarded argument is the same type as our only `@Forwarded` property.
-                                (forwardedProperties.count == 1 && forwardedArgument == firstForwardedProperty.typeDescription)
-                                // The forwarded argument is the same as `InstantiableTypeName.ForwardedArguments`.
-                                || forwardedArgument == .nested(name: "ForwardedArguments", parentType: instantiable.concreteInstantiableType)
-                                // The forwarded argument is the same as the tuple we generated for `InstantiableTypeName.ForwardedArguments`.
-                                || forwardedArgument == forwardedProperties.asTupleTypeDescription
-                            )
-                        {
-                            throw GenerationError.forwardingInstantiatorGenericDoesNotMatch(
-                                property: property,
-                                instantiable: instantiable
-                            )
-                        }
-
-                        let forwardedArgumentList = forwardedProperties
-                            .sorted()
-                            .map(\.label)
-                            .joined(separator: ", ")
-                        closureArguments = " \(forwardedArgumentList) in"
+                    if
+                        let firstForwardedProperty = forwardedProperties.first,
+                        let forwardedArgument = property.generics.first,
+                        !(
+                            // The forwarded argument is the same type as our only `@Forwarded` property.
+                            (forwardedProperties.count == 1 && forwardedArgument == firstForwardedProperty.typeDescription)
+                            // The forwarded argument is the same as `InstantiableTypeName.ForwardedArguments`.
+                            || forwardedArgument == .nested(name: "ForwardedArguments", parentType: instantiable.concreteInstantiableType)
+                            // The forwarded argument is the same as the tuple we generated for `InstantiableTypeName.ForwardedArguments`.
+                            || forwardedArgument == forwardedProperties.asTupleTypeDescription
+                        )
+                    {
+                        throw GenerationError.forwardingInstantiatorGenericDoesNotMatch(
+                            property: property,
+                            instantiable: instantiable
+                        )
                     }
+
                     switch property.propertyType {
                     case .instantiator, .forwardingInstantiator:
-                        isConstant = false
+                        let forwardedProperties = forwardedProperties.sorted()
+                        let forwardedPropertiesHaveLabels = forwardedProperties.count > 1
+                        let forwardedArguments = forwardedProperties
+                            .map {
+                                if forwardedPropertiesHaveLabels {
+                                    "\($0.label): $0.\($0.label)"
+                                } else {
+                                    "\($0.label): $0"
+                                }
+                            }
+                            .joined(separator: ", ")
+                        let generatedProperties = try await generateProperties(leadingMemberWhitespace: Self.standardIndent)
+                        let functionArguments = forwardedProperties.isEmpty ? "" : forwardedProperties.initializerFunctionParameters.map(\.description).joined()
+                        let functionName = self.functionName(toBuild: property)
+                        let functionDeclaration = """
+                            func \(functionName)(\(functionArguments)) -> \(instantiable.concreteInstantiableType.asSource) {
+                            \(generatedProperties.joined(separator: "\n"))
+                            \(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
+                            }
+                            """
+
                         let typeDescription = property.typeDescription.asSource
                         let unwrappedTypeDescription = property.typeDescription.unwrappedTypeDescription.asSource
-                        if typeDescription == unwrappedTypeDescription {
-                            propertyDeclaration = "let \(property.label)"
+                        let propertyDeclaration = if typeDescription == unwrappedTypeDescription {
+                            "let \(property.label)"
                         } else {
-                            propertyDeclaration = "let \(property.label): \(typeDescription)"
+                            "let \(property.label): \(typeDescription)"
                         }
-                        leadingConcreteTypeName = unwrappedTypeDescription
-                    case .constant:
-                        isConstant = true
-                        if concreteTypeName == property.typeDescription.asSource {
-                            propertyDeclaration = "let \(property.label)"
+                        let instantiatorInstantiation = if forwardedArguments.isEmpty {
+                            "\(unwrappedTypeDescription)(\(functionName))"
                         } else {
-                            propertyDeclaration = "let \(property.label): \(property.typeDescription.asSource)"
-                        }
-                        leadingConcreteTypeName = ""
-                    }
-
-                    let leadingMemberWhitespace = "    "
-                    let generatedProperties = try await generateProperties(leadingMemberWhitespace: leadingMemberWhitespace)
-                    let initializer: String
-                    if isConstant && generatedProperties.isEmpty {
-                        initializer = returnLineSansReturn
-                    } else {
-                        initializer = """
-                            \(leadingConcreteTypeName)\(leadingConcreteTypeName.isEmpty ? "" : " "){\(closureArguments)
-                            \(generatedProperties.joined(separator: "\n"))
-                            \(leadingMemberWhitespace)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
-                            }\(isConstant ? "()" : "")
                             """
-                    }
+                            \(unwrappedTypeDescription) {
+                            \(Self.standardIndent)\(functionName)(\(forwardedArguments))
+                            }
+                            """
+                        }
+                        return """
+                            \(functionDeclaration)
+                            \(propertyDeclaration) = \(instantiatorInstantiation)
+                            """
+                    case .constant:
+                        let propertyDeclaration = if concreteTypeName == property.typeDescription.asSource {
+                            "let \(property.label)"
+                        } else {
+                            "let \(property.label): \(property.typeDescription.asSource)"
+                        }
+                        let generatedProperties = try await generateProperties(leadingMemberWhitespace: Self.standardIndent)
 
-                    return "\(propertyDeclaration) = \(initializer)\n"
+                        let initializer: String
+                        if generatedProperties.isEmpty {
+                            initializer = returnLineSansReturn
+                        } else {
+                            initializer = """
+                            {
+                            \(generatedProperties.joined(separator: "\n"))
+                            \(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
+                            }()
+                            """
+                        }
+                        return "\(propertyDeclaration) = \(initializer)\n"
+                    }
                 case let .alias(property, fulfillingProperty):
                     return "let \(property.asSource) = \(fulfillingProperty.label)"
                 }
@@ -306,6 +321,12 @@ actor ScopeGenerator: CustomStringConvertible {
         }
         return generatedProperties
     }
+
+    private func functionName(toBuild property: Property) -> String {
+        "__safeDI_\(property.label)"
+    }
+
+    private static let standardIndent = "    "
 
     // MARK: GenerationError
 
