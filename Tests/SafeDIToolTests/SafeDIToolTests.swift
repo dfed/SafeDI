@@ -4177,16 +4177,24 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
-
-    func test_run_onCodeWithCircularPropertyDependenciesInSameCombinedScope_throwsError() async {
+    func test_run_onCodeWithCircularPropertyDependenciesImmediatelyInitialized_throwsError() async {
         await assertThrowsError(
             """
             Dependency cycle detected!
-            B -> C -> D -> B
+            A -> B -> C -> A
             """
         ) {
             try await executeSystemUnderTest(
                 swiftFileContent: [
+                    """
+                    import Foundation
+
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated
+                        let a: A
+                    }
+                    """,
                     """
                     import Foundation
 
@@ -4197,7 +4205,7 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                     """
-                    import Foundation
+                    import UIKit
 
                     @Instantiable
                     public final class B {
@@ -4211,16 +4219,7 @@ final class SafeDIToolTests: XCTestCase {
                     @Instantiable
                     public final class C {
                         @Instantiated
-                        let d: D
-                    }
-                    """,
-                    """
-                    import UIKit
-
-                    @Instantiable
-                    public final class D {
-                        @Instantiated
-                        let b: B
+                        let a: A
                     }
                     """,
                 ],
@@ -4229,40 +4228,41 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
-    func test_run_onCodeWithCircularPropertyDependenciesInDifferentCombinedScopes_throwsError() async {
+    func test_run_onCodeWithCircularPropertyDependenciesWithDeferredInitialization_throwsError() async {
         await assertThrowsError(
             """
             Dependency cycle detected!
-            UserManager -> ProfileViewController -> UserManager
+            A -> B -> C -> A
             """
         ) {
             try await executeSystemUnderTest(
                 swiftFileContent: [
                     """
                     @Instantiable
-                    public final class UserManager {
+                    public struct Root {
                         @Instantiated
-                        let profileViewControllerBuilder: Instantiator<ProfileViewController>
-
-                        var user: User?
+                        let a: A
                     }
                     """,
                     """
-                    import UIKit
-
                     @Instantiable
-                    public final class ProfileViewController: UIViewController {
+                    public struct A {
                         @Instantiated
-                        let userManager: UserManager
+                        let bBuilder: Instantiator<B>
                     }
                     """,
                     """
-                    import UIKit
-
                     @Instantiable
-                    public final class RootViewController: UIViewController {
+                    public struct B {
                         @Instantiated
-                        let userManager: UserManager
+                        let cBuilder: Instantiator<C>
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public struct C {
+                        @Instantiated
+                        let aBuilder: Instantiator<A>
                     }
                     """,
                 ],
