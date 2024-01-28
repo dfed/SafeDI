@@ -407,10 +407,6 @@ The `@StateObject` documentation reads:
 
 `@Instantiated`, `@Forwarded`, or `@Received` objects may be decorated with [`@ObservedObject`](https://developer.apple.com/documentation/swiftui/ObservedObject). Note that `@Instantiated` objects declared on a `View` will be re-initialized when the view is re-initialized. You can find a deep dive on SwiftUI view lifecycles [here](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
 
-#### Dependency cycles
-
-In a manual DI system it is easy to instantiate an object that can instantiate another object that can then instantiate the first object again. Instantiable objects in SafeDI, however, are not able to generate this kind of circular dependency. Instantiable objects can achieve this kind of circular dependency manually: one object in the cycle must call other cycle objects‘ memberwise initializers directly, rather than utilizing generated `Instantiator`s or `ForwardingInstantiator`s.
-
 #### Inheritance
 
 In a manual DI system it is simple for superclasses to receive injected dependencies. SafeDI‘s utilization of macros means that SafeDI is not aware of dependencies required due to inheritance trees. Due to this limitation, superclass types should not be decorated with `@Instantiable`: instead, subclasses should declare the properties their superclasses need, and pass them upwards via a call to `super.init(…)`.
