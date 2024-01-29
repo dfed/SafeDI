@@ -77,9 +77,9 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         case let .composition(types):
             return types.map { $0.asSource }.joined(separator: " & ")
         case let .optional(type):
-            return "\(type.asSource)?"
+            return "\(type.wrappedIfAmbiguous.asSource)?"
         case let .implicitlyUnwrappedOptional(type):
-            return "\(type.asSource)!"
+            return "\(type.wrappedIfAmbiguous.asSource)!"
         case let .nested(name, parentType, generics):
             if generics.isEmpty {
                 return "\(parentType.asSource).\(name)"
@@ -87,11 +87,11 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 return "\(parentType.asSource).\(name)<\(generics.map { $0.asSource }.joined(separator: ", "))>"
             }
         case let .metatype(type, isType):
-            return "\(type.asSource).\(isType ? "Type" : "Protocol")"
+            return "\(type.wrappedIfAmbiguous.asSource).\(isType ? "Type" : "Protocol")"
         case let .some(type):
-            return "some \(type.asSource)"
+            return "some \(type.wrappedIfAmbiguous.asSource)"
         case let .any(type):
-            return "any \(type.asSource)"
+            return "any \(type.wrappedIfAmbiguous.asSource)"
         case let .attributed(type, specifier, attributes):
             func attributesFromList(_ attributes: [String]) -> String {
                 attributes
@@ -117,9 +117,9 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 return type.asSource
             }
         case let .array(element):
-            return "Array<\(element.asSource)>"
+            return "[\(element.asSource)]"
         case let .dictionary(key, value):
-            return "Dictionary<\(key.asSource), \(value.asSource)>"
+            return "[\(key.asSource): \(value.asSource)]"
         case let .tuple(types):
             return """
                 (\(types.map {
@@ -168,6 +168,11 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     }
 
     public struct TupleElement: Codable, Hashable, Sendable {
+        init(label: String? = nil, _ typeDescription: TypeDescription) {
+            self.label = label
+            self.typeDescription = typeDescription
+        }
+
         public let label: String?
         public let typeDescription: TypeDescription
     }
@@ -238,6 +243,18 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             return typeDescription.asInstantiatedType
         case .array, .attributed,  .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown, .void:
             return self
+        }
+    }
+
+    /// A representation of this type that may be wrapped in a single element tuple to ensure cohesiveness of the type description.
+    private var wrappedIfAmbiguous: Self {
+        switch self {
+        case .void, .simple, .optional, .implicitlyUnwrappedOptional, .metatype, .nested, .array, .dictionary, .tuple, .unknown:
+            // These types contain no spaces, and are therefore unambiguous without being wrapped.
+            self
+        case .composition, .some, .any, .attributed, .closure:
+            // These types contain spaces and may be ambigous without being wrapped.
+            .tuple([.init(self)])
         }
     }
 }
@@ -317,7 +334,7 @@ extension TypeSyntax {
             let elements = typeIdentifier.elements.map {
                 TypeDescription.TupleElement(
                     label: $0.secondName?.text ?? $0.firstName?.text,
-                    typeDescription: $0.type.typeDescription
+                    $0.type.typeDescription
                 )
             }
             if elements.isEmpty {
@@ -420,7 +437,7 @@ extension ExprSyntax {
                 return .tuple(tupleElements.map {
                     TypeDescription.TupleElement(
                         label: $0.label?.text,
-                        typeDescription: $0.expression.typeDescription
+                        $0.expression.typeDescription
                     )
                 })
             }
