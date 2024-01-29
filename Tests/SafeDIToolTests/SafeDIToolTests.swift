@@ -4177,45 +4177,41 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
-
-    func test_run_onCodeWithCircularPropertyDependenciesInSameCombinedScope_throwsError() async {
+    func test_run_onCodeWithCircularPropertyDependenciesImmediatelyInitialized_throwsError() async {
         await assertThrowsError(
             """
             Dependency cycle detected!
-            DefaultNetworkService -> DefaultLoggingService -> DefaultNetworkService
+            A -> B -> C -> A
             """
         ) {
             try await executeSystemUnderTest(
                 swiftFileContent: [
                     """
-                    import Foundation
-
-                    public protocol NetworkService {}
-
-                    @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                    public final class DefaultNetworkService: NetworkService {
-                        @Instantiated
-                        let loggingService: LoggingService
-                    }
-                    """,
-                    """
-                    import Foundation
-
-                    public protocol LoggingService {}
-
-                    @Instantiable(fulfillingAdditionalTypes: [LoggingService.self])
-                    public final class DefaultLoggingService: LoggingService {
-                        @Instantiated
-                        let networkService: NetworkService
-                    }
-                    """,
-                    """
-                    import UIKit
-
                     @Instantiable
-                    public final class RootViewController: UIViewController {
+                    public final class Root {
                         @Instantiated
-                        let networkService: NetworkService
+                        let a: A
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class A {
+                        @Instantiated
+                        let b: B
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class B {
+                        @Instantiated
+                        let c: C
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class C {
+                        @Instantiated
+                        let a: A
                     }
                     """,
                 ],
@@ -4224,40 +4220,41 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
-    func test_run_onCodeWithCircularPropertyDependenciesInDifferentCombinedScopes_throwsError() async {
+    func test_run_onCodeWithCircularPropertyDependenciesWithDeferredInitialization_throwsError() async {
         await assertThrowsError(
             """
             Dependency cycle detected!
-            UserManager -> ProfileViewController -> UserManager
+            A -> B -> C -> A
             """
         ) {
             try await executeSystemUnderTest(
                 swiftFileContent: [
                     """
                     @Instantiable
-                    public final class UserManager {
+                    public struct Root {
                         @Instantiated
-                        let profileViewControllerBuilder: Instantiator<ProfileViewController>
-
-                        var user: User?
+                        let a: A
                     }
                     """,
                     """
-                    import UIKit
-
                     @Instantiable
-                    public final class ProfileViewController: UIViewController {
+                    public struct A {
                         @Instantiated
-                        let userManager: UserManager
+                        let bBuilder: Instantiator<B>
                     }
                     """,
                     """
-                    import UIKit
-
                     @Instantiable
-                    public final class RootViewController: UIViewController {
+                    public struct B {
                         @Instantiated
-                        let userManager: UserManager
+                        let cBuilder: Instantiator<C>
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public struct C {
+                        @Instantiated
+                        let aBuilder: Instantiator<A>
                     }
                     """,
                 ],

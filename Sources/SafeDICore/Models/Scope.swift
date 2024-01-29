@@ -130,6 +130,7 @@ final class Scope: Hashable {
                 Dependency cycle detected!
                 \(instantiables
                     .map(\.concreteInstantiableType.asSource)
+                    .reversed()
                     .joined(separator: " -> "))
                 """
             }
