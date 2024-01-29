@@ -139,6 +139,15 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
         /// A `ForwardingInstantiator` property.
         /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
         case forwardingInstantiator
+
+        var isConstant: Bool {
+            switch self {
+            case .constant:
+                true
+            case .instantiator, .forwardingInstantiator:
+                false
+            }
+        }
     }
 }
 
