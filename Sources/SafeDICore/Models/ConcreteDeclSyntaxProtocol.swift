@@ -24,16 +24,44 @@ public protocol ConcreteDeclSyntaxProtocol: SyntaxProtocol {
     var attributes: AttributeListSyntax { get set }
     var modifiers: DeclModifierListSyntax { get set }
     var inheritanceClause: InheritanceClauseSyntax? { get set }
+    var keyword: TokenSyntax { get set }
     var name: TokenSyntax { get set }
     var declType: ConcreteDeclType { get }
 }
 
 extension ActorDeclSyntax: ConcreteDeclSyntaxProtocol {
+    public var keyword: SwiftSyntax.TokenSyntax {
+        get {
+            actorKeyword
+        }
+        set {
+            actorKeyword = newValue
+        }
+    }
+
     public var declType: ConcreteDeclType { .actorType }
 }
 extension ClassDeclSyntax: ConcreteDeclSyntaxProtocol {
+    public var keyword: SwiftSyntax.TokenSyntax {
+        get {
+            classKeyword
+        }
+        set {
+            classKeyword = newValue
+        }
+    }
+
     public var declType: ConcreteDeclType { .classType }
 }
 extension StructDeclSyntax: ConcreteDeclSyntaxProtocol {
+    public var keyword: SwiftSyntax.TokenSyntax {
+        get {
+            structKeyword
+        }
+        set {
+            structKeyword = newValue
+        }
+    }
+
     public var declType: ConcreteDeclType { .structType }
 }

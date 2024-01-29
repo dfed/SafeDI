@@ -146,7 +146,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
             return .skipChildren
         }
         guard let instantiableMacro = node.attributes.instantiableMacro else {
-            // Not an external instantiable type. We do not care.
+            // Not an instantiable type. We do not care.
             return .skipChildren
         }
 
@@ -160,12 +160,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
         guard declarationType.isExtension else {
             return .skipChildren
         }
-        guard let instantiableType else {
-            // We're being called on code that will not compile.
-            // We are visiting a function but we haven't visited the extension yet.
-            // Just move on.
-            return .skipChildren
-        }
         guard node.name.text == Self.instantiateMethodName else {
             // We don't care about this method.
             return .skipChildren
@@ -173,7 +167,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
         if
             let returnClause = node.signature.returnClause,
-            returnClause.type.typeDescription != instantiableType {
+            returnClause.type.typeDescription != instantiableType,
+            let instantiableType
+        {
             var modifiedSignature = node.signature
             modifiedSignature.returnClause = ReturnClauseSyntax(
                 arrow: .arrowToken(
@@ -215,7 +211,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     DeclModifierSyntax(
                         name: TokenSyntax(
                             TokenKind.keyword(.public),
-                            leadingTrivia: .newline,
+                            leadingTrivia: node.modifiers.first?.leadingTrivia ?? node.funcKeyword.leadingTrivia,
                             presence: .present
                         )
                     ),
@@ -228,6 +224,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     )
                 )
             )
+            modifiedNode.funcKeyword.leadingTrivia = .spaces(0)
             diagnostics.append(Diagnostic(
                 node: node,
                 error: FixableInstantiableError.missingAttributes,
@@ -397,18 +394,27 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
     private func processModifiers(_ modifiers: DeclModifierListSyntax, on node: some ConcreteDeclSyntaxProtocol) {
         if !node.modifiers.containsPublicOrOpen {
-            var modifiedNode = node
-            modifiedNode.modifiers = DeclModifierListSyntax(
-                arrayLiteral:
-                    DeclModifierSyntax(
-                        name: TokenSyntax(
-                            TokenKind.keyword(.public),
-                            leadingTrivia: .newline,
-                            trailingTrivia: .space,
-                            presence: .present
-                        )
-                    )
+            let publicModifier = DeclModifierSyntax(
+                name: TokenSyntax(
+                    TokenKind.keyword(.public),
+                    leadingTrivia: node.modifiers.first?.leadingTrivia ?? .newline,
+                    trailingTrivia: node.modifiers.first?.trailingTrivia ?? .space,
+                    presence: .present
+                )
             )
+            var modifiedNode = node
+            if var firstModifier = modifiedNode.modifiers.first {
+                firstModifier.name.leadingTrivia = .spaces(0)
+                modifiedNode.modifiers.replaceSubrange(
+                    modifiedNode.modifiers.startIndex..<modifiedNode.attributes.index(after: modifiedNode.attributes.startIndex),
+                    with: [publicModifier, firstModifier])
+                modifiedNode.modifiers = modifiedNode.modifiers.filter {
+                    $0.name.text != "internal" && $0.name.text != "fileprivate" && $0.name.text != "private"
+                }
+            } else {
+                modifiedNode.modifiers = [publicModifier]
+                modifiedNode.keyword.leadingTrivia = .spaces(0)
+            }
             diagnostics.append(Diagnostic(
                 node: node,
                 error: FixableInstantiableError.missingPublicOrOpenAttribute,
