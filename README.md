@@ -459,6 +459,12 @@ If your first-party code is entirely contained in a Swift Package with one or mo
 
 You can see this in integration in practice in the [ExamplePackageIntegration](Examples/ExamplePackageIntegration) package.
 
+For faster builds, you can install a release version of `SafeDITool` [rather than a debug version](https://github.com/apple/swift-package-manager/issues/7233) via `brew`:
+
+```zsh
+brew install dfed/safedi/safeditool
+```
+
 #### Other configurations
 
 If your first-party code comprises multiple modules in Xcode, or a mix of Xcode Projects and Swift Packages, or some other configuration not listed above, you will need to utilize the `SafeDITool` command-line executable directly.

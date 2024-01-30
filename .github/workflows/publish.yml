@@ -76,3 +76,11 @@ jobs:
         run: |
           security delete-keychain build.keychain
           rm -rf codesign
+
+  bump-cask:
+    name: Create Cask Bumping PR
+    runs-on: macos-13
+    needs: build-release-cli
+    steps:
+      - name: Bump Brew Version
+        run: brew bump-cask-pr --version ${{ github.ref_name }} dfed/safedi/safeditool
