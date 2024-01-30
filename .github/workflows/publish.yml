@@ -8,13 +8,20 @@ jobs:
   build-release-cli:
     name: Build Release CLI
     runs-on: macos-13
+    strategy:
+      matrix:
+        architecture: [
+          'x86_64',
+          'arm64',
+        ]
+      fail-fast: false
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_15.0.1.app/Contents/Developer
       - name: Build SafeDITool
-        run: xcrun swift build -c release --product SafeDITool
+        run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }}
       - name: Give SafeDITool executable permissions
         run: chmod +x .build/*/release/SafeDITool
       - name: Make codesigning folder
@@ -62,6 +69,7 @@ jobs:
           repo_token: ${{ secrets.RELEASE_UPLOADER }}
           file: codesign/SafeDITool
           tag: ${{ github.ref }}
+          asset_name: SafeDITool-${{ matrix.architecture }}
           overwrite: false
       - name: Cleanup
         if: always() # This ensures that the cleanup step runs even if earlier steps fail
