@@ -61,7 +61,7 @@ jobs:
       - name: Upload SafeDITool artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SafeDITool
+          name: SafeDITool-${{ matrix.architecture }}
           path: codesign/SafeDITool
       - name: Upload SafeDITool as release binary
         uses: svenstaro/upload-release-action@v2
