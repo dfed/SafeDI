@@ -436,7 +436,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
         return Initializer(arguments: dependencies.map {
             Initializer.Argument(
                 innerLabel: $0.property.label,
-                typeDescription: $0.property.typeDescription
+                typeDescription: $0.property.typeDescription,
+                hasDefaultValue: false
             )
         })
     }
