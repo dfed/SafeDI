@@ -7,7 +7,7 @@ on:
 jobs:
   build-release-cli:
     name: Build Release CLI
-    runs-on: macos-13
+    runs-on: macos-14
     strategy:
       matrix:
         architecture: [
@@ -79,7 +79,7 @@ jobs:
 
   bump-cask:
     name: Create Cask Bumping PR
-    runs-on: macos-13
+    runs-on: macos-14
     needs: build-release-cli
     steps:
       - name: Bump Brew Version
