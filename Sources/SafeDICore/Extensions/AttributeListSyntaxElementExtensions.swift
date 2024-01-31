@@ -39,10 +39,13 @@ extension AttributeListSyntax.Element {
     }
 
     private func attributeIfNameEquals(_ expectedName: String) -> AttributeSyntax? {
-        switch self {
-        case let .attribute(attribute):
-            IdentifierTypeSyntax(attribute.attributeName)?.name.text == expectedName ? attribute : nil
-        case .ifConfigDecl:
+        if
+            case let .attribute(attribute) = self,
+            let identifier = IdentifierTypeSyntax(attribute.attributeName),
+            identifier.name.text == expectedName
+        {
+            attribute
+        } else {
             nil
         }
     }

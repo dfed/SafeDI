@@ -69,7 +69,7 @@ public enum FixableInjectableError: DiagnosticError {
             }
         }
 
-        var fixItID: SwiftDiagnostics.MessageID {
+        var fixItID: MessageID {
             MessageID(domain: "\(Self.self)", id: error.description)
         }
 
