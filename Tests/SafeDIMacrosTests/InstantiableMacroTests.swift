@@ -306,7 +306,7 @@ final class InstantiableMacroTests: XCTestCase {
                 let nonInjectedProperty: Int
 
                 public init(nonInjectedProperty: Int = 5) {
-                    self.instantiatedA = instantiatedA
+                    self.nonInjectedProperty = nonInjectedProperty
                 }
             }
             """
@@ -316,7 +316,7 @@ final class InstantiableMacroTests: XCTestCase {
                 let nonInjectedProperty: Int
 
                 public init(nonInjectedProperty: Int = 5) {
-                    self.instantiatedA = instantiatedA
+                    self.nonInjectedProperty = nonInjectedProperty
                 }
             }
             """
@@ -335,6 +335,7 @@ final class InstantiableMacroTests: XCTestCase {
 
                 public init(instantiatedA: InstantiatedA, nonInjectedProperty: Int = 5) {
                     self.instantiatedA = instantiatedA
+                    self.nonInjectedProperty = nonInjectedProperty
                 }
             }
             """
@@ -347,6 +348,7 @@ final class InstantiableMacroTests: XCTestCase {
 
                 public init(instantiatedA: InstantiatedA, nonInjectedProperty: Int = 5) {
                     self.instantiatedA = instantiatedA
+                    self.nonInjectedProperty = nonInjectedProperty
                 }
             }
             """
