@@ -9,7 +9,7 @@ on:
 jobs:
   xcodebuild-15:
     name: Build with xcodebuild on Xcode 15
-    runs-on: macos-13
+    runs-on: macos-14
     strategy:
       matrix:
         platforms: [
@@ -17,46 +17,47 @@ jobs:
           'platform=macos',
           'generic/platform=tvos',
           'generic/platform=watchos',
+          'generic/platform=visionos'
         ]
       fail-fast: false
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_15.0.1.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
       - name: Build Framework
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
 
   spm-package-integration-15:
     name: Build Package Integration on Xcode 15
-    runs-on: macos-13
+    runs-on: macos-14
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_15.0.1.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
       - name: Build Package Integration
         run: xcrun swift build -c release --package-path Examples/ExamplePackageIntegration
 
   spm-project-integration-15:
     name: Build Project Integration on Xcode 15
-    runs-on: macos-13
+    runs-on: macos-14
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_15.0.1.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
       - name: Build Project Integration
         run: pushd Examples/ExampleProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration; popd
 
   spm-15:
     name: Build and Test on Xcode 15
-    runs-on: macos-13
+    runs-on: macos-14
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_15.0.1.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
       - name: Build and Test Framework
         run: xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing
       - name: Prepare Coverage Reports
