@@ -82,7 +82,8 @@ final class InitializerTests: XCTestCase {
             arguments: [
                 .init(
                     innerLabel: "variant",
-                    typeDescription: .simple(name: "Variant")
+                    typeDescription: .simple(name: "Variant"),
+                    hasDefaultValue: false
                 )
             ]
         )
@@ -110,7 +111,8 @@ final class InitializerTests: XCTestCase {
             arguments: [
                 .init(
                     innerLabel: "variant",
-                    typeDescription: .simple(name: "Variant")
+                    typeDescription: .simple(name: "Variant"),
+                    hasDefaultValue: false
                 )
             ]
         )
@@ -137,7 +139,8 @@ final class InitializerTests: XCTestCase {
             arguments: [
                 .init(
                     innerLabel: "variant",
-                    typeDescription: .simple(name: "Variant")
+                    typeDescription: .simple(name: "Variant"),
+                    hasDefaultValue: false
                 )
             ]
         )
@@ -174,7 +177,8 @@ final class InitializerTests: XCTestCase {
             arguments: [
                 .init(
                     innerLabel: "someVariant",
-                    typeDescription: .simple(name: "Variant")
+                    typeDescription: .simple(name: "Variant"),
+                    hasDefaultValue: false
                 )
             ]
         )
@@ -201,7 +205,8 @@ final class InitializerTests: XCTestCase {
             arguments: [
                 .init(
                     innerLabel: "variant",
-                    typeDescription: .simple(name: "NotThatVariant")
+                    typeDescription: .simple(name: "NotThatVariant"),
+                    hasDefaultValue: false
                 )
             ]
         )

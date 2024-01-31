@@ -298,6 +298,63 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
+    func test_declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithDefaultArguments() {
+        assertMacro {
+            """
+            @Instantiable
+            public struct ExampleService {
+                let nonInjectedProperty: Int
+
+                public init(nonInjectedProperty: Int = 5) {
+                    self.nonInjectedProperty = nonInjectedProperty
+                }
+            }
+            """
+        } expansion: {
+            """
+            public struct ExampleService {
+                let nonInjectedProperty: Int
+
+                public init(nonInjectedProperty: Int = 5) {
+                    self.nonInjectedProperty = nonInjectedProperty
+                }
+            }
+            """
+        }
+    }
+
+    func test_declaration_doesNotGenerateRequiredInitializerWithDependenciesSatisfyingInitializerIfItAlreadyExistsWithDefaultArguments() {
+        assertMacro {
+            """
+            @Instantiable
+            public struct ExampleService {
+                @Instantiated
+                let instantiatedA: InstantiatedA
+
+                let nonInjectedProperty: Int
+
+                public init(instantiatedA: InstantiatedA, nonInjectedProperty: Int = 5) {
+                    self.instantiatedA = instantiatedA
+                    self.nonInjectedProperty = nonInjectedProperty
+                }
+            }
+            """
+        } expansion: {
+            """
+            public struct ExampleService {
+                let instantiatedA: InstantiatedA
+
+                let nonInjectedProperty: Int
+
+                public init(instantiatedA: InstantiatedA, nonInjectedProperty: Int = 5) {
+                    self.instantiatedA = instantiatedA
+                    self.nonInjectedProperty = nonInjectedProperty
+                }
+            }
+            """
+        }
+    }
+
     func test_declaration_generatesRequiredInitializerWithDependencies() {
         assertMacro {
             """
