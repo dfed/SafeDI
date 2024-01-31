@@ -86,7 +86,7 @@ public struct InstantiableMacro: MemberMacro {
                     )
                     context.diagnose(Diagnostic(
                         node: Syntax(declaration.memberBlock),
-                        error: FixableInstantiableError.missingRequiredInitializer,
+                        error: FixableInstantiableError.missingRequiredInitializer(hasInjectableProperties: !visitor.dependencies.isEmpty),
                         changes: [
                             .replace(
                                 oldNode: Syntax(declaration.memberBlock.members),

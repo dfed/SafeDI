@@ -1258,6 +1258,47 @@ final class InstantiableMacroTests: XCTestCase {
         }
     }
 
+    func test_declaration_fixit_addsFixitMissingRequiredInitializerWhenPropertyIsMissingInitializerAndThereAreNoDependencies() {
+        assertMacro {
+            """
+            @Instantiable
+            public struct ExampleService {
+                let uninitializedProperty: Int
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            public struct ExampleService {
+                                         ╰─ 🛑 @Instantiable-decorated type with no @Instantiated, @Received, or @Forwarded-decorated properties and at least one uninitialized property must have an empty `public` or `open` initializer
+                                            ✏️ Add required initializer
+                let uninitializedProperty: Int
+            }
+            """
+        } fixes: {
+            """
+            @Instantiable
+            public struct ExampleService {
+            nonisolated public init() {
+            uninitializedProperty = <#T##assign_uninitializedProperty#>
+            }
+
+                let uninitializedProperty: Int
+            }
+            """
+        } expansion: {
+            """
+            public struct ExampleService {
+            nonisolated public init() {
+            uninitializedProperty = <#T##assign_uninitializedProperty#>
+            }
+
+                let uninitializedProperty: Int
+            }
+            """
+        }
+    }
+
     func test_declaration_fixit_addsFixitMissingRequiredInitializerWhenPropertyIsMissingInitializer() {
         assertMacro {
             """
@@ -1273,7 +1314,7 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService {
-                                         ╰─ 🛑 @Instantiable-decorated type with uninitialized property must have `public` or `open` initializer comprising all injected parameters
+                                         ╰─ 🛑 @Instantiable-decorated type with uninitialized property must have `public` or `open` initializer with a parameter for each injected property
                                             ✏️ Add required initializer
                 @Instantiated
                 let receivedA: ReceivedA
@@ -1307,7 +1348,7 @@ final class InstantiableMacroTests: XCTestCase {
 
                 let uninitializedProperty: Int
             }
-            """ // Whitespace is correct in Xcode, but not here.
+            """
         }
     }
 
@@ -1328,7 +1369,7 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService {
-                                         ╰─ 🛑 @Instantiable-decorated type with uninitialized property must have `public` or `open` initializer comprising all injected parameters
+                                         ╰─ 🛑 @Instantiable-decorated type with uninitialized property must have `public` or `open` initializer with a parameter for each injected property
                                             ✏️ Add required initializer
                 @Instantiated
                 let receivedA: ReceivedA
@@ -1374,7 +1415,7 @@ final class InstantiableMacroTests: XCTestCase {
                 let uninitializedProperty2: Int, uninitializedProperty3: Int, initializedProperty = "init"
                 let (uninitializedProperty4, uninitializedProperty5): (Int, Int)
             }
-            """ // Whitespace is correct in Xcode, but not here.
+            """
         }
     }
 

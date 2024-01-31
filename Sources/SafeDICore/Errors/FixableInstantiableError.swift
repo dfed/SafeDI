@@ -24,7 +24,7 @@ public enum FixableInstantiableError: DiagnosticError {
     case dependencyHasTooManyAttributes
     case dependencyHasInitializer
     case missingPublicOrOpenAttribute
-    case missingRequiredInitializer
+    case missingRequiredInitializer(hasInjectableProperties: Bool)
     case missingRequiredInstantiateMethod(typeName: String)
     case missingAttributes
     case disallowedGenericParameter
@@ -40,9 +40,13 @@ public enum FixableInstantiableError: DiagnosticError {
             "Dependency must not have hand-written initializer"
         case .missingPublicOrOpenAttribute:
             "@\(InstantiableVisitor.macroName)-decorated type must be `public` or `open`"
-        case .missingRequiredInitializer:
+        case let .missingRequiredInitializer(hasInjectableProperties):
             // TODO: Create fixit just for `public` or `open` missing.
-            "@\(InstantiableVisitor.macroName)-decorated type with uninitialized property must have `public` or `open` initializer comprising all injected parameters"
+            if hasInjectableProperties {
+                "@\(InstantiableVisitor.macroName)-decorated type with uninitialized property must have `public` or `open` initializer with a parameter for each injected property"
+            } else {
+                "@\(InstantiableVisitor.macroName)-decorated type with no @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated properties and at least one uninitialized property must have an empty `public` or `open` initializer"
+            }
         case let .missingRequiredInstantiateMethod(typeName):
             "@\(InstantiableVisitor.macroName)-decorated extension of \(typeName) must have a `public static func instantiate() -> \(typeName)` method"
         case .missingAttributes:
