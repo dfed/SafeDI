@@ -76,19 +76,3 @@ jobs:
         run: |
           security delete-keychain build.keychain
           rm -rf codesign
-
-  bump-cask:
-    name: Create Cask Bumping PR
-    runs-on: macos-14
-    needs: build-release-cli
-    steps:
-      - name: Bump Brew Version
-        run: |
-          git config --global user.name "Dan Federman"
-          git config --global user.email "dfed@me.com"
-          echo "export HOMEBREW_GITHUB_API_TOKEN=${{ secrets.RELEASE_UPLOADER }}" >> ~/.bash_profile
-          git config --global credential.helper store
-          git config --global credential.username dfed
-          echo "https://$GITHUB_ACTOR:${{ secrets.RELEASE_UPLOADER }}@github.com" > ~/.git-credentials
-          brew tap dfed/safedi
-          brew bump-cask-pr --no-fork --no-browse --version ${{ github.ref_name }} dfed/safedi/safeditool
