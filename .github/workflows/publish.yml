@@ -83,4 +83,6 @@ jobs:
     needs: build-release-cli
     steps:
       - name: Bump Brew Version
-        run: brew bump-cask-pr --version ${{ github.ref_name }} dfed/safedi/safeditool
+        run: |
+          brew tap dfed/safedi
+          brew bump-cask-pr --version ${{ github.ref_name }} dfed/safedi/safeditool
