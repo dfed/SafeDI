@@ -86,6 +86,6 @@ jobs:
         run: |
           git config --global user.name "Dan Federman"
           git config --global user.email "dfed@me.com"
-          echo "HOMEBREW_GITHUB_API_TOKEN=${{ secrets.RELEASE_UPLOADER }}" >> $GITHUB_ENV
+          echo "HOMEBREW_GITHUB_API_TOKEN=${{ secrets.RELEASE_UPLOADER }}" >> /Users/runner/.bash_profile
           brew tap dfed/safedi
           brew bump-cask-pr --version ${{ github.ref_name }} dfed/safedi/safeditool
