@@ -83,12 +83,12 @@ public enum FixableInstantiableError: DiagnosticError {
                     .missingPublicOrOpenAttribute,
                     .missingRequiredInitializer,
                     .missingRequiredInstantiateMethod,
-                            .missingAttributes,
-                            .disallowedGenericParameter,
-                            .disallowedEffectSpecifiers,
-                            .incorrectReturnType,
-                            .disallowedGenericWhereClause:
-                .error
+                    .missingAttributes,
+                    .disallowedGenericParameter,
+                    .disallowedEffectSpecifiers,
+                    .incorrectReturnType,
+                    .disallowedGenericWhereClause:
+                    .error
             }
         }
 
