@@ -69,7 +69,6 @@ jobs:
           fail_ci_if_error: true
           verbose: true
           os: macos
-          swift: true
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
@@ -92,7 +91,6 @@ jobs:
           fail_ci_if_error: true
           verbose: true
           os: linux
-          swift: true
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
