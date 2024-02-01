@@ -84,9 +84,10 @@ public struct InstantiableMacro: MemberMacro {
                         ),
                         at: membersWithInitializer.startIndex
                     )
+                    // TODO: Create separate fixit if just `public` or `open` are missing.
                     context.diagnose(Diagnostic(
                         node: Syntax(declaration.memberBlock),
-                        error: FixableInstantiableError.missingRequiredInitializer,
+                        error: FixableInstantiableError.missingRequiredInitializer(hasInjectableProperties: !visitor.dependencies.isEmpty),
                         changes: [
                             .replace(
                                 oldNode: Syntax(declaration.memberBlock.members),
