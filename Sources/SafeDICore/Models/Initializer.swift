@@ -185,7 +185,11 @@ public struct Initializer: Codable, Hashable {
                 $0.property.label == argument.innerLabel
                 && $0.property.typeDescription.isEqualToFunctionArgument(argument.typeDescription)
             }) else {
-                throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
+                guard argument.hasDefaultValue else {
+                    throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
+                }
+                // We do not care about this argument because it has a default value.
+                return
             }
             partialResult.append((dependency: dependency, argument: argument))
         }
@@ -221,6 +225,8 @@ public struct Initializer: Codable, Hashable {
         public let innerLabel: String
         /// The type to which the property conforms.
         public let typeDescription: TypeDescription
+        /// Whether the argument has a default value.
+        public let hasDefaultValue: Bool
         /// The label by which this argument is referenced at the call site.
         public var label: String {
             outerLabel ?? innerLabel
@@ -242,12 +248,14 @@ public struct Initializer: Codable, Hashable {
                 innerLabel = node.firstName.text
             }
             typeDescription = node.type.typeDescription
+            hasDefaultValue = node.defaultValue != nil
         }
 
-        init(outerLabel: String? = nil, innerLabel: String, typeDescription: TypeDescription) {
+        init(outerLabel: String? = nil, innerLabel: String, typeDescription: TypeDescription, hasDefaultValue: Bool) {
             self.outerLabel = outerLabel
             self.innerLabel = innerLabel
             self.typeDescription = typeDescription
+            self.hasDefaultValue = hasDefaultValue
         }
 
         static let dependenciesArgumentName: TokenSyntax = .identifier("buildSafeDIDependencies")

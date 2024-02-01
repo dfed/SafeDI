@@ -47,8 +47,16 @@ final class FileVisitorTests: XCTestCase {
                     instantiableType: .simple(name: "LoggedInViewController"),
                     initializer: Initializer(
                         arguments: [
-                            .init(innerLabel: "user", typeDescription: .simple(name: "User")),
-                            .init(innerLabel: "networkService", typeDescription: .simple(name: "NetworkService")),
+                            .init(
+                                innerLabel: "user",
+                                typeDescription: .simple(name: "User"),
+                                hasDefaultValue: false
+                            ),
+                            .init(
+                                innerLabel: "networkService",
+                                typeDescription: .simple(name: "NetworkService"),
+                                hasDefaultValue: false
+                            ),
                         ]
                     ),
                     additionalInstantiableTypes: nil,
@@ -100,8 +108,16 @@ final class FileVisitorTests: XCTestCase {
                     instantiableType: .simple(name: "LoggedInViewController"),
                     initializer: Initializer(
                         arguments: [
-                            .init(innerLabel: "user", typeDescription: .simple(name: "User")),
-                            .init(innerLabel: "networkService", typeDescription: .simple(name: "NetworkService")),
+                            .init(
+                                innerLabel: "user",
+                                typeDescription: .simple(name: "User"),
+                                hasDefaultValue: false
+                            ),
+                            .init(
+                                innerLabel: "networkService",
+                                typeDescription: .simple(name: "NetworkService"),
+                                hasDefaultValue: false
+                            ),
                         ]
                     ),
                     additionalInstantiableTypes: nil,
