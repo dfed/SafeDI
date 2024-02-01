@@ -1270,7 +1270,7 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService {
-                                         ╰─ 🛑 @Instantiable-decorated type with no @Instantiated, @Received, or @Forwarded-decorated properties and at least one uninitialized property must have an empty `public` or `open` initializer
+                                         ╰─ 🛑 @Instantiable-decorated type with no @Instantiated, @Received, or @Forwarded-decorated properties must have a `public` or `open` initializer that either takes no parameters or has a default value for each parameter.
                                             ✏️ Add required initializer
                 let uninitializedProperty: Int
             }
@@ -1314,7 +1314,7 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService {
-                                         ╰─ 🛑 @Instantiable-decorated type with uninitialized property must have `public` or `open` initializer with a parameter for each injected property
+                                         ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values.
                                             ✏️ Add required initializer
                 @Instantiated
                 let receivedA: ReceivedA
@@ -1369,7 +1369,7 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService {
-                                         ╰─ 🛑 @Instantiable-decorated type with uninitialized property must have `public` or `open` initializer with a parameter for each injected property
+                                         ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values.
                                             ✏️ Add required initializer
                 @Instantiated
                 let receivedA: ReceivedA

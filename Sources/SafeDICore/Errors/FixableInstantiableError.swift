@@ -41,11 +41,10 @@ public enum FixableInstantiableError: DiagnosticError {
         case .missingPublicOrOpenAttribute:
             "@\(InstantiableVisitor.macroName)-decorated type must be `public` or `open`"
         case let .missingRequiredInitializer(hasInjectableProperties):
-            // TODO: Create fixit just for `public` or `open` missing.
             if hasInjectableProperties {
-                "@\(InstantiableVisitor.macroName)-decorated type with uninitialized property must have `public` or `open` initializer with a parameter for each injected property"
+                "@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values."
             } else {
-                "@\(InstantiableVisitor.macroName)-decorated type with no @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated properties and at least one uninitialized property must have an empty `public` or `open` initializer"
+                "@\(InstantiableVisitor.macroName)-decorated type with no @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated properties must have a `public` or `open` initializer that either takes no parameters or has a default value for each parameter."
             }
         case let .missingRequiredInstantiateMethod(typeName):
             "@\(InstantiableVisitor.macroName)-decorated extension of \(typeName) must have a `public static func instantiate() -> \(typeName)` method"
