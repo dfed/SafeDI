@@ -50,8 +50,8 @@ final class Scope: Hashable {
     var propertiesToGenerate = [PropertyToGenerate]()
 
     enum PropertyToGenerate {
-        case instantiated(Property, Scope)
-        case aliased(Property, fulfilledBy: Property)
+        case instantiated(Property, Scope, erasedToConcreteExistential: Bool)
+        case aliased(Property, fulfilledBy: Property, erasedToConcreteExistential: Bool)
     }
 
     var properties: [Property] {
@@ -67,7 +67,7 @@ final class Scope: Hashable {
                 switch $0.source {
                 case .received:
                     $0.property
-                case let .aliased(fulfillingProperty):
+                case let .aliased(fulfillingProperty, _):
                     fulfillingProperty
                 case .forwarded,
                         .instantiated:
@@ -77,8 +77,9 @@ final class Scope: Hashable {
     }
 
     func createScopeGenerator(
-        for property: Property? = nil,
-        propertyStack: OrderedSet<Property> = []
+        for property: Property?,
+        propertyStack: OrderedSet<Property>,
+        erasedToConcreteExistential: Bool
     ) throws -> ScopeGenerator {
         if
             let property,
@@ -101,18 +102,21 @@ final class Scope: Hashable {
                 property: property,
                 propertiesToGenerate: isPropertyCycle ? [] : try propertiesToGenerate.map {
                     switch $0 {
-                    case let .instantiated(property, scope):
+                    case let .instantiated(property, scope, erasedToConcreteExistential):
                         try scope.createScopeGenerator(
                             for: property,
-                            propertyStack: childPropertyStack
+                            propertyStack: childPropertyStack,
+                            erasedToConcreteExistential: erasedToConcreteExistential
                         )
-                    case let .aliased(property, fulfilledBy: fulfillingProperty):
+                    case let .aliased(property, fulfillingProperty, erasedToConcreteExistential):
                         ScopeGenerator(
                             property: property,
-                            fulfillingProperty: fulfillingProperty
+                            fulfillingProperty: fulfillingProperty,
+                            erasedToConcreteExistential: erasedToConcreteExistential
                         )
                     }
                 },
+                erasedToConcreteExistential: erasedToConcreteExistential,
                 isPropertyCycle: isPropertyCycle
             )
             Task.detached {

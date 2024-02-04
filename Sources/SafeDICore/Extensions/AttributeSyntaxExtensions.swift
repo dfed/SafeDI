@@ -76,13 +76,29 @@ extension AttributeSyntax {
         guard
             let arguments,
             let labeledExpressionList = LabeledExprListSyntax(arguments),
-            let lastLabeledExpression = labeledExpressionList.last,
-            lastLabeledExpression.label?.text == "ofType"
+            let expectedOfTypeLabeledExpression = labeledExpressionList.dropFirst().first,
+            expectedOfTypeLabeledExpression.label?.text == "ofType"
         else {
             return nil
         }
 
-        return lastLabeledExpression.expression
+        return expectedOfTypeLabeledExpression.expression
+    }
+
+    public var erasedToConcreteExistential: ExprSyntax? {
+        guard
+            let arguments,
+            let labeledExpressionList = LabeledExprListSyntax(arguments),
+            let erasedToConcreteExistentialLabeledExpression = labeledExpressionList.dropFirst().first(where: {
+                // In `@Instantiated`, the `erasedToConcreteExistential` parameter is the second parameter.
+                // In `@Received`, the `erasedToConcreteExistential` parameter is the third parameter.
+                $0.label?.text == "erasedToConcreteExistential"
+            })
+        else {
+            return nil
+        }
+
+        return erasedToConcreteExistentialLabeledExpression.expression
     }
 
     public var fulfillingTypeDescription: TypeDescription? {
@@ -97,4 +113,14 @@ extension AttributeSyntax {
         }
     }
 
+    public var erasedToConcreteExistentialType: Bool {
+        guard
+            let erasedToConcreteExistential,
+            let erasedToConcreteExistentialType = BooleanLiteralExprSyntax(erasedToConcreteExistential)
+        else {
+            // Default value for the `erasedToConcreteExistential` parameter is `false`.
+            return false
+        }
+        return erasedToConcreteExistentialType.literal.text == "true"
+    }
 }

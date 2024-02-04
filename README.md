@@ -158,9 +158,11 @@ Property declarations within `@Instantiable` types decorated with [`@Instantiate
 
 #### Utilizing @Instantiated with type erased properties
 
-When you want to instantiate a type-erased property, you may specify which concrete type you expect to fulfill your property by utilizing `@Instantiated`‘s `fulfilledByType` parameter.
+When you want to instantiate a type-erased property, you may specify which concrete type you expect to fulfill your property by utilizing `@Instantiated`‘s `fulfilledByType` and `erasedToConcreteExistential` parameters.
 
 The `fulfilledByType` parameter takes a `String` identical to the type name of the concrete type that will be assigned to the type-erased property. Representing the type as a string literal allows for dependency inversion: the code that receives the concrete type does not need to have a dependency on the module that defines the concrete type.
+
+The `erasedToConcreteExistential` parameter takes a boolean value that indicates whether the fulfilling type is being erased to a concrete [existential](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/#Boxed-Protocol-Types) type. A concrete existential type is a non-protocol type that wraps a protocol and is usually prefixed with `Any`. A fulfilling type does not inherit from a concrete existential type, and therefore when the property‘s type is a concrete existential the fulfilling type must be wrapped in the erasing concrete existential type‘s initializer before it is returned. When the property‘s type is not a concrete existential, the fulfilling type is cast as the property‘s type. For example, an `AnyView` is a concrete and existential type-erased form of some `struct MyExampleView: View`, while a `UIViewController` is a concrete but not existential type-erased form of some `final class MyExampleViewController: UIViewController`. This parameter defaults to `false`.
 
 ```swift
 import SwiftUI
@@ -174,11 +176,11 @@ public struct ParentView: View {
         }
     }
 
-    // The Instantiator‘s `instantiate()` function will build a view of type `ChildView`.
+    // The Instantiator‘s `instantiate()` function will build a `ChildView` wrapped in a concrete `AnyView`.
     // All that is required for this code to compile is for there to be an
     // `@Instantiable public struct ChildView: View` in the codebase.
-    @Instantiated(fulfilledByType: "ChildView")
-    private let childViewBuilder: Instantiator<some View>
+    @Instantiated(fulfilledByType: "ChildView", erasedToConcreteExistential: true)
+    private let childViewBuilder: Instantiator<AnyView>
 }
 ```
 
@@ -206,8 +208,8 @@ public struct LoggedInContentView: View {
     @Forwarded
     private let user: User
 
-    @Instantiated(fulfilledByType: "ProfileView")
-    private let profileViewBuilder: Instantiator<some View>
+    @Instantiated(fulfilledByType: "ProfileView", erasedToConcreteExistential: true)
+    private let profileViewBuilder: Instantiator<AnyView>
 }
 
 @Instantiable
