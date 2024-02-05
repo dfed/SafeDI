@@ -26,7 +26,8 @@
 ///     private let dependency: DependencyType
 ///
 /// Note that the access level of the dependency in the above example does not affect the dependency tree – a `private` dependency can still be `@Received` by `@Instantiable`-decorated types further down the dependency tree.
-@attached(peer) public macro Instantiated() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
+@attached(peer)
+public macro Instantiated() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
 
 /// Marks a SafeDI dependency that is instantiated when its enclosing type is instantiated.
 ///
@@ -45,7 +46,8 @@
 ///   - erasedToConcreteExistential: Whether the concrete type is being erased to a concrete existential type – a type that encapsulates a value conforming to a protocol without revealing the underlying type. Concrete type erasing types like `AnyView` fit this description. Set this parameter to `true` to encapsulate the created instance of `concreteTypeName` in a no-label initializer of the property’s type (e.g. `AnyView(ConcreteView())`).
 ///
 ///  - SeeAlso: [The Swift Programming Lanaguage’s explanation of existential types](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/#Boxed-Protocol-Types)
-@attached(peer) public macro Instantiated(
+@attached(peer)
+public macro Instantiated(
     fulfilledByType concreteTypeName: StaticString,
     erasedToConcreteExistential: Bool = false
 ) = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
