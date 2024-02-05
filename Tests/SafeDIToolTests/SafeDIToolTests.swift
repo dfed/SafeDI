@@ -4153,8 +4153,7 @@ final class SafeDIToolTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableReceivedProperty_throwsError() async {
         await assertThrowsError(
             """
-            The following @Received properties were never @Instantiated or @Forwarded:
-            `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService
+            @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService
             """
         ) {
             try await executeSystemUnderTest(
@@ -4188,8 +4187,7 @@ final class SafeDIToolTests: XCTestCase {
     func test_run_onCodeWithDiamondDependencyWhereAReceivedPropertyIsUnfulfillableOnOneBranch_throwsError() async {
         await assertThrowsError(
             """
-            The following @Received properties were never @Instantiated or @Forwarded:
-            `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
+            @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
             """
         ) {
             try await executeSystemUnderTest(
@@ -4239,8 +4237,7 @@ final class SafeDIToolTests: XCTestCase {
     func test_run_onCodeWithReceivedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """
-            The following @Received properties were never @Instantiated or @Forwarded:
-            `authService: AuthService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
+            @Received property `authService: AuthService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
             """
         ) {
             try await executeSystemUnderTest(
@@ -4296,8 +4293,7 @@ final class SafeDIToolTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableAliasedReceivedPropertyName_throwsError() async {
         await assertThrowsError(
             """
-            The following @Received properties were never @Instantiated or @Forwarded:
-            `networkService2: NetworkService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
+            @Received property `networkService2: NetworkService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
             """
         ) {
             try await executeSystemUnderTest(
@@ -4349,8 +4345,7 @@ final class SafeDIToolTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableAliasedReceivedPropertyType_throwsError() async {
         await assertThrowsError(
             """
-            The following @Received properties were never @Instantiated or @Forwarded:
-            `networkService: NetworkService2` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
+            @Received property `networkService: NetworkService2` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
             """
         ) {
             try await executeSystemUnderTest(
@@ -4402,8 +4397,7 @@ final class SafeDIToolTests: XCTestCase {
     func test_run_onCodeWhereAliasedReceivedPropertyRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """
-            The following @Received properties were never @Instantiated or @Forwarded:
-            `authService: AuthService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
+            @Received property `authService: AuthService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
             """
         ) {
             try await executeSystemUnderTest(
@@ -4459,8 +4453,7 @@ final class SafeDIToolTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableReceivedPropertyOnExtendedInstantiatedType_throwsError() async {
         await assertThrowsError(
             """
-            The following @Received properties were never @Instantiated or @Forwarded:
-            `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> URLSessionWrapper
+            @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> URLSessionWrapper
             """
         ) {
             try await executeSystemUnderTest(

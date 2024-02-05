@@ -88,10 +88,9 @@ public final class DependencyTreeGenerator {
                 "No `@\(InstantiableVisitor.macroName)`-decorated type or extension found to fulfill `@\(Dependency.Source.instantiatedRawValue)`-decorated property with type `\(typeDescription.asSource)`"
             case let .unfulfillableProperties(unfulfillableProperties):
                 """
-                The following @\(Dependency.Source.receivedRawValue) properties were never @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue):
                 \(unfulfillableProperties.map {
                     """
-                    `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(([$0.instantiable] + $0.parentStack)
+                    @\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(([$0.instantiable] + $0.parentStack)
                     .reversed()
                     .map(\.concreteInstantiableType.asSource)
                     .joined(separator: " -> "))
