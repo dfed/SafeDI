@@ -35,9 +35,9 @@ public struct Dependency: Codable, Hashable {
         switch source {
         case .received, .forwarded:
             asInstantiatedType = property.typeDescription.asInstantiatedType
-        case let .instantiated(fulfillingTypeDescription):
+        case let .instantiated(fulfillingTypeDescription, _):
             asInstantiatedType = (fulfillingTypeDescription ?? property.typeDescription).asInstantiatedType
-        case let .aliased(fulfillingProperty):
+        case let .aliased(fulfillingProperty, _):
             asInstantiatedType = fulfillingProperty.typeDescription.asInstantiatedType
         }
     }
@@ -52,14 +52,17 @@ public struct Dependency: Codable, Hashable {
     public let asInstantiatedType: TypeDescription
 
     public enum Source: Codable, Hashable {
-        case instantiated(fulfillingTypeDescription: TypeDescription?)
+        case instantiated(fulfillingTypeDescription: TypeDescription?, erasedToConcreteExistential: Bool)
         case received
-        case aliased(fulfillingProperty: Property)
+        case aliased(fulfillingProperty: Property, erasedToConcreteExistential: Bool)
         case forwarded
 
         public init?(node: AttributeListSyntax.Element) {
             if let instantiatedMacro = node.instantiatedMacro {
-                self = .instantiated(fulfillingTypeDescription: instantiatedMacro.fulfillingTypeDescription)
+                self = .instantiated(
+                    fulfillingTypeDescription: instantiatedMacro.fulfillingTypeDescription,
+                    erasedToConcreteExistential: instantiatedMacro.erasedToConcreteExistentialType
+                )
             } else if let receivedMacro = node.receivedMacro {
                 if
                     let fulfillingPropertyName = receivedMacro.fulfillingPropertyName,
@@ -69,7 +72,8 @@ public struct Dependency: Codable, Hashable {
                         fulfillingProperty: Property(
                             label: fulfillingPropertyName,
                             typeDescription: fulfillingTypeDescription
-                        )
+                        ),
+                        erasedToConcreteExistential: receivedMacro.erasedToConcreteExistentialType
                     )
                 } else {
                     self = .received

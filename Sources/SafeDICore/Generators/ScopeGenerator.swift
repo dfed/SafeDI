@@ -29,6 +29,7 @@ actor ScopeGenerator: CustomStringConvertible {
         instantiable: Instantiable,
         property: Property?,
         propertiesToGenerate: [ScopeGenerator],
+        erasedToConcreteExistential: Bool,
         isPropertyCycle: Bool
     ) {
         if let property {
@@ -41,6 +42,7 @@ actor ScopeGenerator: CustomStringConvertible {
                         .filter { $0.source == .forwarded }
                         .map(\.property)
                 ),
+                erasedToConcreteExistential: erasedToConcreteExistential,
                 isPropertyCycle: isPropertyCycle
             )
             description = instantiable.concreteInstantiableType.asSource
@@ -71,7 +73,7 @@ actor ScopeGenerator: CustomStringConvertible {
                         return nil
                     case .received:
                         return $0.property
-                    case let .aliased(fulfillingProperty):
+                    case let .aliased(fulfillingProperty, _):
                         return fulfillingProperty
                     }
                 }
@@ -80,9 +82,14 @@ actor ScopeGenerator: CustomStringConvertible {
 
     init(
         property: Property,
-        fulfillingProperty: Property
+        fulfillingProperty: Property,
+        erasedToConcreteExistential: Bool
     ) {
-        scopeData = .alias(property: property, fulfillingProperty: fulfillingProperty)
+        scopeData = .alias(
+            property: property,
+            fulfillingProperty: fulfillingProperty,
+            erasedToConcreteExistential: erasedToConcreteExistential
+        )
         requiredReceivedProperties = [fulfillingProperty]
         description = property.asSource
         propertiesToGenerate = []
@@ -122,6 +129,7 @@ actor ScopeGenerator: CustomStringConvertible {
                     instantiable,
                     property,
                     forwardedProperties,
+                    erasedToConcreteExistential,
                     isPropertyCycle
                 ):
                     let argumentList = try instantiable.generateArgumentList()
@@ -169,7 +177,7 @@ actor ScopeGenerator: CustomStringConvertible {
                         let functionArguments = forwardedProperties.isEmpty ? "" : forwardedProperties.initializerFunctionParameters.map(\.description).joined()
                         let functionName = self.functionName(toBuild: property)
                         let functionDeclaration = isPropertyCycle ? "" : """
-                            func \(functionName)(\(functionArguments)) -> \(instantiable.concreteInstantiableType.asSource) {
+                            func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
                             \(generatedProperties.joined(separator: "\n"))
                             \(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
                             }
@@ -177,14 +185,28 @@ actor ScopeGenerator: CustomStringConvertible {
                             """
 
                         let typeDescription = property.typeDescription.asSource
-                        let unwrappedTypeDescription = property.typeDescription.unwrappedTypeDescription.asSource
+                        let unwrappedTypeDescription = property
+                            .typeDescription
+                            .unwrappedTypeDescription
+                            .asSource
+                        let instantiatedTypeDescription = property
+                            .typeDescription
+                            .unwrappedTypeDescription
+                            .asInstantiatedType
+                            .asSource
                         let propertyDeclaration = if typeDescription == unwrappedTypeDescription {
                             "let \(property.label)"
                         } else {
-                            "let \(property.label): \(typeDescription)"
+                            "let \(property.asSource)"
                         }
-                        let instantiatorInstantiation = if forwardedArguments.isEmpty {
+                        let instantiatorInstantiation = if forwardedArguments.isEmpty && !erasedToConcreteExistential {
                             "\(unwrappedTypeDescription)(\(functionName))"
+                        } else if erasedToConcreteExistential {
+                            """
+                            \(unwrappedTypeDescription) {
+                            \(Self.standardIndent)\(instantiatedTypeDescription)(\(functionName)(\(forwardedArguments)))
+                            }
+                            """
                         } else {
                             """
                             \(unwrappedTypeDescription) {
@@ -196,14 +218,19 @@ actor ScopeGenerator: CustomStringConvertible {
                             \(functionDeclaration)\(propertyDeclaration) = \(instantiatorInstantiation)
                             """
                     case .constant:
-                        let propertyDeclaration = if concreteTypeName == property.typeDescription.asSource {
+                        let propertyDeclaration = if erasedToConcreteExistential || concreteTypeName == property.typeDescription.asSource {
                             "let \(property.label)"
                         } else {
-                            "let \(property.label): \(property.typeDescription.asSource)"
+                            "let \(property.asSource)"
                         }
                         let generatedProperties = try await generateProperties(leadingMemberWhitespace: Self.standardIndent)
 
                         let initializer: String
+                        let returnLineSansReturn = if erasedToConcreteExistential {
+                            "\(property.typeDescription.asSource)(\(returnLineSansReturn))"
+                        } else {
+                            returnLineSansReturn
+                        }
                         if generatedProperties.isEmpty {
                             initializer = returnLineSansReturn
                         } else {
@@ -216,8 +243,12 @@ actor ScopeGenerator: CustomStringConvertible {
                         }
                         return "\(propertyDeclaration) = \(initializer)\n"
                     }
-                case let .alias(property, fulfillingProperty):
-                    return "let \(property.asSource) = \(fulfillingProperty.label)"
+                case let .alias(property, fulfillingProperty, erasedToConcreteExistential):
+                    if erasedToConcreteExistential {
+                        return "let \(property.label) = \(property.typeDescription.asSource)(\(fulfillingProperty.label))"
+                    } else {
+                        return "let \(property.asSource) = \(fulfillingProperty.label)"
+                    }
                 }
             }
             self.generateCodeTask = generateCodeTask
@@ -241,16 +272,18 @@ actor ScopeGenerator: CustomStringConvertible {
             instantiable: Instantiable,
             property: Property,
             forwardedProperties: Set<Property>,
+            erasedToConcreteExistential: Bool,
             isPropertyCycle: Bool
         )
         case alias(
             property: Property,
-            fulfillingProperty: Property
+            fulfillingProperty: Property,
+            erasedToConcreteExistential: Bool
         )
 
         var forwardedProperties: Set<Property> {
             switch self {
-            case let .property(_, _, forwardedProperties, _):
+            case let .property(_, _, forwardedProperties, _, _):
                 return forwardedProperties
             case .root, .alias:
                 return []
