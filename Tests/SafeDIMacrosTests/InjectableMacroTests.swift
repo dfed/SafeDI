@@ -323,7 +323,7 @@ final class InjectableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService {
-                @Received(fulfilledByDependencyNamed: "instantiatedA", ofType: []])
+                @Received(fulfilledByDependencyNamed: "instantiatedA", ofType: "InstantiatedA")
                 let receivedA: ReceivedA
             }
             """
@@ -331,14 +331,41 @@ final class InjectableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService {
-                @Received(fulfilledByDependencyNamed: "instantiatedA", ofType: []])
-                                                                                 ┬─
-                │                                                                ├─ 🛑 expected ')' to end attribute
-                │                                                                │  ✏️ insert ')'
-                │                                                                ╰─ 🛑 unexpected code '])' in variable
-                ┬────────────────────────────────────────────────────────────────
+                @Received(fulfilledByDependencyNamed: "instantiatedA", ofType: "InstantiatedA")
+                ┬──────────────────────────────────────────────────────────────────────────────
                 ╰─ 🛑 The argument `ofType` must be a type literal
                 let receivedA: ReceivedA
+            }
+            """
+        }
+    }
+
+    func test_throwsErrorWhenIsExistentialIsAnInvalidType() {
+        assertMacro {
+            """
+            @Instantiable
+            public struct ExampleService {
+                static let erasedToConcreteExistential = true
+                @Received(
+                    fulfilledByDependencyNamed: "receivedA",
+                    ofType: ReceivedA.self,
+                    erasedToConcreteExistential: erasedToConcreteExistential
+                )
+                let receivedA: AnyReceivedA
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            public struct ExampleService {
+                static let erasedToConcreteExistential = true
+                @Received(
+                ╰─ 🛑 The argument `erasedToConcreteExistential` must be a bool literal
+                    fulfilledByDependencyNamed: "receivedA",
+                    ofType: ReceivedA.self,
+                    erasedToConcreteExistential: erasedToConcreteExistential
+                )
+                let receivedA: AnyReceivedA
             }
             """
         }

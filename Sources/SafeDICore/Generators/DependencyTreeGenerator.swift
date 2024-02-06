@@ -41,7 +41,13 @@ public final class DependencyTreeGenerator {
         try validateReceivedProperties(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
         let rootScopeGenerators = try rootInstantiableTypes
             .sorted()
-            .compactMap { try typeDescriptionToScopeMap[$0]?.createScopeGenerator() }
+            .compactMap {
+                try typeDescriptionToScopeMap[$0]?.createScopeGenerator(
+                    for: nil,
+                    propertyStack: [],
+                    erasedToConcreteExistential: false
+                )
+            }
 
         let dependencyTree = try await withThrowingTaskGroup(
             of: String.self,
@@ -82,10 +88,9 @@ public final class DependencyTreeGenerator {
                 "No `@\(InstantiableVisitor.macroName)`-decorated type or extension found to fulfill `@\(Dependency.Source.instantiatedRawValue)`-decorated property with type `\(typeDescription.asSource)`"
             case let .unfulfillableProperties(unfulfillableProperties):
                 """
-                The following @Received properties were never @Instantiated or @Forwarded:
                 \(unfulfillableProperties.map {
                     """
-                    `\($0.property.asSource)` is not @Instantiated or @Forwarded in chain: \(([$0.instantiable] + $0.parentStack)
+                    @\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(([$0.instantiable] + $0.parentStack)
                     .reversed()
                     .map(\.concreteInstantiableType.asSource)
                     .joined(separator: " -> "))
@@ -220,7 +225,7 @@ public final class DependencyTreeGenerator {
         for scope in Set(typeDescriptionToScopeMap.values) {
             for dependency in scope.instantiable.dependencies {
                 switch dependency.source {
-                case .instantiated:
+                case let .instantiated(_, erasedToConcreteExistential):
                     let instantiatedType = dependency.asInstantiatedType
                     guard
                         let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType],
@@ -252,12 +257,14 @@ public final class DependencyTreeGenerator {
                     }
                     scope.propertiesToGenerate.append(.instantiated(
                         dependency.property,
-                        instantiatedScope
+                        instantiatedScope,
+                        erasedToConcreteExistential: erasedToConcreteExistential
                     ))
-                case let .aliased(fulfillingProperty):
+                case let .aliased(fulfillingProperty, erasedToConcreteExistential):
                     scope.propertiesToGenerate.append(.aliased(
                         dependency.property,
-                        fulfilledBy: fulfillingProperty
+                        fulfilledBy: fulfillingProperty,
+                        erasedToConcreteExistential: erasedToConcreteExistential
                     ))
                 case .forwarded, .received:
                     continue
@@ -312,7 +319,7 @@ public final class DependencyTreeGenerator {
 
             for childPropertyToGenerate in scope.propertiesToGenerate {
                 switch childPropertyToGenerate {
-                case let .instantiated(childProperty, childScope):
+                case let .instantiated(childProperty, childScope, _):
                     guard !instantiables.contains(childScope.instantiable) else {
                         // We've previously visited this child scope.
                         // There is a cycle in our scope tree. Do not re-enter it.

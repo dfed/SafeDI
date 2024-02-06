@@ -38,7 +38,8 @@ public struct InjectableMacro: PeerMacro {
             throw InjectableError.decoratingStatic
         }
 
-        if let fulfilledByType = variableDecl.attributes.instantiatedMacro?.fulfilledByType {
+        let macroWithParameters = variableDecl.attributes.instantiatedMacro ?? variableDecl.attributes.receivedMacro
+        if let fulfilledByType = macroWithParameters?.fulfilledByType {
             if
                 let stringLiteralExpression = StringLiteralExprSyntax(fulfilledByType),
                 stringLiteralExpression.segments.count == 1,
@@ -55,7 +56,7 @@ public struct InjectableMacro: PeerMacro {
             }
         }
 
-        if let fulfilledByDependencyNamed = variableDecl.attributes.receivedMacro?.fulfilledByDependencyNamed {
+        if let fulfilledByDependencyNamed = macroWithParameters?.fulfilledByDependencyNamed {
             guard
                 let stringLiteralExpression = StringLiteralExprSyntax(fulfilledByDependencyNamed),
                 stringLiteralExpression.segments.count == 1
@@ -64,9 +65,15 @@ public struct InjectableMacro: PeerMacro {
             }
         }
 
-        if let fulfilledByType = variableDecl.attributes.receivedMacro?.ofType {
+        if let fulfilledByType = macroWithParameters?.ofType {
             if case .unknown = fulfilledByType.typeDescription {
                 throw InjectableError.ofTypeArgumentInvalidType
+            }
+        }
+
+        if let erasedToConcreteExistential = macroWithParameters?.erasedToConcreteExistential {
+            if BooleanLiteralExprSyntax(erasedToConcreteExistential) == nil {
+                throw InjectableError.erasedToConcreteExistentialInvalidType
             }
         }
 
@@ -104,6 +111,7 @@ public struct InjectableMacro: PeerMacro {
         case fulfilledByTypeArgumentInvalidTypeDescription
         case fulfilledByDependencyNamedInvalidType
         case ofTypeArgumentInvalidType
+        case erasedToConcreteExistentialInvalidType
 
         var description: String {
             switch self {
@@ -119,6 +127,8 @@ public struct InjectableMacro: PeerMacro {
                 "The argument `fulfilledByDependencyNamed` must be a string literal"
             case .ofTypeArgumentInvalidType:
                 "The argument `ofType` must be a type literal"
+            case .erasedToConcreteExistentialInvalidType:
+                "The argument `erasedToConcreteExistential` must be a bool literal"
             }
         }
     }
