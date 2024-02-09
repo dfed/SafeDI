@@ -33,7 +33,7 @@ public struct NoteView: View {
     
     public var body: some View {
         VStack {
-            Text("\(userName)‘s note")
+            Text("\(userName)’s note")
             TextEditor(text: $note)
                 .onChange(of: note) { _, newValue in
                     stringStorage.setString(newValue, forKey: userName)
