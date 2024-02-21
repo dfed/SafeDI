@@ -54,8 +54,8 @@ extension ImportDeclSyntax {
 
     private var attribute: String {
         // This AttributeList is of the form ["@", "attribute"]
-        // So we grab the last token
-        attributes.lastToken(viewMode: .sourceAccurate)?.text ?? ""
+        // Grab the whole thing.
+        attributes.trimmedDescription
     }
 
 }
