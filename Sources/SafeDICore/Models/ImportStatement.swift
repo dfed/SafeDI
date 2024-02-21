@@ -48,7 +48,32 @@ public struct ImportStatement: Codable, Hashable {
     /// A canonical representation of this import that can be used in source code.
     public var asSource: String {
         """
-        \(attribute.isEmpty ? "" : attribute + " ")import \(kind.isEmpty ? "" : kind + " ")\(moduleName)\(type.isEmpty ? "" : "." + type)
+        \(attributeStatement)import \(kind.isEmpty ? "" : kind + " ")\(moduleName)\(type.isEmpty ? "" : "." + type)
         """
     }
+
+    // MARK: Private
+
+    private var attributeToGenerate: String {
+        if Self.attributesToFilterOut.contains(attribute) {
+            ""
+        } else {
+            attribute
+        }
+    }
+
+    private var attributeStatement: String {
+        let attributeToGenerate = attributeToGenerate
+        return if attributeToGenerate.isEmpty {
+            ""
+        } else {
+            attributeToGenerate + " "
+        }
+    }
+
+    private static let attributesToFilterOut = Set([
+        // We don't use concurrency in generated code, so including this attribute leads to a warning:
+        //     '@preconcurrency' attribute on module 'ImportedModule' is unused
+        "@preconcurrency",
+    ])
 }
