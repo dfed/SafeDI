@@ -2379,7 +2379,7 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
                 """
-                import GrandchildModule
+                @preconcurrency import GrandchildModule
 
                 @Instantiable()
                 public final class ChildB {
