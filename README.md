@@ -133,9 +133,9 @@ public final class DefaultUserService: UserService {
 
 #### Making external types `@Instantiable`
 
-Types that are declared outside of your project can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via a `public func instantiate(…) -> ExtendedType` function. This `instantiate(…)` function can receive dependencies instantiated or forwarded by objects further up the dependency tree by declaring these dependencies as arguments to the `instantiate(…)` function.
+Types that are declared outside of your project can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via a `public static func instantiate(…) -> ExtendedType` function. This `instantiate(…)` function can receive dependencies instantiated or forwarded by objects further up the dependency tree by declaring these dependencies as arguments to the `instantiate(…)` function.
 
-Here we have a sample `@Instantiable` `SecurePersistentStorage` whose concrete type is defined in a third-party dependency:
+Here we have a sample `@InstantiableExtension` `SecurePersistentStorage` whose concrete type is defined in a third-party dependency:
 
 ```swift
 import SafeDI
@@ -190,7 +190,7 @@ public struct ParentView: View {
 
 Property declarations within `@Instantiable` types decorated with [`@Forwarded`](Sources/SafeDI/PropertyDecoration/Forwarded.swift) represent dependencies that come from the runtime, e.g. user input or backend-delivered content. Like an `@Instantiated`-decorated property, a `@Forwarded`-decorated property is available to be `@Received` by objects instantiated further down the dependency tree.
 
-A `@Forwarded` property is forwarded into the SafeDI dependency tree by a [`Instantiator`](#instantiator)’s `instantiate(_ arguments: T.ForwardedProperties) -> T` function that creates an instance of the property’s enclosing type. `@Instantiable` types with a `@Forwarded`-decorated property can _only_ be instantiated utilizing a `ForwardingInstantiator`.
+A `@Forwarded` property is forwarded into the SafeDI dependency tree by a [`Instantiator`](#instantiator)’s `instantiate(_ forwardedProperties: T.ForwardedProperties) -> T` function that creates an instance of the property’s enclosing type.
 
 Forwarded property types do not need to be decorated with the `@Instantiable` macro.
 

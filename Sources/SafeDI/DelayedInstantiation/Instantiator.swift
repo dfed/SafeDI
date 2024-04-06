@@ -37,8 +37,8 @@ public final class Instantiator<T: Instantiable> {
 
     /// Instantiates and returns a new instance of the `@Instantiable` type.
     /// - Returns: An instance of `T`.
-    public func instantiate(_ arguments: T.ForwardedProperties) -> T {
-        instantiator(arguments)
+    public func instantiate(_ forwardedProperties: T.ForwardedProperties) -> T {
+        instantiator(forwardedProperties)
     }
 
     /// Instantiates and returns a new instance of the `@Instantiable` type.
