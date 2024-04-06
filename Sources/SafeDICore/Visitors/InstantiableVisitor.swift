@@ -366,7 +366,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
         guard !isInTopLevelDeclaration else {
             return .skipChildren
         }
-
         isInTopLevelDeclaration = true
         topLevelDeclarationType = node.declType
 
