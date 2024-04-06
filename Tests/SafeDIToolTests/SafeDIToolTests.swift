@@ -4185,6 +4185,40 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
+    func test_run_onCodeWithInstantiatedPropertyWithForwardedArgument_throwsError() async {
+        await assertThrowsError(
+            """
+            Property `networkService: NetworkService` on RootViewController has at least one @Forwarded property. Property should instead be of type `Instantiator<DefaultNetworkService>`.
+            """
+        ) {
+            try await executeSystemUnderTest(
+                swiftFileContent: [
+                    """
+                    import Foundation
+
+                    public protocol NetworkService {}
+
+                    @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                    public final class DefaultNetworkService: NetworkService {
+                        @Forwarded
+                        let urlSession: URLSession
+                    }
+                    """,
+                    """
+                    import UIKit
+
+                    @Instantiable
+                    public final class RootViewController: UIViewController {
+                        @Instantiated
+                        let networkService: NetworkService
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true
+            )
+        }
+    }
+
     func test_run_onCodeWithDiamondDependencyWhereAReceivedPropertyIsUnfulfillableOnOneBranch_throwsError() async {
         await assertThrowsError(
             """
