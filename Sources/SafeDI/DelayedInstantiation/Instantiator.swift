@@ -30,6 +30,11 @@ public final class Instantiator<T: Instantiable> {
         self.instantiator = instantiator
     }
 
+    /// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
+    public init(_ instantiator: @escaping () -> T) where T.ForwardedProperties == Void {
+        self.instantiator = { _ in instantiator() }
+    }
+
     /// Instantiates and returns a new instance of the `@Instantiable` type.
     /// - Returns: An instance of `T`.
     public func instantiate(_ arguments: T.ForwardedProperties) -> T {
