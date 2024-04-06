@@ -27,7 +27,7 @@ public protocol UserService: ObservableObject {
 }
 
 @Instantiable(fulfillingAdditionalTypes: [UserService.self])
-public final class DefaultUserService: UserService {
+public final class DefaultUserService: Instantiable, UserService {
     public init(stringStorage: StringStorage) {
         self.stringStorage = stringStorage
     }

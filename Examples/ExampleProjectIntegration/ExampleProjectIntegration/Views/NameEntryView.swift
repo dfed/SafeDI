@@ -23,7 +23,7 @@ import SwiftUI
 
 @MainActor
 @Instantiable
-public struct NameEntryView: View {
+public struct NameEntryView: Instantiable, View {
     public init(userService: any UserService) {
         self.userService = userService
     }
