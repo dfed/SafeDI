@@ -145,7 +145,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
         guard declarationType.isExtension else {
             return .skipChildren
         }
-        guard let instantiableMacro = node.attributes.extendedInstantiableMacro ?? node.attributes.instantiableMacro else {
+        guard let instantiableMacro = node.attributes.instantiableExtendedMacro ?? node.attributes.instantiableMacro else {
             // Not an instantiable type. We do not care.
             return .skipChildren
         }
@@ -359,7 +359,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
         guard declarationType.isTypeDefinition else {
             return .skipChildren
         }
-        guard let macro = node.attributes.instantiableMacro ?? node.attributes.extendedInstantiableMacro else {
+        guard let macro = node.attributes.instantiableMacro ?? node.attributes.instantiableExtendedMacro else {
             // Not an instantiable type. We do not care.
             return .skipChildren
         }

@@ -61,7 +61,7 @@ public struct InstantiableMacro: MemberMacro, ExtensionMacro {
     ) throws -> [DeclSyntax] {
         if
             let fulfillingAdditionalTypesArgument = (
-                declaration.attributes.instantiableMacro ?? declaration.attributes.extendedInstantiableMacro
+                declaration.attributes.instantiableMacro ?? declaration.attributes.instantiableExtendedMacro
             )?.fulfillingAdditionalTypes
         {
             if ArrayExprSyntax(fulfillingAdditionalTypesArgument) == nil {
@@ -80,7 +80,7 @@ public struct InstantiableMacro: MemberMacro, ExtensionMacro {
                 context.diagnose(diagnostic)
             }
 
-            if declaration.attributes.extendedInstantiableMacro != nil {
+            if declaration.attributes.instantiableExtendedMacro != nil {
                 context.diagnose(Diagnostic(
                     node: Syntax(node),
                     error: FixableInstantiableExtensionError.incorrectDeclarationType,
