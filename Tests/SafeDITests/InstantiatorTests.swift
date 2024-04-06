@@ -30,11 +30,33 @@ final class InstantiatorTests: XCTestCase {
         XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
     }
 
+    func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() {
+        let systemUnderTest = Instantiator() { id in BuiltProductWithForwardedArgument(id: id) }
+        let firstBuiltProduct = systemUnderTest.instantiate("12345")
+        let secondBuiltProduct = systemUnderTest.instantiate("54321")
+        XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
+    }
+
     private final class BuiltProduct: Equatable, Identifiable, Instantiable {
         static func == (lhs: BuiltProduct, rhs: BuiltProduct) -> Bool {
             lhs.id == rhs.id
         }
 
         let id = UUID().uuidString
+    }
+
+    private final class BuiltProductWithForwardedArgument: Equatable, Identifiable, Instantiable {
+        init(id: String) {
+            self.id = id
+        }
+
+        typealias ForwardedProperties = String
+
+        static func == (lhs: BuiltProductWithForwardedArgument, rhs: BuiltProductWithForwardedArgument) -> Bool {
+            lhs.id == rhs.id
+        }
+
+        @Forwarded
+        let id: String
     }
 }
