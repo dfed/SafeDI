@@ -948,13 +948,13 @@ final class InstantiableMacroTests: XCTestCase {
         } fixes: {
             """
             @Instantiable
-            public final class ExampleService: Instantiable, CustomStringConvertible {
+            public final class ExampleService: CustomStringConvertible, Instantiable {
                 public var description: String { "ExampleService" }
             }
             """
         } expansion: {
             """
-            public final class ExampleService: Instantiable, CustomStringConvertible {
+            public final class ExampleService: CustomStringConvertible, Instantiable {
                 public var description: String { "ExampleService" }
 
                 // A generated initializer that has one argument per SafeDI-injected property.
@@ -1646,7 +1646,7 @@ final class InstantiableMacroTests: XCTestCase {
         } fixes: {
             """
             @Instantiable
-            extension ExampleService: Instantiable, CustomStringConvertible {
+            extension ExampleService: CustomStringConvertible, Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
 
                 public var description: String { "ExampleService" }
@@ -1654,7 +1654,7 @@ final class InstantiableMacroTests: XCTestCase {
             """
         } expansion: {
             """
-            extension ExampleService: Instantiable, CustomStringConvertible {
+            extension ExampleService: CustomStringConvertible, Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
 
                 public var description: String { "ExampleService" }

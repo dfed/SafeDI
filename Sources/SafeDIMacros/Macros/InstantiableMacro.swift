@@ -59,8 +59,15 @@ public struct InstantiableMacro: MemberMacro {
                     type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
                 )
                 if let existingInheritanceClause = modifiedDeclaration.inheritanceClause {
-                    inheritedType.trailingComma = .commaToken(trailingTrivia: .space)
-                    modifiedDeclaration.inheritanceClause?.inheritedTypes = [inheritedType] + existingInheritanceClause.inheritedTypes
+                    inheritedType.trailingTrivia = .space
+                    modifiedDeclaration.inheritanceClause?.inheritedTypes = existingInheritanceClause.inheritedTypes.map { inhertiedType in
+                        var modifiedInhertiedType = inhertiedType
+                        if modifiedInhertiedType.trailingComma == nil {
+                            modifiedInhertiedType.trailingComma = .commaToken(trailingTrivia: .space)
+                            modifiedInhertiedType.type.trailingTrivia = []
+                        }
+                        return modifiedInhertiedType
+                    } + [inheritedType]
                 } else {
                     modifiedDeclaration.name.trailingTrivia = []
                     modifiedDeclaration.inheritanceClause = InheritanceClauseSyntax(
@@ -155,8 +162,15 @@ public struct InstantiableMacro: MemberMacro {
                     type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
                 )
                 if let existingInheritanceClause = modifiedDeclaration.inheritanceClause {
-                    inheritedType.trailingComma = .commaToken(trailingTrivia: .space)
-                    modifiedDeclaration.inheritanceClause?.inheritedTypes = [inheritedType] + existingInheritanceClause.inheritedTypes
+                    inheritedType.trailingTrivia = .space
+                    modifiedDeclaration.inheritanceClause?.inheritedTypes = existingInheritanceClause.inheritedTypes.map { inhertiedType in
+                        var modifiedInhertiedType = inhertiedType
+                        if modifiedInhertiedType.trailingComma == nil {
+                            modifiedInhertiedType.trailingComma = .commaToken(trailingTrivia: .space)
+                            modifiedInhertiedType.type.trailingTrivia = []
+                        }
+                        return modifiedInhertiedType
+                    } + [inheritedType]
                 } else {
                     modifiedDeclaration.extendedType.trailingTrivia = []
                     modifiedDeclaration.inheritanceClause = InheritanceClauseSyntax(
