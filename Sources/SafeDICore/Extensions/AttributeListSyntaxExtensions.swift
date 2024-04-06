@@ -31,6 +31,15 @@ extension AttributeListSyntax {
         return AttributeSyntax(attribute)
     }
 
+    public var extendedInstantiableMacro: AttributeSyntax? {
+        guard let attribute = first(where: { element in
+            element.extendedInstantiableMacro != nil
+        }) else {
+            return nil
+        }
+        return AttributeSyntax(attribute)
+    }
+
     public var instantiatedMacro: AttributeSyntax? {
         guard let attribute = first(where: { element in
             element.instantiatedMacro != nil

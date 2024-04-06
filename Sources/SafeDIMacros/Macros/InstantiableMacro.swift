@@ -24,13 +24,46 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-public struct InstantiableMacro: MemberMacro {
+public struct InstantiableMacro: MemberMacro, ExtensionMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        attachedTo declaration: some DeclGroupSyntax,
+        providingExtensionsOf type: some TypeSyntaxProtocol,
+        conformingTo protocols: [TypeSyntax],
+        in context: some MacroExpansionContext
+    ) throws -> [ExtensionDeclSyntax] {
+        if
+            let concreteDeclaration: ConcreteDeclSyntaxProtocol
+                = ActorDeclSyntax(declaration)
+                ?? ClassDeclSyntax(declaration)
+                ?? StructDeclSyntax(declaration) 
+        {
+            [
+                ExtensionDeclSyntax(
+                    extendedType: IdentifierTypeSyntax(name: concreteDeclaration.name.trimmed),
+                    inheritanceClause: InheritanceClauseSyntax(
+                        inheritedTypes: InheritedTypeListSyntax(arrayLiteral: InheritedTypeSyntax(
+                            type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
+                        ))
+                    ),
+                    memberBlock: MemberBlockSyntax(members: [])
+                )
+            ]
+        } else {
+            []
+        }
+    }
+
     public static func expansion(
         of node: AttributeSyntax,
         providingMembersOf declaration: some DeclGroupSyntax,
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
-        if let fulfillingAdditionalTypesArgument = declaration.attributes.instantiableMacro?.fulfillingAdditionalTypes {
+        if
+            let fulfillingAdditionalTypesArgument = (
+                declaration.attributes.instantiableMacro ?? declaration.attributes.extendedInstantiableMacro
+            )?.fulfillingAdditionalTypes
+        {
             if ArrayExprSyntax(fulfillingAdditionalTypesArgument) == nil {
                 throw InstantiableError.fulfillingAdditionalTypesArgumentInvalid
             }
@@ -45,6 +78,18 @@ public struct InstantiableMacro: MemberMacro {
             visitor.walk(concreteDeclaration)
             for diagnostic in visitor.diagnostics {
                 context.diagnose(diagnostic)
+            }
+
+            if declaration.attributes.extendedInstantiableMacro != nil {
+                context.diagnose(Diagnostic(
+                    node: Syntax(node),
+                    error: FixableInstantiableExtensionError.incorrectDeclarationType,
+                    changes: [
+                        .replace(
+                            oldNode: Syntax(node.attributeName),
+                            newNode: Syntax(TypeSyntax(IdentifierTypeSyntax(name: .identifier(InstantiableVisitor.macroName)))))
+                    ]
+                ))
             }
 
             let forwardedProperties = visitor
@@ -69,7 +114,7 @@ public struct InstantiableMacro: MemberMacro {
 
                         """)
                     return [DeclSyntax(initializer)]
-                    + generateForwardedArguments(from: forwardedProperties)
+                    + generateForwardedProperties(from: forwardedProperties)
                 } else {
                     var membersWithInitializer = declaration.memberBlock.members
                     membersWithInitializer.insert(
@@ -97,15 +142,63 @@ public struct InstantiableMacro: MemberMacro {
                     return []
                 }
             }
-            return generateForwardedArguments(from: forwardedProperties)
+            return generateForwardedProperties(from: forwardedProperties)
 
         } else if let extensionDeclaration = ExtensionDeclSyntax(declaration) {
+            if declaration.attributes.instantiableMacro != nil {
+                context.diagnose(Diagnostic(
+                    node: Syntax(node),
+                    error: FixableInstantiableError.incorrectDeclarationType,
+                    changes: [
+                        .replace(
+                            oldNode: Syntax(node.attributeName),
+                            newNode: Syntax(TypeSyntax(IdentifierTypeSyntax(name: .identifier(InstantiableVisitor.extendedMacroName)))))
+                    ]
+                ))
+            }
+
+            let extendsInstantiable = extensionDeclaration.inheritanceClause?.inheritedTypes.contains(where: {
+                $0.type.typeDescription == .simple(name: "Instantiable")
+                || $0.type.typeDescription == .nested(
+                    name: "Instantiable",
+                    parentType: .simple(name: "SafeDI")
+                )
+            }) ?? false
+            if !extendsInstantiable {
+                var modifiedDeclaration = extensionDeclaration
+                var inheritedType = InheritedTypeSyntax(
+                    type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
+                )
+                if let existingInheritanceClause = modifiedDeclaration.inheritanceClause {
+                    inheritedType.trailingComma = .commaToken(trailingTrivia: .space)
+                    modifiedDeclaration.inheritanceClause?.inheritedTypes = [inheritedType] + existingInheritanceClause.inheritedTypes
+                } else {
+                    modifiedDeclaration.extendedType.trailingTrivia = []
+                    modifiedDeclaration.inheritanceClause = InheritanceClauseSyntax(
+                        colon: .colonToken(trailingTrivia: .space),
+                        inheritedTypes: InheritedTypeListSyntax(arrayLiteral: InheritedTypeSyntax(
+                            type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
+                        )),
+                        trailingTrivia: .space
+                    )
+                }
+                context.diagnose(Diagnostic(
+                    node: node,
+                    error: FixableInstantiableExtensionError.missingInstantiableConformance,
+                    changes: [
+                        .replace(
+                            oldNode: Syntax(extensionDeclaration),
+                            newNode: Syntax(modifiedDeclaration)
+                        )
+                    ]
+                ))
+            }
             if extensionDeclaration.genericWhereClause != nil {
                 var modifiedDeclaration = extensionDeclaration
                 modifiedDeclaration.genericWhereClause = nil
                 context.diagnose(Diagnostic(
                     node: node,
-                    error: FixableInstantiableError.disallowedGenericWhereClause,
+                    error: FixableInstantiableExtensionError.disallowedGenericWhereClause,
                     changes: [
                         .replace(
                             oldNode: Syntax(extensionDeclaration),
@@ -178,7 +271,7 @@ public struct InstantiableMacro: MemberMacro {
                 )
                 context.diagnose(Diagnostic(
                     node: Syntax(extensionDeclaration.memberBlock.members),
-                    error: FixableInstantiableError.missingRequiredInstantiateMethod(
+                    error: FixableInstantiableExtensionError.missingRequiredInstantiateMethod(
                         typeName: extendedTypeName
                     ),
                     changes: [
@@ -194,7 +287,7 @@ public struct InstantiableMacro: MemberMacro {
         }
     }
 
-    private static func generateForwardedArguments(
+    private static func generateForwardedProperties(
         from forwardedProperties: [Property]
     ) -> [DeclSyntax] {
         if forwardedProperties.isEmpty {
@@ -212,7 +305,7 @@ public struct InstantiableMacro: MemberMacro {
                                 trailingTrivia: .space
                             )
                         ),
-                        name: .identifier("ForwardedArguments"),
+                        name: .identifier("ForwardedProperties"),
                         initializer: TypeInitializerClauseSyntax(
                             value: IdentifierTypeSyntax(
                                 name: .identifier(forwardedProperty.typeDescription.asSource)
@@ -235,7 +328,7 @@ public struct InstantiableMacro: MemberMacro {
                                 trailingTrivia: .space
                             )
                         ),
-                        name: .identifier("ForwardedArguments"),
+                        name: .identifier("ForwardedProperties"),
                         initializer: TypeInitializerClauseSyntax(value: forwardedProperties.asTuple)
                     )
                 )
@@ -257,7 +350,7 @@ public struct InstantiableMacro: MemberMacro {
             case .fulfillingAdditionalTypesArgumentInvalid:
                 "The argument `fulfillingAdditionalTypes` must be an inlined array"
             case .tooManyInstantiateMethods:
-                "@\(InstantiableVisitor.macroName)-decorated extension must have a single `instantiate()` method"
+                "@\(InstantiableVisitor.extendedMacroName)-decorated extension must have a single `instantiate()` method"
             }
         }
     }

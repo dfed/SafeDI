@@ -177,6 +177,25 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         public let typeDescription: TypeDescription
     }
 
+    public var propertyType: Property.PropertyType {
+        switch self {
+        case let .simple(name, _):
+            if name == Dependency.instantiatorType {
+                return .instantiator
+            } else if name == Dependency.erasedInstantiatorType {
+                return .erasedInstantiator
+            } else {
+                return .constant
+            }
+        case
+            let .optional(type),
+            let .implicitlyUnwrappedOptional(type):
+            return type.propertyType
+        case .any, .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .some, .tuple, .unknown, .void:
+            return .constant
+        }
+    }
+
     var isOptional: Bool {
         switch self {
         case .any,
@@ -229,8 +248,8 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 // This is a type that is lazily instantiated.
                 // The first generic is the built type.
                 return builtType
-            } else if name == Dependency.forwardingInstantiatorType, let builtType = generics.dropFirst().first {
-                // This is a type that is lazily instantiated with forwarded arguments.
+            } else if name == Dependency.erasedInstantiatorType, let builtType = generics.dropFirst().first {
+                // This is a type that is lazily instantiated with explicitly declared forwarded arguments due to type erasure.
                 // The second generic is the built type.
                 return builtType
             } else {

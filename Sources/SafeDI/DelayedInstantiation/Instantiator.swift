@@ -18,23 +18,29 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A SafeDI dependency responsible for the deferred instantiation of an `@Instantiable` type.
-/// This class facilitates the delayed creation of an `@Instantiable` instance, making it particularly
+/// A SafeDI dependency responsible for the deferred instantiation of an `@Instantiable` or `@InstantiableExtension`
+/// type. This class facilitates the delayed creation of an `@Instantiable` instance, making it particularly
 /// useful in scenarios where immediate instantiation is not necessary or desirable. `Instantiator`
 /// facilitates control over memory usage and enables just-in-time instantiation. Instantiation is thread-safe.
 ///
-/// - SeeAlso: `ForwardingInstantiator`
-public final class Instantiator<InstantiableType> {
-    /// - Parameter instantiator: A closure that returns an instance of `InstantiableType`.
-    public init(_ instantiator: @escaping () -> InstantiableType) {
+/// - SeeAlso: `ErasedInstantiator`
+public final class Instantiator<T: Instantiable> {
+    /// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
+    public init(_ instantiator: @escaping (T.ForwardedProperties) -> T) {
         self.instantiator = instantiator
     }
 
     /// Instantiates and returns a new instance of the `@Instantiable` type.
-    /// - Returns: An `InstantiableType` instance.
-    public func instantiate() -> InstantiableType {
-        instantiator()
+    /// - Returns: An instance of `T`.
+    public func instantiate(_ arguments: T.ForwardedProperties) -> T {
+        instantiator(arguments)
     }
 
-    private let instantiator: () -> InstantiableType
+    /// Instantiates and returns a new instance of the `@Instantiable` type.
+    /// - Returns: An instance of `T`.
+    public func instantiate() -> T where T.ForwardedProperties == Void {
+        instantiator(())
+    }
+
+    private let instantiator: (T.ForwardedProperties) -> T
 }

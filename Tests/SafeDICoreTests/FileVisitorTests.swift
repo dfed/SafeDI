@@ -59,7 +59,7 @@ final class FileVisitorTests: XCTestCase {
                             ),
                         ]
                     ),
-                    additionalInstantiableTypes: nil,
+                    additionalInstantiables: nil,
                     dependencies: [
                         Dependency(
                             property: Property(
@@ -120,7 +120,7 @@ final class FileVisitorTests: XCTestCase {
                             ),
                         ]
                     ),
-                    additionalInstantiableTypes: nil,
+                    additionalInstantiables: nil,
                     dependencies: [
                         Dependency(
                             property: Property(
@@ -142,7 +142,7 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .simple(name: "SomeOtherInstantiable"),
                     initializer: Initializer(arguments: []),
-                    additionalInstantiableTypes: nil,
+                    additionalInstantiables: nil,
                     dependencies: [],
                     declarationType: .structType
                 )
@@ -173,7 +173,7 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .simple(name: "OuterLevel"),
                     initializer: Initializer(arguments: []),
-                    additionalInstantiableTypes: [
+                    additionalInstantiables: [
                         .simple(name: "SomeProtocol")
                     ],
                     dependencies: [],

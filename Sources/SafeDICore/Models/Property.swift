@@ -130,46 +130,41 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 
     // MARK: PropertyType
 
-    enum PropertyType {
+    public enum PropertyType {
         /// A `let` property.
         case constant
         /// An `Instantiator` property.
         /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
         case instantiator
-        /// A `ForwardingInstantiator` property.
+        /// A `ErasedInstantiator` property.
         /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
-        case forwardingInstantiator
+        case erasedInstantiator
 
-        var isConstant: Bool {
+        public var isConstant: Bool {
             switch self {
             case .constant:
                 true
-            case .instantiator, .forwardingInstantiator:
+            case .instantiator, .erasedInstantiator:
                 false
             }
         }
-    }
-}
 
-// MARK: TypeDescription
-
-extension TypeDescription {
-    fileprivate var propertyType: Property.PropertyType {
-        switch self {
-        case let .simple(name, _):
-            if name == Dependency.instantiatorType {
-                return .instantiator
-            } else if name == Dependency.forwardingInstantiatorType {
-                return .forwardingInstantiator
-            } else {
-                return .constant
+        public var isInstantiator: Bool {
+            switch self {
+            case .instantiator:
+                true
+            case .constant, .erasedInstantiator:
+                false
             }
-        case
-            let .optional(type),
-            let .implicitlyUnwrappedOptional(type):
-            return type.propertyType
-        case .any, .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .some, .tuple, .unknown, .void:
-            return .constant
+        }
+
+        public var isErasedInstantiator: Bool {
+            switch self {
+            case .erasedInstantiator:
+                true
+            case .constant, .instantiator:
+                false
+            }
         }
     }
 }

@@ -30,7 +30,7 @@ final class InstantiatorTests: XCTestCase {
         XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
     }
 
-    private final class BuiltProduct: Equatable, Identifiable {
+    private final class BuiltProduct: Equatable, Identifiable, Instantiable {
         static func == (lhs: BuiltProduct, rhs: BuiltProduct) -> Bool {
             lhs.id == rhs.id
         }

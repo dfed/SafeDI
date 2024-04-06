@@ -31,6 +31,7 @@ import SafeDICore
 final class InstantiableMacroTests: XCTestCase {
     let testMacros: [String: Macro.Type] = [
         InstantiableVisitor.macroName: InstantiableMacro.self,
+        InstantiableVisitor.extendedMacroName: InstantiableMacro.self,
         Dependency.Source.instantiatedRawValue: InjectableMacro.self,
         Dependency.Source.receivedRawValue: InjectableMacro.self,
         Dependency.Source.forwardedRawValue: InjectableMacro.self,
@@ -77,6 +78,9 @@ final class InstantiableMacroTests: XCTestCase {
                 nonisolated public init() {
                 }
             }
+
+            extension ExampleService: Instantiable {
+            }
             """
         }
     }
@@ -99,6 +103,9 @@ final class InstantiableMacroTests: XCTestCase {
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
                 nonisolated public init() {
                 }
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -123,6 +130,9 @@ final class InstantiableMacroTests: XCTestCase {
                 public init() {
                 }
             }
+
+            extension ExampleService: Instantiable {
+            }
             """
         }
     }
@@ -139,6 +149,9 @@ final class InstantiableMacroTests: XCTestCase {
             """
             public struct ExampleService {
                 public init() {}
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -165,6 +178,9 @@ final class InstantiableMacroTests: XCTestCase {
                 nonisolated public init() {
                 }
             }
+
+            extension ExampleService: Instantiable {
+            }
             """
         }
     }
@@ -189,6 +205,9 @@ final class InstantiableMacroTests: XCTestCase {
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
                 nonisolated public init() {
                 }
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -216,6 +235,9 @@ final class InstantiableMacroTests: XCTestCase {
                     self.instantiatedA = instantiatedA
                 }
             }
+
+            extension ExampleService: Instantiable {
+            }
             """
         }
     }
@@ -240,7 +262,10 @@ final class InstantiableMacroTests: XCTestCase {
                 }
                 let closure: () -> Void
 
-                public typealias ForwardedArguments = () -> Void
+                public typealias ForwardedProperties = () -> Void
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -266,7 +291,10 @@ final class InstantiableMacroTests: XCTestCase {
                 }
                 let closure: @Sendable () -> Void
 
-                public typealias ForwardedArguments = @Sendable () -> Void
+                public typealias ForwardedProperties = @Sendable () -> Void
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -292,7 +320,10 @@ final class InstantiableMacroTests: XCTestCase {
                 }
                 let closure: (() -> Void)
 
-                public typealias ForwardedArguments = () -> Void
+                public typealias ForwardedProperties = () -> Void
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -318,6 +349,9 @@ final class InstantiableMacroTests: XCTestCase {
                 public init(nonInjectedProperty: Int = 5) {
                     self.nonInjectedProperty = nonInjectedProperty
                 }
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -351,6 +385,9 @@ final class InstantiableMacroTests: XCTestCase {
                     self.nonInjectedProperty = nonInjectedProperty
                 }
             }
+
+            extension ExampleService: Instantiable {
+            }
             """
         }
     }
@@ -377,6 +414,9 @@ final class InstantiableMacroTests: XCTestCase {
                 nonisolated public init(instantiatedA: InstantiatedA) {
                     self.instantiatedA = instantiatedA
                 }
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -433,6 +473,9 @@ final class InstantiableMacroTests: XCTestCase {
                     self.instantiatedA = instantiatedA
                 }
             }
+
+            extension ExampleService: Instantiable {
+            }
             """
         }
     }
@@ -463,6 +506,9 @@ final class InstantiableMacroTests: XCTestCase {
                 nonisolated public init(instantiatedA: InstantiatedA) {
                     self.instantiatedA = instantiatedA
                 }
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -495,6 +541,9 @@ final class InstantiableMacroTests: XCTestCase {
                     self.instantiatedA = instantiatedA
                 }
             }
+
+            extension ExampleService: Instantiable {
+            }
             """
         }
     }
@@ -525,6 +574,9 @@ final class InstantiableMacroTests: XCTestCase {
                 nonisolated public init(instantiatedA: InstantiatedA) {
                     self.instantiatedA = instantiatedA
                 }
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -558,6 +610,9 @@ final class InstantiableMacroTests: XCTestCase {
                 nonisolated public init(instantiatedA: InstantiatedA) {
                     self.instantiatedA = instantiatedA
                 }
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -605,13 +660,16 @@ final class InstantiableMacroTests: XCTestCase {
                     self.receivedB = receivedB
                 }
 
-                public typealias ForwardedArguments = ForwardedA
+                public typealias ForwardedProperties = ForwardedA
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
     }
 
-    func test_declaration_generatesForwardedArgumentsWhenThereAreMultipleForwardedProperties() {
+    func test_declaration_generatesForwardedPropertiesWhenThereAreMultipleForwardedProperties() {
         assertMacro {
             """
             @Instantiable
@@ -639,7 +697,10 @@ final class InstantiableMacroTests: XCTestCase {
                     self.userName = userName
                 }
 
-                public typealias ForwardedArguments = (userID: String, userName: String)
+                public typealias ForwardedProperties = (userID: String, userName: String)
+            }
+
+            extension UserService: Instantiable {
             }
             """
         }
@@ -668,7 +729,10 @@ final class InstantiableMacroTests: XCTestCase {
                     self.closure = closure
                 }
 
-                public typealias ForwardedArguments = () -> Void
+                public typealias ForwardedProperties = () -> Void
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -697,7 +761,10 @@ final class InstantiableMacroTests: XCTestCase {
                     self.closure = closure
                 }
 
-                public typealias ForwardedArguments = @Sendable () -> Void
+                public typealias ForwardedProperties = @Sendable () -> Void
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -725,6 +792,9 @@ final class InstantiableMacroTests: XCTestCase {
                 nonisolated public init(instantiatableAInstantiator: Instantiator<ReceivedA>) {
                     self.instantiatableAInstantiator = instantiatableAInstantiator
                 }
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -802,18 +872,18 @@ final class InstantiableMacroTests: XCTestCase {
         assertMacro {
             """
             let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
-            @Instantiable(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
-            extension ExampleService {
+            @InstantiableExtension(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         } diagnostics: {
             """
             let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
-            @Instantiable(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
-            ┬──────────────────────────────────────────────────────────────────
+            @InstantiableExtension(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
+            ┬───────────────────────────────────────────────────────────────────────────
             ╰─ 🛑 The argument `fulfillingAdditionalTypes` must be an inlined array
-            extension ExampleService {
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
@@ -823,17 +893,17 @@ final class InstantiableMacroTests: XCTestCase {
     func test_extension_throwsErrorWhenFulfillingAdditionalTypesIsAClosure() {
         assertMacro {
             """
-            @Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
-            extension ExampleService {
+            @InstantiableExtension(fulfillingAdditionalTypes: { [AnyObject.self] }())
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         } diagnostics: {
             """
-            @Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
-            ┬───────────────────────────────────────────────────────────────
+            @InstantiableExtension(fulfillingAdditionalTypes: { [AnyObject.self] }())
+            ┬────────────────────────────────────────────────────────────────────────
             ╰─ 🛑 The argument `fulfillingAdditionalTypes` must be an inlined array
-            extension ExampleService {
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
@@ -843,18 +913,18 @@ final class InstantiableMacroTests: XCTestCase {
     func test_extension_throwsErrorWhenMoreThanOneInstantiateMethod() {
         assertMacro {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
                 public static func instantiate(user: User) -> ExampleService { fatalError() }
             }
             """
         } diagnostics: {
             """
-            @Instantiable
-            ┬────────────
-            ╰─ 🛑 @Instantiable-decorated extension must have a single `instantiate()` method
-            extension ExampleService {
+            @InstantiableExtension
+            ┬─────────────────────
+            ╰─ 🛑 @InstantiableExtension-decorated extension must have a single `instantiate()` method
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
                 public static func instantiate(user: User) -> ExampleService { fatalError() }
             }
@@ -954,6 +1024,9 @@ final class InstantiableMacroTests: XCTestCase {
                 }
                 let receivedA: ReceivedA 
             }
+
+            extension ExampleService: Instantiable {
+            }
             """
         }
     }
@@ -1004,6 +1077,9 @@ final class InstantiableMacroTests: XCTestCase {
                     self.receivedA = receivedA
                 }
                 let receivedA: ReceivedA
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -1056,6 +1132,9 @@ final class InstantiableMacroTests: XCTestCase {
                 }
                 let receivedA: ReceivedA
             }
+
+            extension ExampleService: Instantiable {
+            }
             """
         }
     }
@@ -1106,6 +1185,9 @@ final class InstantiableMacroTests: XCTestCase {
                     self.receivedA = receivedA
                 }
                 let receivedA: ReceivedA
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -1158,6 +1240,9 @@ final class InstantiableMacroTests: XCTestCase {
                 }
                 let receivedA: ReceivedA
             }
+
+            extension ExampleService: Instantiable {
+            }
             """
         }
     }
@@ -1208,6 +1293,9 @@ final class InstantiableMacroTests: XCTestCase {
                     self.receivedA = receivedA
                 }
                 let receivedA: ReceivedA
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -1260,6 +1348,9 @@ final class InstantiableMacroTests: XCTestCase {
                 }
                 let receivedA: ReceivedA
             }
+
+            extension ExampleService: Instantiable {
+            }
             """
         }
     }
@@ -1311,6 +1402,9 @@ final class InstantiableMacroTests: XCTestCase {
                 }
                 let receivedA: ReceivedA
             }
+
+            extension ExampleService: Instantiable {
+            }
             """
         }
     }
@@ -1353,6 +1447,9 @@ final class InstantiableMacroTests: XCTestCase {
             }
 
                 let uninitializedProperty: Int
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -1408,6 +1505,9 @@ final class InstantiableMacroTests: XCTestCase {
                 let receivedA: ReceivedA
 
                 let uninitializedProperty: Int
+            }
+
+            extension ExampleService: Instantiable {
             }
             """
         }
@@ -1478,6 +1578,156 @@ final class InstantiableMacroTests: XCTestCase {
                 let uninitializedProperty2: Int, uninitializedProperty3: Int, initializedProperty = "init"
                 let (uninitializedProperty4, uninitializedProperty5): (Int, Int)
             }
+
+            extension ExampleService: Instantiable {
+            }
+            """
+        }
+    }
+
+    func test_declaration_fixit_addsFixitIncorrectMacroWhenMacroOnDeclarationIsInstantiableExtension() {
+        assertMacro {
+            """
+            @InstantiableExtension
+            public struct ExampleService {}
+            """
+        } diagnostics: {
+            """
+            @InstantiableExtension
+            ┬─────────────────────
+            ╰─ 🛑 @InstantiableExtension-decoration is reserved for extensions
+               ✏️ Replace macro with Instantiable
+            public struct ExampleService {}
+            """
+        } fixes: {
+            """
+            @Instantiable
+            public struct ExampleService {}
+            """
+        } expansion: {
+            """
+            public struct ExampleService {
+
+                // A generated initializer that has one argument per SafeDI-injected property.
+                // Because this initializer is generated by a Swift Macro, it can not be used by other Swift Macros.
+                // As a result, this initializer can not be used within a #Preview macro closure.
+                // This initializer is only generated because you have not written this macro yourself.
+                // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
+                nonisolated public init() {
+                }}
+
+            extension ExampleService: Instantiable {
+            }
+            """
+        }
+    }
+
+    func test_extension_fixit_addsFixitIncorrectMacroWhenMacroOnDeclarationIsInstantiable() {
+        assertMacro {
+            """
+            @Instantiable
+            extension ExampleService: Instantiable {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            @Instantiable
+            ┬────────────
+            ╰─ 🛑 @Instantiable-decoration is reserved for type declarations
+               ✏️ Replace macro with InstantiableExtension
+            extension ExampleService: Instantiable {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } fixes: {
+            """
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } expansion: {
+            """
+            extension ExampleService: Instantiable {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        }
+    }
+
+    func test_extension_fixit_addsFixitWhenNoConformancesDeclared() {
+        assertMacro {
+            """
+            @InstantiableExtension
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } diagnostics: {
+            """
+            @InstantiableExtension
+            ┬─────────────────────
+            ╰─ 🛑 @InstantiableExtension-decorated extension must declare conformance to `Instantiable`
+               ✏️ Declare conformance to `Instantiable`
+            extension ExampleService {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } fixes: {
+            """
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        } expansion: {
+            """
+            extension ExampleService: Instantiable {
+                public static func instantiate() -> ExampleService { fatalError() }
+            }
+            """
+        }
+    }
+
+    func test_extension_fixit_addsFixitWhenInstantiableConformanceMissing() {
+        assertMacro {
+            """
+            @InstantiableExtension
+            extension ExampleService: CustomStringConvertible {
+                public static func instantiate() -> ExampleService { fatalError() }
+
+                public var description: String { "ExampleService" }
+            }
+            """
+        } diagnostics: {
+            """
+            @InstantiableExtension
+            ┬─────────────────────
+            ╰─ 🛑 @InstantiableExtension-decorated extension must declare conformance to `Instantiable`
+               ✏️ Declare conformance to `Instantiable`
+            extension ExampleService: CustomStringConvertible {
+                public static func instantiate() -> ExampleService { fatalError() }
+
+                public var description: String { "ExampleService" }
+            }
+            """
+        } fixes: {
+            """
+            @InstantiableExtension
+            extension ExampleService: Instantiable, CustomStringConvertible {
+                public static func instantiate() -> ExampleService { fatalError() }
+
+                public var description: String { "ExampleService" }
+            }
+            """
+        } expansion: {
+            """
+            extension ExampleService: Instantiable, CustomStringConvertible {
+                public static func instantiate() -> ExampleService { fatalError() }
+
+                public var description: String { "ExampleService" }
+            }
             """
         }
     }
@@ -1485,22 +1735,22 @@ final class InstantiableMacroTests: XCTestCase {
     func test_extension_fixit_addsFixitWhenInstantiateMethodMissing() {
         assertMacro {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
             }
             """
         } diagnostics: {
             """
-            @Instantiable
-            extension ExampleService {
-                                      ╰─ 🛑 @Instantiable-decorated extension of ExampleService must have a `public static func instantiate() -> ExampleService` method
-                                         ✏️ Add `public static func instantiate() -> ExampleService` method
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
+                                                    ╰─ 🛑 @InstantiableExtension-decorated extension of ExampleService must have a `public static func instantiate() -> ExampleService` method
+                                                       ✏️ Add `public static func instantiate() -> ExampleService` method
             }
             """
         } fixes: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
             public static func instantiate() -> ExampleService
             {}
 
@@ -1514,31 +1764,31 @@ final class InstantiableMacroTests: XCTestCase {
     func test_extension_fixit_addsFixitWhenInstantiateMethodIsNotPublic() {
         assertMacro {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 static func instantiate() -> ExampleService { fatalError() }
             }
             """
         } diagnostics: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 static func instantiate() -> ExampleService { fatalError() }
                 ┬───────────────────────────────────────────────────────────
-                ╰─ 🛑 @Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`
+                ╰─ 🛑 @InstantiableExtension-decorated extension must have an `instantiate()` method that is both `public` and `static`
                    ✏️ Set `public static` modifiers
             }
             """
         } fixes: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         } expansion: {
             """
-            extension ExampleService {
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
@@ -1548,31 +1798,31 @@ final class InstantiableMacroTests: XCTestCase {
     func test_extension_fixit_addsFixitWhenInstantiateMethodIsNotStatic() {
         assertMacro {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public func instantiate() -> ExampleService { fatalError() }
             }
             """
         } diagnostics: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public func instantiate() -> ExampleService { fatalError() }
                 ┬───────────────────────────────────────────────────────────
-                ╰─ 🛑 @Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`
+                ╰─ 🛑 @InstantiableExtension-decorated extension must have an `instantiate()` method that is both `public` and `static`
                    ✏️ Set `public static` modifiers
             }
             """
         } fixes: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         } expansion: {
             """
-            extension ExampleService {
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
@@ -1582,31 +1832,31 @@ final class InstantiableMacroTests: XCTestCase {
     func test_extension_fixit_addsFixitWhenInstantiateMethodIsNotStaticOrPublic() {
         assertMacro {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 func instantiate() -> ExampleService { fatalError() }
             }
             """
         } diagnostics: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 func instantiate() -> ExampleService { fatalError() }
                 ┬────────────────────────────────────────────────────
-                ╰─ 🛑 @Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`
+                ╰─ 🛑 @InstantiableExtension-decorated extension must have an `instantiate()` method that is both `public` and `static`
                    ✏️ Set `public static` modifiers
             }
             """
         } fixes: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         } expansion: {
             """
-            extension ExampleService {
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
@@ -1616,31 +1866,31 @@ final class InstantiableMacroTests: XCTestCase {
     func test_extension_fixit_addsFixitWhenInstantiateMethodReturnsIncorrectType() {
         assertMacro {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> OtherExampleService { fatalError() }
             }
             """
         } diagnostics: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> OtherExampleService { fatalError() }
                 ┬───────────────────────────────────────────────────────────────────────
-                ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must return the same type as the extended type
+                ╰─ 🛑 @InstantiableExtension-decorated extension’s `instantiate()` method must return the same type as the extended type
                    ✏️ Make `instantiate()`’s return type the same as the extended type
             }
             """
         } fixes: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         } expansion: {
             """
-            extension ExampleService {
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
@@ -1650,31 +1900,31 @@ final class InstantiableMacroTests: XCTestCase {
     func test_extension_fixit_addsFixitWhenInstantiateMethodIsAsync() {
         assertMacro {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() async -> ExampleService { fatalError() }
             }
             """
         } diagnostics: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() async -> ExampleService { fatalError() }
                 ┬────────────────────────────────────────────────────────────────────────
-                ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must not throw or be async
+                ╰─ 🛑 @InstantiableExtension-decorated extension’s `instantiate()` method must not throw or be async
                    ✏️ Remove effect specifiers
             }
             """
         } fixes: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         } expansion: {
             """
-            extension ExampleService {
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
@@ -1684,31 +1934,31 @@ final class InstantiableMacroTests: XCTestCase {
     func test_extension_fixit_addsFixitWhenInstantiateMethodThrows() {
         assertMacro {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() throws -> ExampleService { fatalError() }
             }
             """
         } diagnostics: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() throws -> ExampleService { fatalError() }
                 ┬─────────────────────────────────────────────────────────────────────────
-                ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must not throw or be async
+                ╰─ 🛑 @InstantiableExtension-decorated extension’s `instantiate()` method must not throw or be async
                    ✏️ Remove effect specifiers
             }
             """
         } fixes: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         } expansion: {
             """
-            extension ExampleService {
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
@@ -1718,31 +1968,31 @@ final class InstantiableMacroTests: XCTestCase {
     func test_extension_fixit_addsFixitWhenInstantiateMethodIsAsyncAndThrows() {
         assertMacro {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() async throws -> ExampleService { fatalError() }
             }
             """
         } diagnostics: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() async throws -> ExampleService { fatalError() }
                 ┬───────────────────────────────────────────────────────────────────────────────
-                ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must not throw or be async
+                ╰─ 🛑 @InstantiableExtension-decorated extension’s `instantiate()` method must not throw or be async
                    ✏️ Remove effect specifiers
             }
             """
         } fixes: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         } expansion: {
             """
-            extension ExampleService {
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
@@ -1752,31 +2002,31 @@ final class InstantiableMacroTests: XCTestCase {
     func test_extension_fixit_addsFixitWhenInstantiateMethodHasGenericParameter() {
         assertMacro {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate<T>() -> ExampleService { fatalError() }
             }
             """
         } diagnostics: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate<T>() -> ExampleService { fatalError() }
                 ┬─────────────────────────────────────────────────────────────────────
-                ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must not have a generic parameter
+                ╰─ 🛑 @InstantiableExtension-decorated extension’s `instantiate()` method must not have a generic parameter
                    ✏️ Remove generic parameter
             }
             """
         } fixes: {
             """
-            @Instantiable
-            extension ExampleService {
+            @InstantiableExtension
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
         } expansion: {
             """
-            extension ExampleService {
+            extension ExampleService: Instantiable {
                 public static func instantiate() -> ExampleService { fatalError() }
             }
             """
@@ -1786,31 +2036,31 @@ final class InstantiableMacroTests: XCTestCase {
     func test_extension_fixit_addsFixitWhenInstantiateMethodHasGenericWhereClause() {
         assertMacro {
             """
-            @Instantiable
-            extension Array {
+            @InstantiableExtension
+            extension Array: Instantiable {
                 public static func instantiate() -> Array where Element == String { fatalError() }
             }
             """
         } diagnostics: {
             """
-            @Instantiable
-            extension Array {
+            @InstantiableExtension
+            extension Array: Instantiable {
                 public static func instantiate() -> Array where Element == String { fatalError() }
                 ┬─────────────────────────────────────────────────────────────────────────────────
-                ╰─ 🛑 @Instantiable-decorated extension must not have a generic `where` clause
+                ╰─ 🛑 @InstantiableExtension-decorated extension must not have a generic `where` clause
                    ✏️ Remove generic `where` clause
             }
             """
         } fixes: {
             """
-            @Instantiable
-            extension Array {
+            @InstantiableExtension
+            extension Array: Instantiable {
                 public static func instantiate() -> Array { fatalError() }
             }
             """
         } expansion: {
             """
-            extension Array {
+            extension Array: Instantiable {
                 public static func instantiate() -> Array { fatalError() }
             }
             """
@@ -1820,31 +2070,31 @@ final class InstantiableMacroTests: XCTestCase {
     func test_extension_fixit_addsFixitWhenExtensionHasGenericWhereClause() {
         assertMacro {
             """
-            @Instantiable
-            extension Array where Element == String {
+            @InstantiableExtension
+            extension Array: Instantiable where Element == String {
                 public static func instantiate() -> Array { fatalError() }
             }
             """
         } diagnostics: {
             """
-            @Instantiable
-            ┬────────────
-            ╰─ 🛑 @Instantiable-decorated extension must not have a generic `where` clause
+            @InstantiableExtension
+            ┬─────────────────────
+            ╰─ 🛑 @InstantiableExtension-decorated extension must not have a generic `where` clause
                ✏️ Remove generic `where` clause
-            extension Array where Element == String {
+            extension Array: Instantiable where Element == String {
                 public static func instantiate() -> Array { fatalError() }
             }
             """
         } fixes: {
             """
-            @Instantiable
-            extension Array {
+            @InstantiableExtension
+            extension Array: Instantiable {
                 public static func instantiate() -> Array { fatalError() }
             }
             """
         } expansion: {
             """
-            extension Array {
+            extension Array: Instantiable {
                 public static func instantiate() -> Array { fatalError() }
             }
             """

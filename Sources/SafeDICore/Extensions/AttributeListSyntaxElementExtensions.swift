@@ -26,6 +26,10 @@ extension AttributeListSyntax.Element {
         attributeIfNameEquals(InstantiableVisitor.macroName)
     }
 
+    var extendedInstantiableMacro: AttributeSyntax? {
+        attributeIfNameEquals(InstantiableVisitor.extendedMacroName)
+    }
+
     var instantiatedMacro: AttributeSyntax? {
         attributeIfNameEquals(Dependency.Source.instantiatedRawValue)
     }

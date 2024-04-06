@@ -141,8 +141,8 @@ Here we have a sample `@Instantiable` `SecurePersistentStorage` whose concrete t
 import SafeDI
 import SecurePersistentStorage // A third-party library that provides secure, persistent storage.
 
-@Instantiable
-extension SecurePersistentStorage {
+@InstantiableExtension
+extension SecurePersistentStorage: Instantiable {
     /// A public static function that defines how SafeDI can instantiate the type.
     public static func instantiate() -> SecurePersistentStorage {
         SecurePersistentStorage()
@@ -164,6 +164,8 @@ The `fulfilledByType` parameter takes a `String` identical to the type name of t
 
 The `erasedToConcreteExistential` parameter takes a boolean value that indicates whether the fulfilling type is being erased to a concrete [existential](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/#Boxed-Protocol-Types) type. A concrete existential type is a non-protocol type that wraps a protocol and is usually prefixed with `Any`. A fulfilling type does not inherit from a concrete existential type, and therefore when the property‘s type is a concrete existential the fulfilling type must be wrapped in the erasing concrete existential type‘s initializer before it is returned. When the property‘s type is not a concrete existential, the fulfilling type is cast as the property‘s type. For example, an `AnyView` is a concrete and existential type-erased form of some `struct MyExampleView: View`, while a `UIViewController` is a concrete but not existential type-erased form of some `final class MyExampleViewController: UIViewController`. This parameter defaults to `false`.
 
+The [`ErasedInstantiator`](Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift) type is how SafeDI enables instantiating any `@Instantiable` or `@InstantiableExtended` type when using type erasure. `ErasedInstantiator` has two generics. The first generic must match the type’s `ForwardedProperties` typealias. The second generic matches the type of the to-be-instantiated instance.
+
 ```swift
 import SwiftUI
 
@@ -180,7 +182,7 @@ public struct ParentView: View {
     // All that is required for this code to compile is for there to be an
     // `@Instantiable public struct ChildView: View` in the codebase.
     @Instantiated(fulfilledByType: "ChildView", erasedToConcreteExistential: true)
-    private let childViewBuilder: Instantiator<AnyView>
+    private let childViewBuilder: ErasedInstantiator<(), AnyView>
 }
 ```
 
@@ -188,7 +190,7 @@ public struct ParentView: View {
 
 Property declarations within `@Instantiable` types decorated with [`@Forwarded`](Sources/SafeDI/PropertyDecoration/Forwarded.swift) represent dependencies that come from the runtime, e.g. user input or backend-delivered content. Like an `@Instantiated`-decorated property, a `@Forwarded`-decorated property is available to be `@Received` by objects instantiated further down the dependency tree.
 
-A `@Forwarded` property is forwarded into the SafeDI dependency tree by a [`ForwardingInstantiator`](#forwardinginstantiator)’s `instantiate(_ arguments: ArgumentsToForward) -> InstantiableType` function that creates an instance of the property’s enclosing type. `@Instantiable` types with a `@Forwarded`-decorated property can _only_ be instantiated utilizing a `ForwardingInstantiator`.
+A `@Forwarded` property is forwarded into the SafeDI dependency tree by a [`Instantiator`](#instantiator)’s `instantiate(_ arguments: T.ForwardedProperties) -> T` function that creates an instance of the property’s enclosing type. `@Instantiable` types with a `@Forwarded`-decorated property can _only_ be instantiated utilizing a `ForwardingInstantiator`.
 
 Forwarded property types do not need to be decorated with the `@Instantiable` macro.
 
@@ -313,7 +315,7 @@ When you want to instantiate a dependency after `init(…)`, you need to declare
 
 #### Instantiator
 
-The [`Instantiator`](Sources/SafeDI/DelayedInstantiation/Instantiator.swift) type is how SafeDI enables deferred instantiation of an `@Instantiable` type that has no `@Forwarded`-decorated properties. `Instantiator` has a single generic that matches the type of the to-be-instantiated instance. Creating an `Instantiator` property is as simple as creating any other property in the SafeDI ecosystem:
+The [`Instantiator`](Sources/SafeDI/DelayedInstantiation/Instantiator.swift) type is how SafeDI enables deferred instantiation of an `@Instantiable` or `@InstantiableExtended` type. `Instantiator` has a single generic that matches the type of the to-be-instantiated instance. Creating an `Instantiator` property is as simple as creating any other property in the SafeDI ecosystem:
 
 ```swift
 @Instantiable
@@ -332,42 +334,6 @@ public struct MyApp: App {
 ```
 
 It is possible to write a `Instantiator` with a type-erased generic by utilizing `@Instantiated`‘s `fulfilledByType` parameter.
-
-#### ForwardingInstantiator
-
-The [`ForwardingInstantiator`](Sources/SafeDI/DelayedInstantiation/ForwardingInstantiator.swift) type is how SafeDI enables instantiating any `@Instantiable` type with a `@Forwarded`-decorated property. `ForwardingInstantiator` has two generics. The first generic must match the type of the `@Forwarded`-decorated property. The second generic matches the type of the to-be-instantiated instance.
-
-```swift
-@Instantiable
-public struct MyApp: App {
-    public var body: some Scene {
-        WindowGroup {
-            if let user = userService.user {
-                // Returns a new instance of a `LoggedInContentView` that has a forwarded, non-optional User property.
-                loggedInContentViewInstantiator.instantiate(user)
-            } else {
-                // Returns a new instance of a `LoggedOutContentView`.
-                loggedOutContentViewInstantiator.instantiate()
-            }
-        }
-    }
-
-    /// A private property that knows how to instantiate a logged-in content view.
-    @Instantiated
-    private let loggedInContentViewInstantiator: ForwardingInstantiator<User, LoggedOutContentView>
-
-    /// A private property that knows how to instantiate a logged-out content view.
-    @Instantiated
-    private let loggedOutContentViewInstantiator: Instantiator<LoggedOutContentView>
-
-    /// An instance of an observable `UserService` that is instantiated when `MyApp` is instantiated. This object updates whenever the user changes.
-    @ObservedObject
-    @Instantiated
-    private var userService: UserService
-}
-```
-
-It is possible to write a `ForwardingInstantiator` with a type-erased second generic by utilizing `@Instantiated`‘s `fulfilledByType` parameter.
 
 ### Creating the root of your dependency tree
 
@@ -429,7 +395,7 @@ To install the SafeDI framework into your package with [Swift Package Manager](h
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI", from: "0.3.0"),
+    .package(url: "https://github.com/dfed/SafeDI", from: "0.4.0"),
 ]
 ```
 

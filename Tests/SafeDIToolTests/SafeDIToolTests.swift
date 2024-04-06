@@ -429,7 +429,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, UIViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -444,7 +444,7 @@ final class SafeDIToolTests: XCTestCase {
                     let authService: AuthService
 
                     @Instantiated(fulfilledByType: "LoggedInViewController")
-                    let loggedInViewControllerBuilder: ForwardingInstantiator<User, UIViewController>
+                    let loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>
 
                     private let derivedValue: Bool
 
@@ -491,7 +491,7 @@ final class SafeDIToolTests: XCTestCase {
                     func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
                         LoggedInViewController(user: user, networkService: networkService)
                     }
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, UIViewController> {
+                    let loggedInViewControllerBuilder = ErasedInstantiator<User, UIViewController> {
                         __safeDI_loggedInViewControllerBuilder(user: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
@@ -533,7 +533,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -548,7 +548,7 @@ final class SafeDIToolTests: XCTestCase {
                     let authService: AuthService
 
                     @Instantiated
-                    let loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>
+                    let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
                     private let derivedValue: Bool
 
@@ -606,7 +606,7 @@ final class SafeDIToolTests: XCTestCase {
                         let userService = UserService(user: user)
                         return LoggedInViewController(user: user, networkService: networkService, userService: userService)
                     }
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> {
+                    let loggedInViewControllerBuilder = Instantiator<LoggedInViewController> {
                         __safeDI_loggedInViewControllerBuilder(user: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
@@ -651,7 +651,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<(userID: String, userName: String), UIViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -666,7 +666,7 @@ final class SafeDIToolTests: XCTestCase {
                     let authService: AuthService
 
                     @Instantiated(fulfilledByType: "LoggedInViewController")
-                    let loggedInViewControllerBuilder: ForwardingInstantiator<(userID: String, userName: String), UIViewController>
+                    let loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>
 
                     private let derivedValue: Bool
 
@@ -730,7 +730,7 @@ final class SafeDIToolTests: XCTestCase {
                         let userService = UserService(userName: userName, userID: userID)
                         return LoggedInViewController(userName: userName, userID: userID, networkService: networkService, userService: userService)
                     }
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<(userID: String, userName: String), UIViewController> {
+                    let loggedInViewControllerBuilder = ErasedInstantiator<(userID: String, userName: String), UIViewController> {
                         __safeDI_loggedInViewControllerBuilder(userID: $0.userID, userName: $0.userName)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
@@ -775,7 +775,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<LoggedInViewController.ForwardedArguments, UIViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -790,7 +790,7 @@ final class SafeDIToolTests: XCTestCase {
                     let authService: AuthService
 
                     @Instantiated(fulfilledByType: "LoggedInViewController")
-                    let loggedInViewControllerBuilder: ForwardingInstantiator<LoggedInViewController.ForwardedArguments, UIViewController>
+                    let loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>
 
                     private let derivedValue: Bool
 
@@ -854,7 +854,7 @@ final class SafeDIToolTests: XCTestCase {
                         let userService = UserService(userName: userName, userID: userID)
                         return LoggedInViewController(userName: userName, userID: userID, networkService: networkService, userService: userService)
                     }
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<LoggedInViewController.ForwardedArguments, UIViewController> {
+                    let loggedInViewControllerBuilder = ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController> {
                         __safeDI_loggedInViewControllerBuilder(userID: $0.userID, userName: $0.userName)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
@@ -924,7 +924,7 @@ final class SafeDIToolTests: XCTestCase {
                     }
 
                     @Instantiated(fulfilledByType: "SplashScreenView", erasedToConcreteExistential: true)
-                    private let splashScreenViewBuilder: Instantiator<AnyView>
+                    private let splashScreenViewBuilder: ErasedInstantiator<(), AnyView>
                 }
                 """,
                 """
@@ -953,7 +953,7 @@ final class SafeDIToolTests: XCTestCase {
                     func __safeDI_splashScreenViewBuilder() -> SplashScreenView {
                         SplashScreenView()
                     }
-                    let splashScreenViewBuilder = Instantiator<AnyView> {
+                    let splashScreenViewBuilder = ErasedInstantiator<(), AnyView> {
                         AnyView(__safeDI_splashScreenViewBuilder())
                     }
                     self.init(splashScreenViewBuilder: splashScreenViewBuilder)
@@ -995,7 +995,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -1010,7 +1010,7 @@ final class SafeDIToolTests: XCTestCase {
                     let networkService: NetworkService
 
                     @Instantiated
-                    let loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>
+                    let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
                     private let derivedValue: Bool
 
@@ -1068,7 +1068,7 @@ final class SafeDIToolTests: XCTestCase {
                         let userService = UserService(user: user, networkService: networkService)
                         return LoggedInViewController(user: user, userService: userService)
                     }
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> {
+                    let loggedInViewControllerBuilder = Instantiator<LoggedInViewController> {
                         __safeDI_loggedInViewControllerBuilder(user: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
@@ -1110,7 +1110,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -1125,7 +1125,7 @@ final class SafeDIToolTests: XCTestCase {
                     let networkService: NetworkService
 
                     @Instantiated
-                    let loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>
+                    let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
                     private let derivedValue: Bool
 
@@ -1186,7 +1186,7 @@ final class SafeDIToolTests: XCTestCase {
                         let userServiceInstantiator = Instantiator<UserService>(__safeDI_userServiceInstantiator)
                         return LoggedInViewController(user: user, userServiceInstantiator: userServiceInstantiator)
                     }
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, LoggedInViewController> {
+                    let loggedInViewControllerBuilder = Instantiator<LoggedInViewController> {
                         __safeDI_loggedInViewControllerBuilder(user: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
@@ -1897,14 +1897,14 @@ final class SafeDIToolTests: XCTestCase {
         )
     }
 
-    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesAPropertyForwardedByAChild_doesNotRequirePuttingInstantiatedPropertyBeforeForwardingInstantiator() async throws {
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesAPropertyForwardedByAChild_doesNotRequirePuttingInstantiatedPropertyBeforeErasedInstantiator() async throws {
         let output = try await executeSystemUnderTest(
             swiftFileContent: [
                 """
                 @Instantiable
                 public final class Root {
-                    @Instantiated
-                    let childABuilder: ForwardingInstantiator<Recreated, ChildA>
+                    @Instantiated(fulfilledByType: "ChildA")
+                    let childABuilder: ErasedInstantiator<Recreated, ChildAProtocol>
                     @Instantiated
                     let childB: ChildB
                     @Instantiated
@@ -1916,8 +1916,9 @@ final class SafeDIToolTests: XCTestCase {
                 public final class Recreated {}
                 """,
                 """
+                public protocol ChildAProtocol {}
                 @Instantiable
-                public final class ChildA {
+                public final class ChildA: ChildAProtocol {
                     @Instantiated
                     let grandchildA: GrandchildA
                     @Instantiated
@@ -1985,7 +1986,7 @@ final class SafeDIToolTests: XCTestCase {
                         }()
                         return ChildA(grandchildA: grandchildA, grandchildB: grandchildB, recreated: recreated)
                     }
-                    let childABuilder = ForwardingInstantiator<Recreated, ChildA> {
+                    let childABuilder = ErasedInstantiator<Recreated, ChildAProtocol> {
                         __safeDI_childABuilder(recreated: $0)
                     }
                     let recreated = Recreated()
@@ -2113,7 +2114,7 @@ final class SafeDIToolTests: XCTestCase {
         )
     }
 
-    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesExtendedInstantiablePropertyWithNoArguments() async throws {
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesInstantiableExtensionPropertyWithNoArguments() async throws {
         let output = try await executeSystemUnderTest(
             swiftFileContent: [
                 """
@@ -2137,8 +2138,8 @@ final class SafeDIToolTests: XCTestCase {
 
                 public protocol KeyValueStore {}
 
-                @Instantiable(fulfillingAdditionalTypes: [KeyValueStore.self])
-                extension UserDefaults: KeyValueStore {
+                @InstantiableExtension(fulfillingAdditionalTypes: [KeyValueStore.self])
+                extension UserDefaults: Instantiable, KeyValueStore {
                     public static func instantiate() -> UserDefaults {
                         getShared()
                     }
@@ -2180,7 +2181,7 @@ final class SafeDIToolTests: XCTestCase {
         )
     }
 
-    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesExtendedInstantiablePropertyWithArguments() async throws {
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesInstantiableExtensionPropertyWithArguments() async throws {
         let output = try await executeSystemUnderTest(
             swiftFileContent: [
                 """
@@ -2214,7 +2215,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, UIViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -2229,7 +2230,7 @@ final class SafeDIToolTests: XCTestCase {
                     let authService: AuthService
 
                     @Instantiated(fulfilledByType: "LoggedInViewController")
-                    let loggedInViewControllerBuilder: ForwardingInstantiator<User, UIViewController>
+                    let loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>
 
                     private let derivedValue: Bool
 
@@ -2262,8 +2263,8 @@ final class SafeDIToolTests: XCTestCase {
 
                 public protocol KeyValueStore {}
 
-                @Instantiable(fulfillingAdditionalTypes: [KeyValueStore.self])
-                extension UserDefaults {
+                @InstantiableExtension(fulfillingAdditionalTypes: [KeyValueStore.self])
+                extension UserDefaults: Instantiable {
                     public static func instantiate(user: User) -> UserDefaults {
                         UserDefaults(user: user)
                     }
@@ -2300,7 +2301,7 @@ final class SafeDIToolTests: XCTestCase {
                         let keyValueStore: KeyValueStore = UserDefaults.instantiate(user: user)
                         return LoggedInViewController(user: user, networkService: networkService, keyValueStore: keyValueStore)
                     }
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<User, UIViewController> {
+                    let loggedInViewControllerBuilder = ErasedInstantiator<User, UIViewController> {
                         __safeDI_loggedInViewControllerBuilder(user: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
@@ -2623,7 +2624,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -2637,7 +2638,7 @@ final class SafeDIToolTests: XCTestCase {
                     let networkService: NetworkService
 
                     @Instantiated
-                    let loggedInViewControllerBuilder: ForwardingInstantiator<UserManager, LoggedInViewController>
+                    let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
                     func login(username: String, password: String) {
                         Task { @MainActor in
@@ -2714,7 +2715,7 @@ final class SafeDIToolTests: XCTestCase {
                         let profileViewControllerBuilder = Instantiator<ProfileViewController>(__safeDI_profileViewControllerBuilder)
                         return LoggedInViewController(userManager: userManager, profileViewControllerBuilder: profileViewControllerBuilder)
                     }
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> {
+                    let loggedInViewControllerBuilder = Instantiator<LoggedInViewController> {
                         __safeDI_loggedInViewControllerBuilder(userManager: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
@@ -2731,7 +2732,7 @@ final class SafeDIToolTests: XCTestCase {
                 @Instantiable
                 public final class Root {
                     @Instantiated
-                    let childBuilder: ForwardingInstantiator<IndexingIterator<Array<Element>>, Child>
+                    let childBuilder: Instantiator<Child>
                 }
                 """,
                 """
@@ -2775,7 +2776,7 @@ final class SafeDIToolTests: XCTestCase {
                         let grandchildBuilder = Instantiator<Grandchild>(__safeDI_grandchildBuilder)
                         return Child(iterator: iterator, grandchildBuilder: grandchildBuilder)
                     }
-                    let childBuilder = ForwardingInstantiator<IndexingIterator<Array<Element>>, Child> {
+                    let childBuilder = Instantiator<Child> {
                         __safeDI_childBuilder(iterator: $0)
                     }
                     self.init(childBuilder: childBuilder)
@@ -2834,7 +2835,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -2848,7 +2849,7 @@ final class SafeDIToolTests: XCTestCase {
                     let networkService: NetworkService
 
                     @Instantiated
-                    let loggedInViewControllerBuilder: ForwardingInstantiator<UserManager, LoggedInViewController>
+                    let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
                     func login(username: String, password: String) {
                         Task { @MainActor in
@@ -2931,7 +2932,7 @@ final class SafeDIToolTests: XCTestCase {
                         let profileViewControllerBuilder = Instantiator<ProfileViewController>(__safeDI_profileViewControllerBuilder)
                         return LoggedInViewController(userManager: userManager, userNetworkService: userNetworkService, profileViewControllerBuilder: profileViewControllerBuilder)
                     }
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> {
+                    let loggedInViewControllerBuilder = Instantiator<LoggedInViewController> {
                         __safeDI_loggedInViewControllerBuilder(userManager: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
@@ -2976,7 +2977,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                    public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
                         super.init(nibName: nil, bundle: nil)
@@ -3053,7 +3054,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -3146,7 +3147,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -3160,7 +3161,7 @@ final class SafeDIToolTests: XCTestCase {
                     let networkService: NetworkService
 
                     @Instantiated
-                    let loggedInViewControllerBuilder: ForwardingInstantiator<UserManager, LoggedInViewController>
+                    let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
                     func login(username: String, password: String) {
                         Task { @MainActor in
@@ -3237,7 +3238,7 @@ final class SafeDIToolTests: XCTestCase {
                         let profileViewControllerBuilder = Instantiator<ProfileViewController>(__safeDI_profileViewControllerBuilder)
                         return LoggedInViewController(userManager: userManager, userVendor: userVendor, profileViewControllerBuilder: profileViewControllerBuilder)
                     }
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> {
+                    let loggedInViewControllerBuilder = Instantiator<LoggedInViewController> {
                         __safeDI_loggedInViewControllerBuilder(userManager: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
@@ -3296,7 +3297,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -3310,7 +3311,7 @@ final class SafeDIToolTests: XCTestCase {
                     let networkService: NetworkService
 
                     @Instantiated
-                    let loggedInViewControllerBuilder: ForwardingInstantiator<UserManager, LoggedInViewController>
+                    let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
                     func login(username: String, password: String) {
                         Task { @MainActor in
@@ -3384,7 +3385,7 @@ final class SafeDIToolTests: XCTestCase {
                         let profileViewControllerBuilder = Instantiator<ProfileViewController>(__safeDI_profileViewControllerBuilder)
                         return LoggedInViewController(userManager: userManager, profileViewControllerBuilder: profileViewControllerBuilder)
                     }
-                    let loggedInViewControllerBuilder = ForwardingInstantiator<UserManager, LoggedInViewController> {
+                    let loggedInViewControllerBuilder = Instantiator<LoggedInViewController> {
                         __safeDI_loggedInViewControllerBuilder(userManager: $0)
                     }
                     self.init(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
@@ -4050,14 +4051,14 @@ final class SafeDIToolTests: XCTestCase {
                 @Instantiable
                 public struct Root {
                     @Instantiated
-                    let aBuilder: ForwardingInstantiator<String, A>
+                    let aBuilder: Instantiator<A>
                 }
                 """,
                 """
                 @Instantiable
                 public struct A {
                     @Instantiated
-                    let aBuilder: ForwardingInstantiator<String, A>
+                    let aBuilder: Instantiator<A>
                     @Forwarded
                     let context: String
                 }
@@ -4076,12 +4077,12 @@ final class SafeDIToolTests: XCTestCase {
             extension Root {
                 public init() {
                     func __safeDI_aBuilder(context: String) -> A {
-                        let aBuilder = ForwardingInstantiator<String, A> {
+                        let aBuilder = Instantiator<A> {
                             __safeDI_aBuilder(context: $0)
                         }
                         return A(aBuilder: aBuilder, context: context)
                     }
-                    let aBuilder = ForwardingInstantiator<String, A> {
+                    let aBuilder = Instantiator<A> {
                         __safeDI_aBuilder(context: $0)
                     }
                     self.init(aBuilder: aBuilder)
@@ -4096,7 +4097,7 @@ final class SafeDIToolTests: XCTestCase {
     func test_run_onCodeWithPropertyWithUnknownFulfilledType_throwsError() async {
         await assertThrowsError(
             """
-            No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `DoesNotExist`
+            No `@Instantiable`-decorated type or `@InstantiableExtension`-decorated extension found to fulfill `@Instantiated`-decorated property with type `DoesNotExist`
             """
         ) {
             try await executeSystemUnderTest(
@@ -4119,7 +4120,7 @@ final class SafeDIToolTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableInstantiatedProperty_throwsError() async {
         await assertThrowsError(
             """
-            No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `URLSession`
+            No `@Instantiable`-decorated type or `@InstantiableExtension`-decorated extension found to fulfill `@Instantiated`-decorated property with type `URLSession`
             """
         ) {
             try await executeSystemUnderTest(
@@ -4274,7 +4275,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                    public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
                         super.init(nibName: nil, bundle: nil)
@@ -4434,7 +4435,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, loggedInViewControllerBuilder: ForwardingInstantiator<User, LoggedInViewController>) {
+                    public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
                         super.init(nibName: nil, bundle: nil)
@@ -4461,8 +4462,8 @@ final class SafeDIToolTests: XCTestCase {
                     """
                     import URLSessionWrapper
 
-                    @Instantiable
-                    extension URLSessionWrapper {
+                    @InstantiableExtension
+                    extension URLSessionWrapper: Instantiable {
                         public func instantiate(urlSession: URLSession) -> URLSessionWrapper {
                             URLSessionWrapper(urlSession)
                         }
@@ -4559,7 +4560,7 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
-    func test_run_onCodeWithDuplicateInstantiableAndExtendedInstantiable_throwsError() async {
+    func test_run_onCodeWithDuplicateInstantiableAndInstantiableExtension_throwsError() async {
         await assertThrowsError(
             """
             @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
@@ -4576,8 +4577,8 @@ final class SafeDIToolTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable
-                    extension RootViewController {
+                    @InstantiableExtension
+                    extension RootViewController: Instantiable {
                         public static instantiate() {
                             RootViewController()
                         }
@@ -4589,7 +4590,7 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
-    func test_run_onCodeWithDuplicateExtendedInstantiable_throwsError() async {
+    func test_run_onCodeWithDuplicateInstantiableExtension_throwsError() async {
         await assertThrowsError(
             """
             @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `UserDefaults`
@@ -4600,8 +4601,8 @@ final class SafeDIToolTests: XCTestCase {
                     """
                     import Foundation
 
-                    @Instantiable
-                    extension UserDefaults {
+                    @InstantiableExtension
+                    extension UserDefaults: Instantiable {
                         public static instantiate() {
                             .standard
                         }
@@ -4610,8 +4611,8 @@ final class SafeDIToolTests: XCTestCase {
                     """
                     import Foundation
 
-                    @Instantiable
-                    extension UserDefaults {
+                    @InstantiableExtension
+                    extension UserDefaults: Instantiable {
                         public static instantiate(suiteName: String) {
                             UserDefaults(suiteName: suiteName)
                         }
@@ -4829,112 +4830,10 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
-    func test_run_onCodeWithForwardingInstantiatorSecondGeneric_hasNoForwardedProperty_throwsError() async throws {
+    func test_run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasSingleForwardedProperty_throwsError() async throws {
         await assertThrowsError(
             """
-            Property `noteViewBuilder: ForwardingInstantiator<String, NoteView>` on RootView has no @Forwarded property. Property should instead be of type `Instantiator<NoteView>`.
-            """
-        ) {
-            try await executeSystemUnderTest(
-                swiftFileContent: [
-                """
-                import SwiftUI
-
-                @Instantiable
-                public struct RootView: View {
-                    public var view: some View {
-                        noteViewBuilder.instantiate("my note")
-                    }
-
-                    @Instantiated
-                    let noteViewBuilder: ForwardingInstantiator<String, NoteView>
-                }
-                """,
-                """
-                import SwiftUI
-
-                @Instantiable
-                public struct NoteView: View {
-                    public var view: some View {
-                        TextField(note)
-                    }
-
-                    @State
-                    var note: String = ""
-                }
-                """,
-                ],
-                buildDependencyTreeOutput: true
-            )
-        }
-    }
-
-    func test_run_onCodeWhereInstantiableWithForwardedPropertyIsInstantiatedOutsideOfForwardingInstantiator_throwsError() async throws {
-        await assertThrowsError(
-            """
-            Property `child: Child` on Root has at least one @Forwarded property. Property should instead be of type `ForwardingInstantiator<Child.ForwardedArguments, Child>`.
-            """
-        ) {
-            try await executeSystemUnderTest(
-                swiftFileContent: [
-                """
-                @Instantiable
-                public final class Root {
-                    @Instantiated
-                    let child: Child
-                }
-                """,
-                """
-                public struct Forwarded {}
-                """,
-                """
-                @Instantiable
-                public final class Child {
-                    @Forwarded
-                    let forwarded: Forwarded
-                }
-                """,
-                ],
-                buildDependencyTreeOutput: true
-            )
-        }
-    }
-
-    func test_run_onCodeWhereInstantiableWithForwardedPropertyIsInstantiatedWithAnInstantiator_throwsError() async throws {
-        await assertThrowsError(
-            """
-            Property `childBuilder: Instantiator<Child>` on Root has at least one @Forwarded property. Property should instead be of type `ForwardingInstantiator<Child.ForwardedArguments, Child>`.
-            """
-        ) {
-            try await executeSystemUnderTest(
-                swiftFileContent: [
-                """
-                @Instantiable
-                public final class Root {
-                    @Instantiated
-                    let childBuilder: Instantiator<Child>
-                }
-                """,
-                """
-                public struct Forwarded {}
-                """,
-                """
-                @Instantiable
-                public final class Child {
-                    @Forwarded
-                    let forwarded: Forwarded
-                }
-                """,
-                ],
-                buildDependencyTreeOutput: true
-            )
-        }
-    }
-
-    func test_run_onCodeWithIncorrectForwardingInstantiatorFirstGeneric_whenInstantiableHasSingleForwardedProperty_throwsError() async throws {
-        await assertThrowsError(
-            """
-            Property `loggedInViewControllerBuilder: ForwardingInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ForwardingInstantiator<LoggedInViewController.ForwardedArguments, UIViewController>`.
+            Property `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>`.
             """
         ) {
             try await executeSystemUnderTest(
@@ -4968,7 +4867,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<String, UIViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -4983,7 +4882,7 @@ final class SafeDIToolTests: XCTestCase {
                     let authService: AuthService
 
                     @Instantiated(fulfilledByType: "LoggedInViewController")
-                    let loggedInViewControllerBuilder: ForwardingInstantiator<String, UIViewController>
+                    let loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>
 
                     private let derivedValue: Bool
 
@@ -5013,10 +4912,10 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
-    func test_run_onCodeWithIncorrectForwardingInstantiatorFirstGeneric_whenInstantiableHasMultipleForwardedProperty_throwsError() async throws {
+    func test_run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasMultipleForwardedProperty_throwsError() async throws {
         await assertThrowsError(
             """
-            Property `loggedInViewControllerBuilder: ForwardingInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ForwardingInstantiator<LoggedInViewController.ForwardedArguments, UIViewController>`.
+            Property `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>`.
             """
         ) {
             try await executeSystemUnderTest(
@@ -5050,7 +4949,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 @Instantiable
                 public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ForwardingInstantiator<String, UIViewController>) {
+                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>) {
                         self.authService = authService
                         self.networkService = networkService
                         self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -5065,7 +4964,7 @@ final class SafeDIToolTests: XCTestCase {
                     let authService: AuthService
 
                     @Instantiated(fulfilledByType: "LoggedInViewController")
-                    let loggedInViewControllerBuilder: ForwardingInstantiator<String, UIViewController>
+                    let loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>
 
                     private let derivedValue: Bool
 
@@ -5138,7 +5037,7 @@ final class SafeDIToolTests: XCTestCase {
         tool.moduleInfoPaths = dependentModuleOutputPaths
         tool.dependencyTreeOutput = buildDependencyTreeOutput ? dependencyTreeOutput.relativePath : nil
         try await tool.run()
-        
+
         filesToDelete.append(swiftFileCSV)
         filesToDelete += swiftFiles
         filesToDelete.append(moduleInfoOutput)
