@@ -40,6 +40,14 @@ public struct InjectableMacro: PeerMacro {
 
         let macroWithParameters = variableDecl.attributes.instantiatedMacro ?? variableDecl.attributes.receivedMacro
         if let fulfilledByType = macroWithParameters?.fulfilledByType {
+            let decoratesInstantiator = variableDecl
+                .bindings
+                .compactMap { $0.typeAnnotation }
+                .contains(where: { $0.type.typeDescription.propertyType.isInstantiator })
+            if decoratesInstantiator {
+                throw InjectableError.fulfilledByTypeUseOnInstantiator
+            }
+
             if
                 let stringLiteralExpression = StringLiteralExprSyntax(fulfilledByType),
                 stringLiteralExpression.segments.count == 1,
@@ -53,14 +61,6 @@ public struct InjectableMacro: PeerMacro {
                 }
             } else {
                 throw InjectableError.fulfilledByTypeArgumentInvalidType
-            }
-
-            let decoratesInstantiator = variableDecl
-                .bindings
-                .compactMap { $0.typeAnnotation }
-                .contains(where: { $0.type.typeDescription.propertyType.isInstantiator })
-            if decoratesInstantiator {
-                throw InjectableError.fulfilledByTypeUseOnInstantiator
             }
         } else {
             let decoratesErasedInstantiator = variableDecl
