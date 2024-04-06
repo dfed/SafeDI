@@ -58,7 +58,7 @@ public macro Instantiable(
     fulfillingAdditionalTypes additionalTypes: [Any.Type] = []
 ) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")
 
-/// A type that can be instantiated with arguments.
+/// A type that can be instantiated with runtime-injected properties.
 public protocol Instantiable {
     /// The forwarded properties required to instantiate the type.
     /// Defaults to `Void`.
