@@ -2114,7 +2114,7 @@ final class SafeDIToolTests: XCTestCase {
         )
     }
 
-    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesInstantiableExtensionPropertyWithNoArguments() async throws {
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesInstantiablePropertyWithNoArguments() async throws {
         let output = try await executeSystemUnderTest(
             swiftFileContent: [
                 """
@@ -2138,7 +2138,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 public protocol KeyValueStore {}
 
-                @InstantiableExtension(fulfillingAdditionalTypes: [KeyValueStore.self])
+                @Instantiable(fulfillingAdditionalTypes: [KeyValueStore.self])
                 extension UserDefaults: Instantiable, KeyValueStore {
                     public static func instantiate() -> UserDefaults {
                         getShared()
@@ -2181,7 +2181,7 @@ final class SafeDIToolTests: XCTestCase {
         )
     }
 
-    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesInstantiableExtensionPropertyWithArguments() async throws {
+    func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesInstantiablePropertyWithArguments() async throws {
         let output = try await executeSystemUnderTest(
             swiftFileContent: [
                 """
@@ -2263,7 +2263,7 @@ final class SafeDIToolTests: XCTestCase {
 
                 public protocol KeyValueStore {}
 
-                @InstantiableExtension(fulfillingAdditionalTypes: [KeyValueStore.self])
+                @Instantiable(fulfillingAdditionalTypes: [KeyValueStore.self])
                 extension UserDefaults: Instantiable {
                     public static func instantiate(user: User) -> UserDefaults {
                         UserDefaults(user: user)
@@ -4097,7 +4097,7 @@ final class SafeDIToolTests: XCTestCase {
     func test_run_onCodeWithPropertyWithUnknownFulfilledType_throwsError() async {
         await assertThrowsError(
             """
-            No `@Instantiable`-decorated type or `@InstantiableExtension`-decorated extension found to fulfill `@Instantiated`-decorated property with type `DoesNotExist`
+            No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `DoesNotExist`
             """
         ) {
             try await executeSystemUnderTest(
@@ -4120,7 +4120,7 @@ final class SafeDIToolTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableInstantiatedProperty_throwsError() async {
         await assertThrowsError(
             """
-            No `@Instantiable`-decorated type or `@InstantiableExtension`-decorated extension found to fulfill `@Instantiated`-decorated property with type `URLSession`
+            No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `URLSession`
             """
         ) {
             try await executeSystemUnderTest(
@@ -4496,7 +4496,7 @@ final class SafeDIToolTests: XCTestCase {
                     """
                     import URLSessionWrapper
 
-                    @InstantiableExtension
+                    @Instantiable
                     extension URLSessionWrapper: Instantiable {
                         public func instantiate(urlSession: URLSession) -> URLSessionWrapper {
                             URLSessionWrapper(urlSession)
@@ -4594,7 +4594,7 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
-    func test_run_onCodeWithDuplicateInstantiableAndInstantiableExtension_throwsError() async {
+    func test_run_onCodeWithDuplicateInstantiableAndInstantiable_throwsError() async {
         await assertThrowsError(
             """
             @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
@@ -4611,7 +4611,7 @@ final class SafeDIToolTests: XCTestCase {
                     """
                     import UIKit
 
-                    @InstantiableExtension
+                    @Instantiable
                     extension RootViewController: Instantiable {
                         public static instantiate() {
                             RootViewController()
@@ -4624,7 +4624,7 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
-    func test_run_onCodeWithDuplicateInstantiableExtension_throwsError() async {
+    func test_run_onCodeWithDuplicateInstantiableViaExtension_throwsError() async {
         await assertThrowsError(
             """
             @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `UserDefaults`
@@ -4635,7 +4635,7 @@ final class SafeDIToolTests: XCTestCase {
                     """
                     import Foundation
 
-                    @InstantiableExtension
+                    @Instantiable
                     extension UserDefaults: Instantiable {
                         public static instantiate() {
                             .standard
@@ -4645,7 +4645,7 @@ final class SafeDIToolTests: XCTestCase {
                     """
                     import Foundation
 
-                    @InstantiableExtension
+                    @Instantiable
                     extension UserDefaults: Instantiable {
                         public static instantiate(suiteName: String) {
                             UserDefaults(suiteName: suiteName)

@@ -25,7 +25,7 @@
 /// Example:
 ///
 ///     @Instantiable
-///     public final class FirstPartyType {
+///     public final class FirstPartyType: Instantiable {
 ///         public init(createdDependency: Dependency, receivedDependency: Dependency) {
 ///             self.createdDependency = createdDependency
 ///             self.receivedDependency = receivedDependency
@@ -45,7 +45,7 @@
 /// Example:
 ///
 ///     @Instantiable
-///     extension ThirdPartyType {
+///     extension ThirdPartyType: Instantiable {
 ///         public static func instantiate() -> ThirdPartyType {
 ///             // Implementation returning an instance of ThirdPartyType
 ///         }
@@ -53,7 +53,6 @@
 ///
 /// - Parameter additionalTypes: The types (in addition to the type decorated with this macro) of properties that can be decorated with `@Instantiated` and yield a result of this type. The types provided *must* be either superclasses of this type or protocols to which this type conforms.
 @attached(member, names: arbitrary)
-@attached(extension, conformances: Instantiable)
 public macro Instantiable(
     fulfillingAdditionalTypes additionalTypes: [Any.Type] = []
 ) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")

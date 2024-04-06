@@ -84,7 +84,7 @@ public final class DependencyTreeGenerator {
         var description: String {
             switch self {
             case let .noInstantiableFound(typeDescription):
-                "No `@\(InstantiableVisitor.macroName)`-decorated type or `@\(InstantiableVisitor.extendedMacroName)`-decorated extension found to fulfill `@\(Dependency.Source.instantiatedRawValue)`-decorated property with type `\(typeDescription.asSource)`"
+                "No `@\(InstantiableVisitor.macroName)`-decorated type or extension found to fulfill `@\(Dependency.Source.instantiatedRawValue)`-decorated property with type `\(typeDescription.asSource)`"
             case let .unfulfillableProperties(unfulfillableProperties):
                 """
                 \(unfulfillableProperties.map {

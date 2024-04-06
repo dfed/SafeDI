@@ -22,7 +22,7 @@ import SafeDI
 import SharedModule
 
 @Instantiable
-public struct GrandchildC {
+public struct GrandchildC: Instantiable {
 
     @Received
     let shared: SharedThing

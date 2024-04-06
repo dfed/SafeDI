@@ -26,7 +26,7 @@ import SafeDI
 import SharedModule
 
 @Instantiable
-public final class Root {
+public final class Root: Instantiable {
 
     static let shared = Root()
 

@@ -18,8 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A SafeDI dependency responsible for the deferred instantiation of an `@Instantiable` or `@InstantiableExtension`
-/// type. This class facilitates the delayed creation of an `@Instantiable` instance, making it particularly
+/// A SafeDI dependency responsible for the deferred instantiation of an `@Instantiable`-decorated type.
+/// This class facilitates the delayed creation of an `@Instantiable` instance, making it particularly
 /// useful in scenarios where immediate instantiation is not necessary or desirable. `Instantiator`
 /// facilitates control over memory usage and enables just-in-time instantiation. Instantiation is thread-safe.
 ///

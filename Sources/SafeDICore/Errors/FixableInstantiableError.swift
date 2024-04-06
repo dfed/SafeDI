@@ -21,7 +21,13 @@
 import SwiftDiagnostics
 
 public enum FixableInstantiableError: DiagnosticError {
-    case incorrectDeclarationType
+    case missingInstantiableConformance
+    case missingRequiredInstantiateMethod(typeName: String)
+    case missingAttributes
+    case disallowedGenericParameter
+    case disallowedEffectSpecifiers
+    case incorrectReturnType
+    case disallowedGenericWhereClause
     case dependencyHasTooManyAttributes
     case dependencyHasInitializer
     case missingPublicOrOpenAttribute
@@ -29,8 +35,20 @@ public enum FixableInstantiableError: DiagnosticError {
 
     public var description: String {
         switch self {
-        case .incorrectDeclarationType:
-            "@\(InstantiableVisitor.macroName)-decoration is reserved for type declarations"
+        case .missingInstantiableConformance:
+            "@\(InstantiableVisitor.macroName)-decorated type or extension must declare conformance to `Instantiable`"
+        case let .missingRequiredInstantiateMethod(typeName):
+            "@\(InstantiableVisitor.macroName)-decorated extension of \(typeName) must have a `public static func instantiate() -> \(typeName)` method"
+        case .missingAttributes:
+            "@\(InstantiableVisitor.macroName)-decorated extension must have an `instantiate()` method that is both `public` and `static`"
+        case .disallowedGenericParameter:
+            "@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must not have a generic parameter"
+        case .disallowedEffectSpecifiers:
+            "@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must not throw or be async"
+        case .incorrectReturnType:
+            "@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must return the same type as the extended type"
+        case .disallowedGenericWhereClause:
+            "@\(InstantiableVisitor.macroName)-decorated extension must not have a generic `where` clause"
         case .dependencyHasTooManyAttributes:
             "Dependency can have at most one of @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue) attached macro"
         case .dependencyHasInitializer:
@@ -63,7 +81,13 @@ public enum FixableInstantiableError: DiagnosticError {
 
         var severity: DiagnosticSeverity {
             switch error {
-            case .incorrectDeclarationType,
+            case .missingInstantiableConformance,
+                    .missingRequiredInstantiateMethod,
+                    .missingAttributes,
+                    .disallowedGenericParameter,
+                    .disallowedEffectSpecifiers,
+                    .incorrectReturnType,
+                    .disallowedGenericWhereClause,
                     .dependencyHasTooManyAttributes,
                     .dependencyHasInitializer,
                     .missingPublicOrOpenAttribute,
@@ -84,8 +108,20 @@ public enum FixableInstantiableError: DiagnosticError {
     private struct InstantiableFixItMessage: FixItMessage {
         var message: String {
             switch error {
-            case .incorrectDeclarationType:
-                "Replace macro with \(InstantiableVisitor.extendedMacroName)"
+            case .missingInstantiableConformance:
+                "Declare conformance to `Instantiable`"
+            case let .missingRequiredInstantiateMethod(typeName):
+                "Add `public static func instantiate() -> \(typeName)` method"
+            case .missingAttributes:
+                "Set `public static` modifiers"
+            case .disallowedGenericParameter:
+                "Remove generic parameter"
+            case .disallowedEffectSpecifiers:
+                "Remove effect specifiers"
+            case .incorrectReturnType:
+                "Make `instantiate()`’s return type the same as the extended type"
+            case .disallowedGenericWhereClause:
+                "Remove generic `where` clause"
             case .dependencyHasTooManyAttributes:
                 "Remove excessive attached macros"
             case .dependencyHasInitializer:

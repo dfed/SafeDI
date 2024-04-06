@@ -145,7 +145,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
         guard declarationType.isExtension else {
             return .skipChildren
         }
-        guard let instantiableMacro = node.attributes.instantiableExtendedMacro ?? node.attributes.instantiableMacro else {
+        guard let instantiableMacro = node.attributes.instantiableMacro else {
             // Not an instantiable type. We do not care.
             return .skipChildren
         }
@@ -184,7 +184,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
             )
             diagnostics.append(Diagnostic(
                 node: node,
-                error: FixableInstantiableExtensionError.incorrectReturnType,
+                error: FixableInstantiableError.incorrectReturnType,
                 changes: [
                     .replace(
                         oldNode: Syntax(node.signature),
@@ -227,7 +227,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
             modifiedNode.funcKeyword.leadingTrivia = []
             diagnostics.append(Diagnostic(
                 node: node,
-                error: FixableInstantiableExtensionError.missingAttributes,
+                error: FixableInstantiableError.missingAttributes,
                 changes: [
                     .replace(
                         oldNode: Syntax(node),
@@ -241,7 +241,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
             modifiedSignature.effectSpecifiers = nil
             diagnostics.append(Diagnostic(
                 node: node,
-                error: FixableInstantiableExtensionError.disallowedEffectSpecifiers,
+                error: FixableInstantiableError.disallowedEffectSpecifiers,
                 changes: [
                     .replace(
                         oldNode: Syntax(node.signature),
@@ -255,7 +255,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
             modifiedNode.genericParameterClause = nil
             diagnostics.append(Diagnostic(
                 node: node,
-                error: FixableInstantiableExtensionError.disallowedGenericParameter,
+                error: FixableInstantiableError.disallowedGenericParameter,
                 changes: [
                     .replace(
                         oldNode: Syntax(node),
@@ -269,7 +269,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
             modifiedNode.genericWhereClause = nil
             diagnostics.append(Diagnostic(
                 node: node,
-                error: FixableInstantiableExtensionError.disallowedGenericWhereClause,
+                error: FixableInstantiableError.disallowedGenericWhereClause,
                 changes: [
                     .replace(
                         oldNode: Syntax(node),
@@ -292,7 +292,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
     public private(set) var uninitializedNonOptionalPropertyNames = [String]()
 
     public static let macroName = "Instantiable"
-    public static let extendedMacroName = "InstantiableExtension"
     public static let instantiateMethodName = "instantiate"
 
     // MARK: DeclarationType
@@ -359,7 +358,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
         guard declarationType.isTypeDefinition else {
             return .skipChildren
         }
-        guard let macro = node.attributes.instantiableMacro ?? node.attributes.instantiableExtendedMacro else {
+        guard let macro = node.attributes.instantiableMacro else {
             // Not an instantiable type. We do not care.
             return .skipChildren
         }
