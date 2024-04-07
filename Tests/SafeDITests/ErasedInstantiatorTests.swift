@@ -50,7 +50,7 @@ final class ErasedInstantiatorTests: XCTestCase {
         let id: String
     }
 
-    private final class BuiltProductWithForwardedArgument: Equatable, Identifiable, Instantiable {
+    private final class BuiltProductWithForwardedArgument: Equatable, Identifiable {
         init(id: String) {
             self.id = id
         }
