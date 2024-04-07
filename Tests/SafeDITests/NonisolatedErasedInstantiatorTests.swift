@@ -24,38 +24,30 @@ import XCTest
 
 final class NonisolatedErasedInstantiatorTests: XCTestCase {
     func test_instantiate_returnsNewObjectEachTime() {
-        let systemUnderTest = NonisolatedErasedInstantiator() { id in BuiltProduct(id: id) }
+        let systemUnderTest = NonisolatedErasedInstantiator<Void, BuiltProduct>() { BuiltProduct() }
+        let firstBuiltProduct = systemUnderTest.instantiate()
+        let secondBuiltProduct = systemUnderTest.instantiate()
+        XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
+    }
+
+    func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() {
+        let systemUnderTest = NonisolatedErasedInstantiator() { id in BuiltProductWithForwardedArgument(id: id) }
         let id = UUID().uuidString
         let firstBuiltProduct = systemUnderTest.instantiate(id)
         let secondBuiltProduct = systemUnderTest.instantiate(id)
         XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
     }
 
-    func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() {
-        let systemUnderTest = NonisolatedErasedInstantiator() { id in BuiltProductWithForwardedArgument(id: id) }
-        let firstBuiltProduct = systemUnderTest.instantiate("12345")
-        let secondBuiltProduct = systemUnderTest.instantiate("54321")
-        XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
+    private final class BuiltProduct {
+        let id = UUID().uuidString
     }
 
-    private final class BuiltProduct: Identifiable {
-        init(id: String) {
-            self.id = id
-        }
-
-        let id: String
-    }
-
-    private final class BuiltProductWithForwardedArgument: Equatable, Identifiable {
+    private final class BuiltProductWithForwardedArgument {
         init(id: String) {
             self.id = id
         }
 
         typealias ForwardedProperties = String
-
-        static func == (lhs: BuiltProductWithForwardedArgument, rhs: BuiltProductWithForwardedArgument) -> Bool {
-            lhs.id == rhs.id
-        }
 
         @Forwarded
         let id: String

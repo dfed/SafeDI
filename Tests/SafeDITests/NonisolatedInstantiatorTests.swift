@@ -23,42 +23,31 @@ import XCTest
 @testable import SafeDI
 
 final class NonisolatedInstantiatorTests: XCTestCase {
-    func test_instantiate_returnsNewObjectEachTime() async {
-        await Task { @MainActor in
-            let systemUnderTest = Instantiator() { BuiltProduct() }
-            let firstBuiltProduct = systemUnderTest.instantiate()
-            let secondBuiltProduct = systemUnderTest.instantiate()
-            XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
-        }.value
+    func test_instantiate_returnsNewObjectEachTime() {
+        let systemUnderTest = NonisolatedInstantiator() { BuiltProduct() }
+        let firstBuiltProduct = systemUnderTest.instantiate()
+        let secondBuiltProduct = systemUnderTest.instantiate()
+        XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
     }
 
-    func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() async {
-        await Task { @MainActor in
-            let systemUnderTest = Instantiator() { id in BuiltProductWithForwardedArgument(id: id) }
-            let firstBuiltProduct = systemUnderTest.instantiate("12345")
-            let secondBuiltProduct = systemUnderTest.instantiate("54321")
-            XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
-        }.value
+    func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() {
+        let systemUnderTest = NonisolatedInstantiator() { id in BuiltProductWithForwardedArgument(id: id) }
+        let id = UUID().uuidString
+        let firstBuiltProduct = systemUnderTest.instantiate(id)
+        let secondBuiltProduct = systemUnderTest.instantiate(id)
+        XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
     }
 
-    private final class BuiltProduct: Equatable, Identifiable, Instantiable {
-        static func == (lhs: BuiltProduct, rhs: BuiltProduct) -> Bool {
-            lhs.id == rhs.id
-        }
-
+    private final class BuiltProduct: Instantiable {
         let id = UUID().uuidString
     }
 
-    private final class BuiltProductWithForwardedArgument: Equatable, Identifiable, Instantiable {
+    private final class BuiltProductWithForwardedArgument: Instantiable {
         init(id: String) {
             self.id = id
         }
 
         typealias ForwardedProperties = String
-
-        static func == (lhs: BuiltProductWithForwardedArgument, rhs: BuiltProductWithForwardedArgument) -> Bool {
-            lhs.id == rhs.id
-        }
 
         @Forwarded
         let id: String
