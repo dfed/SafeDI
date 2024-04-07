@@ -164,7 +164,7 @@ The `fulfilledByType` parameter takes a `String` identical to the type name of t
 
 The `erasedToConcreteExistential` parameter takes a boolean value that indicates whether the fulfilling type is being erased to a concrete [existential](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/#Boxed-Protocol-Types) type. A concrete existential type is a non-protocol type that wraps a protocol and is usually prefixed with `Any`. A fulfilling type does not inherit from a concrete existential type, and therefore when the property‘s type is a concrete existential the fulfilling type must be wrapped in the erasing concrete existential type‘s initializer before it is returned. When the property‘s type is not a concrete existential, the fulfilling type is cast as the property‘s type. For example, an `AnyView` is a concrete and existential type-erased form of some `struct MyExampleView: View`, while a `UIViewController` is a concrete but not existential type-erased form of some `final class MyExampleViewController: UIViewController`. This parameter defaults to `false`.
 
-The [`ErasedInstantiator`](Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift) type is how SafeDI enables instantiating any `@Instantiable` or `@InstantiableExtended` type when using type erasure. `ErasedInstantiator` has two generics. The first generic must match the type’s `ForwardedProperties` typealias. The second generic matches the type of the to-be-instantiated instance.
+The [`ErasedInstantiator`](Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift) type is how SafeDI enables instantiating any `@Instantiable` type when using type erasure. `ErasedInstantiator` has two generics. The first generic must match the type’s `ForwardedProperties` typealias. The second generic matches the type of the to-be-instantiated instance.
 
 ```swift
 import SwiftUI
@@ -211,7 +211,7 @@ public struct LoggedInContentView: View, Instantiable {
     private let user: User
 
     @Instantiated(fulfilledByType: "ProfileView", erasedToConcreteExistential: true)
-    private let profileViewBuilder: Instantiator<AnyView>
+    private let profileViewBuilder: ErasedInstantiator<AnyView>
 }
 
 @Instantiable
@@ -315,7 +315,7 @@ When you want to instantiate a dependency after `init(…)`, you need to declare
 
 #### Instantiator
 
-The [`Instantiator`](Sources/SafeDI/DelayedInstantiation/Instantiator.swift) type is how SafeDI enables deferred instantiation of an `@Instantiable` or `@InstantiableExtended` type. `Instantiator` has a single generic that matches the type of the to-be-instantiated instance. Creating an `Instantiator` property is as simple as creating any other property in the SafeDI ecosystem:
+The [`Instantiator`](Sources/SafeDI/DelayedInstantiation/Instantiator.swift) type is how SafeDI enables deferred instantiation of an `@Instantiable` type. `Instantiator` has a single generic that matches the type of the to-be-instantiated instance. Creating an `Instantiator` property is as simple as creating any other property in the SafeDI ecosystem:
 
 ```swift
 @Instantiable
@@ -332,8 +332,6 @@ public struct MyApp: App, Instantiable {
     private let contentViewInstantiator: Instantiator<ContentView>
 }
 ```
-
-It is possible to write a `Instantiator` with a type-erased generic by utilizing `@Instantiated`‘s `fulfilledByType` parameter.
 
 ### Creating the root of your dependency tree
 
