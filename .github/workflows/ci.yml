@@ -47,6 +47,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
+      - name: Replace 'main' branch with the current branch
+        run: sed -i '' "s#branch = main;#branch = ${{ github.head_ref || github.ref_name }};#" "Examples/ExampleProjectIntegration/ExampleProjectIntegration.xcodeproj/project.pbxproj"
       - name: Build Project Integration
         run: pushd Examples/ExampleProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration; popd
 
