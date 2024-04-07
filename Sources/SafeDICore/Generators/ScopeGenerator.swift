@@ -142,8 +142,9 @@ actor ScopeGenerator: CustomStringConvertible {
                     }
                     let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
 
+                    let propertyType = property.propertyType
                     if
-                        property.propertyType.isErasedInstantiator,
+                        propertyType.isErasedInstantiator,
                         let firstForwardedProperty = forwardedProperties.first,
                         let forwardedArgument = property.generics.first,
                         !(
@@ -161,8 +162,11 @@ actor ScopeGenerator: CustomStringConvertible {
                         )
                     }
 
-                    switch property.propertyType {
-                    case .instantiator, .erasedInstantiator:
+                    switch propertyType {
+                    case .instantiator,
+                            .erasedInstantiator,
+                            .nonisolatedInstantiator,
+                            .nonisolatedErasedInstantiator:
                         let forwardedProperties = forwardedProperties.sorted()
                         let forwardedPropertiesHaveLabels = forwardedProperties.count > 1
                         let forwardedArguments = forwardedProperties
@@ -175,15 +179,28 @@ actor ScopeGenerator: CustomStringConvertible {
                             }
                             .joined(separator: ", ")
                         let generatedProperties = try await generateProperties(leadingMemberWhitespace: Self.standardIndent)
-                        let functionArguments = forwardedProperties.isEmpty ? "" : forwardedProperties.initializerFunctionParameters.map(\.description).joined()
+                        let functionArguments = if forwardedProperties.isEmpty {
+                            ""
+                        } else {
+                            forwardedProperties.initializerFunctionParameters.map(\.description).joined()
+                        }
                         let functionName = self.functionName(toBuild: property)
-                        let functionDeclaration = isPropertyCycle ? "" : """
-                            func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
+                        let actorBinding = if propertyType.isMainActorBound {
+                            "@MainActor "
+                        } else {
+                            "nonisolated "
+                        }
+                        let functionDeclaration = if isPropertyCycle {
+                            ""
+                        } else {
+                            """
+                            \(actorBinding)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
                             \(generatedProperties.joined(separator: "\n"))
                             \(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
                             }
 
                             """
+                        }
 
                         let typeDescription = property.typeDescription.asSource
                         let unwrappedTypeDescription = property

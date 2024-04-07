@@ -184,6 +184,10 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 return .instantiator
             } else if name == Dependency.erasedInstantiatorType {
                 return .erasedInstantiator
+            } else if name == Dependency.nonisolatedInstantiatorType {
+                return .nonisolatedInstantiator
+            } else if name == Dependency.nonisolatedErasedInstantiatorType {
+                return .nonisolatedErasedInstantiator
             } else {
                 return .constant
             }
@@ -244,11 +248,15 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     var asInstantiatedType: TypeDescription {
         switch self {
         case let .simple(name, generics):
-            if name == Dependency.instantiatorType, let builtType = generics.first {
+            if name == Dependency.instantiatorType || name == Dependency.nonisolatedInstantiatorType,
+               let builtType = generics.first
+            {
                 // This is a type that is lazily instantiated.
                 // The first generic is the built type.
                 return builtType
-            } else if name == Dependency.erasedInstantiatorType, let builtType = generics.dropFirst().first {
+            } else if name == Dependency.erasedInstantiatorType || name == Dependency.nonisolatedErasedInstantiatorType,
+                      let builtType = generics.dropFirst().first
+            {
                 // This is a type that is lazily instantiated with explicitly declared forwarded arguments due to type erasure.
                 // The second generic is the built type.
                 return builtType

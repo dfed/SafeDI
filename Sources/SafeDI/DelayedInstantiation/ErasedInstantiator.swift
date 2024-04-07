@@ -19,7 +19,9 @@
 // SOFTWARE.
 
 /// A SafeDI dependency designed for the deferred instantiation of a type-erased instance of a
-/// type decorated with `@Instantiable`. Instantiation is thread-safe.
+/// type decorated with `@Instantiable`.
+///
+/// This instantiator can be used to instantiate types that are @MainActor-bound.
 ///
 /// - SeeAlso: `Instantiator`
 public final class ErasedInstantiator<ForwardedProperties, Instantiable> {

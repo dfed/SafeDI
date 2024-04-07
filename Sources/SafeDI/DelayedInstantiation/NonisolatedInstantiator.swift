@@ -23,33 +23,31 @@
 /// useful in scenarios where immediate instantiation is not necessary or desirable. `Instantiator`
 /// facilitates control over memory usage and enables just-in-time instantiation.
 ///
-/// This instantiator can be used to instantiate types that are @MainActor-bound.
+/// This instantiator can be used to instantiate types that are not isolated to any particular actor.
 ///
-/// - SeeAlso: `ErasedInstantiator`
-public final class Instantiator<T: Instantiable> {
+/// - SeeAlso: `NonisolatedErasedInstantiator`
+public final class NonisolatedInstantiator<T: Instantiable> {
     /// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
-    public init(_ instantiator: @escaping @MainActor (T.ForwardedProperties) -> T) {
+    public init(_ instantiator: @escaping (T.ForwardedProperties) -> T) {
         self.instantiator = instantiator
     }
 
     /// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
-    public init(_ instantiator: @escaping @MainActor () -> T) where T.ForwardedProperties == Void {
+    public init(_ instantiator: @escaping () -> T) where T.ForwardedProperties == Void {
         self.instantiator = { _ in instantiator() }
     }
 
     /// Instantiates and returns a new instance of the `@Instantiable` type.
     /// - Returns: An instance of `T`.
-    @MainActor
     public func instantiate(_ forwardedProperties: T.ForwardedProperties) -> T {
         instantiator(forwardedProperties)
     }
 
     /// Instantiates and returns a new instance of the `@Instantiable` type.
     /// - Returns: An instance of `T`.
-    @MainActor
     public func instantiate() -> T where T.ForwardedProperties == Void {
         instantiator(())
     }
 
-    private let instantiator: @MainActor (T.ForwardedProperties) -> T
+    private let instantiator: (T.ForwardedProperties) -> T
 }
