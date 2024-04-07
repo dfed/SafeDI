@@ -23,20 +23,22 @@ import XCTest
 @testable import SafeDI
 
 final class InstantiatorTests: XCTestCase {
-    @MainActor
-    func test_instantiate_returnsNewObjectEachTime() {
-        let systemUnderTest = Instantiator() { BuiltProduct() }
-        let firstBuiltProduct = systemUnderTest.instantiate()
-        let secondBuiltProduct = systemUnderTest.instantiate()
-        XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
+    func test_instantiate_returnsNewObjectEachTime() async {
+        await Task { @MainActor in
+            let systemUnderTest = Instantiator() { BuiltProduct() }
+            let firstBuiltProduct = systemUnderTest.instantiate()
+            let secondBuiltProduct = systemUnderTest.instantiate()
+            XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
+        }.value
     }
 
-    @MainActor
-    func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() {
-        let systemUnderTest = Instantiator() { id in BuiltProductWithForwardedArgument(id: id) }
-        let firstBuiltProduct = systemUnderTest.instantiate("12345")
-        let secondBuiltProduct = systemUnderTest.instantiate("54321")
-        XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
+    func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() async {
+        await Task { @MainActor in
+            let systemUnderTest = Instantiator() { id in BuiltProductWithForwardedArgument(id: id) }
+            let firstBuiltProduct = systemUnderTest.instantiate("12345")
+            let secondBuiltProduct = systemUnderTest.instantiate("54321")
+            XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
+        }.value
     }
 
     private final class BuiltProduct: Equatable, Identifiable, Instantiable {

@@ -23,13 +23,23 @@ import XCTest
 @testable import SafeDI
 
 final class ErasedInstantiatorTests: XCTestCase {
-    @MainActor
-    func test_instantiate_returnsNewObjectEachTime() {
-        let systemUnderTest = ErasedInstantiator() { id in BuiltProduct(id: id) }
-        let id = UUID().uuidString
-        let firstBuiltProduct = systemUnderTest.instantiate(id)
-        let secondBuiltProduct = systemUnderTest.instantiate(id)
-        XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
+    func test_instantiate_returnsNewObjectEachTime() async {
+        await Task { @MainActor in
+            let systemUnderTest = ErasedInstantiator() { id in BuiltProduct(id: id) }
+            let id = UUID().uuidString
+            let firstBuiltProduct = systemUnderTest.instantiate(id)
+            let secondBuiltProduct = systemUnderTest.instantiate(id)
+            XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
+        }.value
+    }
+
+    func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() async {
+        await Task { @MainActor in
+            let systemUnderTest = ErasedInstantiator() { id in BuiltProductWithForwardedArgument(id: id) }
+            let firstBuiltProduct = systemUnderTest.instantiate("12345")
+            let secondBuiltProduct = systemUnderTest.instantiate("54321")
+            XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
+        }.value
     }
 
     private final class BuiltProduct: Identifiable {
@@ -37,6 +47,21 @@ final class ErasedInstantiatorTests: XCTestCase {
             self.id = id
         }
 
+        let id: String
+    }
+
+    private final class BuiltProductWithForwardedArgument: Equatable, Identifiable, Instantiable {
+        init(id: String) {
+            self.id = id
+        }
+
+        typealias ForwardedProperties = String
+
+        static func == (lhs: BuiltProductWithForwardedArgument, rhs: BuiltProductWithForwardedArgument) -> Bool {
+            lhs.id == rhs.id
+        }
+
+        @Forwarded
         let id: String
     }
 }
