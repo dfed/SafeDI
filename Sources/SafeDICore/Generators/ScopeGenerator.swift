@@ -219,23 +219,25 @@ actor ScopeGenerator: CustomStringConvertible {
                             \(functionDeclaration)\(propertyDeclaration) = \(instantiatorInstantiation)
                             """
                     case .constant:
-                        let propertyDeclaration = if erasedToConcreteExistential || concreteTypeName == property.typeDescription.asSource {
+                        let generatedProperties = try await generateProperties(leadingMemberWhitespace: Self.standardIndent)
+                        let propertyDeclaration = if erasedToConcreteExistential || (
+                            concreteTypeName == property.typeDescription.asSource
+                            && generatedProperties.isEmpty
+                        ) {
                             "let \(property.label)"
                         } else {
                             "let \(property.asSource)"
                         }
-                        let generatedProperties = try await generateProperties(leadingMemberWhitespace: Self.standardIndent)
 
-                        let initializer: String
                         let returnLineSansReturn = if erasedToConcreteExistential {
                             "\(property.typeDescription.asSource)(\(returnLineSansReturn))"
                         } else {
                             returnLineSansReturn
                         }
-                        if generatedProperties.isEmpty {
-                            initializer = returnLineSansReturn
+                        let initializer = if generatedProperties.isEmpty {
+                            returnLineSansReturn
                         } else {
-                            initializer = """
+                            """
                             {
                             \(generatedProperties.joined(separator: "\n"))
                             \(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
