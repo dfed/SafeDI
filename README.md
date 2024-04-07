@@ -156,36 +156,6 @@ Property declarations within `@Instantiable` types decorated with [`@Instantiate
 
 `@Instantiated`-decorated properties must be an `@Instantiable` type, or of an `additionalType` listed in an `@Instantiable(fulfillingAdditionalTypes:)`‘s declaration.
 
-#### Utilizing @Instantiated with type erased properties
-
-When you want to instantiate a type-erased property, you may specify which concrete type you expect to fulfill your property by utilizing `@Instantiated`‘s `fulfilledByType` and `erasedToConcreteExistential` parameters.
-
-The `fulfilledByType` parameter takes a `String` identical to the type name of the concrete type that will be assigned to the type-erased property. Representing the type as a string literal allows for dependency inversion: the code that receives the concrete type does not need to have a dependency on the module that defines the concrete type.
-
-The `erasedToConcreteExistential` parameter takes a boolean value that indicates whether the fulfilling type is being erased to a concrete [existential](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/#Boxed-Protocol-Types) type. A concrete existential type is a non-protocol type that wraps a protocol and is usually prefixed with `Any`. A fulfilling type does not inherit from a concrete existential type, and therefore when the property‘s type is a concrete existential the fulfilling type must be wrapped in the erasing concrete existential type‘s initializer before it is returned. When the property‘s type is not a concrete existential, the fulfilling type is cast as the property‘s type. For example, an `AnyView` is a concrete and existential type-erased form of some `struct MyExampleView: View`, while a `UIViewController` is a concrete but not existential type-erased form of some `final class MyExampleViewController: UIViewController`. This parameter defaults to `false`.
-
-The [`ErasedInstantiator`](Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift) type is how SafeDI enables instantiating any `@Instantiable` type when using type erasure. `ErasedInstantiator` has two generics. The first generic must match the type’s `ForwardedProperties` typealias. The second generic matches the type of the to-be-instantiated instance. An `type’s` is `@MainActor`-bound – if you want to instantiate an erased type in a nonisolated environment, use an [`NonisolatedErasedInstantiator`](Sources/SafeDI/DelayedInstantiation/NonisolatedErasedInstantiator.swift).
-
-```swift
-import SwiftUI
-
-@Instantiable
-public struct ParentView: View, Instantiable {
-    public var body: some View {
-        VStack {
-            Text("Child View")
-            childViewBuilder.instantiate()
-        }
-    }
-
-    // The Instantiator‘s `instantiate()` function will build a `ChildView` wrapped in a concrete `AnyView`.
-    // All that is required for this code to compile is for there to be an
-    // `@Instantiable public struct ChildView: View` in the codebase.
-    @Instantiated(fulfilledByType: "ChildView", erasedToConcreteExistential: true)
-    private let childViewBuilder: ErasedInstantiator<(), AnyView>
-}
-```
-
 ### @Forwarded
 
 Property declarations within `@Instantiable` types decorated with [`@Forwarded`](Sources/SafeDI/PropertyDecoration/Forwarded.swift) represent dependencies that come from the runtime, e.g. user input or backend-delivered content. Like an `@Instantiated`-decorated property, a `@Forwarded`-decorated property is available to be `@Received` by objects instantiated further down the dependency tree.
@@ -334,6 +304,36 @@ public struct MyApp: App, Instantiable {
 ```
 
 An `Instantiator` is `@MainActor`-bound – if you want to instantiate a type in a nonisolated environment, use an [`NonisolatedInstantiator`]](Sources/SafeDI/DelayedInstantiation/NonisolatedInstantiator.swift).
+
+#### Utilizing @Instantiated with type erased properties
+
+When you want to instantiate a type-erased property, you may specify which concrete type you expect to fulfill your property by utilizing `@Instantiated`‘s `fulfilledByType` and `erasedToConcreteExistential` parameters.
+
+The `fulfilledByType` parameter takes a `String` identical to the type name of the concrete type that will be assigned to the type-erased property. Representing the type as a string literal allows for dependency inversion: the code that receives the concrete type does not need to have a dependency on the module that defines the concrete type.
+
+The `erasedToConcreteExistential` parameter takes a boolean value that indicates whether the fulfilling type is being erased to a concrete [existential](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/#Boxed-Protocol-Types) type. A concrete existential type is a non-protocol type that wraps a protocol and is usually prefixed with `Any`. A fulfilling type does not inherit from a concrete existential type, and therefore when the property‘s type is a concrete existential the fulfilling type must be wrapped in the erasing concrete existential type‘s initializer before it is returned. When the property‘s type is not a concrete existential, the fulfilling type is cast as the property‘s type. For example, an `AnyView` is a concrete and existential type-erased form of some `struct MyExampleView: View`, while a `UIViewController` is a concrete but not existential type-erased form of some `final class MyExampleViewController: UIViewController`. This parameter defaults to `false`.
+
+The [`ErasedInstantiator`](Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift) type is how SafeDI enables instantiating any `@Instantiable` type when using type erasure. `ErasedInstantiator` has two generics. The first generic must match the type’s `ForwardedProperties` typealias. The second generic matches the type of the to-be-instantiated instance. An `type’s` is `@MainActor`-bound – if you want to instantiate an erased type in a nonisolated environment, use an [`NonisolatedErasedInstantiator`](Sources/SafeDI/DelayedInstantiation/NonisolatedErasedInstantiator.swift).
+
+```swift
+import SwiftUI
+
+@Instantiable
+public struct ParentView: View, Instantiable {
+    public var body: some View {
+        VStack {
+            Text("Child View")
+            childViewBuilder.instantiate()
+        }
+    }
+
+    // The Instantiator‘s `instantiate()` function will build a `ChildView` wrapped in a concrete `AnyView`.
+    // All that is required for this code to compile is for there to be an
+    // `@Instantiable public struct ChildView: View` in the codebase.
+    @Instantiated(fulfilledByType: "ChildView", erasedToConcreteExistential: true)
+    private let childViewBuilder: ErasedInstantiator<(), AnyView>
+}
+```
 
 ### Creating the root of your dependency tree
 
