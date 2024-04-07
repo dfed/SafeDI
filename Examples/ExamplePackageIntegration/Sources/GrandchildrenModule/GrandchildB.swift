@@ -22,7 +22,7 @@ import SafeDI
 import SharedModule
 
 @Instantiable
-public actor GrandchildB {
+public actor GrandchildB: Instantiable {
 
     @Received
     let shared: SharedThing

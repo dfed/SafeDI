@@ -25,11 +25,11 @@ public struct Instantiable: Codable, Hashable {
     public init(
         instantiableType: TypeDescription,
         initializer: Initializer?,
-        additionalInstantiableTypes: [TypeDescription]?,
+        additionalInstantiables: [TypeDescription]?,
         dependencies: [Dependency],
         declarationType: DeclarationType)
     {
-        self.instantiableTypes = [instantiableType] + (additionalInstantiableTypes ?? [])
+        self.instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
         self.initializer = initializer
         self.dependencies = dependencies
         self.declarationType = declarationType
@@ -40,7 +40,7 @@ public struct Instantiable: Codable, Hashable {
     /// The types that can be fulfilled with this Instantiable.
     public let instantiableTypes: [TypeDescription]
     /// The concrete type that fulfills `instantiableTypes`.
-    public var concreteInstantiableType: TypeDescription {
+    public var concreteInstantiable: TypeDescription {
         instantiableTypes[0]
     }
     /// A memberwise initializer for the concrete instantiable type.

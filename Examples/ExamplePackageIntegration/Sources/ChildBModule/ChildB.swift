@@ -23,7 +23,7 @@ import SafeDI
 import SharedModule
 
 @Instantiable
-public final class ChildB {
+public final class ChildB: Instantiable {
 
     @Received
     let shared: SharedThing

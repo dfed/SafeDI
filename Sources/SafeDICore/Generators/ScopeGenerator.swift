@@ -45,10 +45,10 @@ actor ScopeGenerator: CustomStringConvertible {
                 erasedToConcreteExistential: erasedToConcreteExistential,
                 isPropertyCycle: isPropertyCycle
             )
-            description = instantiable.concreteInstantiableType.asSource
+            description = instantiable.concreteInstantiable.asSource
         } else {
             scopeData = .root(instantiable: instantiable)
-            description = instantiable.concreteInstantiableType.asSource
+            description = instantiable.concreteInstantiable.asSource
         }
         self.property = property
         self.propertiesToGenerate = propertiesToGenerate
@@ -117,7 +117,7 @@ actor ScopeGenerator: CustomStringConvertible {
                         return ""
                     } else {
                         return """
-                            extension \(instantiable.concreteInstantiableType.asSource) {
+                            extension \(instantiable.concreteInstantiable.asSource) {
                                 public \(instantiable.declarationType == .classType ? "convenience " : "")init() {
                             \(try await generateProperties(leadingMemberWhitespace: "        ").joined(separator: "\n"))
                                     self.init(\(argumentList))
@@ -133,7 +133,7 @@ actor ScopeGenerator: CustomStringConvertible {
                     isPropertyCycle
                 ):
                     let argumentList = try instantiable.generateArgumentList()
-                    let concreteTypeName = instantiable.concreteInstantiableType.asSource
+                    let concreteTypeName = instantiable.concreteInstantiable.asSource
                     let instantiationDeclaration = switch instantiable.declarationType {
                     case .actorType, .classType, .structType:
                         concreteTypeName
@@ -143,25 +143,26 @@ actor ScopeGenerator: CustomStringConvertible {
                     let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
 
                     if
+                        property.propertyType.isErasedInstantiator,
                         let firstForwardedProperty = forwardedProperties.first,
                         let forwardedArgument = property.generics.first,
                         !(
                             // The forwarded argument is the same type as our only `@Forwarded` property.
                             (forwardedProperties.count == 1 && forwardedArgument == firstForwardedProperty.typeDescription)
-                            // The forwarded argument is the same as `InstantiableTypeName.ForwardedArguments`.
-                            || forwardedArgument == .nested(name: "ForwardedArguments", parentType: instantiable.concreteInstantiableType)
-                            // The forwarded argument is the same as the tuple we generated for `InstantiableTypeName.ForwardedArguments`.
+                            // The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
+                            || forwardedArgument == .nested(name: "ForwardedProperties", parentType: instantiable.concreteInstantiable)
+                            // The forwarded argument is the same as the tuple we generated for `InstantiableName.ForwardedProperties`.
                             || forwardedArgument == forwardedProperties.asTupleTypeDescription
                         )
                     {
-                        throw GenerationError.forwardingInstantiatorGenericDoesNotMatch(
+                        throw GenerationError.erasedInstantiatorGenericDoesNotMatch(
                             property: property,
                             instantiable: instantiable
                         )
                     }
 
                     switch property.propertyType {
-                    case .instantiator, .forwardingInstantiator:
+                    case .instantiator, .erasedInstantiator:
                         let forwardedProperties = forwardedProperties.sorted()
                         let forwardedPropertiesHaveLabels = forwardedProperties.count > 1
                         let forwardedArguments = forwardedProperties
@@ -368,13 +369,13 @@ actor ScopeGenerator: CustomStringConvertible {
     // MARK: GenerationError
 
     private enum GenerationError: Error, CustomStringConvertible {
-        case forwardingInstantiatorGenericDoesNotMatch(property: Property, instantiable: Instantiable)
+        case erasedInstantiatorGenericDoesNotMatch(property: Property, instantiable: Instantiable)
         case dependencyCycleDetected(any Collection<Property>, scope: ScopeGenerator)
 
         var description: String {
             switch self {
-            case let .forwardingInstantiatorGenericDoesNotMatch(property, instantiable):
-                "Property `\(property.asSource)` on \(instantiable.concreteInstantiableType.asSource) incorrectly configured. Property should instead be of type `\(Dependency.forwardingInstantiatorType)<\(instantiable.concreteInstantiableType.asSource).ForwardedArguments, \(property.typeDescription.asInstantiatedType.asSource)>`."
+            case let .erasedInstantiatorGenericDoesNotMatch(property, instantiable):
+                "Property `\(property.asSource)` on \(instantiable.concreteInstantiable.asSource) incorrectly configured. Property should instead be of type `\(Dependency.erasedInstantiatorType)<\(instantiable.concreteInstantiable.asSource).ForwardedProperties, \(property.typeDescription.asInstantiatedType.asSource)>`."
             case let .dependencyCycleDetected(properties, scope):
                 """
                 Dependency cycle detected on \(scope)!

@@ -18,7 +18,24 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import SafeDI
+import XCTest
 
-@Instantiable
-public final class SharedThing: Instantiable {}
+@testable import SafeDI
+
+final class ErasedInstantiatorTests: XCTestCase {
+    func test_instantiate_returnsNewObjectEachTime() {
+        let systemUnderTest = ErasedInstantiator() { id in BuiltProduct(id: id) }
+        let id = UUID().uuidString
+        let firstBuiltProduct = systemUnderTest.instantiate(id)
+        let secondBuiltProduct = systemUnderTest.instantiate(id)
+        XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
+    }
+
+    private final class BuiltProduct: Identifiable {
+        init(id: String) {
+            self.id = id
+        }
+
+        let id: String
+    }
+}

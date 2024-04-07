@@ -40,6 +40,14 @@ public struct InjectableMacro: PeerMacro {
 
         let macroWithParameters = variableDecl.attributes.instantiatedMacro ?? variableDecl.attributes.receivedMacro
         if let fulfilledByType = macroWithParameters?.fulfilledByType {
+            let decoratesInstantiator = variableDecl
+                .bindings
+                .compactMap { $0.typeAnnotation }
+                .contains(where: { $0.type.typeDescription.propertyType.isInstantiator })
+            if decoratesInstantiator {
+                throw InjectableError.fulfilledByTypeUseOnInstantiator
+            }
+
             if
                 let stringLiteralExpression = StringLiteralExprSyntax(fulfilledByType),
                 stringLiteralExpression.segments.count == 1,
@@ -53,6 +61,14 @@ public struct InjectableMacro: PeerMacro {
                 }
             } else {
                 throw InjectableError.fulfilledByTypeArgumentInvalidType
+            }
+        } else {
+            let decoratesErasedInstantiator = variableDecl
+                .bindings
+                .compactMap { $0.typeAnnotation }
+                .contains(where: { $0.type.typeDescription.propertyType.isErasedInstantiator })
+            if decoratesErasedInstantiator {
+                throw InjectableError.erasedInstantiatorUsedWithoutFulfilledByType
             }
         }
 
@@ -110,8 +126,10 @@ public struct InjectableMacro: PeerMacro {
         case fulfilledByTypeArgumentInvalidType
         case fulfilledByTypeArgumentInvalidTypeDescription
         case fulfilledByDependencyNamedInvalidType
+        case fulfilledByTypeUseOnInstantiator
         case ofTypeArgumentInvalidType
         case erasedToConcreteExistentialInvalidType
+        case erasedInstantiatorUsedWithoutFulfilledByType
 
         var description: String {
             switch self {
@@ -125,10 +143,14 @@ public struct InjectableMacro: PeerMacro {
                 "The argument `fulfilledByType` must refer to a simple, unnested type"
             case .fulfilledByDependencyNamedInvalidType:
                 "The argument `fulfilledByDependencyNamed` must be a string literal"
+            case .fulfilledByTypeUseOnInstantiator:
+                "The argument `fulfilledByType` can not be used on an Instantiator. Use an `ErasedInstantiator` instead"
             case .ofTypeArgumentInvalidType:
                 "The argument `ofType` must be a type literal"
             case .erasedToConcreteExistentialInvalidType:
                 "The argument `erasedToConcreteExistential` must be a bool literal"
+            case .erasedInstantiatorUsedWithoutFulfilledByType:
+                "An `ErasedInstantiator` cannot be used without the argument `fulfilledByType`"
             }
         }
     }

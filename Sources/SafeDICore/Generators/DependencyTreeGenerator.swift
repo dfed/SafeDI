@@ -39,7 +39,7 @@ public final class DependencyTreeGenerator {
 
         let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
         try validateReceivedProperties(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
-        let rootScopeGenerators = try rootInstantiableTypes
+        let rootScopeGenerators = try rootInstantiables
             .sorted()
             .compactMap {
                 try typeDescriptionToScopeMap[$0]?.createScopeGenerator(
@@ -80,7 +80,6 @@ public final class DependencyTreeGenerator {
         case noInstantiableFound(TypeDescription)
         case unfulfillableProperties([UnfulfillableProperty])
         case instantiableHasForwardedProperty(property: Property, instantiableWithForwardedProperty: Instantiable, parent: Instantiable)
-        case forwardingInstantiatorInstantiableHasNoForwardedProperty(property: Property, instantiableWithoutForwardedProperty: Instantiable, parent: Instantiable)
 
         var description: String {
             switch self {
@@ -92,15 +91,13 @@ public final class DependencyTreeGenerator {
                     """
                     @\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(([$0.instantiable] + $0.parentStack)
                     .reversed()
-                    .map(\.concreteInstantiableType.asSource)
+                    .map(\.concreteInstantiable.asSource)
                     .joined(separator: " -> "))
                     """
                 }.joined(separator: "\n"))
                 """
             case let .instantiableHasForwardedProperty(property, instantiable, parent):
-                "Property `\(property.asSource)` on \(parent.concreteInstantiableType.asSource) has at least one @\(Dependency.Source.forwardedRawValue) property. Property should instead be of type `\(Dependency.forwardingInstantiatorType)<\(instantiable.concreteInstantiableType.asSource).ForwardedArguments, \(instantiable.concreteInstantiableType.asSource)>`."
-            case let .forwardingInstantiatorInstantiableHasNoForwardedProperty(property, instantiable, parent):
-                "Property `\(property.asSource)` on \(parent.concreteInstantiableType.asSource) has no @\(Dependency.Source.forwardedRawValue) property. Property should instead be of type `\(Dependency.instantiatorType)<\(instantiable.concreteInstantiableType.asSource)>`."
+                "Property `\(property.asSource)` on \(parent.concreteInstantiable.asSource) has at least one @\(Dependency.Source.forwardedRawValue) property. Property should instead be of type `\(Dependency.instantiatorType)<\(instantiable.concreteInstantiable.asSource)>`."
             }
         }
 
@@ -150,11 +147,11 @@ public final class DependencyTreeGenerator {
 
     /// A collection of `@Instantiable`-decorated types that do not explicitly receive dependencies.
     /// - Note: These are not necessarily roots in the build graph, since these types may be instantiated by another `@Instantiable`.
-    private lazy var possibleRootInstantiableTypes: Set<TypeDescription> = Set(
+    private lazy var possibleRootInstantiables: Set<TypeDescription> = Set(
         typeDescriptionToFulfillingInstantiableMap
             .values
             .filter(\.dependencies.couldRepresentRoot)
-            .map(\.concreteInstantiableType)
+            .map(\.concreteInstantiable)
     )
 
     /// A collection of `@Instantiable`-decorated types that are instantiated by at least one other
@@ -182,7 +179,7 @@ public final class DependencyTreeGenerator {
             }
         }
 
-        for reachableTypeDescription in possibleRootInstantiableTypes {
+        for reachableTypeDescription in possibleRootInstantiables {
             recordReachableTypeDescription(reachableTypeDescription)
         }
 
@@ -190,7 +187,7 @@ public final class DependencyTreeGenerator {
     }()
 
     /// A collection of `@Instantiable`-decorated types that are at the roots of their respective dependency trees.
-    private lazy var rootInstantiableTypes: Set<TypeDescription> = possibleRootInstantiableTypes
+    private lazy var rootInstantiables: Set<TypeDescription> = possibleRootInstantiables
         // Remove all `@Instantiable`-decorated types that are instantiated by another
         // `@Instantiable`-decorated type.
         .subtracting(Set(
@@ -199,7 +196,7 @@ public final class DependencyTreeGenerator {
                 .flatMap(\.dependencies)
                 .filter(\.isInstantiated)
                 .map(\.asInstantiatedType)
-                .compactMap { typeDescriptionToFulfillingInstantiableMap[$0]?.concreteInstantiableType }
+                .compactMap { typeDescriptionToFulfillingInstantiableMap[$0]?.concreteInstantiable }
         ))
 
     private func createTypeDescriptionToScopeMapping() throws -> [TypeDescription: Scope] {
@@ -211,7 +208,7 @@ public final class DependencyTreeGenerator {
                     // This is bad, but we handle this error in `validateReachableTypeDescriptions()`.
                     return
                 }
-                guard partialResult[instantiable.concreteInstantiableType] == nil else {
+                guard partialResult[instantiable.concreteInstantiable] == nil else {
                     // We've already created a scope for this `instantiable`. Skip.
                     return
                 }
@@ -236,16 +233,9 @@ public final class DependencyTreeGenerator {
                     }
                     let type = dependency.property.propertyType
                     switch type {
-                    case .forwardingInstantiator:
-                        guard !instantiable.dependencies.filter(\.isForwarded).isEmpty else {
-                            throw DependencyTreeGeneratorError
-                                .forwardingInstantiatorInstantiableHasNoForwardedProperty(
-                                    property: dependency.property,
-                                    instantiableWithoutForwardedProperty: instantiable,
-                                    parent: scope.instantiable
-                                )
-                        }
-                    case .constant, .instantiator:
+                    case .erasedInstantiator, .instantiator:
+                        break
+                    case .constant:
                         guard instantiable.dependencies.filter(\.isForwarded).isEmpty else {
                             throw DependencyTreeGeneratorError
                                 .instantiableHasForwardedProperty(
@@ -305,7 +295,7 @@ public final class DependencyTreeGenerator {
                 if !parentContainsProperty && !propertyIsCreatedAtThisScope {
                     if instantiables.elements.isEmpty {
                         // This property's scope is not a real root instantiable! Remove it from the list.
-                        rootInstantiableTypes.remove(scope.instantiable.concreteInstantiableType)
+                        rootInstantiables.remove(scope.instantiable.concreteInstantiable)
                     } else {
                         // This property is in a dependency tree and is unfulfillable. Record the problem.
                         unfulfillableProperties.insert(.init(
@@ -342,7 +332,7 @@ public final class DependencyTreeGenerator {
             }
         }
 
-        for rootScope in rootInstantiableTypes.compactMap({ typeDescriptionToScopeMap[$0] }) {
+        for rootScope in rootInstantiables.compactMap({ typeDescriptionToScopeMap[$0] }) {
             validateReceivedProperties(
                 on: rootScope,
                 receivableProperties: Set(rootScope.properties),

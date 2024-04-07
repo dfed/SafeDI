@@ -25,7 +25,7 @@
 /// Example:
 ///
 ///     @Instantiable
-///     public final class FirstPartyType {
+///     public final class FirstPartyType: Instantiable {
 ///         public init(createdDependency: Dependency, receivedDependency: Dependency) {
 ///             self.createdDependency = createdDependency
 ///             self.receivedDependency = receivedDependency
@@ -45,7 +45,7 @@
 /// Example:
 ///
 ///     @Instantiable
-///     extension ThirdPartyType {
+///     extension ThirdPartyType: Instantiable {
 ///         public static func instantiate() -> ThirdPartyType {
 ///             // Implementation returning an instance of ThirdPartyType
 ///         }
@@ -56,3 +56,10 @@
 public macro Instantiable(
     fulfillingAdditionalTypes additionalTypes: [Any.Type] = []
 ) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")
+
+/// A type that can be instantiated with runtime-injected properties.
+public protocol Instantiable {
+    /// The forwarded properties required to instantiate the type.
+    /// Defaults to `Void`.
+    associatedtype ForwardedProperties = Void
+}

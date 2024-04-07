@@ -18,24 +18,25 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import XCTest
-
-@testable import SafeDI
-
-final class ForwardingInstantiatorTests: XCTestCase {
-    func test_instantiate_returnsNewObjectEachTime() {
-        let systemUnderTest = ForwardingInstantiator() { id in BuiltProduct(id: id) }
-        let id = UUID().uuidString
-        let firstBuiltProduct = systemUnderTest.instantiate(id)
-        let secondBuiltProduct = systemUnderTest.instantiate(id)
-        XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
+/// A SafeDI dependency designed for the deferred instantiation of a type-erased instance of a
+/// type decorated with `@Instantiable`. Instantiation is thread-safe.
+///
+/// - SeeAlso: `Instantiator`
+public final class ErasedInstantiator<ArgumentsToForward, Instantiable> {
+    /// Initializes a new forwarding instantiator with the provided instantiation closure.
+    ///
+    /// - Parameter instantiator: A closure that takes `ArgumentsToForward` and returns an instance of `Instantiable`.
+    public init(_ instantiator: @escaping (ArgumentsToForward) -> Instantiable) {
+        self.instantiator = instantiator
     }
 
-    private final class BuiltProduct: Identifiable {
-        init(id: String) {
-            self.id = id
-        }
-
-        let id: String
+    /// Instantiates and returns a new instance of the `@Instantiable` type, using the provided arguments.
+    ///
+    /// - Parameter arguments: Arguments required for instantiation.
+    /// - Returns: An `Instantiable` instance.
+    public func instantiate(_ arguments: ArgumentsToForward) -> Instantiable {
+        instantiator(arguments)
     }
+
+    private let instantiator: (ArgumentsToForward) -> Instantiable
 }

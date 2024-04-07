@@ -93,5 +93,5 @@ public struct Dependency: Codable, Hashable {
     // MARK: Internal
 
     static let instantiatorType = "Instantiator"
-    static let forwardingInstantiatorType = "ForwardingInstantiator"
+    static let erasedInstantiatorType = "ErasedInstantiator"
 }

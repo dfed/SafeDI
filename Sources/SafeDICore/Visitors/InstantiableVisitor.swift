@@ -224,7 +224,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     )
                 )
             )
-            modifiedNode.funcKeyword.leadingTrivia = .spaces(0)
+            modifiedNode.funcKeyword.leadingTrivia = []
             diagnostics.append(Diagnostic(
                 node: node,
                 error: FixableInstantiableError.missingAttributes,
@@ -287,7 +287,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
     public private(set) var dependencies = [Dependency]()
     public private(set) var initializers = [Initializer]()
     public private(set) var instantiableType: TypeDescription?
-    public private(set) var additionalInstantiableTypes: [TypeDescription]?
+    public private(set) var additionalInstantiables: [TypeDescription]?
     public private(set) var diagnostics = [Diagnostic]()
     public private(set) var uninitializedNonOptionalPropertyNames = [String]()
 
@@ -331,7 +331,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
             return Instantiable(
                 instantiableType: instantiableType,
                 initializer: initializers.first(where: { $0.isValid(forFulfilling: dependencies) }) ?? initializerToGenerate(),
-                additionalInstantiableTypes: additionalInstantiableTypes,
+                additionalInstantiables: additionalInstantiables,
                 dependencies: dependencies,
                 declarationType: topLevelDeclarationType.asDeclarationType
             )
@@ -340,7 +340,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                 instantiableType: instantiableType,
                 // If we have more than one initializer this isn't a valid extension.
                 initializer: initializers.count > 1 ? nil : initializers.first,
-                additionalInstantiableTypes: additionalInstantiableTypes,
+                additionalInstantiables: additionalInstantiables,
                 dependencies: dependencies,
                 declarationType: .extensionType
             )
@@ -387,7 +387,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
             return
         }
 
-        additionalInstantiableTypes = fulfillingAdditionalTypesArray
+        additionalInstantiables = fulfillingAdditionalTypesArray
             .elements
             .map { $0.expression.typeDescription }
     }
@@ -404,7 +404,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
             )
             var modifiedNode = node
             if var firstModifier = modifiedNode.modifiers.first {
-                firstModifier.name.leadingTrivia = .spaces(0)
+                firstModifier.name.leadingTrivia = []
                 modifiedNode.modifiers.replaceSubrange(
                     modifiedNode.modifiers.startIndex..<modifiedNode.attributes.index(after: modifiedNode.attributes.startIndex),
                     with: [publicModifier, firstModifier])
@@ -413,7 +413,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                 }
             } else {
                 modifiedNode.modifiers = [publicModifier]
-                modifiedNode.keyword.leadingTrivia = .spaces(0)
+                modifiedNode.keyword.leadingTrivia = []
             }
             diagnostics.append(Diagnostic(
                 node: node,

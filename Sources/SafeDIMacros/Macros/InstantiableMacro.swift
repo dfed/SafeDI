@@ -30,7 +30,11 @@ public struct InstantiableMacro: MemberMacro {
         providingMembersOf declaration: some DeclGroupSyntax,
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
-        if let fulfillingAdditionalTypesArgument = declaration.attributes.instantiableMacro?.fulfillingAdditionalTypes {
+        if
+            let fulfillingAdditionalTypesArgument = (
+                declaration.attributes.instantiableMacro
+            )?.fulfillingAdditionalTypes
+        {
             if ArrayExprSyntax(fulfillingAdditionalTypesArgument) == nil {
                 throw InstantiableError.fulfillingAdditionalTypesArgumentInvalid
             }
@@ -40,7 +44,52 @@ public struct InstantiableMacro: MemberMacro {
             let concreteDeclaration: ConcreteDeclSyntaxProtocol
                 = ActorDeclSyntax(declaration)
                 ?? ClassDeclSyntax(declaration)
-                ?? StructDeclSyntax(declaration) {
+                ?? StructDeclSyntax(declaration)
+        {
+            let extendsInstantiable = concreteDeclaration.inheritanceClause?.inheritedTypes.contains(where: {
+                $0.type.typeDescription == .simple(name: "Instantiable")
+                || $0.type.typeDescription == .nested(
+                    name: "Instantiable",
+                    parentType: .simple(name: "SafeDI")
+                )
+            }) ?? false
+            if !extendsInstantiable {
+                var modifiedDeclaration = concreteDeclaration
+                var inheritedType = InheritedTypeSyntax(
+                    type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
+                )
+                if let existingInheritanceClause = modifiedDeclaration.inheritanceClause {
+                    inheritedType.trailingTrivia = .space
+                    modifiedDeclaration.inheritanceClause?.inheritedTypes = existingInheritanceClause.inheritedTypes.map { inhertiedType in
+                        var modifiedInhertiedType = inhertiedType
+                        if modifiedInhertiedType.trailingComma == nil {
+                            modifiedInhertiedType.trailingComma = .commaToken(trailingTrivia: .space)
+                            modifiedInhertiedType.type.trailingTrivia = []
+                        }
+                        return modifiedInhertiedType
+                    } + [inheritedType]
+                } else {
+                    modifiedDeclaration.name.trailingTrivia = []
+                    modifiedDeclaration.inheritanceClause = InheritanceClauseSyntax(
+                        colon: .colonToken(trailingTrivia: .space),
+                        inheritedTypes: InheritedTypeListSyntax(arrayLiteral: InheritedTypeSyntax(
+                            type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
+                        )),
+                        trailingTrivia: .space
+                    )
+                }
+                context.diagnose(Diagnostic(
+                    node: node,
+                    error: FixableInstantiableError.missingInstantiableConformance,
+                    changes: [
+                        .replace(
+                            oldNode: Syntax(concreteDeclaration),
+                            newNode: Syntax(modifiedDeclaration)
+                        )
+                    ]
+                ))
+            }
+
             let visitor = InstantiableVisitor(declarationType: .concreteDecl)
             visitor.walk(concreteDeclaration)
             for diagnostic in visitor.diagnostics {
@@ -69,7 +118,7 @@ public struct InstantiableMacro: MemberMacro {
 
                         """)
                     return [DeclSyntax(initializer)]
-                    + generateForwardedArguments(from: forwardedProperties)
+                    + generateForwardedProperties(from: forwardedProperties)
                 } else {
                     var membersWithInitializer = declaration.memberBlock.members
                     membersWithInitializer.insert(
@@ -97,9 +146,52 @@ public struct InstantiableMacro: MemberMacro {
                     return []
                 }
             }
-            return generateForwardedArguments(from: forwardedProperties)
+            return generateForwardedProperties(from: forwardedProperties)
 
         } else if let extensionDeclaration = ExtensionDeclSyntax(declaration) {
+            let extendsInstantiable = extensionDeclaration.inheritanceClause?.inheritedTypes.contains(where: {
+                $0.type.typeDescription == .simple(name: "Instantiable")
+                || $0.type.typeDescription == .nested(
+                    name: "Instantiable",
+                    parentType: .simple(name: "SafeDI")
+                )
+            }) ?? false
+            if !extendsInstantiable {
+                var modifiedDeclaration = extensionDeclaration
+                var inheritedType = InheritedTypeSyntax(
+                    type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
+                )
+                if let existingInheritanceClause = modifiedDeclaration.inheritanceClause {
+                    inheritedType.trailingTrivia = .space
+                    modifiedDeclaration.inheritanceClause?.inheritedTypes = existingInheritanceClause.inheritedTypes.map { inhertiedType in
+                        var modifiedInhertiedType = inhertiedType
+                        if modifiedInhertiedType.trailingComma == nil {
+                            modifiedInhertiedType.trailingComma = .commaToken(trailingTrivia: .space)
+                            modifiedInhertiedType.type.trailingTrivia = []
+                        }
+                        return modifiedInhertiedType
+                    } + [inheritedType]
+                } else {
+                    modifiedDeclaration.extendedType.trailingTrivia = []
+                    modifiedDeclaration.inheritanceClause = InheritanceClauseSyntax(
+                        colon: .colonToken(trailingTrivia: .space),
+                        inheritedTypes: InheritedTypeListSyntax(arrayLiteral: InheritedTypeSyntax(
+                            type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
+                        )),
+                        trailingTrivia: .space
+                    )
+                }
+                context.diagnose(Diagnostic(
+                    node: node,
+                    error: FixableInstantiableError.missingInstantiableConformance,
+                    changes: [
+                        .replace(
+                            oldNode: Syntax(extensionDeclaration),
+                            newNode: Syntax(modifiedDeclaration)
+                        )
+                    ]
+                ))
+            }
             if extensionDeclaration.genericWhereClause != nil {
                 var modifiedDeclaration = extensionDeclaration
                 modifiedDeclaration.genericWhereClause = nil
@@ -194,7 +286,7 @@ public struct InstantiableMacro: MemberMacro {
         }
     }
 
-    private static func generateForwardedArguments(
+    private static func generateForwardedProperties(
         from forwardedProperties: [Property]
     ) -> [DeclSyntax] {
         if forwardedProperties.isEmpty {
@@ -212,7 +304,7 @@ public struct InstantiableMacro: MemberMacro {
                                 trailingTrivia: .space
                             )
                         ),
-                        name: .identifier("ForwardedArguments"),
+                        name: .identifier("ForwardedProperties"),
                         initializer: TypeInitializerClauseSyntax(
                             value: IdentifierTypeSyntax(
                                 name: .identifier(forwardedProperty.typeDescription.asSource)
@@ -235,7 +327,7 @@ public struct InstantiableMacro: MemberMacro {
                                 trailingTrivia: .space
                             )
                         ),
-                        name: .identifier("ForwardedArguments"),
+                        name: .identifier("ForwardedProperties"),
                         initializer: TypeInitializerClauseSyntax(value: forwardedProperties.asTuple)
                     )
                 )

@@ -21,31 +21,22 @@
 import SwiftDiagnostics
 
 public enum FixableInstantiableError: DiagnosticError {
-    case dependencyHasTooManyAttributes
-    case dependencyHasInitializer
-    case missingPublicOrOpenAttribute
-    case missingRequiredInitializer(hasInjectableProperties: Bool)
+    case missingInstantiableConformance
     case missingRequiredInstantiateMethod(typeName: String)
     case missingAttributes
     case disallowedGenericParameter
     case disallowedEffectSpecifiers
     case incorrectReturnType
     case disallowedGenericWhereClause
+    case dependencyHasTooManyAttributes
+    case dependencyHasInitializer
+    case missingPublicOrOpenAttribute
+    case missingRequiredInitializer(hasInjectableProperties: Bool)
 
     public var description: String {
         switch self {
-        case .dependencyHasTooManyAttributes:
-            "Dependency can have at most one of @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue) attached macro"
-        case .dependencyHasInitializer:
-            "Dependency must not have hand-written initializer"
-        case .missingPublicOrOpenAttribute:
-            "@\(InstantiableVisitor.macroName)-decorated type must be `public` or `open`"
-        case let .missingRequiredInitializer(hasInjectableProperties):
-            if hasInjectableProperties {
-                "@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values."
-            } else {
-                "@\(InstantiableVisitor.macroName)-decorated type with no @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated properties must have a `public` or `open` initializer that either takes no parameters or has a default value for each parameter."
-            }
+        case .missingInstantiableConformance:
+            "@\(InstantiableVisitor.macroName)-decorated type or extension must declare conformance to `Instantiable`"
         case let .missingRequiredInstantiateMethod(typeName):
             "@\(InstantiableVisitor.macroName)-decorated extension of \(typeName) must have a `public static func instantiate() -> \(typeName)` method"
         case .missingAttributes:
@@ -58,6 +49,18 @@ public enum FixableInstantiableError: DiagnosticError {
             "@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must return the same type as the extended type"
         case .disallowedGenericWhereClause:
             "@\(InstantiableVisitor.macroName)-decorated extension must not have a generic `where` clause"
+        case .dependencyHasTooManyAttributes:
+            "Dependency can have at most one of @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue) attached macro"
+        case .dependencyHasInitializer:
+            "Dependency must not have hand-written initializer"
+        case .missingPublicOrOpenAttribute:
+            "@\(InstantiableVisitor.macroName)-decorated type must be `public` or `open`"
+        case let .missingRequiredInitializer(hasInjectableProperties):
+            if hasInjectableProperties {
+                "@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values."
+            } else {
+                "@\(InstantiableVisitor.macroName)-decorated type with no @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated properties must have a `public` or `open` initializer that either takes no parameters or has a default value for each parameter."
+            }
         }
     }
 
@@ -78,16 +81,17 @@ public enum FixableInstantiableError: DiagnosticError {
 
         var severity: DiagnosticSeverity {
             switch error {
-            case .dependencyHasTooManyAttributes,
-                    .dependencyHasInitializer,
-                    .missingPublicOrOpenAttribute,
-                    .missingRequiredInitializer,
+            case .missingInstantiableConformance,
                     .missingRequiredInstantiateMethod,
                     .missingAttributes,
                     .disallowedGenericParameter,
                     .disallowedEffectSpecifiers,
                     .incorrectReturnType,
-                    .disallowedGenericWhereClause:
+                    .disallowedGenericWhereClause,
+                    .dependencyHasTooManyAttributes,
+                    .dependencyHasInitializer,
+                    .missingPublicOrOpenAttribute,
+                    .missingRequiredInitializer:
                     .error
             }
         }
@@ -104,14 +108,8 @@ public enum FixableInstantiableError: DiagnosticError {
     private struct InstantiableFixItMessage: FixItMessage {
         var message: String {
             switch error {
-            case .dependencyHasTooManyAttributes:
-                "Remove excessive attached macros"
-            case .dependencyHasInitializer:
-                "Remove initializer"
-            case .missingPublicOrOpenAttribute:
-                "Add `public` modifier"
-            case .missingRequiredInitializer:
-                "Add required initializer"
+            case .missingInstantiableConformance:
+                "Declare conformance to `Instantiable`"
             case let .missingRequiredInstantiateMethod(typeName):
                 "Add `public static func instantiate() -> \(typeName)` method"
             case .missingAttributes:
@@ -124,6 +122,14 @@ public enum FixableInstantiableError: DiagnosticError {
                 "Make `instantiate()`’s return type the same as the extended type"
             case .disallowedGenericWhereClause:
                 "Remove generic `where` clause"
+            case .dependencyHasTooManyAttributes:
+                "Remove excessive attached macros"
+            case .dependencyHasInitializer:
+                "Remove initializer"
+            case .missingPublicOrOpenAttribute:
+                "Add `public` modifier"
+            case .missingRequiredInitializer:
+                "Add required initializer"
             }
         }
 

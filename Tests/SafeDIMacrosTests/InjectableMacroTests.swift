@@ -136,6 +136,46 @@ final class InjectableMacroTests: XCTestCase {
 
     // MARK: Error tests
 
+    func test_throwsErrorWhenUsingFulfilledByTypeOnInstantiator() {
+        assertMacro {
+            """
+            public struct ExampleService {
+                @Instantiated(fulfilledByType: "LoginViewController")
+                let loginViewControllerBuilder: Instantiator<UIViewController>
+            }
+            """
+        } diagnostics: {
+            """
+            public struct ExampleService {
+                @Instantiated(fulfilledByType: "LoginViewController")
+                ┬────────────────────────────────────────────────────
+                ╰─ 🛑 The argument `fulfilledByType` can not be used on an Instantiator. Use an `ErasedInstantiator` instead
+                let loginViewControllerBuilder: Instantiator<UIViewController>
+            }
+            """
+        }
+    }
+
+    func test_throwsErrorWhenErasedInstantiatorUsedWithoutFulfilledByTypeArgument() {
+        assertMacro {
+            """
+            public struct ExampleService {
+                @Instantiated
+                let loginViewControllerBuilder: ErasedInstantiator<UIViewController>
+            }
+            """
+        } diagnostics: {
+            """
+            public struct ExampleService {
+                @Instantiated
+                ┬────────────
+                ╰─ 🛑 An `ErasedInstantiator` cannot be used without the argument `fulfilledByType`
+                let loginViewControllerBuilder: ErasedInstantiator<UIViewController>
+            }
+            """
+        }
+    }
+
     func test_throwsErrorWhenInjectableMacroAttachedtoStaticProperty() {
         assertMacro {
             """
