@@ -23,6 +23,7 @@ import XCTest
 @testable import SafeDI
 
 final class ErasedInstantiatorTests: XCTestCase {
+    @MainActor
     func test_instantiate_returnsNewObjectEachTime() {
         let systemUnderTest = ErasedInstantiator() { id in BuiltProduct(id: id) }
         let id = UUID().uuidString

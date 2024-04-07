@@ -23,6 +23,7 @@ import XCTest
 @testable import SafeDI
 
 final class InstantiatorTests: XCTestCase {
+    @MainActor
     func test_instantiate_returnsNewObjectEachTime() {
         let systemUnderTest = Instantiator() { BuiltProduct() }
         let firstBuiltProduct = systemUnderTest.instantiate()
@@ -30,6 +31,7 @@ final class InstantiatorTests: XCTestCase {
         XCTAssertNotEqual(firstBuiltProduct, secondBuiltProduct)
     }
 
+    @MainActor
     func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() {
         let systemUnderTest = Instantiator() { id in BuiltProductWithForwardedArgument(id: id) }
         let firstBuiltProduct = systemUnderTest.instantiate("12345")
