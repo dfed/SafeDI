@@ -303,7 +303,7 @@ public struct MyApp: App, Instantiable {
 }
 ```
 
-An `Instantiator` is `@MainActor`-bound – if you want to instantiate a type in a nonisolated environment, use an [`NonisolatedInstantiator`]](Sources/SafeDI/DelayedInstantiation/NonisolatedInstantiator.swift).
+An `Instantiator` is `@MainActor`-bound – if you want to instantiate a type in a nonisolated environment, use a [`NonisolatedInstantiator`]](Sources/SafeDI/DelayedInstantiation/NonisolatedInstantiator.swift).
 
 #### Utilizing @Instantiated with type erased properties
 
@@ -313,7 +313,7 @@ The `fulfilledByType` parameter takes a `String` identical to the type name of t
 
 The `erasedToConcreteExistential` parameter takes a boolean value that indicates whether the fulfilling type is being erased to a concrete [existential](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/#Boxed-Protocol-Types) type. A concrete existential type is a non-protocol type that wraps a protocol and is usually prefixed with `Any`. A fulfilling type does not inherit from a concrete existential type, and therefore when the property‘s type is a concrete existential the fulfilling type must be wrapped in the erasing concrete existential type‘s initializer before it is returned. When the property‘s type is not a concrete existential, the fulfilling type is cast as the property‘s type. For example, an `AnyView` is a concrete and existential type-erased form of some `struct MyExampleView: View`, while a `UIViewController` is a concrete but not existential type-erased form of some `final class MyExampleViewController: UIViewController`. This parameter defaults to `false`.
 
-The [`ErasedInstantiator`](Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift) type is how SafeDI enables instantiating any `@Instantiable` type when using type erasure. `ErasedInstantiator` has two generics. The first generic must match the type’s `ForwardedProperties` typealias. The second generic matches the type of the to-be-instantiated instance. An `type’s` is `@MainActor`-bound – if you want to instantiate an erased type in a nonisolated environment, use an [`NonisolatedErasedInstantiator`](Sources/SafeDI/DelayedInstantiation/NonisolatedErasedInstantiator.swift).
+The [`ErasedInstantiator`](Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift) type is how SafeDI enables instantiating any `@Instantiable` type when using type erasure. `ErasedInstantiator` has two generics. The first generic must match the type’s `ForwardedProperties` typealias. The second generic matches the type of the to-be-instantiated instance. An `ErasedInstantiator` is `@MainActor`-bound – if you want to instantiate an erased type in a nonisolated environment, use a [`NonisolatedErasedInstantiator`](Sources/SafeDI/DelayedInstantiation/NonisolatedErasedInstantiator.swift).
 
 ```swift
 import SwiftUI
@@ -327,7 +327,7 @@ public struct ParentView: View, Instantiable {
         }
     }
 
-    // The Instantiator‘s `instantiate()` function will build a `ChildView` wrapped in a concrete `AnyView`.
+    // The ErasedInstantiator `instantiate()` function will build a `ChildView` wrapped in a concrete `AnyView`.
     // All that is required for this code to compile is for there to be an
     // `@Instantiable public struct ChildView: View` in the codebase.
     @Instantiated(fulfilledByType: "ChildView", erasedToConcreteExistential: true)
