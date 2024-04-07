@@ -395,7 +395,7 @@ To install the SafeDI framework into your package with [Swift Package Manager](h
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI", from: "0.4.0"),
+    .package(url: "https://github.com/dfed/SafeDI", from: "0.5.0"),
 ]
 ```
 
