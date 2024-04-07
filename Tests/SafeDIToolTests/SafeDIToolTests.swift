@@ -1904,7 +1904,7 @@ final class SafeDIToolTests: XCTestCase {
                 @Instantiable
                 public final class Root {
                     @Instantiated(fulfilledByType: "ChildA")
-                    let childABuilder: ErasedInstantiator<Recreated, ChildAProtocol>
+                    let childABuilder: NonisolatedErasedInstantiator<Recreated, ChildAProtocol>
                     @Instantiated
                     let childB: ChildB
                     @Instantiated
@@ -1974,7 +1974,7 @@ final class SafeDIToolTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    @MainActor func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
+                    nonisolated func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
                         let grandchildA: GrandchildA = {
                             let recreated = Recreated()
                             let greatGrandchild = GreatGrandchild(recreated: recreated)
@@ -1986,7 +1986,7 @@ final class SafeDIToolTests: XCTestCase {
                         }()
                         return ChildA(grandchildA: grandchildA, grandchildB: grandchildB, recreated: recreated)
                     }
-                    let childABuilder = ErasedInstantiator<Recreated, ChildAProtocol> {
+                    let childABuilder = NonisolatedErasedInstantiator<Recreated, ChildAProtocol> {
                         __safeDI_childABuilder(recreated: $0)
                     }
                     let recreated = Recreated()
@@ -2348,7 +2348,7 @@ final class SafeDIToolTests: XCTestCase {
                 @Instantiable()
                 public final class GrandchildBA {
                     @Instantiated
-                    var greatGrandchildInstantiator: Instantiator<GreatGrandchild>
+                    var greatGrandchildInstantiator: NonisolatedInstantiator<GreatGrandchild>
                 }
                 """,
                 """
@@ -2357,7 +2357,7 @@ final class SafeDIToolTests: XCTestCase {
                 @Instantiable()
                 public final class GrandchildBB {
                     @Instantiated
-                    greatGrandchildInstantiator: Instantiator<GreatGrandchild>
+                    greatGrandchildInstantiator: NonisolatedInstantiator<GreatGrandchild>
                 }
                 """,
             ],
@@ -2371,7 +2371,8 @@ final class SafeDIToolTests: XCTestCase {
                 import class GrandchildModule.GrandchildAA
                 import class GrandchildModule.GrandchildAB
 
-                @Instantiable()
+                @MainActor
+                @Instantiable
                 public final class ChildA {
                     @Instantiated
                     let grandchildAA: GrandchildAA
@@ -2403,7 +2404,8 @@ final class SafeDIToolTests: XCTestCase {
                 """
                 import ChildModule
 
-                @Instantiable()
+                @MainActor
+                @Instantiable
                 public final class Root {
                     @Instantiated
                     let childA: ChildA
@@ -2452,17 +2454,17 @@ final class SafeDIToolTests: XCTestCase {
                     }()
                     let childB: ChildB = {
                         let grandchildBA: GrandchildBA = {
-                            @MainActor func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
+                            nonisolated func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
                                 GreatGrandchild()
                             }
-                            let greatGrandchildInstantiator = Instantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
+                            let greatGrandchildInstantiator = NonisolatedInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
                             return GrandchildBA(greatGrandchildInstantiator: greatGrandchildInstantiator)
                         }()
                         let grandchildBB: GrandchildBB = {
-                            @MainActor func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
+                            nonisolated func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
                                 GreatGrandchild()
                             }
-                            let greatGrandchildInstantiator = Instantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
+                            let greatGrandchildInstantiator = NonisolatedInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
                             return GrandchildBB(greatGrandchildInstantiator: greatGrandchildInstantiator)
                         }()
                         return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)
