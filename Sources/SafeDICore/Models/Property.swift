@@ -136,7 +136,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
         /// An `Instantiator` property.
         /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
         case instantiator
-        /// A `ErasedInstantiator` property.
+        /// An `ErasedInstantiator` property.
         /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
         case erasedInstantiator
         /// A `NonisolatedInstantiator` property.
