@@ -25,6 +25,8 @@
 ///
 /// This instantiator can be used to instantiate types that are not isolated to any particular actor.
 ///
+/// - SeeAlso: `Instantiator`
+/// - SeeAlso: `ErasedInstantiator`
 /// - SeeAlso: `NonisolatedErasedInstantiator`
 public final class NonisolatedInstantiator<T: Instantiable> {
     /// - Parameter instantiator: A closure that returns an instance of `Instantiable`.

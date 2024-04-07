@@ -23,7 +23,9 @@
 ///
 /// This instantiator can be used to instantiate types that are not isolated to any particular actor.
 ///
+/// - SeeAlso: `Instantiator`
 /// - SeeAlso: `NonisolatedInstantiator`
+/// - SeeAlso: `ErasedInstantiator`
 public final class NonisolatedErasedInstantiator<ForwardedProperties, Instantiable> {
     /// - Parameter instantiator: A closure that takes `ForwardedProperties` and returns an instance of `Instantiable`.
     public init(_ instantiator: @escaping (ForwardedProperties) -> Instantiable) {

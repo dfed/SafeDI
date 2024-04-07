@@ -24,6 +24,8 @@
 /// This instantiator can be used to instantiate types that are @MainActor-bound.
 ///
 /// - SeeAlso: `Instantiator`
+/// - SeeAlso: `NonisolatedInstantiator`
+/// - SeeAlso: `NonisolatedErasedInstantiator`
 public final class ErasedInstantiator<ForwardedProperties, Instantiable> {
     /// - Parameter instantiator: A closure that takes `ForwardedProperties` and returns an instance of `Instantiable`.
     public init(_ instantiator: @escaping @MainActor (ForwardedProperties) -> Instantiable) {
