@@ -23,14 +23,14 @@ import SwiftUI
 
 @MainActor
 @Instantiable
-public struct NoteView: View {
+public struct NoteView: Instantiable, View {
     public init(userName: String, userService: any UserService, stringStorage: StringStorage) {
         self.userName = userName
         self.userService = userService
         self.stringStorage = stringStorage
         _note = State(initialValue: stringStorage.string(forKey: userName) ?? "")
     }
-    
+
     public var body: some View {
         VStack {
             Text("\(userName)’s note")
@@ -46,7 +46,7 @@ public struct NoteView: View {
         }
         .padding()
     }
-    
+
     @Forwarded
     private let userName: String
     @Received

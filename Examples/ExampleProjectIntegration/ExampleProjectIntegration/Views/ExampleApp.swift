@@ -26,7 +26,7 @@ import SwiftUI
 @Instantiable
 @MainActor
 @main
-public struct NotesApp: App {
+public struct NotesApp: Instantiable, App {
     public var body: some Scene {
         WindowGroup {
             if let userName = userService.userName {
@@ -48,7 +48,7 @@ public struct NotesApp: App {
         userService: any UserService,
         stringStorage: StringStorage,
         nameEntryViewBuilder: Instantiator<NameEntryView>,
-        noteViewBuilder: ForwardingInstantiator<String, NoteView>
+        noteViewBuilder: Instantiator<NoteView>
     ) {
         self.userService = userService
         self.stringStorage = stringStorage
@@ -68,7 +68,7 @@ public struct NotesApp: App {
     private let nameEntryViewBuilder: Instantiator<NameEntryView>
     /// A private property that is instantiated when the app is instantiated and can create a NoteView on demand.
     @Instantiated
-    private let noteViewBuilder: ForwardingInstantiator<String, NoteView>
+    private let noteViewBuilder: Instantiator<NoteView>
     /// A mechanism for observing updates to the user service.
     @ObservedObject
     private var observedUserService: AnyObservableObject
