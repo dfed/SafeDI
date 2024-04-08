@@ -149,7 +149,7 @@ final class InjectableMacroTests: XCTestCase {
             public struct ExampleService {
                 @Instantiated(fulfilledByType: "LoginViewController")
                 ┬────────────────────────────────────────────────────
-                ╰─ 🛑 The argument `fulfilledByType` can not be used on an Instantiator. Use an `ErasedInstantiator` instead
+                ╰─ 🛑 The argument `fulfilledByType` can not be used on an `Instantiator` or `NonisolatedInstantiator`. Use an `ErasedInstantiator` or `NonisolatedErasedInstantiator` instead
                 let loginViewControllerBuilder: Instantiator<UIViewController>
             }
             """
@@ -169,7 +169,7 @@ final class InjectableMacroTests: XCTestCase {
             public struct ExampleService {
                 @Instantiated
                 ┬────────────
-                ╰─ 🛑 An `ErasedInstantiator` cannot be used without the argument `fulfilledByType`
+                ╰─ 🛑 `ErasedInstantiator` and `NonisolatedErasedInstantiator` require use of the argument `fulfilledByType`
                 let loginViewControllerBuilder: ErasedInstantiator<UIViewController>
             }
             """

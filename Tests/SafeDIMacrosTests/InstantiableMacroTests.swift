@@ -74,7 +74,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init() {
+                public init() {
                 }
             }
             """
@@ -97,7 +97,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init() {
+                public init() {
                 }
             }
             """
@@ -162,7 +162,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init() {
+                public init() {
                 }
             }
             """
@@ -187,7 +187,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init() {
+                public init() {
                 }
             }
             """
@@ -374,7 +374,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init(instantiatedA: InstantiatedA) {
+                public init(instantiatedA: InstantiatedA) {
                     self.instantiatedA = instantiatedA
                 }
             }
@@ -429,7 +429,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init(instantiatedA: InstantiatedA) {
+                public init(instantiatedA: InstantiatedA) {
                     self.instantiatedA = instantiatedA
                 }
             }
@@ -460,7 +460,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init(instantiatedA: InstantiatedA) {
+                public init(instantiatedA: InstantiatedA) {
                     self.instantiatedA = instantiatedA
                 }
             }
@@ -491,7 +491,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init(instantiatedA: InstantiatedA) {
+                public init(instantiatedA: InstantiatedA) {
                     self.instantiatedA = instantiatedA
                 }
             }
@@ -522,7 +522,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init(instantiatedA: InstantiatedA) {
+                public init(instantiatedA: InstantiatedA) {
                     self.instantiatedA = instantiatedA
                 }
             }
@@ -555,7 +555,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init(instantiatedA: InstantiatedA) {
+                public init(instantiatedA: InstantiatedA) {
                     self.instantiatedA = instantiatedA
                 }
             }
@@ -599,7 +599,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+                public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
                     self.forwardedA = forwardedA
                     self.receivedA = receivedA
                     self.receivedB = receivedB
@@ -659,7 +659,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init(userID: String, userName: String) {
+                public init(userID: String, userName: String) {
                     self.userID = userID
                     self.userName = userName
                 }
@@ -689,7 +689,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init(closure: @escaping () -> Void) {
+                public init(closure: @escaping () -> Void) {
                     self.closure = closure
                 }
 
@@ -718,7 +718,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init(closure: @escaping @Sendable () -> Void) {
+                public init(closure: @escaping @Sendable () -> Void) {
                     self.closure = closure
                 }
 
@@ -747,7 +747,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init(instantiatableAInstantiator: Instantiator<ReceivedA>) {
+                public init(instantiatableAInstantiator: Instantiator<ReceivedA>) {
                     self.instantiatableAInstantiator = instantiatableAInstantiator
                 }
             }
@@ -920,7 +920,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init() {
+                public init() {
                 }
             }
             """
@@ -962,7 +962,7 @@ final class InstantiableMacroTests: XCTestCase {
                 // As a result, this initializer can not be used within a #Preview macro closure.
                 // This initializer is only generated because you have not written this macro yourself.
                 // Copy/pasting this generated initializer into your code will enable this initializer to be used within other Swift Macros.
-                nonisolated public init() {
+                public init() {
                 }
             }
             """
@@ -1441,7 +1441,7 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService: Instantiable {
-            nonisolated public init() {
+            public init() {
             // If the following properties were decorated with the @Instantiated, @Received, or @Forwarded macros, had default values, or were written as computed properties, this initializer could have been auto-generated by the @Instantiable macro.
             uninitializedProperty = <#T##assign_uninitializedProperty#>
             }
@@ -1452,7 +1452,7 @@ final class InstantiableMacroTests: XCTestCase {
         } expansion: {
             """
             public struct ExampleService: Instantiable {
-            nonisolated public init() {
+            public init() {
             // If the following properties were decorated with the @Instantiated, @Received, or @Forwarded macros, had default values, or were written as computed properties, this initializer could have been auto-generated by the @Instantiable macro.
             uninitializedProperty = <#T##assign_uninitializedProperty#>
             }
@@ -1490,7 +1490,7 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService: Instantiable {
-            nonisolated public init(receivedA: ReceivedA) {
+            public init(receivedA: ReceivedA) {
             self.receivedA = receivedA
             // If the following properties were decorated with the @Instantiated, @Received, or @Forwarded macros, had default values, or were written as computed properties, this initializer could have been auto-generated by the @Instantiable macro.
             uninitializedProperty = <#T##assign_uninitializedProperty#>
@@ -1505,7 +1505,7 @@ final class InstantiableMacroTests: XCTestCase {
         } expansion: {
             """
             public struct ExampleService: Instantiable {
-            nonisolated public init(receivedA: ReceivedA) {
+            public init(receivedA: ReceivedA) {
             self.receivedA = receivedA
             // If the following properties were decorated with the @Instantiated, @Received, or @Forwarded macros, had default values, or were written as computed properties, this initializer could have been auto-generated by the @Instantiable macro.
             uninitializedProperty = <#T##assign_uninitializedProperty#>
@@ -1549,7 +1549,7 @@ final class InstantiableMacroTests: XCTestCase {
             """
             @Instantiable
             public struct ExampleService: Instantiable {
-            nonisolated public init(receivedA: ReceivedA) {
+            public init(receivedA: ReceivedA) {
             self.receivedA = receivedA
             // If the following properties were decorated with the @Instantiated, @Received, or @Forwarded macros, had default values, or were written as computed properties, this initializer could have been auto-generated by the @Instantiable macro.
             uninitializedProperty1 = <#T##assign_uninitializedProperty1#>
@@ -1569,7 +1569,7 @@ final class InstantiableMacroTests: XCTestCase {
         } expansion: {
             """
             public struct ExampleService: Instantiable {
-            nonisolated public init(receivedA: ReceivedA) {
+            public init(receivedA: ReceivedA) {
             self.receivedA = receivedA
             // If the following properties were decorated with the @Instantiated, @Received, or @Forwarded macros, had default values, or were written as computed properties, this initializer could have been auto-generated by the @Instantiable macro.
             uninitializedProperty1 = <#T##assign_uninitializedProperty1#>

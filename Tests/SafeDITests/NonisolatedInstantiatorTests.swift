@@ -22,24 +22,20 @@ import XCTest
 
 @testable import SafeDI
 
-final class InstantiatorTests: XCTestCase {
-    func test_instantiate_returnsNewObjectEachTime() async {
-        await Task { @MainActor in
-            let systemUnderTest = Instantiator() { BuiltProduct() }
-            let firstBuiltProduct = systemUnderTest.instantiate()
-            let secondBuiltProduct = systemUnderTest.instantiate()
-            XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
-        }.value
+final class NonisolatedInstantiatorTests: XCTestCase {
+    func test_instantiate_returnsNewObjectEachTime() {
+        let systemUnderTest = NonisolatedInstantiator() { BuiltProduct() }
+        let firstBuiltProduct = systemUnderTest.instantiate()
+        let secondBuiltProduct = systemUnderTest.instantiate()
+        XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
     }
 
-    func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() async {
-        await Task { @MainActor in
-            let systemUnderTest = Instantiator() { id in BuiltProductWithForwardedArgument(id: id) }
-            let id = UUID().uuidString
-            let firstBuiltProduct = systemUnderTest.instantiate(id)
-            let secondBuiltProduct = systemUnderTest.instantiate(id)
-            XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
-        }.value
+    func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() {
+        let systemUnderTest = NonisolatedInstantiator() { id in BuiltProductWithForwardedArgument(id: id) }
+        let id = UUID().uuidString
+        let firstBuiltProduct = systemUnderTest.instantiate(id)
+        let secondBuiltProduct = systemUnderTest.instantiate(id)
+        XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
     }
 
     private final class BuiltProduct: Instantiable {

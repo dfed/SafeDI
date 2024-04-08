@@ -232,10 +232,7 @@ public final class DependencyTreeGenerator {
                         continue
                     }
                     let type = dependency.property.propertyType
-                    switch type {
-                    case .erasedInstantiator, .instantiator:
-                        break
-                    case .constant:
+                    if type.isConstant {
                         guard instantiable.dependencies.filter(\.isForwarded).isEmpty else {
                             throw DependencyTreeGeneratorError
                                 .instantiableHasForwardedProperty(

@@ -268,35 +268,15 @@ public struct Initializer: Codable, Hashable {
 
 extension ConcreteDeclType {
     fileprivate var initializerModifiers: DeclModifierListSyntax {
-        switch self {
-        case .actorType:
-            DeclModifierListSyntax(
-                arrayLiteral: DeclModifierSyntax(
-                    name: TokenSyntax(
-                        TokenKind.identifier("public"),
-                        presence: .present
-                    ),
-                    trailingTrivia: .space
-                )
-            )
-        case .classType, .structType:
-            DeclModifierListSyntax(
-                arrayLiteral: DeclModifierSyntax(
-                    name: TokenSyntax(
-                        TokenKind.identifier("nonisolated"),
-                        presence: .present
-                    ),
-                    trailingTrivia: .space
+        DeclModifierListSyntax(
+            arrayLiteral: DeclModifierSyntax(
+                name: TokenSyntax(
+                    TokenKind.identifier("public"),
+                    presence: .present
                 ),
-                DeclModifierSyntax(
-                    name: TokenSyntax(
-                        TokenKind.identifier("public"),
-                        presence: .present
-                    ),
-                    trailingTrivia: .space
-                )
+                trailingTrivia: .space
             )
-        }
+        )
     }
 }
 
