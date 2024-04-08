@@ -150,7 +150,7 @@ public struct InjectableMacro: PeerMacro {
             case .erasedToConcreteExistentialInvalidType:
                 "The argument `erasedToConcreteExistential` must be a bool literal"
             case .erasedInstantiatorUsedWithoutFulfilledByType:
-                "`ErasedInstantiator` and `NonisolatedErasedInstantiator` cannot be used without the argument `fulfilledByType`"
+                "`ErasedInstantiator` and `NonisolatedErasedInstantiator` require use of the argument `fulfilledByType`"
             }
         }
     }

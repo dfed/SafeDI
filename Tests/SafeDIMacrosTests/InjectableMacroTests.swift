@@ -169,7 +169,7 @@ final class InjectableMacroTests: XCTestCase {
             public struct ExampleService {
                 @Instantiated
                 ┬────────────
-                ╰─ 🛑 `ErasedInstantiator` and `NonisolatedErasedInstantiator` cannot be used without the argument `fulfilledByType`
+                ╰─ 🛑 `ErasedInstantiator` and `NonisolatedErasedInstantiator` require use of the argument `fulfilledByType`
                 let loginViewControllerBuilder: ErasedInstantiator<UIViewController>
             }
             """
