@@ -303,7 +303,7 @@ public struct MyApp: App, Instantiable {
 }
 ```
 
-An `Instantiator` is `@MainActor`-bound – if you want to instantiate a type in a nonisolated environment, use a [`NonisolatedInstantiator`]](Sources/SafeDI/DelayedInstantiation/NonisolatedInstantiator.swift).
+An `Instantiator` is `@MainActor`-bound – if you want to instantiate a type in a nonisolated environment, use a [`NonisolatedInstantiator`](Sources/SafeDI/DelayedInstantiation/NonisolatedInstantiator.swift).
 
 #### Utilizing @Instantiated with type erased properties
 
