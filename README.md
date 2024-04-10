@@ -181,7 +181,7 @@ public struct LoggedInContentView: View, Instantiable {
     private let user: User
 
     @Instantiated(fulfilledByType: "ProfileView", erasedToConcreteExistential: true)
-    private let profileViewBuilder: ErasedInstantiator<AnyView>
+    private let profileViewBuilder: ErasedInstantiator<(), AnyView>
 }
 
 @Instantiable
