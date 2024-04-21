@@ -1007,8 +1007,18 @@ final class InstantiableMacroTests: XCTestCase {
                 }
 
                 @Received
+                let receivedA: ReceivedA
             }
-            """ // Fixes expansion is incorrect – we delete the second macro but not the property.
+            """
+        } expansion: {
+            """
+            public struct ExampleService: Instantiable {
+                public init(receivedA: ReceivedA) {
+                    self.receivedA = receivedA
+                }
+                let receivedA: ReceivedA
+            }
+            """
         }
     }
 
@@ -1685,10 +1695,18 @@ final class InstantiableMacroTests: XCTestCase {
             public static func instantiate() -> ExampleService
             {}
 
-
+            
+            }
+            """
+        } expansion: {
+            """
+            extension ExampleService: Instantiable {
             public static func instantiate() -> ExampleService
             {}
-            """ // This is correct in Xcode: we only write the `instantiate()` method once.
+
+
+            }
+            """
         }
     }
 
