@@ -21,7 +21,6 @@
 import SwiftSyntax
 
 extension AttributeListSyntax {
-
     public var instantiableMacro: AttributeSyntax? {
         guard let attribute = first(where: { element in
             element.instantiableMacro != nil

@@ -21,16 +21,14 @@
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
-extension Collection where Element == Dependency {
-
+extension Collection<Dependency> {
     var initializerFunctionParameters: [FunctionParameterSyntax] {
         map(\.property)
             .initializerFunctionParameters
     }
 }
 
-extension Collection where Element == Property {
-
+extension Collection<Property> {
     public var asTuple: TupleTypeSyntax {
         let tupleElements = sorted()
             .map(\.asTupleElement)
@@ -51,7 +49,7 @@ extension Collection where Element == Property {
     }
 
     var initializerFunctionParameters: [FunctionParameterSyntax] {
-        map { $0.asFunctionParamter }
+        map(\.asFunctionParamter)
             .transformUntilLast {
                 var node = $0
                 node.trailingComma = .commaToken(trailingTrivia: .space)
@@ -61,7 +59,7 @@ extension Collection where Element == Property {
 }
 
 extension Collection {
-    fileprivate func transformUntilLast(_ transform: (Element) throws -> Element) rethrows -> [Element] {
+    private func transformUntilLast(_ transform: (Element) throws -> Element) rethrows -> [Element] {
         var arrayToTransform = Array(self)
         guard let lastItem = arrayToTransform.popLast() else {
             // Array is empty.

@@ -25,7 +25,7 @@ import XCTest
 final class InstantiatorTests: XCTestCase {
     func test_instantiate_returnsNewObjectEachTime() async {
         await Task { @MainActor in
-            let systemUnderTest = Instantiator() { BuiltProduct() }
+            let systemUnderTest = Instantiator { BuiltProduct() }
             let firstBuiltProduct = systemUnderTest.instantiate()
             let secondBuiltProduct = systemUnderTest.instantiate()
             XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
@@ -34,7 +34,7 @@ final class InstantiatorTests: XCTestCase {
 
     func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() async {
         await Task { @MainActor in
-            let systemUnderTest = Instantiator() { id in BuiltProductWithForwardedArgument(id: id) }
+            let systemUnderTest = Instantiator { id in BuiltProductWithForwardedArgument(id: id) }
             let id = UUID().uuidString
             let firstBuiltProduct = systemUnderTest.instantiate(id)
             let secondBuiltProduct = systemUnderTest.instantiate(id)
@@ -53,7 +53,6 @@ final class InstantiatorTests: XCTestCase {
 
         typealias ForwardedProperties = String
 
-        @Forwarded
-        let id: String
+        @Forwarded let id: String
     }
 }

@@ -19,7 +19,6 @@
 // SOFTWARE.
 
 public struct Instantiable: Codable, Hashable {
-
     // MARK: Initialization
 
     public init(
@@ -27,9 +26,9 @@ public struct Instantiable: Codable, Hashable {
         initializer: Initializer?,
         additionalInstantiables: [TypeDescription]?,
         dependencies: [Dependency],
-        declarationType: DeclarationType)
-    {
-        self.instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
+        declarationType: DeclarationType
+    ) {
+        instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
         self.initializer = initializer
         self.dependencies = dependencies
         self.declarationType = declarationType
@@ -43,6 +42,7 @@ public struct Instantiable: Codable, Hashable {
     public var concreteInstantiable: TypeDescription {
         instantiableTypes[0]
     }
+
     /// A memberwise initializer for the concrete instantiable type.
     /// If `nil`, the Instanitable type is incorrectly configured.
     public let initializer: Initializer?

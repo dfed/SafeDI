@@ -21,7 +21,6 @@
 import SwiftSyntax
 
 extension ImportDeclSyntax {
-
     // MARK: Public
 
     public var asImportStatement: ImportStatement? {
@@ -57,5 +56,4 @@ extension ImportDeclSyntax {
         // Grab the whole thing.
         attributes.trimmedDescription
     }
-
 }

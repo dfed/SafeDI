@@ -24,7 +24,6 @@ import XCTest
 @testable import SafeDITool
 
 final class SafeDIToolTests: XCTestCase {
-
     // MARK: XCTestCase
 
     override func setUpWithError() throws {
@@ -41,16 +40,16 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
-#if !os(Linux) // Linux does not support multiple invokations of the same test.
-    override func invokeTest() {
-        // Stop test execution on the first failure so we don't get repeated failures per repeated test run.
-        continueAfterFailure = false
-        // Run each test five times to ensure ordering is consistent.
-        for _ in 0..<5 {
-            super.invokeTest()
+    #if !os(Linux) // Linux does not support multiple invokations of the same test.
+        override func invokeTest() {
+            // Stop test execution on the first failure so we don't get repeated failures per repeated test run.
+            continueAfterFailure = false
+            // Run each test five times to ensure ordering is consistent.
+            for _ in 0..<5 {
+                super.invokeTest()
+            }
         }
-    }
-#endif
+    #endif
 
     // MARK: Code Generation Tests
 
@@ -371,7 +370,7 @@ final class SafeDIToolTests: XCTestCase {
                 """,
                 """
                 public final class OtherType {}
-                """
+                """,
             ],
             buildDependencyTreeOutput: true
         )
@@ -2439,7 +2438,7 @@ final class SafeDIToolTests: XCTestCase {
             ],
             dependentModuleOutputPaths: [
                 greatGrandchildModuleOutput.moduleInfoOutputPath,
-                grandchildModuleOutput.moduleInfoOutputPath
+                grandchildModuleOutput.moduleInfoOutputPath,
             ],
             buildDependencyTreeOutput: false
         )
@@ -2457,12 +2456,12 @@ final class SafeDIToolTests: XCTestCase {
                     @Instantiated
                     let childB: ChildB
                 }
-                """
+                """,
             ],
             dependentModuleOutputPaths: [
                 greatGrandchildModuleOutput.moduleInfoOutputPath,
                 grandchildModuleOutput.moduleInfoOutputPath,
-                childModuleOutput.moduleInfoOutputPath
+                childModuleOutput.moduleInfoOutputPath,
             ],
             buildDependencyTreeOutput: true
         )
@@ -4274,42 +4273,42 @@ final class SafeDIToolTests: XCTestCase {
         ) {
             try await executeSystemUnderTest(
                 swiftFileContent: [
-                """
-                @Instantiable
-                public final class Root {
-                    @Instantiated
-                    let childA: ChildA
-                    @Instantiated
-                    let childB: ChildB
-                }
-                """,
-                """
-                @Instantiable
-                public final class ChildA {
-                    @Instantiated
-                    let grandchild: Grandchild
-                    @Instantiated
-                    let blankie: Blankie
-                }
-                """,
-                """
-                @Instantiable
-                public final class ChildB {
-                    @Instantiated
-                    let grandchild: Grandchild
-                }
-                """,
-                """
-                @Instantiable
-                public final class Grandchild {
-                    @Received
-                    let blankie: Blankie
-                }
-                """,
-                """
-                @Instantiable
-                public final class Blankie {}
-                """
+                    """
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated
+                        let childA: ChildA
+                        @Instantiated
+                        let childB: ChildB
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class ChildA {
+                        @Instantiated
+                        let grandchild: Grandchild
+                        @Instantiated
+                        let blankie: Blankie
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class ChildB {
+                        @Instantiated
+                        let grandchild: Grandchild
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class Grandchild {
+                        @Received
+                        let blankie: Blankie
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class Blankie {}
+                    """,
                 ],
                 buildDependencyTreeOutput: true
             )
@@ -4324,48 +4323,48 @@ final class SafeDIToolTests: XCTestCase {
         ) {
             try await executeSystemUnderTest(
                 swiftFileContent: [
-                """
-                public struct User {}
-                """,
-                """
-                public protocol NetworkService {}
+                    """
+                    public struct User {}
+                    """,
+                    """
+                    public protocol NetworkService {}
 
-                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {}
-                """,
-                """
-                public protocol AuthService {
-                    func login(username: String, password: String) async -> User
-                }
-
-                @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-                public final class DefaultAuthService: AuthService {
-                    public func login(username: String, password: String) async -> User {
-                        User(username: username)
+                    @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                    public final class DefaultNetworkService: NetworkService {}
+                    """,
+                    """
+                    public protocol AuthService {
+                        func login(username: String, password: String) async -> User
                     }
 
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+                    public final class DefaultAuthService: AuthService {
+                        public func login(username: String, password: String) async -> User {
+                            User(username: username)
+                        }
 
-                    @Received
-                    let authService: AuthService
-                }
-                """,
-                """
-                import UIKit
+                        @Instantiated
+                        let networkService: NetworkService
 
-                @Instantiable
-                public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
-                        self.authService = authService
-                        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
-                        super.init(nibName: nil, bundle: nil)
+                        @Received
+                        let authService: AuthService
                     }
+                    """,
+                    """
+                    import UIKit
 
-                    @Instantiated
-                    let authService: AuthService
-                }
-                """,
+                    @Instantiable
+                    public final class RootViewController: UIViewController {
+                        public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
+                            self.authService = authService
+                            self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
+                            super.init(nibName: nil, bundle: nil)
+                        }
+
+                        @Instantiated
+                        let authService: AuthService
+                    }
+                    """,
                 ],
                 buildDependencyTreeOutput: true
             )
@@ -4417,7 +4416,7 @@ final class SafeDIToolTests: XCTestCase {
                         )
                         let networking: NetworkService
                     }
-                    """
+                    """,
                 ],
                 buildDependencyTreeOutput: true
             )
@@ -4469,7 +4468,7 @@ final class SafeDIToolTests: XCTestCase {
                         )
                         let networking: NetworkService
                     }
-                    """
+                    """,
                 ],
                 buildDependencyTreeOutput: true
             )
@@ -4484,48 +4483,48 @@ final class SafeDIToolTests: XCTestCase {
         ) {
             try await executeSystemUnderTest(
                 swiftFileContent: [
-                """
-                public struct User {}
-                """,
-                """
-                public protocol NetworkService {}
+                    """
+                    public struct User {}
+                    """,
+                    """
+                    public protocol NetworkService {}
 
-                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {}
-                """,
-                """
-                public protocol AuthService {
-                    func login(username: String, password: String) async -> User
-                }
-
-                @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-                public final class DefaultAuthService: AuthService {
-                    public func login(username: String, password: String) async -> User {
-                        User(username: username)
+                    @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                    public final class DefaultNetworkService: NetworkService {}
+                    """,
+                    """
+                    public protocol AuthService {
+                        func login(username: String, password: String) async -> User
                     }
 
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+                    public final class DefaultAuthService: AuthService {
+                        public func login(username: String, password: String) async -> User {
+                            User(username: username)
+                        }
 
-                    @Received(fulfilledByDependencyNamed: "authService", ofType: AuthService.self)
-                    let renamedAuthService: AuthService
-                }
-                """,
-                """
-                import UIKit
+                        @Instantiated
+                        let networkService: NetworkService
 
-                @Instantiable
-                public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
-                        self.authService = authService
-                        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
-                        super.init(nibName: nil, bundle: nil)
+                        @Received(fulfilledByDependencyNamed: "authService", ofType: AuthService.self)
+                        let renamedAuthService: AuthService
                     }
+                    """,
+                    """
+                    import UIKit
 
-                    @Instantiated
-                    let authService: AuthService
-                }
-                """,
+                    @Instantiable
+                    public final class RootViewController: UIViewController {
+                        public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
+                            self.authService = authService
+                            self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
+                            super.init(nibName: nil, bundle: nil)
+                        }
+
+                        @Instantiated
+                        let authService: AuthService
+                    }
+                    """,
                 ],
                 buildDependencyTreeOutput: true
             )
@@ -4564,7 +4563,6 @@ final class SafeDIToolTests: XCTestCase {
             )
         }
     }
-
 
     func test_run_onCodeWithNestedInstantiable_throwsError() async {
         await assertThrowsError(
@@ -4919,74 +4917,74 @@ final class SafeDIToolTests: XCTestCase {
         ) {
             try await executeSystemUnderTest(
                 swiftFileContent: [
-                """
-                public struct User {}
-                """,
-                """
-                public protocol AuthService {
-                    func login(username: String, password: String) async -> User
-                }
-
-                @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-                public final class DefaultAuthService: AuthService {
-                    public func login(username: String, password: String) async -> User {
-                        User()
+                    """
+                    public struct User {}
+                    """,
+                    """
+                    public protocol AuthService {
+                        func login(username: String, password: String) async -> User
                     }
 
-                    @Received
-                    let networkService: NetworkService
-                }
-                """,
-                """
-                public protocol NetworkService {}
+                    @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+                    public final class DefaultAuthService: AuthService {
+                        public func login(username: String, password: String) async -> User {
+                            User()
+                        }
 
-                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {}
-                """,
-                """
-                import UIKit
-
-                @Instantiable
-                public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>) {
-                        self.authService = authService
-                        self.networkService = networkService
-                        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
-                        derivedValue = false
-                        super.init(nibName: nil, bundle: nil)
+                        @Received
+                        let networkService: NetworkService
                     }
+                    """,
+                    """
+                    public protocol NetworkService {}
 
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                    public final class DefaultNetworkService: NetworkService {}
+                    """,
+                    """
+                    import UIKit
 
-                    @Instantiated
-                    let authService: AuthService
+                    @Instantiable
+                    public final class RootViewController: UIViewController {
+                        public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>) {
+                            self.authService = authService
+                            self.networkService = networkService
+                            self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
+                            derivedValue = false
+                            super.init(nibName: nil, bundle: nil)
+                        }
 
-                    @Instantiated(fulfilledByType: "LoggedInViewController")
-                    let loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>
+                        @Instantiated
+                        let networkService: NetworkService
 
-                    private let derivedValue: Bool
+                        @Instantiated
+                        let authService: AuthService
 
-                    func login(username: String, password: String) {
-                        Task { @MainActor in
-                            let loggedInViewController = loggedInViewControllerBuilder.instantiate(username)
-                            pushViewController(loggedInViewController)
+                        @Instantiated(fulfilledByType: "LoggedInViewController")
+                        let loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>
+
+                        private let derivedValue: Bool
+
+                        func login(username: String, password: String) {
+                            Task { @MainActor in
+                                let loggedInViewController = loggedInViewControllerBuilder.instantiate(username)
+                                pushViewController(loggedInViewController)
+                            }
                         }
                     }
-                }
-                """,
-                """
-                import UIKit
+                    """,
+                    """
+                    import UIKit
 
-                @Instantiable
-                public final class LoggedInViewController: UIViewController {
-                    @Forwarded
-                    private let user: User
+                    @Instantiable
+                    public final class LoggedInViewController: UIViewController {
+                        @Forwarded
+                        private let user: User
 
-                    @Received
-                    let networkService: NetworkService
-                }
-                """,
+                        @Received
+                        let networkService: NetworkService
+                    }
+                    """,
                 ],
                 buildDependencyTreeOutput: true
             )
@@ -5001,88 +4999,88 @@ final class SafeDIToolTests: XCTestCase {
         ) {
             try await executeSystemUnderTest(
                 swiftFileContent: [
-                """
-                public struct User {}
-                """,
-                """
-                public protocol AuthService {
-                    func login(username: String, password: String) async -> User
-                }
-
-                @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-                public final class DefaultAuthService: AuthService {
-                    public func login(username: String, password: String) async -> User {
-                        User()
+                    """
+                    public struct User {}
+                    """,
+                    """
+                    public protocol AuthService {
+                        func login(username: String, password: String) async -> User
                     }
 
-                    @Received
-                    let networkService: NetworkService
-                }
-                """,
-                """
-                public protocol NetworkService {}
+                    @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+                    public final class DefaultAuthService: AuthService {
+                        public func login(username: String, password: String) async -> User {
+                            User()
+                        }
 
-                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {}
-                """,
-                """
-                import UIKit
-
-                @Instantiable
-                public final class RootViewController: UIViewController {
-                    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>) {
-                        self.authService = authService
-                        self.networkService = networkService
-                        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
-                        derivedValue = false
-                        super.init(nibName: nil, bundle: nil)
+                        @Received
+                        let networkService: NetworkService
                     }
+                    """,
+                    """
+                    public protocol NetworkService {}
 
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                    public final class DefaultNetworkService: NetworkService {}
+                    """,
+                    """
+                    import UIKit
 
-                    @Instantiated
-                    let authService: AuthService
+                    @Instantiable
+                    public final class RootViewController: UIViewController {
+                        public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>) {
+                            self.authService = authService
+                            self.networkService = networkService
+                            self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
+                            derivedValue = false
+                            super.init(nibName: nil, bundle: nil)
+                        }
 
-                    @Instantiated(fulfilledByType: "LoggedInViewController")
-                    let loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>
+                        @Instantiated
+                        let networkService: NetworkService
 
-                    private let derivedValue: Bool
+                        @Instantiated
+                        let authService: AuthService
 
-                    func login(username: String, password: String) {
-                        Task { @MainActor in
-                            let loggedInViewController = loggedInViewControllerBuilder.instantiate(username)
-                            pushViewController(loggedInViewController)
+                        @Instantiated(fulfilledByType: "LoggedInViewController")
+                        let loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>
+
+                        private let derivedValue: Bool
+
+                        func login(username: String, password: String) {
+                            Task { @MainActor in
+                                let loggedInViewController = loggedInViewControllerBuilder.instantiate(username)
+                                pushViewController(loggedInViewController)
+                            }
                         }
                     }
-                }
-                """,
-                """
-                import UIKit
+                    """,
+                    """
+                    import UIKit
 
-                @Instantiable
-                public final class LoggedInViewController: UIViewController {
+                    @Instantiable
+                    public final class LoggedInViewController: UIViewController {
 
-                    @Forwarded
-                    private let user: User
+                        @Forwarded
+                        private let user: User
 
-                    @Forwarded
-                    private let userManager: UserManager
+                        @Forwarded
+                        private let userManager: UserManager
 
-                    @Received
-                    let networkService: NetworkService
-                }
-                """,
+                        @Received
+                        let networkService: NetworkService
+                    }
+                    """,
                 ],
                 buildDependencyTreeOutput: true
             )
         }
     }
 
-    private func assertThrowsError<ReturnType>(
+    private func assertThrowsError(
         _ errorDescription: String,
         line: UInt = #line,
-        block: () async throws -> ReturnType
+        block: () async throws -> some Any
     ) async {
         do {
             _ = try await block()
@@ -5105,7 +5103,7 @@ final class SafeDIToolTests: XCTestCase {
                 return location
             }
         try swiftFiles
-            .map { $0.relativePath }
+            .map(\.relativePath)
             .joined(separator: ",")
             .write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
@@ -5126,10 +5124,10 @@ final class SafeDIToolTests: XCTestCase {
             filesToDelete.append(dependencyTreeOutput)
         }
 
-        return TestOutput(
-            moduleInfo: try JSONDecoder().decode(SafeDITool.ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
+        return try TestOutput(
+            moduleInfo: JSONDecoder().decode(SafeDITool.ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
             moduleInfoOutputPath: moduleInfoOutput.relativePath,
-            dependencyTree: buildDependencyTreeOutput ? String(data: try Data(contentsOf: dependencyTreeOutput), encoding: .utf8) : nil,
+            dependencyTree: buildDependencyTreeOutput ? String(data: Data(contentsOf: dependencyTreeOutput), encoding: .utf8) : nil,
             dependencyTreeOutputPath: buildDependencyTreeOutput ? dependencyTreeOutput.relativePath : nil
         )
     }
@@ -5146,14 +5144,14 @@ final class SafeDIToolTests: XCTestCase {
 
 extension URL {
     fileprivate static var temporaryFile: URL {
-#if os(Linux)
-        FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-#else
-        if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
-            URL.temporaryDirectory.appending(path: UUID().uuidString)
-        } else {
+        #if os(Linux)
             FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        }
-#endif
+        #else
+            if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
+                URL.temporaryDirectory.appending(path: UUID().uuidString)
+            } else {
+                FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            }
+        #endif
     }
 }

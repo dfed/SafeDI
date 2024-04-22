@@ -31,7 +31,7 @@ final class NonisolatedErasedInstantiatorTests: XCTestCase {
     }
 
     func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() {
-        let systemUnderTest = NonisolatedErasedInstantiator() { id in BuiltProductWithForwardedArgument(id: id) }
+        let systemUnderTest = NonisolatedErasedInstantiator { id in BuiltProductWithForwardedArgument(id: id) }
         let id = UUID().uuidString
         let firstBuiltProduct = systemUnderTest.instantiate(id)
         let secondBuiltProduct = systemUnderTest.instantiate(id)
@@ -49,7 +49,6 @@ final class NonisolatedErasedInstantiatorTests: XCTestCase {
 
         typealias ForwardedProperties = String
 
-        @Forwarded
-        let id: String
+        @Forwarded let id: String
     }
 }

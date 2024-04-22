@@ -41,6 +41,7 @@ extension ActorDeclSyntax: ConcreteDeclSyntaxProtocol {
 
     public var declType: ConcreteDeclType { .actorType }
 }
+
 extension ClassDeclSyntax: ConcreteDeclSyntaxProtocol {
     public var keyword: SwiftSyntax.TokenSyntax {
         get {
@@ -53,6 +54,7 @@ extension ClassDeclSyntax: ConcreteDeclSyntaxProtocol {
 
     public var declType: ConcreteDeclType { .classType }
 }
+
 extension StructDeclSyntax: ConcreteDeclSyntaxProtocol {
     public var keyword: SwiftSyntax.TokenSyntax {
         get {

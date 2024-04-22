@@ -26,11 +26,10 @@ import XCTest
 @testable import SafeDICore
 
 final class TypeDescriptionTests: XCTestCase {
-
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAVoidTypeIdentifierSyntax_findsTheType() throws {
         let content = """
-            var void: Void = ()
-            """
+        var void: Void = ()
+        """
 
         let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -42,8 +41,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingATypeIdentifierSyntax_findsTheType() throws {
         let content = """
-            var int: Int = 1
-            """
+        var int: Int = 1
+        """
 
         let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -55,8 +54,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAMemberTypeSyntax_findsTheType() throws {
         let content = """
-            var int: Swift.Int = 1
-            """
+        var int: Swift.Int = 1
+        """
 
         let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -68,8 +67,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAMemberTypeSyntax_withRightHandGeneric_findsTheType() throws {
         let content = """
-            var intArray: Swift.Array<Int> = [1]
-            """
+        var intArray: Swift.Array<Int> = [1]
+        """
 
         let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -81,8 +80,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAMemberTypeSyntax_withLeftHandGeneric_findsTheType() throws {
         let content = """
-            var genericType: OuterGenericType<Int>.InnerType
-            """
+        var genericType: OuterGenericType<Int>.InnerType
+        """
 
         let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -94,8 +93,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAMemberTypeSyntax_withGenericOnBothSides_findsTheType() throws {
         let content = """
-            var genericType: OuterGenericType<Int>.InnerGenericType<String>
-            """
+        var genericType: OuterGenericType<Int>.InnerGenericType<String>
+        """
 
         let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -107,8 +106,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingACompositionTypeSyntax_findsTheType() throws {
         let content = """
-            protocol FooBar: Foo & Bar
-            """
+        protocol FooBar: Foo & Bar
+        """
 
         let visitor = CompositionTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -120,8 +119,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAOptionalTypeSyntax_findsTheType() throws {
         let content = """
-            var optionalAnyObject: AnyObject?
-            """
+        var optionalAnyObject: AnyObject?
+        """
 
         let visitor = OptionalTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -133,8 +132,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAOptionalClosureTypeSyntax_findsTheType() throws {
         let content = """
-            var optionalClosure: (() -> Void)?
-            """
+        var optionalClosure: (() -> Void)?
+        """
 
         let visitor = OptionalTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -146,8 +145,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAImplicitlyUnwrappedOptionalTypeSyntax_findsTheType() throws {
         let content = """
-            var int: Int!
-            """
+        var int: Int!
+        """
 
         let visitor = ImplicitlyUnwrappedOptionalTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -159,8 +158,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAType_findsTheType() throws {
         let content = """
-            let metatype: Int.Type
-            """
+        let metatype: Int.Type
+        """
 
         let visitor = MetatypeTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -172,8 +171,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAProtocol_findsTheType() throws {
         let content = """
-            let metatype: Equatable.Protocol
-            """
+        let metatype: Equatable.Protocol
+        """
 
         let visitor = MetatypeTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -185,8 +184,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingASomeOrAnyTypeSyntax_withSome_findsTheType() throws {
         let content = """
-            func makeSomething() -> some Equatable { "" }
-            """
+        func makeSomething() -> some Equatable { "" }
+        """
 
         let visitor = SomeOrAnyTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -198,8 +197,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingASomeOrAnyTypeSyntax_withAny_findsTheType() throws {
         let content = """
-            func makeSomething() -> any Equatable { "" }
-            """
+        func makeSomething() -> any Equatable { "" }
+        """
 
         let visitor = SomeOrAnyTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -211,8 +210,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnAttributedTypeSyntax_findsTheType() throws {
         let content = """
-            func test(parameter: inout Int) {}
-            """
+        func test(parameter: inout Int) {}
+        """
 
         let visitor = AttributedTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -224,8 +223,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnAttributedTypeSyntax_withAttributes_findsTheType() throws {
         let content = """
-            @autoclosure () -> Void
-            """
+        @autoclosure () -> Void
+        """
 
         let visitor = AttributedTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -237,8 +236,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnAttributedTypeSyntax_withSpecifierAndAttributes_findsTheType() throws {
         let content = """
-            func test(parameter: inout @autoclosure () -> Void) {}
-            """
+        func test(parameter: inout @autoclosure () -> Void) {}
+        """
 
         let visitor = AttributedTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -250,8 +249,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnArrayTypeSyntax_findsTheType() throws {
         let content = """
-            var intArray: [Int] = [Int]()
-            """
+        var intArray: [Int] = [Int]()
+        """
 
         let visitor = ArrayTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -263,8 +262,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnArray_notOfFormArrayTypeSyntax_findsTheType() throws {
         let content = """
-            var intArray: Array<Int>
-            """
+        var intArray: Array<Int>
+        """
 
         let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -276,8 +275,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnArray_ofTwoDimensions_findsTheType() throws {
         let content = """
-            var twoDimensionalIntArray: Array<Array<Int>>
-            """
+        var twoDimensionalIntArray: Array<Array<Int>>
+        """
 
         let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -289,8 +288,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingADictionaryTypeSyntax_findsTheType() throws {
         let content = """
-            var dictionary: [Int: String] = [Int: String]()
-            """
+        var dictionary: [Int: String] = [Int: String]()
+        """
 
         let visitor = DictionaryTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -302,8 +301,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingADictionary_notOfFormDictionaryTypeSyntax_findsTheType() throws {
         let content = """
-            var dictionary: Dictionary<Int, String>
-            """
+        var dictionary: Dictionary<Int, String>
+        """
 
         let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -315,8 +314,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingADictionary_OfTwoDimensions_findsTheType() throws {
         let content = """
-            var twoDimensionalDictionary: Dictionary<Int, Dictionary<Int, String>>
-            """
+        var twoDimensionalDictionary: Dictionary<Int, Dictionary<Int, String>>
+        """
 
         let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -328,8 +327,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAVoidTupleTypeSyntax_findsTheType() throws {
         let content = """
-            var voidTuple: ()
-            """
+        var voidTuple: ()
+        """
 
         let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -341,8 +340,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingASpelledOutVoidWrappedInTupleTypeSyntax_findsTheType() throws {
         let content = """
-            var voidTuple: (Void)
-            """
+        var voidTuple: (Void)
+        """
 
         let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -354,8 +353,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAVoidWrappedInTupleTypeSyntax_findsTheType() throws {
         let content = """
-            var voidTuple: (())
-            """
+        var voidTuple: (())
+        """
 
         let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -367,8 +366,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingATupleTypeSyntax_findsTheType() throws {
         let content = """
-            var tuple: (Int, String)
-            """
+        var tuple: (Int, String)
+        """
 
         let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -380,8 +379,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingASigleElementTupleTypeSyntax_findsTheType() throws {
         let content = """
-            var tupleWrappedString: (String)
-            """
+        var tupleWrappedString: (String)
+        """
 
         let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -393,8 +392,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAClassRestrictionTypeSyntax_findsTheType() throws {
         let content = """
-            protocol SomeObject: class {}
-            """
+        protocol SomeObject: class {}
+        """
 
         let visitor = ClassRestrictionTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -406,8 +405,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAFunctionTypeSyntax_onAFunctionThatDoesNotThrow_findsTheType() throws {
         let content = """
-            var test: (Int, Double) -> String
-            """
+        var test: (Int, Double) -> String
+        """
 
         let visitor = FunctionTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -419,8 +418,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAFunctionTypeSyntax_onAFunctionThatThrows_findsTheType() throws {
         let content = """
-            var test: (Int, Double) throws -> String
-            """
+        var test: (Int, Double) throws -> String
+        """
 
         let visitor = FunctionTypeSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
@@ -431,8 +430,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAVoidType_findsTheType() throws {
         let content = """
-            let type: Void.Type = Void.self
-            """
+        let type: Void.Type = Void.self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
@@ -443,8 +442,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingASimpleType_findsTheType() throws {
         let content = """
-            let type: Any.Type = String.self
-            """
+        let type: Any.Type = String.self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
@@ -455,8 +454,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingASimpleTypeWithGenerics_findsTheType() throws {
         let content = """
-            let test: Any.Type = Array<Int>.self
-            """
+        let test: Any.Type = Array<Int>.self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
 
@@ -467,8 +466,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingANestedTypeWithGenerics_findsTheType() throws {
         let content = """
-            let test: Any.Type = Swift.Array<Int>.self
-            """
+        let test: Any.Type = Swift.Array<Int>.self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -478,8 +477,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAnAnyType_findsTheType() throws {
         let content = """
-            let test: Any.Type = (any Collection).self
-            """
+        let test: Any.Type = (any Collection).self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -489,8 +488,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingACompositionType_findsTheType() throws {
         let content = """
-            let test: Any.Type = (Decodable & Encodable).self
-            """
+        let test: Any.Type = (Decodable & Encodable).self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -500,8 +499,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAnOptionalType_findsTheType() throws {
         let content = """
-            let test: Any.Type = Int?.self
-            """
+        let test: Any.Type = Int?.self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -511,8 +510,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAMetatypeType_findsTheType() throws {
         let content = """
-            let test: Any.Type = Int.Type.self
-            """
+        let test: Any.Type = Int.Type.self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -522,8 +521,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAMetatypeProtocol_findsTheType() throws {
         let content = """
-            let test: Any.Type = Int.Protocol.self
-            """
+        let test: Any.Type = Int.Protocol.self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -533,8 +532,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAnArrayType_findsTheType() throws {
         let content = """
-            let test: Any.Type = [Int].self
-            """
+        let test: Any.Type = [Int].self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -544,8 +543,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingADictionaryType_findsTheType() throws {
         let content = """
-            let test: Any.Type = [Int: String].self
-            """
+        let test: Any.Type = [Int: String].self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -555,8 +554,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingATupleTypeWithoutLabels_findsTheType() throws {
         let content = """
-            let test: Any.Type = (Int, String).self
-            """
+        let test: Any.Type = (Int, String).self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -566,8 +565,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingATupleTypeWithOneLabel_findsTheType() throws {
         let content = """
-            let test: Any.Type = (int: Int, String).self
-            """
+        let test: Any.Type = (int: Int, String).self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -577,8 +576,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingATupleTypeWithLabels_findsTheType() throws {
         let content = """
-            let test: Any.Type = (int: Int, string: String).self
-            """
+        let test: Any.Type = (int: Int, string: String).self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -588,8 +587,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAClosureType_findsTheType() throws {
         let content = """
-            let test: Any.Type = (() -> ()).self
-            """
+        let test: Any.Type = (() -> ()).self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -599,8 +598,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAThrowingClosureType_findsTheType() throws {
         let content = """
-            let test: Any.Type = (((() throws -> ()))).self
-            """
+        let test: Any.Type = (((() throws -> ()))).self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -610,8 +609,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAnAsyncClosureType_findsTheType() throws {
         let content = """
-            let test: Any.Type = (() async -> ()).self
-            """
+        let test: Any.Type = (() async -> ()).self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -621,8 +620,8 @@ final class TypeDescriptionTests: XCTestCase {
 
     func test_typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAnAsyncThrowingClosureType_findsTheType() throws {
         let content = """
-            let test: Any.Type = (() async throws -> ()).self
-            """
+        let test: Any.Type = (() async throws -> ()).self
+        """
         let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
         visitor.walk(Parser.parse(source: content))
         let typeDescription = try XCTUnwrap(visitor.typeDescription)
@@ -684,6 +683,7 @@ final class TypeDescriptionTests: XCTestCase {
             return .skipChildren
         }
     }
+
     private final class MemberTypeSyntaxVisitor: SyntaxVisitor {
         var nestedType: TypeDescription?
         override func visit(_ node: MemberTypeSyntax) -> SyntaxVisitorContinueKind {
@@ -691,6 +691,7 @@ final class TypeDescriptionTests: XCTestCase {
             return .skipChildren
         }
     }
+
     private final class CompositionTypeSyntaxVisitor: SyntaxVisitor {
         var composedTypeIdentifier: TypeDescription?
         // Note: ideally we'd visit a node of type CompositionTypeElementListSyntax
@@ -700,6 +701,7 @@ final class TypeDescriptionTests: XCTestCase {
             return .skipChildren
         }
     }
+
     private final class OptionalTypeSyntaxVisitor: SyntaxVisitor {
         var optionalTypeIdentifier: TypeDescription?
         override func visit(_ node: OptionalTypeSyntax) -> SyntaxVisitorContinueKind {
@@ -707,6 +709,7 @@ final class TypeDescriptionTests: XCTestCase {
             return .skipChildren
         }
     }
+
     private final class ImplicitlyUnwrappedOptionalTypeSyntaxVisitor: SyntaxVisitor {
         var implictlyUnwrappedOptionalTypeIdentifier: TypeDescription?
         override func visit(_ node: ImplicitlyUnwrappedOptionalTypeSyntax) -> SyntaxVisitorContinueKind {
@@ -714,6 +717,7 @@ final class TypeDescriptionTests: XCTestCase {
             return .skipChildren
         }
     }
+
     private final class MetatypeTypeSyntaxVisitor: SyntaxVisitor {
         var metatypeTypeIdentifier: TypeDescription?
         override func visit(_ node: MetatypeTypeSyntax) -> SyntaxVisitorContinueKind {
@@ -721,6 +725,7 @@ final class TypeDescriptionTests: XCTestCase {
             return .skipChildren
         }
     }
+
     private final class SomeOrAnyTypeSyntaxVisitor: SyntaxVisitor {
         var someOrAnyTypeIdentifier: TypeDescription?
         override func visit(_ node: SomeOrAnyTypeSyntax) -> SyntaxVisitorContinueKind {
@@ -728,6 +733,7 @@ final class TypeDescriptionTests: XCTestCase {
             return .skipChildren
         }
     }
+
     private final class AttributedTypeSyntaxVisitor: SyntaxVisitor {
         var attributedTypeIdentifier: TypeDescription?
         override func visit(_ node: AttributedTypeSyntax) -> SyntaxVisitorContinueKind {
@@ -735,6 +741,7 @@ final class TypeDescriptionTests: XCTestCase {
             return .skipChildren
         }
     }
+
     private final class ArrayTypeSyntaxVisitor: SyntaxVisitor {
         var arrayTypeIdentifier: TypeDescription?
         override func visit(_ node: ArrayTypeSyntax) -> SyntaxVisitorContinueKind {
@@ -742,6 +749,7 @@ final class TypeDescriptionTests: XCTestCase {
             return .skipChildren
         }
     }
+
     private final class DictionaryTypeSyntaxVisitor: SyntaxVisitor {
         var dictionaryTypeIdentifier: TypeDescription?
         override func visit(_ node: DictionaryTypeSyntax) -> SyntaxVisitorContinueKind {
@@ -749,6 +757,7 @@ final class TypeDescriptionTests: XCTestCase {
             return .skipChildren
         }
     }
+
     private final class TupleTypeSyntaxVisitor: SyntaxVisitor {
         var tupleTypeIdentifier: TypeDescription?
         // Note: ideally we'd visit a node of type TupleTypeElementListSyntax
@@ -758,6 +767,7 @@ final class TypeDescriptionTests: XCTestCase {
             return .skipChildren
         }
     }
+
     private final class ClassRestrictionTypeSyntaxVisitor: SyntaxVisitor {
         var classRestrictionIdentifier: TypeDescription?
         // Note: ideally we'd visit a node of type ClassRestrictionTypeSyntax
@@ -767,6 +777,7 @@ final class TypeDescriptionTests: XCTestCase {
             return .skipChildren
         }
     }
+
     private final class FunctionTypeSyntaxVisitor: SyntaxVisitor {
         var functionIdentifier: TypeDescription?
         // Note: ideally we'd visit a node of type FunctionTypeSyntax
@@ -776,6 +787,7 @@ final class TypeDescriptionTests: XCTestCase {
             return .skipChildren
         }
     }
+
     private final class MemberAccessExprSyntaxVisitor: SyntaxVisitor {
         var typeDescription: TypeDescription?
         override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {

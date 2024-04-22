@@ -22,7 +22,6 @@ import Collections
 
 /// A model of the scoped dependencies required for an `@Instantiable` in the reachable dependency tree.
 final class Scope: Hashable {
-
     // MARK: Initialization
 
     init(instantiable: Instantiable) {
@@ -70,7 +69,7 @@ final class Scope: Hashable {
                 case let .aliased(fulfillingProperty, _):
                     fulfillingProperty
                 case .forwarded,
-                        .instantiated:
+                     .instantiated:
                     nil
                 }
             }
@@ -97,10 +96,10 @@ final class Scope: Hashable {
             } else {
                 isPropertyCycle = false
             }
-            let scopeGenerator = ScopeGenerator(
+            let scopeGenerator = try ScopeGenerator(
                 instantiable: instantiable,
                 property: property,
-                propertiesToGenerate: isPropertyCycle ? [] : try propertiesToGenerate.map {
+                propertiesToGenerate: isPropertyCycle ? [] : propertiesToGenerate.map {
                     switch $0 {
                     case let .instantiated(property, scope, erasedToConcreteExistential):
                         try scope.createScopeGenerator(
@@ -130,7 +129,6 @@ final class Scope: Hashable {
     // MARK: ScopeError
 
     private enum ScopeError: Error, CustomStringConvertible {
-
         case dependencyCycleDetected([TypeDescription])
 
         var description: String {

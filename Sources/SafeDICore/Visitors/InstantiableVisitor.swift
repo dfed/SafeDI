@@ -22,7 +22,6 @@ import SwiftDiagnostics
 import SwiftSyntax
 
 public final class InstantiableVisitor: SyntaxVisitor {
-
     // MARK: Initialization
 
     public init(declarationType: DeclarationType) {
@@ -35,7 +34,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
     public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
         guard
             declarationType.isTypeDefinition
-                && node.modifiers.staticModifier == nil
+            && node.modifiers.staticModifier == nil
         else {
             return .skipChildren
         }
@@ -49,7 +48,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     .replace(
                         oldNode: Syntax(node.attributes),
                         newNode: Syntax(dependencySources[0].node)
-                    )
+                    ),
                 ]
             ))
             return .skipChildren
@@ -61,13 +60,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
                 .bindings
                 .filter {
                     $0.accessorBlock == nil
-                    && !$0.isOptionalOrInitialized
+                        && !$0.isOptionalOrInitialized
                 }
                 .map(\.pattern)
             uninitializedNonOptionalPropertyNames += patterns
                 .compactMap(IdentifierPatternSyntax.init)
                 .map(\.identifier.text)
-            + patterns
+                + patterns
                 .compactMap(TuplePatternSyntax.init)
                 .map(\.trimmedDescription)
             return .skipChildren
@@ -86,7 +85,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                         .replace(
                             oldNode: Syntax(binding),
                             newNode: Syntax(bindingWithoutInitializer)
-                        )
+                        ),
                     ]
                 ))
             }
@@ -97,12 +96,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
             {
                 dependencies.append(
                     Dependency(
-                        property: { 
-                            Property(
-                                label: label,
-                                typeDescription: typeDescription
-                            )
-                        }(),
+                        property: Property(
+                            label: label,
+                            typeDescription: typeDescription
+                        ),
                         source: dependencySource
                     )
                 )
@@ -120,7 +117,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
         return .skipChildren
     }
 
-
     public override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
         visitDecl(node)
     }
@@ -133,11 +129,11 @@ public final class InstantiableVisitor: SyntaxVisitor {
         visitDecl(node)
     }
 
-    public override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
         .skipChildren
     }
 
-    public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
         .skipChildren
     }
 
@@ -189,7 +185,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     .replace(
                         oldNode: Syntax(node.signature),
                         newNode: Syntax(modifiedSignature)
-                    )
+                    ),
                 ]
             ))
         }
@@ -208,13 +204,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
             var modifiedNode = node
             modifiedNode.modifiers = DeclModifierListSyntax(
                 arrayLiteral:
-                    DeclModifierSyntax(
-                        name: TokenSyntax(
-                            TokenKind.keyword(.public),
-                            leadingTrivia: node.modifiers.first?.leadingTrivia ?? node.funcKeyword.leadingTrivia,
-                            presence: .present
-                        )
-                    ),
+                DeclModifierSyntax(
+                    name: TokenSyntax(
+                        TokenKind.keyword(.public),
+                        leadingTrivia: node.modifiers.first?.leadingTrivia ?? node.funcKeyword.leadingTrivia,
+                        presence: .present
+                    )
+                ),
                 DeclModifierSyntax(
                     name: TokenSyntax(
                         TokenKind.keyword(.static),
@@ -232,7 +228,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     .replace(
                         oldNode: Syntax(node),
                         newNode: Syntax(modifiedNode)
-                    )
+                    ),
                 ]
             ))
         }
@@ -246,7 +242,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     .replace(
                         oldNode: Syntax(node.signature),
                         newNode: Syntax(modifiedSignature)
-                    )
+                    ),
                 ]
             ))
         }
@@ -260,7 +256,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     .replace(
                         oldNode: Syntax(node),
                         newNode: Syntax(modifiedNode)
-                    )
+                    ),
                 ]
             ))
         }
@@ -274,7 +270,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     .replace(
                         oldNode: Syntax(node),
                         newNode: Syntax(modifiedNode)
-                    )
+                    ),
                 ]
             ))
         }
@@ -378,7 +374,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
         return .visitChildren
     }
 
-    private func processAttributes(_ attributes: AttributeListSyntax, on macro: AttributeSyntax) {
+    private func processAttributes(_: AttributeListSyntax, on macro: AttributeSyntax) {
         guard
             let fulfillingAdditionalTypesExpression = macro.fulfillingAdditionalTypes,
             let fulfillingAdditionalTypesArray = ArrayExprSyntax(fulfillingAdditionalTypesExpression)
@@ -389,10 +385,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
         additionalInstantiables = fulfillingAdditionalTypesArray
             .elements
-            .map { $0.expression.typeDescription.asInstantiatedType }
+            .map(\.expression.typeDescription.asInstantiatedType)
     }
 
-    private func processModifiers(_ modifiers: DeclModifierListSyntax, on node: some ConcreteDeclSyntaxProtocol) {
+    private func processModifiers(_: DeclModifierListSyntax, on node: some ConcreteDeclSyntaxProtocol) {
         if !node.modifiers.containsPublicOrOpen {
             let publicModifier = DeclModifierSyntax(
                 name: TokenSyntax(
@@ -407,7 +403,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
                 firstModifier.name.leadingTrivia = []
                 modifiedNode.modifiers.replaceSubrange(
                     modifiedNode.modifiers.startIndex..<modifiedNode.attributes.index(after: modifiedNode.attributes.startIndex),
-                    with: [publicModifier, firstModifier])
+                    with: [publicModifier, firstModifier]
+                )
                 modifiedNode.modifiers = modifiedNode.modifiers.filter {
                     $0.name.text != "internal" && $0.name.text != "fileprivate" && $0.name.text != "private"
                 }
@@ -422,7 +419,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     .replace(
                         oldNode: Syntax(node),
                         newNode: Syntax(modifiedNode)
-                    )
+                    ),
                 ]
             ))
         }

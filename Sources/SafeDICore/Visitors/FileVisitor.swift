@@ -22,7 +22,6 @@ import SwiftSyntax
 
 /// A syntax visitor that can read an entire file.
 public final class FileVisitor: SyntaxVisitor {
-
     // MARK: Initialization
 
     public init() {
@@ -31,15 +30,15 @@ public final class FileVisitor: SyntaxVisitor {
 
     // MARK: SyntaxVisitor
 
-    public override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
         .skipChildren
     }
 
-    public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
         .skipChildren
     }
 
-    public override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
         .skipChildren
     }
 
@@ -50,11 +49,11 @@ public final class FileVisitor: SyntaxVisitor {
         return .skipChildren
     }
 
-    public override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
         .skipChildren
     }
 
-    public override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
         .skipChildren
     }
 
@@ -82,12 +81,12 @@ public final class FileVisitor: SyntaxVisitor {
         visitPostDecl(node)
     }
 
-    public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+    public override func visit(_: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
         declSyntaxParentCount += 1
         return .visitChildren // Make sure there aren't `@Instantiable`s declared within an enum.
     }
 
-    public override func visitPost(_ node: EnumDeclSyntax) {
+    public override func visitPost(_: EnumDeclSyntax) {
         declSyntaxParentCount -= 1
     }
 
@@ -133,7 +132,7 @@ public final class FileVisitor: SyntaxVisitor {
         return .visitChildren
     }
 
-    private func visitPostDecl(_ node: some ConcreteDeclSyntaxProtocol) {
+    private func visitPostDecl(_: some ConcreteDeclSyntaxProtocol) {
         declSyntaxParentCount -= 1
     }
 }
