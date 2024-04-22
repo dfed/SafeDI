@@ -32,7 +32,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-syntax.git", from: "509.0.0"),
         .package(url: "https://github.com/michaeleisel/ZippyJSON.git", from: "1.2.0"),
         .package(url: "https://github.com/pointfreeco/swift-macro-testing.git", from: "0.4.0"),
-        .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.53.0"),
     ],
     targets: [
         // Macros

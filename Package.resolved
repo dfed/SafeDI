@@ -55,15 +55,6 @@
       }
     },
     {
-      "identity" : "swiftformat",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/nicklockwood/SwiftFormat",
-      "state" : {
-        "revision" : "825b4cdadbcabb91661243a09aeb44c3d4ef459d",
-        "version" : "0.53.7"
-      }
-    },
-    {
       "identity" : "zippyjson",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/michaeleisel/ZippyJSON.git",

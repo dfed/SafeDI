@@ -114,4 +114,4 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Lint Swift
-        run: swift package plugin --allow-writing-to-package-directory swiftformat
+        run: xcrun swift run --package-path CLI -c release swiftformat Sources Tests Plugins Examples
