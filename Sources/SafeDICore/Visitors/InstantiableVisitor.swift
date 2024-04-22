@@ -389,7 +389,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
         additionalInstantiables = fulfillingAdditionalTypesArray
             .elements
-            .map { $0.expression.typeDescription }
+            .map { $0.expression.typeDescription.asInstantiatedType }
     }
 
     private func processModifiers(_ modifiers: DeclModifierListSyntax, on node: some ConcreteDeclSyntaxProtocol) {
