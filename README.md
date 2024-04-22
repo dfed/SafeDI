@@ -93,12 +93,10 @@ public final class UserService: Instantiable {
     }
 
     /// An auth service instance that is instantiated when the `UserService` is instantiated.
-    @Instantiated
-    private let authService: AuthService
+    @Instantiated private let authService: AuthService
 
     /// An instance of secure, persistent storage that is instantiated further up the SafeDI dependency tree.
-    @Received
-    private let securePersistentStorage: SecurePersistentStorage
+    @Received private let securePersistentStorage: SecurePersistentStorage
 
     private func loadPersistedUser() -> User? {
         securePersistentStorage["user", ofType: User.self]
@@ -177,11 +175,9 @@ public struct LoggedInContentView: View, Instantiable {
         ... // Instantiates and displays a ProfileView when a button is pressed.
     }
 
-    @Forwarded
-    private let user: User
+    @Forwarded private let user: User
 
-    @Instantiated(fulfilledByType: "ProfileView", erasedToConcreteExistential: true)
-    private let profileViewBuilder: ErasedInstantiator<(), AnyView>
+    @Instantiated(fulfilledByType: "ProfileView", erasedToConcreteExistential: true) private let profileViewBuilder: ErasedInstantiator<(), AnyView>
 }
 
 @Instantiable
@@ -190,8 +186,7 @@ public struct ProfileView: View, Instantiable {
         ... // Allows for updating user information.
     }
 
-    @Instantiated
-    private let updateUserService: UpdateUserService
+    @Instantiated private let updateUserService: UpdateUserService
 }
 
 @Instantiable
@@ -206,8 +201,7 @@ public final class UpdateUserService: Instantiable {
     }
 
     // The user object which is received from the LoggedInContentView.
-    @Received
-    private let user: User
+    @Received private let user: User
 
     private let urlSession: URLSession
 }
@@ -248,11 +242,9 @@ public struct LoggedInView: View, Instantiable {
         ... // A logged in user experience
     }
     
-    @Forwarded
-    private let userManager: UserManager 
+    @Forwarded private let userManager: UserManager 
 
-    @Instantiated
-    private let profileViewBuilder: Instantiator<ProfileView>
+    @Instantiated private let profileViewBuilder: Instantiator<ProfileView>
 }
 
 @Instantiable
@@ -261,11 +253,9 @@ public struct ProfileView: View, Instantiable {
         ... // A profile viewing experience
     }
 
-    @Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self)
-    private let userVendor: UserVendor
+    @Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self) private let userVendor: UserVendor
 
-    @Instantiated
-    private let editProfileViewBuilder: Instantiator<EditProfileView>
+    @Instantiated private let editProfileViewBuilder: Instantiator<EditProfileView>
 }
 
 @Instantiable
@@ -274,8 +264,7 @@ public struct EditProfileView: View, Instantiable {
         ... // A profile editing experience
     }
 
-    @Received
-    private let userVendor: UserVendor
+    @Received private let userVendor: UserVendor
 }
 ```
 
@@ -298,8 +287,7 @@ public struct MyApp: App, Instantiable {
     }
 
     /// A private property that knows how to instantiate a content view.
-    @Instantiated
-    private let contentViewInstantiator: Instantiator<ContentView>
+    @Instantiated private let contentViewInstantiator: Instantiator<ContentView>
 }
 ```
 
@@ -330,8 +318,7 @@ public struct ParentView: View, Instantiable {
     // The ErasedInstantiator `instantiate()` function will build a `ChildView` wrapped in a concrete `AnyView`.
     // All that is required for this code to compile is for there to be an
     // `@Instantiable public struct ChildView: View` in the codebase.
-    @Instantiated(fulfilledByType: "ChildView", erasedToConcreteExistential: true)
-    private let childViewBuilder: ErasedInstantiator<(), AnyView>
+    @Instantiated(fulfilledByType: "ChildView", erasedToConcreteExistential: true) private let childViewBuilder: ErasedInstantiator<(), AnyView>
 }
 ```
 

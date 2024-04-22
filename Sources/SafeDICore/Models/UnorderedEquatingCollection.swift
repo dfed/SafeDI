@@ -19,7 +19,6 @@
 // SOFTWARE.
 
 public struct UnorderedEquatingCollection<Element: Hashable>: Hashable, Collection, ExpressibleByArrayLiteral {
-
     // MARK: Initialization
 
     public init(_ array: [Element]) {
@@ -41,12 +40,13 @@ public struct UnorderedEquatingCollection<Element: Hashable>: Hashable, Collecti
 
     // MARK: Collection
 
-    public func makeIterator() -> IndexingIterator<Array<Element>> { array.makeIterator() }
+    public func makeIterator() -> IndexingIterator<[Element]> { array.makeIterator() }
     public var startIndex: Int { array.startIndex }
     public var endIndex: Int { array.endIndex }
     public func index(after i: Int) -> Int {
         array.index(after: i)
     }
+
     public subscript(position: Int) -> Element {
         array[position]
     }
@@ -78,7 +78,7 @@ extension UnorderedEquatingCollection: Encodable where Element: Encodable {
 
 extension UnorderedEquatingCollection: Decodable where Element: Decodable {
     public init(from decoder: Decoder) throws {
-        self.init(try decoder.singleValueContainer().decode([Element].self))
+        try self.init(decoder.singleValueContainer().decode([Element].self))
     }
 }
 

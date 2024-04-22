@@ -33,7 +33,8 @@ public struct NameEntryView: Instantiable, View {
             TextField(
                 text: $name,
                 prompt: Text("Enter your name"),
-                label: {})
+                label: {}
+            )
             Button(action: {
                 userService.userName = name
             }, label: {
@@ -43,11 +44,9 @@ public struct NameEntryView: Instantiable, View {
         .padding()
     }
 
-    @State
-    private var name: String = ""
+    @State private var name: String = ""
 
-    @Received
-    private let userService: any UserService
+    @Received private let userService: any UserService
 }
 
 #Preview {

@@ -23,13 +23,12 @@ import SwiftSyntax
 /// A representation of a property.
 /// e.g. `let myProperty: MyProperty`
 public struct Property: Codable, Hashable, Comparable, Sendable {
-
     // MARK: Initialization
 
     init(
         label: String,
-        typeDescription: TypeDescription)
-    {
+        typeDescription: TypeDescription
+    ) {
         self.label = label
         self.typeDescription = typeDescription
     }
@@ -86,18 +85,18 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
                 )
             )
         case .simple,
-                .nested,
-                .composition,
-                .optional,
-                .implicitlyUnwrappedOptional,
-                .some,
-                .any,
-                .metatype,
-                .array,
-                .dictionary,
-                .tuple,
-                .unknown,
-                .void:
+             .nested,
+             .composition,
+             .optional,
+             .implicitlyUnwrappedOptional,
+             .some,
+             .any,
+             .metatype,
+             .array,
+             .dictionary,
+             .tuple,
+             .unknown,
+             .void:
             FunctionParameterSyntax(
                 firstName: .identifier(label),
                 colon: .colonToken(trailingTrivia: .space),
@@ -121,10 +120,10 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
     var generics: [TypeDescription] {
         switch typeDescription {
         case let .simple(_, generics),
-            let .nested(_, _, generics):
-            return generics
+             let .nested(_, _, generics):
+            generics
         case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
-            return []
+            []
         }
     }
 

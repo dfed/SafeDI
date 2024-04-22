@@ -23,28 +23,22 @@ import Foundation
 import SafeDICore
 import SwiftParser
 #if canImport(ZippyJSON)
-import ZippyJSON
+    import ZippyJSON
 #endif
 
 @main
 struct SafeDITool: AsyncParsableCommand {
-
     // MARK: Arguments
 
-    @Argument(help: "A path to a CSV file containing paths of Swift files to parse.")
-    var swiftSourcesFilePath: String
+    @Argument(help: "A path to a CSV file containing paths of Swift files to parse.") var swiftSourcesFilePath: String
 
-    @Option(parsing: .upToNextOption, help: "The names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.")
-    var additionalImportedModules: [String] = []
+    @Option(parsing: .upToNextOption, help: "The names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModules: [String] = []
 
-    @Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project‘s non-root module")
-    var moduleInfoOutput: String?
+    @Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project‘s non-root module") var moduleInfoOutput: String?
 
-    @Option(parsing: .upToNextOption, help: "File paths to SafeDI representations of other modules. Only include this option when running on a project‘s root module.")
-    var moduleInfoPaths: [String] = []
+    @Option(parsing: .upToNextOption, help: "File paths to SafeDI representations of other modules. Only include this option when running on a project‘s root module.") var moduleInfoPaths: [String] = []
 
-    @Option(help: "The desired output location of the Swift dependency injection tree. Only include this option when running on a project‘s root module.")
-    var dependencyTreeOutput: String?
+    @Option(help: "The desired output location of the Swift dependency injection tree. Only include this option when running on a project‘s root module.") var dependencyTreeOutput: String?
 
     // MARK: Internal
 
@@ -55,14 +49,14 @@ struct SafeDITool: AsyncParsableCommand {
             parsedModule(loadSwiftFiles())
         )
 
-        async let generatedCode: String? = dependencyTreeOutput != nil
-        ? DependencyTreeGenerator(
-            importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
-            typeDescriptionToFulfillingInstantiableMap: try resolveSafeDIFulfilledTypes(
-                instantiables: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
-            )
-        ).generate()
-        : nil
+        async let generatedCode: String? = try dependencyTreeOutput != nil
+            ? DependencyTreeGenerator(
+                importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
+                typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
+                    instantiables: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
+                )
+            ).generate()
+            : nil
 
         if !module.nestedInstantiableDecoratedTypeDescriptions.isEmpty {
             throw CollectInstantiablesError
@@ -135,7 +129,6 @@ struct SafeDITool: AsyncParsableCommand {
                 imports.append(contentsOf: fileVisitor.imports)
                 instantiables.append(contentsOf: fileVisitor.instantiables)
             }
-
         }
 
         return ParsedModule(
@@ -153,11 +146,11 @@ struct SafeDITool: AsyncParsableCommand {
                 of: ModuleInfo.self,
                 returning: [ModuleInfo].self
             ) { taskGroup in
-#if canImport(ZippyJSON)
-                let decoder = ZippyJSONDecoder()
-#else
-                let decoder = JSONDecoder()
-#endif
+                #if canImport(ZippyJSON)
+                    let decoder = ZippyJSONDecoder()
+                #else
+                    let decoder = JSONDecoder()
+                #endif
                 for moduleInfoURL in moduleInfoURLs {
                     taskGroup.addTask {
                         try decoder.decode(
@@ -212,15 +205,15 @@ struct SafeDITool: AsyncParsableCommand {
 
 extension Data {
     fileprivate func write(toPath filePath: String) throws {
-#if os(Linux)
-        try write(to: URL(fileURLWithPath: filePath))
-#else
-        if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
-            try write(to: URL(filePath: filePath))
-        } else {
+        #if os(Linux)
             try write(to: URL(fileURLWithPath: filePath))
-        }
-#endif
+        #else
+            if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
+                try write(to: URL(filePath: filePath))
+            } else {
+                try write(to: URL(fileURLWithPath: filePath))
+            }
+        #endif
     }
 }
 
@@ -230,14 +223,14 @@ extension String {
     }
 
     fileprivate var asFileURL: URL {
-#if os(Linux)
-        URL(fileURLWithPath: self)
-#else
-        if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
-            URL(filePath: self)
-        } else {
+        #if os(Linux)
             URL(fileURLWithPath: self)
-        }
-#endif
+        #else
+            if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
+                URL(filePath: self)
+            } else {
+                URL(fileURLWithPath: self)
+            }
+        #endif
     }
 }

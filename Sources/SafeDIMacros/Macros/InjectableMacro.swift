@@ -27,8 +27,9 @@ public struct InjectableMacro: PeerMacro {
     public static func expansion(
         of node: AttributeSyntax,
         providingPeersOf declaration: some DeclSyntaxProtocol,
-        in context: some MacroExpansionContext)
-    throws -> [DeclSyntax]
+        in context: some MacroExpansionContext
+    )
+        throws -> [DeclSyntax]
     {
         guard let variableDecl = VariableDeclSyntax(declaration) else {
             throw InjectableError.notDecoratingBinding
@@ -42,8 +43,8 @@ public struct InjectableMacro: PeerMacro {
         if let fulfilledByType = macroWithParameters?.fulfilledByType {
             let decoratesInstantiator = variableDecl
                 .bindings
-                .compactMap { $0.typeAnnotation }
-                .contains(where: { $0.type.typeDescription.propertyType.isInstantiator })
+                .compactMap(\.typeAnnotation)
+                .contains(where: \.type.typeDescription.propertyType.isInstantiator)
             if decoratesInstantiator {
                 throw InjectableError.fulfilledByTypeUseOnInstantiator
             }
@@ -65,8 +66,8 @@ public struct InjectableMacro: PeerMacro {
         } else {
             let decoratesErasedInstantiator = variableDecl
                 .bindings
-                .compactMap { $0.typeAnnotation }
-                .contains(where: { $0.type.typeDescription.propertyType.isErasedInstantiator })
+                .compactMap(\.typeAnnotation)
+                .contains(where: \.type.typeDescription.propertyType.isErasedInstantiator)
             if decoratesErasedInstantiator {
                 throw InjectableError.erasedInstantiatorUsedWithoutFulfilledByType
             }
@@ -95,7 +96,7 @@ public struct InjectableMacro: PeerMacro {
 
         if variableDecl.bindingSpecifier.text != TokenSyntax.keyword(.let).text,
            // If there is only one attribute, we know the variable is not decorated with a property wrapper.
-            variableDecl.attributes.count == 1
+           variableDecl.attributes.count == 1
         {
             context.diagnose(Diagnostic(
                 node: variableDecl.bindingSpecifier,
@@ -108,7 +109,7 @@ public struct InjectableMacro: PeerMacro {
                             leadingTrivia: .space,
                             trailingTrivia: .space
                         ))
-                    )
+                    ),
                 ]
             ))
         }

@@ -19,7 +19,6 @@
 // SOFTWARE.
 
 public struct ImportStatement: Codable, Hashable {
-
     // MARK: Initialization
 
     public init(

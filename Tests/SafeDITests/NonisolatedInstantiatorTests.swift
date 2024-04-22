@@ -24,14 +24,14 @@ import XCTest
 
 final class NonisolatedInstantiatorTests: XCTestCase {
     func test_instantiate_returnsNewObjectEachTime() {
-        let systemUnderTest = NonisolatedInstantiator() { BuiltProduct() }
+        let systemUnderTest = NonisolatedInstantiator { BuiltProduct() }
         let firstBuiltProduct = systemUnderTest.instantiate()
         let secondBuiltProduct = systemUnderTest.instantiate()
         XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
     }
 
     func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() {
-        let systemUnderTest = NonisolatedInstantiator() { id in BuiltProductWithForwardedArgument(id: id) }
+        let systemUnderTest = NonisolatedInstantiator { id in BuiltProductWithForwardedArgument(id: id) }
         let id = UUID().uuidString
         let firstBuiltProduct = systemUnderTest.instantiate(id)
         let secondBuiltProduct = systemUnderTest.instantiate(id)
@@ -49,7 +49,6 @@ final class NonisolatedInstantiatorTests: XCTestCase {
 
         typealias ForwardedProperties = String
 
-        @Forwarded
-        let id: String
+        @Forwarded let id: String
     }
 }

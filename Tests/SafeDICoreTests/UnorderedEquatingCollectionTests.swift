@@ -23,7 +23,6 @@ import XCTest
 @testable import SafeDICore
 
 final class UnorderedEquatingCollectionTests: XCTestCase {
-
     func test_makeIterator_iteratesInOrder() {
         for (index, value) in UnorderedEquatingCollection([1, 2, 3]).enumerated() {
             if index == 0 {

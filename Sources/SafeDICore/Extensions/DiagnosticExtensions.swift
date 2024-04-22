@@ -28,8 +28,8 @@ extension Diagnostic {
         error: some DiagnosticError,
         highlights: [Syntax]? = nil,
         notes: [Note] = [],
-        changes: [FixIt.Change])
-    {
+        changes: [FixIt.Change]
+    ) {
         self.init(
             node: node,
             position: position,
@@ -39,7 +39,9 @@ extension Diagnostic {
             fixIts: [
                 FixIt(
                     message: error.fixIt,
-                    changes: changes)
-            ])
+                    changes: changes
+                ),
+            ]
+        )
     }
 }

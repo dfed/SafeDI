@@ -18,14 +18,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import SwiftSyntax
 import SwiftParser
+import SwiftSyntax
 import XCTest
 
 @testable import SafeDICore
 
 final class FileVisitorTests: XCTestCase {
-
     func test_walk_findsInstantiable() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
@@ -74,10 +73,10 @@ final class FileVisitorTests: XCTestCase {
                                 typeDescription: .simple(name: "NetworkService")
                             ),
                             source: .received
-                        )
+                        ),
                     ],
                     declarationType: .classType
-                )
+                ),
             ]
         )
         XCTAssertEqual(
@@ -135,7 +134,7 @@ final class FileVisitorTests: XCTestCase {
                                 typeDescription: .simple(name: "NetworkService")
                             ),
                             source: .received
-                        )
+                        ),
                     ],
                     declarationType: .classType
                 ),
@@ -145,7 +144,7 @@ final class FileVisitorTests: XCTestCase {
                     additionalInstantiables: nil,
                     dependencies: [],
                     declarationType: .structType
-                )
+                ),
             ]
         )
         XCTAssertEqual(
@@ -174,17 +173,17 @@ final class FileVisitorTests: XCTestCase {
                     instantiableType: .simple(name: "OuterLevel"),
                     initializer: Initializer(arguments: []),
                     additionalInstantiables: [
-                        .simple(name: "SomeProtocol")
+                        .simple(name: "SomeProtocol"),
                     ],
                     dependencies: [],
                     declarationType: .structType
-                )
+                ),
             ]
         )
         XCTAssertEqual(
             fileVisitor.nestedInstantiableDecoratedTypeDescriptions,
             [
-                .simple(name: "InnerLevel")
+                .simple(name: "InnerLevel"),
             ]
         )
     }
@@ -204,7 +203,7 @@ final class FileVisitorTests: XCTestCase {
         XCTAssertEqual(
             fileVisitor.nestedInstantiableDecoratedTypeDescriptions,
             [
-                .simple(name: "InnerLevel")
+                .simple(name: "InnerLevel"),
             ]
         )
     }

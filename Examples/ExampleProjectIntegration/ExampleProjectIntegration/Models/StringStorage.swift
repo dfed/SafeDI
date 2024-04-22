@@ -28,7 +28,6 @@ public protocol StringStorage {
 
 @Instantiable(fulfillingAdditionalTypes: [StringStorage.self])
 extension UserDefaults: Instantiable, StringStorage {
-
     public static func instantiate() -> UserDefaults {
         .standard
     }

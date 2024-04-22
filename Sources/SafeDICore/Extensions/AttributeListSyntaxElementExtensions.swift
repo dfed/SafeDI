@@ -21,7 +21,6 @@
 import SwiftSyntax
 
 extension AttributeListSyntax.Element {
-
     var instantiableMacro: AttributeSyntax? {
         attributeIfNameEquals(InstantiableVisitor.macroName)
     }

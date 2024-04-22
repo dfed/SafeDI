@@ -23,7 +23,6 @@ import XCTest
 @testable import SafeDICore
 
 final class InitializerTests: XCTestCase {
-
     func test_generateSafeDIInitializer_throwsWhenInitializerIsNotPublicOrOpen() throws {
         let initializer = Initializer(
             isPublicOrOpen: false,
@@ -84,7 +83,7 @@ final class InitializerTests: XCTestCase {
                     innerLabel: "variant",
                     typeDescription: .simple(name: "Variant"),
                     hasDefaultValue: false
-                )
+                ),
             ]
         )
 
@@ -97,7 +96,7 @@ final class InitializerTests: XCTestCase {
                             typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded
-                    )
+                    ),
                 ]
             )
         ) { error in
@@ -113,7 +112,7 @@ final class InitializerTests: XCTestCase {
                     innerLabel: "variant",
                     typeDescription: .simple(name: "Variant"),
                     hasDefaultValue: false
-                )
+                ),
             ]
         )
 
@@ -126,7 +125,7 @@ final class InitializerTests: XCTestCase {
                             typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded
-                    )
+                    ),
                 ]
             )
         ) { error in
@@ -141,7 +140,7 @@ final class InitializerTests: XCTestCase {
                     innerLabel: "variant",
                     typeDescription: .simple(name: "Variant"),
                     hasDefaultValue: false
-                )
+                ),
             ]
         )
 
@@ -164,7 +163,7 @@ final class InitializerTests: XCTestCase {
                             typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded
-                    )
+                    ),
                 ]
             )
         ) { error in
@@ -179,7 +178,7 @@ final class InitializerTests: XCTestCase {
                     innerLabel: "someVariant",
                     typeDescription: .simple(name: "Variant"),
                     hasDefaultValue: false
-                )
+                ),
             ]
         )
 
@@ -192,7 +191,7 @@ final class InitializerTests: XCTestCase {
                             typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded
-                    )
+                    ),
                 ]
             )
         ) { error in
@@ -207,7 +206,7 @@ final class InitializerTests: XCTestCase {
                     innerLabel: "variant",
                     typeDescription: .simple(name: "NotThatVariant"),
                     hasDefaultValue: false
-                )
+                ),
             ]
         )
 
@@ -220,7 +219,7 @@ final class InitializerTests: XCTestCase {
                             typeDescription: .simple(name: "Variant")
                         ),
                         source: .forwarded
-                    )
+                    ),
                 ]
             )
         ) { error in

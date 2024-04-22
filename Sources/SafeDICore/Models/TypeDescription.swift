@@ -72,10 +72,10 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             if generics.isEmpty {
                 return name
             } else {
-                return "\(name)<\(generics.map { $0.asSource }.joined(separator: ", "))>"
+                return "\(name)<\(generics.map(\.asSource).joined(separator: ", "))>"
             }
         case let .composition(types):
-            return types.map { $0.asSource }.joined(separator: " & ")
+            return types.map(\.asSource).joined(separator: " & ")
         case let .optional(type):
             return "\(type.wrappedIfAmbiguous.asSource)?"
         case let .implicitlyUnwrappedOptional(type):
@@ -84,7 +84,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             if generics.isEmpty {
                 return "\(parentType.asSource).\(name)"
             } else {
-                return "\(parentType.asSource).\(name)<\(generics.map { $0.asSource }.joined(separator: ", "))>"
+                return "\(parentType.asSource).\(name)<\(generics.map(\.asSource).joined(separator: ", "))>"
             }
         case let .metatype(type, isType):
             return "\(type.wrappedIfAmbiguous.asSource).\(isType ? "Type" : "Protocol")"
@@ -122,16 +122,16 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             return "[\(key.asSource): \(value.asSource)]"
         case let .tuple(types):
             return """
-                (\(types.map {
-                    if let label = $0.label {
-                        "\(label): \($0.typeDescription.asSource)"
-                    } else {
-                        $0.typeDescription.asSource
-                    }
-                }.joined(separator: ", ")))
-                """
+            (\(types.map {
+                if let label = $0.label {
+                    "\(label): \($0.typeDescription.asSource)"
+                } else {
+                    $0.typeDescription.asSource
+                }
+            }.joined(separator: ", ")))
+            """
         case let .closure(arguments, isAsync, doesThrow, returnType):
-            return "(\(arguments.map { $0.asSource }.joined(separator: ", ")))\([isAsync ? " async" : "", doesThrow ? " throws" : ""].filter { !$0.isEmpty }.joined()) -> \(returnType.asSource)"
+            return "(\(arguments.map(\.asSource).joined(separator: ", ")))\([isAsync ? " async" : "", doesThrow ? " throws" : ""].filter { !$0.isEmpty }.joined()) -> \(returnType.asSource)"
         case let .unknown(text):
             return text
         }
@@ -147,7 +147,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         /// The `Void` spelling.
         case identifier
 
-        public static func == (lhs: VoidSpelling, rhs: VoidSpelling) -> Bool {
+        public static func == (_: VoidSpelling, _: VoidSpelling) -> Bool {
             // Void is functionally equivalent no matter how it is spelled.
             true
         }
@@ -203,19 +203,19 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     public var isOptional: Bool {
         switch self {
         case .any,
-                .array,
-                .attributed,
-                .closure,
-                .composition,
-                .dictionary,
-                .implicitlyUnwrappedOptional,
-                .metatype,
-                .nested,
-                .simple,
-                .some,
-                .tuple,
-                .unknown,
-                .void:
+             .array,
+             .attributed,
+             .closure,
+             .composition,
+             .dictionary,
+             .implicitlyUnwrappedOptional,
+             .metatype,
+             .nested,
+             .simple,
+             .some,
+             .tuple,
+             .unknown,
+             .void:
             false
         case .optional:
             true
@@ -225,19 +225,19 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     var isUnknown: Bool {
         switch self {
         case .any,
-                .array,
-                .attributed,
-                .closure,
-                .composition,
-                .dictionary,
-                .implicitlyUnwrappedOptional,
-                .metatype,
-                .nested,
-                .optional,
-                .simple,
-                .some,
-                .tuple,
-                .void:
+             .array,
+             .attributed,
+             .closure,
+             .composition,
+             .dictionary,
+             .implicitlyUnwrappedOptional,
+             .metatype,
+             .nested,
+             .optional,
+             .simple,
+             .some,
+             .tuple,
+             .void:
             false
         case .unknown:
             true
@@ -264,11 +264,11 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 self
             }
         case let .any(typeDescription),
-            let .implicitlyUnwrappedOptional(typeDescription),
-            let .optional(typeDescription),
-            let .some(typeDescription):
+             let .implicitlyUnwrappedOptional(typeDescription),
+             let .optional(typeDescription),
+             let .some(typeDescription):
             typeDescription.asInstantiatedType
-        case .array, .attributed,  .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown, .void:
+        case .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown, .void:
             self
         }
     }
@@ -289,7 +289,6 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 // MARK: - TypeSyntax
 
 extension TypeSyntax {
-
     /// - Returns: the type description for the receiver.
     public var typeDescription: TypeDescription {
         if let typeIdentifier = IdentifierTypeSyntax(self) {
@@ -297,7 +296,7 @@ extension TypeSyntax {
             if let genericArgumentClause = typeIdentifier.genericArgumentClause {
                 genericTypeVisitor.walk(genericArgumentClause)
             }
-            if genericTypeVisitor.genericArguments.isEmpty && typeIdentifier.name.text == "Void" {
+            if genericTypeVisitor.genericArguments.isEmpty, typeIdentifier.name.text == "Void" {
                 return .void(.identifier)
             } else {
                 return .simple(
@@ -318,7 +317,7 @@ extension TypeSyntax {
             )
 
         } else if let typeIdentifiers = CompositionTypeSyntax(self) {
-            return .composition(UnorderedEquatingCollection(typeIdentifiers.elements.map { $0.type.typeDescription }))
+            return .composition(UnorderedEquatingCollection(typeIdentifiers.elements.map(\.type.typeDescription)))
 
         } else if let typeIdentifier = OptionalTypeSyntax(self) {
             return .optional(typeIdentifier.wrappedType.typeDescription)
@@ -336,7 +335,8 @@ extension TypeSyntax {
         } else if let typeIdentifier = MetatypeTypeSyntax(self) {
             return .metatype(
                 typeIdentifier.baseType.typeDescription,
-                isType: typeIdentifier.metatypeSpecifier.text == "Type")
+                isType: typeIdentifier.metatypeSpecifier.text == "Type"
+            )
 
         } else if let typeIdentifier = AttributedTypeSyntax(self) {
             let attributes: [String] = typeIdentifier.attributes.compactMap {
@@ -381,7 +381,7 @@ extension TypeSyntax {
 
         } else if let typeIdentifier = FunctionTypeSyntax(self) {
             return .closure(
-                arguments: typeIdentifier.parameters.map { $0.type.typeDescription },
+                arguments: typeIdentifier.parameters.map(\.type.typeDescription),
                 isAsync: typeIdentifier.effectSpecifiers?.asyncSpecifier != nil,
                 doesThrow: typeIdentifier.effectSpecifiers?.throwsSpecifier != nil,
                 returnType: typeIdentifier.returnClause.type.typeDescription
@@ -527,7 +527,6 @@ extension ExprSyntax {
 // MARK: - GenericArgumentVisitor
 
 private final class GenericArgumentVisitor: SyntaxVisitor {
-
     private(set) var genericArguments = [TypeDescription]()
 
     override func visit(_ node: GenericArgumentSyntax) -> SyntaxVisitorContinueKind {

@@ -58,18 +58,13 @@ public struct NotesApp: Instantiable, App {
     }
 
     /// A private property that is instantiated when the app is instantiated and manages the User state.
-    @Instantiated
-    private let userService: any UserService
+    @Instantiated private let userService: any UserService
     /// A private property that is instantiated when the app is instantiated and manages the persistence of strings.
-    @Instantiated
-    private let stringStorage: StringStorage
+    @Instantiated private let stringStorage: StringStorage
     /// A private property that is instantiated when the app is instantiated and can create a NameEntryView on demand.
-    @Instantiated
-    private let nameEntryViewBuilder: Instantiator<NameEntryView>
+    @Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
     /// A private property that is instantiated when the app is instantiated and can create a NoteView on demand.
-    @Instantiated
-    private let noteViewBuilder: Instantiator<NoteView>
+    @Instantiated private let noteViewBuilder: Instantiator<NoteView>
     /// A mechanism for observing updates to the user service.
-    @ObservedObject
-    private var observedUserService: AnyObservableObject
+    @ObservedObject private var observedUserService: AnyObservableObject
 }

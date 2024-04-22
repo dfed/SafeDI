@@ -23,8 +23,5 @@ import SharedModule
 
 @Instantiable
 public actor GrandchildB: Instantiable {
-
-    @Received
-    let shared: SharedThing
-
+    @Received let shared: SharedThing
 }

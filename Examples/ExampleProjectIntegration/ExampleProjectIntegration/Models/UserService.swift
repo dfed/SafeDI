@@ -47,6 +47,5 @@ public final class DefaultUserService: Instantiable, UserService {
     }
 
     @Received
-    @Published
-    private var stringStorage: StringStorage
+    @Published private var stringStorage: StringStorage
 }

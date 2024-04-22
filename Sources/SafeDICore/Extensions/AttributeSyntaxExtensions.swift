@@ -21,7 +21,6 @@
 import SwiftSyntax
 
 extension AttributeSyntax {
-
     public var fulfillingAdditionalTypes: ExprSyntax? {
         guard
             let arguments,
@@ -36,7 +35,7 @@ extension AttributeSyntax {
     }
 
     public var fulfilledByDependencyNamed: ExprSyntax? {
-        guard 
+        guard
             let arguments,
             let labeledExpressionList = LabeledExprListSyntax(arguments),
             let firstLabeledExpression = labeledExpressionList.first,
@@ -107,9 +106,9 @@ extension AttributeSyntax {
             let stringLiteral = StringLiteralExprSyntax(expression),
             let firstStringSegement = stringLiteral.segments.firstStringSegment
         {
-            return TypeSyntax(stringLiteral: firstStringSegement).typeDescription
+            TypeSyntax(stringLiteral: firstStringSegement).typeDescription
         } else {
-            return ofType?.typeDescription
+            ofType?.typeDescription
         }
     }
 

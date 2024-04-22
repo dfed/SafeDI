@@ -34,7 +34,7 @@ final class ErasedInstantiatorTests: XCTestCase {
 
     func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() async {
         await Task { @MainActor in
-            let systemUnderTest = ErasedInstantiator() { id in BuiltProductWithForwardedArgument(id: id) }
+            let systemUnderTest = ErasedInstantiator { id in BuiltProductWithForwardedArgument(id: id) }
             let id = UUID().uuidString
             let firstBuiltProduct = systemUnderTest.instantiate(id)
             let secondBuiltProduct = systemUnderTest.instantiate(id)
@@ -53,7 +53,6 @@ final class ErasedInstantiatorTests: XCTestCase {
 
         typealias ForwardedProperties = String
 
-        @Forwarded
-        let id: String
+        @Forwarded let id: String
     }
 }

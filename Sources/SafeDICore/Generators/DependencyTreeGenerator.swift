@@ -21,7 +21,6 @@
 import Collections
 
 public final class DependencyTreeGenerator {
-
     // MARK: Initialization
 
     public init(
@@ -76,7 +75,6 @@ public final class DependencyTreeGenerator {
     // MARK: - DependencyTreeGeneratorError
 
     private enum DependencyTreeGeneratorError: Error, CustomStringConvertible {
-
         case noInstantiableFound(TypeDescription)
         case unfulfillableProperties([UnfulfillableProperty])
         case instantiableHasForwardedProperty(property: Property, instantiableWithForwardedProperty: Instantiable, parent: Instantiable)
@@ -90,9 +88,9 @@ public final class DependencyTreeGenerator {
                 \(unfulfillableProperties.map {
                     """
                     @\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(([$0.instantiable] + $0.parentStack)
-                    .reversed()
-                    .map(\.concreteInstantiable.asSource)
-                    .joined(separator: " -> "))
+                        .reversed()
+                        .map(\.concreteInstantiable.asSource)
+                        .joined(separator: " -> "))
                     """
                 }.joined(separator: "\n"))
                 """
@@ -127,11 +125,11 @@ public final class DependencyTreeGenerator {
             .flatMap {
                 if let wholeModuleImport = $0.value.first(where: {
                     $0.kind.isEmpty
-                    && $0.type.isEmpty
+                        && $0.type.isEmpty
                 }) {
-                    return [wholeModuleImport]
+                    [wholeModuleImport]
                 } else {
-                    return Array($0.value)
+                    Array($0.value)
                 }
             }
             .map {
@@ -202,7 +200,7 @@ public final class DependencyTreeGenerator {
     private func createTypeDescriptionToScopeMapping() throws -> [TypeDescription: Scope] {
         // Create the mapping.
         let typeDescriptionToScopeMap: [TypeDescription: Scope] = reachableTypeDescriptions
-            .reduce(into: [TypeDescription: Scope](), { partialResult, typeDescription in
+            .reduce(into: [TypeDescription: Scope]()) { partialResult, typeDescription in
                 guard let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription] else {
                     // We can't find an instantiable for this type.
                     // This is bad, but we handle this error in `validateReachableTypeDescriptions()`.
@@ -216,7 +214,7 @@ public final class DependencyTreeGenerator {
                 for instantiableType in instantiable.instantiableTypes {
                     partialResult[instantiableType] = scope
                 }
-            })
+            }
 
         // Populate the propertiesToGenerate on each scope.
         for scope in Set(typeDescriptionToScopeMap.values) {
@@ -276,12 +274,12 @@ public final class DependencyTreeGenerator {
                         switch $0.source {
                         case .instantiated, .forwarded:
                             // The source is being injected into the dependency tree.
-                            return true
+                            true
                         case .aliased:
                             // This property is being re-injected into the dependency tree under a new alias.
-                            return true
+                            true
                         case .received:
-                            return false
+                            false
                         }
                     }
                     .map(\.property)
@@ -289,7 +287,7 @@ public final class DependencyTreeGenerator {
             for receivedProperty in scope.receivedProperties {
                 let parentContainsProperty = receivableProperties.contains(receivedProperty)
                 let propertyIsCreatedAtThisScope = createdProperties.contains(receivedProperty)
-                if !parentContainsProperty && !propertyIsCreatedAtThisScope {
+                if !parentContainsProperty, !propertyIsCreatedAtThisScope {
                     if instantiables.elements.isEmpty {
                         // This property's scope is not a real root instantiable! Remove it from the list.
                         rootInstantiables.remove(scope.instantiable.concreteInstantiable)
@@ -298,7 +296,8 @@ public final class DependencyTreeGenerator {
                         unfulfillableProperties.insert(.init(
                             property: receivedProperty,
                             instantiable: scope.instantiable,
-                            parentStack: instantiables.elements)
+                            parentStack: instantiables.elements
+                        )
                         )
                     }
                 }
@@ -362,6 +361,7 @@ extension Dependency {
             false
         }
     }
+
     fileprivate var isForwarded: Bool {
         switch source {
         case .forwarded:
@@ -374,7 +374,7 @@ extension Dependency {
 
 // MARK: - Collection
 
-extension Collection where Element == Dependency {
+extension Collection<Dependency> {
     fileprivate var couldRepresentRoot: Bool {
         first(where: {
             switch $0.source {

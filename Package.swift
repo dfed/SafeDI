@@ -1,8 +1,8 @@
 // swift-tools-version: 5.9
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
-import PackageDescription
 import CompilerPluginSupport
+import PackageDescription
 
 let package = Package(
     name: "SafeDI",
@@ -43,7 +43,7 @@ let package = Package(
             name: "SafeDITests",
             dependencies: [
                 "SafeDI",
-                "SafeDICore"
+                "SafeDICore",
             ]
         ),
         .macro(

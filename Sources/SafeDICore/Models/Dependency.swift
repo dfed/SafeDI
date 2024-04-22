@@ -23,7 +23,6 @@ import SwiftSyntax
 /// A representation of a dependency.
 /// e.g. `@Instantiated let myService: MyService`
 public struct Dependency: Codable, Hashable {
-
     // MARK: Initialization
 
     public init(

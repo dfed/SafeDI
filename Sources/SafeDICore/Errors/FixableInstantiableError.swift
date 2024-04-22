@@ -82,17 +82,17 @@ public enum FixableInstantiableError: DiagnosticError {
         var severity: DiagnosticSeverity {
             switch error {
             case .missingInstantiableConformance,
-                    .missingRequiredInstantiateMethod,
-                    .missingAttributes,
-                    .disallowedGenericParameter,
-                    .disallowedEffectSpecifiers,
-                    .incorrectReturnType,
-                    .disallowedGenericWhereClause,
-                    .dependencyHasTooManyAttributes,
-                    .dependencyHasInitializer,
-                    .missingPublicOrOpenAttribute,
-                    .missingRequiredInitializer:
-                    .error
+                 .missingRequiredInstantiateMethod,
+                 .missingAttributes,
+                 .disallowedGenericParameter,
+                 .disallowedEffectSpecifiers,
+                 .incorrectReturnType,
+                 .disallowedGenericWhereClause,
+                 .dependencyHasTooManyAttributes,
+                 .dependencyHasInitializer,
+                 .missingPublicOrOpenAttribute,
+                 .missingRequiredInitializer:
+                .error
             }
         }
 
