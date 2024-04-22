@@ -181,22 +181,22 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         switch self {
         case let .simple(name, _):
             if name == Dependency.instantiatorType {
-                return .instantiator
+                .instantiator
             } else if name == Dependency.erasedInstantiatorType {
-                return .erasedInstantiator
+                .erasedInstantiator
             } else if name == Dependency.nonisolatedInstantiatorType {
-                return .nonisolatedInstantiator
+                .nonisolatedInstantiator
             } else if name == Dependency.nonisolatedErasedInstantiatorType {
-                return .nonisolatedErasedInstantiator
+                .nonisolatedErasedInstantiator
             } else {
-                return .constant
+                .constant
             }
         case
             let .optional(type),
             let .implicitlyUnwrappedOptional(type):
-            return type.propertyType
+            type.propertyType
         case .any, .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .some, .tuple, .unknown, .void:
-            return .constant
+            .constant
         }
     }
 
@@ -216,9 +216,9 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 .tuple,
                 .unknown,
                 .void:
-            return false
+            false
         case .optional:
-            return true
+            true
         }
     }
 
@@ -238,9 +238,9 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 .some,
                 .tuple,
                 .void:
-            return false
+            false
         case .unknown:
-            return true
+            true
         }
     }
 
@@ -253,23 +253,23 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             {
                 // This is a type that is lazily instantiated.
                 // The first generic is the built type.
-                return builtType
+                builtType
             } else if name == Dependency.erasedInstantiatorType || name == Dependency.nonisolatedErasedInstantiatorType,
                       let builtType = generics.dropFirst().first
             {
                 // This is a type that is lazily instantiated with explicitly declared forwarded arguments due to type erasure.
                 // The second generic is the built type.
-                return builtType
+                builtType
             } else {
-                return self
+                self
             }
         case let .any(typeDescription),
             let .implicitlyUnwrappedOptional(typeDescription),
             let .optional(typeDescription),
             let .some(typeDescription):
-            return typeDescription.asInstantiatedType
+            typeDescription.asInstantiatedType
         case .array, .attributed,  .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown, .void:
-            return self
+            self
         }
     }
 
