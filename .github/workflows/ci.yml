@@ -105,3 +105,13 @@ jobs:
         uses: actions/checkout@v4
       - name: Validate Markdown
         uses: gaurav-nelson/github-action-markdown-link-check@v1
+
+  lint-swift:
+    name: Lint Swift
+    runs-on: ubuntu-latest
+    container: swift:5.9
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+      - name: Lint Swift
+        run: swift package plugin --allow-writing-to-package-directory swiftformat
