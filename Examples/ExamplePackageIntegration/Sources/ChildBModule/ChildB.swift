@@ -24,11 +24,7 @@ import SharedModule
 
 @Instantiable
 public final class ChildB: Instantiable {
+    @Received let shared: SharedThing
 
-    @Received
-    let shared: SharedThing
-
-    @Instantiated
-    let grandchildB: GrandchildB
-
+    @Instantiated let grandchildB: GrandchildB
 }

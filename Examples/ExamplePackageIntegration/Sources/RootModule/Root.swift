@@ -27,21 +27,15 @@ import SharedModule
 
 @Instantiable
 public final class Root: Instantiable {
-
     static let shared = Root()
 
-    @Instantiated
-    let childA: ChildA
+    @Instantiated let childA: ChildA
 
-    @Instantiated
-    let childB: ChildB
+    @Instantiated let childB: ChildB
 
-    @Instantiated
-    let childC: ChildC
+    @Instantiated let childC: ChildC
 
-    @Instantiated
-    let shared: SharedThing
+    @Instantiated let shared: SharedThing
 
-    @Instantiated
-    let userDefaults: UserDefaults
+    @Instantiated let userDefaults: UserDefaults
 }

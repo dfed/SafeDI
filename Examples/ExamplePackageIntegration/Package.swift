@@ -10,16 +10,17 @@ let package = Package(
         .iOS(.v13),
         .tvOS(.v13),
         .watchOS(.v6),
-        .macCatalyst(.v13)
+        .macCatalyst(.v13),
     ],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "ExamplePackageIntegration",
-            targets: ["RootModule"]),
+            targets: ["RootModule"]
+        ),
     ],
     dependencies: [
-        .package(path: "../../")
+        .package(path: "../../"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -65,7 +66,7 @@ let package = Package(
             name: "GrandchildrenModule",
             dependencies: [
                 "SafeDI",
-                "SharedModule"
+                "SharedModule",
             ]
         ),
         .target(

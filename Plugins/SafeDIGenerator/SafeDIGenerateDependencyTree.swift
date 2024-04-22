@@ -5,9 +5,8 @@ import PackagePlugin
 struct SafeDIGenerateDependencyTree: BuildToolPlugin {
     func createBuildCommands(
         context: PluginContext,
-        target: Target)
-    async throws -> [Command]
-    {
+        target: Target
+    ) async throws -> [Command] {
         guard let sourceTarget = target as? SourceModuleTarget else {
             return []
         }
@@ -38,19 +37,18 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
         let arguments = [
             inputSourcesFilePath,
             "--dependency-tree-output",
-            outputSwiftFile.string
+            outputSwiftFile.string,
         ]
 
-        let toolPath: PackagePlugin.Path
-        if FileManager.default.fileExists(atPath: Self.armMacBrewInstallLocation) {
+        let toolPath: PackagePlugin.Path = if FileManager.default.fileExists(atPath: Self.armMacBrewInstallLocation) {
             // SafeDITool has been installed via homebrew on an ARM Mac.
-            toolPath = PackagePlugin.Path(Self.armMacBrewInstallLocation)
+            PackagePlugin.Path(Self.armMacBrewInstallLocation)
         } else if FileManager.default.fileExists(atPath: Self.intelMacBrewInstallLocation) {
             // SafeDITool has been installed via homebrew on an Intel Mac.
-            toolPath = PackagePlugin.Path(Self.intelMacBrewInstallLocation)
+            PackagePlugin.Path(Self.intelMacBrewInstallLocation)
         } else {
             // Fall back to the just-in-time built tool.
-            toolPath = try context.tool(named: "SafeDITool").path
+            try context.tool(named: "SafeDITool").path
         }
 
         return [
@@ -60,7 +58,8 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                 arguments: arguments,
                 environment: [:],
                 inputFiles: targetSwiftFiles + dependenciesSourceFiles,
-                outputFiles: [outputSwiftFile])
+                outputFiles: [outputSwiftFile]
+            ),
         ]
     }
 
@@ -69,7 +68,6 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 }
 
 extension Target {
-
     var sourceModuleRecursiveDependencies: [SwiftSourceModuleTarget] {
         recursiveTargetDependencies.compactMap {
             // Since we only understand Swift files, we only care about SwiftSourceModuleTargets.
@@ -80,14 +78,14 @@ extension Target {
             // We only care about first-party code. Ignore third-party dependencies.
             guard
                 swiftModule
-                    .directory
-                    // Removing the module name.
-                    .removingLastComponent()
-                    // Removing 'Sources'.
-                    .removingLastComponent()
-                    // Removing the package name.
-                    .removingLastComponent()
-                    .lastComponent != "checkouts"
+                .directory
+                // Removing the module name.
+                .removingLastComponent()
+                // Removing 'Sources'.
+                .removingLastComponent()
+                // Removing the package name.
+                .removingLastComponent()
+                .lastComponent != "checkouts"
             else {
                 return nil
             }
@@ -97,66 +95,68 @@ extension Target {
 }
 
 #if canImport(XcodeProjectPlugin)
-import XcodeProjectPlugin
+    import XcodeProjectPlugin
 
-extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
-    func createBuildCommands(
-        context: XcodeProjectPlugin.XcodePluginContext,
-        target: XcodeProjectPlugin.XcodeTarget)
-    throws -> [PackagePlugin.Command]
-    {
-        // As of Xcode 15.0.1, Swift Package Plugins in Xcode are unable
-        // to inspect target dependencies. As a result, this Xcode plugin
-        // only works if it is running on a single-module project, or if
-        // all `@Instantiable`-decorated types are in the target module.
-        // https://github.com/apple/swift-package-manager/issues/6003
-        let inputSwiftFiles = target
-            .inputFiles
-            .filter { $0.path.extension == "swift" }
-            .map(\.path)
-        guard !inputSwiftFiles.isEmpty else {
-            // There are no Swift files in this module!
-            return []
-        }
-
-        let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
-        let inputSourcesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.csv").string
-        try Data(
-            inputSwiftFiles
-                .map(\.string)
-                .joined(separator: ",")
-                .utf8
+    extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
+        func createBuildCommands(
+            context: XcodeProjectPlugin.XcodePluginContext,
+            target: XcodeProjectPlugin.XcodeTarget
         )
-        .write(toPath: inputSourcesFilePath)
-        let arguments = [
-            inputSourcesFilePath,
-            "--dependency-tree-output",
-            outputSwiftFile.string
-        ]
+            throws -> [PackagePlugin.Command]
+        {
+            // As of Xcode 15.0.1, Swift Package Plugins in Xcode are unable
+            // to inspect target dependencies. As a result, this Xcode plugin
+            // only works if it is running on a single-module project, or if
+            // all `@Instantiable`-decorated types are in the target module.
+            // https://github.com/apple/swift-package-manager/issues/6003
+            let inputSwiftFiles = target
+                .inputFiles
+                .filter { $0.path.extension == "swift" }
+                .map(\.path)
+            guard !inputSwiftFiles.isEmpty else {
+                // There are no Swift files in this module!
+                return []
+            }
 
-        return [
-            .buildCommand(
-                displayName: "SafeDIGenerateDependencyTree",
-                executable: try context.tool(named: "SafeDITool").path,
-                arguments: arguments,
-                environment: [:],
-                inputFiles: inputSwiftFiles,
-                outputFiles: [outputSwiftFile])
-        ]
+            let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
+            let inputSourcesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.csv").string
+            try Data(
+                inputSwiftFiles
+                    .map(\.string)
+                    .joined(separator: ",")
+                    .utf8
+            )
+            .write(toPath: inputSourcesFilePath)
+            let arguments = [
+                inputSourcesFilePath,
+                "--dependency-tree-output",
+                outputSwiftFile.string,
+            ]
+
+            return try [
+                .buildCommand(
+                    displayName: "SafeDIGenerateDependencyTree",
+                    executable: context.tool(named: "SafeDITool").path,
+                    arguments: arguments,
+                    environment: [:],
+                    inputFiles: inputSwiftFiles,
+                    outputFiles: [outputSwiftFile]
+                ),
+            ]
+        }
     }
-}
 #endif
 
 extension Data {
     fileprivate func write(toPath filePath: String) throws {
-#if os(Linux)
-        try write(to: URL(fileURLWithPath: filePath))
-#else
-        if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
-            try write(to: URL(filePath: filePath))
-        } else {
+        #if os(Linux)
             try write(to: URL(fileURLWithPath: filePath))
-        }
-#endif
+        #else
+            if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
+                try write(to: URL(filePath: filePath))
+            } else {
+                try write(to: URL(fileURLWithPath: filePath))
+            }
+        #endif
     }
 }

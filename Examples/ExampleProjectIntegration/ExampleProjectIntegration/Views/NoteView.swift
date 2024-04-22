@@ -47,15 +47,11 @@ public struct NoteView: Instantiable, View {
         .padding()
     }
 
-    @Forwarded
-    private let userName: String
-    @Received
-    private let userService: any UserService
-    @Received
-    private let stringStorage: StringStorage
+    @Forwarded private let userName: String
+    @Received private let userService: any UserService
+    @Received private let stringStorage: StringStorage
 
-    @State
-    private var note: String = ""
+    @State private var note: String = ""
 }
 
 #Preview {
