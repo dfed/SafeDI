@@ -777,14 +777,46 @@ final class InstantiableMacroTests: XCTestCase {
         assertMacro {
             """
             @Instantiable
-            public enum ExampleService {}
+            public enum ExampleService: Instantiable {}
             """
         } diagnostics: {
             """
             @Instantiable
             ┬────────────
             ╰─ 🛑 @Instantiable must decorate an extension on a type or a class, struct, or actor declaration
-            public enum ExampleService {}
+            public enum ExampleService: Instantiable {}
+            """
+        }
+    }
+
+    func test_declaration_throwsErrorWhenFulfillingAdditionalTypesIncludesAShortformOptional() {
+        assertMacro {
+            """
+            @Instantiable(fulfillingAdditionalTypes: [AnyObject?.self])
+            public final class ExampleService: Instantiable {}
+            """
+        } diagnostics: {
+            """
+            @Instantiable(fulfillingAdditionalTypes: [AnyObject?.self])
+            ┬──────────────────────────────────────────────────────────
+            ╰─ 🛑 The argument `fulfillingAdditionalTypes` must not include optionals
+            public final class ExampleService: Instantiable {}
+            """
+        }
+    }
+
+    func test_declaration_throwsErrorWhenFulfillingAdditionalTypesIncludesALongformOptional() {
+        assertMacro {
+            """
+            @Instantiable(fulfillingAdditionalTypes: [Optional<AnyObject>.self])
+            public final class ExampleService: Instantiable {}
+            """
+        } diagnostics: {
+            """
+            @Instantiable(fulfillingAdditionalTypes: [Optional<AnyObject>.self])
+            ┬───────────────────────────────────────────────────────────────────
+            ╰─ 🛑 The argument `fulfillingAdditionalTypes` must not include optionals
+            public final class ExampleService: Instantiable {}
             """
         }
     }
@@ -794,7 +826,7 @@ final class InstantiableMacroTests: XCTestCase {
             """
             let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
             @Instantiable(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
-            public final class ExampleService {}
+            public final class ExampleService: Instantiable {}
             """
         } diagnostics: {
             """
@@ -802,7 +834,7 @@ final class InstantiableMacroTests: XCTestCase {
             @Instantiable(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
             ┬──────────────────────────────────────────────────────────────────
             ╰─ 🛑 The argument `fulfillingAdditionalTypes` must be an inlined array
-            public final class ExampleService {}
+            public final class ExampleService: Instantiable {}
             """
         }
     }
@@ -811,14 +843,14 @@ final class InstantiableMacroTests: XCTestCase {
         assertMacro {
             """
             @Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
-            public final class ExampleService {}
+            public final class ExampleService: Instantiable {}
             """
         } diagnostics: {
             """
             @Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
             ┬───────────────────────────────────────────────────────────────
             ╰─ 🛑 The argument `fulfillingAdditionalTypes` must be an inlined array
-            public final class ExampleService {}
+            public final class ExampleService: Instantiable {}
             """
         }
     }
