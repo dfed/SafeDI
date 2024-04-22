@@ -200,7 +200,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         }
     }
 
-    var isOptional: Bool {
+    public var isOptional: Bool {
         switch self {
         case .any,
                 .array,
@@ -438,10 +438,17 @@ extension ExprSyntax {
             genericTypeVisitor.walk(genericExpr.genericArgumentClause)
             switch genericExpr.expression.typeDescription {
             case let .simple(name, _):
-                return .simple(
-                    name: name,
-                    generics: genericTypeVisitor.genericArguments
-                )
+                if name == "Optional",
+                   genericTypeVisitor.genericArguments.count == 1,
+                   let firstGenericArgument = genericTypeVisitor.genericArguments.first
+                {
+                    return .optional(firstGenericArgument)
+                } else {
+                    return .simple(
+                        name: name,
+                        generics: genericTypeVisitor.genericArguments
+                    )
+                }
             case let .nested(name, parentType, _):
                 return .nested(
                     name: name,

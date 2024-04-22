@@ -35,7 +35,14 @@ public struct InstantiableMacro: MemberMacro {
                 declaration.attributes.instantiableMacro
             )?.fulfillingAdditionalTypes
         {
-            if ArrayExprSyntax(fulfillingAdditionalTypesArgument) == nil {
+            if let arrayExpression = ArrayExprSyntax(fulfillingAdditionalTypesArgument) {
+                if arrayExpression
+                    .elements
+                .contains(where: { $0.expression.typeDescription.isOptional })
+                {
+                    throw InstantiableError.fulfillingAdditionalTypesContainsOptional
+                }
+            } else {
                 throw InstantiableError.fulfillingAdditionalTypesArgumentInvalid
             }
         }
@@ -339,6 +346,7 @@ public struct InstantiableMacro: MemberMacro {
 
     private enum InstantiableError: Error, CustomStringConvertible {
         case decoratingIncompatibleType
+        case fulfillingAdditionalTypesContainsOptional
         case fulfillingAdditionalTypesArgumentInvalid
         case tooManyInstantiateMethods
 
@@ -346,6 +354,8 @@ public struct InstantiableMacro: MemberMacro {
             switch self {
             case .decoratingIncompatibleType:
                 "@\(InstantiableVisitor.macroName) must decorate an extension on a type or a class, struct, or actor declaration"
+            case .fulfillingAdditionalTypesContainsOptional:
+                "The argument `fulfillingAdditionalTypes` must not include optionals"
             case .fulfillingAdditionalTypesArgumentInvalid:
                 "The argument `fulfillingAdditionalTypes` must be an inlined array"
             case .tooManyInstantiateMethods:
