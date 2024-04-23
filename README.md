@@ -382,7 +382,7 @@ To install the SafeDI framework into your package with [Swift Package Manager](h
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI", from: "0.5.0"),
+    .package(url: "https://github.com/dfed/SafeDI", from: "0.6.0"),
 ]
 ```
 
@@ -434,7 +434,7 @@ The `SafeDITool` can parse all of your Swift files at once, or for better perfor
 
 ### Requirements
 
-* Xcode 15.0 or later
+* Xcode 15.3 or later
 * iOS 13 or later
 * tvOS 13 or later
 * watchOS 6 or later
