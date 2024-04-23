@@ -24,7 +24,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_15.3.app/Contents/Developer
       - name: Build Framework
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
 
@@ -35,7 +35,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_15.3.app/Contents/Developer
       - name: Build Package Integration
         run: xcrun swift build -c release --package-path Examples/ExamplePackageIntegration
 
@@ -46,7 +46,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_15.3.app/Contents/Developer
       - name: Replace 'main' branch with the current branch
         if: github.event.pull_request.head.repo.full_name == github.repository # Only do this if the branch is from our repo.
         run: sed -i '' "s#branch = main;#branch = ${{ github.head_ref || github.ref_name }};#" "Examples/ExampleProjectIntegration/ExampleProjectIntegration.xcodeproj/project.pbxproj"
@@ -60,7 +60,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_15.3.app/Contents/Developer
       - name: Build and Test Framework
         run: xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing
       - name: Prepare Coverage Reports
@@ -78,7 +78,7 @@ jobs:
   linux:
     name: Build and Test on Linux
     runs-on: ubuntu-latest
-    container: swift:5.9
+    container: swift:5.10
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -109,9 +109,9 @@ jobs:
   lint-swift:
     name: Lint Swift
     runs-on: ubuntu-latest
-    container: swift:5.9
+    container: swift:5.10
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Lint Swift
-        run: swift run --package-path CLI swiftformat --swiftversion 5.9 .
+        run: swift run --package-path CLI swiftformat --swiftversion 5.10 .
