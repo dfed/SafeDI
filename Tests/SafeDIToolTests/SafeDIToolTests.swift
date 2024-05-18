@@ -38,6 +38,7 @@ final class SafeDIToolTests: XCTestCase {
         for fileToDelete in filesToDelete {
             try FileManager.default.removeItem(at: fileToDelete)
         }
+        fileFinder = FileManager.default
     }
 
     #if !os(Linux) // Linux does not support multiple invokations of the same test.
@@ -5077,6 +5078,48 @@ final class SafeDIToolTests: XCTestCase {
         }
     }
 
+    // MARK: Argument handling tests
+
+    func test_include_throwsErrorWhenCanNotCreateEnumerator() async {
+        final class FailingFileFinder: FileFinder {
+            func enumerator(
+                at _: URL,
+                includingPropertiesForKeys _: [URLResourceKey]?,
+                options _: FileManager.DirectoryEnumerationOptions,
+                errorHandler _: ((URL, any Error) -> Bool)?
+            ) -> FileManager.DirectoryEnumerator? {
+                nil
+            }
+        }
+        fileFinder = FailingFileFinder()
+
+        var tool = SafeDITool()
+        tool.swiftSourcesFilePath = nil
+        tool.include = ["Fake"]
+        tool.additionalImportedModules = []
+        tool.moduleInfoOutput = nil
+        tool.moduleInfoPaths = []
+        tool.dependencyTreeOutput = nil
+        await assertThrowsError("Could not create file enumerator for directory 'Fake'") {
+            try await tool.run()
+        }
+    }
+
+    func test_include_throwsErrorWhenNoSwiftSourcesFilePathAndNoInclude() async {
+        var tool = SafeDITool()
+        tool.swiftSourcesFilePath = nil
+        tool.include = []
+        tool.additionalImportedModules = []
+        tool.moduleInfoOutput = nil
+        tool.moduleInfoPaths = []
+        tool.dependencyTreeOutput = nil
+        await assertThrowsError("Must provide either 'swift-sources-file-path' or '--include'.") {
+            try await tool.run()
+        }
+    }
+
+    // MARK: Private
+
     private func assertThrowsError(
         _ errorDescription: String,
         line: UInt = #line,
@@ -5098,7 +5141,7 @@ final class SafeDIToolTests: XCTestCase {
         let swiftFileCSV = URL.temporaryFile
         let swiftFiles = try swiftFileContent
             .map {
-                let location = URL.temporaryFile
+                let location = URL.temporaryFile.appendingPathExtension("swift")
                 try $0.write(to: location, atomically: true, encoding: .utf8)
                 return location
             }
@@ -5109,8 +5152,10 @@ final class SafeDIToolTests: XCTestCase {
 
         let moduleInfoOutput = URL.temporaryFile
         let dependencyTreeOutput = URL.temporaryFile
+        fileFinder = StubFileFinder(files: swiftFiles) // Successfully execute the file finder code path.
         var tool = SafeDITool()
         tool.swiftSourcesFilePath = swiftFileCSV.relativePath
+        tool.include = ["Fake"]
         tool.additionalImportedModules = []
         tool.moduleInfoOutput = moduleInfoOutput.relativePath
         tool.moduleInfoPaths = dependentModuleOutputPaths
@@ -5154,4 +5199,35 @@ extension URL {
             }
         #endif
     }
+}
+
+struct StubFileFinder: FileFinder {
+    func enumerator(
+        at _: URL,
+        includingPropertiesForKeys _: [URLResourceKey]?,
+        options _: FileManager.DirectoryEnumerationOptions,
+        errorHandler _: ((URL, any Error) -> Bool)?
+    ) -> FileManager.DirectoryEnumerator? {
+        StubDirectoryEnumerator(files: files)
+    }
+
+    final class StubDirectoryEnumerator: FileManager.DirectoryEnumerator {
+        init(files: [URL]) {
+            self.files = files
+                // Also include a random file in the glob.
+                + [URL.temporaryFile]
+        }
+
+        override func nextObject() -> Any? {
+            if files.isEmpty {
+                nil
+            } else {
+                files.removeFirst()
+            }
+        }
+
+        var files: [URL]
+    }
+
+    let files: [URL]
 }

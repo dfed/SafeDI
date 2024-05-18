@@ -30,7 +30,9 @@ import SwiftParser
 struct SafeDITool: AsyncParsableCommand {
     // MARK: Arguments
 
-    @Argument(help: "A path to a CSV file containing paths of Swift files to parse.") var swiftSourcesFilePath: String
+    @Argument(help: "A path to a CSV file containing paths of Swift files to parse.") var swiftSourcesFilePath: String?
+
+    @Option(parsing: .upToNextOption, help: "Directories containing Swift files to include, relative to the executing directory.") var include: [String] = []
 
     @Option(parsing: .upToNextOption, help: "The names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModules: [String] = []
 
@@ -44,6 +46,10 @@ struct SafeDITool: AsyncParsableCommand {
 
     @MainActor
     func run() async throws {
+        if swiftSourcesFilePath == nil, include.isEmpty {
+            throw ValidationError("Must provide either 'swift-sources-file-path' or '--include'.")
+        }
+
         let (dependentModuleInfo, module) = try await (
             loadSafeDIModuleInfo(atModuleInfoURLs: moduleInfoPaths.map(\.asFileURL)),
             parsedModule(loadSwiftFiles())
@@ -86,14 +92,46 @@ struct SafeDITool: AsyncParsableCommand {
 
     // MARK: Private
 
+    private func findSwiftFiles() async throws -> Set<String> {
+        var swiftFiles = Set<String>()
+        if let swiftSourcesFilePath {
+            try swiftFiles.formUnion(String(contentsOfFile: swiftSourcesFilePath)
+                .components(separatedBy: CharacterSet(arrayLiteral: ",")))
+        }
+        for included in include {
+            let includedFileEnumerator = fileFinder
+                .enumerator(
+                    at: URL(relativePath: included),
+                    includingPropertiesForKeys: nil,
+                    options: [.skipsHiddenFiles],
+                    errorHandler: nil
+                )
+            guard let includedFileEnumerator else {
+                struct CouldNotEnumerateDirectoryError: Error, CustomStringConvertible {
+                    let directory: String
+
+                    var description: String {
+                        "Could not create file enumerator for directory '\(directory)'"
+                    }
+                }
+                throw CouldNotEnumerateDirectoryError(directory: included)
+            }
+            swiftFiles.formUnion(includedFileEnumerator.compactMap {
+                guard let file = $0 as? URL,
+                      file.pathExtension == "swift"
+                else { return nil }
+                return file.standardizedFileURL.relativePath
+            })
+        }
+        return swiftFiles
+    }
+
     private func loadSwiftFiles() async throws -> [String] {
         try await withThrowingTaskGroup(
             of: String.self,
             returning: [String].self
         ) { taskGroup in
-            let swiftFilePaths = try String(contentsOfFile: swiftSourcesFilePath)
-                .components(separatedBy: CharacterSet(arrayLiteral: ","))
-            for filePath in swiftFilePaths {
+            for filePath in try await findSwiftFiles() {
                 guard !filePath.isEmpty else { continue }
                 taskGroup.addTask {
                     let swiftFile = try String(contentsOfFile: filePath)
@@ -234,3 +272,39 @@ extension String {
         #endif
     }
 }
+
+extension URL {
+    fileprivate init(relativePath: String) {
+        #if os(Linux)
+            self = URL(
+                fileURLWithPath: relativePath,
+                relativeTo: FileManager.default.currentDirectoryPath.asFileURL
+            )
+        #else
+            if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
+                self = URL(
+                    filePath: relativePath,
+                    relativeTo: .currentDirectory()
+                )
+            } else {
+                self = URL(
+                    fileURLWithPath: relativePath,
+                    relativeTo: FileManager.default.currentDirectoryPath.asFileURL
+                )
+            }
+        #endif
+    }
+}
+
+protocol FileFinder {
+    func enumerator(
+        at url: URL,
+        includingPropertiesForKeys keys: [URLResourceKey]?,
+        options mask: FileManager.DirectoryEnumerationOptions,
+        errorHandler handler: ((URL, any Error) -> Bool)?
+    ) -> FileManager.DirectoryEnumerator?
+}
+
+extension FileManager: FileFinder {}
+
+var fileFinder: FileFinder = FileManager.default
