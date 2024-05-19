@@ -421,7 +421,7 @@ If your first-party code comprises multiple modules in Xcode, or a mix of Xcode 
 ```sh
 set -e
 
-VERSION='0.6.1'
+VERSION='<<VERSION>>'
 DESTINATION="$BUILD_DIR/SafeDITool-Release/safeditool"
 
 if [ -f "$DESTINATION" ]; then
@@ -433,20 +433,21 @@ else
 
     ARCH=$(uname -m)
     if [ "$ARCH" = "arm64" ]; then
-        curl -L -o "$DESTINATION" "https://github.com/dfed/SafeDI/releases/download/$VERSION/SafeDITool-arm64"
+        ARCH_PATH="SafeDITool-arm64"
     elif [ "$ARCH" = "x86_64" ]; then
-        curl -L -o "$DESTINATION" "https://github.com/dfed/SafeDI/releases/download/$VERSION/SafeDITool-x86_64"
+        ARCH_PATH="SafeDITool-x86_64"
     else
         echo "Unsupported architecture: $ARCH"
         exit 1
     fi
+    curl -L -o "$DESTINATION" "https://github.com/dfed/SafeDI/releases/download/$VERSION/$ARCH_PATH"
     chmod +x "$DESTINATION"
 fi
 
 $DESTINATION --include <<RELATIVE_PATH_TO_SOURCE_FILES>> <<RELATIVE_PATH_TO_MORE_SOURCE_FILES>> --dependency-tree-output "$PROJECT_DIR/<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>"
 ```
 
-Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in your target, and to replace the `VERSION`, `<<RELATIVE_PATH_TO_SOURCE_FILES>>`, `<<RELATIVE_PATH_TO_MORE_SOURCE_FILES>>`, and `<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>` with the appropriate values.
+Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in your target, and to replace the `<<VERSION>>`, `<<RELATIVE_PATH_TO_SOURCE_FILES>>`, `<<RELATIVE_PATH_TO_MORE_SOURCE_FILES>>`, and `<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>` with the appropriate values.
 
 You can see this in integration in practice in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) package.
 
