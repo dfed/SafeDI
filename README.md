@@ -416,12 +416,12 @@ brew install dfed/safedi/safeditool
 
 #### Other configurations
 
-If your first-party code comprises multiple modules in Xcode, or a mix of Xcode Projects and Swift Packages, or some other configuration not listed above, once your Xcode project depends on the SafeDI package you will need to utilize the `SafeDITool` command-line executable directly as a pre-build script.
+If your first-party code comprises multiple modules in Xcode, or a mix of Xcode Projects and Swift Packages, or some other configuration not listed above, once your Xcode project depends on the SafeDI package you will need to utilize the `SafeDITool` command-line executable directly in a pre-build script.
 
 ```sh
 set -e
 
-VERSION='0.6.0'
+VERSION='0.6.1'
 DESTINATION="$BUILD_DIR/SafeDITool-Release/safeditool"
 
 if [ -f "$DESTINATION" ]; then
@@ -446,7 +446,7 @@ fi
 $DESTINATION --include <<RELATIVE_PATH_TO_SOURCE_FILES>> <<RELATIVE_PATH_TO_MORE_SOURCE_FILES>> --dependency-tree-output "$PROJECT_DIR/<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>"
 ```
 
-Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in your target, and to replace `<<RELATIVE_PATH_TO_SOURCE_FILES>>`, `<<RELATIVE_PATH_TO_MORE_SOURCE_FILES>>`, and `<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>` with the appropriate paths.
+Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in your target, and to replace the `VERSION`, `<<RELATIVE_PATH_TO_SOURCE_FILES>>`, `<<RELATIVE_PATH_TO_MORE_SOURCE_FILES>>`, and `<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>` with the appropriate values.
 
 You can see this in integration in practice in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) package.
 
