@@ -99,14 +99,15 @@ struct SafeDITool: AsyncParsableCommand {
                 .components(separatedBy: CharacterSet(arrayLiteral: ",")))
         }
         for included in include {
+            let includedURL = included.asFileURL
             let includedFileEnumerator = fileFinder
                 .enumerator(
-                    at: URL(relativePath: included),
+                    at: includedURL,
                     includingPropertiesForKeys: nil,
                     options: [.skipsHiddenFiles],
                     errorHandler: nil
                 )
-            guard let includedFileEnumerator else {
+            guard let files = includedFileEnumerator?.compactMap({ $0 as? URL }) else {
                 struct CouldNotEnumerateDirectoryError: Error, CustomStringConvertible {
                     let directory: String
 
@@ -116,11 +117,12 @@ struct SafeDITool: AsyncParsableCommand {
                 }
                 throw CouldNotEnumerateDirectoryError(directory: included)
             }
-            swiftFiles.formUnion(includedFileEnumerator.compactMap {
-                guard let file = $0 as? URL,
-                      file.pathExtension == "swift"
-                else { return nil }
-                return file.standardizedFileURL.relativePath
+            swiftFiles.formUnion((files + [includedURL]).compactMap {
+                if $0.pathExtension == "swift" {
+                    $0.standardizedFileURL.relativePath
+                } else {
+                    nil
+                }
             })
         }
         return swiftFiles
@@ -268,29 +270,6 @@ extension String {
                 URL(filePath: self)
             } else {
                 URL(fileURLWithPath: self)
-            }
-        #endif
-    }
-}
-
-extension URL {
-    fileprivate init(relativePath: String) {
-        #if os(Linux)
-            self = URL(
-                fileURLWithPath: relativePath,
-                relativeTo: FileManager.default.currentDirectoryPath.asFileURL
-            )
-        #else
-            if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
-                self = URL(
-                    filePath: relativePath,
-                    relativeTo: .currentDirectory()
-                )
-            } else {
-                self = URL(
-                    fileURLWithPath: relativePath,
-                    relativeTo: FileManager.default.currentDirectoryPath.asFileURL
-                )
             }
         #endif
     }
