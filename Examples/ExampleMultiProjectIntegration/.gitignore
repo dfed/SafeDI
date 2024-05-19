@@ -1,0 +1,2 @@
+# Ignore the resolved file so we always pull the latest
+ExampleMultiProjectIntegration.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved

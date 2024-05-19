@@ -416,21 +416,44 @@ brew install dfed/safedi/safeditool
 
 #### Other configurations
 
-If your first-party code comprises multiple modules in Xcode, or a mix of Xcode Projects and Swift Packages, or some other configuration not listed above, you will need to utilize the `SafeDITool` command-line executable directly.
+If your first-party code comprises multiple modules in Xcode, or a mix of Xcode Projects and Swift Packages, or some other configuration not listed above, once your Xcode project depends on the SafeDI package you will need to utilize the `SafeDITool` command-line executable directly in a pre-build script.
+
+```sh
+set -e
+
+VERSION='<<VERSION>>'
+DESTINATION="$BUILD_DIR/SafeDITool-Release/$VERSION/safeditool"
+
+if [ -f "$DESTINATION" ]; then
+    if [ ! -x "$DESTINATION" ]; then
+        chmod +x "$DESTINATION"
+    fi
+else
+    mkdir -p "$(dirname "$DESTINATION")"
+
+    ARCH=$(uname -m)
+    if [ "$ARCH" = "arm64" ]; then
+        ARCH_PATH="SafeDITool-arm64"
+    elif [ "$ARCH" = "x86_64" ]; then
+        ARCH_PATH="SafeDITool-x86_64"
+    else
+        echo "Unsupported architecture: $ARCH"
+        exit 1
+    fi
+    curl -L -o "$DESTINATION" "https://github.com/dfed/SafeDI/releases/download/$VERSION/$ARCH_PATH"
+    chmod +x "$DESTINATION"
+fi
+
+$DESTINATION --include <<RELATIVE_PATH_TO_SOURCE_FILES>> <<RELATIVE_PATH_TO_MORE_SOURCE_FILES>> --dependency-tree-output "$PROJECT_DIR/<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>"
+```
+
+Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in your target, and to replace the `<<VERSION>>`, `<<RELATIVE_PATH_TO_SOURCE_FILES>>`, `<<RELATIVE_PATH_TO_MORE_SOURCE_FILES>>`, and `<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>` with the appropriate values.
+
+You can see this in integration in practice in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) package.
 
 The `SafeDITool` utility is designed to able to be integrated into projects of any size or shape.
 
-You can build the SafeDI tool locally by running the following command at the root of this repository:
-```zsh
-swift build -c release
-```
-
-Once you‘ve built the tool, you can see the tool‘s expected arguments by running:
-```zsh
-$(swift build -c release --target SafeDITool --show-bin-path)/SafeDITool --help
-```
-
-The `SafeDITool` can parse all of your Swift files at once, or for better performance the tool can be run on each dependent module as part of the build. Integrating this tool into your project is currently left as an exercise to the reader. SafeDI would welcome a better documented approach or tool for integrating SafeDI into currently unsupported projects.
+The `SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Running this tool on each dependent module is currently left as an exercise to the reader.
 
 ### Requirements
 

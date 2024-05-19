@@ -1,3 +1,7 @@
+# file options
+
+--exclude Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDI.swift
+
 # format options
 --modifierorder nonisolated,open,public,internal,fileprivate,private,private(set),final,override,required
 --ranges no-space
