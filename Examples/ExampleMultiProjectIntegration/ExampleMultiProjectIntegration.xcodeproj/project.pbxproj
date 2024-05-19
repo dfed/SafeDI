@@ -286,7 +286,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "xcrun swift run --package-path $BUILD_ROOT/../../SourcePackages/checkouts/SafeDI --scratch-path $BUILD_DIR/SafeDITool-$CONFIGURATION SafeDITool --include ExampleMultiProjectIntegration Subproject --dependency-tree-output $PROJECT_DIR/ExampleMultiProjectIntegration/SafeDI.swift\n";
+			shellScript = "xcrun swift run --package-path $BUILD_ROOT/../../SourcePackages/checkouts/SafeDI --scratch-path $BUILD_DIR/SafeDITool-$CONFIGURATION SafeDITool --include $PROJECT_DIR/ExampleMultiProjectIntegration $PROJECT_DIR/Subproject --dependency-tree-output $PROJECT_DIR/ExampleMultiProjectIntegration/SafeDI.swift\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
