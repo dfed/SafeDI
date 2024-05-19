@@ -422,7 +422,7 @@ If your first-party code comprises multiple modules in Xcode, or a mix of Xcode 
 set -e
 
 VERSION='<<VERSION>>'
-DESTINATION="$BUILD_DIR/SafeDITool-Release/safeditool"
+DESTINATION="$BUILD_DIR/SafeDITool-Release/$VERSION/safeditool"
 
 if [ -f "$DESTINATION" ]; then
     if [ ! -x "$DESTINATION" ]; then
