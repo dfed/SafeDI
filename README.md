@@ -453,7 +453,7 @@ You can see this in integration in practice in the [ExampleMultiProjectIntegrati
 
 The `SafeDITool` utility is designed to able to be integrated into projects of any size or shape.
 
-The `SafeDITool` can parse all of your Swift files at once, or for even better performance the tool can be run on each dependent module as part of the build. Running this tool on each dependent module is currently left as an exercise to the reader.
+The `SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Running this tool on each dependent module is currently left as an exercise to the reader.
 
 ### Requirements
 
