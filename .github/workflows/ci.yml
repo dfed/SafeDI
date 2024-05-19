@@ -37,7 +37,7 @@ jobs:
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_15.3.app/Contents/Developer
       - name: Build Package Integration
-        run: xcrun swift build -c release --package-path Examples/ExamplePackageIntegration
+        run: xcrun swift build --package-path Examples/ExamplePackageIntegration
 
   spm-project-integration-15:
     name: Build Project Integration on Xcode 15
