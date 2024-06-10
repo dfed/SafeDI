@@ -2184,7 +2184,7 @@ final class SafeDIToolTests: XCTestCase {
                 public protocol KeyValueStore {}
 
                 @Instantiable(fulfillingAdditionalTypes: [KeyValueStore.self])
-                extension UserDefaults: Instantiable, KeyValueStore {
+                extension UserDefaults: @retroactive Instantiable, @retroactive KeyValueStore {
                     public static func instantiate() -> UserDefaults {
                         getShared()
                     }

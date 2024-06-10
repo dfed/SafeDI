@@ -53,13 +53,7 @@ public struct InstantiableMacro: MemberMacro {
             ?? ClassDeclSyntax(declaration)
             ?? StructDeclSyntax(declaration)
         {
-            let extendsInstantiable = concreteDeclaration.inheritanceClause?.inheritedTypes.contains(where: {
-                $0.type.typeDescription == .simple(name: "Instantiable")
-                    || $0.type.typeDescription == .nested(
-                        name: "Instantiable",
-                        parentType: .simple(name: "SafeDI")
-                    )
-            }) ?? false
+            let extendsInstantiable = concreteDeclaration.inheritanceClause?.inheritedTypes.contains(where: \.type.typeDescription.isInstantiable) ?? false
             if !extendsInstantiable {
                 var modifiedDeclaration = concreteDeclaration
                 var inheritedType = InheritedTypeSyntax(
@@ -157,13 +151,7 @@ public struct InstantiableMacro: MemberMacro {
             return generateForwardedProperties(from: forwardedProperties)
 
         } else if let extensionDeclaration = ExtensionDeclSyntax(declaration) {
-            let extendsInstantiable = extensionDeclaration.inheritanceClause?.inheritedTypes.contains(where: {
-                $0.type.typeDescription == .simple(name: "Instantiable")
-                    || $0.type.typeDescription == .nested(
-                        name: "Instantiable",
-                        parentType: .simple(name: "SafeDI")
-                    )
-            }) ?? false
+            let extendsInstantiable = extensionDeclaration.inheritanceClause?.inheritedTypes.contains(where: \.type.typeDescription.isInstantiable) ?? false
             if !extendsInstantiable {
                 var modifiedDeclaration = extensionDeclaration
                 var inheritedType = InheritedTypeSyntax(
@@ -363,5 +351,30 @@ public struct InstantiableMacro: MemberMacro {
                 "@\(InstantiableVisitor.macroName)-decorated extension must have a single `instantiate()` method"
             }
         }
+    }
+}
+
+// MARK: - TypeDescription
+
+extension TypeDescription {
+    fileprivate var isInstantiable: Bool {
+        self == .simple(name: "Instantiable")
+            || self == .nested(
+                name: "Instantiable",
+                parentType: .simple(name: "SafeDI")
+            )
+            || self == .attributed(
+                .simple(name: "Instantiable"),
+                specifier: nil,
+                attributes: ["retroactive"]
+            )
+            || self == .nested(
+                name: "Instantiable",
+                parentType: .attributed(
+                    .simple(name: "SafeDI"),
+                    specifier: nil,
+                    attributes: ["retroactive"]
+                )
+            )
     }
 }
