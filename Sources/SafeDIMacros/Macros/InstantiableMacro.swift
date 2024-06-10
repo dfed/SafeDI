@@ -54,11 +54,7 @@ public struct InstantiableMacro: MemberMacro {
             ?? StructDeclSyntax(declaration)
         {
             let extendsInstantiable = concreteDeclaration.inheritanceClause?.inheritedTypes.contains(where: {
-                $0.type.typeDescription == .simple(name: "Instantiable")
-                    || $0.type.typeDescription == .nested(
-                        name: "Instantiable",
-                        parentType: .simple(name: "SafeDI")
-                    )
+                $0.type.typeDescription.isInstantiable
             }) ?? false
             if !extendsInstantiable {
                 var modifiedDeclaration = concreteDeclaration
@@ -158,11 +154,7 @@ public struct InstantiableMacro: MemberMacro {
 
         } else if let extensionDeclaration = ExtensionDeclSyntax(declaration) {
             let extendsInstantiable = extensionDeclaration.inheritanceClause?.inheritedTypes.contains(where: {
-                $0.type.typeDescription == .simple(name: "Instantiable")
-                    || $0.type.typeDescription == .nested(
-                        name: "Instantiable",
-                        parentType: .simple(name: "SafeDI")
-                    )
+                $0.type.typeDescription.isInstantiable
             }) ?? false
             if !extendsInstantiable {
                 var modifiedDeclaration = extensionDeclaration
@@ -363,5 +355,30 @@ public struct InstantiableMacro: MemberMacro {
                 "@\(InstantiableVisitor.macroName)-decorated extension must have a single `instantiate()` method"
             }
         }
+    }
+}
+
+// MARK: - TypeDescription
+
+extension TypeDescription {
+    fileprivate var isInstantiable: Bool {
+        self == .simple(name: "Instantiable")
+            || self == .nested(
+                name: "Instantiable",
+                parentType: .simple(name: "SafeDI")
+            )
+            || self == .attributed(
+                .simple(name: "Instantiable"),
+                specifier: nil,
+                attributes: ["retroactive"]
+            )
+            || self == .nested(
+                name: "Instantiable",
+                parentType: .attributed(
+                    .simple(name: "SafeDI"),
+                    specifier: nil,
+                    attributes: ["retroactive"]
+                )
+            )
     }
 }
