@@ -79,10 +79,10 @@ public struct InstantiableMacro: MemberMacro {
                     modifiedDeclaration.name.trailingTrivia = []
                     modifiedDeclaration.inheritanceClause = InheritanceClauseSyntax(
                         colon: .colonToken(trailingTrivia: .space),
-                        inheritedTypes: InheritedTypeListSyntax(arrayLiteral: InheritedTypeSyntax(
+                  inheritedTypes: InheritedTypeListSyntax(arrayLiteral: InheritedTypeSyntax(
                             type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
                         )),
-                        trailingTrivia: .space
+                          trailingTrivia: .space
                     )
                 }
                 context.diagnose(Diagnostic(
