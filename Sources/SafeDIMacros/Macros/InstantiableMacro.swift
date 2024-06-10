@@ -53,9 +53,7 @@ public struct InstantiableMacro: MemberMacro {
             ?? ClassDeclSyntax(declaration)
             ?? StructDeclSyntax(declaration)
         {
-            let extendsInstantiable = concreteDeclaration.inheritanceClause?.inheritedTypes.contains(where: {
-                $0.type.typeDescription.isInstantiable
-            }) ?? false
+            let extendsInstantiable = concreteDeclaration.inheritanceClause?.inheritedTypes.contains(where: \.type.typeDescription.isInstantiable) ?? false
             if !extendsInstantiable {
                 var modifiedDeclaration = concreteDeclaration
                 var inheritedType = InheritedTypeSyntax(
@@ -153,9 +151,7 @@ public struct InstantiableMacro: MemberMacro {
             return generateForwardedProperties(from: forwardedProperties)
 
         } else if let extensionDeclaration = ExtensionDeclSyntax(declaration) {
-            let extendsInstantiable = extensionDeclaration.inheritanceClause?.inheritedTypes.contains(where: {
-                $0.type.typeDescription.isInstantiable
-            }) ?? false
+            let extendsInstantiable = extensionDeclaration.inheritanceClause?.inheritedTypes.contains(where: \.type.typeDescription.isInstantiable) ?? false
             if !extendsInstantiable {
                 var modifiedDeclaration = extensionDeclaration
                 var inheritedType = InheritedTypeSyntax(
