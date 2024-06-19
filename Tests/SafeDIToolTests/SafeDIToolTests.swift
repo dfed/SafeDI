@@ -533,7 +533,7 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    @MainActor func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
+                    func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
                         LoggedInViewController(user: user, networkService: networkService)
                     }
                     let loggedInViewControllerBuilder = ErasedInstantiator<User, UIViewController> {
@@ -647,7 +647,7 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    @MainActor func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
+                    func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
                         let userService = UserService(user: user)
                         return LoggedInViewController(user: user, networkService: networkService, userService: userService)
                     }
@@ -771,7 +771,7 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    @MainActor func __safeDI_loggedInViewControllerBuilder(userID: String, userName: String) -> LoggedInViewController {
+                    func __safeDI_loggedInViewControllerBuilder(userID: String, userName: String) -> LoggedInViewController {
                         let userService = UserService(userName: userName, userID: userID)
                         return LoggedInViewController(userName: userName, userID: userID, networkService: networkService, userService: userService)
                     }
@@ -895,7 +895,7 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    @MainActor func __safeDI_loggedInViewControllerBuilder(userID: String, userName: String) -> LoggedInViewController {
+                    func __safeDI_loggedInViewControllerBuilder(userID: String, userName: String) -> LoggedInViewController {
                         let userService = UserService(userName: userName, userID: userID)
                         return LoggedInViewController(userName: userName, userID: userID, networkService: networkService, userService: userService)
                     }
@@ -995,7 +995,7 @@ final class SafeDIToolTests: XCTestCase {
 
             extension RootView {
                 public init() {
-                    @MainActor func __safeDI_splashScreenViewBuilder() -> SplashScreenView {
+                    func __safeDI_splashScreenViewBuilder() -> SplashScreenView {
                         SplashScreenView()
                     }
                     let splashScreenViewBuilder = ErasedInstantiator<(), AnyView> {
@@ -1109,7 +1109,7 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    @MainActor func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
+                    func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
                         let userService = UserService(user: user, networkService: networkService)
                         return LoggedInViewController(user: user, userService: userService)
                     }
@@ -1224,8 +1224,8 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    @MainActor func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
-                        @MainActor func __safeDI_userServiceInstantiator() -> UserService {
+                    func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
+                        func __safeDI_userServiceInstantiator() -> UserService {
                             UserService(user: user, networkService: networkService)
                         }
                         let userServiceInstantiator = Instantiator<UserService>(__safeDI_userServiceInstantiator)
@@ -1949,7 +1949,7 @@ final class SafeDIToolTests: XCTestCase {
                 @Instantiable
                 public final class Root {
                     @Instantiated(fulfilledByType: "ChildA")
-                    let childABuilder: NonisolatedErasedInstantiator<Recreated, ChildAProtocol>
+                    let childABuilder: ErasedInstantiator<Recreated, ChildAProtocol>
                     @Instantiated
                     let childB: ChildB
                     @Instantiated
@@ -2019,7 +2019,7 @@ final class SafeDIToolTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    nonisolated func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
+                    func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
                         let grandchildA: GrandchildA = {
                             let recreated = Recreated()
                             let greatGrandchild = GreatGrandchild(recreated: recreated)
@@ -2031,7 +2031,7 @@ final class SafeDIToolTests: XCTestCase {
                         }()
                         return ChildA(grandchildA: grandchildA, grandchildB: grandchildB, recreated: recreated)
                     }
-                    let childABuilder = NonisolatedErasedInstantiator<Recreated, ChildAProtocol> {
+                    let childABuilder = ErasedInstantiator<Recreated, ChildAProtocol> {
                         __safeDI_childABuilder(recreated: $0)
                     }
                     let recreated = Recreated()
@@ -2342,7 +2342,7 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    @MainActor func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
+                    func __safeDI_loggedInViewControllerBuilder(user: User) -> LoggedInViewController {
                         let keyValueStore: KeyValueStore = UserDefaults.instantiate(user: user)
                         return LoggedInViewController(user: user, networkService: networkService, keyValueStore: keyValueStore)
                     }
@@ -2393,7 +2393,7 @@ final class SafeDIToolTests: XCTestCase {
                 @Instantiable()
                 public final class GrandchildBA {
                     @Instantiated
-                    var greatGrandchildInstantiator: NonisolatedInstantiator<GreatGrandchild>
+                    var greatGrandchildInstantiator: Instantiator<GreatGrandchild>
                 }
                 """,
                 """
@@ -2402,7 +2402,7 @@ final class SafeDIToolTests: XCTestCase {
                 @Instantiable()
                 public final class GrandchildBB {
                     @Instantiated
-                    greatGrandchildInstantiator: NonisolatedInstantiator<GreatGrandchild>
+                    greatGrandchildInstantiator: Instantiator<GreatGrandchild>
                 }
                 """,
             ],
@@ -2499,17 +2499,17 @@ final class SafeDIToolTests: XCTestCase {
                     }()
                     let childB: ChildB = {
                         let grandchildBA: GrandchildBA = {
-                            nonisolated func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
+                            func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
                                 GreatGrandchild()
                             }
-                            let greatGrandchildInstantiator = NonisolatedInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
+                            let greatGrandchildInstantiator = Instantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
                             return GrandchildBA(greatGrandchildInstantiator: greatGrandchildInstantiator)
                         }()
                         let grandchildBB: GrandchildBB = {
-                            nonisolated func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
+                            func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
                                 GreatGrandchild()
                             }
-                            let greatGrandchildInstantiator = NonisolatedInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
+                            let greatGrandchildInstantiator = Instantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
                             return GrandchildBB(greatGrandchildInstantiator: greatGrandchildInstantiator)
                         }()
                         return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)
@@ -2750,10 +2750,10 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    @MainActor func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
-                        @MainActor func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
+                    func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
+                        func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
                             let userVendor: UserVendor = userManager
-                            @MainActor func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
+                            func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
                                 EditProfileViewController(userVendor: userVendor, userManager: userManager)
                             }
                             let editProfileViewControllerBuilder = Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
@@ -2815,8 +2815,8 @@ final class SafeDIToolTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    @MainActor func __safeDI_childBuilder(iterator: IndexingIterator<Array<Element>>) -> Child {
-                        @MainActor func __safeDI_grandchildBuilder() -> Grandchild {
+                    func __safeDI_childBuilder(iterator: IndexingIterator<Array<Element>>) -> Child {
+                        func __safeDI_grandchildBuilder() -> Grandchild {
                             let anyIterator = AnyIterator(iterator)
                             return Grandchild(anyIterator: anyIterator)
                         }
@@ -2966,11 +2966,11 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    @MainActor func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
+                    func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
                         let userNetworkService: NetworkService = networkService
-                        @MainActor func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
+                        func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
                             let userVendor: UserVendor = userManager
-                            @MainActor func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
+                            func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
                                 EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: userNetworkService)
                             }
                             let editProfileViewControllerBuilder = Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
@@ -3273,10 +3273,10 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    @MainActor func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
+                    func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
                         let userVendor: UserVendor = userManager
-                        @MainActor func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
-                            @MainActor func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
+                        func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
+                            func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
                                 EditProfileViewController(userVendor: userVendor, userManager: userManager)
                             }
                             let editProfileViewControllerBuilder = Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
@@ -3420,9 +3420,9 @@ final class SafeDIToolTests: XCTestCase {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
                     let authService: AuthService = DefaultAuthService(networkService: networkService)
-                    @MainActor func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
-                        @MainActor func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
-                            @MainActor func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
+                    func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
+                        func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
+                            func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
                                 let userVendor: UserVendor = userManager
                                 return EditProfileViewController(userVendor: userVendor, userManager: userManager)
                             }
@@ -3909,7 +3909,7 @@ final class SafeDIToolTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    @MainActor func __safeDI_childBuilder() -> Child {
+                    func __safeDI_childBuilder() -> Child {
                         Child()
                     }
                     let childBuilder: Instantiator<Child>? = Instantiator<Child>(__safeDI_childBuilder)
@@ -3964,9 +3964,9 @@ final class SafeDIToolTests: XCTestCase {
 
             extension Root {
                 public init() {
-                    @MainActor func __safeDI_aBuilder() -> A {
-                        @MainActor func __safeDI_bBuilder() -> B {
-                            @MainActor func __safeDI_cBuilder() -> C {
+                    func __safeDI_aBuilder() -> A {
+                        func __safeDI_bBuilder() -> B {
+                            func __safeDI_cBuilder() -> C {
                                 let aBuilder = Instantiator<A>(__safeDI_aBuilder)
                                 return C(aBuilder: aBuilder)
                             }
@@ -4030,7 +4030,7 @@ final class SafeDIToolTests: XCTestCase {
                 public init() {
                     let a: A = {
                         let b: B = {
-                            @MainActor func __safeDI_cBuilder() -> C {
+                            func __safeDI_cBuilder() -> C {
                                 let a = A(b: b)
                                 return C(a: a)
                             }
@@ -4077,7 +4077,7 @@ final class SafeDIToolTests: XCTestCase {
             extension Root {
                 public init() {
                     let a: A = {
-                        @MainActor func __safeDI_aBuilder() -> A {
+                        func __safeDI_aBuilder() -> A {
                             let aBuilder = Instantiator<A>(__safeDI_aBuilder)
                             return A(aBuilder: aBuilder)
                         }
@@ -4123,7 +4123,7 @@ final class SafeDIToolTests: XCTestCase {
 
             extension Root {
                 public init() {
-                    @MainActor func __safeDI_aBuilder(context: String) -> A {
+                    func __safeDI_aBuilder(context: String) -> A {
                         let aBuilder = Instantiator<A> {
                             __safeDI_aBuilder(context: $0)
                         }

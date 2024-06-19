@@ -163,9 +163,7 @@ actor ScopeGenerator: CustomStringConvertible {
 
                     switch propertyType {
                     case .instantiator,
-                         .erasedInstantiator,
-                         .nonisolatedInstantiator,
-                         .nonisolatedErasedInstantiator:
+                         .erasedInstantiator:
                         let forwardedProperties = forwardedProperties.sorted()
                         let forwardedPropertiesHaveLabels = forwardedProperties.count > 1
                         let forwardedArguments = forwardedProperties
@@ -184,16 +182,11 @@ actor ScopeGenerator: CustomStringConvertible {
                             forwardedProperties.initializerFunctionParameters.map(\.description).joined()
                         }
                         let functionName = self.functionName(toBuild: property)
-                        let actorBinding = if propertyType.isMainActorBound {
-                            "@MainActor "
-                        } else {
-                            "nonisolated "
-                        }
                         let functionDeclaration = if isPropertyCycle {
                             ""
                         } else {
                             """
-                            \(actorBinding)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
+                            func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
                             \(generatedProperties.joined(separator: "\n"))
                             \(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
                             }

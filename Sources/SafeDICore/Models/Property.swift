@@ -138,45 +138,30 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
         /// An `ErasedInstantiator` property.
         /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
         case erasedInstantiator
-        /// A `NonisolatedInstantiator` property.
-        /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
-        case nonisolatedInstantiator
-        /// A `NonisolatedErasedInstantiator` property.
-        /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
-        case nonisolatedErasedInstantiator
 
         public var isConstant: Bool {
             switch self {
             case .constant:
                 true
-            case .instantiator, .erasedInstantiator, .nonisolatedInstantiator, .nonisolatedErasedInstantiator:
+            case .instantiator, .erasedInstantiator:
                 false
             }
         }
 
         public var isInstantiator: Bool {
             switch self {
-            case .instantiator, .nonisolatedInstantiator:
+            case .instantiator, .erasedInstantiator:
                 true
-            case .constant, .erasedInstantiator, .nonisolatedErasedInstantiator:
+            case .constant:
                 false
             }
         }
 
         public var isErasedInstantiator: Bool {
             switch self {
-            case .erasedInstantiator, .nonisolatedErasedInstantiator:
+            case .erasedInstantiator:
                 true
-            case .constant, .instantiator, .nonisolatedInstantiator:
-                false
-            }
-        }
-
-        public var isMainActorBound: Bool {
-            switch self {
-            case .instantiator, .erasedInstantiator:
-                true
-            case .constant, .nonisolatedInstantiator, .nonisolatedErasedInstantiator:
+            case .constant, .instantiator:
                 false
             }
         }
