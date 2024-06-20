@@ -22,8 +22,8 @@
 /// type decorated with `@Instantiable`.
 ///
 /// - SeeAlso: `Instantiator`
-/// - SeeAlso: `SendableErasedInstantiator`
 /// - SeeAlso: `SendableInstantiator`
+/// - SeeAlso: `SendableErasedInstantiator`
 public final class ErasedInstantiator<ForwardedProperties, Instantiable> {
     /// - Parameter instantiator: A closure that takes `ForwardedProperties` and returns an instance of `Instantiable`.
     public init(_ instantiator: @escaping (ForwardedProperties) -> Instantiable) {
