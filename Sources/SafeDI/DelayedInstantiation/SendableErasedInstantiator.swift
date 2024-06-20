@@ -21,17 +21,19 @@
 /// A SafeDI dependency designed for the deferred instantiation of a type-erased instance of a
 /// type decorated with `@Instantiable`.
 ///
+/// This instantiator can be used to instantiate types on any queue.
+///
 /// - SeeAlso: `Instantiator`
-/// - SeeAlso: `SendableErasedInstantiator`
 /// - SeeAlso: `SendableInstantiator`
-public final class ErasedInstantiator<ForwardedProperties, Instantiable> {
+/// - SeeAlso: `ErasedInstantiator`
+public final class SendableErasedInstantiator<ForwardedProperties, Instantiable>: Sendable {
     /// - Parameter instantiator: A closure that takes `ForwardedProperties` and returns an instance of `Instantiable`.
-    public init(_ instantiator: @escaping (ForwardedProperties) -> Instantiable) {
+    public init(_ instantiator: @escaping @Sendable (ForwardedProperties) -> Instantiable) {
         self.instantiator = instantiator
     }
 
     /// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
-    public init(_ instantiator: @escaping () -> Instantiable) where ForwardedProperties == Void {
+    public init(_ instantiator: @escaping @Sendable () -> Instantiable) where ForwardedProperties == Void {
         self.instantiator = { _ in instantiator() }
     }
 
@@ -50,5 +52,5 @@ public final class ErasedInstantiator<ForwardedProperties, Instantiable> {
         instantiator(())
     }
 
-    private let instantiator: (ForwardedProperties) -> Instantiable
+    private let instantiator: @Sendable (ForwardedProperties) -> Instantiable
 }

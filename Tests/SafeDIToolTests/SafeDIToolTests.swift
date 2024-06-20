@@ -1858,7 +1858,7 @@ final class SafeDIToolTests: XCTestCase {
                 """,
                 """
                 @Instantiable
-                public final class Recreated {}
+                public final class Recreated: Sendable {}
                 """,
                 """
                 @Instantiable
@@ -1949,7 +1949,7 @@ final class SafeDIToolTests: XCTestCase {
                 @Instantiable
                 public final class Root {
                     @Instantiated(fulfilledByType: "ChildA")
-                    let childABuilder: NonisolatedErasedInstantiator<Recreated, ChildAProtocol>
+                    let childABuilder: SendableErasedInstantiator<Recreated, ChildAProtocol>
                     @Instantiated
                     let childB: ChildB
                     @Instantiated
@@ -1961,7 +1961,7 @@ final class SafeDIToolTests: XCTestCase {
                 public final class Recreated {}
                 """,
                 """
-                public protocol ChildAProtocol {}
+                public protocol ChildAProtocol: Sendable {}
                 @Instantiable
                 public final class ChildA: ChildAProtocol {
                     @Instantiated
@@ -2019,7 +2019,7 @@ final class SafeDIToolTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    nonisolated func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
+                    @Sendable func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
                         let grandchildA: GrandchildA = {
                             let recreated = Recreated()
                             let greatGrandchild = GreatGrandchild(recreated: recreated)
@@ -2031,7 +2031,7 @@ final class SafeDIToolTests: XCTestCase {
                         }()
                         return ChildA(grandchildA: grandchildA, grandchildB: grandchildB, recreated: recreated)
                     }
-                    let childABuilder = NonisolatedErasedInstantiator<Recreated, ChildAProtocol> {
+                    let childABuilder = SendableErasedInstantiator<Recreated, ChildAProtocol> {
                         __safeDI_childABuilder(recreated: $0)
                     }
                     let recreated = Recreated()
@@ -2361,7 +2361,7 @@ final class SafeDIToolTests: XCTestCase {
             swiftFileContent: [
                 """
                 @Instantiable()
-                public final class GreatGrandchild {}
+                public final class GreatGrandchild: Sendable {}
                 """,
             ],
             buildDependencyTreeOutput: false
@@ -2393,7 +2393,7 @@ final class SafeDIToolTests: XCTestCase {
                 @Instantiable()
                 public final class GrandchildBA {
                     @Instantiated
-                    var greatGrandchildInstantiator: NonisolatedInstantiator<GreatGrandchild>
+                    var greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>
                 }
                 """,
                 """
@@ -2402,7 +2402,7 @@ final class SafeDIToolTests: XCTestCase {
                 @Instantiable()
                 public final class GrandchildBB {
                     @Instantiated
-                    greatGrandchildInstantiator: NonisolatedInstantiator<GreatGrandchild>
+                    greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>
                 }
                 """,
             ],
@@ -2499,17 +2499,17 @@ final class SafeDIToolTests: XCTestCase {
                     }()
                     let childB: ChildB = {
                         let grandchildBA: GrandchildBA = {
-                            nonisolated func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
+                            @Sendable func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
                                 GreatGrandchild()
                             }
-                            let greatGrandchildInstantiator = NonisolatedInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
+                            let greatGrandchildInstantiator = SendableInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
                             return GrandchildBA(greatGrandchildInstantiator: greatGrandchildInstantiator)
                         }()
                         let grandchildBB: GrandchildBB = {
-                            nonisolated func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
+                            @Sendable func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
                                 GreatGrandchild()
                             }
-                            let greatGrandchildInstantiator = NonisolatedInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
+                            let greatGrandchildInstantiator = SendableInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
                             return GrandchildBB(greatGrandchildInstantiator: greatGrandchildInstantiator)
                         }()
                         return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)

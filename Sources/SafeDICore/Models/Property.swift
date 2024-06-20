@@ -138,46 +138,46 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
         /// An `ErasedInstantiator` property.
         /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
         case erasedInstantiator
-        /// A `NonisolatedInstantiator` property.
+        /// A `SendableInstantiator` property.
         /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
-        case nonisolatedInstantiator
-        /// A `NonisolatedErasedInstantiator` property.
+        case sendableInstantiator
+        /// A `SendableErasedInstantiator` property.
         /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
-        case nonisolatedErasedInstantiator
+        case sendableErasedInstantiator
 
         public var isConstant: Bool {
             switch self {
             case .constant:
                 true
-            case .instantiator, .erasedInstantiator, .nonisolatedInstantiator, .nonisolatedErasedInstantiator:
+            case .instantiator, .erasedInstantiator, .sendableInstantiator, .sendableErasedInstantiator:
                 false
             }
         }
 
         public var isInstantiator: Bool {
             switch self {
-            case .instantiator, .nonisolatedInstantiator:
+            case .instantiator, .sendableInstantiator:
                 true
-            case .constant, .erasedInstantiator, .nonisolatedErasedInstantiator:
+            case .constant, .erasedInstantiator, .sendableErasedInstantiator:
                 false
             }
         }
 
         public var isErasedInstantiator: Bool {
             switch self {
-            case .erasedInstantiator, .nonisolatedErasedInstantiator:
+            case .erasedInstantiator, .sendableErasedInstantiator:
                 true
-            case .constant, .instantiator, .nonisolatedInstantiator:
+            case .constant, .instantiator, .sendableInstantiator:
                 false
             }
         }
 
-        public var isMainActorBound: Bool {
+        public var isSendable: Bool {
             switch self {
-            case .instantiator, .erasedInstantiator:
-                true
-            case .constant, .nonisolatedInstantiator, .nonisolatedErasedInstantiator:
+            case .instantiator, .erasedInstantiator, .constant:
                 false
+            case .sendableInstantiator, .sendableErasedInstantiator:
+                true
             }
         }
     }

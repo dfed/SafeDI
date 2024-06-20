@@ -24,6 +24,8 @@
 /// facilitates control over memory usage and enables just-in-time instantiation.
 ///
 /// - SeeAlso: `ErasedInstantiator`
+/// - SeeAlso: `SendableInstantiator`
+/// - SeeAlso: `SendableErasedInstantiator`
 public final class Instantiator<T: Instantiable> {
     /// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
     public init(_ instantiator: @escaping (T.ForwardedProperties) -> T) {
