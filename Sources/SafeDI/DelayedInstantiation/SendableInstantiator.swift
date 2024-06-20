@@ -23,7 +23,7 @@
 /// useful in scenarios where immediate instantiation is not necessary or desirable. `Instantiator`
 /// facilitates control over memory usage and enables just-in-time instantiation.
 ///
-/// This instantiator can be used to instantiate types on any queue.
+/// This instantiator can be used to instantiate types across concurrency domains.
 ///
 /// - SeeAlso: `Instantiator`
 /// - SeeAlso: `ErasedInstantiator`

@@ -21,7 +21,7 @@
 /// A SafeDI dependency designed for the deferred instantiation of a type-erased instance of a
 /// type decorated with `@Instantiable`.
 ///
-/// This instantiator can be used to instantiate types on any queue.
+/// This instantiator can be used to instantiate types across concurrency domains.
 ///
 /// - SeeAlso: `Instantiator`
 /// - SeeAlso: `SendableInstantiator`
