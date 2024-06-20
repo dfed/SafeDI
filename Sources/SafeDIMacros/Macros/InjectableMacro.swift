@@ -145,13 +145,13 @@ public struct InjectableMacro: PeerMacro {
             case .fulfilledByDependencyNamedInvalidType:
                 "The argument `fulfilledByDependencyNamed` must be a string literal"
             case .fulfilledByTypeUseOnInstantiator:
-                "The argument `fulfilledByType` can not be used on an `Instantiator`. Use an `ErasedInstantiator` instead"
+                "The argument `fulfilledByType` can not be used on an `Instantiator` or `NonisolatedInstantiator`. Use an `ErasedInstantiator` or `NonisolatedErasedInstantiator` instead"
             case .ofTypeArgumentInvalidType:
                 "The argument `ofType` must be a type literal"
             case .erasedToConcreteExistentialInvalidType:
                 "The argument `erasedToConcreteExistential` must be a bool literal"
             case .erasedInstantiatorUsedWithoutFulfilledByType:
-                "`ErasedInstantiator` requires use of the argument `fulfilledByType`"
+                "`ErasedInstantiator` and `NonisolatedErasedInstantiator` require use of the argument `fulfilledByType`"
             }
         }
     }

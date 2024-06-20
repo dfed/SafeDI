@@ -138,30 +138,45 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
         /// An `ErasedInstantiator` property.
         /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
         case erasedInstantiator
+        /// A `NonisolatedInstantiator` property.
+        /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
+        case nonisolatedInstantiator
+        /// A `NonisolatedErasedInstantiator` property.
+        /// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
+        case nonisolatedErasedInstantiator
 
         public var isConstant: Bool {
             switch self {
             case .constant:
                 true
-            case .instantiator, .erasedInstantiator:
+            case .instantiator, .erasedInstantiator, .nonisolatedInstantiator, .nonisolatedErasedInstantiator:
                 false
             }
         }
 
         public var isInstantiator: Bool {
             switch self {
-            case .instantiator, .erasedInstantiator:
+            case .instantiator, .nonisolatedInstantiator:
                 true
-            case .constant:
+            case .constant, .erasedInstantiator, .nonisolatedErasedInstantiator:
                 false
             }
         }
 
         public var isErasedInstantiator: Bool {
             switch self {
-            case .erasedInstantiator:
+            case .erasedInstantiator, .nonisolatedErasedInstantiator:
                 true
-            case .constant, .instantiator:
+            case .constant, .instantiator, .nonisolatedInstantiator:
+                false
+            }
+        }
+
+        public var isMainActorBound: Bool {
+            switch self {
+            case .instantiator, .erasedInstantiator:
+                true
+            case .constant, .nonisolatedInstantiator, .nonisolatedErasedInstantiator:
                 false
             }
         }

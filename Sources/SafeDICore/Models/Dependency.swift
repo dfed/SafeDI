@@ -93,4 +93,6 @@ public struct Dependency: Codable, Hashable {
 
     static let instantiatorType = "Instantiator"
     static let erasedInstantiatorType = "ErasedInstantiator"
+    static let nonisolatedInstantiatorType = "NonisolatedInstantiator"
+    static let nonisolatedErasedInstantiatorType = "NonisolatedErasedInstantiator"
 }
