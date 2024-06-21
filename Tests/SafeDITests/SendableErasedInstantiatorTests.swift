@@ -22,27 +22,27 @@ import XCTest
 
 @testable import SafeDI
 
-final class NonisolatedInstantiatorTests: XCTestCase {
+final class SendableErasedInstantiatorTests: XCTestCase {
     func test_instantiate_returnsNewObjectEachTime() {
-        let systemUnderTest = NonisolatedInstantiator { BuiltProduct() }
+        let systemUnderTest = SendableErasedInstantiator<Void, BuiltProduct>() { BuiltProduct() }
         let firstBuiltProduct = systemUnderTest.instantiate()
         let secondBuiltProduct = systemUnderTest.instantiate()
         XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
     }
 
     func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() {
-        let systemUnderTest = NonisolatedInstantiator { id in BuiltProductWithForwardedArgument(id: id) }
+        let systemUnderTest = SendableErasedInstantiator { id in BuiltProductWithForwardedArgument(id: id) }
         let id = UUID().uuidString
         let firstBuiltProduct = systemUnderTest.instantiate(id)
         let secondBuiltProduct = systemUnderTest.instantiate(id)
         XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
     }
 
-    private final class BuiltProduct: Instantiable {
+    private final class BuiltProduct {
         let id = UUID().uuidString
     }
 
-    private final class BuiltProductWithForwardedArgument: Instantiable {
+    private final class BuiltProductWithForwardedArgument {
         init(id: String) {
             self.id = id
         }

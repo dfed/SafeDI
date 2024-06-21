@@ -148,7 +148,7 @@ import SafeDICore
                 public struct ExampleService {
                     @Instantiated(fulfilledByType: "LoginViewController")
                     ┬────────────────────────────────────────────────────
-                    ╰─ 🛑 The argument `fulfilledByType` can not be used on an `Instantiator` or `NonisolatedInstantiator`. Use an `ErasedInstantiator` or `NonisolatedErasedInstantiator` instead
+                    ╰─ 🛑 The argument `fulfilledByType` can not be used on an `Instantiator` or `SendableInstantiator`. Use an `ErasedInstantiator` or `SendableErasedInstantiator` instead
                     let loginViewControllerBuilder: Instantiator<UIViewController>
                 }
                 """
@@ -168,7 +168,7 @@ import SafeDICore
                 public struct ExampleService {
                     @Instantiated
                     ┬────────────
-                    ╰─ 🛑 `ErasedInstantiator` and `NonisolatedErasedInstantiator` require use of the argument `fulfilledByType`
+                    ╰─ 🛑 `ErasedInstantiator` and `SendableErasedInstantiator` require use of the argument `fulfilledByType`
                     let loginViewControllerBuilder: ErasedInstantiator<UIViewController>
                 }
                 """

@@ -18,38 +18,39 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A SafeDI dependency responsible for the deferred instantiation of an `@Instantiable`-decorated type.
-/// This class facilitates the delayed creation of an `@Instantiable` instance, making it particularly
-/// useful in scenarios where immediate instantiation is not necessary or desirable. `Instantiator`
-/// facilitates control over memory usage and enables just-in-time instantiation.
+/// A SafeDI dependency designed for the deferred instantiation of a type-erased instance of a
+/// type decorated with `@Instantiable`.
 ///
-/// This instantiator can be used to instantiate types that are not isolated to any particular actor.
+/// This instantiator can be used to instantiate types across concurrency domains.
 ///
 /// - SeeAlso: `Instantiator`
+/// - SeeAlso: `SendableInstantiator`
 /// - SeeAlso: `ErasedInstantiator`
-/// - SeeAlso: `NonisolatedErasedInstantiator`
-public final class NonisolatedInstantiator<T: Instantiable> {
-    /// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
-    public init(_ instantiator: @escaping (T.ForwardedProperties) -> T) {
+public final class SendableErasedInstantiator<ForwardedProperties, Instantiable>: Sendable {
+    /// - Parameter instantiator: A closure that takes `ForwardedProperties` and returns an instance of `Instantiable`.
+    public init(_ instantiator: @escaping @Sendable (ForwardedProperties) -> Instantiable) {
         self.instantiator = instantiator
     }
 
     /// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
-    public init(_ instantiator: @escaping () -> T) where T.ForwardedProperties == Void {
+    public init(_ instantiator: @escaping @Sendable () -> Instantiable) where ForwardedProperties == Void {
         self.instantiator = { _ in instantiator() }
     }
 
-    /// Instantiates and returns a new instance of the `@Instantiable` type.
-    /// - Returns: An instance of `T`.
-    public func instantiate(_ forwardedProperties: T.ForwardedProperties) -> T {
-        instantiator(forwardedProperties)
+    /// Instantiates and returns a new instance of the `@Instantiable` type, using the provided arguments.
+    ///
+    /// - Parameter arguments: Arguments required for instantiation.
+    /// - Returns: An `Instantiable` instance.
+    public func instantiate(_ arguments: ForwardedProperties) -> Instantiable {
+        instantiator(arguments)
     }
 
     /// Instantiates and returns a new instance of the `@Instantiable` type.
-    /// - Returns: An instance of `T`.
-    public func instantiate() -> T where T.ForwardedProperties == Void {
+    ///
+    /// - Returns: An `Instantiable` instance.
+    public func instantiate() -> Instantiable where ForwardedProperties == Void {
         instantiator(())
     }
 
-    private let instantiator: (T.ForwardedProperties) -> T
+    private let instantiator: @Sendable (ForwardedProperties) -> Instantiable
 }

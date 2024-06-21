@@ -21,19 +21,17 @@
 /// A SafeDI dependency designed for the deferred instantiation of a type-erased instance of a
 /// type decorated with `@Instantiable`.
 ///
-/// This instantiator can be used to instantiate types that are @MainActor-bound.
-///
 /// - SeeAlso: `Instantiator`
-/// - SeeAlso: `NonisolatedInstantiator`
-/// - SeeAlso: `NonisolatedErasedInstantiator`
+/// - SeeAlso: `SendableInstantiator`
+/// - SeeAlso: `SendableErasedInstantiator`
 public final class ErasedInstantiator<ForwardedProperties, Instantiable> {
     /// - Parameter instantiator: A closure that takes `ForwardedProperties` and returns an instance of `Instantiable`.
-    public init(_ instantiator: @escaping @MainActor (ForwardedProperties) -> Instantiable) {
+    public init(_ instantiator: @escaping (ForwardedProperties) -> Instantiable) {
         self.instantiator = instantiator
     }
 
     /// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
-    public init(_ instantiator: @escaping @MainActor () -> Instantiable) where ForwardedProperties == Void {
+    public init(_ instantiator: @escaping () -> Instantiable) where ForwardedProperties == Void {
         self.instantiator = { _ in instantiator() }
     }
 
@@ -41,7 +39,6 @@ public final class ErasedInstantiator<ForwardedProperties, Instantiable> {
     ///
     /// - Parameter arguments: Arguments required for instantiation.
     /// - Returns: An `Instantiable` instance.
-    @MainActor
     public func instantiate(_ arguments: ForwardedProperties) -> Instantiable {
         instantiator(arguments)
     }
@@ -49,10 +46,9 @@ public final class ErasedInstantiator<ForwardedProperties, Instantiable> {
     /// Instantiates and returns a new instance of the `@Instantiable` type.
     ///
     /// - Returns: An `Instantiable` instance.
-    @MainActor
     public func instantiate() -> Instantiable where ForwardedProperties == Void {
         instantiator(())
     }
 
-    private let instantiator: @MainActor (ForwardedProperties) -> Instantiable
+    private let instantiator: (ForwardedProperties) -> Instantiable
 }
