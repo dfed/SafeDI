@@ -250,15 +250,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             .simple(name: name, generics: [])
         case let .nested(name, parentType, _):
             .nested(name: name, parentType: parentType, generics: [])
-        case let .optional(typeDescription):
-            .optional(typeDescription.strippingGenerics)
-        case let .implicitlyUnwrappedOptional(typeDescription):
-            .implicitlyUnwrappedOptional(typeDescription.strippingGenerics)
-        case let .any(typeDescription):
-            .any(typeDescription.strippingGenerics)
-        case let .some(typeDescription):
-            .some(typeDescription.strippingGenerics)
-        case .array, .attributed, .closure, .composition, .dictionary, .metatype, .tuple, .unknown, .void:
+        case .array, .attributed, .any, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
             self
         }
     }
