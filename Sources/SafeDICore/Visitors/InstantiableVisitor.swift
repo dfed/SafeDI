@@ -138,16 +138,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
     }
 
     public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
-        guard declarationType.isExtension else {
-            return .skipChildren
-        }
-        guard let instantiableMacro = node.attributes.instantiableMacro else {
-            // Not an instantiable type. We do not care.
-            return .skipChildren
-        }
-
         instantiableType = node.extendedType.typeDescription
-        processAttributes(node.attributes, on: instantiableMacro)
+        if let instantiableMacro = node.attributes.instantiableMacro {
+            processAttributes(node.attributes, on: instantiableMacro)
+        }
 
         return .visitChildren
     }
