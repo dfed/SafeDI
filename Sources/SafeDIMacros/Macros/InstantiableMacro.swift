@@ -209,10 +209,10 @@ public struct InstantiableMacro: MemberMacro {
                 context.diagnose(diagnostic)
             }
 
-            let initializersCount = visitor.initializers.count
-            if initializersCount > 1 {
+            let instantiableTypeCount = visitor.instantiables.map(\.instantiableTypes).count
+            if instantiableTypeCount > 1 {
                 throw InstantiableError.tooManyInstantiateMethods
-            } else if initializersCount == 0 {
+            } else if instantiableTypeCount == 0 {
                 let extendedTypeName = extensionDeclaration.extendedType.typeDescription.asSource
                 var membersWithInitializer = declaration.memberBlock.members
                 membersWithInitializer.insert(
@@ -348,7 +348,7 @@ public struct InstantiableMacro: MemberMacro {
             case .fulfillingAdditionalTypesArgumentInvalid:
                 "The argument `fulfillingAdditionalTypes` must be an inlined array"
             case .tooManyInstantiateMethods:
-                "@\(InstantiableVisitor.macroName)-decorated extension must have a single `instantiate()` method"
+                "@\(InstantiableVisitor.macroName)-decorated extension must have a single `instantiate()` method per return type"
             }
         }
     }

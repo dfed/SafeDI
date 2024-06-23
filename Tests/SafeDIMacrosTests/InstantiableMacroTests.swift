@@ -897,7 +897,7 @@ import SafeDICore
             }
         }
 
-        func test_extension_throwsErrorWhenMoreThanOneInstantiateMethod() {
+        func test_extension_throwsErrorWhenMoreThanOneInstantiateMethodForSameType() {
             assertMacro {
                 """
                 @Instantiable
@@ -910,7 +910,7 @@ import SafeDICore
                 """
                 @Instantiable
                 ┬────────────
-                ╰─ 🛑 @Instantiable-decorated extension must have a single `instantiate()` method
+                ╰─ 🛑 @Instantiable-decorated extension must have a single `instantiate()` method per return type
                 extension ExampleService: Instantiable {
                     public static func instantiate() -> ExampleService { fatalError() }
                     public static func instantiate(user: User) -> ExampleService { fatalError() }
@@ -1883,8 +1883,8 @@ import SafeDICore
                 extension ExampleService: Instantiable {
                     public static func instantiate() -> OtherExampleService { fatalError() }
                     ┬───────────────────────────────────────────────────────────────────────
-                    ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must return the same type as the extended type
-                       ✏️ Make `instantiate()`’s return type the same as the extended type
+                    ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must return the same base type as the extended type
+                       ✏️ Make `instantiate()`’s return type the same base type as the extended type
                 }
                 """
             } fixes: {

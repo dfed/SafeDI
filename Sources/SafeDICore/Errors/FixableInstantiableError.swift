@@ -46,7 +46,7 @@ public enum FixableInstantiableError: DiagnosticError {
         case .disallowedEffectSpecifiers:
             "@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must not throw or be async"
         case .incorrectReturnType:
-            "@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must return the same type as the extended type"
+            "@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must return the same base type as the extended type"
         case .disallowedGenericWhereClause:
             "@\(InstantiableVisitor.macroName)-decorated extension must not have a generic `where` clause"
         case .dependencyHasTooManyAttributes:
@@ -119,7 +119,7 @@ public enum FixableInstantiableError: DiagnosticError {
             case .disallowedEffectSpecifiers:
                 "Remove effect specifiers"
             case .incorrectReturnType:
-                "Make `instantiate()`’s return type the same as the extended type"
+                "Make `instantiate()`’s return type the same base type as the extended type"
             case .disallowedGenericWhereClause:
                 "Remove generic `where` clause"
             case .dependencyHasTooManyAttributes:

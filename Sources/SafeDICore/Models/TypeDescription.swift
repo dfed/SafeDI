@@ -244,6 +244,25 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         }
     }
 
+    var strippingGenerics: TypeDescription {
+        switch self {
+        case let .simple(name, _):
+            .simple(name: name, generics: [])
+        case let .nested(name, parentType, _):
+            .nested(name: name, parentType: parentType, generics: [])
+        case let .optional(typeDescription):
+            .optional(typeDescription.strippingGenerics)
+        case let .implicitlyUnwrappedOptional(typeDescription):
+            .implicitlyUnwrappedOptional(typeDescription.strippingGenerics)
+        case let .any(typeDescription):
+            .any(typeDescription.strippingGenerics)
+        case let .some(typeDescription):
+            .some(typeDescription.strippingGenerics)
+        case .array, .attributed, .closure, .composition, .dictionary, .metatype, .tuple, .unknown, .void:
+            self
+        }
+    }
+
     /// The receiver as an `@Instantiable` type.
     var asInstantiatedType: TypeDescription {
         switch self {

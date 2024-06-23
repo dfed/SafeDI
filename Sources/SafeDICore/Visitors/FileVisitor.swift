@@ -93,7 +93,7 @@ public final class FileVisitor: SyntaxVisitor {
     public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
         let instantiableVisitor = InstantiableVisitor(declarationType: .extensionDecl)
         instantiableVisitor.walk(node)
-        if let instantiable = instantiableVisitor.instantiable {
+        for instantiable in instantiableVisitor.instantiables {
             instantiables.append(instantiable)
         }
 
@@ -124,7 +124,7 @@ public final class FileVisitor: SyntaxVisitor {
 
         let instantiableVisitor = InstantiableVisitor(declarationType: .concreteDecl)
         instantiableVisitor.walk(node)
-        if let instantiable = instantiableVisitor.instantiable {
+        for instantiable in instantiableVisitor.instantiables {
             instantiables.append(instantiable)
         }
 
