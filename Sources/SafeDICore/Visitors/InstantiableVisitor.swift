@@ -138,16 +138,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
     }
 
     public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
-        guard declarationType.isExtension else {
-            return .skipChildren
-        }
-        guard let instantiableMacro = node.attributes.instantiableMacro else {
-            // Not an instantiable type. We do not care.
-            return .skipChildren
-        }
-
         instantiableType = node.extendedType.typeDescription
-        processAttributes(node.attributes, on: instantiableMacro)
+        if let instantiableMacro = node.attributes.instantiableMacro {
+            processAttributes(node.attributes, on: instantiableMacro)
+        }
 
         return .visitChildren
     }
@@ -163,7 +157,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
         if
             let returnClause = node.signature.returnClause,
-            returnClause.type.typeDescription != instantiableType,
+            returnClause.type.typeDescription.strippingGenerics != instantiableType?.strippingGenerics,
             let instantiableType
         {
             var modifiedSignature = node.signature
@@ -174,7 +168,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                 ),
                 type: IdentifierTypeSyntax(
                     leadingTrivia: node.signature.leadingTrivia,
-                    name: .identifier(instantiableType.asSource),
+                    name: .identifier(instantiableType.strippingGenerics.asSource),
                     trailingTrivia: node.signature.trailingTrivia
                 )
             )
@@ -191,13 +185,19 @@ public final class InstantiableVisitor: SyntaxVisitor {
         }
 
         let initializer = Initializer(node)
-        initializers.append(initializer)
-        // We should only have a single `instantiate` method, so we set rather than append to dependencies.
-        dependencies = initializer.arguments.map {
-            Dependency(
-                property: $0.asProperty,
-                source: .received
-            )
+        if let instantiableType = node.signature.returnClause?.type.typeDescription {
+            extensionInstantiables.append(.init(
+                instantiableType: instantiableType,
+                initializer: initializer,
+                additionalInstantiables: additionalInstantiables,
+                dependencies: initializer.arguments.map {
+                    Dependency(
+                        property: $0.asProperty,
+                        source: .received
+                    )
+                },
+                declarationType: .extensionType
+            ))
         }
 
         if !initializer.isPublicOrOpen || node.modifiers.staticModifier == nil {
@@ -317,29 +317,24 @@ public final class InstantiableVisitor: SyntaxVisitor {
         }
     }
 
-    // MARK: Internal
-
-    var instantiable: Instantiable? {
-        guard let instantiableType else { return nil }
+    public var instantiables: [Instantiable] {
         switch declarationType {
         case .concreteDecl:
-            guard let topLevelDeclarationType else { return nil }
-            return Instantiable(
-                instantiableType: instantiableType,
-                initializer: initializers.first(where: { $0.isValid(forFulfilling: dependencies) }) ?? initializerToGenerate(),
-                additionalInstantiables: additionalInstantiables,
-                dependencies: dependencies,
-                declarationType: topLevelDeclarationType.asDeclarationType
-            )
+            if let instantiableType, let topLevelDeclarationType {
+                [
+                    Instantiable(
+                        instantiableType: instantiableType,
+                        initializer: initializers.first(where: { $0.isValid(forFulfilling: dependencies) }) ?? initializerToGenerate(),
+                        additionalInstantiables: additionalInstantiables,
+                        dependencies: dependencies,
+                        declarationType: topLevelDeclarationType.asDeclarationType
+                    ),
+                ]
+            } else {
+                []
+            }
         case .extensionDecl:
-            return Instantiable(
-                instantiableType: instantiableType,
-                // If we have more than one initializer this isn't a valid extension.
-                initializer: initializers.count > 1 ? nil : initializers.first,
-                additionalInstantiables: additionalInstantiables,
-                dependencies: dependencies,
-                declarationType: .extensionType
-            )
+            extensionInstantiables
         }
     }
 
@@ -347,6 +342,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
     private var isInTopLevelDeclaration = false
     private var topLevelDeclarationType: ConcreteDeclType?
+
+    private var extensionInstantiables = [Instantiable]()
 
     private let declarationType: DeclarationType
 
