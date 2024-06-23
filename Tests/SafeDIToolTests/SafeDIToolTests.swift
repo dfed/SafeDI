@@ -4156,7 +4156,7 @@ final class SafeDIToolTests: XCTestCase {
                     let value: T
                 }
                 @Instantiable
-                extension Container<T>: Instantiable {
+                extension Container: Instantiable {
                     public static func instantiate() -> Container<String> {
                         .init(value: "")
                     }
@@ -4184,10 +4184,10 @@ final class SafeDIToolTests: XCTestCase {
 
             extension Root {
                 public init() {
-                    let stringContainer = Container<String>.instantiate()
-                    let intContainer = Container<Int>.instantiate()
-                    let floatContainer = Container<Float>.instantiate()
-                    let voidContainer = Container<Void>.instantiate()
+                    let stringContainer: Container<String> = Container<String>.instantiate()
+                    let intContainer: Container<Int> = Container<Int>.instantiate()
+                    let floatContainer: Container<Float> = Container<Float>.instantiate()
+                    let voidContainer: Container<Void> = Container<Void>.instantiate()
                     self.init(stringContainer: stringContainer, intContainer: intContainer, floatContainer: floatContainer, voidContainer: voidContainer)
                 }
             }
@@ -4212,7 +4212,7 @@ final class SafeDIToolTests: XCTestCase {
                     let value: T
                 }
                 @Instantiable
-                extension MyModule.Container<T>: Instantiable {
+                extension MyModule.Container: Instantiable {
                     public static func instantiate() -> MyModule.Container<String> {
                         .init(value: "")
                     }
@@ -4240,10 +4240,10 @@ final class SafeDIToolTests: XCTestCase {
 
             extension Root {
                 public init() {
-                    let stringContainer = MyModule.Container<String>.instantiate()
-                    let intContainer = MyModule.Container<Int>.instantiate()
-                    let floatContainer = MyModule.Container<Float>.instantiate()
-                    let voidContainer = MyModule.Container<Void>.instantiate()
+                    let stringContainer: MyModule.Container<String> = MyModule.Container<String>.instantiate()
+                    let intContainer: MyModule.Container<Int> = MyModule.Container<Int>.instantiate()
+                    let floatContainer: MyModule.Container<Float> = MyModule.Container<Float>.instantiate()
+                    let voidContainer: MyModule.Container<Void> = MyModule.Container<Void>.instantiate()
                     self.init(stringContainer: stringContainer, intContainer: intContainer, floatContainer: floatContainer, voidContainer: voidContainer)
                 }
             }

@@ -209,10 +209,17 @@ public struct InstantiableMacro: MemberMacro {
                 context.diagnose(diagnostic)
             }
 
-            let instantiableTypeCount = visitor.instantiables.map(\.instantiableTypes).count
-            if instantiableTypeCount > 1 {
-                throw InstantiableError.tooManyInstantiateMethods
-            } else if instantiableTypeCount == 0 {
+            let instantiables = visitor.instantiables
+            if instantiables.count > 1 {
+                var concreteInstantiables = Set<TypeDescription>()
+                for concreteInstantiable in instantiables.map(\.concreteInstantiable) {
+                    if concreteInstantiables.contains(concreteInstantiable) {
+                        throw InstantiableError.tooManyInstantiateMethods(concreteInstantiable)
+                    } else {
+                        concreteInstantiables.insert(concreteInstantiable)
+                    }
+                }
+            } else if instantiables.isEmpty {
                 let extendedTypeName = extensionDeclaration.extendedType.typeDescription.asSource
                 var membersWithInitializer = declaration.memberBlock.members
                 membersWithInitializer.insert(
@@ -337,7 +344,7 @@ public struct InstantiableMacro: MemberMacro {
         case decoratingIncompatibleType
         case fulfillingAdditionalTypesContainsOptional
         case fulfillingAdditionalTypesArgumentInvalid
-        case tooManyInstantiateMethods
+        case tooManyInstantiateMethods(TypeDescription)
 
         var description: String {
             switch self {
@@ -347,8 +354,8 @@ public struct InstantiableMacro: MemberMacro {
                 "The argument `fulfillingAdditionalTypes` must not include optionals"
             case .fulfillingAdditionalTypesArgumentInvalid:
                 "The argument `fulfillingAdditionalTypes` must be an inlined array"
-            case .tooManyInstantiateMethods:
-                "@\(InstantiableVisitor.macroName)-decorated extension must have a single `instantiate()` method per return type"
+            case let .tooManyInstantiateMethods(type):
+                "@\(InstantiableVisitor.macroName)-decorated extension must have a single `\(InstantiableVisitor.instantiateMethodName)(…)` method that returns `\(type.asSource)`"
             }
         }
     }

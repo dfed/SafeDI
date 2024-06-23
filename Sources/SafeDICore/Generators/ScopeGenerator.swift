@@ -133,11 +133,10 @@ actor ScopeGenerator: CustomStringConvertible {
                 ):
                     let argumentList = try instantiable.generateArgumentList()
                     let concreteTypeName = instantiable.concreteInstantiable.asSource
-                    let instantiationDeclaration = switch instantiable.declarationType {
-                    case .actorType, .classType, .structType:
-                        concreteTypeName
-                    case .extensionType:
+                    let instantiationDeclaration = if instantiable.declarationType.isExtension {
                         "\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
+                    } else {
+                        concreteTypeName
                     }
                     let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
 
@@ -211,7 +210,7 @@ actor ScopeGenerator: CustomStringConvertible {
                             .unwrappedTypeDescription
                             .asInstantiatedType
                             .asSource
-                        let propertyDeclaration = if typeDescription == unwrappedTypeDescription {
+                        let propertyDeclaration = if !instantiable.declarationType.isExtension, typeDescription == unwrappedTypeDescription {
                             "let \(property.label)"
                         } else {
                             "let \(property.asSource)"
@@ -239,6 +238,7 @@ actor ScopeGenerator: CustomStringConvertible {
                         let propertyDeclaration = if erasedToConcreteExistential || (
                             concreteTypeName == property.typeDescription.asSource
                                 && generatedProperties.isEmpty
+                                && !instantiable.declarationType.isExtension
                         ) {
                             "let \(property.label)"
                         } else {

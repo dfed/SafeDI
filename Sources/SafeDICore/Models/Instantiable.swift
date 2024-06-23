@@ -57,5 +57,14 @@ public struct Instantiable: Codable, Hashable {
         case actorType
         case structType
         case extensionType
+
+        public var isExtension: Bool {
+            switch self {
+            case .extensionType:
+                true
+            case .actorType, .classType, .structType:
+                false
+            }
+        }
     }
 }
