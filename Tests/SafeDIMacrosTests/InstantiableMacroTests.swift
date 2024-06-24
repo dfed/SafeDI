@@ -755,6 +755,54 @@ import SafeDICore
             }
         }
 
+        func test_extension_doesNotThrowErrorWhenMoreThanOneInstantiateMethodForSameBaseTypeWithDifferingGeneric() {
+            assertMacro {
+                """
+                @Instantiable
+                extension Container: Instantiable {
+                    public static func instantiate() -> Container<String> {
+                        .init(value: "")
+                    }
+                    public static func instantiate() -> Container<Int> {
+                        .init(value: 0)
+                    }
+                }
+                """
+            } expansion: {
+                """
+                extension Container: Instantiable {
+                    public static func instantiate() -> Container<String> {
+                        .init(value: "")
+                    }
+                    public static func instantiate() -> Container<Int> {
+                        .init(value: 0)
+                    }
+                }
+                """
+            }
+        }
+
+        func test_extension_doesNotThrowErrorWhenFulfillingAdditionalType() {
+            assertMacro {
+                """
+                @Instantiable(fulfillingAdditionalTypes: [SendableContainer<String>.self])
+                extension Container: Instantiable {
+                    public static func instantiate() -> Container<String> {
+                        .init(value: "")
+                    }
+                }
+                """
+            } expansion: {
+                """
+                extension Container: Instantiable {
+                    public static func instantiate() -> Container<String> {
+                        .init(value: "")
+                    }
+                }
+                """
+            }
+        }
+
         // MARK: Error tests
 
         func test_declaration_throwsErrorWhenOnProtocol() {
@@ -910,7 +958,7 @@ import SafeDICore
                 """
                 @Instantiable
                 ┬────────────
-                ╰─ 🛑 @Instantiable-decorated extension must have a single `instantiate()` method per return type
+                ╰─ 🛑 @Instantiable-decorated extension must have a single `instantiate(…)` method that returns `ExampleService`
                 extension ExampleService: Instantiable {
                     public static func instantiate() -> ExampleService { fatalError() }
                     public static func instantiate(user: User) -> ExampleService { fatalError() }
