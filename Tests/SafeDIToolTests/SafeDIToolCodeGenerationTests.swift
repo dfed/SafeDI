@@ -23,7 +23,7 @@ import XCTest
 
 @testable import SafeDITool
 
-final class SafeDIToolTests: XCTestCase {
+final class SafeDIToolCodeGenerationTests: XCTestCase {
     // MARK: XCTestCase
 
     override func setUpWithError() throws {
@@ -55,9 +55,10 @@ final class SafeDIToolTests: XCTestCase {
     // MARK: Code Generation Tests
 
     func test_run_successfullyGeneratesOutputFileWhenNoCodeInput() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -73,7 +74,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_doesNotWriteExtensionIfRootAlreadyHasEmptyInitializer() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 import Foundation
@@ -86,7 +87,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -106,7 +108,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootIsClass() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 import Foundation
@@ -126,7 +128,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -151,7 +154,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootIsActor() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 import class Foundation.URLSession
@@ -171,7 +174,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -196,7 +200,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootIsStruct() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 import Foundation
@@ -216,7 +220,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -241,7 +246,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenMultipleRootsExist() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 import Foundation
@@ -268,7 +273,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -300,7 +306,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootHasAnAnyProperty() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -324,7 +330,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -349,7 +356,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootHasAnAnyPropertyFulfilledByAnyAdditionalType() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 public protocol SomeProtocol<SomeAssociatedType> {
@@ -373,7 +380,8 @@ final class SafeDIToolTests: XCTestCase {
                 public final class OtherType {}
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -394,7 +402,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootHasAnOptionalProperty() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -418,7 +426,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -443,7 +452,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootHasMultipleLayers() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 public struct User {}
@@ -515,7 +524,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -547,7 +557,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesSingleForwardedPropertyInSubBuilders() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 public struct User {}
@@ -629,7 +639,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -662,7 +673,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizeMultipleForwardedPropertiesInSubBuilders() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 public struct User {
@@ -753,7 +764,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -786,7 +798,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizeMultipleForwardedPropertiesAndDependencyInversionInSubBuilders() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 public struct User {
@@ -877,7 +889,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -910,7 +923,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesDependencyInversionOfExistentialTypeInSubBuilder() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 import SwiftUI
@@ -932,7 +945,8 @@ final class SafeDIToolTests: XCTestCase {
                 public struct SplashScreenView: View {}
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -957,7 +971,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesLazyDependencyInversionOfExistentialTypeInSubBuilder() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 import SwiftUI
@@ -979,7 +993,8 @@ final class SafeDIToolTests: XCTestCase {
                 public struct SplashScreenView: View {}
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -1009,7 +1024,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizePropertiesNotDirectlyProvidedByParent() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 public struct User {}
@@ -1091,7 +1106,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -1124,7 +1140,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleLayersOfInstantiators() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 public struct User {}
@@ -1206,7 +1222,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -1242,7 +1259,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertyWithMissingInstantiableInitializer() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable()
@@ -1267,7 +1284,8 @@ final class SafeDIToolTests: XCTestCase {
                 public final class Grandchild {}
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -1291,7 +1309,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertyWithInitializerWithDefaultArgumentForNonInjectedProperty() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable()
@@ -1319,7 +1337,8 @@ final class SafeDIToolTests: XCTestCase {
                 public final class Grandchild {}
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -1343,7 +1362,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertyWithNotPublicInstantiableInitializer() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable()
@@ -1364,7 +1383,8 @@ final class SafeDIToolTests: XCTestCase {
                 public final class Grandchild {}
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -1388,7 +1408,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesNonPublicProperty() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable()
@@ -1409,7 +1429,8 @@ final class SafeDIToolTests: XCTestCase {
                 public final class Grandchild {}
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -1433,7 +1454,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatReceiveTheSameProperty() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable()
@@ -1498,7 +1519,8 @@ final class SafeDIToolTests: XCTestCase {
                 """,
 
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -1529,7 +1551,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyInMiddleLevel() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable()
@@ -1596,7 +1618,8 @@ final class SafeDIToolTests: XCTestCase {
                 """,
 
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -1628,7 +1651,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesTheSamePropertyAtMultipleLevels() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -1668,7 +1691,8 @@ final class SafeDIToolTests: XCTestCase {
                 """,
 
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -1697,7 +1721,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesAReceivedPropertyBelowWhereItIsReceived() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -1736,7 +1760,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -1767,7 +1792,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesAReceivedPropertyMultipleLevelsBelowWhereItIsFirstReceived() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -1813,7 +1838,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -1847,7 +1873,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesAPropertyReceivedInOneChildBranchMultipleLevelsBelowWhereItIsFirstReceived() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -1902,7 +1928,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -1943,7 +1970,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesAPropertyForwardedByAChild_doesNotRequirePuttingInstantiatedPropertyBeforeErasedInstantiator() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -2007,7 +2034,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -2055,7 +2083,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyMultipleLayersDeep() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable()
@@ -2118,7 +2146,8 @@ final class SafeDIToolTests: XCTestCase {
                 """,
 
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -2160,7 +2189,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesInstantiablePropertyWithNoArguments() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable()
@@ -2201,7 +2230,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -2227,7 +2257,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesInstantiablePropertyWithArguments() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 public struct User {
@@ -2321,7 +2351,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -2357,17 +2388,18 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyAcrossMultipleModules() async throws {
-        let greatGrandchildModuleOutput = try await executeSystemUnderTest(
+        let greatGrandchildModuleOutput = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable()
                 public final class GreatGrandchild: Sendable {}
                 """,
             ],
-            buildDependencyTreeOutput: false
+            buildDependencyTreeOutput: false,
+            filesToDelete: &filesToDelete
         )
 
-        let grandchildModuleOutput = try await executeSystemUnderTest(
+        let grandchildModuleOutput = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 import GreatGrandchildModule
@@ -2407,10 +2439,11 @@ final class SafeDIToolTests: XCTestCase {
                 """,
             ],
             dependentModuleOutputPaths: [greatGrandchildModuleOutput.moduleInfoOutputPath],
-            buildDependencyTreeOutput: false
+            buildDependencyTreeOutput: false,
+            filesToDelete: &filesToDelete
         )
 
-        let childModuleOutput = try await executeSystemUnderTest(
+        let childModuleOutput = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 import class GrandchildModule.GrandchildAA
@@ -2441,10 +2474,11 @@ final class SafeDIToolTests: XCTestCase {
                 greatGrandchildModuleOutput.moduleInfoOutputPath,
                 grandchildModuleOutput.moduleInfoOutputPath,
             ],
-            buildDependencyTreeOutput: false
+            buildDependencyTreeOutput: false,
+            filesToDelete: &filesToDelete
         )
 
-        let topLevelModuleOutput = try await executeSystemUnderTest(
+        let topLevelModuleOutput = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 import ChildModule
@@ -2464,7 +2498,8 @@ final class SafeDIToolTests: XCTestCase {
                 grandchildModuleOutput.moduleInfoOutputPath,
                 childModuleOutput.moduleInfoOutputPath,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -2522,7 +2557,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootHasReceivedAliasOfInstantiable() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -2549,7 +2584,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -2575,7 +2611,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_successfullyGeneratesOutputFileWhenNoRootFound() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -2603,7 +2639,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -2623,7 +2660,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliased() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 public struct User {}
@@ -2732,7 +2769,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -2773,7 +2811,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedAndExistential() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -2803,7 +2841,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -2834,7 +2873,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedALevelAboveWhereItIsReceived() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 public struct User {}
@@ -2948,7 +2987,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -2990,7 +3030,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWhenInstantiated() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 public struct User {}
@@ -3035,7 +3075,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -3064,7 +3105,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedTwice() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 public struct User {}
@@ -3116,7 +3157,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -3146,7 +3188,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWhenForwarded() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 public struct User {}
@@ -3255,7 +3297,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -3296,7 +3339,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWasALevelBelowWhereItWasForwarded() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 public struct User {}
@@ -3402,7 +3445,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -3443,7 +3487,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenFirstPropertyDependsOnLastPropertyAndMiddlePropertyHasNoDependencyEntanglementsWithEither() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -3479,7 +3523,8 @@ final class SafeDIToolTests: XCTestCase {
                 public final class GreatGrandchild {}
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -3505,7 +3550,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootHasLotsOfDependenciesThatDependOnOneAnother() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -3837,7 +3882,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -3883,7 +3929,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenRootPropertyWithOptionalInstantiator() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -3897,7 +3943,8 @@ final class SafeDIToolTests: XCTestCase {
                 public final class Child {}
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -3921,7 +3968,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenLazyInstantiationCycleExists() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -3952,7 +3999,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -3985,7 +4033,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenPartiallyLazyInstantiationCycleExists() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -4016,7 +4064,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -4047,7 +4096,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenLazySelfInstantiationCycleExists() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -4064,7 +4113,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -4092,7 +4142,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenLazySelfForwardingInstantiationCycleExists() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -4111,7 +4161,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -4140,7 +4191,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenAGenericTypeIsAnExtendedInstantiableWithMultipleGenericReturnTypes() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -4172,7 +4223,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -4196,7 +4248,7 @@ final class SafeDIToolTests: XCTestCase {
     }
 
     func test_run_writesConvenienceExtensionOnRootOfTree_whenAGenericTypeIsAnExtendedInstantiableWithMultipleGenericFullyQualifiedReturnTypes() async throws {
-        let output = try await executeSystemUnderTest(
+        let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
                 @Instantiable
@@ -4228,7 +4280,8 @@ final class SafeDIToolTests: XCTestCase {
                 }
                 """,
             ],
-            buildDependencyTreeOutput: true
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
         )
 
         XCTAssertEqual(
@@ -4259,7 +4312,7 @@ final class SafeDIToolTests: XCTestCase {
             No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `DoesNotExist`
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     import UIKit
@@ -4271,7 +4324,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4282,7 +4336,7 @@ final class SafeDIToolTests: XCTestCase {
             No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `URLSession`
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     import Foundation
@@ -4305,7 +4359,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4316,7 +4371,7 @@ final class SafeDIToolTests: XCTestCase {
             @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     import Foundation
@@ -4339,7 +4394,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4350,7 +4406,7 @@ final class SafeDIToolTests: XCTestCase {
             Property `networkService: NetworkService` on RootViewController has at least one @Forwarded property. Property should instead be of type `Instantiator<DefaultNetworkService>`.
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     import Foundation
@@ -4373,7 +4429,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4384,7 +4441,7 @@ final class SafeDIToolTests: XCTestCase {
             @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     @Instantiable
@@ -4423,7 +4480,8 @@ final class SafeDIToolTests: XCTestCase {
                     public final class Blankie {}
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4434,7 +4492,7 @@ final class SafeDIToolTests: XCTestCase {
             @Received property `authService: AuthService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     public struct User {}
@@ -4479,7 +4537,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4490,7 +4549,7 @@ final class SafeDIToolTests: XCTestCase {
             @Received property `networkService2: NetworkService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     import Foundation
@@ -4531,7 +4590,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4542,7 +4602,7 @@ final class SafeDIToolTests: XCTestCase {
             @Received property `networkService: NetworkService2` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     import Foundation
@@ -4583,7 +4643,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4594,7 +4655,7 @@ final class SafeDIToolTests: XCTestCase {
             @Received property `authService: AuthService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     public struct User {}
@@ -4639,7 +4700,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4650,7 +4712,7 @@ final class SafeDIToolTests: XCTestCase {
             @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> URLSessionWrapper
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     import URLSessionWrapper
@@ -4672,7 +4734,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4683,7 +4746,7 @@ final class SafeDIToolTests: XCTestCase {
             @Instantiable types must be top-level declarations. Found the following nested @Instantiable types: SplashViewController
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     import UIKit
@@ -4695,7 +4758,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4706,7 +4770,7 @@ final class SafeDIToolTests: XCTestCase {
             @Instantiable types must be top-level declarations. Found the following nested @Instantiable types: AuthenticatedViewController, SplashViewController
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     import UIKit
@@ -4721,7 +4785,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4732,7 +4797,7 @@ final class SafeDIToolTests: XCTestCase {
             @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     import UIKit
@@ -4747,7 +4812,8 @@ final class SafeDIToolTests: XCTestCase {
                     public final class RootViewController: UIViewController {}
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4758,7 +4824,7 @@ final class SafeDIToolTests: XCTestCase {
             @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     import UIKit
@@ -4777,7 +4843,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4788,7 +4855,7 @@ final class SafeDIToolTests: XCTestCase {
             @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `UserDefaults`
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     import Foundation
@@ -4811,7 +4878,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4822,7 +4890,7 @@ final class SafeDIToolTests: XCTestCase {
             @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `UIViewController`
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     import UIKit
@@ -4837,7 +4905,8 @@ final class SafeDIToolTests: XCTestCase {
                     public final class SplashViewController: UIViewController {}
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4849,7 +4918,7 @@ final class SafeDIToolTests: XCTestCase {
             A -> B -> C -> A
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     @Instantiable
@@ -4880,7 +4949,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4892,7 +4962,7 @@ final class SafeDIToolTests: XCTestCase {
             B -> C -> A -> B
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     @Instantiable
@@ -4923,7 +4993,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4935,7 +5006,7 @@ final class SafeDIToolTests: XCTestCase {
             a: A -> b: B -> c: C -> a: A
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     @Instantiable
@@ -4970,7 +5041,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -4982,7 +5054,7 @@ final class SafeDIToolTests: XCTestCase {
             b: B -> c: C -> renamedB: B -> b: B
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     @Instantiable
@@ -5017,7 +5089,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -5028,7 +5101,7 @@ final class SafeDIToolTests: XCTestCase {
             Property `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>`.
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     public struct User {}
@@ -5099,7 +5172,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -5110,7 +5184,7 @@ final class SafeDIToolTests: XCTestCase {
             Property `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>`.
             """
         ) {
-            try await executeSystemUnderTest(
+            try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
                     public struct User {}
@@ -5185,7 +5259,8 @@ final class SafeDIToolTests: XCTestCase {
                     }
                     """,
                 ],
-                buildDependencyTreeOutput: true
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
             )
         }
     }
@@ -5232,114 +5307,5 @@ final class SafeDIToolTests: XCTestCase {
 
     // MARK: Private
 
-    private func assertThrowsError(
-        _ errorDescription: String,
-        line: UInt = #line,
-        block: () async throws -> some Any
-    ) async {
-        do {
-            _ = try await block()
-            XCTFail("Did not throw error!", line: line)
-        } catch {
-            XCTAssertEqual("\(error)", errorDescription, line: line)
-        }
-    }
-
-    private func executeSystemUnderTest(
-        swiftFileContent: [String],
-        dependentModuleOutputPaths: [String] = [],
-        buildDependencyTreeOutput: Bool
-    ) async throws -> TestOutput {
-        let swiftFileCSV = URL.temporaryFile
-        let swiftFiles = try swiftFileContent
-            .map {
-                let location = URL.temporaryFile.appendingPathExtension("swift")
-                try $0.write(to: location, atomically: true, encoding: .utf8)
-                return location
-            }
-        try swiftFiles
-            .map(\.relativePath)
-            .joined(separator: ",")
-            .write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-
-        let moduleInfoOutput = URL.temporaryFile
-        let dependencyTreeOutput = URL.temporaryFile
-        fileFinder = StubFileFinder(files: swiftFiles) // Successfully execute the file finder code path.
-        var tool = SafeDITool()
-        tool.swiftSourcesFilePath = swiftFileCSV.relativePath
-        tool.include = ["Fake"]
-        tool.additionalImportedModules = []
-        tool.moduleInfoOutput = moduleInfoOutput.relativePath
-        tool.moduleInfoPaths = dependentModuleOutputPaths
-        tool.dependencyTreeOutput = buildDependencyTreeOutput ? dependencyTreeOutput.relativePath : nil
-        try await tool.run()
-
-        filesToDelete.append(swiftFileCSV)
-        filesToDelete += swiftFiles
-        filesToDelete.append(moduleInfoOutput)
-        if buildDependencyTreeOutput {
-            filesToDelete.append(dependencyTreeOutput)
-        }
-
-        return try TestOutput(
-            moduleInfo: JSONDecoder().decode(SafeDITool.ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
-            moduleInfoOutputPath: moduleInfoOutput.relativePath,
-            dependencyTree: buildDependencyTreeOutput ? String(data: Data(contentsOf: dependencyTreeOutput), encoding: .utf8) : nil,
-            dependencyTreeOutputPath: buildDependencyTreeOutput ? dependencyTreeOutput.relativePath : nil
-        )
-    }
-
-    private struct TestOutput {
-        let moduleInfo: SafeDITool.ModuleInfo
-        let moduleInfoOutputPath: String
-        let dependencyTree: String?
-        let dependencyTreeOutputPath: String?
-    }
-
     private var filesToDelete = [URL]()
-}
-
-extension URL {
-    fileprivate static var temporaryFile: URL {
-        #if os(Linux)
-            FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        #else
-            if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
-                URL.temporaryDirectory.appending(path: UUID().uuidString)
-            } else {
-                FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-            }
-        #endif
-    }
-}
-
-struct StubFileFinder: FileFinder {
-    func enumerator(
-        at _: URL,
-        includingPropertiesForKeys _: [URLResourceKey]?,
-        options _: FileManager.DirectoryEnumerationOptions,
-        errorHandler _: ((URL, any Error) -> Bool)?
-    ) -> FileManager.DirectoryEnumerator? {
-        StubDirectoryEnumerator(files: files)
-    }
-
-    final class StubDirectoryEnumerator: FileManager.DirectoryEnumerator {
-        init(files: [URL]) {
-            self.files = files
-                // Also include a random file in the glob.
-                + [URL.temporaryFile]
-        }
-
-        override func nextObject() -> Any? {
-            if files.isEmpty {
-                nil
-            } else {
-                files.removeFirst()
-            }
-        }
-
-        var files: [URL]
-    }
-
-    let files: [URL]
 }

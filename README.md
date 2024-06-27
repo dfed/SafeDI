@@ -477,6 +477,10 @@ SafeDI‘s compile-time-safe design makes it similar to [Needle](https://github.
 
 Other Swift DI libraries like [Swinject](https://github.com/Swinject/Swinject) and [Cleanse](https://github.com/square/Cleanse) do not offer compile-time safety, though other features are similar. A primary benefit of the SafeDI library is that compilation validates your dependency tree.
 
+## Introspecting a SafeDI tree
+
+You can utilize the `safeditool` to create a [GraphViz DOT file](https://graphviz.org/doc/info/lang.html) to introspect a SafeDI dependency tree by utilizing the `--dot-file-output` parameter on `safeditool`. This command will create a `DOT` file that you can pipe into `GraphViz`‘s `dot` command to create a pdf.
+
 ## Acknowledgements
 
 Huge thanks to [@kierajmumick](http://github.com/kierajmumick) for helping hone the early design of SafeDI.
