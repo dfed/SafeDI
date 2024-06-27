@@ -42,6 +42,8 @@ struct SafeDITool: AsyncParsableCommand {
 
     @Option(help: "The desired output location of the Swift dependency injection tree. Only include this option when running on a project‘s root module.") var dependencyTreeOutput: String?
 
+    @Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project‘s root module.") var dotFileOutput: String?
+
     // MARK: Internal
 
     @MainActor
@@ -55,13 +57,14 @@ struct SafeDITool: AsyncParsableCommand {
             parsedModule(loadSwiftFiles())
         )
 
+        let generator = try DependencyTreeGenerator(
+            importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
+            typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
+                instantiables: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
+            )
+        )
         async let generatedCode: String? = try dependencyTreeOutput != nil
-            ? DependencyTreeGenerator(
-                importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
-                typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
-                    instantiables: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
-                )
-            ).generate()
+            ? generator.generateCodeTree()
             : nil
 
         if !module.nestedInstantiableDecoratedTypeDescriptions.isEmpty {
@@ -82,6 +85,16 @@ struct SafeDITool: AsyncParsableCommand {
 
         if let dependencyTreeOutput, let generatedCode = try await generatedCode {
             try generatedCode.write(toPath: dependencyTreeOutput)
+        }
+
+        if let dotFileOutput {
+            let dotGraph = try await generator.generateDOTTree()
+            try """
+            graph SafeDI {
+                ranksep=2
+            \(dotGraph)
+            }
+            """.write(toPath: dotFileOutput)
         }
     }
 

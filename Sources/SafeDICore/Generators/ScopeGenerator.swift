@@ -283,6 +283,24 @@ actor ScopeGenerator: CustomStringConvertible {
         }
     }
 
+    func generateDOT() async throws -> String {
+        let orderedPropertiesToGenerate = try orderedPropertiesToGenerate
+        let instantiatedProperties = orderedPropertiesToGenerate.map(\.scopeData.asDOTNode)
+        var childDOTs = [String]()
+        for orderedPropertyToGenerate in orderedPropertiesToGenerate {
+            let childDOT = try await orderedPropertyToGenerate.generateDOT()
+            if !childDOT.isEmpty {
+                childDOTs.append(childDOT)
+            }
+        }
+
+        let root = scopeData.asDOTNode
+        let forwardedProperties = scopeData.forwardedProperties.sorted().map { "\"\($0.asSource)\"" }
+        return ((instantiatedProperties + forwardedProperties).map {
+            "    \(root) -- \($0)"
+        } + childDOTs).joined(separator: "\n")
+    }
+
     // MARK: Private
 
     private enum ScopeData {
@@ -306,6 +324,17 @@ actor ScopeGenerator: CustomStringConvertible {
                 forwardedProperties
             case .root, .alias:
                 []
+            }
+        }
+
+        var asDOTNode: String {
+            switch self {
+            case let .root(instantiable):
+                instantiable.concreteInstantiable.asSource
+            case let .property(_, property, _, _, _):
+                "\"\(property.asSource)\""
+            case let .alias(property, fulfillingProperty, _):
+                "\"\(property.asSource) <- \(fulfillingProperty.asSource)\""
             }
         }
     }

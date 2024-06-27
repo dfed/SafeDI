@@ -33,20 +33,8 @@ public final class DependencyTreeGenerator {
 
     // MARK: Public
 
-    public func generate() async throws -> String {
-        try validateReachableTypeDescriptions()
-
-        let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
-        try validateReceivedProperties(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
-        let rootScopeGenerators = try rootInstantiables
-            .sorted()
-            .compactMap {
-                try typeDescriptionToScopeMap[$0]?.createScopeGenerator(
-                    for: nil,
-                    propertyStack: [],
-                    erasedToConcreteExistential: false
-                )
-            }
+    public func generateCodeTree() async throws -> String {
+        let rootScopeGenerators = try rootScopeGenerators
 
         let dependencyTree = try await withThrowingTaskGroup(
             of: String.self,
@@ -59,7 +47,7 @@ public final class DependencyTreeGenerator {
             for try await generatedRoot in taskGroup {
                 generatedRoots.append(generatedRoot)
             }
-            return generatedRoots.sorted().joined(separator: "\n\n")
+            return generatedRoots.filter { !$0.isEmpty }.sorted().joined(separator: "\n\n")
         }
 
         let importsWhitespace = imports.isEmpty ? "" : "\n"
@@ -69,6 +57,28 @@ public final class DependencyTreeGenerator {
         // Please refrain from editing this file directly.
         \(importsWhitespace)\(imports)\(importsWhitespace)
         \(dependencyTree.isEmpty ? "// No root @\(InstantiableVisitor.macroName)-decorated types found, or root types already had a `public init()` method." : dependencyTree)
+        """
+    }
+
+    public func generateDOTTree() async throws -> String {
+        let rootScopeGenerators = try rootScopeGenerators
+
+        let dependencyTree = try await withThrowingTaskGroup(
+            of: String.self,
+            returning: String.self
+        ) { taskGroup in
+            for rootScopeGenerator in rootScopeGenerators {
+                taskGroup.addTask { try await rootScopeGenerator.generateDOT() }
+            }
+            var generatedRoots = [String]()
+            for try await generatedRoot in taskGroup {
+                generatedRoots.append(generatedRoot)
+            }
+            return generatedRoots.filter { !$0.isEmpty }.sorted().joined(separator: "\n\n")
+        }
+
+        return """
+        \(dependencyTree)
         """
     }
 
@@ -114,6 +124,33 @@ public final class DependencyTreeGenerator {
 
     private let importStatements: [ImportStatement]
     private let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
+    private var rootScopeGenerators: [ScopeGenerator] {
+        get throws {
+            if let _rootScopeGenerators {
+                return _rootScopeGenerators
+            } else {
+                let rootScopeGenerators: [ScopeGenerator] = try {
+                    try validateReachableTypeDescriptions()
+
+                    let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
+                    try validateReceivedProperties(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
+                    return try rootInstantiables
+                        .sorted()
+                        .compactMap {
+                            try typeDescriptionToScopeMap[$0]?.createScopeGenerator(
+                                for: nil,
+                                propertyStack: [],
+                                erasedToConcreteExistential: false
+                            )
+                        }
+                }()
+                _rootScopeGenerators = rootScopeGenerators
+                return rootScopeGenerators
+            }
+        }
+    }
+
+    private var _rootScopeGenerators: [ScopeGenerator]?
 
     private var imports: String {
         importStatements
