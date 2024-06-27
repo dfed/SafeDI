@@ -283,26 +283,21 @@ actor ScopeGenerator: CustomStringConvertible {
         }
     }
 
-    func generateDOT(parent: String? = nil) async throws -> String {
-        let root = scopeData.asDOTNode
+    func generateDOT() async throws -> String {
         let orderedPropertiesToGenerate = try orderedPropertiesToGenerate
+        let instantiatedProperties = orderedPropertiesToGenerate.map(\.scopeData.asDOTNode)
         var childDOTs = [String]()
-        let childrenParentTree = if let parent {
-            "\(parent) -- \(root)"
-        } else {
-            "    \(root)"
-        }
         for orderedPropertyToGenerate in orderedPropertiesToGenerate {
-            let childDOT = "\(try await orderedPropertyToGenerate.generateDOT(parent: childrenParentTree))"
+            let childDOT = try await orderedPropertyToGenerate.generateDOT()
             if !childDOT.isEmpty {
                 childDOTs.append(childDOT)
             }
         }
 
-        let instantiatedProperties = orderedPropertiesToGenerate.map(\.scopeData.asDOTNode)
+        let root = scopeData.asDOTNode
         let forwardedProperties = scopeData.forwardedProperties.sorted().map { "\"\($0.asSource)\"" }
         return ((instantiatedProperties + forwardedProperties).map {
-            "\(childrenParentTree) -- \($0)"
+            "    \(root) -- \($0)"
         } + childDOTs).joined(separator: "\n")
     }
 

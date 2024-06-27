@@ -234,7 +234,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 RootViewController -- "networkService: NetworkService"
                 RootViewController -- "authService: AuthService"
                 RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>"
-                RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>" -- "user: User"
+                "loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>" -- "user: User"
             }
             """
         )
@@ -334,8 +334,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 RootViewController -- "networkService: NetworkService"
                 RootViewController -- "authService: AuthService"
                 RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>"
-                RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "userService: UserService"
-                RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "user: User"
+                "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "userService: UserService"
+                "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "user: User"
             }
             """
         )
@@ -444,9 +444,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 RootViewController -- "networkService: NetworkService"
                 RootViewController -- "authService: AuthService"
                 RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>"
-                RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>" -- "userService: UserService"
-                RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>" -- "userID: String"
-                RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>" -- "userName: String"
+                "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>" -- "userService: UserService"
+                "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>" -- "userID: String"
+                "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>" -- "userName: String"
             }
             """
         )
@@ -555,9 +555,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 RootViewController -- "networkService: NetworkService"
                 RootViewController -- "authService: AuthService"
                 RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>"
-                RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>" -- "userService: UserService"
-                RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>" -- "userID: String"
-                RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>" -- "userName: String"
+                "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>" -- "userService: UserService"
+                "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>" -- "userID: String"
+                "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>" -- "userName: String"
             }
             """
         )
@@ -657,8 +657,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 RootViewController -- "networkService: NetworkService"
                 RootViewController -- "authService: AuthService"
                 RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>"
-                RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "userService: UserService"
-                RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "user: User"
+                "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "userService: UserService"
+                "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "user: User"
             }
             """
         )
@@ -758,8 +758,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 RootViewController -- "networkService: NetworkService"
                 RootViewController -- "authService: AuthService"
                 RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>"
-                RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "userServiceInstantiator: Instantiator<UserService>"
-                RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "user: User"
+                "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "userServiceInstantiator: Instantiator<UserService>"
+                "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "user: User"
             }
             """
         )
@@ -842,10 +842,10 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 Root -- "greatGrandchild: GreatGrandchild"
                 Root -- "childA: ChildA"
                 Root -- "childB: ChildB"
-                Root -- "childA: ChildA" -- "grandchildAA: GrandchildAA"
-                Root -- "childA: ChildA" -- "grandchildAB: GrandchildAB"
-                Root -- "childB: ChildB" -- "grandchildBA: GrandchildBA"
-                Root -- "childB: ChildB" -- "grandchildBB: GrandchildBB"
+                "childA: ChildA" -- "grandchildAA: GrandchildAA"
+                "childA: ChildA" -- "grandchildAB: GrandchildAB"
+                "childB: ChildB" -- "grandchildBA: GrandchildBA"
+                "childB: ChildB" -- "grandchildBB: GrandchildBB"
             }
             """
         )
@@ -929,12 +929,12 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             graph SafeDI {
                 Root -- "childA: ChildA"
                 Root -- "childB: ChildB"
-                Root -- "childA: ChildA" -- "greatGrandchild: GreatGrandchild"
-                Root -- "childA: ChildA" -- "grandchildAA: GrandchildAA"
-                Root -- "childA: ChildA" -- "grandchildAB: GrandchildAB"
-                Root -- "childB: ChildB" -- "greatGrandchild: GreatGrandchild"
-                Root -- "childB: ChildB" -- "grandchildBA: GrandchildBA"
-                Root -- "childB: ChildB" -- "grandchildBB: GrandchildBB"
+                "childA: ChildA" -- "greatGrandchild: GreatGrandchild"
+                "childA: ChildA" -- "grandchildAA: GrandchildAA"
+                "childA: ChildA" -- "grandchildAB: GrandchildAB"
+                "childB: ChildB" -- "greatGrandchild: GreatGrandchild"
+                "childB: ChildB" -- "grandchildBA: GrandchildBA"
+                "childB: ChildB" -- "grandchildBB: GrandchildBB"
             }
             """
         )
@@ -990,10 +990,10 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             """
             graph SafeDI {
                 Root -- "child: Child"
-                Root -- "child: Child" -- "grandchild: Grandchild"
-                Root -- "child: Child" -- "recreated: Recreated"
-                Root -- "child: Child" -- "grandchild: Grandchild" -- "recreated: Recreated"
-                Root -- "child: Child" -- "grandchild: Grandchild" -- "greatGrandchild: GreatGrandchild"
+                "child: Child" -- "grandchild: Grandchild"
+                "child: Child" -- "recreated: Recreated"
+                "grandchild: Grandchild" -- "recreated: Recreated"
+                "grandchild: Grandchild" -- "greatGrandchild: GreatGrandchild"
             }
             """
         )
@@ -1073,14 +1073,14 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             graph SafeDI {
                 Root -- "childA: ChildA"
                 Root -- "childB: ChildB"
-                Root -- "childA: ChildA" -- "grandchildAA: GrandchildAA"
-                Root -- "childA: ChildA" -- "grandchildAB: GrandchildAB"
-                Root -- "childA: ChildA" -- "grandchildAA: GrandchildAA" -- "greatGrandchild: GreatGrandchild"
-                Root -- "childA: ChildA" -- "grandchildAB: GrandchildAB" -- "greatGrandchild: GreatGrandchild"
-                Root -- "childB: ChildB" -- "grandchildBA: GrandchildBA"
-                Root -- "childB: ChildB" -- "grandchildBB: GrandchildBB"
-                Root -- "childB: ChildB" -- "grandchildBA: GrandchildBA" -- "greatGrandchild: GreatGrandchild"
-                Root -- "childB: ChildB" -- "grandchildBB: GrandchildBB" -- "greatGrandchild: GreatGrandchild"
+                "childA: ChildA" -- "grandchildAA: GrandchildAA"
+                "childA: ChildA" -- "grandchildAB: GrandchildAB"
+                "grandchildAA: GrandchildAA" -- "greatGrandchild: GreatGrandchild"
+                "grandchildAB: GrandchildAB" -- "greatGrandchild: GreatGrandchild"
+                "childB: ChildB" -- "grandchildBA: GrandchildBA"
+                "childB: ChildB" -- "grandchildBB: GrandchildBB"
+                "grandchildBA: GrandchildBA" -- "greatGrandchild: GreatGrandchild"
+                "grandchildBB: GrandchildBB" -- "greatGrandchild: GreatGrandchild"
             }
             """
         )
@@ -1207,14 +1207,14 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             graph SafeDI {
                 Root -- "childA: ChildA"
                 Root -- "childB: ChildB"
-                Root -- "childA: ChildA" -- "grandchildAA: GrandchildAA"
-                Root -- "childA: ChildA" -- "grandchildAB: GrandchildAB"
-                Root -- "childA: ChildA" -- "grandchildAA: GrandchildAA" -- "greatGrandchild: GreatGrandchild"
-                Root -- "childA: ChildA" -- "grandchildAB: GrandchildAB" -- "greatGrandchild: GreatGrandchild"
-                Root -- "childB: ChildB" -- "grandchildBA: GrandchildBA"
-                Root -- "childB: ChildB" -- "grandchildBB: GrandchildBB"
-                Root -- "childB: ChildB" -- "grandchildBA: GrandchildBA" -- "greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>"
-                Root -- "childB: ChildB" -- "grandchildBB: GrandchildBB" -- "greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>"
+                "childA: ChildA" -- "grandchildAA: GrandchildAA"
+                "childA: ChildA" -- "grandchildAB: GrandchildAB"
+                "grandchildAA: GrandchildAA" -- "greatGrandchild: GreatGrandchild"
+                "grandchildAB: GrandchildAB" -- "greatGrandchild: GreatGrandchild"
+                "childB: ChildB" -- "grandchildBA: GrandchildBA"
+                "childB: ChildB" -- "grandchildBB: GrandchildBB"
+                "grandchildBA: GrandchildBA" -- "greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>"
+                "grandchildBB: GrandchildBB" -- "greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>"
             }
             """
         )
@@ -1326,8 +1326,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             graph SafeDI {
                 RootViewController -- "networkService: NetworkService"
                 RootViewController -- "authService: AuthService"
-                RootViewController -- "authService: AuthService" -- "renamedNetworkService: NetworkService <- networkService: NetworkService"
-                RootViewController -- "authService: AuthService" -- "renamedAgainNetworkService: NetworkService <- renamedNetworkService: NetworkService"
+                "authService: AuthService" -- "renamedNetworkService: NetworkService <- networkService: NetworkService"
+                "authService: AuthService" -- "renamedAgainNetworkService: NetworkService <- renamedNetworkService: NetworkService"
             }
             """
         )
@@ -1379,9 +1379,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             """
             graph SafeDI {
                 Root -- "child: Child"
-                Root -- "child: Child" -- "greatGrandchild: GreatGrandchild"
-                Root -- "child: Child" -- "grandchild: Grandchild"
-                Root -- "child: Child" -- "unrelated: Unrelated"
+                "child: Child" -- "greatGrandchild: GreatGrandchild"
+                "child: Child" -- "grandchild: Grandchild"
+                "child: Child" -- "unrelated: Unrelated"
             }
             """
         )
@@ -1800,9 +1800,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             """
             graph SafeDI {
                 Root -- "aBuilder: Instantiator<A>"
-                Root -- "aBuilder: Instantiator<A>" -- "bBuilder: Instantiator<B>"
-                Root -- "aBuilder: Instantiator<A>" -- "bBuilder: Instantiator<B>" -- "cBuilder: Instantiator<C>"
-                Root -- "aBuilder: Instantiator<A>" -- "bBuilder: Instantiator<B>" -- "cBuilder: Instantiator<C>" -- "aBuilder: Instantiator<A>"
+                "aBuilder: Instantiator<A>" -- "bBuilder: Instantiator<B>"
+                "bBuilder: Instantiator<B>" -- "cBuilder: Instantiator<C>"
+                "cBuilder: Instantiator<C>" -- "aBuilder: Instantiator<A>"
             }
             """
         )
@@ -1849,9 +1849,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             """
             graph SafeDI {
                 Root -- "a: A"
-                Root -- "a: A" -- "b: B"
-                Root -- "a: A" -- "b: B" -- "cBuilder: Instantiator<C>"
-                Root -- "a: A" -- "b: B" -- "cBuilder: Instantiator<C>" -- "a: A"
+                "a: A" -- "b: B"
+                "b: B" -- "cBuilder: Instantiator<C>"
+                "cBuilder: Instantiator<C>" -- "a: A"
             }
             """
         )
@@ -1884,8 +1884,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             """
             graph SafeDI {
                 Root -- "a: A"
-                Root -- "a: A" -- "aBuilder: Instantiator<A>"
-                Root -- "a: A" -- "aBuilder: Instantiator<A>" -- "aBuilder: Instantiator<A>"
+                "a: A" -- "aBuilder: Instantiator<A>"
+                "aBuilder: Instantiator<A>" -- "aBuilder: Instantiator<A>"
             }
             """
         )
@@ -1920,9 +1920,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             """
             graph SafeDI {
                 Root -- "aBuilder: Instantiator<A>"
-                Root -- "aBuilder: Instantiator<A>" -- "aBuilder: Instantiator<A>"
-                Root -- "aBuilder: Instantiator<A>" -- "context: String"
-                Root -- "aBuilder: Instantiator<A>" -- "aBuilder: Instantiator<A>" -- "context: String"
+                "aBuilder: Instantiator<A>" -- "aBuilder: Instantiator<A>"
+                "aBuilder: Instantiator<A>" -- "context: String"
+                "aBuilder: Instantiator<A>" -- "context: String"
             }
             """
         )
