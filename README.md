@@ -481,6 +481,13 @@ Other Swift DI libraries like [Swinject](https://github.com/Swinject/Swinject) a
 
 You can utilize the `safeditool` to create a [GraphViz DOT file](https://graphviz.org/doc/info/lang.html) to introspect a SafeDI dependency tree by utilizing the `--dot-file-output` parameter on `safeditool`. This command will create a `DOT` file that you can pipe into `GraphViz`‘s `dot` command to create a pdf.
 
+Once you have a the dot file, you can run:
+```bash
+dot path_to_dot_file.dot -Tpdf > path_to_pdf_file.pdf
+```
+
+You can find instructions for how to install the `dot` command [here](https://graphviz.org/download/).
+
 ## Acknowledgements
 
 Huge thanks to [@kierajmumick](http://github.com/kierajmumick) for helping hone the early design of SafeDI.
