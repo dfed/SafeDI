@@ -2052,46 +2052,6 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    // MARK: Argument handling tests
-
-    func test_include_throwsErrorWhenCanNotCreateEnumerator() async {
-        final class FailingFileFinder: FileFinder {
-            func enumerator(
-                at _: URL,
-                includingPropertiesForKeys _: [URLResourceKey]?,
-                options _: FileManager.DirectoryEnumerationOptions,
-                errorHandler _: ((URL, any Error) -> Bool)?
-            ) -> FileManager.DirectoryEnumerator? {
-                nil
-            }
-        }
-        fileFinder = FailingFileFinder()
-
-        var tool = SafeDITool()
-        tool.swiftSourcesFilePath = nil
-        tool.include = ["Fake"]
-        tool.additionalImportedModules = []
-        tool.moduleInfoOutput = nil
-        tool.moduleInfoPaths = []
-        tool.dependencyTreeOutput = nil
-        await assertThrowsError("Could not create file enumerator for directory 'Fake'") {
-            try await tool.run()
-        }
-    }
-
-    func test_include_throwsErrorWhenNoSwiftSourcesFilePathAndNoInclude() async {
-        var tool = SafeDITool()
-        tool.swiftSourcesFilePath = nil
-        tool.include = []
-        tool.additionalImportedModules = []
-        tool.moduleInfoOutput = nil
-        tool.moduleInfoPaths = []
-        tool.dependencyTreeOutput = nil
-        await assertThrowsError("Must provide either 'swift-sources-file-path' or '--include'.") {
-            try await tool.run()
-        }
-    }
-
     // MARK: Private
 
     private var filesToDelete = [URL]()
