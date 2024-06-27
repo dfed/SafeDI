@@ -65,6 +65,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
 
             }
             """
@@ -100,6 +101,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 RootViewController -- "networkService: NetworkService"
             }
             """
@@ -142,6 +144,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root1 -- "networkService: NetworkService"
 
                 Root2 -- "networkService: NetworkService"
@@ -231,6 +234,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 RootViewController -- "networkService: NetworkService"
                 RootViewController -- "authService: AuthService"
                 RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>"
@@ -331,6 +335,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 RootViewController -- "networkService: NetworkService"
                 RootViewController -- "authService: AuthService"
                 RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>"
@@ -441,6 +446,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 RootViewController -- "networkService: NetworkService"
                 RootViewController -- "authService: AuthService"
                 RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>"
@@ -552,6 +558,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 RootViewController -- "networkService: NetworkService"
                 RootViewController -- "authService: AuthService"
                 RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>"
@@ -654,6 +661,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 RootViewController -- "networkService: NetworkService"
                 RootViewController -- "authService: AuthService"
                 RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>"
@@ -755,6 +763,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 RootViewController -- "networkService: NetworkService"
                 RootViewController -- "authService: AuthService"
                 RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>"
@@ -839,6 +848,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root -- "greatGrandchild: GreatGrandchild"
                 Root -- "childA: ChildA"
                 Root -- "childB: ChildB"
@@ -927,6 +937,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root -- "childA: ChildA"
                 Root -- "childB: ChildB"
                 "childA: ChildA" -- "greatGrandchild: GreatGrandchild"
@@ -989,6 +1000,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root -- "child: Child"
                 "child: Child" -- "grandchild: Grandchild"
                 "child: Child" -- "recreated: Recreated"
@@ -1071,6 +1083,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root -- "childA: ChildA"
                 Root -- "childB: ChildB"
                 "childA: ChildA" -- "grandchildAA: GrandchildAA"
@@ -1205,6 +1218,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(topLevelModuleOutput.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root -- "childA: ChildA"
                 Root -- "childB: ChildB"
                 "childA: ChildA" -- "grandchildAA: GrandchildAA"
@@ -1256,6 +1270,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root -- "defaultUserService: DefaultUserService"
                 Root -- "userService: any UserService <- defaultUserService: DefaultUserService"
             }
@@ -1324,6 +1339,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 RootViewController -- "networkService: NetworkService"
                 RootViewController -- "authService: AuthService"
                 "authService: AuthService" -- "renamedNetworkService: NetworkService <- networkService: NetworkService"
@@ -1378,6 +1394,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root -- "child: Child"
                 "child: Child" -- "greatGrandchild: GreatGrandchild"
                 "child: Child" -- "grandchild: Grandchild"
@@ -1728,6 +1745,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root -- "x: X"
                 Root -- "a: A"
                 Root -- "g: G"
@@ -1799,6 +1817,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root -- "aBuilder: Instantiator<A>"
                 "aBuilder: Instantiator<A>" -- "bBuilder: Instantiator<B>"
                 "bBuilder: Instantiator<B>" -- "cBuilder: Instantiator<C>"
@@ -1848,6 +1867,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root -- "a: A"
                 "a: A" -- "b: B"
                 "b: B" -- "cBuilder: Instantiator<C>"
@@ -1883,6 +1903,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root -- "a: A"
                 "a: A" -- "aBuilder: Instantiator<A>"
                 "aBuilder: Instantiator<A>" -- "aBuilder: Instantiator<A>"
@@ -1919,6 +1940,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root -- "aBuilder: Instantiator<A>"
                 "aBuilder: Instantiator<A>" -- "aBuilder: Instantiator<A>"
                 "aBuilder: Instantiator<A>" -- "context: String"
@@ -1969,6 +1991,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root -- "stringContainer: Container<String>"
                 Root -- "intContainer: Container<Int>"
                 Root -- "floatContainer: Container<Float>"
@@ -2019,6 +2042,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             try XCTUnwrap(output.dotTree),
             """
             graph SafeDI {
+                ranksep=2
                 Root -- "stringContainer: MyModule.Container<String>"
                 Root -- "intContainer: MyModule.Container<Int>"
                 Root -- "floatContainer: MyModule.Container<Float>"

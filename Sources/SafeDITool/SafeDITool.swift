@@ -91,6 +91,7 @@ struct SafeDITool: AsyncParsableCommand {
             let dotGraph = try await generator.generateDOTTree()
             try """
             graph SafeDI {
+                ranksep=2
             \(dotGraph)
             }
             """.write(toPath: dotFileOutput)
