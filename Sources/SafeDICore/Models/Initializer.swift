@@ -18,7 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-@preconcurrency import SwiftSyntax
+#if compiler(>=6.0)
+    @preconcurrency import SwiftSyntax
+#else
+    import SwiftSyntax
+#endif
 import SwiftSyntaxBuilder
 
 public struct Initializer: Codable, Hashable, Sendable {
