@@ -38,7 +38,6 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         for fileToDelete in filesToDelete {
             try FileManager.default.removeItem(at: fileToDelete)
         }
-        fileFinder = FileManager.default
     }
 
     #if !os(Linux) // Linux does not support multiple invokations of the same test.
@@ -54,6 +53,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
 
     // MARK: Error Tests
 
+    @MainActor
     func test_run_onCodeWithPropertyWithUnknownFulfilledType_throwsError() async {
         await assertThrowsError(
             """
@@ -78,6 +78,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithUnfulfillableInstantiatedProperty_throwsError() async {
         await assertThrowsError(
             """
@@ -113,6 +114,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithUnfulfillableReceivedProperty_throwsError() async {
         await assertThrowsError(
             """
@@ -148,6 +150,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithInstantiatedPropertyWithForwardedArgument_throwsError() async {
         await assertThrowsError(
             """
@@ -183,6 +186,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithDiamondDependencyWhereAReceivedPropertyIsUnfulfillableOnOneBranch_throwsError() async {
         await assertThrowsError(
             """
@@ -234,6 +238,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithReceivedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """
@@ -291,6 +296,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithUnfulfillableAliasedReceivedPropertyName_throwsError() async {
         await assertThrowsError(
             """
@@ -344,6 +350,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithUnfulfillableAliasedReceivedPropertyType_throwsError() async {
         await assertThrowsError(
             """
@@ -397,6 +404,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWhereAliasedReceivedPropertyRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """
@@ -454,6 +462,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithUnfulfillableReceivedPropertyOnExtendedInstantiatedType_throwsError() async {
         await assertThrowsError(
             """
@@ -488,6 +497,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithNestedInstantiable_throwsError() async {
         await assertThrowsError(
             """
@@ -512,6 +522,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithMultipleNestedInstantiable_throwsError() async {
         await assertThrowsError(
             """
@@ -539,6 +550,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithDuplicateInstantiable_throwsError() async {
         await assertThrowsError(
             """
@@ -566,6 +578,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithDuplicateInstantiableAndInstantiable_throwsError() async {
         await assertThrowsError(
             """
@@ -597,6 +610,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithDuplicateInstantiableViaExtension_throwsError() async {
         await assertThrowsError(
             """
@@ -632,6 +646,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithDuplicateInstantiableFulfillment_throwsError() async {
         await assertThrowsError(
             """
@@ -659,6 +674,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithCircularPropertyDependenciesImmediatelyInitialized_throwsError() async {
         await assertThrowsError(
             """
@@ -703,6 +719,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithVaryingNames_throwsError() async {
         await assertThrowsError(
             """
@@ -747,6 +764,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithCircularReceivedDependencies_throwsError() async {
         await assertThrowsError(
             """
@@ -795,6 +813,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithCircularReceivedRenamedDependencies_throwsError() async {
         await assertThrowsError(
             """
@@ -843,6 +862,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasSingleForwardedProperty_throwsError() async throws {
         await assertThrowsError(
             """
@@ -926,6 +946,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasMultipleForwardedProperty_throwsError() async throws {
         await assertThrowsError(
             """
@@ -1015,6 +1036,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
 
     // MARK: Argument handling error tests
 
+    @MainActor
     func test_include_throwsErrorWhenCanNotCreateEnumerator() async {
         final class FailingFileFinder: FileFinder {
             func enumerator(
@@ -1027,6 +1049,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
             }
         }
         fileFinder = FailingFileFinder()
+        defer {
+            fileFinder = FileManager.default
+        }
 
         var tool = SafeDITool()
         tool.swiftSourcesFilePath = nil

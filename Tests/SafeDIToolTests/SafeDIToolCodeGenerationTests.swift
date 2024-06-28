@@ -38,7 +38,6 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         for fileToDelete in filesToDelete {
             try FileManager.default.removeItem(at: fileToDelete)
         }
-        fileFinder = FileManager.default
     }
 
     #if !os(Linux) // Linux does not support multiple invokations of the same test.

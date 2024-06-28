@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-public struct Instantiable: Codable, Hashable {
+public struct Instantiable: Codable, Hashable, Sendable {
     // MARK: Initialization
 
     public init(
@@ -52,7 +52,7 @@ public struct Instantiable: Codable, Hashable {
     public let declarationType: DeclarationType
 
     /// The type of declaration where this Instantiable was defined.
-    public enum DeclarationType: Codable, Hashable {
+    public enum DeclarationType: Codable, Hashable, Sendable {
         case classType
         case actorType
         case structType

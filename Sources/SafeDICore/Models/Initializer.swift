@@ -18,10 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import SwiftSyntax
+@preconcurrency import SwiftSyntax
 import SwiftSyntaxBuilder
 
-public struct Initializer: Codable, Hashable {
+public struct Initializer: Codable, Hashable, Sendable {
     // MARK: Initialization
 
     init(_ node: InitializerDeclSyntax) {
@@ -220,7 +220,7 @@ public struct Initializer: Codable, Hashable {
 
     // MARK: - Argument
 
-    public struct Argument: Codable, Hashable {
+    public struct Argument: Codable, Hashable, Sendable {
         /// The outer label, if one exists, by which the argument is referenced at the call site.
         public let outerLabel: String?
         /// The label by which the argument is referenced.

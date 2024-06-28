@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-public struct ImportStatement: Codable, Hashable {
+public struct ImportStatement: Codable, Hashable, Sendable {
     // MARK: Initialization
 
     public init(

@@ -21,7 +21,7 @@
 import Collections
 
 /// A model capable of generating code for a scope’s dependency tree.
-actor ScopeGenerator: CustomStringConvertible {
+actor ScopeGenerator: CustomStringConvertible, Sendable {
     // MARK: Initialization
 
     init(
@@ -285,9 +285,10 @@ actor ScopeGenerator: CustomStringConvertible {
 
     func generateDOT() async throws -> String {
         let orderedPropertiesToGenerate = try orderedPropertiesToGenerate
-        let instantiatedProperties = orderedPropertiesToGenerate.map(\.scopeData.asDOTNode)
+        var instantiatedProperties = [String]()
         var childDOTs = [String]()
         for orderedPropertyToGenerate in orderedPropertiesToGenerate {
+            instantiatedProperties.append(orderedPropertyToGenerate.scopeData.asDOTNode)
             let childDOT = try await orderedPropertyToGenerate.generateDOT()
             if !childDOT.isEmpty {
                 childDOTs.append(childDOT)
@@ -303,7 +304,7 @@ actor ScopeGenerator: CustomStringConvertible {
 
     // MARK: Private
 
-    private enum ScopeData {
+    private enum ScopeData: Sendable{
         case root(instantiable: Instantiable)
         case property(
             instantiable: Instantiable,
@@ -417,7 +418,7 @@ actor ScopeGenerator: CustomStringConvertible {
 
     private enum GenerationError: Error, CustomStringConvertible {
         case erasedInstantiatorGenericDoesNotMatch(property: Property, instantiable: Instantiable)
-        case dependencyCycleDetected(any Collection<Property>, scope: ScopeGenerator)
+        case dependencyCycleDetected(Array<Property>, scope: ScopeGenerator)
 
         var description: String {
             switch self {
