@@ -300,5 +300,4 @@ protocol FileFinder {
 
 extension FileManager: FileFinder {}
 
-@MainActor
-var fileFinder: FileFinder = FileManager.default
+@MainActor var fileFinder: FileFinder = FileManager.default

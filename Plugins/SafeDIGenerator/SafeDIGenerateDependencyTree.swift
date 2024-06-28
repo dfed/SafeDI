@@ -17,70 +17,70 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
         // output of other plugins, we must forgo searching for
         // `.safeDI` files and instead parse the entire project at once.
         #if compiler(>=6.0)
-        let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
-        let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map { $0.url }
-        let dependenciesSourceFiles = sourceTarget
-            .sourceModuleRecursiveDependencies
-            .flatMap {
-                $0
-                    .sourceFiles(withSuffix: ".swift")
-                    .map { $0.url }
-            }
-        let inputSourcesFilePath = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv").path()
-        try Data(
-            (targetSwiftFiles.map { $0.path() } + dependenciesSourceFiles.map { $0.path() })
-                .joined(separator: ",")
-                .utf8
-        )
-        .write(toPath: inputSourcesFilePath)
-        let arguments = [
-            inputSourcesFilePath,
-            "--dependency-tree-output",
-            outputSwiftFile.path(),
-        ]
+            let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
+            let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.url)
+            let dependenciesSourceFiles = sourceTarget
+                .sourceModuleRecursiveDependencies
+                .flatMap {
+                    $0
+                        .sourceFiles(withSuffix: ".swift")
+                        .map(\.url)
+                }
+            let inputSourcesFilePath = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv").path()
+            try Data(
+                (targetSwiftFiles.map { $0.path() } + dependenciesSourceFiles.map { $0.path() })
+                    .joined(separator: ",")
+                    .utf8
+            )
+            .write(toPath: inputSourcesFilePath)
+            let arguments = [
+                inputSourcesFilePath,
+                "--dependency-tree-output",
+                outputSwiftFile.path(),
+            ]
 
-        let toolPath: URL = if FileManager.default.fileExists(atPath: Self.armMacBrewInstallLocation) {
-            // SafeDITool has been installed via homebrew on an ARM Mac.
-            URL(filePath: Self.armMacBrewInstallLocation)
-        } else if FileManager.default.fileExists(atPath: Self.intelMacBrewInstallLocation) {
-            // SafeDITool has been installed via homebrew on an Intel Mac.
-            URL(filePath: Self.intelMacBrewInstallLocation)
-        } else {
-            // Fall back to the just-in-time built tool.
-            try context.tool(named: "SafeDITool").url
-        }
+            let toolPath: URL = if FileManager.default.fileExists(atPath: Self.armMacBrewInstallLocation) {
+                // SafeDITool has been installed via homebrew on an ARM Mac.
+                URL(filePath: Self.armMacBrewInstallLocation)
+            } else if FileManager.default.fileExists(atPath: Self.intelMacBrewInstallLocation) {
+                // SafeDITool has been installed via homebrew on an Intel Mac.
+                URL(filePath: Self.intelMacBrewInstallLocation)
+            } else {
+                // Fall back to the just-in-time built tool.
+                try context.tool(named: "SafeDITool").url
+            }
         #else
-        let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.path)
-        let dependenciesSourceFiles = sourceTarget
-            .sourceModuleRecursiveDependencies
-            .flatMap {
-                $0
-                    .sourceFiles(withSuffix: ".swift")
-                    .map(\.path)
-            }
-        let inputSourcesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.csv").string
-        try Data(
-            (targetSwiftFiles + dependenciesSourceFiles)
-                .joined(separator: ",")
-                .utf8
-        )
-        .write(toPath: inputSourcesFilePath)
-        let arguments = [
-            inputSourcesFilePath,
-            "--dependency-tree-output",
-            outputSwiftFile,
-        ]
+            let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.path)
+            let dependenciesSourceFiles = sourceTarget
+                .sourceModuleRecursiveDependencies
+                .flatMap {
+                    $0
+                        .sourceFiles(withSuffix: ".swift")
+                        .map(\.path)
+                }
+            let inputSourcesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.csv").string
+            try Data(
+                (targetSwiftFiles + dependenciesSourceFiles)
+                    .joined(separator: ",")
+                    .utf8
+            )
+            .write(toPath: inputSourcesFilePath)
+            let arguments = [
+                inputSourcesFilePath,
+                "--dependency-tree-output",
+                outputSwiftFile,
+            ]
 
-        let toolPath: PackagePlugin.Path = if FileManager.default.fileExists(atPath: Self.armMacBrewInstallLocation) {
-            // SafeDITool has been installed via homebrew on an ARM Mac.
-            PackagePlugin.Path(Self.armMacBrewInstallLocation)
-        } else if FileManager.default.fileExists(atPath: Self.intelMacBrewInstallLocation) {
-            // SafeDITool has been installed via homebrew on an Intel Mac.
-            PackagePlugin.Path(Self.intelMacBrewInstallLocation)
-        } else {
-            // Fall back to the just-in-time built tool.
-            try context.tool(named: "SafeDITool").path
-        }
+            let toolPath: PackagePlugin.Path = if FileManager.default.fileExists(atPath: Self.armMacBrewInstallLocation) {
+                // SafeDITool has been installed via homebrew on an ARM Mac.
+                PackagePlugin.Path(Self.armMacBrewInstallLocation)
+            } else if FileManager.default.fileExists(atPath: Self.intelMacBrewInstallLocation) {
+                // SafeDITool has been installed via homebrew on an Intel Mac.
+                PackagePlugin.Path(Self.intelMacBrewInstallLocation)
+            } else {
+                // Fall back to the just-in-time built tool.
+                try context.tool(named: "SafeDITool").path
+            }
         #endif
 
         return [
@@ -108,36 +108,36 @@ extension Target {
             }
 
             // We only care about first-party code. Ignore third-party dependencies.
-#if compiler(>=6.0)
-            guard
-                swiftModule
-                .directoryURL
-                .pathComponents
-                // Removing the module name.
-                .dropLast()
-                // Removing 'Sources'.
-                .dropLast()
-                // Removing the package name.
-                .dropLast()
-                .last != "checkouts"
-            else {
-                return nil
-            }
-#else
-            guard
-                swiftModule
-                .directory
-                // Removing the module name.
-                .removingLastComponent()
-                // Removing 'Sources'.
-                .removingLastComponent()
-                // Removing the package name.
-                .removingLastComponent()
-                .lastComponent != "checkouts"
-            else {
-                return nil
-            }
-#endif
+            #if compiler(>=6.0)
+                guard
+                    swiftModule
+                    .directoryURL
+                    .pathComponents
+                    // Removing the module name.
+                    .dropLast()
+                    // Removing 'Sources'.
+                    .dropLast()
+                    // Removing the package name.
+                    .dropLast()
+                    .last != "checkouts"
+                else {
+                    return nil
+                }
+            #else
+                guard
+                    swiftModule
+                    .directory
+                    // Removing the module name.
+                    .removingLastComponent()
+                    // Removing 'Sources'.
+                    .removingLastComponent()
+                    // Removing the package name.
+                    .removingLastComponent()
+                    .lastComponent != "checkouts"
+                else {
+                    return nil
+                }
+            #endif
             return swiftModule
         }
     }

@@ -304,7 +304,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
     // MARK: Private
 
-    private enum ScopeData: Sendable{
+    private enum ScopeData: Sendable {
         case root(instantiable: Instantiable)
         case property(
             instantiable: Instantiable,
@@ -418,7 +418,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
     private enum GenerationError: Error, CustomStringConvertible {
         case erasedInstantiatorGenericDoesNotMatch(property: Property, instantiable: Instantiable)
-        case dependencyCycleDetected(Array<Property>, scope: ScopeGenerator)
+        case dependencyCycleDetected([Property], scope: ScopeGenerator)
 
         var description: String {
             switch self {
