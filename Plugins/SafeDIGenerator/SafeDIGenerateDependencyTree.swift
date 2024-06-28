@@ -11,13 +11,13 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
             return []
         }
 
-        // Swift Package Plugins do not (as of Swift 5.9) allow for
-        // creating dependencies between plugin output. Since our
-        // current build system does not support depending on the
-        // output of other plugins, we must forgo searching for
-        // `.safeDI` files and instead parse the entire project at once.
         #if compiler(>=6.0)
             let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
+            // Swift Package Plugins do not (as of Swift 5.9) allow for
+            // creating dependencies between plugin output. Since our
+            // current build system does not support depending on the
+            // output of other plugins, we must forgo searching for
+            // `.safeDI` files and instead parse the entire project at once.
             let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.url)
             let dependenciesSourceFiles = sourceTarget
                 .sourceModuleRecursiveDependencies
@@ -50,6 +50,12 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                 try context.tool(named: "SafeDITool").url
             }
         #else
+            let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
+            // Swift Package Plugins do not (as of Swift 5.9) allow for
+            // creating dependencies between plugin output. Since our
+            // current build system does not support depending on the
+            // output of other plugins, we must forgo searching for
+            // `.safeDI` files and instead parse the entire project at once.
             let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.path)
             let dependenciesSourceFiles = sourceTarget
                 .sourceModuleRecursiveDependencies
@@ -58,9 +64,11 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                         .sourceFiles(withSuffix: ".swift")
                         .map(\.path)
                 }
+
             let inputSourcesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.csv").string
             try Data(
                 (targetSwiftFiles + dependenciesSourceFiles)
+                    .map(\.string)
                     .joined(separator: ",")
                     .utf8
             )
@@ -68,7 +76,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
             let arguments = [
                 inputSourcesFilePath,
                 "--dependency-tree-output",
-                outputSwiftFile,
+                outputSwiftFile.string,
             ]
 
             let toolPath: PackagePlugin.Path = if FileManager.default.fileExists(atPath: Self.armMacBrewInstallLocation) {
