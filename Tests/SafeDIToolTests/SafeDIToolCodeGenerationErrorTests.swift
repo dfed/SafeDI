@@ -237,7 +237,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithReceivedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """
-            @Received property `authService: AuthService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
+            Dependency cycle detected on RootViewController!
+            authService: AuthService -> authService: AuthService
             """
         ) {
             try await executeSafeDIToolTest(
@@ -400,7 +401,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWhereAliasedReceivedPropertyRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """
-            @Received property `authService: AuthService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
+            Dependency cycle detected on RootViewController!
+            authService: AuthService -> authService: AuthService
             """
         ) {
             try await executeSafeDIToolTest(
@@ -694,6 +696,46 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     public final class C {
                         @Instantiated
                         let a: A
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    func test_run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedAndReceived_throwsError() async {
+        await assertThrowsError(
+            """
+            Dependency cycle detected!
+            A -> B -> C -> A
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated let a: A
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class A {
+                        @Instantiated let b: B
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class B {
+                        @Instantiated let c: C
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class C {
+                        @Received let a: A
                     }
                     """,
                 ],

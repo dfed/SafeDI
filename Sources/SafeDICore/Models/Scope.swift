@@ -80,11 +80,10 @@ final class Scope: Hashable {
         propertyStack: OrderedSet<Property>,
         erasedToConcreteExistential: Bool
     ) throws -> ScopeGenerator {
-        if
-            let property,
-            property.propertyType.isConstant,
-            let cycleIndex = propertyStack.firstIndex(of: property),
-            !propertyStack.elements[0...cycleIndex].contains(where: { !$0.propertyType.isConstant })
+        if let property,
+           property.propertyType.isConstant,
+           let cycleIndex = propertyStack.firstIndex(of: property),
+           !propertyStack.elements[0...cycleIndex].contains(where: { !$0.propertyType.isConstant })
         {
             throw ScopeError.dependencyCycleDetected([property.typeDescription] + propertyStack.elements[0...cycleIndex].map(\.typeDescription))
         } else {
@@ -93,6 +92,20 @@ final class Scope: Hashable {
             if let property {
                 isPropertyCycle = propertyStack.contains(property)
                 childPropertyStack.insert(property, at: 0)
+                // Check received children for cycles.
+                for dependency in instantiable.dependencies.filter(\.source.isReceived) {
+                    if dependency.property.propertyType.isConstant,
+                       let cycleIndex = propertyStack.firstIndex(of: dependency.property),
+                       !propertyStack.elements[0...cycleIndex].contains(where: { !$0.propertyType.isConstant })
+                    {
+                        throw ScopeError.dependencyCycleDetected(
+                            (
+                                [dependency.property, property]
+                                    + propertyStack.elements[0...cycleIndex]
+                            ).map(\.typeDescription)
+                        )
+                    }
+                }
             } else {
                 isPropertyCycle = false
             }
@@ -142,6 +155,17 @@ final class Scope: Hashable {
                     .joined(separator: " -> "))
                 """
             }
+        }
+    }
+}
+
+extension Dependency.Source {
+    var isReceived: Bool {
+        switch self {
+        case .received:
+            true
+        case .instantiated, .aliased, .forwarded:
+            false
         }
     }
 }

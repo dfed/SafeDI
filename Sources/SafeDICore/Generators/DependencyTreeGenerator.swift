@@ -334,15 +334,14 @@ public final class DependencyTreeGenerator {
                             property: receivedProperty,
                             instantiable: scope.instantiable,
                             parentStack: instantiables.elements
-                        )
-                        )
+                        ))
                     }
                 }
             }
 
             for childPropertyToGenerate in scope.propertiesToGenerate {
                 switch childPropertyToGenerate {
-                case let .instantiated(childProperty, childScope, _):
+                case let .instantiated(_, childScope, _):
                     guard !instantiables.contains(childScope.instantiable) else {
                         // We've previously visited this child scope.
                         // There is a cycle in our scope tree. Do not re-enter it.
@@ -354,11 +353,9 @@ public final class DependencyTreeGenerator {
                     validateReceivedProperties(
                         on: childScope,
                         receivableProperties: receivableProperties
-                            .union(scope.properties)
-                            .removing(childProperty),
+                            .union(scope.properties),
                         instantiables: instantiables
                     )
-
                 case .aliased:
                     break
                 }
@@ -421,15 +418,5 @@ extension Collection<Dependency> {
                 true
             }
         }) == nil
-    }
-}
-
-// MARK: - Set
-
-extension Set {
-    fileprivate func removing(_ element: Element) -> Self {
-        var setWithoutElement = self
-        setWithoutElement.remove(element)
-        return setWithoutElement
     }
 }
