@@ -87,12 +87,12 @@ final class Scope: Hashable {
             childPropertyStack.insert(property, at: 0)
             // Check received children for cycles.
             for dependency in instantiable.dependencies {
-                guard let cycleIndex = propertyStack.firstIndex(of: dependency.property) else {
+                guard let cycleIndex = childPropertyStack.firstIndex(of: dependency.property) else {
                     continue
                 }
                 let typesInCycle = (
-                    [dependency.property, property]
-                        + propertyStack.elements[0...cycleIndex]
+                    [dependency.property]
+                        + childPropertyStack.elements[0...cycleIndex]
                 ).map(\.typeDescription)
                 if dependency.property.propertyType.isConstant {
                     // We can break a constant dependency cycle if there's lazy instantiation in the tree.
