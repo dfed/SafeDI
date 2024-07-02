@@ -87,23 +87,24 @@ final class Scope: Hashable {
             childPropertyStack.insert(property, at: 0)
             // Check received children for cycles.
             for dependency in instantiable.dependencies {
-                if let cycleIndex = propertyStack.firstIndex(of: dependency.property) {
-                    let typesInCycle = (
-                        [dependency.property, property]
-                            + propertyStack.elements[0...cycleIndex]
-                    ).map(\.typeDescription)
-                    if dependency.property.propertyType.isConstant {
-                        // We can break a constant dependency cycle if there's lazy instantiation in the tree.
-                        if !typesInCycle.contains(where: { !$0.propertyType.isConstant }) {
-                            throw ScopeError.constantDependencyCycleDetected(typesInCycle)
-                        }
-                    } else if dependency.source.isReceived {
-                        throw ScopeError.receivedInstantiatorDependencyCycleDetected(
-                            dependency: dependency.property,
-                            directParent: instantiable.concreteInstantiable,
-                            cycle: typesInCycle
-                        )
+                guard let cycleIndex = propertyStack.firstIndex(of: dependency.property) else {
+                    continue
+                }
+                let typesInCycle = (
+                    [dependency.property, property]
+                        + propertyStack.elements[0...cycleIndex]
+                ).map(\.typeDescription)
+                if dependency.property.propertyType.isConstant {
+                    // We can break a constant dependency cycle if there's lazy instantiation in the tree.
+                    if !typesInCycle.contains(where: { !$0.propertyType.isConstant }) {
+                        throw ScopeError.constantDependencyCycleDetected(typesInCycle)
                     }
+                } else if dependency.source.isReceived {
+                    throw ScopeError.receivedInstantiatorDependencyCycleDetected(
+                        dependency: dependency.property,
+                        directParent: instantiable.concreteInstantiable,
+                        cycle: typesInCycle
+                    )
                 }
             }
         } else {
