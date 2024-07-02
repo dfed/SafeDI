@@ -80,74 +80,69 @@ final class Scope: Hashable {
         propertyStack: OrderedSet<Property>,
         erasedToConcreteExistential: Bool
     ) throws -> ScopeGenerator {
-        if let property,
-           property.propertyType.isConstant,
-           let cycleIndex = propertyStack.firstIndex(of: property),
-           !propertyStack.elements[0...cycleIndex].contains(where: { !$0.propertyType.isConstant })
-        {
-            throw ScopeError.constantDependencyCycleDetected([property.typeDescription] + propertyStack.elements[0...cycleIndex].map(\.typeDescription))
-        } else {
-            var childPropertyStack = propertyStack
-            let isPropertyCycle: Bool
-            if let property {
-                isPropertyCycle = propertyStack.contains(property)
-                childPropertyStack.insert(property, at: 0)
-                // Check received children for cycles.
-                for dependency in instantiable.dependencies.filter(\.source.isReceived) {
-                    if let cycleIndex = propertyStack.firstIndex(of: dependency.property) {
-                        let typesInCycle = (
-                            [dependency.property, property]
-                                + propertyStack.elements[0...cycleIndex]
-                        ).map(\.typeDescription)
-                        if dependency.property.propertyType.isConstant {
+        var childPropertyStack = propertyStack
+        let isPropertyCycle: Bool
+        if let property {
+            isPropertyCycle = propertyStack.contains(property)
+            childPropertyStack.insert(property, at: 0)
+            // Check received children for cycles.
+            for dependency in instantiable.dependencies {
+                if let cycleIndex = propertyStack.firstIndex(of: dependency.property) {
+                    let typesInCycle = (
+                        [dependency.property, property]
+                            + propertyStack.elements[0...cycleIndex]
+                    ).map(\.typeDescription)
+                    if dependency.property.propertyType.isConstant {
+                        // We can break a constant dependency cycle if there's lazy instantiation in the tree.
+                        if !typesInCycle.contains(where: { !$0.propertyType.isConstant }) {
                             throw ScopeError.constantDependencyCycleDetected(typesInCycle)
-                        } else {
-                            throw ScopeError.instantiatorDependencyCycleDetected(
-                                dependency: dependency.property,
-                                directParent: instantiable.concreteInstantiable,
-                                cycle: typesInCycle
-                            )
                         }
+                    } else if dependency.source.isReceived {
+                        throw ScopeError.receivedInstantiatorDependencyCycleDetected(
+                            dependency: dependency.property,
+                            directParent: instantiable.concreteInstantiable,
+                            cycle: typesInCycle
+                        )
                     }
                 }
-            } else {
-                isPropertyCycle = false
             }
-            let scopeGenerator = try ScopeGenerator(
-                instantiable: instantiable,
-                property: property,
-                propertiesToGenerate: isPropertyCycle ? [] : propertiesToGenerate.map {
-                    switch $0 {
-                    case let .instantiated(property, scope, erasedToConcreteExistential):
-                        try scope.createScopeGenerator(
-                            for: property,
-                            propertyStack: childPropertyStack,
-                            erasedToConcreteExistential: erasedToConcreteExistential
-                        )
-                    case let .aliased(property, fulfillingProperty, erasedToConcreteExistential):
-                        ScopeGenerator(
-                            property: property,
-                            fulfillingProperty: fulfillingProperty,
-                            erasedToConcreteExistential: erasedToConcreteExistential
-                        )
-                    }
-                },
-                erasedToConcreteExistential: erasedToConcreteExistential,
-                isPropertyCycle: isPropertyCycle
-            )
-            Task.detached {
-                // Kick off code generation.
-                try await scopeGenerator.generateCode()
-            }
-            return scopeGenerator
+        } else {
+            isPropertyCycle = false
         }
+        let scopeGenerator = try ScopeGenerator(
+            instantiable: instantiable,
+            property: property,
+            propertiesToGenerate: isPropertyCycle ? [] : propertiesToGenerate.map {
+                switch $0 {
+                case let .instantiated(property, scope, erasedToConcreteExistential):
+                    try scope.createScopeGenerator(
+                        for: property,
+                        propertyStack: childPropertyStack,
+                        erasedToConcreteExistential: erasedToConcreteExistential
+                    )
+                case let .aliased(property, fulfillingProperty, erasedToConcreteExistential):
+                    ScopeGenerator(
+                        property: property,
+                        fulfillingProperty: fulfillingProperty,
+                        erasedToConcreteExistential: erasedToConcreteExistential
+                    )
+                }
+            },
+            erasedToConcreteExistential: erasedToConcreteExistential,
+            isPropertyCycle: isPropertyCycle
+        )
+        Task.detached {
+            // Kick off code generation.
+            try await scopeGenerator.generateCode()
+        }
+        return scopeGenerator
     }
 
     // MARK: ScopeError
 
     private enum ScopeError: Error, CustomStringConvertible {
         case constantDependencyCycleDetected([TypeDescription])
-        case instantiatorDependencyCycleDetected(dependency: Property, directParent: TypeDescription, cycle: [TypeDescription])
+        case receivedInstantiatorDependencyCycleDetected(dependency: Property, directParent: TypeDescription, cycle: [TypeDescription])
 
         var description: String {
             switch self {
@@ -159,7 +154,7 @@ final class Scope: Hashable {
                     .reversed()
                     .joined(separator: " -> "))
                 """
-            case let .instantiatorDependencyCycleDetected(dependency, directParent, instantiables):
+            case let .receivedInstantiatorDependencyCycleDetected(dependency, directParent, instantiables):
                 """
                 Dependency cycle detected! @\(Dependency.Source.instantiatedRawValue) `\(dependency.asSource)` is @\(Dependency.Source.receivedRawValue) in tree created by @\(Dependency.Source.instantiatedRawValue) `\(dependency.asSource)`. Declare @\(Dependency.Source.receivedRawValue) `\(dependency.asSource)` on `\(directParent.asSource)` as @\(Dependency.Source.instantiatedRawValue) to fix. Full cycle:
                 \(instantiables
