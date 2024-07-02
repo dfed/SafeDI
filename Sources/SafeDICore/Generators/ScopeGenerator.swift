@@ -367,10 +367,14 @@ actor ScopeGenerator: CustomStringConvertible {
                     return
                 }
                 guard !stack.contains(property) else {
-                    throw GenerationError.dependencyCycleDetected(
-                        stack.drop(while: { $0 != property }) + [property],
-                        scope: self
-                    )
+                    if property.propertyType.isConstant {
+                        throw GenerationError.dependencyCycleDetected(
+                            stack.drop(while: { $0 != property }) + [property],
+                            scope: self
+                        )
+                    } else {
+                        return
+                    }
                 }
 
                 let scopeDependencies = propertyToUnfulfilledScopeMap
