@@ -87,21 +87,22 @@ final class Scope: Hashable {
             childPropertyStack.insert(property, at: 0)
             // Check received children for cycles.
             for dependency in instantiable.dependencies {
-                guard let cycleIndex = childPropertyStack.firstIndex(of: dependency.property) else {
+                let propertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
+                guard let cycleIndex = childPropertyStack.firstIndex(of: propertyForDependency) else {
                     continue
                 }
                 let typesInCycle = (
-                    [dependency.property]
+                    [propertyForDependency]
                         + childPropertyStack.elements[0...cycleIndex]
                 ).map(\.typeDescription)
-                if dependency.property.propertyType.isConstant {
+                if propertyForDependency.propertyType.isConstant {
                     // We can break a constant dependency cycle if there's lazy instantiation in the tree.
                     if !typesInCycle.contains(where: { !$0.propertyType.isConstant }) {
                         throw ScopeError.constantDependencyCycleDetected(typesInCycle)
                     }
                 } else if dependency.source.isReceived {
                     throw ScopeError.receivedInstantiatorDependencyCycleDetected(
-                        dependency: dependency.property,
+                        property: propertyForDependency,
                         directParent: instantiable.concreteInstantiable,
                         cycle: typesInCycle
                     )
@@ -143,7 +144,7 @@ final class Scope: Hashable {
 
     private enum ScopeError: Error, CustomStringConvertible {
         case constantDependencyCycleDetected([TypeDescription])
-        case receivedInstantiatorDependencyCycleDetected(dependency: Property, directParent: TypeDescription, cycle: [TypeDescription])
+        case receivedInstantiatorDependencyCycleDetected(property: Property, directParent: TypeDescription, cycle: [TypeDescription])
 
         var description: String {
             switch self {
@@ -155,9 +156,9 @@ final class Scope: Hashable {
                     .reversed()
                     .joined(separator: " -> "))
                 """
-            case let .receivedInstantiatorDependencyCycleDetected(dependency, directParent, instantiables):
+            case let .receivedInstantiatorDependencyCycleDetected(property, directParent, instantiables):
                 """
-                Dependency cycle detected! @\(Dependency.Source.instantiatedRawValue) `\(dependency.asSource)` is @\(Dependency.Source.receivedRawValue) in tree created by @\(Dependency.Source.instantiatedRawValue) `\(dependency.asSource)`. Declare @\(Dependency.Source.receivedRawValue) `\(dependency.asSource)` on `\(directParent.asSource)` as @\(Dependency.Source.instantiatedRawValue) to fix. Full cycle:
+                Dependency cycle detected! @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)` is @\(Dependency.Source.receivedRawValue) in tree created by @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)`. Declare @\(Dependency.Source.receivedRawValue) `\(property.asSource)` on `\(directParent.asSource)` as @\(Dependency.Source.instantiatedRawValue) to fix. Full cycle:
                 \(instantiables
                     .map(\.asSource)
                     .reversed()

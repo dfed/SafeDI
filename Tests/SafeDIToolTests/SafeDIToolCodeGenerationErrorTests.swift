@@ -234,11 +234,69 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         }
     }
 
+    func test_run_onCodeWithInstantiatedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
+        await assertThrowsError(
+            """
+            Dependency cycle detected!
+            AuthService -> AuthService
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    public struct User {}
+                    """,
+                    """
+                    public protocol NetworkService {}
+
+                    @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                    public final class DefaultNetworkService: NetworkService {}
+                    """,
+                    """
+                    public protocol AuthService {
+                        func login(username: String, password: String) async -> User
+                    }
+
+                    @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+                    public final class DefaultAuthService: AuthService {
+                        public func login(username: String, password: String) async -> User {
+                            User(username: username)
+                        }
+
+                        @Instantiated
+                        let networkService: NetworkService
+
+                        @Instantiated
+                        let authService: AuthService
+                    }
+                    """,
+                    """
+                    import UIKit
+
+                    @Instantiable
+                    public final class RootViewController: UIViewController {
+                        public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
+                            self.authService = authService
+                            self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
+                            super.init(nibName: nil, bundle: nil)
+                        }
+
+                        @Instantiated
+                        let authService: AuthService
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
     func test_run_onCodeWithReceivedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """
-            Dependency cycle detected on RootViewController!
-            authService: AuthService -> authService: AuthService
+            Dependency cycle detected!
+            AuthService -> AuthService
             """
         ) {
             try await executeSafeDIToolTest(
@@ -401,8 +459,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWhereAliasedReceivedPropertyRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """
-            Dependency cycle detected on RootViewController!
-            authService: AuthService -> authService: AuthService
+            Dependency cycle detected!
+            AuthService -> AuthService
             """
         ) {
             try await executeSafeDIToolTest(

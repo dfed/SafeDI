@@ -84,6 +84,15 @@ public struct Dependency: Codable, Hashable {
             }
         }
 
+        public var fulfillingProperty: Property? {
+            switch self {
+            case let .aliased(fulfillingProperty, _):
+                fulfillingProperty
+            case .instantiated, .received, .forwarded:
+                nil
+            }
+        }
+
         public static let instantiatedRawValue = "Instantiated"
         public static let receivedRawValue = "Received"
         public static let forwardedRawValue = "Forwarded"
