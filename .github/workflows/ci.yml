@@ -76,7 +76,10 @@ jobs:
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_15.3.app/Contents/Developer
       - name: Build and Test Framework
-        run: xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing
+        run: |
+          for i in {1..5}; do # Run tests a few times to ensure code-gen is stable.
+            xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing
+          done
       - name: Prepare Coverage Reports
         run: ./Scripts/prepare-coverage-reports.sh
       - name: Upload Coverage Reports
