@@ -359,7 +359,7 @@ public final class DependencyTreeGenerator {
                 }
             }
 
-            // Check received children for cycles.
+            // Check children for cycles.
             var childPropertyStack = propertyStack
             if let property {
                 childPropertyStack.insert(property, at: 0)
