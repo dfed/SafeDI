@@ -39,10 +39,8 @@ import SafeDICore
         // MARK: XCTestCase
 
         override func invokeTest() {
-            func executeTest() {
-                withMacroTesting(macros: testMacros) {
-                    super.invokeTest()
-                }
+            withMacroTesting(macros: testMacros) {
+                super.invokeTest()
             }
         }
 
