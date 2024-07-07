@@ -29,6 +29,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.0"),
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.0.0"),
+        // TODO: Bump to 600.0.0 once it's available.
         .package(url: "https://github.com/apple/swift-syntax.git", from: "510.0.0"),
         .package(url: "https://github.com/michaeleisel/ZippyJSON.git", from: "1.2.0"),
         .package(url: "https://github.com/pointfreeco/swift-macro-testing.git", from: "0.4.0"),
