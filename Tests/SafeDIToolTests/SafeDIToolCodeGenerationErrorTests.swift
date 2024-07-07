@@ -1008,6 +1008,55 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     }
 
     @MainActor
+    func test_run_onCodeWithMultipleCircularReceivedRenamedDependencies_throwsError() async {
+        await assertThrowsError(
+            """
+            Dependency received in same chain it is instantiated!
+            @Instantiated c: C -> @Received renamedB: B -> @Received c: C
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    @Instantiable
+                    public struct Root {
+                        @Instantiated
+                        private let a: A
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public struct A {
+                        @Instantiated
+                        private let b: B
+                        @Received(fulfilledByDependencyNamed: "b", ofType: B.self)
+                        private let renamedB: B
+                        @Instantiated
+                        private let c: C
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public struct B {
+                        @Received
+                        private let c: C
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public struct C {
+                        @Received
+                        private let renamedB: B
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
     func test_run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasSingleForwardedProperty_throwsError() async throws {
         await assertThrowsError(
             """
