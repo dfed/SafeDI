@@ -353,13 +353,12 @@ public final class DependencyTreeGenerator {
             if let property {
                 func validateNoCycleInReceivedProperties(
                     scope: Scope,
-                    instantiatedProperty: Property,
                     receivedPropertyStack: OrderedSet<Property>
                 ) throws {
                     for childProperty in scope.receivedProperties {
-                        guard childProperty != instantiatedProperty else {
+                        guard childProperty != property else {
                             throw DependencyTreeGeneratorError.receivedConstantCycleDetected(
-                                instantiated: instantiatedProperty,
+                                instantiated: property,
                                 receivedPropertyChain: receivedPropertyStack + [childProperty]
                             )
                         }
@@ -372,7 +371,6 @@ public final class DependencyTreeGenerator {
                             childPropertyStack.append(childProperty)
                             try validateNoCycleInReceivedProperties(
                                 scope: receivedPropertyScope,
-                                instantiatedProperty: instantiatedProperty,
                                 receivedPropertyStack: childPropertyStack
                             )
                         }
@@ -380,7 +378,6 @@ public final class DependencyTreeGenerator {
                 }
                 try validateNoCycleInReceivedProperties(
                     scope: scope,
-                    instantiatedProperty: property,
                     receivedPropertyStack: []
                 )
             }
