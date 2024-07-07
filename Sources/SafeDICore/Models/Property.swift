@@ -61,7 +61,10 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
                 colon: .colonToken(trailingTrivia: .space),
                 type: AttributedTypeSyntax(
                     attributes: AttributeListSyntax {
-                        AttributeSyntax(attributeName: IdentifierTypeSyntax(name: "escaping"))
+                        AttributeSyntax(attributeName: IdentifierTypeSyntax(
+                            name: "escaping",
+                            trailingTrivia: .space
+                        ))
                     },
                     baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
                 )
@@ -74,7 +77,10 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
                     // It is not possible for a property declaration to have specifiers today.
                     specifier: nil,
                     attributes: AttributeListSyntax {
-                        AttributeSyntax(attributeName: IdentifierTypeSyntax(name: "escaping"))
+                        AttributeSyntax(attributeName: IdentifierTypeSyntax(
+                            name: "escaping",
+                            trailingTrivia: .space
+                        ))
                         if let attributes {
                             for attribute in attributes {
                                 AttributeSyntax(attributeName: IdentifierTypeSyntax(name: .identifier(attribute)))

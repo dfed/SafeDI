@@ -80,68 +80,51 @@ final class Scope: Hashable {
         propertyStack: OrderedSet<Property>,
         erasedToConcreteExistential: Bool
     ) throws -> ScopeGenerator {
-        if
-            let property,
-            property.propertyType.isConstant,
-            let cycleIndex = propertyStack.firstIndex(of: property),
-            !propertyStack.elements[0...cycleIndex].contains(where: { !$0.propertyType.isConstant })
-        {
-            throw ScopeError.dependencyCycleDetected([property.typeDescription] + propertyStack.elements[0...cycleIndex].map(\.typeDescription))
+        var childPropertyStack = propertyStack
+        let isPropertyCycle: Bool
+        if let property {
+            isPropertyCycle = propertyStack.contains(property)
+            childPropertyStack.insert(property, at: 0)
         } else {
-            var childPropertyStack = propertyStack
-            let isPropertyCycle: Bool
-            if let property {
-                isPropertyCycle = propertyStack.contains(property)
-                childPropertyStack.insert(property, at: 0)
-            } else {
-                isPropertyCycle = false
-            }
-            let scopeGenerator = try ScopeGenerator(
-                instantiable: instantiable,
-                property: property,
-                propertiesToGenerate: isPropertyCycle ? [] : propertiesToGenerate.map {
-                    switch $0 {
-                    case let .instantiated(property, scope, erasedToConcreteExistential):
-                        try scope.createScopeGenerator(
-                            for: property,
-                            propertyStack: childPropertyStack,
-                            erasedToConcreteExistential: erasedToConcreteExistential
-                        )
-                    case let .aliased(property, fulfillingProperty, erasedToConcreteExistential):
-                        ScopeGenerator(
-                            property: property,
-                            fulfillingProperty: fulfillingProperty,
-                            erasedToConcreteExistential: erasedToConcreteExistential
-                        )
-                    }
-                },
-                erasedToConcreteExistential: erasedToConcreteExistential,
-                isPropertyCycle: isPropertyCycle
-            )
-            Task.detached {
-                // Kick off code generation.
-                try await scopeGenerator.generateCode()
-            }
-            return scopeGenerator
+            isPropertyCycle = false
         }
+        let scopeGenerator = try ScopeGenerator(
+            instantiable: instantiable,
+            property: property,
+            propertiesToGenerate: isPropertyCycle ? [] : propertiesToGenerate.map {
+                switch $0 {
+                case let .instantiated(property, scope, erasedToConcreteExistential):
+                    try scope.createScopeGenerator(
+                        for: property,
+                        propertyStack: childPropertyStack,
+                        erasedToConcreteExistential: erasedToConcreteExistential
+                    )
+                case let .aliased(property, fulfillingProperty, erasedToConcreteExistential):
+                    ScopeGenerator(
+                        property: property,
+                        fulfillingProperty: fulfillingProperty,
+                        erasedToConcreteExistential: erasedToConcreteExistential
+                    )
+                }
+            },
+            erasedToConcreteExistential: erasedToConcreteExistential,
+            isPropertyCycle: isPropertyCycle
+        )
+        Task.detached {
+            // Kick off code generation.
+            try await scopeGenerator.generateCode()
+        }
+        return scopeGenerator
     }
+}
 
-    // MARK: ScopeError
-
-    private enum ScopeError: Error, CustomStringConvertible {
-        case dependencyCycleDetected([TypeDescription])
-
-        var description: String {
-            switch self {
-            case let .dependencyCycleDetected(instantiables):
-                """
-                Dependency cycle detected!
-                \(instantiables
-                    .map(\.asSource)
-                    .reversed()
-                    .joined(separator: " -> "))
-                """
-            }
+extension Dependency.Source {
+    var isReceived: Bool {
+        switch self {
+        case .received:
+            true
+        case .instantiated, .aliased, .forwarded:
+            false
         }
     }
 }

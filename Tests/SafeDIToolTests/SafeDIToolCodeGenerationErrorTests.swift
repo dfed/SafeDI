@@ -239,10 +239,70 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     }
 
     @MainActor
+    func test_run_onCodeWithInstantiatedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
+        await assertThrowsError(
+            """
+            Dependency cycle detected!
+            AuthService -> AuthService
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    public struct User {}
+                    """,
+                    """
+                    public protocol NetworkService {}
+
+                    @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                    public final class DefaultNetworkService: NetworkService {}
+                    """,
+                    """
+                    public protocol AuthService {
+                        func login(username: String, password: String) async -> User
+                    }
+
+                    @Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+                    public final class DefaultAuthService: AuthService {
+                        public func login(username: String, password: String) async -> User {
+                            User(username: username)
+                        }
+
+                        @Instantiated
+                        let networkService: NetworkService
+
+                        @Instantiated
+                        let authService: AuthService
+                    }
+                    """,
+                    """
+                    import UIKit
+
+                    @Instantiable
+                    public final class RootViewController: UIViewController {
+                        public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
+                            self.authService = authService
+                            self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
+                            super.init(nibName: nil, bundle: nil)
+                        }
+
+                        @Instantiated
+                        let authService: AuthService
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
     func test_run_onCodeWithReceivedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """
-            @Received property `authService: AuthService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
+            Dependency cycle detected!
+            AuthService -> AuthService
             """
         ) {
             try await executeSafeDIToolTest(
@@ -408,7 +468,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWhereAliasedReceivedPropertyRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """
-            @Received property `authService: AuthService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
+            Dependency cycle detected!
+            AuthService -> AuthService
             """
         ) {
             try await executeSafeDIToolTest(
@@ -710,6 +771,88 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     public final class C {
                         @Instantiated
                         let a: A
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
+    func test_run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedAndReceived_throwsError() async {
+        await assertThrowsError(
+            """
+            Dependency cycle detected!
+            A -> B -> C -> A
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated let a: A
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class A {
+                        @Instantiated let b: B
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class B {
+                        @Instantiated let c: C
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class C {
+                        @Received let a: A
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
+    func test_run_onCodeWithCircularPropertyDependenciesLazyInitializedAndReceived_throwsError() async throws {
+        await assertThrowsError(
+            """
+            Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `C` as @Instantiated to fix. Full cycle:
+            Instantiator<A> -> Instantiator<B> -> Instantiator<C> -> Instantiator<A>
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    @Instantiable
+                    public struct Root {
+                        @Instantiated let aBuilder: Instantiator<A>
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public struct A {
+                        @Instantiated let bBuilder: Instantiator<B>
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public struct B {
+                        @Instantiated let cBuilder: Instantiator<C>
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public struct C {
+                        @Received let aBuilder: Instantiator<A>
                     }
                     """,
                 ],

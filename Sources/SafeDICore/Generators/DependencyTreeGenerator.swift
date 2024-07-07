@@ -88,6 +88,8 @@ public final class DependencyTreeGenerator {
         case noInstantiableFound(TypeDescription)
         case unfulfillableProperties([UnfulfillableProperty])
         case instantiableHasForwardedProperty(property: Property, instantiableWithForwardedProperty: Instantiable, parent: Instantiable)
+        case constantDependencyCycleDetected([TypeDescription])
+        case receivedInstantiatorDependencyCycleDetected(property: Property, directParent: TypeDescription, cycle: [TypeDescription])
 
         var description: String {
             switch self {
@@ -97,15 +99,31 @@ public final class DependencyTreeGenerator {
                 """
                 \(unfulfillableProperties.map {
                     """
-                    @\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(([$0.instantiable] + $0.parentStack)
+                    @\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(([$0.instantiable.concreteInstantiable] + $0.parentStack)
                         .reversed()
-                        .map(\.concreteInstantiable.asSource)
+                        .map(\.asSource)
                         .joined(separator: " -> "))
                     """
                 }.joined(separator: "\n"))
                 """
             case let .instantiableHasForwardedProperty(property, instantiable, parent):
                 "Property `\(property.asSource)` on \(parent.concreteInstantiable.asSource) has at least one @\(Dependency.Source.forwardedRawValue) property. Property should instead be of type `\(Dependency.instantiatorType)<\(instantiable.concreteInstantiable.asSource)>`."
+            case let .constantDependencyCycleDetected(instantiables):
+                """
+                Dependency cycle detected!
+                \(instantiables
+                    .map(\.asSource)
+                    .reversed()
+                    .joined(separator: " -> "))
+                """
+            case let .receivedInstantiatorDependencyCycleDetected(property, directParent, instantiables):
+                """
+                Dependency cycle detected! @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)` is @\(Dependency.Source.receivedRawValue) in tree created by @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)`. Declare @\(Dependency.Source.receivedRawValue) `\(property.asSource)` on `\(directParent.asSource)` as @\(Dependency.Source.instantiatedRawValue) to fix. Full cycle:
+                \(instantiables
+                    .map(\.asSource)
+                    .reversed()
+                    .joined(separator: " -> "))
+                """
             }
         }
 
@@ -116,7 +134,7 @@ public final class DependencyTreeGenerator {
 
             let property: Property
             let instantiable: Instantiable
-            let parentStack: [Instantiable]
+            let parentStack: [TypeDescription]
         }
     }
 
@@ -301,8 +319,10 @@ public final class DependencyTreeGenerator {
         func validateReceivedProperties(
             on scope: Scope,
             receivableProperties: Set<Property>,
-            instantiables: OrderedSet<Instantiable>
-        ) {
+            property: Property?,
+            propertyStack: OrderedSet<Property>,
+            root: TypeDescription
+        ) throws {
             let createdProperties = Set(
                 scope
                     .instantiable
@@ -325,7 +345,7 @@ public final class DependencyTreeGenerator {
                 let parentContainsProperty = receivableProperties.contains(receivedProperty)
                 let propertyIsCreatedAtThisScope = createdProperties.contains(receivedProperty)
                 if !parentContainsProperty, !propertyIsCreatedAtThisScope {
-                    if instantiables.elements.isEmpty {
+                    if property == nil {
                         // This property's scope is not a real root instantiable! Remove it from the list.
                         rootInstantiables.remove(scope.instantiable.concreteInstantiable)
                     } else {
@@ -333,32 +353,55 @@ public final class DependencyTreeGenerator {
                         unfulfillableProperties.insert(.init(
                             property: receivedProperty,
                             instantiable: scope.instantiable,
-                            parentStack: instantiables.elements
-                        )
-                        )
+                            parentStack: propertyStack.map(\.typeDescription) + [root]
+                        ))
                     }
+                }
+            }
+
+            // Check children for cycles.
+            var childPropertyStack = propertyStack
+            if let property {
+                childPropertyStack.insert(property, at: 0)
+            }
+            for dependency in scope.instantiable.dependencies {
+                let propertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
+                guard let cycleIndex = childPropertyStack.firstIndex(of: propertyForDependency) else {
+                    continue
+                }
+                let typesInCycle = (
+                    [propertyForDependency]
+                        + childPropertyStack.elements[0...cycleIndex]
+                ).map(\.typeDescription)
+                if propertyForDependency.propertyType.isConstant {
+                    // We can break a constant dependency cycle if there's lazy instantiation in the tree.
+                    if !typesInCycle.contains(where: { !$0.propertyType.isConstant }) {
+                        throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
+                    }
+                } else if dependency.source.isReceived {
+                    throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
+                        property: propertyForDependency,
+                        directParent: scope.instantiable.concreteInstantiable,
+                        cycle: typesInCycle
+                    )
                 }
             }
 
             for childPropertyToGenerate in scope.propertiesToGenerate {
                 switch childPropertyToGenerate {
-                case let .instantiated(childProperty, childScope, _):
-                    guard !instantiables.contains(childScope.instantiable) else {
-                        // We've previously visited this child scope.
+                case let .instantiated(property, childScope, _):
+                    guard !childPropertyStack.contains(property) else {
                         // There is a cycle in our scope tree. Do not re-enter it.
                         continue
                     }
-                    var instantiables = instantiables
-                    instantiables.insert(scope.instantiable, at: 0)
-
-                    validateReceivedProperties(
+                    try validateReceivedProperties(
                         on: childScope,
                         receivableProperties: receivableProperties
-                            .union(scope.properties)
-                            .removing(childProperty),
-                        instantiables: instantiables
+                            .union(scope.properties),
+                        property: property,
+                        propertyStack: childPropertyStack,
+                        root: root
                     )
-
                 case .aliased:
                     break
                 }
@@ -366,10 +409,12 @@ public final class DependencyTreeGenerator {
         }
 
         for rootScope in rootInstantiables.compactMap({ typeDescriptionToScopeMap[$0] }) {
-            validateReceivedProperties(
+            try validateReceivedProperties(
                 on: rootScope,
                 receivableProperties: Set(rootScope.properties),
-                instantiables: []
+                property: nil,
+                propertyStack: [],
+                root: rootScope.instantiable.concreteInstantiable
             )
         }
 
@@ -421,15 +466,5 @@ extension Collection<Dependency> {
                 true
             }
         }) == nil
-    }
-}
-
-// MARK: - Set
-
-extension Set {
-    fileprivate func removing(_ element: Element) -> Self {
-        var setWithoutElement = self
-        setWithoutElement.remove(element)
-        return setWithoutElement
     }
 }
