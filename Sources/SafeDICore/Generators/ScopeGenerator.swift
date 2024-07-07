@@ -284,7 +284,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
     }
 
     func generateDOT() async throws -> String {
-        let orderedPropertiesToGenerate = try orderedPropertiesToGenerate
+        let orderedPropertiesToGenerate = orderedPropertiesToGenerate
         let instantiatedProperties = orderedPropertiesToGenerate.map(\.scopeData.asDOTNode)
         var childDOTs = [String]()
         for orderedPropertyToGenerate in orderedPropertiesToGenerate {
