@@ -366,17 +366,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
                 else {
                     return
                 }
-                guard !stack.contains(property) else {
-                    if property.propertyType.isConstant {
-                        throw GenerationError.dependencyCycleDetected(
-                            stack.drop(while: { $0 != property }) + [property],
-                            scope: self
-                        )
-                    } else {
-                        return
-                    }
-                }
-
                 let scopeDependencies = propertyToUnfulfilledScopeMap
                     .keys
                     .intersection(scope.requiredReceivedProperties)
@@ -421,17 +410,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
     private enum GenerationError: Error, CustomStringConvertible {
         case erasedInstantiatorGenericDoesNotMatch(property: Property, instantiable: Instantiable)
-        case dependencyCycleDetected([Property], scope: ScopeGenerator)
 
         var description: String {
             switch self {
             case let .erasedInstantiatorGenericDoesNotMatch(property, instantiable):
                 "Property `\(property.asSource)` on \(instantiable.concreteInstantiable.asSource) incorrectly configured. Property should instead be of type `\(Dependency.erasedInstantiatorType)<\(instantiable.concreteInstantiable.asSource).ForwardedProperties, \(property.typeDescription.asInstantiatedType.asSource)>`."
-            case let .dependencyCycleDetected(properties, scope):
-                """
-                Dependency cycle detected on \(scope)!
-                \(properties.map(\.asSource).joined(separator: " -> "))
-                """
             }
         }
     }
