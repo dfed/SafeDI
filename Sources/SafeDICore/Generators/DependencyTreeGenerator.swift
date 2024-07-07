@@ -90,6 +90,7 @@ public final class DependencyTreeGenerator {
         case instantiableHasForwardedProperty(property: Property, instantiableWithForwardedProperty: Instantiable, parent: Instantiable)
         case constantDependencyCycleDetected([TypeDescription])
         case receivedInstantiatorDependencyCycleDetected(property: Property, directParent: TypeDescription, cycle: [TypeDescription])
+        case receivedConstantCycleDetected(instantiated: Property, receivedPropertyChain: [Property])
 
         var description: String {
             switch self {
@@ -124,6 +125,14 @@ public final class DependencyTreeGenerator {
                     .reversed()
                     .joined(separator: " -> "))
                 """
+            case let .receivedConstantCycleDetected(instantiated, receivedPropertyChain):
+                """
+                Dependency received in same chain it is instantiated!
+                \("@\(Dependency.Source.instantiatedRawValue) \(instantiated.asSource) -> "
+                    + receivedPropertyChain
+                    .map { "@\(Dependency.Source.receivedRawValue) \($0.asSource)" }
+                    .joined(separator: " -> "))
+                """
             }
         }
 
@@ -151,7 +160,7 @@ public final class DependencyTreeGenerator {
                     try validateReachableTypeDescriptions()
 
                     let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
-                    try validateReceivedProperties(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
+                    try validatePropertiesAreFulfillable(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
                     return try rootInstantiables
                         .sorted()
                         .compactMap {
@@ -314,9 +323,9 @@ public final class DependencyTreeGenerator {
         return typeDescriptionToScopeMap
     }
 
-    private func validateReceivedProperties(typeDescriptionToScopeMap: [TypeDescription: Scope]) throws {
+    private func validatePropertiesAreFulfillable(typeDescriptionToScopeMap: [TypeDescription: Scope]) throws {
         var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
-        func validateReceivedProperties(
+        func validatePropertiesAreFulfillable(
             on scope: Scope,
             receivableProperties: Set<Property>,
             property: Property?,
@@ -341,6 +350,38 @@ public final class DependencyTreeGenerator {
                     }
                     .map(\.property)
             )
+            if let property {
+                func validateNoCycleInReceivedProperties(
+                    scope: Scope,
+                    receivedPropertyStack: OrderedSet<Property>
+                ) throws {
+                    for childProperty in scope.receivedProperties {
+                        guard childProperty != property else {
+                            throw DependencyTreeGeneratorError.receivedConstantCycleDetected(
+                                instantiated: property,
+                                receivedPropertyChain: receivedPropertyStack + [childProperty]
+                            )
+                        }
+                        guard !receivedPropertyStack.contains(childProperty) else {
+                            // We've found a cycle, but it's not our cycle. Bail and let a future loop find this.
+                            return
+                        }
+                        if let receivedPropertyScope = typeDescriptionToScopeMap[childProperty.typeDescription] {
+                            var childPropertyStack = receivedPropertyStack
+                            childPropertyStack.append(childProperty)
+                            try validateNoCycleInReceivedProperties(
+                                scope: receivedPropertyScope,
+                                receivedPropertyStack: childPropertyStack
+                            )
+                        }
+                    }
+                }
+                try validateNoCycleInReceivedProperties(
+                    scope: scope,
+                    receivedPropertyStack: []
+                )
+            }
+
             for receivedProperty in scope.receivedProperties {
                 let parentContainsProperty = receivableProperties.contains(receivedProperty)
                 let propertyIsCreatedAtThisScope = createdProperties.contains(receivedProperty)
@@ -389,16 +430,17 @@ public final class DependencyTreeGenerator {
 
             for childPropertyToGenerate in scope.propertiesToGenerate {
                 switch childPropertyToGenerate {
-                case let .instantiated(property, childScope, _):
-                    guard !childPropertyStack.contains(property) else {
+                case let .instantiated(childProperty, childScope, _):
+                    guard !childPropertyStack.contains(childProperty) else {
                         // There is a cycle in our scope tree. Do not re-enter it.
                         continue
                     }
-                    try validateReceivedProperties(
+                    try validatePropertiesAreFulfillable(
                         on: childScope,
                         receivableProperties: receivableProperties
-                            .union(scope.properties),
-                        property: property,
+                            .union(scope.properties)
+                            .removing(childProperty),
+                        property: childProperty,
                         propertyStack: childPropertyStack,
                         root: root
                     )
@@ -409,7 +451,7 @@ public final class DependencyTreeGenerator {
         }
 
         for rootScope in rootInstantiables.compactMap({ typeDescriptionToScopeMap[$0] }) {
-            try validateReceivedProperties(
+            try validatePropertiesAreFulfillable(
                 on: rootScope,
                 receivableProperties: Set(rootScope.properties),
                 property: nil,
@@ -466,5 +508,15 @@ extension Collection<Dependency> {
                 true
             }
         }) == nil
+    }
+}
+
+// MARK: - Set
+
+extension Set {
+    fileprivate func removing(_ element: Element) -> Self {
+        var setWithoutElement = self
+        setWithoutElement.remove(element)
+        return setWithoutElement
     }
 }

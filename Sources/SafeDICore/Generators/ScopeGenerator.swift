@@ -284,7 +284,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
     }
 
     func generateDOT() async throws -> String {
-        let orderedPropertiesToGenerate = try orderedPropertiesToGenerate
+        let orderedPropertiesToGenerate = orderedPropertiesToGenerate
         let instantiatedProperties = orderedPropertiesToGenerate.map(\.scopeData.asDOTNode)
         var childDOTs = [String]()
         for orderedPropertyToGenerate in orderedPropertiesToGenerate {
@@ -351,58 +351,43 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
     private var generateCodeTask: Task<String, Error>?
 
     private var orderedPropertiesToGenerate: [ScopeGenerator] {
-        get throws {
-            var orderedPropertiesToGenerate = [ScopeGenerator]()
-            var propertyToUnfulfilledScopeMap = propertiesToGenerate
-                .reduce(into: OrderedDictionary<Property, ScopeGenerator>()) { partialResult, scope in
-                    if let property = scope.property {
-                        partialResult[property] = scope
-                    }
+        var orderedPropertiesToGenerate = [ScopeGenerator]()
+        var propertyToUnfulfilledScopeMap = propertiesToGenerate
+            .reduce(into: OrderedDictionary<Property, ScopeGenerator>()) { partialResult, scope in
+                if let property = scope.property {
+                    partialResult[property] = scope
                 }
-            func fulfill(_ scope: ScopeGenerator, stack: OrderedSet<Property> = []) throws {
-                guard
-                    let property = scope.property,
-                    propertyToUnfulfilledScopeMap[property] != nil
-                else {
-                    return
-                }
-                guard !stack.contains(property) else {
-                    if property.propertyType.isConstant {
-                        throw GenerationError.dependencyCycleDetected(
-                            stack.drop(while: { $0 != property }) + [property],
-                            scope: self
-                        )
-                    } else {
-                        return
-                    }
-                }
-
-                let scopeDependencies = propertyToUnfulfilledScopeMap
-                    .keys
-                    .intersection(scope.requiredReceivedProperties)
-                    .compactMap { propertyToUnfulfilledScopeMap[$0] }
-                // Fulfill the scopes we depend upon.
-                for dependentScope in scopeDependencies {
-                    var stack = stack
-                    stack.append(property)
-                    try fulfill(dependentScope, stack: stack)
-                }
-                // We can now be marked as fulfilled!
-                orderedPropertiesToGenerate.append(scope)
-                propertyToUnfulfilledScopeMap[property] = nil
             }
-
-            for scope in propertiesToGenerate {
-                try fulfill(scope)
+        func fulfill(_ scope: ScopeGenerator) {
+            guard
+                let property = scope.property,
+                propertyToUnfulfilledScopeMap[property] != nil
+            else {
+                return
             }
-
-            return orderedPropertiesToGenerate
+            let scopeDependencies = propertyToUnfulfilledScopeMap
+                .keys
+                .intersection(scope.requiredReceivedProperties)
+                .compactMap { propertyToUnfulfilledScopeMap[$0] }
+            // Fulfill the scopes we depend upon.
+            for dependentScope in scopeDependencies {
+                fulfill(dependentScope)
+            }
+            // We can now be marked as fulfilled!
+            orderedPropertiesToGenerate.append(scope)
+            propertyToUnfulfilledScopeMap[property] = nil
         }
+
+        for scope in propertiesToGenerate {
+            fulfill(scope)
+        }
+
+        return orderedPropertiesToGenerate
     }
 
     private func generateProperties(leadingMemberWhitespace: String) async throws -> [String] {
         var generatedProperties = [String]()
-        for childGenerator in try orderedPropertiesToGenerate {
+        for childGenerator in orderedPropertiesToGenerate {
             try await generatedProperties.append(
                 childGenerator
                     .generateCode(leadingWhitespace: leadingMemberWhitespace)
@@ -421,17 +406,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
     private enum GenerationError: Error, CustomStringConvertible {
         case erasedInstantiatorGenericDoesNotMatch(property: Property, instantiable: Instantiable)
-        case dependencyCycleDetected([Property], scope: ScopeGenerator)
 
         var description: String {
             switch self {
             case let .erasedInstantiatorGenericDoesNotMatch(property, instantiable):
                 "Property `\(property.asSource)` on \(instantiable.concreteInstantiable.asSource) incorrectly configured. Property should instead be of type `\(Dependency.erasedInstantiatorType)<\(instantiable.concreteInstantiable.asSource).ForwardedProperties, \(property.typeDescription.asInstantiatedType.asSource)>`."
-            case let .dependencyCycleDetected(properties, scope):
-                """
-                Dependency cycle detected on \(scope)!
-                \(properties.map(\.asSource).joined(separator: " -> "))
-                """
             }
         }
     }
