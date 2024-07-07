@@ -1350,10 +1350,11 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    let child: Child = {
+                    func __safeDI_child() -> Child {
                         let grandchild = Grandchild()
                         return Child(/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */)
-                    }()
+                    }
+                    let child: Child = __safeDI_child()
                     self.init(child: child)
                 }
             }
@@ -1403,10 +1404,11 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    let child: Child = {
+                    func __safeDI_child() -> Child {
                         let grandchild = Grandchild()
                         return Child(grandchild: grandchild)
-                    }()
+                    }
+                    let child: Child = __safeDI_child()
                     self.init(child: child)
                 }
             }
@@ -1449,10 +1451,11 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    let child: Child = {
+                    func __safeDI_child() -> Child {
                         let grandchild = Grandchild()
                         return Child(grandchild: grandchild)
-                    }()
+                    }
+                    let child: Child = __safeDI_child()
                     self.init(child: child)
                 }
             }
@@ -1495,10 +1498,11 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    let child: Child = {
+                    func __safeDI_child() -> Child {
                         let grandchild = Grandchild()
                         return Child(grandchild: grandchild)
-                    }()
+                    }
+                    let child: Child = __safeDI_child()
                     self.init(child: child)
                 }
             }
@@ -1586,16 +1590,18 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
             extension Root {
                 public convenience init() {
                     let greatGrandchild = GreatGrandchild()
-                    let childA: ChildA = {
+                    func __safeDI_childA() -> ChildA {
                         let grandchildAA = GrandchildAA(greatGrandchild: greatGrandchild)
                         let grandchildAB = GrandchildAB(greatGrandchild: greatGrandchild)
                         return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
-                    }()
-                    let childB: ChildB = {
+                    }
+                    let childA: ChildA = __safeDI_childA()
+                    func __safeDI_childB() -> ChildB {
                         let grandchildBA = GrandchildBA(greatGrandchild: greatGrandchild)
                         let grandchildBB = GrandchildBB(greatGrandchild: greatGrandchild)
                         return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)
-                    }()
+                    }
+                    let childB: ChildB = __safeDI_childB()
                     self.init(childA: childA, childB: childB, greatGrandchild: greatGrandchild)
                 }
             }
@@ -1684,18 +1690,20 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    let childA: ChildA = {
+                    func __safeDI_childA() -> ChildA {
                         let greatGrandchild = GreatGrandchild()
                         let grandchildAA = GrandchildAA(greatGrandchild: greatGrandchild)
                         let grandchildAB = GrandchildAB(greatGrandchild: greatGrandchild)
                         return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB, greatGrandchild: greatGrandchild)
-                    }()
-                    let childB: ChildB = {
+                    }
+                    let childA: ChildA = __safeDI_childA()
+                    func __safeDI_childB() -> ChildB {
                         let greatGrandchild = GreatGrandchild()
                         let grandchildBA = GrandchildBA(greatGrandchild: greatGrandchild)
                         let grandchildBB = GrandchildBB(greatGrandchild: greatGrandchild)
                         return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB, greatGrandchild: greatGrandchild)
-                    }()
+                    }
+                    let childB: ChildB = __safeDI_childB()
                     self.init(childA: childA, childB: childB)
                 }
             }
@@ -1757,15 +1765,17 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    let child: Child = {
-                        let grandchild: Grandchild = {
+                    func __safeDI_child() -> Child {
+                        func __safeDI_grandchild() -> Grandchild {
                             let recreated = Recreated()
                             let greatGrandchild = GreatGrandchild(recreated: recreated)
                             return Grandchild(greatGrandchild: greatGrandchild, recreated: recreated)
-                        }()
+                        }
+                        let grandchild: Grandchild = __safeDI_grandchild()
                         let recreated = Recreated()
                         return Child(grandchild: grandchild, recreated: recreated)
-                    }()
+                    }
+                    let child: Child = __safeDI_child()
                     self.init(child: child)
                 }
             }
@@ -1827,16 +1837,19 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
             extension Root {
                 public convenience init() {
                     let recreated = Recreated()
-                    let child: Child = {
-                        let grandchild: Grandchild = {
-                            let greatGrandchild: GreatGrandchild = {
+                    func __safeDI_child() -> Child {
+                        func __safeDI_grandchild() -> Grandchild {
+                            func __safeDI_greatGrandchild() -> GreatGrandchild {
                                 let recreated = Recreated()
                                 return GreatGrandchild(recreated: recreated)
-                            }()
+                            }
+                            let greatGrandchild: GreatGrandchild = __safeDI_greatGrandchild()
                             return Grandchild(greatGrandchild: greatGrandchild)
-                        }()
+                        }
+                        let grandchild: Grandchild = __safeDI_grandchild()
                         return Child(grandchild: grandchild, recreated: recreated)
-                    }()
+                    }
+                    let child: Child = __safeDI_child()
                     self.init(child: child, recreated: recreated)
                 }
             }
@@ -1905,19 +1918,23 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
             extension Root {
                 public convenience init() {
                     let recreated = Recreated()
-                    let child: Child = {
-                        let grandchild: Grandchild = {
-                            let greatGrandchild: GreatGrandchild = {
-                                let greatGreatGrandchild: GreatGreatGrandchild = {
+                    func __safeDI_child() -> Child {
+                        func __safeDI_grandchild() -> Grandchild {
+                            func __safeDI_greatGrandchild() -> GreatGrandchild {
+                                func __safeDI_greatGreatGrandchild() -> GreatGreatGrandchild {
                                     let recreated = Recreated()
                                     return GreatGreatGrandchild(recreated: recreated)
-                                }()
+                                }
+                                let greatGreatGrandchild: GreatGreatGrandchild = __safeDI_greatGreatGrandchild()
                                 return GreatGrandchild(greatGreatGrandchild: greatGreatGrandchild, recreated: recreated)
-                            }()
+                            }
+                            let greatGrandchild: GreatGrandchild = __safeDI_greatGrandchild()
                             return Grandchild(greatGrandchild: greatGrandchild)
-                        }()
+                        }
+                        let grandchild: Grandchild = __safeDI_grandchild()
                         return Child(grandchild: grandchild)
-                    }()
+                    }
+                    let child: Child = __safeDI_child()
                     self.init(child: child, recreated: recreated)
                 }
             }
@@ -1994,27 +2011,33 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    let child: Child = {
+                    func __safeDI_child() -> Child {
                         let recreated = Recreated()
-                        let grandchild: Grandchild = {
-                            let greatGrandchildA: GreatGrandchildA = {
-                                let greatGreatGrandchild: GreatGreatGrandchild = {
+                        func __safeDI_grandchild() -> Grandchild {
+                            func __safeDI_greatGrandchildA() -> GreatGrandchildA {
+                                func __safeDI_greatGreatGrandchild() -> GreatGreatGrandchild {
                                     let recreated = Recreated()
                                     return GreatGreatGrandchild(recreated: recreated)
-                                }()
+                                }
+                                let greatGreatGrandchild: GreatGreatGrandchild = __safeDI_greatGreatGrandchild()
                                 return GreatGrandchildA(greatGreatGrandchild: greatGreatGrandchild, recreated: recreated)
-                            }()
-                            let greatGrandchildB: GreatGrandchildB = {
-                                let greatGreatGrandchild: GreatGreatGrandchild = {
+                            }
+                            let greatGrandchildA: GreatGrandchildA = __safeDI_greatGrandchildA()
+                            func __safeDI_greatGrandchildB() -> GreatGrandchildB {
+                                func __safeDI_greatGreatGrandchild() -> GreatGreatGrandchild {
                                     let recreated = Recreated()
                                     return GreatGreatGrandchild(recreated: recreated)
-                                }()
+                                }
+                                let greatGreatGrandchild: GreatGreatGrandchild = __safeDI_greatGreatGrandchild()
                                 return GreatGrandchildB(greatGreatGrandchild: greatGreatGrandchild)
-                            }()
+                            }
+                            let greatGrandchildB: GreatGrandchildB = __safeDI_greatGrandchildB()
                             return Grandchild(greatGrandchildA: greatGrandchildA, greatGrandchildB: greatGrandchildB)
-                        }()
+                        }
+                        let grandchild: Grandchild = __safeDI_grandchild()
                         return Child(grandchild: grandchild, recreated: recreated)
-                    }()
+                    }
+                    let child: Child = __safeDI_child()
                     self.init(child: child)
                 }
             }
@@ -2101,33 +2124,38 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
             extension Root {
                 public convenience init() {
                     @Sendable func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
-                        let grandchildA: GrandchildA = {
+                        func __safeDI_grandchildA() -> GrandchildA {
                             let recreated = Recreated()
                             let greatGrandchild = GreatGrandchild(recreated: recreated)
                             return GrandchildA(greatGrandchild: greatGrandchild, recreated: recreated)
-                        }()
-                        let grandchildB: GrandchildB = {
+                        }
+                        let grandchildA: GrandchildA = __safeDI_grandchildA()
+                        func __safeDI_grandchildB() -> GrandchildB {
                             let greatGrandchild = GreatGrandchild(recreated: recreated)
                             return GrandchildB(greatGrandchild: greatGrandchild)
-                        }()
+                        }
+                        let grandchildB: GrandchildB = __safeDI_grandchildB()
                         return ChildA(grandchildA: grandchildA, grandchildB: grandchildB, recreated: recreated)
                     }
                     let childABuilder = SendableErasedInstantiator<Recreated, ChildAProtocol> {
                         __safeDI_childABuilder(recreated: $0)
                     }
                     let recreated = Recreated()
-                    let childB: ChildB = {
-                        let grandchildA: GrandchildA = {
+                    func __safeDI_childB() -> ChildB {
+                        func __safeDI_grandchildA() -> GrandchildA {
                             let recreated = Recreated()
                             let greatGrandchild = GreatGrandchild(recreated: recreated)
                             return GrandchildA(greatGrandchild: greatGrandchild, recreated: recreated)
-                        }()
-                        let grandchildB: GrandchildB = {
+                        }
+                        let grandchildA: GrandchildA = __safeDI_grandchildA()
+                        func __safeDI_grandchildB() -> GrandchildB {
                             let greatGrandchild = GreatGrandchild(recreated: recreated)
                             return GrandchildB(greatGrandchild: greatGrandchild)
-                        }()
+                        }
+                        let grandchildB: GrandchildB = __safeDI_grandchildB()
                         return ChildB(grandchildA: grandchildA, grandchildB: grandchildB, recreated: recreated)
-                    }()
+                    }
+                    let childB: ChildB = __safeDI_childB()
                     self.init(childABuilder: childABuilder, childB: childB, recreated: recreated)
                 }
             }
@@ -2212,28 +2240,34 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    let childA: ChildA = {
-                        let grandchildAA: GrandchildAA = {
+                    func __safeDI_childA() -> ChildA {
+                        func __safeDI_grandchildAA() -> GrandchildAA {
                             let greatGrandchild = GreatGrandchild()
                             return GrandchildAA(greatGrandchild: greatGrandchild)
-                        }()
-                        let grandchildAB: GrandchildAB = {
+                        }
+                        let grandchildAA: GrandchildAA = __safeDI_grandchildAA()
+                        func __safeDI_grandchildAB() -> GrandchildAB {
                             let greatGrandchild = GreatGrandchild()
                             return GrandchildAB(greatGrandchild: greatGrandchild)
-                        }()
+                        }
+                        let grandchildAB: GrandchildAB = __safeDI_grandchildAB()
                         return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
-                    }()
-                    let childB: ChildB = {
-                        let grandchildBA: GrandchildBA = {
+                    }
+                    let childA: ChildA = __safeDI_childA()
+                    func __safeDI_childB() -> ChildB {
+                        func __safeDI_grandchildBA() -> GrandchildBA {
                             let greatGrandchild = GreatGrandchild()
                             return GrandchildBA(greatGrandchild: greatGrandchild)
-                        }()
-                        let grandchildBB: GrandchildBB = {
+                        }
+                        let grandchildBA: GrandchildBA = __safeDI_grandchildBA()
+                        func __safeDI_grandchildBB() -> GrandchildBB {
                             let greatGrandchild = GreatGrandchild()
                             return GrandchildBB(greatGrandchild: greatGrandchild)
-                        }()
+                        }
+                        let grandchildBB: GrandchildBB = __safeDI_grandchildBB()
                         return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)
-                    }()
+                    }
+                    let childB: ChildB = __safeDI_childB()
                     self.init(childA: childA, childB: childB)
                 }
             }
@@ -2574,34 +2608,40 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    let childA: ChildA = {
-                        let grandchildAA: GrandchildAA = {
+                    func __safeDI_childA() -> ChildA {
+                        func __safeDI_grandchildAA() -> GrandchildAA {
                             let greatGrandchild = GreatGrandchild()
                             return GrandchildAA(greatGrandchild: greatGrandchild)
-                        }()
-                        let grandchildAB: GrandchildAB = {
+                        }
+                        let grandchildAA: GrandchildAA = __safeDI_grandchildAA()
+                        func __safeDI_grandchildAB() -> GrandchildAB {
                             let greatGrandchild = GreatGrandchild()
                             return GrandchildAB(greatGrandchild: greatGrandchild)
-                        }()
+                        }
+                        let grandchildAB: GrandchildAB = __safeDI_grandchildAB()
                         return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
-                    }()
-                    let childB: ChildB = {
-                        let grandchildBA: GrandchildBA = {
+                    }
+                    let childA: ChildA = __safeDI_childA()
+                    func __safeDI_childB() -> ChildB {
+                        func __safeDI_grandchildBA() -> GrandchildBA {
                             @Sendable func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
                                 GreatGrandchild()
                             }
                             let greatGrandchildInstantiator = SendableInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
                             return GrandchildBA(greatGrandchildInstantiator: greatGrandchildInstantiator)
-                        }()
-                        let grandchildBB: GrandchildBB = {
+                        }
+                        let grandchildBA: GrandchildBA = __safeDI_grandchildBA()
+                        func __safeDI_grandchildBB() -> GrandchildBB {
                             @Sendable func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
                                 GreatGrandchild()
                             }
                             let greatGrandchildInstantiator = SendableInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
                             return GrandchildBB(greatGrandchildInstantiator: greatGrandchildInstantiator)
-                        }()
+                        }
+                        let grandchildBB: GrandchildBB = __safeDI_grandchildBB()
                         return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)
-                    }()
+                    }
+                    let childB: ChildB = __safeDI_childB()
                     self.init(childA: childA, childB: childB)
                 }
             }
@@ -3145,11 +3185,12 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
 
             extension RootViewController {
                 public convenience init() {
-                    let authService: AuthService = {
+                    func __safeDI_authService() -> DefaultAuthService {
                         let networkService: NetworkService = DefaultNetworkService()
                         let renamedNetworkService: NetworkService = networkService
                         return DefaultAuthService(networkService: networkService, renamedNetworkService: renamedNetworkService)
-                    }()
+                    }
+                    let authService: AuthService = __safeDI_authService()
                     self.init(authService: authService)
                 }
             }
@@ -3228,11 +3269,12 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
             extension RootViewController {
                 public convenience init() {
                     let networkService: NetworkService = DefaultNetworkService()
-                    let authService: AuthService = {
+                    func __safeDI_authService() -> DefaultAuthService {
                         let renamedNetworkService: NetworkService = networkService
                         let renamedAgainNetworkService: NetworkService = renamedNetworkService
                         return DefaultAuthService(networkService: networkService, renamedNetworkService: renamedNetworkService, renamedAgainNetworkService: renamedAgainNetworkService)
-                    }()
+                    }
+                    let authService: AuthService = __safeDI_authService()
                     self.init(authService: authService, networkService: networkService)
                 }
             }
@@ -3589,12 +3631,13 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
 
             extension Root {
                 public convenience init() {
-                    let child: Child = {
+                    func __safeDI_child() -> Child {
                         let greatGrandchild = GreatGrandchild()
                         let grandchild = Grandchild(greatGrandchild: greatGrandchild)
                         let unrelated = Unrelated()
                         return Child(grandchild: grandchild, unrelated: unrelated, greatGrandchild: greatGrandchild)
-                    }()
+                    }
+                    let child: Child = __safeDI_child()
                     self.init(child: child)
                 }
             }
@@ -4130,17 +4173,19 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
 
             extension Root {
                 public init() {
-                    let a: A = {
-                        let b: B = {
+                    func __safeDI_a() -> A {
+                        func __safeDI_b() -> B {
                             func __safeDI_cBuilder() -> C {
                                 let a = A(b: b)
                                 return C(a: a)
                             }
                             let cBuilder = Instantiator<C>(__safeDI_cBuilder)
                             return B(cBuilder: cBuilder)
-                        }()
+                        }
+                        let b: B = __safeDI_b()
                         return A(b: b)
-                    }()
+                    }
+                    let a: A = __safeDI_a()
                     self.init(a: a)
                 }
             }
@@ -4179,14 +4224,15 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
 
             extension Root {
                 public init() {
-                    let a: A = {
+                    func __safeDI_a() -> A {
                         func __safeDI_aBuilder() -> A {
                             let aBuilder = Instantiator<A>(__safeDI_aBuilder)
                             return A(aBuilder: aBuilder)
                         }
                         let aBuilder = Instantiator<A>(__safeDI_aBuilder)
                         return A(aBuilder: aBuilder)
-                    }()
+                    }
+                    let a: A = __safeDI_a()
                     self.init(a: a)
                 }
             }
