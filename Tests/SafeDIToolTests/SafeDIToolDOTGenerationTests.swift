@@ -53,6 +53,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
 
     // MARK: DOT Generation Tests
 
+    @MainActor
     func test_run_successfullyGeneratesOutputFileWhenNoCodeInput() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [],
@@ -71,6 +72,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenSingleRoot() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -107,6 +109,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenMultipleRootsExist() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -152,6 +155,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenRootHasMultipleLayers() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -243,6 +247,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenRootInstantiatesPropertiesThatUtilizesSingleForwardedPropertyInSubBuilders() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -345,6 +350,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenRootInstantiatesPropertiesThatUtilizeMultipleForwardedPropertiesInSubBuilders() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -457,6 +463,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenRootInstantiatesPropertiesThatUtilizeMultipleForwardedPropertiesAndDependencyInversionInSubBuilders() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -569,6 +576,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenRootInstantiatesPropertiesThatUtilizePropertiesNotDirectlyProvidedByParent() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -671,6 +679,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleLayersOfInstantiators() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -773,6 +782,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleTreesThatReceiveTheSameProperty() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -860,6 +870,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyInMiddleLevel() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -950,6 +961,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesTheSamePropertyAtMultipleLevels() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -1010,6 +1022,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyMultipleLayersDeep() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -1098,6 +1111,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyAcrossMultipleModules() async throws {
         let greatGrandchildModuleOutput = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -1233,6 +1247,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenRootHasReceivedAliasOfInstantiable() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -1277,6 +1292,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenReceivedPropertyIsAliasedTwice() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -1348,6 +1364,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenFirstPropertyDependsOnLastPropertyAndMiddlePropertyHasNoDependencyEntanglementsWithEither() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -1403,6 +1420,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenRootHasLotsOfDependenciesThatDependOnOneAnother() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -1776,6 +1794,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenLazyInstantiationCycleExists() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -1826,6 +1845,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenPartiallyLazyInstantiationCycleExists() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -1876,6 +1896,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenLazySelfInstantiationCycleExists() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -1911,6 +1932,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenLazySelfForwardingInstantiationCycleExists() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -1949,6 +1971,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenAGenericTypeIsAnExtendedInstantiableWithMultipleGenericReturnTypes() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
@@ -2000,6 +2023,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
+    @MainActor
     func test_run_writesDOTTree_whenAGenericTypeIsAnExtendedInstantiableWithMultipleGenericFullyQualifiedReturnTypes() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
