@@ -245,6 +245,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
                             "let \(property.asSource)"
                         }
 
+                        // Ideally we would be able to use an anonymous closure rather than a named function here.
+                        // Unfortunately, there's a bug in Swift Concurrency that prevents us from doing this: https://github.com/swiftlang/swift/issues/75003
+                        let functionName = self.functionName(toBuild: property)
+                        let functionDeclaration = if generatedProperties.isEmpty {
+                            ""
+                        } else {
+                            """
+                            func \(functionName)() -> \(concreteTypeName) {
+                            \(generatedProperties.joined(separator: "\n"))
+                            \(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
+                            }
+
+                            """
+                        }
                         let returnLineSansReturn = if erasedToConcreteExistential {
                             "\(property.typeDescription.asSource)(\(returnLineSansReturn))"
                         } else {
@@ -253,14 +267,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
                         let initializer = if generatedProperties.isEmpty {
                             returnLineSansReturn
                         } else {
-                            """
-                            {
-                            \(generatedProperties.joined(separator: "\n"))
-                            \(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
-                            }()
-                            """
+                            "\(functionName)()"
                         }
-                        return "\(propertyDeclaration) = \(initializer)\n"
+                        return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
                     }
                 case let .alias(property, fulfillingProperty, erasedToConcreteExistential):
                     if erasedToConcreteExistential {
