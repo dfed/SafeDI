@@ -2685,7 +2685,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                import Foundation
+                @_implementationOnly import Foundation
 
                 public protocol UserService {
                     var userName: String? { get set }
@@ -2711,7 +2711,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
             // Please refrain from editing this file directly.
 
             #if canImport(Foundation)
-            import Foundation
+            @_implementationOnly import Foundation
             #endif
 
             extension Root {

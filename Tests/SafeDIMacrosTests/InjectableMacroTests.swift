@@ -43,6 +43,25 @@ import SafeDICore
             }
         }
 
+        // MARK: Behavior Tests
+
+        func test_propertyIsFulfilledByTypeWithStringLiteral_expandsWithoutIssue() {
+            assertMacro {
+                """
+                public struct ExampleService {
+                    @Instantiated(fulfilledByType: "SomethingElse")
+                    let something: Something
+                }
+                """
+            } expansion: {
+                """
+                public struct ExampleService {
+                    let something: Something
+                }
+                """
+            }
+        }
+
         // MARK: Fixit Tests
 
         func test_fixit_addsFixitWhenInjectableParameterIsMutable() {
@@ -246,6 +265,36 @@ import SafeDICore
                     let instantiatedA: InstantiatedA
                 }
                 """
+            }
+        }
+
+        func test_throwsErrorWhenFulfilledByTypeIsNotAStringExpression() {
+            assertMacro {
+                """
+                public struct ExampleService {
+                    init(instantiatedA: InstantiatedA) {
+                        self.instantiatedA = instantiatedA
+                    }
+
+                    static let fulfilledByType = "ConcreteType"
+                    @Instantiated(fulfilledByType: "\\(Self.fulfilledByType)")
+                    let instantiatedA: InstantiatedA
+                }
+                """
+            } diagnostics: {
+                #"""
+                public struct ExampleService {
+                    init(instantiatedA: InstantiatedA) {
+                        self.instantiatedA = instantiatedA
+                    }
+
+                    static let fulfilledByType = "ConcreteType"
+                    @Instantiated(fulfilledByType: "\(Self.fulfilledByType)")
+                    ┬────────────────────────────────────────────────────────
+                    ╰─ 🛑 The argument `fulfilledByType` must be a string literal
+                    let instantiatedA: InstantiatedA
+                }
+                """#
             }
         }
 

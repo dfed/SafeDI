@@ -43,9 +43,7 @@ public final class FileVisitor: SyntaxVisitor {
     }
 
     public override func visit(_ node: ImportDeclSyntax) -> SyntaxVisitorContinueKind {
-        if let importStatement = node.asImportStatement {
-            imports.append(importStatement)
-        }
+        imports.append(node.asImportStatement)
         return .skipChildren
     }
 

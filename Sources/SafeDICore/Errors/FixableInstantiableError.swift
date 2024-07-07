@@ -75,12 +75,9 @@ public enum FixableInstantiableError: DiagnosticError {
     // MARK: - InstantiableDiagnosticMessage
 
     private struct InstantiableDiagnosticMessage: DiagnosticMessage {
-        var diagnosticID: MessageID {
-            MessageID(domain: "\(Self.self)", id: error.description)
-        }
-
-        var severity: DiagnosticSeverity {
-            switch error {
+        init(error: FixableInstantiableError) {
+            diagnosticID = MessageID(domain: "\(Self.self)", id: error.description)
+            severity = switch error {
             case .missingInstantiableConformance,
                  .missingRequiredInstantiateMethod,
                  .missingAttributes,
@@ -94,20 +91,19 @@ public enum FixableInstantiableError: DiagnosticError {
                  .missingRequiredInitializer:
                 .error
             }
+            message = error.description
         }
 
-        var message: String {
-            error.description
-        }
-
-        let error: FixableInstantiableError
+        let diagnosticID: MessageID
+        let severity: DiagnosticSeverity
+        let message: String
     }
 
     // MARK: - InstantiableFixItMessage
 
     private struct InstantiableFixItMessage: FixItMessage {
-        var message: String {
-            switch error {
+        init(error: FixableInstantiableError) {
+            message = switch error {
             case .missingInstantiableConformance:
                 "Declare conformance to `Instantiable`"
             case let .missingRequiredInstantiateMethod(typeName):
@@ -131,12 +127,10 @@ public enum FixableInstantiableError: DiagnosticError {
             case .missingRequiredInitializer:
                 "Add required initializer"
             }
+            fixItID = MessageID(domain: "\(Self.self)", id: error.description)
         }
 
-        var fixItID: MessageID {
-            MessageID(domain: "\(Self.self)", id: error.description)
-        }
-
-        let error: FixableInstantiableError
+        let message: String
+        let fixItID: MessageID
     }
 }

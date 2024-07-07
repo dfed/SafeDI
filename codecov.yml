@@ -10,5 +10,9 @@ coverage:
   status:
     project:
       default:
-        target: 90%
+        target: 99.51%
     patch: off
+
+ignore:
+  # This package is not shipped.
+  - "Tests"

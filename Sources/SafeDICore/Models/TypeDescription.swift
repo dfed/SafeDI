@@ -222,28 +222,6 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         }
     }
 
-    var isUnknown: Bool {
-        switch self {
-        case .any,
-             .array,
-             .attributed,
-             .closure,
-             .composition,
-             .dictionary,
-             .implicitlyUnwrappedOptional,
-             .metatype,
-             .nested,
-             .optional,
-             .simple,
-             .some,
-             .tuple,
-             .void:
-            false
-        case .unknown:
-            true
-        }
-    }
-
     var strippingGenerics: TypeDescription {
         switch self {
         case let .simple(name, _):
@@ -423,8 +401,6 @@ extension ExprSyntax {
             if memberAccessExpr.declName.baseName.text == "self" {
                 if let base = memberAccessExpr.base {
                     return base.typeDescription
-                } else {
-                    return .unknown(text: memberAccessExpr.trimmedDescription)
                 }
             } else {
                 if let base = memberAccessExpr.base {
@@ -440,8 +416,6 @@ extension ExprSyntax {
                             generics: []
                         )
                     }
-                } else {
-                    return .unknown(text: memberAccessExpr.trimmedDescription)
                 }
             }
         } else if let genericExpr = GenericSpecializationExprSyntax(self) {
@@ -508,8 +482,6 @@ extension ExprSyntax {
                     doesThrow: arrow.effectSpecifiers?.throwsSpecifier != nil,
                     returnType: returnType.typeDescription
                 )
-            } else {
-                return .unknown(text: trimmedDescription)
             }
         } else if let optionalChainingExpr = OptionalChainingExprSyntax(self) {
             return .optional(optionalChainingExpr.expression.typeDescription)
@@ -529,9 +501,8 @@ extension ExprSyntax {
                 key: onlyElement.key.typeDescription,
                 value: onlyElement.value.typeDescription
             )
-        } else {
-            return .unknown(text: trimmedDescription)
         }
+        return .unknown(text: trimmedDescription)
     }
 }
 
