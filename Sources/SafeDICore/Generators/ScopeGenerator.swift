@@ -21,7 +21,7 @@
 import Collections
 
 /// A model capable of generating code for a scope’s dependency tree.
-actor ScopeGenerator: CustomStringConvertible {
+actor ScopeGenerator: CustomStringConvertible, Sendable {
     // MARK: Initialization
 
     init(
@@ -303,7 +303,7 @@ actor ScopeGenerator: CustomStringConvertible {
 
     // MARK: Private
 
-    private enum ScopeData {
+    private enum ScopeData: Sendable {
         case root(instantiable: Instantiable)
         case property(
             instantiable: Instantiable,
@@ -421,7 +421,7 @@ actor ScopeGenerator: CustomStringConvertible {
 
     private enum GenerationError: Error, CustomStringConvertible {
         case erasedInstantiatorGenericDoesNotMatch(property: Property, instantiable: Instantiable)
-        case dependencyCycleDetected(any Collection<Property>, scope: ScopeGenerator)
+        case dependencyCycleDetected([Property], scope: ScopeGenerator)
 
         var description: String {
             switch self {

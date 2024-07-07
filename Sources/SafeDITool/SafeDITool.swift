@@ -23,11 +23,11 @@ import Foundation
 import SafeDICore
 import SwiftParser
 #if canImport(ZippyJSON)
-    import ZippyJSON
+    @preconcurrency import ZippyJSON
 #endif
 
 @main
-struct SafeDITool: AsyncParsableCommand {
+struct SafeDITool: AsyncParsableCommand, Sendable {
     // MARK: Arguments
 
     @Argument(help: "A path to a CSV file containing paths of Swift files to parse.") var swiftSourcesFilePath: String?
@@ -98,13 +98,14 @@ struct SafeDITool: AsyncParsableCommand {
         }
     }
 
-    struct ModuleInfo: Codable {
+    struct ModuleInfo: Codable, Sendable {
         let imports: [ImportStatement]
         let instantiables: [Instantiable]
     }
 
     // MARK: Private
 
+    @MainActor
     private func findSwiftFiles() async throws -> Set<String> {
         var swiftFiles = Set<String>()
         if let swiftSourcesFilePath {
@@ -299,4 +300,4 @@ protocol FileFinder {
 
 extension FileManager: FileFinder {}
 
-var fileFinder: FileFinder = FileManager.default
+@MainActor var fileFinder: FileFinder = FileManager.default

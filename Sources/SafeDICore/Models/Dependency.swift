@@ -22,7 +22,7 @@ import SwiftSyntax
 
 /// A representation of a dependency.
 /// e.g. `@Instantiated let myService: MyService`
-public struct Dependency: Codable, Hashable {
+public struct Dependency: Codable, Hashable, Sendable {
     // MARK: Initialization
 
     public init(
@@ -50,7 +50,7 @@ public struct Dependency: Codable, Hashable {
     /// The receiver’s type description as an `@Instantiable`-decorated type.
     public let asInstantiatedType: TypeDescription
 
-    public enum Source: Codable, Hashable {
+    public enum Source: Codable, Hashable, Sendable {
         case instantiated(fulfillingTypeDescription: TypeDescription?, erasedToConcreteExistential: Bool)
         case received
         case aliased(fulfillingProperty: Property, erasedToConcreteExistential: Bool)
