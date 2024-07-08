@@ -23,14 +23,11 @@ import SwiftSyntax
 extension ImportDeclSyntax {
     // MARK: Public
 
-    public var asImportStatement: ImportStatement? {
-        guard let moduleName = path.first?.name.text else {
-            return nil
-        }
-        return ImportStatement(
+    public var asImportStatement: ImportStatement {
+        ImportStatement(
             attribute: attribute,
             kind: kind,
-            moduleName: moduleName,
+            moduleName: path.first?.name.text ?? "",
             type: path
                 .map(\.name.text)
                 .dropFirst()

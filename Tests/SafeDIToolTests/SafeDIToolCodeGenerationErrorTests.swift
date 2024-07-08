@@ -228,6 +228,62 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     }
 
     @MainActor
+    func test_run_onCodeWithDiamondDependencyWhereMultipleReceivedPropertiesAreUnfulfillableOnOneBranch_throwsError() async {
+        await assertThrowsError(
+            """
+            @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildA -> Grandchild
+            @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
+            @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated
+                        let childA: ChildA
+                        @Instantiated
+                        let childB: ChildB
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class ChildA {
+                        @Instantiated
+                        let grandchild: Grandchild
+                        @Instantiated
+                        let blankie: Blankie
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class ChildB {
+                        @Instantiated
+                        let grandchild: Grandchild
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class Grandchild {
+                        @Received
+                        let blankie: Blankie
+                        @Received
+                        let blankie2: Blankie
+                    }
+                    """,
+                    """
+                    @Instantiable
+                    public final class Blankie {}
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
     func test_run_onCodeWithInstantiatedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """

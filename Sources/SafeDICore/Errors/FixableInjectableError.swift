@@ -41,38 +41,32 @@ public enum FixableInjectableError: DiagnosticError {
     // MARK: - InjectableDiagnosticMessage
 
     private struct InjectableDiagnosticMessage: DiagnosticMessage {
-        var diagnosticID: MessageID {
-            MessageID(domain: "\(Self.self)", id: error.description)
-        }
-
-        var severity: DiagnosticSeverity {
-            switch error {
+        init(error: FixableInjectableError) {
+            diagnosticID = MessageID(domain: "\(Self.self)", id: error.description)
+            severity = switch error {
             case .unexpectedMutable:
                 .error
             }
+            message = error.description
         }
 
-        var message: String {
-            error.description
-        }
-
-        let error: FixableInjectableError
+        let diagnosticID: MessageID
+        let severity: DiagnosticSeverity
+        let message: String
     }
 
     // MARK: - InjectableFixItMessage
 
     private struct InjectableFixItMessage: FixItMessage {
-        var message: String {
-            switch error {
+        init(error: FixableInjectableError) {
+            message = switch error {
             case .unexpectedMutable:
                 "Replace `var` with `let`"
             }
+            fixItID = MessageID(domain: "\(Self.self)", id: error.description)
         }
 
-        var fixItID: MessageID {
-            MessageID(domain: "\(Self.self)", id: error.description)
-        }
-
-        let error: FixableInjectableError
+        let message: String
+        let fixItID: MessageID
     }
 }

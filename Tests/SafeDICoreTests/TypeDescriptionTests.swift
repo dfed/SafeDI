@@ -796,3 +796,27 @@ final class TypeDescriptionTests: XCTestCase {
         }
     }
 }
+
+extension TypeDescription {
+    var isUnknown: Bool {
+        switch self {
+        case .any,
+             .array,
+             .attributed,
+             .closure,
+             .composition,
+             .dictionary,
+             .implicitlyUnwrappedOptional,
+             .metatype,
+             .nested,
+             .optional,
+             .simple,
+             .some,
+             .tuple,
+             .void:
+            false
+        case .unknown:
+            true
+        }
+    }
+}

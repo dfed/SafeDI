@@ -105,7 +105,9 @@ public final class DependencyTreeGenerator {
                         .map(\.asSource)
                         .joined(separator: " -> "))
                     """
-                }.joined(separator: "\n"))
+                }
+                .sorted()
+                .joined(separator: "\n"))
                 """
             case let .instantiableHasForwardedProperty(property, instantiable, parent):
                 "Property `\(property.asSource)` on \(parent.concreteInstantiable.asSource) has at least one @\(Dependency.Source.forwardedRawValue) property. Property should instead be of type `\(Dependency.instantiatorType)<\(instantiable.concreteInstantiable.asSource)>`."
@@ -136,11 +138,7 @@ public final class DependencyTreeGenerator {
             }
         }
 
-        struct UnfulfillableProperty: Hashable, Comparable {
-            static func < (lhs: DependencyTreeGenerator.DependencyTreeGeneratorError.UnfulfillableProperty, rhs: DependencyTreeGenerator.DependencyTreeGeneratorError.UnfulfillableProperty) -> Bool {
-                lhs.property < rhs.property
-            }
-
+        struct UnfulfillableProperty: Hashable {
             let property: Property
             let instantiable: Instantiable
             let parentStack: [TypeDescription]
@@ -153,31 +151,24 @@ public final class DependencyTreeGenerator {
     private let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
     private var rootScopeGenerators: [ScopeGenerator] {
         get throws {
-            if let _rootScopeGenerators {
-                return _rootScopeGenerators
-            } else {
-                let rootScopeGenerators: [ScopeGenerator] = try {
-                    try validateReachableTypeDescriptions()
+            let rootScopeGenerators: [ScopeGenerator] = try {
+                try validateReachableTypeDescriptions()
 
-                    let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
-                    try validatePropertiesAreFulfillable(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
-                    return try rootInstantiables
-                        .sorted()
-                        .compactMap {
-                            try typeDescriptionToScopeMap[$0]?.createScopeGenerator(
-                                for: nil,
-                                propertyStack: [],
-                                erasedToConcreteExistential: false
-                            )
-                        }
-                }()
-                _rootScopeGenerators = rootScopeGenerators
-                return rootScopeGenerators
-            }
+                let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
+                try validatePropertiesAreFulfillable(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
+                return try rootInstantiables
+                    .sorted()
+                    .compactMap {
+                        try typeDescriptionToScopeMap[$0]?.createScopeGenerator(
+                            for: nil,
+                            propertyStack: [],
+                            erasedToConcreteExistential: false
+                        )
+                    }
+            }()
+            return rootScopeGenerators
         }
     }
-
-    private var _rootScopeGenerators: [ScopeGenerator]?
 
     private var imports: String {
         importStatements
@@ -265,12 +256,9 @@ public final class DependencyTreeGenerator {
         // Create the mapping.
         let typeDescriptionToScopeMap: [TypeDescription: Scope] = reachableTypeDescriptions
             .reduce(into: [TypeDescription: Scope]()) { partialResult, typeDescription in
-                guard let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription] else {
-                    // We can't find an instantiable for this type.
-                    // This is bad, but we handle this error in `validateReachableTypeDescriptions()`.
-                    return
-                }
-                guard partialResult[instantiable.concreteInstantiable] == nil else {
+                guard let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription],
+                      partialResult[instantiable.concreteInstantiable] == nil
+                else {
                     // We've already created a scope for this `instantiable`. Skip.
                     return
                 }
@@ -286,29 +274,26 @@ public final class DependencyTreeGenerator {
                 switch dependency.source {
                 case let .instantiated(_, erasedToConcreteExistential):
                     let instantiatedType = dependency.asInstantiatedType
-                    guard
-                        let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType],
-                        let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
-                    else {
-                        assertionFailure("Invalid state. Could not look up info for \(instantiatedType)")
-                        continue
-                    }
-                    let type = dependency.property.propertyType
-                    if type.isConstant {
-                        guard instantiable.dependencies.filter(\.isForwarded).isEmpty else {
-                            throw DependencyTreeGeneratorError
-                                .instantiableHasForwardedProperty(
-                                    property: dependency.property,
-                                    instantiableWithForwardedProperty: instantiable,
-                                    parent: scope.instantiable
-                                )
+                    if let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType],
+                       let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
+                    {
+                        let type = dependency.property.propertyType
+                        if type.isConstant {
+                            guard instantiable.dependencies.filter(\.isForwarded).isEmpty else {
+                                throw DependencyTreeGeneratorError
+                                    .instantiableHasForwardedProperty(
+                                        property: dependency.property,
+                                        instantiableWithForwardedProperty: instantiable,
+                                        parent: scope.instantiable
+                                    )
+                            }
                         }
+                        scope.propertiesToGenerate.append(.instantiated(
+                            dependency.property,
+                            instantiatedScope,
+                            erasedToConcreteExistential: erasedToConcreteExistential
+                        ))
                     }
-                    scope.propertiesToGenerate.append(.instantiated(
-                        dependency.property,
-                        instantiatedScope,
-                        erasedToConcreteExistential: erasedToConcreteExistential
-                    ))
                 case let .aliased(fulfillingProperty, erasedToConcreteExistential):
                     scope.propertiesToGenerate.append(.aliased(
                         dependency.property,
@@ -461,7 +446,7 @@ public final class DependencyTreeGenerator {
         }
 
         if !unfulfillableProperties.isEmpty {
-            throw DependencyTreeGeneratorError.unfulfillableProperties(unfulfillableProperties.sorted())
+            throw DependencyTreeGeneratorError.unfulfillableProperties(Array(unfulfillableProperties))
         }
     }
 
