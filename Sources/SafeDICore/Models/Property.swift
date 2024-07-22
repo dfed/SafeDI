@@ -83,7 +83,10 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
                         ))
                         if let attributes {
                             for attribute in attributes {
-                                AttributeSyntax(attributeName: IdentifierTypeSyntax(name: .identifier(attribute)))
+                                AttributeSyntax(
+                                    attributeName: IdentifierTypeSyntax(name: .identifier(attribute)),
+                                    trailingTrivia: .space
+                                )
                             }
                         }
                     },

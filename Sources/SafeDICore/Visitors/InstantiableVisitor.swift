@@ -33,14 +33,14 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
     public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
         guard
-            declarationType.isTypeDefinition
-            && node.modifiers.staticModifier == nil
+            declarationType.isTypeDefinition,
+            node.modifiers.staticModifier == nil
         else {
             return .skipChildren
         }
         // Check attributes and extract dependency source.
         let dependencySources = node.attributes.dependencySources
-        guard dependencySources.isEmpty || dependencySources.count == 1 else {
+        if dependencySources.count > 1 {
             diagnostics.append(Diagnostic(
                 node: node.attributes,
                 error: FixableInstantiableError.dependencyHasTooManyAttributes,
@@ -51,7 +51,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
                     ),
                 ]
             ))
-            return .skipChildren
         }
         guard let dependencySource = dependencySources.first?.source else {
             // This dependency is not part of the DI system.

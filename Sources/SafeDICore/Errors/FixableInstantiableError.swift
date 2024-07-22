@@ -31,7 +31,13 @@ public enum FixableInstantiableError: DiagnosticError {
     case dependencyHasTooManyAttributes
     case dependencyHasInitializer
     case missingPublicOrOpenAttribute
-    case missingRequiredInitializer(hasInjectableProperties: Bool)
+    case missingRequiredInitializer(MissingInitializer)
+
+    public enum MissingInitializer {
+        case hasOnlyInjectableProperties
+        case hasInjectableAndNotInjectableProperties
+        case hasNoInjectableProperties
+    }
 
     public var description: String {
         switch self {
@@ -55,10 +61,13 @@ public enum FixableInstantiableError: DiagnosticError {
             "Dependency must not have hand-written initializer"
         case .missingPublicOrOpenAttribute:
             "@\(InstantiableVisitor.macroName)-decorated type must be `public` or `open`"
-        case let .missingRequiredInitializer(hasInjectableProperties):
-            if hasInjectableProperties {
+        case let .missingRequiredInitializer(missingInitializer):
+            switch missingInitializer {
+            case .hasOnlyInjectableProperties:
+                "@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property."
+            case .hasInjectableAndNotInjectableProperties:
                 "@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values."
-            } else {
+            case .hasNoInjectableProperties:
                 "@\(InstantiableVisitor.macroName)-decorated type with no @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated properties must have a `public` or `open` initializer that either takes no parameters or has a default value for each parameter."
             }
         }

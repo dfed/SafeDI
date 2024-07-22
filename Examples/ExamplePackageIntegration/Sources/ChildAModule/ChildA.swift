@@ -24,6 +24,11 @@ import SharedModule
 
 @Instantiable
 public final class ChildA: Instantiable {
+    public init(shared: SharedThing, grandchildA: GrandchildA) {
+        self.shared = shared
+        self.grandchildA = grandchildA
+    }
+
     @Received let shared: SharedThing
 
     @Instantiated let grandchildA: GrandchildA
