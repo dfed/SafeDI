@@ -1,4 +1,5 @@
 {
+  "originHash" : "4828c1967a8becd3449664c8ced8013fc851b1b749c97f36a6b6e17c68977693",
   "pins" : [
     {
       "identity" : "jjliso8601dateformatter",
@@ -30,7 +31,7 @@
     {
       "identity" : "swift-syntax",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-syntax.git",
+      "location" : "https://github.com/swiftlang/swift-syntax.git",
       "state" : {
         "revision" : "fa8f95c2d536d6620cc2f504ebe8a6167c9fc2dd",
         "version" : "510.0.1"
@@ -55,5 +56,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }

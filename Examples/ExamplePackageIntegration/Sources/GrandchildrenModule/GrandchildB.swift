@@ -23,5 +23,9 @@ import SharedModule
 
 @Instantiable
 public actor GrandchildB: Instantiable {
+    public init(shared: SharedThing) {
+        self.shared = shared
+    }
+
     @Received let shared: SharedThing
 }

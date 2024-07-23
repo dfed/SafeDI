@@ -155,7 +155,10 @@ public struct Initializer: Codable, Hashable, Sendable {
                                 leadingTrivia: .space,
                                 trailingTrivia: .space
                             ),
-                            rightOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(dependency.property.label))
+                            rightOperand: DeclReferenceExprSyntax(
+                                baseName: TokenSyntax.identifier(dependency.property.label),
+                                trailingTrivia: dependency == dependencies.last ? .newline : nil
+                            )
                         )))
                     )
                 }
