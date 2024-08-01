@@ -33,7 +33,7 @@ public enum FixableInstantiableError: DiagnosticError {
     case missingPublicOrOpenAttribute
     case missingRequiredInitializer(MissingInitializer)
 
-    public enum MissingInitializer {
+    public enum MissingInitializer: Sendable {
         case hasOnlyInjectableProperties
         case hasInjectableAndNotInjectableProperties
         case hasNoInjectableProperties
