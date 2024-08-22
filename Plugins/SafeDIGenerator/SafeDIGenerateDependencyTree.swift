@@ -159,45 +159,87 @@ extension Target {
             context: XcodeProjectPlugin.XcodePluginContext,
             target: XcodeProjectPlugin.XcodeTarget
         ) throws -> [PackagePlugin.Command] {
-            // As of Xcode 15.0.1, Swift Package Plugins in Xcode are unable
-            // to inspect target dependencies. As a result, this Xcode plugin
-            // only works if it is running on a single-module project, or if
-            // all `@Instantiable`-decorated types are in the target module.
-            // https://github.com/apple/swift-package-manager/issues/6003
-            let inputSwiftFiles = target
-                .inputFiles
-                .filter { $0.path.extension == "swift" }
-                .map(\.path)
-            guard !inputSwiftFiles.isEmpty else {
-                // There are no Swift files in this module!
-                return []
-            }
+            #if compiler(>=6.0)
+                // As of Xcode 15.0.1, Swift Package Plugins in Xcode are unable
+                // to inspect target dependencies. As a result, this Xcode plugin
+                // only works if it is running on a single-module project, or if
+                // all `@Instantiable`-decorated types are in the target module.
+                // https://github.com/apple/swift-package-manager/issues/6003
+                let inputSwiftFiles = target
+                    .inputFiles
+                    .filter { $0.url.pathExtension == "swift" }
+                    .map(\.url)
+                guard !inputSwiftFiles.isEmpty else {
+                    // There are no Swift files in this module!
+                    return []
+                }
 
-            let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
-            let inputSourcesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.csv").string
-            try Data(
-                inputSwiftFiles
-                    .map(\.string)
-                    .joined(separator: ",")
-                    .utf8
-            )
-            .write(toPath: inputSourcesFilePath)
-            let arguments = [
-                inputSourcesFilePath,
-                "--dependency-tree-output",
-                outputSwiftFile.string,
-            ]
+                let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
+                let inputSourcesFilePath = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv").path()
+                try Data(
+                    inputSwiftFiles
+                        .map { $0.path() }
+                        .joined(separator: ",")
+                        .utf8
+                )
+                .write(toPath: inputSourcesFilePath)
+                let arguments = [
+                    inputSourcesFilePath,
+                    "--dependency-tree-output",
+                    outputSwiftFile.path(),
+                ]
 
-            return try [
-                .buildCommand(
-                    displayName: "SafeDIGenerateDependencyTree",
-                    executable: context.tool(named: "SafeDITool").path,
-                    arguments: arguments,
-                    environment: [:],
-                    inputFiles: inputSwiftFiles,
-                    outputFiles: [outputSwiftFile]
-                ),
-            ]
+                return try [
+                    .buildCommand(
+                        displayName: "SafeDIGenerateDependencyTree",
+                        executable: context.tool(named: "SafeDITool").url,
+                        arguments: arguments,
+                        environment: [:],
+                        inputFiles: inputSwiftFiles,
+                        outputFiles: [outputSwiftFile]
+                    ),
+                ]
+            #else
+                // As of Xcode 15.0.1, Swift Package Plugins in Xcode are unable
+                // to inspect target dependencies. As a result, this Xcode plugin
+                // only works if it is running on a single-module project, or if
+                // all `@Instantiable`-decorated types are in the target module.
+                // https://github.com/apple/swift-package-manager/issues/6003
+                let inputSwiftFiles = target
+                    .inputFiles
+                    .filter { $0.path.extension == "swift" }
+                    .map(\.path)
+                guard !inputSwiftFiles.isEmpty else {
+                    // There are no Swift files in this module!
+                    return []
+                }
+
+                let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
+                let inputSourcesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.csv").string
+                try Data(
+                    inputSwiftFiles
+                        .map(\.string)
+                        .joined(separator: ",")
+                        .utf8
+                )
+                .write(toPath: inputSourcesFilePath)
+                let arguments = [
+                    inputSourcesFilePath,
+                    "--dependency-tree-output",
+                    outputSwiftFile.string,
+                ]
+
+                return try [
+                    .buildCommand(
+                        displayName: "SafeDIGenerateDependencyTree",
+                        executable: context.tool(named: "SafeDITool").path,
+                        arguments: arguments,
+                        environment: [:],
+                        inputFiles: inputSwiftFiles,
+                        outputFiles: [outputSwiftFile]
+                    ),
+                ]
+            #endif
         }
     }
 #endif

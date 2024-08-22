@@ -20,7 +20,7 @@
 
 import Collections
 
-public final class DependencyTreeGenerator {
+public actor DependencyTreeGenerator {
     // MARK: Initialization
 
     public init(

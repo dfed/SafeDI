@@ -40,7 +40,7 @@ let package = Package(
             name: "SafeDI",
             dependencies: ["SafeDIMacros"],
             swiftSettings: [
-                .swiftLanguageVersion(.v6),
+                .swiftLanguageMode(.v6),
             ]
         ),
         .testTarget(
@@ -50,7 +50,7 @@ let package = Package(
                 "SafeDICore",
             ],
             swiftSettings: [
-                .swiftLanguageVersion(.v6),
+                .swiftLanguageMode(.v6),
             ]
         ),
         .macro(
@@ -64,7 +64,7 @@ let package = Package(
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
             ],
             swiftSettings: [
-                .swiftLanguageVersion(.v6),
+                .swiftLanguageMode(.v6),
             ]
         ),
         .testTarget(
@@ -76,7 +76,7 @@ let package = Package(
                 .product(name: "MacroTesting", package: "swift-macro-testing"),
             ],
             swiftSettings: [
-                .swiftLanguageVersion(.v6),
+                .swiftLanguageMode(.v6),
             ]
         ),
 
@@ -96,7 +96,7 @@ let package = Package(
                 "SafeDICore",
             ],
             swiftSettings: [
-                .swiftLanguageVersion(.v6),
+                .swiftLanguageMode(.v6),
             ]
         ),
         .testTarget(
@@ -107,7 +107,7 @@ let package = Package(
                 "SafeDITool",
             ],
             swiftSettings: [
-                .swiftLanguageVersion(.v6),
+                .swiftLanguageMode(.v6),
             ]
         ),
 
@@ -121,14 +121,14 @@ let package = Package(
                 .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
             ],
             swiftSettings: [
-                .swiftLanguageVersion(.v6),
+                .swiftLanguageMode(.v6),
             ]
         ),
         .testTarget(
             name: "SafeDICoreTests",
             dependencies: ["SafeDICore"],
             swiftSettings: [
-                .swiftLanguageVersion(.v6),
+                .swiftLanguageMode(.v6),
             ]
         ),
     ]
