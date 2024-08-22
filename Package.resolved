@@ -1,5 +1,5 @@
 {
-  "originHash" : "dc3bea121a5b98d056df3ebf34bb4af99009b01c1aea8c1805be9c40a6eed750",
+  "originHash" : "510f944249fe47ef5eb47a3895fae01d320996b28ac46f0f9c27a513878af17f",
   "pins" : [
     {
       "identity" : "jjliso8601dateformatter",
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-macro-testing.git",
       "state" : {
-        "revision" : "a35257b7e9ce44e92636447003a8eeefb77b145c",
-        "version" : "0.5.1"
+        "revision" : "20c1a8f3b624fb5d1503eadcaa84743050c350f4",
+        "version" : "0.5.2"
       }
     },
     {
@@ -42,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-snapshot-testing",
       "state" : {
-        "revision" : "e883fc9ea51e76dc9ed13fd4a92b0ee258a1e8c9",
-        "version" : "1.17.3"
+        "revision" : "6d932a79e7173b275b96c600c86c603cf84f153c",
+        "version" : "1.17.4"
       }
     },
     {
