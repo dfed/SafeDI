@@ -68,6 +68,94 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     }
 
     @MainActor
+    func test_run_onCodeWithPropertyWithUnknownTypeWithDotSuffixOfFulfillableType_throwsError() async {
+        await assertThrowsError(
+            """
+            @Received property `value: NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild
+            The following similar properties are available in chain:
+            \t`value: Grandchild.NestedType`
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated let childBuilder: Instantiator<Child>
+                    }
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Child {
+                        @Forwarded let value: Grandchild.NestedType
+                        @Instantiated let grandchild: Grandchild
+                    }
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Grandchild {
+                        public struct NestedType {}
+                        @Received let value: NestedType
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
+    func test_run_onCodeWithPropertyWithUnknownTypeWithDotPrefixOfFulfillableType_throwsError() async {
+        await assertThrowsError(
+            """
+            @Received property `value: Root.NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild
+            The following similar properties are available in chain:
+            \t`value: NestedType`
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated let childBuilder: Instantiator<Child>
+                    }
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Child {
+                        public struct NestedType {}
+                        @Forwarded let value: NestedType
+                        @Instantiated let grandchild: Grandchild
+                    }
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Grandchild {
+                        @Received let value: Root.NestedType
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
     func test_run_onCodeWithUnfulfillableInstantiatedProperty_throwsError() async {
         await assertThrowsError(
             """
@@ -94,6 +182,92 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     public final class RootViewController: UIViewController {
                         @Instantiated
                         let networkService: NetworkService
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
+    func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedAny_throwsError() async {
+        await assertThrowsError(
+            """
+            @Received property `erasedType: any ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child
+            The following similar properties are available in chain:
+            \t`erasedType: ErasedType`
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated(fulfilledByType: "SomeErasedType") let erasedType: ErasedType
+                        @Instantiated let child: Child
+                    }
+                    """,
+                    """
+                    import SafeDI
+
+                    public protocol ErasedType {}
+
+                    @Instantiable
+                    public final class SomeErasedType: ErasedType {}
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Child {
+                        @Received let erasedType: any ErasedType
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
+    func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedAny_throwsError() async {
+        await assertThrowsError(
+            """
+            @Received property `erasedType: ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child
+            The following similar properties are available in chain:
+            \t`erasedType: any ErasedType`
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated(fulfilledByType: "SomeErasedType") let erasedType: any ErasedType
+                        @Instantiated let child: Child
+                    }
+                    """,
+                    """
+                    import SafeDI
+
+                    public protocol ErasedType {}
+
+                    @Instantiable
+                    public final class SomeErasedType: ErasedType {}
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Child {
+                        @Received let erasedType: ErasedType
                     }
                     """,
                 ],
@@ -232,6 +406,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         await assertThrowsError(
             """
             @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildA -> Grandchild
+            The following similar properties are available in chain:
+            \t`blankie: Blankie`
             @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
             @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
             """
@@ -406,6 +582,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         await assertThrowsError(
             """
             @Received property `networkService2: NetworkService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
+            The following similar properties are available in chain:
+            \t`networkService: NetworkService`
             """
         ) {
             try await executeSafeDIToolTest(

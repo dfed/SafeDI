@@ -103,7 +103,7 @@ public actor DependencyTreeGenerator {
                     @\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(([$0.instantiable.concreteInstantiable] + $0.parentStack)
                         .reversed()
                         .map(\.asSource)
-                        .joined(separator: " -> "))
+                        .joined(separator: " -> "))\($0.suggestedAlternatives.isEmpty ? "" : "\nThe following similar properties are available in chain:\n\($0.suggestedAlternatives.map { "\t`\($0.asSource)`" }.joined(separator: "\n"))")
                     """
                 }
                 .sorted()
@@ -142,6 +142,7 @@ public actor DependencyTreeGenerator {
             let property: Property
             let instantiable: Instantiable
             let parentStack: [TypeDescription]
+            let suggestedAlternatives: [Property]
         }
     }
 
@@ -379,7 +380,12 @@ public actor DependencyTreeGenerator {
                         unfulfillableProperties.insert(.init(
                             property: receivedProperty,
                             instantiable: scope.instantiable,
-                            parentStack: propertyStack.map(\.typeDescription) + [root]
+                            parentStack: propertyStack.map(\.typeDescription) + [root],
+                            suggestedAlternatives: receivableProperties.filter {
+                                $0.typeDescription.isMoreQualifiedType(of: receivedProperty.typeDescription)
+                                    || receivedProperty.typeDescription.isMoreQualifiedType(of: $0.typeDescription)
+                                    || receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
+                            }.sorted()
                         ))
                     }
                 }
@@ -503,5 +509,24 @@ extension Set {
         var setWithoutElement = self
         setWithoutElement.remove(element)
         return setWithoutElement
+    }
+}
+
+// MARK: - TypeDescription
+
+extension TypeDescription {
+    fileprivate func isMoreQualifiedType(of lessQualifiedType: TypeDescription) -> Bool {
+        asSource.hasSuffix(".\(lessQualifiedType.asSource)")
+    }
+
+    fileprivate var leastQualifiedTypeDescription: TypeDescription {
+        switch self {
+        case let .nested(name, _, generics):
+            .simple(name: name, generics: generics)
+        case let .any(typeDescription), let .implicitlyUnwrappedOptional(typeDescription), let .optional(typeDescription), let .some(typeDescription):
+            typeDescription.leastQualifiedTypeDescription
+        case .array, .attributed, .closure, .composition, .dictionary, .metatype, .simple, .tuple, .unknown, .void:
+            self
+        }
     }
 }
