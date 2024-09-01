@@ -192,6 +192,42 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     }
 
     @MainActor
+    func test_run_onCodeWithUnfulfillableReceivedProperty_throwsError() async {
+        await assertThrowsError(
+            """
+            @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    import Foundation
+
+                    public protocol NetworkService {}
+
+                    @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                    public final class DefaultNetworkService: NetworkService {
+                        @Received
+                        let urlSession: URLSession // URLSession is not `@Instantiable`! This will fail!
+                    }
+                    """,
+                    """
+                    import UIKit
+
+                    @Instantiable
+                    public final class RootViewController: UIViewController {
+                        @Instantiated
+                        let networkService: NetworkService
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
     func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedAny_throwsError() async {
         await assertThrowsError(
             """
@@ -278,32 +314,204 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     }
 
     @MainActor
-    func test_run_onCodeWithUnfulfillableReceivedProperty_throwsError() async {
+    func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedForceUnwrap_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService
+            @Received property `thing: Thing!` is not @Instantiated or @Forwarded in chain: Root -> Child
+            The following similar properties are available in chain:
+            \t`thing: Thing`
             """
         ) {
             try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
-                    import Foundation
+                    import SafeDI
 
-                    public protocol NetworkService {}
-
-                    @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                    public final class DefaultNetworkService: NetworkService {
-                        @Received
-                        let urlSession: URLSession // URLSession is not `@Instantiable`! This will fail!
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated let thing: Thing
+                        @Instantiated let child: Child
                     }
                     """,
                     """
-                    import UIKit
+                    import SafeDI
 
                     @Instantiable
-                    public final class RootViewController: UIViewController {
-                        @Instantiated
-                        let networkService: NetworkService
+                    public final class Thing {}
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Child {
+                        @Received let thing: Thing!
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
+    func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedForceUnwrap_throwsError() async {
+        await assertThrowsError(
+            """
+            @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain: Root -> Child
+            The following similar properties are available in chain:
+            \t`thing: Thing!`
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated let thing: Thing!
+                        @Instantiated let child: Child
+                    }
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Thing {}
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Child {
+                        @Received let thing: Thing
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
+    func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedOptional_throwsError() async {
+        await assertThrowsError(
+            """
+            @Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain: Root -> Child
+            The following similar properties are available in chain:
+            \t`thing: Thing`
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated let thing: Thing
+                        @Instantiated let child: Child
+                    }
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Thing {}
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Child {
+                        @Received let thing: Thing?
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
+    func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedOptional_throwsError() async {
+        await assertThrowsError(
+            """
+            @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain: Root -> Child
+            The following similar properties are available in chain:
+            \t`thing: Thing?`
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated let thing: Thing?
+                        @Instantiated let child: Child
+                    }
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Thing {}
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Child {
+                        @Received let thing: Thing
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
+    func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToIncorrectType_throwsError() async {
+        await assertThrowsError(
+            """
+            @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain: Root -> Child
+            The following similar properties are available in chain:
+            \t`thing: Thing`
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated let thing: Thing
+                        @Instantiated let child: Child
+                    }
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Thing {}
+
+                    @Instantiable
+                    public final class OtherThing {}
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Child {
+                        @Received let thing: OtherThing
                     }
                     """,
                 ],
@@ -638,6 +846,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         await assertThrowsError(
             """
             @Received property `networkService: NetworkService2` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
+            The following similar properties are available in chain:
+            \t`networkService: NetworkService`
             """
         ) {
             try await executeSafeDIToolTest(

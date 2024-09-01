@@ -383,6 +383,7 @@ public actor DependencyTreeGenerator {
                             parentStack: propertyStack.map(\.typeDescription) + [root],
                             suggestedAlternatives: receivableProperties.filter {
                                 receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
+                                    || receivedProperty.label == $0.label
                             }.sorted()
                         ))
                     }
