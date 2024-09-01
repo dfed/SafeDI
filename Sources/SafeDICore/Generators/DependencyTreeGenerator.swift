@@ -382,9 +382,7 @@ public actor DependencyTreeGenerator {
                             instantiable: scope.instantiable,
                             parentStack: propertyStack.map(\.typeDescription) + [root],
                             suggestedAlternatives: receivableProperties.filter {
-                                $0.typeDescription.isMoreQualifiedType(of: receivedProperty.typeDescription)
-                                    || receivedProperty.typeDescription.isMoreQualifiedType(of: $0.typeDescription)
-                                    || receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
+                                receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
                             }.sorted()
                         ))
                     }
@@ -515,10 +513,6 @@ extension Set {
 // MARK: - TypeDescription
 
 extension TypeDescription {
-    fileprivate func isMoreQualifiedType(of lessQualifiedType: TypeDescription) -> Bool {
-        asSource.hasSuffix(".\(lessQualifiedType.asSource)")
-    }
-
     fileprivate var leastQualifiedTypeDescription: TypeDescription {
         switch self {
         case let .nested(name, _, generics):
