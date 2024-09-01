@@ -522,6 +522,52 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     }
 
     @MainActor
+    func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToIncorrectTypeOrLabel_throwsError() async {
+        await assertThrowsError(
+            """
+            @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain: Root -> Child
+            The following similar properties are available in chain:
+            \t`otherThing: OtherThing`
+            \t`thing: Thing`
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Root {
+                        @Instantiated let thing: Thing
+                        @Instantiated let otherThing: OtherThing
+                        @Instantiated let child: Child
+                    }
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Thing {}
+
+                    @Instantiable
+                    public final class OtherThing {}
+                    """,
+                    """
+                    import SafeDI
+
+                    @Instantiable
+                    public final class Child {
+                        @Received let thing: OtherThing
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
     func test_run_onCodeWithInstantiatedPropertyWithForwardedArgument_throwsError() async {
         await assertThrowsError(
             """
