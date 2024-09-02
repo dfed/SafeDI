@@ -1,3 +1,23 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 import Foundation
 import PackagePlugin
 
@@ -39,16 +59,12 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                 outputSwiftFile.path(),
             ]
 
-            let toolPath: URL = if FileManager.default.fileExists(atPath: Self.armMacBrewInstallLocation) {
-                // SafeDITool has been installed via homebrew on an ARM Mac.
-                URL(filePath: Self.armMacBrewInstallLocation)
-            } else if FileManager.default.fileExists(atPath: Self.intelMacBrewInstallLocation) {
-                // SafeDITool has been installed via homebrew on an Intel Mac.
-                URL(filePath: Self.intelMacBrewInstallLocation)
+            let toolLocation: URL = if let toolLocation = context.downloadedToolLocation {
+                toolLocation
             } else {
-                // Fall back to the just-in-time built tool.
                 try context.tool(named: "SafeDITool").url
             }
+
         #else
             let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
             // Swift Package Plugins do not (as of Swift 5.9) allow for
@@ -79,7 +95,9 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                 outputSwiftFile.string,
             ]
 
-            let toolPath: PackagePlugin.Path = if FileManager.default.fileExists(atPath: Self.armMacBrewInstallLocation) {
+            let armMacBrewInstallLocation = "/opt/homebrew/bin/safeditool"
+            let intelMacBrewInstallLocation = "/usr/local/bin/safeditool"
+            let toolLocation: PackagePlugin.Path = if FileManager.default.fileExists(atPath: Self.armMacBrewInstallLocation) {
                 // SafeDITool has been installed via homebrew on an ARM Mac.
                 PackagePlugin.Path(Self.armMacBrewInstallLocation)
             } else if FileManager.default.fileExists(atPath: Self.intelMacBrewInstallLocation) {
@@ -94,7 +112,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
         return [
             .buildCommand(
                 displayName: "SafeDIGenerateDependencyTree",
-                executable: toolPath,
+                executable: toolLocation,
                 arguments: arguments,
                 environment: [:],
                 inputFiles: targetSwiftFiles + dependenciesSourceFiles,
@@ -102,9 +120,6 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
             ),
         ]
     }
-
-    private static let armMacBrewInstallLocation = "/opt/homebrew/bin/safeditool"
-    private static let intelMacBrewInstallLocation = "/usr/local/bin/safeditool"
 }
 
 extension Target {
@@ -257,3 +272,32 @@ extension Data {
         #endif
     }
 }
+
+#if compiler(>=6.0)
+    extension PackagePlugin.PluginContext {
+        var safeDIVersion: String? {
+            guard let safeDIOrigin = package.dependencies.first(where: { $0.package.displayName == "SafeDI" })?.package.origin else {
+                return nil
+            }
+            switch safeDIOrigin {
+            case let .repository(_, displayVersion, _):
+                return displayVersion
+            case .registry, .root, .local:
+                fallthrough
+            @unknown default:
+                return nil
+            }
+        }
+
+        var downloadedToolLocation: URL? {
+            guard let safeDIVersion else { return nil }
+            let location = package.directoryURL.appending(
+                components: ".safedi",
+                safeDIVersion,
+                "safeditool"
+            )
+            guard FileManager.default.fileExists(atPath: location.path()) else { return nil }
+            return location
+        }
+    }
+#endif
