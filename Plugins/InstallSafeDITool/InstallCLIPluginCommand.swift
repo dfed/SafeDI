@@ -48,7 +48,7 @@ struct InstallSafeDITool: CommandPlugin {
             let expectedToolLocation = expectedToolFolder.appending(component: "safeditool")
 
             guard let url = URL(string: url)?.deletingPathExtension() else {
-                print("No package origin found for SafeDI package")
+                print("No package url found for SafeDI package")
                 return
             }
             #if arch(arm64)
