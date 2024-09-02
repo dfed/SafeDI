@@ -34,16 +34,17 @@ struct InstallSafeDITool: CommandPlugin {
         switch safeDIOrigin {
         case let .repository(url, displayVersion, _):
             guard let versionMatch = try /Optional\((.*?)\)|^(.*?)$/.firstMatch(in: displayVersion),
-                  let version = versionMatch.output.1 ?? versionMatch.output.2
+                  let versionSubstring = versionMatch.output.1 ?? versionMatch.output.2
             else {
                 print("could not extract version for SafeDI")
                 return
             }
+            let version = String(versionSubstring)
             let safediFolder = context.package.directoryURL.appending(
                 component: ".safedi"
             )
             let expectedToolFolder = safediFolder.appending(
-                component: String(version)
+                component: version
             )
             let expectedToolLocation = expectedToolFolder.appending(component: "safeditool")
 
@@ -63,7 +64,7 @@ struct InstallSafeDITool: CommandPlugin {
             let downloadURL = url.appending(
                 components: "releases",
                 "download",
-                displayVersion,
+                version,
                 toolName
             )
             let (downloadedURL, _) = try await URLSession.shared.download(
