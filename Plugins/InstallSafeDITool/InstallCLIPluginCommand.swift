@@ -73,7 +73,7 @@ struct InstallSafeDITool: CommandPlugin {
             let gitIgnoreLocation = expectedToolFolder.appending(component: ".gitignore")
             if !FileManager.default.fileExists(atPath: gitIgnoreLocation.path()) {
                 try """
-                safeditool
+                \(expectedToolLocation.lastPathComponent)
                 """.write(
                     to: gitIgnoreLocation,
                     atomically: true,
