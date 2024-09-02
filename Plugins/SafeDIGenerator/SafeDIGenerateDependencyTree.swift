@@ -59,8 +59,28 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                 outputSwiftFile.path(),
             ]
 
-            let toolLocation: URL = if let toolLocation = context.downloadedToolLocation {
-                toolLocation
+            let downloadedToolLocation = context.downloadedToolLocation
+            if context.hasSafeDIFolder, downloadedToolLocation == nil {
+                Diagnostics.error("""
+                \(context.safediFolder.path()) exists, but there is no SafeDITool binary for this release present.
+
+                To download the current release SafeDITool binary, run:
+                \tswift package --package-path \(context.package.directoryURL.path()) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
+
+                To use a debug SafeDITool binary instead, remove the `.safedi` directory by running:
+                \trm -rf \(context.safediFolder.path())
+                """)
+            } else if downloadedToolLocation == nil {
+                Diagnostics.warning("""
+                Using a debug SafeDITool binary, which is 15x slower than a release SafeDITool binary.
+
+                To download the current release SafeDITool binary, run:
+                \tswift package --package-path \(context.package.directoryURL.path()) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
+                """)
+            }
+
+            let toolLocation = if let downloadedToolLocation {
+                downloadedToolLocation
             } else {
                 try context.tool(named: "SafeDITool").url
             }
@@ -294,11 +314,20 @@ extension Data {
             }
         }
 
+        var hasSafeDIFolder: Bool {
+            FileManager.default.fileExists(atPath: safediFolder.path())
+        }
+
+        var safediFolder: URL {
+            package.directoryURL.appending(
+                component: ".safedi"
+            )
+        }
+
         var downloadedToolLocation: URL? {
             guard let safeDIVersion else { return nil }
-            let location = package.directoryURL.appending(
-                components: ".safedi",
-                safeDIVersion,
+            let location = safediFolder.appending(
+                components: safeDIVersion,
                 "safeditool"
             )
             guard FileManager.default.fileExists(atPath: location.path()) else { return nil }
