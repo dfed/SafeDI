@@ -97,12 +97,12 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 
             let armMacBrewInstallLocation = "/opt/homebrew/bin/safeditool"
             let intelMacBrewInstallLocation = "/usr/local/bin/safeditool"
-            let toolLocation: PackagePlugin.Path = if FileManager.default.fileExists(atPath: Self.armMacBrewInstallLocation) {
+            let toolLocation: PackagePlugin.Path = if FileManager.default.fileExists(atPath: armMacBrewInstallLocation) {
                 // SafeDITool has been installed via homebrew on an ARM Mac.
-                PackagePlugin.Path(Self.armMacBrewInstallLocation)
-            } else if FileManager.default.fileExists(atPath: Self.intelMacBrewInstallLocation) {
+                PackagePlugin.Path(armMacBrewInstallLocation)
+            } else if FileManager.default.fileExists(atPath: intelMacBrewInstallLocation) {
                 // SafeDITool has been installed via homebrew on an Intel Mac.
-                PackagePlugin.Path(Self.intelMacBrewInstallLocation)
+                PackagePlugin.Path(intelMacBrewInstallLocation)
             } else {
                 // Fall back to the just-in-time built tool.
                 try context.tool(named: "SafeDITool").path
