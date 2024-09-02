@@ -67,7 +67,14 @@ struct InstallSafeDITool: CommandPlugin {
             let (downloadedURL, _) = try await URLSession.shared.download(
                 for: URLRequest(url: downloadURL)
             )
-
+            let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path())
+            guard let currentPermissions = downloadedFileAttributes[.posixPermissions] as? NSNumber,
+                  // Add executable attributes to the downloaded file.
+                  chmod(downloadedURL.path(), mode_t(currentPermissions.uint16Value | S_IXUSR | S_IXGRP | S_IXOTH)) == 0
+            else {
+                print("Failed to make downloaded file executable")
+                return
+            }
             try FileManager.default.createDirectory(
                 at: expectedToolFolder,
                 withIntermediateDirectories: true
