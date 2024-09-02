@@ -281,7 +281,12 @@ extension Data {
             }
             switch safeDIOrigin {
             case let .repository(_, displayVersion, _):
-                return displayVersion
+                guard let versionMatch = try? /Optional\((.*?)\)|^(.*?)$/.firstMatch(in: displayVersion),
+                      let version = versionMatch.output.1 ?? versionMatch.output.2
+                else {
+                    return nil
+                }
+                return String(version)
             case .registry, .root, .local:
                 fallthrough
             @unknown default:
