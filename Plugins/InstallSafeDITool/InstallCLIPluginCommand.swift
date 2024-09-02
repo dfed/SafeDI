@@ -39,9 +39,11 @@ struct InstallSafeDITool: CommandPlugin {
                 print("could not extract version for SafeDI")
                 return
             }
-            let expectedToolFolder = context.package.directoryURL.appending(
-                components: ".safedi",
-                String(version)
+            let safediFolder = context.package.directoryURL.appending(
+                component: ".safedi"
+            )
+            let expectedToolFolder = safediFolder.appending(
+                component: String(version)
             )
             let expectedToolLocation = expectedToolFolder.appending(component: "safeditool")
 
@@ -83,10 +85,10 @@ struct InstallSafeDITool: CommandPlugin {
                 at: downloadedURL,
                 to: expectedToolLocation
             )
-            let gitIgnoreLocation = expectedToolFolder.appending(component: ".gitignore")
+            let gitIgnoreLocation = safediFolder.appending(component: ".gitignore")
             if !FileManager.default.fileExists(atPath: gitIgnoreLocation.path()) {
                 try """
-                \(expectedToolLocation.lastPathComponent)
+                */\(expectedToolLocation.lastPathComponent)
                 """.write(
                     to: gitIgnoreLocation,
                     atomically: true,
