@@ -60,21 +60,22 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
             ]
 
             let downloadedToolLocation = context.downloadedToolLocation
-            if context.hasSafeDIFolder, downloadedToolLocation == nil {
+            let safeDIVersion = context.safeDIVersion
+            if context.hasSafeDIFolder, let safeDIVersion, downloadedToolLocation == nil {
                 Diagnostics.error("""
-                \(context.safediFolder.path()) exists, but there is no SafeDITool binary for this release present.
+                \(context.safediFolder.path()) exists, but contains no SafeDITool binary for version \(safeDIVersion).
 
-                To download the current release SafeDITool binary, run:
+                To download the release SafeDITool binary for version \(safeDIVersion), run:
                 \tswift package --package-path \(context.package.directoryURL.path()) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
 
                 To use a debug SafeDITool binary instead, remove the `.safedi` directory by running:
                 \trm -rf \(context.safediFolder.path())
                 """)
-            } else if downloadedToolLocation == nil {
+            } else if downloadedToolLocation == nil, let safeDIVersion {
                 Diagnostics.warning("""
                 Using a debug SafeDITool binary, which is 15x slower than a release SafeDITool binary.
 
-                To download the current release SafeDITool binary, run:
+                To download the release SafeDITool binary for version \(safeDIVersion), run:
                 \tswift package --package-path \(context.package.directoryURL.path()) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
                 """)
             }
