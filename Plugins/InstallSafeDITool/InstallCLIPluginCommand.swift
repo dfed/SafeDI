@@ -29,7 +29,7 @@ struct InstallSafeDITool: CommandPlugin {
     ) async throws {
         guard let safeDIOrigin = context.package.dependencies.first(where: { $0.package.displayName == "SafeDI" })?.package.origin else {
             Diagnostics.error("No package origin found for SafeDI package")
-            return
+            exit(1)
         }
         switch safeDIOrigin {
         case let .repository(url, displayVersion, _):
@@ -39,7 +39,7 @@ struct InstallSafeDITool: CommandPlugin {
                   let versionSubstring = versionMatch.output.1 ?? versionMatch.output.2
             else {
                 Diagnostics.error("Could not extract version for SafeDI")
-                return
+                exit(1)
             }
             let version = String(versionSubstring)
             let safediFolder = context.package.directoryURL.appending(
@@ -52,7 +52,7 @@ struct InstallSafeDITool: CommandPlugin {
 
             guard let url = URL(string: url)?.deletingPathExtension() else {
                 Diagnostics.error("No package url found for SafeDI package")
-                return
+                exit(1)
             }
             #if arch(arm64)
                 let toolName = "SafeDITool-arm64"
@@ -60,7 +60,7 @@ struct InstallSafeDITool: CommandPlugin {
                 let toolName = "SafeDITool-x86_64"
             #else
                 Diagnostics.error("Unexpected architecture type")
-                return
+                exit(1)
             #endif
 
             let githubDownloadURL = url.appending(
@@ -78,7 +78,7 @@ struct InstallSafeDITool: CommandPlugin {
                   chmod(downloadedURL.path(), mode_t(currentPermissions.uint16Value | S_IXUSR | S_IXGRP | S_IXOTH)) == 0
             else {
                 Diagnostics.error("Failed to make downloaded file \(downloadedURL.path()) executable")
-                return
+                exit(1)
             }
             try FileManager.default.createDirectory(
                 at: expectedToolFolder,
@@ -104,6 +104,7 @@ struct InstallSafeDITool: CommandPlugin {
 
         @unknown default:
             Diagnostics.error("Cannot download SafeDITool from \(safeDIOrigin) – downloading only works when using a versioned release of SafeDI")
+            exit(1)
         }
     }
 }
