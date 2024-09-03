@@ -28,15 +28,17 @@ struct InstallSafeDITool: CommandPlugin {
         arguments _: [String]
     ) async throws {
         guard let safeDIOrigin = context.package.dependencies.first(where: { $0.package.displayName == "SafeDI" })?.package.origin else {
-            print("No package origin found for SafeDI package")
+            Diagnostics.error("No package origin found for SafeDI package")
             return
         }
         switch safeDIOrigin {
         case let .repository(url, displayVersion, _):
+            // As of Xcode 16.0 Beta 6, the display version is of the form "Optional(version)".
+            // This regular expression is duplicated by SafeDIGenerateDependencyTree since plugins can not share code.
             guard let versionMatch = try /Optional\((.*?)\)|^(.*?)$/.firstMatch(in: displayVersion),
                   let versionSubstring = versionMatch.output.1 ?? versionMatch.output.2
             else {
-                print("could not extract version for SafeDI")
+                Diagnostics.error("Could not extract version for SafeDI")
                 return
             }
             let version = String(versionSubstring)
@@ -49,7 +51,7 @@ struct InstallSafeDITool: CommandPlugin {
             let expectedToolLocation = expectedToolFolder.appending(component: "safeditool")
 
             guard let url = URL(string: url)?.deletingPathExtension() else {
-                print("No package url found for SafeDI package")
+                Diagnostics.error("No package url found for SafeDI package")
                 return
             }
             #if arch(arm64)
@@ -57,25 +59,25 @@ struct InstallSafeDITool: CommandPlugin {
             #elseif arch(x86_64)
                 let toolName = "SafeDITool-x86_64"
             #else
-                print("Unexpected architecture type")
+                Diagnostics.error("Unexpected architecture type")
                 return
             #endif
 
-            let downloadURL = url.appending(
+            let githubDownloadURL = url.appending(
                 components: "releases",
                 "download",
                 version,
                 toolName
             )
             let (downloadedURL, _) = try await URLSession.shared.download(
-                for: URLRequest(url: downloadURL)
+                for: URLRequest(url: githubDownloadURL)
             )
             let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path())
             guard let currentPermissions = downloadedFileAttributes[.posixPermissions] as? NSNumber,
                   // Add executable attributes to the downloaded file.
                   chmod(downloadedURL.path(), mode_t(currentPermissions.uint16Value | S_IXUSR | S_IXGRP | S_IXOTH)) == 0
             else {
-                print("Failed to make downloaded file executable")
+                Diagnostics.error("Failed to make downloaded file \(downloadedURL.path()) executable")
                 return
             }
             try FileManager.default.createDirectory(
@@ -101,7 +103,7 @@ struct InstallSafeDITool: CommandPlugin {
             fallthrough
 
         @unknown default:
-            print("Cannot download SafeDITool from \(safeDIOrigin)")
+            Diagnostics.error("Cannot download SafeDITool from \(safeDIOrigin) – downloading only works when using a versioned release of SafeDI")
         }
     }
 }

@@ -301,6 +301,7 @@ extension Data {
             }
             switch safeDIOrigin {
             case let .repository(_, displayVersion, _):
+                // This regular expression is duplicated by InstallSafeDITool since plugins can not share code.
                 guard let versionMatch = try? /Optional\((.*?)\)|^(.*?)$/.firstMatch(in: displayVersion),
                       let version = versionMatch.output.1 ?? versionMatch.output.2
                 else {
