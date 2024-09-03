@@ -437,10 +437,20 @@ If your first-party code is entirely contained in a Swift Package with one or mo
 
 You can see this in integration in practice in the [ExamplePackageIntegration](Examples/ExamplePackageIntegration) package.
 
+##### Xcode 15
+
 For faster builds, you can install a release version of `SafeDITool` [rather than a debug version](https://github.com/apple/swift-package-manager/issues/7233) via `brew`:
 
 ```zsh
 brew install dfed/safedi/safeditool
+```
+
+##### Xcode 16
+
+for faster builds, you can install a release version of `SafeDITool` [rather than a debug version](https://github.com/apple/swift-package-manager/issues/7233) via `swift`:
+
+```zsh
+swift package --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
 ```
 
 #### Other configurations
