@@ -41,7 +41,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
     /// A meta type. e.g. `Int.Type` or `Equatable.Protocol`
     indirect case metatype(TypeDescription, isType: Bool)
     /// A type identifier with a specifier or attributes. e.g. `inout Int` or `@autoclosure () -> Void`
-    indirect case attributed(TypeDescription, specifier: String?, attributes: [String]?)
+    indirect case attributed(TypeDescription, specifiers: [String]?, attributes: [String]?)
     /// An array. e.g. [Int]
     indirect case array(element: TypeDescription)
     /// A dictionary. e.g. [Int: String]
@@ -92,18 +92,18 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             return "some \(type.wrappedIfAmbiguous.asSource)"
         case let .any(type):
             return "any \(type.wrappedIfAmbiguous.asSource)"
-        case let .attributed(type, specifier, attributes):
+        case let .attributed(type, specifiers, attributes):
             func attributesFromList(_ attributes: [String]) -> String {
                 attributes
                     .map { "@\($0)" }
                     .joined(separator: " ")
             }
-            switch (specifier, attributes) {
-            case let (.some(specifier), .none):
-                return "\(specifier) \(type.asSource)"
+            switch (specifiers, attributes) {
+            case let (.some(specifiers), .none):
+                return "\(specifiers.joined(separator: " ")) \(type.asSource)"
             case let (.none, .some(attributes)):
                 return "\(attributesFromList(attributes)) \(type.asSource)"
-            case let (.some(specifier), .some(attributes)):
+            case let (.some(specifiers), .some(attributes)):
                 // This case likely represents an error.
                 // We are unaware of type reference that compiles with both a specifier and attributes.
                 // The Swift reference manual specifies that attributes come before the specifier,
@@ -111,7 +111,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 // Only code where the specifier comes before the attribute parses as an AttributedTypeSyntax.
                 // As a result, we construct this source with the specifier first.
                 // Reference manual: https://docs.swift.org/swift-book/ReferenceManual/Types.html#grammar_type
-                return "\(specifier) \(attributesFromList(attributes)) \(type.asSource)"
+                return "\(specifiers.joined(separator: " ")) \(attributesFromList(attributes)) \(type.asSource)"
             case (.none, .none):
                 // This case represents an error.
                 return type.asSource
@@ -331,9 +331,18 @@ extension TypeSyntax {
             let attributes: [String] = typeIdentifier.attributes.compactMap {
                 AttributeSyntax($0)?.attributeName.as(IdentifierTypeSyntax.self)?.name.text
             }
+            #if compiler(>=6.0)
+                let specifiers = typeIdentifier.specifiers.textRepresentation
+            #else
+                let specifiers: [String]? = if let specifier = typeIdentifier.specifier?.text {
+                    [specifier]
+                } else {
+                    nil
+                }
+            #endif
             return .attributed(
                 typeIdentifier.baseType.typeDescription,
-                specifier: typeIdentifier.specifier?.text,
+                specifiers: specifiers,
                 attributes: attributes.isEmpty ? nil : attributes
             )
 
@@ -369,10 +378,15 @@ extension TypeSyntax {
             return .simple(name: "AnyObject")
 
         } else if let typeIdentifier = FunctionTypeSyntax(self) {
+            #if compiler(>=6.0)
+                let doesThrow = typeIdentifier.effectSpecifiers?.throwsClause?.throwsSpecifier != nil
+            #else
+                let doesThrow = typeIdentifier.effectSpecifiers?.throwsSpecifier != nil
+            #endif
             return .closure(
                 arguments: typeIdentifier.parameters.map(\.type.typeDescription),
                 isAsync: typeIdentifier.effectSpecifiers?.asyncSpecifier != nil,
-                doesThrow: typeIdentifier.effectSpecifiers?.throwsSpecifier != nil,
+                doesThrow: doesThrow,
                 returnType: typeIdentifier.returnClause.type.typeDescription
             )
 
@@ -476,10 +490,15 @@ extension ExprSyntax {
                 ]),
                 let returnType = sequenceExpr.elements.last
             {
+                #if compiler(>=6.0)
+                    let doesThrow = arrow.effectSpecifiers?.throwsClause?.throwsSpecifier != nil
+                #else
+                    let doesThrow = arrow.effectSpecifiers?.throwsSpecifier != nil
+                #endif
                 return .closure(
                     arguments: arguments.elements.map(\.expression.typeDescription),
                     isAsync: arrow.effectSpecifiers?.asyncSpecifier != nil,
-                    doesThrow: arrow.effectSpecifiers?.throwsSpecifier != nil,
+                    doesThrow: doesThrow,
                     returnType: returnType.typeDescription
                 )
             }
@@ -516,3 +535,23 @@ private final class GenericArgumentVisitor: SyntaxVisitor {
         return .skipChildren
     }
 }
+
+#if compiler(>=6.0)
+    extension TypeSpecifierListSyntax {
+        fileprivate var textRepresentation: [String]? {
+            let specifiers = compactMap { specifier in
+                if case let .simpleTypeSpecifier(simpleTypeSpecifierSyntax) = specifier {
+                    simpleTypeSpecifierSyntax.specifier.text
+                } else {
+                    // lifetimeTypeSpecifier is SPI, so we ignore it.
+                    nil
+                }
+            }
+            if specifiers.isEmpty {
+                return nil
+            } else {
+                return specifiers
+            }
+        }
+    }
+#endif

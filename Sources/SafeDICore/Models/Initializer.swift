@@ -32,7 +32,11 @@ public struct Initializer: Codable, Hashable, Sendable {
         isPublicOrOpen = node.modifiers.containsPublicOrOpen
         isOptional = node.optionalMark != nil
         isAsync = node.signature.effectSpecifiers?.asyncSpecifier != nil
-        doesThrow = node.signature.effectSpecifiers?.throwsSpecifier != nil
+        #if compiler(>=6.0)
+            doesThrow = node.signature.effectSpecifiers?.throwsClause?.throwsSpecifier != nil
+        #else
+            doesThrow = node.signature.effectSpecifiers?.throwsSpecifier != nil
+        #endif
         hasGenericParameter = node.genericParameterClause != nil
         hasGenericWhereClause = node.genericWhereClause != nil
         arguments = node
@@ -46,7 +50,11 @@ public struct Initializer: Codable, Hashable, Sendable {
         isPublicOrOpen = node.modifiers.containsPublicOrOpen
         isOptional = false
         isAsync = node.signature.effectSpecifiers?.asyncSpecifier != nil
-        doesThrow = node.signature.effectSpecifiers?.throwsSpecifier != nil
+        #if compiler(>=6.0)
+            doesThrow = node.signature.effectSpecifiers?.throwsClause?.throwsSpecifier != nil
+        #else
+            doesThrow = node.signature.effectSpecifiers?.throwsSpecifier != nil
+        #endif
         hasGenericParameter = node.genericParameterClause != nil
         hasGenericWhereClause = node.genericWhereClause != nil
         arguments = node
@@ -294,7 +302,7 @@ extension ConcreteDeclType {
 extension TypeDescription {
     fileprivate func isEqualToFunctionArgument(_ argument: TypeDescription) -> Bool {
         switch argument {
-        case let .attributed(argumentTypeDescription, argumentSpecifier, argumentAttributes):
+        case let .attributed(argumentTypeDescription, argumentSpecifiers, argumentAttributes):
             switch self {
             case .simple,
                  .nested,
@@ -311,11 +319,11 @@ extension TypeDescription {
                  .unknown,
                  .void:
                 self == argumentTypeDescription
-                    && argumentSpecifier == nil
+                    && argumentSpecifiers?.isEmpty ?? true
                     && (argumentAttributes ?? []).contains("escaping")
-            case let .attributed(parameterTypeDescription, parameterSpecifier, parameterAttributes):
+            case let .attributed(parameterTypeDescription, parameterSpecifiers, parameterAttributes):
                 parameterTypeDescription == argumentTypeDescription
-                    && parameterSpecifier == argumentSpecifier
+                    && Set(parameterSpecifiers ?? []) == Set(argumentSpecifiers ?? [])
                     && Set(argumentAttributes ?? []).subtracting(parameterAttributes ?? []) == ["escaping"]
             }
         case .simple,
