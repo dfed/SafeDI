@@ -331,18 +331,9 @@ extension TypeSyntax {
             let attributes: [String] = typeIdentifier.attributes.compactMap {
                 AttributeSyntax($0)?.attributeName.as(IdentifierTypeSyntax.self)?.name.text
             }
-            #if compiler(>=6.0)
-                let specifiers = typeIdentifier.specifiers.textRepresentation
-            #else
-                let specifiers: [String]? = if let specifier = typeIdentifier.specifier?.text {
-                    [specifier]
-                } else {
-                    nil
-                }
-            #endif
             return .attributed(
                 typeIdentifier.baseType.typeDescription,
-                specifiers: specifiers,
+                specifiers: typeIdentifier.specifiers.textRepresentation,
                 attributes: attributes.isEmpty ? nil : attributes
             )
 
@@ -378,15 +369,10 @@ extension TypeSyntax {
             return .simple(name: "AnyObject")
 
         } else if let typeIdentifier = FunctionTypeSyntax(self) {
-            #if compiler(>=6.0)
-                let doesThrow = typeIdentifier.effectSpecifiers?.throwsClause?.throwsSpecifier != nil
-            #else
-                let doesThrow = typeIdentifier.effectSpecifiers?.throwsSpecifier != nil
-            #endif
             return .closure(
                 arguments: typeIdentifier.parameters.map(\.type.typeDescription),
                 isAsync: typeIdentifier.effectSpecifiers?.asyncSpecifier != nil,
-                doesThrow: doesThrow,
+                doesThrow: typeIdentifier.effectSpecifiers?.throwsClause?.throwsSpecifier != nil,
                 returnType: typeIdentifier.returnClause.type.typeDescription
             )
 
@@ -490,15 +476,10 @@ extension ExprSyntax {
                 ]),
                 let returnType = sequenceExpr.elements.last
             {
-                #if compiler(>=6.0)
-                    let doesThrow = arrow.effectSpecifiers?.throwsClause?.throwsSpecifier != nil
-                #else
-                    let doesThrow = arrow.effectSpecifiers?.throwsSpecifier != nil
-                #endif
                 return .closure(
                     arguments: arguments.elements.map(\.expression.typeDescription),
                     isAsync: arrow.effectSpecifiers?.asyncSpecifier != nil,
-                    doesThrow: doesThrow,
+                    doesThrow: arrow.effectSpecifiers?.throwsClause?.throwsSpecifier != nil,
                     returnType: returnType.typeDescription
                 )
             }
@@ -536,22 +517,20 @@ private final class GenericArgumentVisitor: SyntaxVisitor {
     }
 }
 
-#if compiler(>=6.0)
-    extension TypeSpecifierListSyntax {
-        fileprivate var textRepresentation: [String]? {
-            let specifiers = compactMap { specifier in
-                if case let .simpleTypeSpecifier(simpleTypeSpecifierSyntax) = specifier {
-                    simpleTypeSpecifierSyntax.specifier.text
-                } else {
-                    // lifetimeTypeSpecifier is SPI, so we ignore it.
-                    nil
-                }
-            }
-            if specifiers.isEmpty {
-                return nil
+extension TypeSpecifierListSyntax {
+    fileprivate var textRepresentation: [String]? {
+        let specifiers = compactMap { specifier in
+            if case let .simpleTypeSpecifier(simpleTypeSpecifierSyntax) = specifier {
+                simpleTypeSpecifierSyntax.specifier.text
             } else {
-                return specifiers
+                // lifetimeTypeSpecifier is SPI, so we ignore it.
+                nil
             }
         }
+        if specifiers.isEmpty {
+            return nil
+        } else {
+            return specifiers
+        }
     }
-#endif
+}

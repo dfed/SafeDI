@@ -21,6 +21,6 @@
 import SafeDI
 
 @Instantiable
-public final class SharedThing: Instantiable {
+public final class SharedThing: Instantiable, Sendable {
     public init() {}
 }

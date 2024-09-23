@@ -18,11 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#if compiler(>=6.0)
-    @preconcurrency import SwiftSyntax
-#else
-    import SwiftSyntax
-#endif
+@preconcurrency import SwiftSyntax
 import SwiftSyntaxBuilder
 
 public struct Initializer: Codable, Hashable, Sendable {
@@ -32,11 +28,7 @@ public struct Initializer: Codable, Hashable, Sendable {
         isPublicOrOpen = node.modifiers.containsPublicOrOpen
         isOptional = node.optionalMark != nil
         isAsync = node.signature.effectSpecifiers?.asyncSpecifier != nil
-        #if compiler(>=6.0)
-            doesThrow = node.signature.effectSpecifiers?.throwsClause?.throwsSpecifier != nil
-        #else
-            doesThrow = node.signature.effectSpecifiers?.throwsSpecifier != nil
-        #endif
+        doesThrow = node.signature.effectSpecifiers?.throwsClause?.throwsSpecifier != nil
         hasGenericParameter = node.genericParameterClause != nil
         hasGenericWhereClause = node.genericWhereClause != nil
         arguments = node
@@ -50,11 +42,7 @@ public struct Initializer: Codable, Hashable, Sendable {
         isPublicOrOpen = node.modifiers.containsPublicOrOpen
         isOptional = false
         isAsync = node.signature.effectSpecifiers?.asyncSpecifier != nil
-        #if compiler(>=6.0)
-            doesThrow = node.signature.effectSpecifiers?.throwsClause?.throwsSpecifier != nil
-        #else
-            doesThrow = node.signature.effectSpecifiers?.throwsSpecifier != nil
-        #endif
+        doesThrow = node.signature.effectSpecifiers?.throwsClause?.throwsSpecifier != nil
         hasGenericParameter = node.genericParameterClause != nil
         hasGenericWhereClause = node.genericWhereClause != nil
         arguments = node

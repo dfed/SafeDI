@@ -16,9 +16,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "32756FE12B24C042006BDD24"
-               BuildableName = "ExampleMultiProjectIntegration.app"
-               BlueprintName = "ExampleMultiProjectIntegration"
-               ReferencedContainer = "container:ExampleMultiProjectIntegration.xcodeproj">
+               BuildableName = "ExampleProjectIntegration.app"
+               BlueprintName = "ExampleProjectIntegration"
+               ReferencedContainer = "container:ExampleProjectIntegration.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -45,9 +45,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "32756FE12B24C042006BDD24"
-            BuildableName = "ExampleMultiProjectIntegration.app"
-            BlueprintName = "ExampleMultiProjectIntegration"
-            ReferencedContainer = "container:ExampleMultiProjectIntegration.xcodeproj">
+            BuildableName = "ExampleProjectIntegration.app"
+            BlueprintName = "ExampleProjectIntegration"
+            ReferencedContainer = "container:ExampleProjectIntegration.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -62,9 +62,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "32756FE12B24C042006BDD24"
-            BuildableName = "ExampleMultiProjectIntegration.app"
-            BlueprintName = "ExampleMultiProjectIntegration"
-            ReferencedContainer = "container:ExampleMultiProjectIntegration.xcodeproj">
+            BuildableName = "ExampleProjectIntegration.app"
+            BlueprintName = "ExampleProjectIntegration"
+            ReferencedContainer = "container:ExampleProjectIntegration.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

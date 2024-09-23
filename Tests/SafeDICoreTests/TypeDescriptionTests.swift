@@ -247,20 +247,18 @@ final class TypeDescriptionTests: XCTestCase {
         XCTAssertEqual(typeDescription.asSource, "inout @autoclosure () -> Void")
     }
 
-    #if compiler(>=6.0)
-        func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnAttributedTypeSyntax_withMultipleSpecifiers_findsTheType() throws {
-            let content = """
-            func test(parameter: sending @autoclosure () -> Void) {}
-            """
+    func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnAttributedTypeSyntax_withMultipleSpecifiers_findsTheType() throws {
+        let content = """
+        func test(parameter: sending @autoclosure () -> Void) {}
+        """
 
-            let visitor = AttributedTypeSyntaxVisitor(viewMode: .sourceAccurate)
-            visitor.walk(Parser.parse(source: content))
+        let visitor = AttributedTypeSyntaxVisitor(viewMode: .sourceAccurate)
+        visitor.walk(Parser.parse(source: content))
 
-            let typeDescription = try XCTUnwrap(visitor.attributedTypeIdentifier)
-            XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
-            XCTAssertEqual(typeDescription.asSource, "sending @autoclosure () -> Void")
-        }
-    #endif
+        let typeDescription = try XCTUnwrap(visitor.attributedTypeIdentifier)
+        XCTAssertFalse(typeDescription.isUnknown, "Type description is not of known type!")
+        XCTAssertEqual(typeDescription.asSource, "sending @autoclosure () -> Void")
+    }
 
     func test_typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnArrayTypeSyntax_findsTheType() throws {
         let content = """
