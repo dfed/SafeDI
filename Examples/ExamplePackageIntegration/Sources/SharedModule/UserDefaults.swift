@@ -22,7 +22,7 @@ import Foundation
 import SafeDI
 
 @Instantiable
-extension UserDefaults: Instantiable {
+extension UserDefaults: SafeDI.Instantiable {
     public static func instantiate() -> UserDefaults {
         .standard
     }

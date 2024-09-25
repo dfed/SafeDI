@@ -19,6 +19,9 @@
 // SOFTWARE.
 
 import Foundation
+#if canImport(FoundationNetworking)
+    import FoundationNetworking
+#endif
 import PackagePlugin
 
 @main
@@ -75,7 +78,7 @@ struct InstallSafeDITool: CommandPlugin {
             let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path())
             guard let currentPermissions = downloadedFileAttributes[.posixPermissions] as? NSNumber,
                   // Add executable attributes to the downloaded file.
-                  chmod(downloadedURL.path(), mode_t(currentPermissions.uint16Value | S_IXUSR | S_IXGRP | S_IXOTH)) == 0
+                  chmod(downloadedURL.path(), mode_t(currentPermissions.uint32Value) | S_IXUSR | S_IXGRP | S_IXOTH) == 0
             else {
                 Diagnostics.error("Failed to make downloaded file \(downloadedURL.path()) executable")
                 exit(1)

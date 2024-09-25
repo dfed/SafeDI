@@ -56,87 +56,44 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
     var asFunctionParamter: FunctionParameterSyntax {
         switch typeDescription {
         case .closure:
-            #if compiler(>=6.0)
-                FunctionParameterSyntax(
-                    firstName: .identifier(label),
-                    colon: .colonToken(trailingTrivia: .space),
-                    type: AttributedTypeSyntax(
-                        specifiers: [],
-                        attributes: AttributeListSyntax {
-                            AttributeSyntax(attributeName: IdentifierTypeSyntax(
-                                name: "escaping",
-                                trailingTrivia: .space
-                            ))
-                        },
-                        baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
-                    )
+            FunctionParameterSyntax(
+                firstName: .identifier(label),
+                colon: .colonToken(trailingTrivia: .space),
+                type: AttributedTypeSyntax(
+                    specifiers: [],
+                    attributes: AttributeListSyntax {
+                        AttributeSyntax(attributeName: IdentifierTypeSyntax(
+                            name: "escaping",
+                            trailingTrivia: .space
+                        ))
+                    },
+                    baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
                 )
-            #else
-                FunctionParameterSyntax(
-                    firstName: .identifier(label),
-                    colon: .colonToken(trailingTrivia: .space),
-                    type: AttributedTypeSyntax(
-                        specifier: nil,
-                        attributes: AttributeListSyntax {
-                            AttributeSyntax(attributeName: IdentifierTypeSyntax(
-                                name: "escaping",
-                                trailingTrivia: .space
-                            ))
-                        },
-                        baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
-                    )
-                )
-            #endif
+            )
         case let .attributed(typeDescription, _, attributes):
-            #if compiler(>=6.0)
-                FunctionParameterSyntax(
-                    firstName: .identifier(label),
-                    colon: .colonToken(trailingTrivia: .space),
-                    type: AttributedTypeSyntax(
-                        // It is not possible for a property declaration to have specifiers today.
-                        specifiers: [],
-                        attributes: AttributeListSyntax {
-                            AttributeSyntax(attributeName: IdentifierTypeSyntax(
-                                name: "escaping",
-                                trailingTrivia: .space
-                            ))
-                            if let attributes {
-                                for attribute in attributes {
-                                    AttributeSyntax(
-                                        attributeName: IdentifierTypeSyntax(name: .identifier(attribute)),
-                                        trailingTrivia: .space
-                                    )
-                                }
+            FunctionParameterSyntax(
+                firstName: .identifier(label),
+                colon: .colonToken(trailingTrivia: .space),
+                type: AttributedTypeSyntax(
+                    // It is not possible for a property declaration to have specifiers today.
+                    specifiers: [],
+                    attributes: AttributeListSyntax {
+                        AttributeSyntax(attributeName: IdentifierTypeSyntax(
+                            name: "escaping",
+                            trailingTrivia: .space
+                        ))
+                        if let attributes {
+                            for attribute in attributes {
+                                AttributeSyntax(
+                                    attributeName: IdentifierTypeSyntax(name: .identifier(attribute)),
+                                    trailingTrivia: .space
+                                )
                             }
-                        },
-                        baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
-                    )
+                        }
+                    },
+                    baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
                 )
-            #else
-                FunctionParameterSyntax(
-                    firstName: .identifier(label),
-                    colon: .colonToken(trailingTrivia: .space),
-                    type: AttributedTypeSyntax(
-                        // It is not possible for a property declaration to have specifiers today.
-                        specifier: nil,
-                        attributes: AttributeListSyntax {
-                            AttributeSyntax(attributeName: IdentifierTypeSyntax(
-                                name: "escaping",
-                                trailingTrivia: .space
-                            ))
-                            if let attributes {
-                                for attribute in attributes {
-                                    AttributeSyntax(
-                                        attributeName: IdentifierTypeSyntax(name: .identifier(attribute)),
-                                        trailingTrivia: .space
-                                    )
-                                }
-                            }
-                        },
-                        baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
-                    )
-                )
-            #endif
+            )
         case .simple,
              .nested,
              .composition,

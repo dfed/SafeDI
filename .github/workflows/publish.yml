@@ -19,7 +19,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_15.3.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
       - name: Build SafeDITool
         run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }}
       - name: Give SafeDITool executable permissions

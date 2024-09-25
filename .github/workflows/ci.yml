@@ -8,13 +8,13 @@ on:
 
 jobs:
   xcodebuild-15:
-    name: Build with xcodebuild on Xcode 15
+    name: Build with xcodebuild on Xcode 16
     runs-on: macos-14
     strategy:
       matrix:
         platforms: [
           'generic/platform=ios',
-          'platform=macos',
+          'platform=macOS',
           'generic/platform=tvos',
           'generic/platform=watchos',
           'generic/platform=visionos'
@@ -24,32 +24,36 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_15.3.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
       - name: Download visionOS
         if: matrix.platforms == 'generic/platform=visionos'
-        run: xcodebuild -downloadPlatform visionOS
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          sudo xcrun simctl list
+          sudo xcodebuild -downloadPlatform visionOS
+          sudo xcodebuild -runFirstLaunch
       - name: Build Framework
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
 
   spm-package-integration-15:
-    name: Build Package Integration on Xcode 15
+    name: Build Package Integration on Xcode 16
     runs-on: macos-14
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_15.3.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
       - name: Build Package Integration
         run: xcrun swift build --package-path Examples/ExamplePackageIntegration
 
   spm-project-integration-15:
-    name: Build Project Integration on Xcode 15
+    name: Build Project Integration on Xcode 16
     runs-on: macos-14
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_15.3.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
       - name: Replace 'main' branch with the current branch
         if: github.event.pull_request.head.repo.full_name == github.repository # Only do this if the branch is from our repo.
         run: sed -i '' "s#branch = main;#branch = ${{ github.head_ref || github.ref_name }};#" "Examples/ExampleProjectIntegration/ExampleProjectIntegration.xcodeproj/project.pbxproj"
@@ -57,13 +61,13 @@ jobs:
         run: pushd Examples/ExampleProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration; popd
 
   spm-multi-project-integration-15:
-    name: Build Multi Project Integration on Xcode 15
+    name: Build Multi Project Integration on Xcode 16
     runs-on: macos-14
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_15.3.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
       - name: Replace 'main' branch with the current branch
         if: github.event.pull_request.head.repo.full_name == github.repository # Only do this if the branch is from our repo.
         run: sed -i '' "s#branch = main;#branch = ${{ github.head_ref || github.ref_name }};#" "Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration.xcodeproj/project.pbxproj"
@@ -71,13 +75,13 @@ jobs:
         run: pushd Examples/ExampleMultiProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration; popd
 
   spm-15:
-    name: Build and Test on Xcode 15
+    name: Build and Test on Xcode 16
     runs-on: macos-14
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_15.3.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
       - name: Build and Test Framework
         run: |
           for i in {1..5}; do # Run tests a few times to ensure code-gen is stable.
@@ -98,7 +102,7 @@ jobs:
   linux:
     name: Build and Test on Linux
     runs-on: ubuntu-latest
-    container: swift:5.10
+    container: swift:6.0
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -129,9 +133,9 @@ jobs:
   lint-swift:
     name: Lint Swift
     runs-on: ubuntu-latest
-    container: swift:5.10
+    container: swift:6.0
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Lint Swift
-        run: swift run --package-path CLI swiftformat --swiftversion 5.10 . --lint
+        run: swift run --package-path CLI swiftformat --swiftversion 6.0 . --lint

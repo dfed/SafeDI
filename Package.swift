@@ -1,4 +1,4 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import CompilerPluginSupport
@@ -25,11 +25,15 @@ let package = Package(
             name: "SafeDIGenerator",
             targets: ["SafeDIGenerator"]
         ),
+        .plugin(
+            name: "InstallSafeDITool",
+            targets: ["InstallSafeDITool"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.0"),
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.0.0"),
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "510.0.0"),
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
         .package(url: "https://github.com/michaeleisel/ZippyJSON.git", from: "1.2.0"),
         .package(url: "https://github.com/pointfreeco/swift-macro-testing.git", from: "0.5.0"),
     ],
@@ -37,13 +41,19 @@ let package = Package(
         // Macros
         .target(
             name: "SafeDI",
-            dependencies: ["SafeDIMacros"]
+            dependencies: ["SafeDIMacros"],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
         ),
         .testTarget(
             name: "SafeDITests",
             dependencies: [
                 "SafeDI",
                 "SafeDICore",
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
             ]
         ),
         .macro(
@@ -55,6 +65,9 @@ let package = Package(
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
             ]
         ),
         .testTarget(
@@ -64,6 +77,9 @@ let package = Package(
                 "SafeDICore",
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
                 .product(name: "MacroTesting", package: "swift-macro-testing"),
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
             ]
         ),
 
@@ -81,6 +97,9 @@ let package = Package(
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .byNameItem(name: "ZippyJSON", condition: .when(platforms: [.iOS, .tvOS, .macOS])),
                 "SafeDICore",
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
             ]
         ),
         .testTarget(
@@ -89,7 +108,24 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .byNameItem(name: "ZippyJSON", condition: .when(platforms: [.iOS, .tvOS, .macOS])),
                 "SafeDITool",
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
             ]
+        ),
+        .plugin(
+            name: "InstallSafeDITool",
+            capability: .command(
+                intent: .custom(
+                    verb: "safedi-release-install",
+                    description: "Installs a release version of the SafeDITool build plugin executable."
+                ),
+                permissions: [
+                    .writeToPackageDirectory(reason: "Downloads the SafeDI release build plugin executable into your project directory."),
+                    .allowNetworkConnections(scope: .all(ports: []), reason: "Downloads the SafeDI release build plugin executable from GitHub."),
+                ]
+            ),
+            dependencies: []
         ),
 
         // Core
@@ -100,11 +136,17 @@ let package = Package(
                 .product(name: "SwiftDiagnostics", package: "swift-syntax"),
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
             ]
         ),
         .testTarget(
             name: "SafeDICoreTests",
-            dependencies: ["SafeDICore"]
+            dependencies: ["SafeDICore"],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
         ),
     ]
 )

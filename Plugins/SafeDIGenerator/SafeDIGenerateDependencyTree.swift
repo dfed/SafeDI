@@ -31,104 +31,60 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
             return []
         }
 
-        #if compiler(>=6.0)
-            let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
-            // Swift Package Plugins do not (as of Swift 5.9) allow for
-            // creating dependencies between plugin output. Since our
-            // current build system does not support depending on the
-            // output of other plugins, we must forgo searching for
-            // `.safeDI` files and instead parse the entire project at once.
-            let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.url)
-            let dependenciesSourceFiles = sourceTarget
-                .sourceModuleRecursiveDependencies
-                .flatMap {
-                    $0
-                        .sourceFiles(withSuffix: ".swift")
-                        .map(\.url)
-                }
-            let inputSourcesFilePath = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv").path()
-            try Data(
-                (targetSwiftFiles.map { $0.path() } + dependenciesSourceFiles.map { $0.path() })
-                    .joined(separator: ",")
-                    .utf8
-            )
-            .write(toPath: inputSourcesFilePath)
-            let arguments = [
-                inputSourcesFilePath,
-                "--dependency-tree-output",
-                outputSwiftFile.path(),
-            ]
-
-            let downloadedToolLocation = context.downloadedToolLocation
-            let safeDIVersion = context.safeDIVersion
-            if context.hasSafeDIFolder, let safeDIVersion, downloadedToolLocation == nil {
-                Diagnostics.error("""
-                \(context.safediFolder.path()) exists, but contains no SafeDITool binary for version \(safeDIVersion).
-
-                To download the release SafeDITool binary for version \(safeDIVersion), run:
-                \tswift package --package-path \(context.package.directoryURL.path()) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
-
-                To use a debug SafeDITool binary instead, remove the `.safedi` directory by running:
-                \trm -rf \(context.safediFolder.path())
-                """)
-            } else if downloadedToolLocation == nil, let safeDIVersion {
-                Diagnostics.warning("""
-                Using a debug SafeDITool binary, which is 15x slower than a release SafeDITool binary.
-
-                To download the release SafeDITool binary for version \(safeDIVersion), run:
-                \tswift package --package-path \(context.package.directoryURL.path()) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
-                """)
+        let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
+        // Swift Package Plugins did not (as of Swift 5.9) allow for
+        // creating dependencies between plugin output at the time of writing.
+        // Since our current build system didnot support depending on the
+        // output of other plugins, we must forgo searching for `.safeDI` files
+        // and instead parse the entire project at once.
+        // TODO: https://github.com/dfed/SafeDI/issues/92
+        let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.url)
+        let dependenciesSourceFiles = sourceTarget
+            .sourceModuleRecursiveDependencies
+            .flatMap {
+                $0
+                    .sourceFiles(withSuffix: ".swift")
+                    .map(\.url)
             }
+        let inputSourcesFilePath = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv").path()
+        try Data(
+            (targetSwiftFiles.map { $0.path() } + dependenciesSourceFiles.map { $0.path() })
+                .joined(separator: ",")
+                .utf8
+        )
+        .write(toPath: inputSourcesFilePath)
+        let arguments = [
+            inputSourcesFilePath,
+            "--dependency-tree-output",
+            outputSwiftFile.path(),
+        ]
 
-            let toolLocation = if let downloadedToolLocation {
-                downloadedToolLocation
-            } else {
-                try context.tool(named: "SafeDITool").url
-            }
+        let downloadedToolLocation = context.downloadedToolLocation
+        let safeDIVersion = context.safeDIVersion
+        if context.hasSafeDIFolder, let safeDIVersion, downloadedToolLocation == nil {
+            Diagnostics.error("""
+            \(context.safediFolder.path()) exists, but contains no SafeDITool binary for version \(safeDIVersion).
 
-        #else
-            let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
-            // Swift Package Plugins do not (as of Swift 5.9) allow for
-            // creating dependencies between plugin output. Since our
-            // current build system does not support depending on the
-            // output of other plugins, we must forgo searching for
-            // `.safeDI` files and instead parse the entire project at once.
-            let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.path)
-            let dependenciesSourceFiles = sourceTarget
-                .sourceModuleRecursiveDependencies
-                .flatMap {
-                    $0
-                        .sourceFiles(withSuffix: ".swift")
-                        .map(\.path)
-                }
+            To download the release SafeDITool binary for version \(safeDIVersion), run:
+            \tswift package --package-path \(context.package.directoryURL.path()) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
 
-            let inputSourcesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.csv").string
-            try Data(
-                (targetSwiftFiles + dependenciesSourceFiles)
-                    .map(\.string)
-                    .joined(separator: ",")
-                    .utf8
-            )
-            .write(toPath: inputSourcesFilePath)
-            let arguments = [
-                inputSourcesFilePath,
-                "--dependency-tree-output",
-                outputSwiftFile.string,
-            ]
+            To use a debug SafeDITool binary instead, remove the `.safedi` directory by running:
+            \trm -rf \(context.safediFolder.path())
+            """)
+        } else if downloadedToolLocation == nil, let safeDIVersion {
+            Diagnostics.warning("""
+            Using a debug SafeDITool binary, which is 15x slower than a release SafeDITool binary.
 
-            let armMacBrewInstallLocation = "/opt/homebrew/bin/safeditool"
-            let intelMacBrewInstallLocation = "/usr/local/bin/safeditool"
-            let toolLocation: PackagePlugin.Path = if FileManager.default.fileExists(atPath: armMacBrewInstallLocation) {
-                // SafeDITool has been installed via homebrew on an ARM Mac.
-                PackagePlugin.Path(armMacBrewInstallLocation)
-            } else if FileManager.default.fileExists(atPath: intelMacBrewInstallLocation) {
-                // SafeDITool has been installed via homebrew on an Intel Mac.
-                PackagePlugin.Path(intelMacBrewInstallLocation)
-            } else {
-                // Fall back to the just-in-time built tool.
-                try context.tool(named: "SafeDITool").path
-            }
-        #endif
+            To download the release SafeDITool binary for version \(safeDIVersion), run:
+            \tswift package --package-path \(context.package.directoryURL.path()) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
+            """)
+        }
+
+        let toolLocation = if let downloadedToolLocation {
+            downloadedToolLocation
+        } else {
+            try context.tool(named: "SafeDITool").url
+        }
 
         return [
             .buildCommand(
@@ -152,36 +108,20 @@ extension Target {
             }
 
             // We only care about first-party code. Ignore third-party dependencies.
-            #if compiler(>=6.0)
-                guard
-                    swiftModule
-                    .directoryURL
-                    .pathComponents
-                    // Removing the module name.
-                    .dropLast()
-                    // Removing 'Sources'.
-                    .dropLast()
-                    // Removing the package name.
-                    .dropLast()
-                    .last != "checkouts"
-                else {
-                    return nil
-                }
-            #else
-                guard
-                    swiftModule
-                    .directory
-                    // Removing the module name.
-                    .removingLastComponent()
-                    // Removing 'Sources'.
-                    .removingLastComponent()
-                    // Removing the package name.
-                    .removingLastComponent()
-                    .lastComponent != "checkouts"
-                else {
-                    return nil
-                }
-            #endif
+            guard
+                swiftModule
+                .directoryURL
+                .pathComponents
+                // Removing the module name.
+                .dropLast()
+                // Removing 'Sources'.
+                .dropLast()
+                // Removing the package name.
+                .dropLast()
+                .last != "checkouts"
+            else {
+                return nil
+            }
             return swiftModule
         }
     }
@@ -195,87 +135,45 @@ extension Target {
             context: XcodeProjectPlugin.XcodePluginContext,
             target: XcodeProjectPlugin.XcodeTarget
         ) throws -> [PackagePlugin.Command] {
-            #if compiler(>=6.0)
-                // As of Xcode 15.0.1, Swift Package Plugins in Xcode are unable
-                // to inspect target dependencies. As a result, this Xcode plugin
-                // only works if it is running on a single-module project, or if
-                // all `@Instantiable`-decorated types are in the target module.
-                // https://github.com/apple/swift-package-manager/issues/6003
-                let inputSwiftFiles = target
-                    .inputFiles
-                    .filter { $0.url.pathExtension == "swift" }
-                    .map(\.url)
-                guard !inputSwiftFiles.isEmpty else {
-                    // There are no Swift files in this module!
-                    return []
-                }
+            // As of Xcode 15.0.1, Swift Package Plugins in Xcode are unable
+            // to inspect target dependencies. As a result, this Xcode plugin
+            // only works if it is running on a single-module project, or if
+            // all `@Instantiable`-decorated types are in the target module.
+            // https://github.com/apple/swift-package-manager/issues/6003
+            let inputSwiftFiles = target
+                .inputFiles
+                .filter { $0.url.pathExtension == "swift" }
+                .map(\.url)
+            guard !inputSwiftFiles.isEmpty else {
+                // There are no Swift files in this module!
+                return []
+            }
 
-                let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
-                let inputSourcesFilePath = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv").path()
-                try Data(
-                    inputSwiftFiles
-                        .map { $0.path() }
-                        .joined(separator: ",")
-                        .utf8
-                )
-                .write(toPath: inputSourcesFilePath)
-                let arguments = [
-                    inputSourcesFilePath,
-                    "--dependency-tree-output",
-                    outputSwiftFile.path(),
-                ]
+            let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
+            let inputSourcesFilePath = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv").path()
+            try Data(
+                inputSwiftFiles
+                    .map { $0.path() }
+                    .joined(separator: ",")
+                    .utf8
+            )
+            .write(toPath: inputSourcesFilePath)
+            let arguments = [
+                inputSourcesFilePath,
+                "--dependency-tree-output",
+                outputSwiftFile.path(),
+            ]
 
-                return try [
-                    .buildCommand(
-                        displayName: "SafeDIGenerateDependencyTree",
-                        executable: context.tool(named: "SafeDITool").url,
-                        arguments: arguments,
-                        environment: [:],
-                        inputFiles: inputSwiftFiles,
-                        outputFiles: [outputSwiftFile]
-                    ),
-                ]
-            #else
-                // As of Xcode 15.0.1, Swift Package Plugins in Xcode are unable
-                // to inspect target dependencies. As a result, this Xcode plugin
-                // only works if it is running on a single-module project, or if
-                // all `@Instantiable`-decorated types are in the target module.
-                // https://github.com/apple/swift-package-manager/issues/6003
-                let inputSwiftFiles = target
-                    .inputFiles
-                    .filter { $0.path.extension == "swift" }
-                    .map(\.path)
-                guard !inputSwiftFiles.isEmpty else {
-                    // There are no Swift files in this module!
-                    return []
-                }
-
-                let outputSwiftFile = context.pluginWorkDirectory.appending(subpath: "SafeDI.swift")
-                let inputSourcesFilePath = context.pluginWorkDirectory.appending(subpath: "InputSwiftFiles.csv").string
-                try Data(
-                    inputSwiftFiles
-                        .map(\.string)
-                        .joined(separator: ",")
-                        .utf8
-                )
-                .write(toPath: inputSourcesFilePath)
-                let arguments = [
-                    inputSourcesFilePath,
-                    "--dependency-tree-output",
-                    outputSwiftFile.string,
-                ]
-
-                return try [
-                    .buildCommand(
-                        displayName: "SafeDIGenerateDependencyTree",
-                        executable: context.tool(named: "SafeDITool").path,
-                        arguments: arguments,
-                        environment: [:],
-                        inputFiles: inputSwiftFiles,
-                        outputFiles: [outputSwiftFile]
-                    ),
-                ]
-            #endif
+            return try [
+                .buildCommand(
+                    displayName: "SafeDIGenerateDependencyTree",
+                    executable: context.tool(named: "SafeDITool").url,
+                    arguments: arguments,
+                    environment: [:],
+                    inputFiles: inputSwiftFiles,
+                    outputFiles: [outputSwiftFile]
+                ),
+            ]
         }
     }
 #endif
@@ -294,46 +192,44 @@ extension Data {
     }
 }
 
-#if compiler(>=6.0)
-    extension PackagePlugin.PluginContext {
-        var safeDIVersion: String? {
-            guard let safeDIOrigin = package.dependencies.first(where: { $0.package.displayName == "SafeDI" })?.package.origin else {
+extension PackagePlugin.PluginContext {
+    var safeDIVersion: String? {
+        guard let safeDIOrigin = package.dependencies.first(where: { $0.package.displayName == "SafeDI" })?.package.origin else {
+            return nil
+        }
+        switch safeDIOrigin {
+        case let .repository(_, displayVersion, _):
+            // This regular expression is duplicated by InstallSafeDITool since plugins can not share code.
+            guard let versionMatch = try? /Optional\((.*?)\)|^(.*?)$/.firstMatch(in: displayVersion),
+                  let version = versionMatch.output.1 ?? versionMatch.output.2
+            else {
                 return nil
             }
-            switch safeDIOrigin {
-            case let .repository(_, displayVersion, _):
-                // This regular expression is duplicated by InstallSafeDITool since plugins can not share code.
-                guard let versionMatch = try? /Optional\((.*?)\)|^(.*?)$/.firstMatch(in: displayVersion),
-                      let version = versionMatch.output.1 ?? versionMatch.output.2
-                else {
-                    return nil
-                }
-                return String(version)
-            case .registry, .root, .local:
-                fallthrough
-            @unknown default:
-                return nil
-            }
-        }
-
-        var hasSafeDIFolder: Bool {
-            FileManager.default.fileExists(atPath: safediFolder.path())
-        }
-
-        var safediFolder: URL {
-            package.directoryURL.appending(
-                component: ".safedi"
-            )
-        }
-
-        var downloadedToolLocation: URL? {
-            guard let safeDIVersion else { return nil }
-            let location = safediFolder.appending(
-                components: safeDIVersion,
-                "safeditool"
-            )
-            guard FileManager.default.fileExists(atPath: location.path()) else { return nil }
-            return location
+            return String(version)
+        case .registry, .root, .local:
+            fallthrough
+        @unknown default:
+            return nil
         }
     }
-#endif
+
+    var hasSafeDIFolder: Bool {
+        FileManager.default.fileExists(atPath: safediFolder.path())
+    }
+
+    var safediFolder: URL {
+        package.directoryURL.appending(
+            component: ".safedi"
+        )
+    }
+
+    var downloadedToolLocation: URL? {
+        guard let safeDIVersion else { return nil }
+        let location = safediFolder.appending(
+            components: safeDIVersion,
+            "safeditool"
+        )
+        guard FileManager.default.fileExists(atPath: location.path()) else { return nil }
+        return location
+    }
+}

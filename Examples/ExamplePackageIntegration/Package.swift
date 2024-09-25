@@ -1,4 +1,4 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -34,6 +34,9 @@ let package = Package(
                 "ChildBModule",
                 "ChildCModule",
             ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ],
             plugins: [
                 .plugin(name: "SafeDIGenerator", package: "SafeDI"),
             ]
@@ -44,6 +47,9 @@ let package = Package(
                 "SafeDI",
                 "SharedModule",
                 "GrandchildrenModule",
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
             ]
         ),
         .target(
@@ -52,6 +58,9 @@ let package = Package(
                 "SafeDI",
                 "SharedModule",
                 "GrandchildrenModule",
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
             ]
         ),
         .target(
@@ -60,6 +69,9 @@ let package = Package(
                 "SafeDI",
                 "SharedModule",
                 "GrandchildrenModule",
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
             ]
         ),
         .target(
@@ -67,11 +79,17 @@ let package = Package(
             dependencies: [
                 "SafeDI",
                 "SharedModule",
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
             ]
         ),
         .target(
             name: "SharedModule",
-            dependencies: ["SafeDI"]
+            dependencies: ["SafeDI"],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
         ),
     ]
 )

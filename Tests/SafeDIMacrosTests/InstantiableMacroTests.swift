@@ -429,27 +429,15 @@ import SafeDICore
                 }
                 """
             } expansion: {
-                #if compiler(>=6.0)
-                    """
-                    public struct ExampleService: Instantiable {
-                    public init(instantiatedA: InstantiatedA) {
-                    self.instantiatedA = instantiatedA
-                    }
+                """
+                public struct ExampleService: Instantiable {
+                public init(instantiatedA: InstantiatedA) {
+                self.instantiatedA = instantiatedA
+                }
 
-                        @Unknown let instantiatedA: InstantiatedA
-                    }
-                    """
-                #else
-                    """
-                    public struct ExampleService: Instantiable {
-                    public init(instantiatedA: InstantiatedA) {
-                    self.instantiatedA = instantiatedA
-                    }@Unknown 
-
-                        let instantiatedA: InstantiatedA
-                    }
-                    """
-                #endif
+                    @Unknown let instantiatedA: InstantiatedA
+                }
+                """
             }
         }
 
