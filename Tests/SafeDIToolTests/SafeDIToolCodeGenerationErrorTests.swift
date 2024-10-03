@@ -1731,7 +1731,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         tool.include = ["Fake"]
         tool.additionalImportedModules = []
         tool.moduleInfoOutput = nil
-        tool.moduleInfoPaths = []
+        tool.dependentModuleInfoFilePath = nil
         tool.dependencyTreeOutput = nil
         await assertThrowsError("Could not create file enumerator for directory 'Fake'") {
             try await tool.run()
@@ -1744,7 +1744,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         tool.include = []
         tool.additionalImportedModules = []
         tool.moduleInfoOutput = nil
-        tool.moduleInfoPaths = []
+        tool.dependentModuleInfoFilePath = nil
         tool.dependencyTreeOutput = nil
         await assertThrowsError("Must provide either 'swift-sources-file-path' or '--include'.") {
             try await tool.run()

@@ -36,9 +36,9 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 
     @Option(parsing: .upToNextOption, help: "The names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModules: [String] = []
 
-    @Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project‘s non-root module") var moduleInfoOutput: String?
+    @Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project‘s non-root module. Must have a `.safedi` suffix") var moduleInfoOutput: String?
 
-    @Option(parsing: .upToNextOption, help: "File paths to SafeDI representations of other modules. Only include this option when running on a project‘s root module.") var moduleInfoPaths: [String] = []
+    @Option(help: "A path to a CSV file containing paths of SafeDI representations of other modules to parse.") var dependentModuleInfoFilePath: String?
 
     @Option(help: "The desired output location of the Swift dependency injection tree. Only include this option when running on a project‘s root module.") var dependencyTreeOutput: String?
 
@@ -53,7 +53,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
         }
 
         let (dependentModuleInfo, module) = try await (
-            loadSafeDIModuleInfo(atModuleInfoURLs: moduleInfoPaths.map(\.asFileURL)),
+            loadSafeDIModuleInfo(),
             parsedModule(loadSwiftFiles())
         )
 
@@ -192,34 +192,45 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
         )
     }
 
-    private func loadSafeDIModuleInfo(atModuleInfoURLs moduleInfoURLs: [URL]) async throws -> [ModuleInfo] {
-        if moduleInfoURLs.isEmpty {
-            []
-        } else {
-            try await withThrowingTaskGroup(
-                of: ModuleInfo.self,
-                returning: [ModuleInfo].self
-            ) { taskGroup in
-                for moduleInfoURL in moduleInfoURLs {
-                    taskGroup.addTask {
-                        #if canImport(ZippyJSON)
-                            let decoder = ZippyJSONDecoder()
-                        #else
-                            let decoder = JSONDecoder()
-                        #endif
-                        return try decoder.decode(
-                            ModuleInfo.self,
-                            from: Data(contentsOf: moduleInfoURL)
-                        )
-                    }
-                }
-                var allModuleInfo = [ModuleInfo]()
-                for try await moduleInfo in taskGroup {
-                    allModuleInfo.append(moduleInfo)
-                }
-
-                return allModuleInfo
+    var moduleInfoURLs: Set<URL> {
+        get throws {
+            if let dependentModuleInfoFilePath {
+                try .init(
+                    String(contentsOfFile: dependentModuleInfoFilePath)
+                        .components(separatedBy: CharacterSet(arrayLiteral: ","))
+                        .map(\.asFileURL)
+                )
+            } else {
+                []
             }
+        }
+    }
+
+    private func loadSafeDIModuleInfo() async throws -> [ModuleInfo] {
+        try await withThrowingTaskGroup(
+            of: ModuleInfo.self,
+            returning: [ModuleInfo].self
+        ) { taskGroup in
+            let moduleInfoURLs = try moduleInfoURLs
+            guard !moduleInfoURLs.isEmpty else { return [] }
+            for moduleInfoURL in moduleInfoURLs {
+                taskGroup.addTask {
+                    #if canImport(ZippyJSON)
+                        let decoder = ZippyJSONDecoder()
+                    #else
+                        let decoder = JSONDecoder()
+                    #endif
+                    return try decoder.decode(
+                        ModuleInfo.self,
+                        from: Data(contentsOf: moduleInfoURL)
+                    )
+                }
+            }
+            var allModuleInfo = [ModuleInfo]()
+            for try await moduleInfo in taskGroup {
+                allModuleInfo.append(moduleInfo)
+            }
+            return allModuleInfo
         }
     }
 

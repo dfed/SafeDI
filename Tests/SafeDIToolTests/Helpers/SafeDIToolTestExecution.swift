@@ -27,7 +27,7 @@ import XCTest
 @MainActor
 func executeSafeDIToolTest(
     swiftFileContent: [String],
-    dependentModuleOutputPaths: [String] = [],
+    dependentModuleInfoPaths: [String] = [],
     buildDependencyTreeOutput: Bool = false,
     buildDOTFileOutput: Bool = false,
     filesToDelete: inout [URL]
@@ -44,16 +44,21 @@ func executeSafeDIToolTest(
         .joined(separator: ",")
         .write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
-    let moduleInfoOutput = URL.temporaryFile
-    let dependencyTreeOutput = URL.temporaryFile
-    let dotTreeOutput = URL.temporaryFile
+    let dependentModuleInfoFileCSV = URL.temporaryFile
+    try dependentModuleInfoPaths
+        .joined(separator: ",")
+        .write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
+
+    let moduleInfoOutput = URL.temporaryFile.appendingPathExtension("safedi")
+    let dependencyTreeOutput = URL.temporaryFile.appendingPathExtension("swift")
+    let dotTreeOutput = URL.temporaryFile.appendingPathExtension("dot")
     fileFinder = StubFileFinder(files: swiftFiles) // Successfully execute the file finder code path.
     var tool = SafeDITool()
     tool.swiftSourcesFilePath = swiftFileCSV.relativePath
     tool.include = ["Fake"]
     tool.additionalImportedModules = []
     tool.moduleInfoOutput = moduleInfoOutput.relativePath
-    tool.moduleInfoPaths = dependentModuleOutputPaths
+    tool.dependentModuleInfoFilePath = dependentModuleInfoPaths.isEmpty ? nil : dependentModuleInfoFileCSV.relativePath
     tool.dependencyTreeOutput = buildDependencyTreeOutput ? dependencyTreeOutput.relativePath : nil
     tool.dotFileOutput = buildDOTFileOutput ? dotTreeOutput.relativePath : nil
     try await tool.run()
