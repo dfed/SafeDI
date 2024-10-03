@@ -32,32 +32,38 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
         }
 
         let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
-        // Swift Package Plugins did not (as of Swift 5.9) allow for
-        // creating dependencies between plugin output at the time of writing.
-        // Since our current build system didnot support depending on the
-        // output of other plugins, we must forgo searching for `.safeDI` files
-        // and instead parse the entire project at once.
-        // TODO: https://github.com/dfed/SafeDI/issues/92
         let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.url)
-        let dependenciesSourceFiles = sourceTarget
-            .sourceModuleRecursiveDependencies
-            .flatMap {
-                $0
-                    .sourceFiles(withSuffix: ".swift")
-                    .map(\.url)
-            }
         let inputSourcesFilePath = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv").path()
         try Data(
-            (targetSwiftFiles.map { $0.path() } + dependenciesSourceFiles.map { $0.path() })
+            targetSwiftFiles
+                .map { $0.path() }
                 .joined(separator: ",")
                 .utf8
         )
         .write(toPath: inputSourcesFilePath)
+        let dependentModuleInfoFilePath = context.pluginWorkDirectoryURL.appending(path: "DependentModuleInfo.csv").path()
+        let dependenciesInfo = sourceTarget
+            .sourceModuleRecursiveDependencies
+            .flatMap(\.pluginGeneratedResources)
+            .filter { $0.pathExtension == "safedi" }
+        let includeDependenciesInfo = !dependenciesInfo.isEmpty
+        if includeDependenciesInfo {
+            try Data(
+                dependenciesInfo
+                    .map { $0.path() }
+                    .joined(separator: ",")
+                    .utf8
+            )
+            .write(toPath: dependentModuleInfoFilePath)
+        }
         let arguments = [
             inputSourcesFilePath,
             "--dependency-tree-output",
             outputSwiftFile.path(),
-        ]
+        ] + (includeDependenciesInfo ? [
+            "--dependent-module-info-file-path",
+            dependentModuleInfoFilePath,
+        ] : [])
 
         let downloadedToolLocation = context.downloadedToolLocation
         let safeDIVersion = context.safeDIVersion
@@ -92,7 +98,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                 executable: toolLocation,
                 arguments: arguments,
                 environment: [:],
-                inputFiles: targetSwiftFiles + dependenciesSourceFiles,
+                inputFiles: targetSwiftFiles + dependenciesInfo,
                 outputFiles: [outputSwiftFile]
             ),
         ]
@@ -104,22 +110,6 @@ extension Target {
         recursiveTargetDependencies.compactMap { target in
             // Since we only understand Swift files, we only care about SwiftSourceModuleTargets.
             guard let swiftModule = target as? SwiftSourceModuleTarget else {
-                return nil
-            }
-
-            // We only care about first-party code. Ignore third-party dependencies.
-            guard
-                swiftModule
-                .directoryURL
-                .pathComponents
-                // Removing the module name.
-                .dropLast()
-                // Removing 'Sources'.
-                .dropLast()
-                // Removing the package name.
-                .dropLast()
-                .last != "checkouts"
-            else {
                 return nil
             }
             return swiftModule
@@ -135,7 +125,7 @@ extension Target {
             context: XcodeProjectPlugin.XcodePluginContext,
             target: XcodeProjectPlugin.XcodeTarget
         ) throws -> [PackagePlugin.Command] {
-            // As of Xcode 15.0.1, Swift Package Plugins in Xcode are unable
+            // As of Xcode 16.0, Swift Package Plugins in Xcode are unable
             // to inspect target dependencies. As a result, this Xcode plugin
             // only works if it is running on a single-module project, or if
             // all `@Instantiable`-decorated types are in the target module.

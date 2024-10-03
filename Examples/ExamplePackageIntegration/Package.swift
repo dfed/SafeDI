@@ -50,6 +50,9 @@ let package = Package(
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
+            ],
+            plugins: [
+                .plugin(name: "ModuleInfoGenerator", package: "SafeDI"),
             ]
         ),
         .target(
@@ -61,6 +64,9 @@ let package = Package(
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
+            ],
+            plugins: [
+                .plugin(name: "ModuleInfoGenerator", package: "SafeDI"),
             ]
         ),
         .target(
@@ -72,6 +78,9 @@ let package = Package(
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
+            ],
+            plugins: [
+                .plugin(name: "ModuleInfoGenerator", package: "SafeDI"),
             ]
         ),
         .target(
@@ -82,6 +91,9 @@ let package = Package(
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
+            ],
+            plugins: [
+                .plugin(name: "ModuleInfoGenerator", package: "SafeDI"),
             ]
         ),
         .target(
@@ -89,6 +101,9 @@ let package = Package(
             dependencies: ["SafeDI"],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
+            ],
+            plugins: [
+                .plugin(name: "ModuleInfoGenerator", package: "SafeDI"),
             ]
         ),
     ]

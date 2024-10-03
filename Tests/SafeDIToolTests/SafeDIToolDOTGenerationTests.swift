@@ -1152,7 +1152,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 }
                 """,
             ],
-            dependentModuleOutputPaths: [greatGrandchildModuleOutput.moduleInfoOutputPath],
+            dependentModuleInfoPaths: [greatGrandchildModuleOutput.moduleInfoOutputPath],
             buildDOTFileOutput: false,
             filesToDelete: &filesToDelete
         )
@@ -1184,7 +1184,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 }
                 """,
             ],
-            dependentModuleOutputPaths: [
+            dependentModuleInfoPaths: [
                 greatGrandchildModuleOutput.moduleInfoOutputPath,
                 grandchildModuleOutput.moduleInfoOutputPath,
             ],
@@ -1207,7 +1207,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 }
                 """,
             ],
-            dependentModuleOutputPaths: [
+            dependentModuleInfoPaths: [
                 greatGrandchildModuleOutput.moduleInfoOutputPath,
                 grandchildModuleOutput.moduleInfoOutputPath,
                 childModuleOutput.moduleInfoOutputPath,

@@ -25,6 +25,11 @@ let package = Package(
             name: "SafeDIGenerator",
             targets: ["SafeDIGenerator"]
         ),
+        /// A SafeDI plugin that can be run on non-root source modules in a project to generate module info.
+        .plugin(
+            name: "ModuleInfoGenerator",
+            targets: ["ModuleInfoGenerator"]
+        ),
         .plugin(
             name: "InstallSafeDITool",
             targets: ["InstallSafeDITool"]
@@ -86,6 +91,11 @@ let package = Package(
         // Plugins
         .plugin(
             name: "SafeDIGenerator",
+            capability: .buildTool(),
+            dependencies: ["SafeDITool"]
+        ),
+        .plugin(
+            name: "ModuleInfoGenerator",
             capability: .buildTool(),
             dependencies: ["SafeDITool"]
         ),
