@@ -111,7 +111,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
         ) { taskGroup in
             taskGroup.addTask {
                 if let swiftSourcesFilePath {
-                    try String(contentsOfFile: swiftSourcesFilePath)
+                    try String(contentsOfFile: swiftSourcesFilePath, encoding: .utf8)
                         .components(separatedBy: CharacterSet(arrayLiteral: ","))
                         .removingEmpty()
                 } else {
@@ -166,7 +166,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
             for filePath in try await findSwiftFiles() {
                 guard !filePath.isEmpty else { continue }
                 taskGroup.addTask {
-                    let swiftFile = try String(contentsOfFile: filePath)
+                    let swiftFile = try String(contentsOfFile: filePath, encoding: .utf8)
                     if swiftFile.contains("@\(InstantiableVisitor.macroName)") {
                         return swiftFile
                     } else {
@@ -212,7 +212,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
         get throws {
             if let dependentModuleInfoFilePath {
                 try .init(
-                    String(contentsOfFile: dependentModuleInfoFilePath)
+                    String(contentsOfFile: dependentModuleInfoFilePath, encoding: .utf8)
                         .components(separatedBy: CharacterSet(arrayLiteral: ","))
                         .removingEmpty()
                         .map(\.asFileURL)
