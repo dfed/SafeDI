@@ -419,7 +419,7 @@
 /* Begin XCRemoteSwiftPackageReference section */
 		321042512B2533ED0088785D /* XCRemoteSwiftPackageReference "SafeDI" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/dfed/SafeDI";
+			repositoryURL = "https://github.com/dfed/SafeDI.git";
 			requirement = {
 				branch = main;
 				kind = branch;

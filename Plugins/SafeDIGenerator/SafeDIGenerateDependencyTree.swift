@@ -48,7 +48,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
             }
         let inputSourcesFilePath = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv").path()
         try Data(
-            (targetSwiftFiles.map { $0.path() } + dependenciesSourceFiles.map { $0.path() })
+            (targetSwiftFiles.map { $0.path(percentEncoded: false) } + dependenciesSourceFiles.map { $0.path(percentEncoded: false) })
                 .joined(separator: ",")
                 .utf8
         )
@@ -153,7 +153,7 @@ extension Target {
             let inputSourcesFilePath = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv").path()
             try Data(
                 inputSwiftFiles
-                    .map { $0.path() }
+                    .map { $0.path(percentEncoded: false) }
                     .joined(separator: ",")
                     .utf8
             )
