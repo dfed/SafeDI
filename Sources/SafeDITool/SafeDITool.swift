@@ -109,8 +109,11 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
     private func findSwiftFiles() async throws -> Set<String> {
         var swiftFiles = Set<String>()
         if let swiftSourcesFilePath {
-            try swiftFiles.formUnion(String(contentsOfFile: swiftSourcesFilePath)
-                .components(separatedBy: CharacterSet(arrayLiteral: ",")))
+            try swiftFiles.formUnion(
+                String(contentsOfFile: swiftSourcesFilePath)
+                    .components(separatedBy: CharacterSet(arrayLiteral: ","))
+                    .filter { !$0.isEmpty }
+            )
         }
         for included in include {
             let includedURL = included.asFileURL
@@ -198,6 +201,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
                 try .init(
                     String(contentsOfFile: dependentModuleInfoFilePath)
                         .components(separatedBy: CharacterSet(arrayLiteral: ","))
+                        .filter { !$0.isEmpty }
                         .map(\.asFileURL)
                 )
             } else {
