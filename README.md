@@ -61,7 +61,7 @@ Every `@Instantiable`-decorated type must be:
 
 1. `public` or `open`
 
-2. Have a `public init(…)` or `open init(…)` that has an argument for every injectable property and no other arguments
+2. Have a `public init(…)` or `open init(…)` that has an argument for every injectable property
 
 The `@Instantiable` macro guides engineers through satisfying these requirements with code generation and build-time FixIts.
 
