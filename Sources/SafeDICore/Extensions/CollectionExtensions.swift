@@ -68,3 +68,9 @@ extension Collection {
         return try arrayToTransform.map { try transform($0) } + [lastItem]
     }
 }
+
+extension Collection<String> {
+    public func removingEmpty() -> [Element] {
+        filter { !$0.isEmpty }
+    }
+}

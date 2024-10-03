@@ -47,7 +47,7 @@ public actor DependencyTreeGenerator {
             for try await generatedRoot in taskGroup {
                 generatedRoots.append(generatedRoot)
             }
-            return generatedRoots.filter { !$0.isEmpty }.sorted().joined(separator: "\n\n")
+            return generatedRoots.removingEmpty().sorted().joined(separator: "\n\n")
         }
 
         let importsWhitespace = imports.isEmpty ? "" : "\n"
@@ -74,7 +74,7 @@ public actor DependencyTreeGenerator {
             for try await generatedRoot in taskGroup {
                 generatedRoots.append(generatedRoot)
             }
-            return generatedRoots.filter { !$0.isEmpty }.sorted().joined(separator: "\n\n")
+            return generatedRoots.removingEmpty().sorted().joined(separator: "\n\n")
         }
 
         return """
