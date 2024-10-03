@@ -113,7 +113,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
                 if let swiftSourcesFilePath {
                     try String(contentsOfFile: swiftSourcesFilePath)
                         .components(separatedBy: CharacterSet(arrayLiteral: ","))
-                        .filter { !$0.isEmpty }
+                        .removingEmpty()
                 } else {
                     []
                 }
@@ -214,7 +214,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
                 try .init(
                     String(contentsOfFile: dependentModuleInfoFilePath)
                         .components(separatedBy: CharacterSet(arrayLiteral: ","))
-                        .filter { !$0.isEmpty }
+                        .removingEmpty()
                         .map(\.asFileURL)
                 )
             } else {

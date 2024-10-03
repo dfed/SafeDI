@@ -131,7 +131,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             }.joined(separator: ", ")))
             """
         case let .closure(arguments, isAsync, doesThrow, returnType):
-            return "(\(arguments.map(\.asSource).joined(separator: ", ")))\([isAsync ? " async" : "", doesThrow ? " throws" : ""].filter { !$0.isEmpty }.joined()) -> \(returnType.asSource)"
+            return "(\(arguments.map(\.asSource).joined(separator: ", ")))\([isAsync ? " async" : "", doesThrow ? " throws" : ""].removingEmpty().joined()) -> \(returnType.asSource)"
         case let .unknown(text):
             return text
         }
@@ -519,17 +519,10 @@ private final class GenericArgumentVisitor: SyntaxVisitor {
 
 extension TypeSpecifierListSyntax {
     fileprivate var textRepresentation: [String]? {
-        let specifiers = compactMap { specifier in
-            if case let .simpleTypeSpecifier(simpleTypeSpecifierSyntax) = specifier {
-                simpleTypeSpecifierSyntax.specifier.text
-            } else {
-                nil // lifetimeTypeSpecifier is SPI, so we ignore it.
-            }
-        }
-        if specifiers.isEmpty {
-            return nil
+        if isEmpty {
+            nil
         } else {
-            return specifiers
+            compactMap(\.trimmedDescription)
         }
     }
 }
