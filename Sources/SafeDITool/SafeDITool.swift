@@ -46,7 +46,6 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 
     // MARK: Internal
 
-    @MainActor
     func run() async throws {
         if swiftSourcesFilePath == nil, include.isEmpty {
             throw ValidationError("Must provide either 'swift-sources-file-path' or '--include'.")
@@ -105,44 +104,58 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 
     // MARK: Private
 
-    @MainActor
     private func findSwiftFiles() async throws -> Set<String> {
-        var swiftFiles = Set<String>()
-        if let swiftSourcesFilePath {
-            try swiftFiles.formUnion(
-                String(contentsOfFile: swiftSourcesFilePath)
-                    .components(separatedBy: CharacterSet(arrayLiteral: ","))
-                    .filter { !$0.isEmpty }
-            )
-        }
-        for included in include {
-            let includedURL = included.asFileURL
-            let includedFileEnumerator = fileFinder
-                .enumerator(
-                    at: includedURL,
-                    includingPropertiesForKeys: nil,
-                    options: [.skipsHiddenFiles],
-                    errorHandler: nil
-                )
-            guard let files = includedFileEnumerator?.compactMap({ $0 as? URL }) else {
-                struct CouldNotEnumerateDirectoryError: Error, CustomStringConvertible {
-                    let directory: String
+        try await withThrowingTaskGroup(
+            of: [String].self,
+            returning: Set<String>.self
+        ) { taskGroup in
+            taskGroup.addTask {
+                if let swiftSourcesFilePath {
+                    try String(contentsOfFile: swiftSourcesFilePath)
+                        .components(separatedBy: CharacterSet(arrayLiteral: ","))
+                        .filter { !$0.isEmpty }
+                } else {
+                    []
+                }
+            }
+            let fileFinder = await fileFinder
+            for included in include {
+                taskGroup.addTask {
+                    let includedURL = included.asFileURL
+                    let includedFileEnumerator = fileFinder
+                        .enumerator(
+                            at: includedURL,
+                            includingPropertiesForKeys: nil,
+                            options: [.skipsHiddenFiles],
+                            errorHandler: nil
+                        )
+                    guard let files = includedFileEnumerator?.compactMap({ $0 as? URL }) else {
+                        struct CouldNotEnumerateDirectoryError: Error, CustomStringConvertible {
+                            let directory: String
 
-                    var description: String {
-                        "Could not create file enumerator for directory '\(directory)'"
+                            var description: String {
+                                "Could not create file enumerator for directory '\(directory)'"
+                            }
+                        }
+                        throw CouldNotEnumerateDirectoryError(directory: included)
+                    }
+                    return (files + [includedURL]).compactMap {
+                        if $0.pathExtension == "swift" {
+                            $0.standardizedFileURL.relativePath
+                        } else {
+                            nil
+                        }
                     }
                 }
-                throw CouldNotEnumerateDirectoryError(directory: included)
             }
-            swiftFiles.formUnion((files + [includedURL]).compactMap {
-                if $0.pathExtension == "swift" {
-                    $0.standardizedFileURL.relativePath
-                } else {
-                    nil
-                }
-            })
+
+            var swiftFiles = Set<String>()
+            for try await includedFiles in taskGroup {
+                swiftFiles.formUnion(includedFiles)
+            }
+
+            return swiftFiles
         }
-        return swiftFiles
     }
 
     private func loadSwiftFiles() async throws -> [String] {
@@ -304,7 +317,7 @@ extension String {
     }
 }
 
-protocol FileFinder {
+protocol FileFinder: Sendable {
     func enumerator(
         at url: URL,
         includingPropertiesForKeys keys: [URLResourceKey]?,
@@ -314,5 +327,9 @@ protocol FileFinder {
 }
 
 extension FileManager: FileFinder {}
+extension FileManager: @retroactive @unchecked Sendable {
+    // FileManager is thread safe:
+    // https://developer.apple.com/documentation/foundation/nsfilemanager#1651181
+}
 
 @MainActor var fileFinder: FileFinder = FileManager.default
