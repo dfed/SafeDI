@@ -523,8 +523,7 @@ extension TypeSpecifierListSyntax {
             if case let .simpleTypeSpecifier(simpleTypeSpecifierSyntax) = specifier {
                 simpleTypeSpecifierSyntax.specifier.text
             } else {
-                // lifetimeTypeSpecifier is SPI, so we ignore it.
-                nil
+                nil // lifetimeTypeSpecifier is SPI, so we ignore it.
             }
         }
         if specifiers.isEmpty {
