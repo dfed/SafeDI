@@ -484,14 +484,6 @@ The `SafeDITool` utility is designed to able to be integrated into projects of a
 
 The `SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Running this tool on each dependent module is currently left as an exercise to the reader.
 
-### Requirements
-
-* Xcode 16.0 or later
-* iOS 13 or later
-* tvOS 13 or later
-* watchOS 6 or later
-* macOS 10.13 or later
-
 ## Under the hood
 
 SafeDI has a `SafeDITool` executable that the `SafeDIGenerator` plugin utilizes to read code and generate a dependency tree. The tool utilizes Apple‘s [SwiftSyntax](https://github.com/apple/swift-syntax) library to parse your code and find your `@Instantiable` types‘ initializers and dependencies. With this information, SafeDI creates a graph of your project‘s dependencies. This graph is validated as part of the `SafeDITool`‘s execution, and the tool emits human-readible errors if the dependency graph is not valid. Source code is only generated if the dependency graph is valid.
