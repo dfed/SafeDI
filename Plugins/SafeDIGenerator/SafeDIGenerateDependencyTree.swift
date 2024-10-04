@@ -115,7 +115,7 @@ extension Target {
                 // Removing the module name.
                 .dropLast()
                 // Removing 'Sources'.
-                .dropLast()
+                .dropLast(ifEquals: "Sources")
                 // Removing the package name.
                 .dropLast()
                 .last != "checkouts"
@@ -231,5 +231,15 @@ extension PackagePlugin.PluginContext {
         )
         guard FileManager.default.fileExists(atPath: location.path()) else { return nil }
         return location
+    }
+}
+
+extension Array where Element: Equatable {
+    public func dropLast(ifEquals value: Element) -> [Element] {
+        if last == value {
+            dropLast()
+        } else {
+            self
+        }
     }
 }
