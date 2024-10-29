@@ -9,7 +9,7 @@ on:
 jobs:
   xcodebuild-15:
     name: Build with xcodebuild on Xcode 16
-    runs-on: macos-14
+    runs-on: macos-15
     strategy:
       matrix:
         platforms: [
@@ -37,7 +37,7 @@ jobs:
 
   spm-package-integration-15:
     name: Build Package Integration on Xcode 16
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
 
   spm-project-integration-15:
     name: Build Project Integration on Xcode 16
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -62,7 +62,7 @@ jobs:
 
   spm-multi-project-integration-15:
     name: Build Multi Project Integration on Xcode 16
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -76,7 +76,7 @@ jobs:
 
   spm-15:
     name: Build and Test on Xcode 16
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
