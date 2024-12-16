@@ -22,11 +22,11 @@ extension NotesApp {
     public init() {
         let stringStorage: StringStorage = UserDefaults.instantiate()
         let userService: any UserService = DefaultUserService(stringStorage: stringStorage)
-        @MainActor func __safeDI_nameEntryViewBuilder() -> NameEntryView {
+        func __safeDI_nameEntryViewBuilder() -> NameEntryView {
             NameEntryView(userService: userService)
         }
         let nameEntryViewBuilder = Instantiator<NameEntryView>(__safeDI_nameEntryViewBuilder)
-        @MainActor func __safeDI_noteViewBuilder(userName: String) -> NoteView {
+        func __safeDI_noteViewBuilder(userName: String) -> NoteView {
             NoteView(userName: userName, userService: userService, stringStorage: stringStorage)
         }
         let noteViewBuilder = Instantiator<NoteView> {

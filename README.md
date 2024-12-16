@@ -476,7 +476,7 @@ fi
 $DESTINATION --include "$PROJECT_DIR/<<RELATIVE_PATH_TO_SOURCE_FILES>>" "$PROJECT_DIR/<<RELATIVE_PATH_TO_MORE_SOURCE_FILES>>" --dependency-tree-output "$PROJECT_DIR/<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>"
 ```
 
-Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in your target, and to replace the `<<VERSION>>`, `<<RELATIVE_PATH_TO_SOURCE_FILES>>`, `<<RELATIVE_PATH_TO_MORE_SOURCE_FILES>>`, and `<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>` with the appropriate values.
+Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in your target, and to replace the `<<VERSION>>`, `<<RELATIVE_PATH_TO_SOURCE_FILES>>`, `<<RELATIVE_PATH_TO_MORE_SOURCE_FILES>>`, and `<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>` with the appropriate values. Also ensure that you add `$PROJECT_DIR/<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>` to the build script’s `Output Files` list.
 
 You can see this in integration in practice in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) package.
 

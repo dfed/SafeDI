@@ -283,6 +283,7 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				$PROJECT_DIR/ExampleMultiProjectIntegration/SafeDI.swift,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
