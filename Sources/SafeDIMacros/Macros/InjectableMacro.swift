@@ -25,7 +25,7 @@ import SwiftSyntaxMacros
 
 public struct InjectableMacro: PeerMacro {
     public static func expansion(
-        of node: AttributeSyntax,
+        of _: AttributeSyntax,
         providingPeersOf declaration: some DeclSyntaxProtocol,
         in context: some MacroExpansionContext
     )
