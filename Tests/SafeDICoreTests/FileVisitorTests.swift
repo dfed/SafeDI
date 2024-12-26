@@ -83,10 +83,6 @@ final class FileVisitorTests: XCTestCase {
                 ),
             ]
         )
-        XCTAssertEqual(
-            fileVisitor.nestedInstantiableDecoratedTypeDescriptions,
-            []
-        )
     }
 
     func test_walk_findsMultipleInstantiables() {
@@ -157,13 +153,9 @@ final class FileVisitorTests: XCTestCase {
                 ),
             ]
         )
-        XCTAssertEqual(
-            fileVisitor.nestedInstantiableDecoratedTypeDescriptions,
-            []
-        )
     }
 
-    func test_walk_errorsOnNestedInstantiable() {
+    func test_walk_findsInstantiableNestedInOuterInstantiableConcreteDeclaration() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         @Instantiable(fulfillingAdditionalTypes: [SomeProtocol.self])
@@ -188,32 +180,128 @@ final class FileVisitorTests: XCTestCase {
                     dependencies: [],
                     declarationType: .structType
                 ),
-            ]
-        )
-        XCTAssertEqual(
-            fileVisitor.nestedInstantiableDecoratedTypeDescriptions,
-            [
-                .simple(name: "InnerLevel"),
+                Instantiable(
+                    instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
+                    initializer: Initializer(arguments: []),
+                    additionalInstantiables: [],
+                    dependencies: [],
+                    declarationType: .structType
+                ),
             ]
         )
     }
 
-    func test_walk_errorsOnInstantiableNestedWithinEnum() {
+    func test_walk_findsInstantiableNestedInOuterExtendedInstantiable() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
-        public enum OuterLevel {
+        extension OuterLevel {
+            public static func instantiate() -> OuterLevel { fatalError() }
+
             @Instantiable
-            public struct InnerLevel {}
+            public struct InnerLevel {
+                public init() {}
+            }
         }
         """))
         XCTAssertEqual(
             fileVisitor.instantiables,
-            []
-        )
-        XCTAssertEqual(
-            fileVisitor.nestedInstantiableDecoratedTypeDescriptions,
             [
-                .simple(name: "InnerLevel"),
+                Instantiable(
+                    instantiableType: .simple(name: "OuterLevel"),
+                    initializer: Initializer(arguments: []),
+                    additionalInstantiables: [],
+                    dependencies: [],
+                    declarationType: .extensionType
+                ),
+                Instantiable(
+                    instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
+                    initializer: Initializer(arguments: []),
+                    additionalInstantiables: [],
+                    dependencies: [],
+                    declarationType: .structType
+                ),
+            ]
+        )
+    }
+
+    func test_walk_findsInstantiablesNestedInOuterExtendedInstantiable() {
+        let fileVisitor = FileVisitor()
+        fileVisitor.walk(Parser.parse(source: """
+        extension OuterLevel {
+            public static func instantiate() -> OuterLevel { fatalError() }
+
+            @Instantiable
+            public actor InnerLevel1 {
+                public init() {}
+            }
+            @Instantiable
+            public class InnerLevel2 {
+                public init() {}
+            }
+            @Instantiable
+            public struct InnerLevel3 {
+                public init() {}
+            }
+            public struct InnerLevel4 {
+                public init() {}
+            }
+        }
+        """))
+        XCTAssertEqual(
+            fileVisitor.instantiables,
+            [
+                Instantiable(
+                    instantiableType: .simple(name: "OuterLevel"),
+                    initializer: Initializer(arguments: []),
+                    additionalInstantiables: [],
+                    dependencies: [],
+                    declarationType: .extensionType
+                ),
+                Instantiable(
+                    instantiableType: .nested(name: "InnerLevel1", parentType: .simple(name: "OuterLevel")),
+                    initializer: Initializer(arguments: []),
+                    additionalInstantiables: [],
+                    dependencies: [],
+                    declarationType: .actorType
+                ),
+                Instantiable(
+                    instantiableType: .nested(name: "InnerLevel2", parentType: .simple(name: "OuterLevel")),
+                    initializer: Initializer(arguments: []),
+                    additionalInstantiables: [],
+                    dependencies: [],
+                    declarationType: .classType
+                ),
+                Instantiable(
+                    instantiableType: .nested(name: "InnerLevel3", parentType: .simple(name: "OuterLevel")),
+                    initializer: Initializer(arguments: []),
+                    additionalInstantiables: [],
+                    dependencies: [],
+                    declarationType: .structType
+                ),
+            ]
+        )
+    }
+
+    func test_walk_findsInstantiableNestedWithinEnum() {
+        let fileVisitor = FileVisitor()
+        fileVisitor.walk(Parser.parse(source: """
+        public enum OuterLevel {
+            @Instantiable
+            public struct InnerLevel {
+                public init() {}
+            }
+        }
+        """))
+        XCTAssertEqual(
+            fileVisitor.instantiables,
+            [
+                Instantiable(
+                    instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
+                    initializer: Initializer(arguments: []),
+                    additionalInstantiables: [],
+                    dependencies: [],
+                    declarationType: .structType
+                ),
             ]
         )
     }

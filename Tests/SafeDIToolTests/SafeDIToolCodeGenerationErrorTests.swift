@@ -1048,59 +1048,6 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     }
 
     @MainActor
-    func test_run_onCodeWithNestedInstantiable_throwsError() async {
-        await assertThrowsError(
-            """
-            @Instantiable types must be top-level declarations. Found the following nested @Instantiable types: SplashViewController
-            """
-        ) {
-            try await executeSafeDIToolTest(
-                swiftFileContent: [
-                    """
-                    import UIKit
-
-                    @Instantiable
-                    public final class RootViewController: UIViewController {
-                        @Instantiable
-                        public final class SplashViewController: UIViewController {}
-                    }
-                    """,
-                ],
-                buildDependencyTreeOutput: true,
-                filesToDelete: &filesToDelete
-            )
-        }
-    }
-
-    @MainActor
-    func test_run_onCodeWithMultipleNestedInstantiable_throwsError() async {
-        await assertThrowsError(
-            """
-            @Instantiable types must be top-level declarations. Found the following nested @Instantiable types: AuthenticatedViewController, SplashViewController
-            """
-        ) {
-            try await executeSafeDIToolTest(
-                swiftFileContent: [
-                    """
-                    import UIKit
-
-                    @Instantiable
-                    public final class RootViewController: UIViewController {
-                        @Instantiable
-                        public final class SplashViewController: UIViewController {}
-
-                        @Instantiable
-                        public final class AuthenticatedViewController: UIViewController {}
-                    }
-                    """,
-                ],
-                buildDependencyTreeOutput: true,
-                filesToDelete: &filesToDelete
-            )
-        }
-    }
-
-    @MainActor
     func test_run_onCodeWithDuplicateInstantiable_throwsError() async {
         await assertThrowsError(
             """

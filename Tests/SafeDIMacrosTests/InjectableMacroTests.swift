@@ -62,6 +62,30 @@ import SafeDICore
             }
         }
 
+        func test_propertyIsFulfilledByTypeWithStringLiteralNestedType_expandsWithoutIssue() {
+            assertMacro {
+                """
+                public struct ExampleService {
+                    init(instantiatedA: InstantiatedA) {
+                        self.instantiatedA = instantiatedA
+                    }
+
+                    @Instantiated(fulfilledByType: "Module.ConcreteType")
+                    let instantiatedA: InstantiatedA
+                }
+                """
+            } expansion: {
+                """
+                public struct ExampleService {
+                    init(instantiatedA: InstantiatedA) {
+                        self.instantiatedA = instantiatedA
+                    }
+                    let instantiatedA: InstantiatedA
+                }
+                """
+            }
+        }
+
         // MARK: Fixit Tests
 
         func test_fixit_addsFixitWhenInjectableParameterIsMutable() {
@@ -298,34 +322,6 @@ import SafeDICore
             }
         }
 
-        func test_throwsErrorWhenFulfilledByTypeIsANestedType() {
-            assertMacro {
-                """
-                public struct ExampleService {
-                    init(instantiatedA: InstantiatedA) {
-                        self.instantiatedA = instantiatedA
-                    }
-
-                    @Instantiated(fulfilledByType: "Module.ConcreteType")
-                    let instantiatedA: InstantiatedA
-                }
-                """
-            } diagnostics: {
-                """
-                public struct ExampleService {
-                    init(instantiatedA: InstantiatedA) {
-                        self.instantiatedA = instantiatedA
-                    }
-
-                    @Instantiated(fulfilledByType: "Module.ConcreteType")
-                    ┬────────────────────────────────────────────────────
-                    ╰─ 🛑 The argument `fulfilledByType` must refer to a simple, unnested type
-                    let instantiatedA: InstantiatedA
-                }
-                """
-            }
-        }
-
         func test_throwsErrorWhenFulfilledByTypeIsAnOptionalType() {
             assertMacro {
                 """
@@ -347,7 +343,7 @@ import SafeDICore
 
                     @Instantiated(fulfilledByType: "ConcreteType?")
                     ┬──────────────────────────────────────────────
-                    ╰─ 🛑 The argument `fulfilledByType` must refer to a simple, unnested type
+                    ╰─ 🛑 The argument `fulfilledByType` must refer to a simple type
                     let instantiatedA: InstantiatedA
                 }
                 """
@@ -375,7 +371,7 @@ import SafeDICore
 
                     @Instantiated(fulfilledByType: "ConcreteType!")
                     ┬──────────────────────────────────────────────
-                    ╰─ 🛑 The argument `fulfilledByType` must refer to a simple, unnested type
+                    ╰─ 🛑 The argument `fulfilledByType` must refer to a simple type
                     let instantiatedA: InstantiatedA
                 }
                 """

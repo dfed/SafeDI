@@ -59,78 +59,91 @@ public final class FileVisitor: SyntaxVisitor {
         visitDecl(node)
     }
 
-    public override func visitPost(_ node: ClassDeclSyntax) {
-        visitPostDecl(node)
+    public override func visitPost(_: ClassDeclSyntax) {
+        exitType()
     }
 
     public override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
         visitDecl(node)
     }
 
-    public override func visitPost(_ node: ActorDeclSyntax) {
-        visitPostDecl(node)
+    public override func visitPost(_: ActorDeclSyntax) {
+        exitType()
     }
 
     public override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
         visitDecl(node)
     }
 
-    public override func visitPost(_ node: StructDeclSyntax) {
-        visitPostDecl(node)
+    public override func visitPost(_: StructDeclSyntax) {
+        exitType()
     }
 
-    public override func visit(_: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
-        declSyntaxParentCount += 1
-        return .visitChildren // Make sure there aren't `@Instantiable`s declared within an enum.
+    public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+        // Enums can't be instantiable because they can't have `let` properties.
+        // However, they can have nested types within them that are instantiable.
+        enterTypeNamed(node.name.text)
+        return .visitChildren
     }
 
     public override func visitPost(_: EnumDeclSyntax) {
-        declSyntaxParentCount -= 1
+        exitType()
     }
 
     public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
-        let instantiableVisitor = InstantiableVisitor(declarationType: .extensionDecl)
+        let instantiableVisitor = InstantiableVisitor(
+            declarationType: .extensionDecl,
+            parentType: nil
+        )
         instantiableVisitor.walk(node)
         for instantiable in instantiableVisitor.instantiables {
             instantiables.append(instantiable)
         }
 
-        return .skipChildren
+        // Extensions are always top-level.
+        parentType = node.extendedType.typeDescription
+
+        // Continue to find child types.
+        return .visitChildren
     }
 
     // MARK: Public
 
     public private(set) var imports = [ImportStatement]()
     public private(set) var instantiables = [Instantiable]()
-    public private(set) var nestedInstantiableDecoratedTypeDescriptions = [TypeDescription]()
 
     // MARK: Private
 
-    private var declSyntaxParentCount = 0
+    private var parentType: TypeDescription?
 
     private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
-        // TODO: Allow Instantiable to be nested types. Accomplishing this task will require understanding when other nested types are being referenced.
-        defer { declSyntaxParentCount += 1 }
-        guard declSyntaxParentCount == 0 else {
-            let instantiableVisitor = InstantiableVisitor(declarationType: .concreteDecl)
-            instantiableVisitor.walk(node)
-            if let instantiableType = instantiableVisitor.instantiableType {
-                nestedInstantiableDecoratedTypeDescriptions.append(instantiableType)
-            }
-            return .visitChildren
-        }
-
-        let instantiableVisitor = InstantiableVisitor(declarationType: .concreteDecl)
+        let instantiableVisitor = InstantiableVisitor(
+            declarationType: .concreteDecl,
+            parentType: parentType
+        )
         instantiableVisitor.walk(node)
         for instantiable in instantiableVisitor.instantiables {
             instantiables.append(instantiable)
         }
 
-        // Find nested Instantiable types.
+        // Keep track of how nested we are.
+        enterTypeNamed(node.name.text)
+
+        // Continue to find child types.
         return .visitChildren
     }
 
-    private func visitPostDecl(_: some ConcreteDeclSyntaxProtocol) {
-        declSyntaxParentCount -= 1
+    private func enterTypeNamed(_ name: String) {
+        if let parentType {
+            self.parentType = .nested(name: name, parentType: parentType)
+        } else {
+            parentType = .simple(name: name)
+        }
+    }
+
+    private func exitType() {
+        if let parentType {
+            self.parentType = parentType.popNested
+        }
     }
 }

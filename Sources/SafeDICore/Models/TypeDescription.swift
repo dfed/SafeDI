@@ -63,6 +63,41 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         .nested(name: name, parentType: parentType, generics: [])
     }
 
+    /// A shortcut for creating possible `nested` cases given both a property's type description and the type description of the property's parent type.
+    public static func nestedOptions(referencedType: TypeDescription, within parentType: TypeDescription) -> [TypeDescription] {
+        func zip(outer: TypeDescription, inner: TypeDescription) -> TypeDescription {
+            if let simpleNameAndGenerics = inner.simpleNameAndGenerics {
+                if let innerParent = inner.popNested {
+                    .nested(
+                        name: simpleNameAndGenerics.name,
+                        parentType: zip(outer: outer, inner: innerParent),
+                        generics: simpleNameAndGenerics.generics
+                    )
+                } else {
+                    .nested(
+                        name: simpleNameAndGenerics.name,
+                        parentType: outer,
+                        generics: simpleNameAndGenerics.generics
+                    )
+                }
+            } else {
+                // There is no way to shoehorn `inner` into a nested type.
+                inner
+            }
+        }
+
+        // Options must be in the order that the compiler will search for them. Start with the most qualified, working towards the least qualified.
+        var nestedOptions = [zip(outer: parentType, inner: referencedType)]
+        var parentType = parentType
+        while let poppedParent = parentType.popNested {
+            nestedOptions.append(zip(outer: poppedParent, inner: referencedType))
+            parentType = poppedParent
+        }
+        nestedOptions.append(referencedType)
+
+        return nestedOptions
+    }
+
     /// A canonical representation of this type that can be used in source code.
     public var asSource: String {
         switch self {
@@ -222,6 +257,15 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         }
     }
 
+    public var popNested: TypeDescription? {
+        switch self {
+        case let .nested(_, parentType, _):
+            parentType
+        case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .simple, .some, .tuple, .unknown, .void:
+            nil
+        }
+    }
+
     var strippingGenerics: TypeDescription {
         switch self {
         case let .simple(name, _):
@@ -259,6 +303,17 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
             typeDescription.asInstantiatedType
         case .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown, .void:
             self
+        }
+    }
+
+    /// The name of a simple type sans nesting, with associated generics.
+    var simpleNameAndGenerics: (name: String, generics: [TypeDescription])? {
+        switch self {
+        case let .simple(name, generics),
+             let .nested(name, _, generics):
+            (name, generics)
+        case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
+            nil
         }
     }
 

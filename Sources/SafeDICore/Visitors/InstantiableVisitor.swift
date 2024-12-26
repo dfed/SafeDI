@@ -24,8 +24,12 @@ import SwiftSyntax
 public final class InstantiableVisitor: SyntaxVisitor {
     // MARK: Initialization
 
-    public init(declarationType: DeclarationType) {
+    public init(
+        declarationType: DeclarationType,
+        parentType: TypeDescription? = nil
+    ) {
         self.declarationType = declarationType
+        self.parentType = parentType
         super.init(viewMode: .sourceAccurate)
     }
 
@@ -154,10 +158,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
             return .skipChildren
         }
 
-        if
-            let returnClause = node.signature.returnClause,
-            returnClause.type.typeDescription.strippingGenerics != instantiableType?.strippingGenerics,
-            let instantiableType
+        if let returnClause = node.signature.returnClause,
+           returnClause.type.typeDescription.strippingGenerics != instantiableType?.strippingGenerics,
+           let instantiableType
         {
             var modifiedSignature = node.signature
             modifiedSignature.returnClause = ReturnClauseSyntax(
@@ -319,14 +322,14 @@ public final class InstantiableVisitor: SyntaxVisitor {
     public var instantiables: [Instantiable] {
         switch declarationType {
         case .concreteDecl:
-            if let instantiableType, let topLevelDeclarationType {
+            if let instantiableType, let instantiableDeclarationType {
                 [
                     Instantiable(
                         instantiableType: instantiableType,
                         initializer: initializers.first(where: { $0.isValid(forFulfilling: dependencies) }),
                         additionalInstantiables: additionalInstantiables,
                         dependencies: dependencies,
-                        declarationType: topLevelDeclarationType.asDeclarationType
+                        declarationType: instantiableDeclarationType.asDeclarationType
                     ),
                 ]
             } else {
@@ -339,14 +342,23 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
     // MARK: Private
 
-    private var isInTopLevelDeclaration = false
-    private var topLevelDeclarationType: ConcreteDeclType?
+    private var hasFoundDeclaration = false
+    private var instantiableDeclarationType: ConcreteDeclType?
 
     private var extensionInstantiables = [Instantiable]()
 
     private let declarationType: DeclarationType
+    private let parentType: TypeDescription?
 
     private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
+        let nodeDeclarationType: TypeDescription = if let parentType {
+            .nested(
+                name: node.name.text,
+                parentType: parentType
+            )
+        } else {
+            .simple(name: node.name.text)
+        }
         guard declarationType.isTypeDefinition else {
             return .skipChildren
         }
@@ -354,16 +366,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
             // Not an instantiable type. We do not care.
             return .skipChildren
         }
-        guard !isInTopLevelDeclaration else {
+        guard !hasFoundDeclaration else {
             return .skipChildren
         }
-        isInTopLevelDeclaration = true
-        topLevelDeclarationType = node.declType
+        hasFoundDeclaration = true
+        instantiableDeclarationType = node.declType
 
-        instantiableType = .simple(
-            name: node.name.text,
-            generics: []
-        )
+        instantiableType = nodeDeclarationType
         processAttributes(node.attributes, on: macro)
         processModifiers(node.modifiers, on: node)
 

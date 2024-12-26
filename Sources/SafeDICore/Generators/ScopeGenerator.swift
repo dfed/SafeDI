@@ -144,7 +144,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
                     if
                         propertyType.isErasedInstantiator,
                         let firstForwardedProperty = forwardedProperties.first,
-                        let forwardedArgument = property.generics.first,
+                        let forwardedArgument = property.generics?.first,
                         !(
                             // The forwarded argument is the same type as our only `@Forwarded` property.
                             (forwardedProperties.count == 1 && forwardedArgument == firstForwardedProperty.typeDescription)
