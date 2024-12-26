@@ -323,7 +323,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                 [
                     Instantiable(
                         instantiableType: instantiableType,
-                        initializer: initializers.first(where: { $0.isValid(forFulfilling: dependencies) }) ?? initializerToGenerate(),
+                        initializer: initializers.first(where: { $0.isValid(forFulfilling: dependencies) }),
                         additionalInstantiables: additionalInstantiables,
                         dependencies: dependencies,
                         declarationType: topLevelDeclarationType.asDeclarationType
@@ -419,19 +419,5 @@ public final class InstantiableVisitor: SyntaxVisitor {
                 ]
             ))
         }
-    }
-
-    private func initializerToGenerate() -> Initializer? {
-        guard uninitializedNonOptionalPropertyNames.isEmpty else {
-            // There’s an uninitialized property, so we can't generate an initializer.
-            return nil
-        }
-        return Initializer(arguments: dependencies.map {
-            Initializer.Argument(
-                innerLabel: $0.property.label,
-                typeDescription: $0.property.typeDescription,
-                hasDefaultValue: false
-            )
-        })
     }
 }

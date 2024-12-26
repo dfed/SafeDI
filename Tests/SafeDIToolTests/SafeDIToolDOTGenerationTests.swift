@@ -162,15 +162,15 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                         User()
                     }
 
-                    @Received
-                    let networkService: NetworkService
-                }
+                    @Received let networkService: NetworkService                }
                 """,
                 """
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {}
+                public final class DefaultNetworkService: NetworkService {
+                    public init() {}
+                }
                 """,
                 """
                 import UIKit
@@ -210,12 +210,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
 
                 @Instantiable
                 public final class LoggedInViewController: UIViewController {
-                    @Forwarded
-                    private let user: User
+                    @Forwarded private let user: User
 
-                    @Received
-                    let networkService: NetworkService
-                }
+                    @Received let networkService: NetworkService                }
                 """,
             ],
             buildDOTFileOutput: true,
@@ -254,15 +251,15 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                         User()
                     }
 
-                    @Received
-                    let networkService: NetworkService
-                }
+                    @Received let networkService: NetworkService                }
                 """,
                 """
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {}
+                public final class DefaultNetworkService: NetworkService {
+                    public init() {}
+                }
                 """,
                 """
                 import UIKit
@@ -309,14 +306,10 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
 
                 @Instantiable
                 public final class LoggedInViewController: UIViewController {
-                    @Forwarded
-                    private let user: User
+                    @Forwarded private let user: User
 
-                    @Received
-                    let networkService: NetworkService
-
-                    @Instantiated
-                    let userService: UserService
+                    @Received let networkService: NetworkService
+                    @Instantiated let userService: UserService
                 }
                 """,
             ],
@@ -360,15 +353,15 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                         User()
                     }
 
-                    @Received
-                    let networkService: NetworkService
-                }
+                    @Received let networkService: NetworkService                }
                 """,
                 """
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {}
+                public final class DefaultNetworkService: NetworkService {
+                    public init() {}
+                }
                 """,
                 """
                 import UIKit
@@ -424,11 +417,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                     @Forwarded
                     private let userID: String
 
-                    @Received
-                    let networkService: NetworkService
-
-                    @Instantiated
-                    let userService: UserService
+                    @Received let networkService: NetworkService
+                    @Instantiated let userService: UserService
                 }
                 """,
             ],
@@ -473,15 +463,15 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                         User()
                     }
 
-                    @Received
-                    let networkService: NetworkService
-                }
+                    @Received let networkService: NetworkService                }
                 """,
                 """
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {}
+                public final class DefaultNetworkService: NetworkService {
+                    public init() {}
+                }
                 """,
                 """
                 import UIKit
@@ -537,11 +527,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                     @Forwarded
                     private let userID: String
 
-                    @Received
-                    let networkService: NetworkService
-
-                    @Instantiated
-                    let userService: UserService
+                    @Received let networkService: NetworkService
+                    @Instantiated let userService: UserService
                 }
                 """,
             ],
@@ -583,15 +570,15 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                         User()
                     }
 
-                    @Received
-                    let networkService: NetworkService
-                }
+                    @Received let networkService: NetworkService                }
                 """,
                 """
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {}
+                public final class DefaultNetworkService: NetworkService {
+                    public init() {}
+                }
                 """,
                 """
                 import UIKit
@@ -641,11 +628,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
 
                 @Instantiable
                 public final class LoggedInViewController: UIViewController {
-                    @Forwarded
-                    private let user: User
+                    @Forwarded private let user: User
 
-                    @Instantiated
-                    let userService: UserService
+                    @Instantiated let userService: UserService
                 }
                 """,
             ],
@@ -686,15 +671,15 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                         User()
                     }
 
-                    @Received
-                    let networkService: NetworkService
-                }
+                    @Received let networkService: NetworkService                }
                 """,
                 """
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {}
+                public final class DefaultNetworkService: NetworkService {
+                    public init() {}
+                }
                 """,
                 """
                 import UIKit
@@ -744,8 +729,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
 
                 @Instantiable
                 public final class LoggedInViewController: UIViewController {
-                    @Forwarded
-                    private let user: User
+                    @Forwarded private let user: User
 
                     @Instantiated
                     let userServiceInstantiator: Instantiator<UserService>
@@ -1292,7 +1276,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 public protocol NetworkService {}
 
                 @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                public final class DefaultNetworkService: NetworkService {}
+                public final class DefaultNetworkService: NetworkService {
+                    public init() {}
+                }
                 """,
                 """
                 public protocol AuthService {
@@ -1305,9 +1291,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                         User(username: username)
                     }
 
-                    @Received
-                    let networkService: NetworkService
-
+                    @Received let networkService: NetworkService
                     @Received(fulfilledByDependencyNamed: "networkService", ofType: NetworkService.self)
                     let renamedNetworkService: NetworkService
 
