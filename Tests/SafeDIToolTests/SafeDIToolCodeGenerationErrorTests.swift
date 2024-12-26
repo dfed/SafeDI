@@ -730,7 +730,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     public protocol NetworkService {}
 
                     @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                    public final class DefaultNetworkService: NetworkService {}
+                    public final class DefaultNetworkService: NetworkService {
+                        public init() {}
+                    }
                     """,
                     """
                     public protocol AuthService {
@@ -789,7 +791,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     public protocol NetworkService {}
 
                     @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                    public final class DefaultNetworkService: NetworkService {}
+                    public final class DefaultNetworkService: NetworkService {
+                        public init() {}
+                    }
                     """,
                     """
                     public protocol AuthService {
@@ -848,7 +852,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     public protocol NetworkService {}
 
                     @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                    public final class DefaultNetworkService: NetworkService {}
+                    public final class DefaultNetworkService: NetworkService {
+                        public init() {}
+                    }
                     """,
                     """
                     import UIKit
@@ -904,7 +910,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     public protocol NetworkService {}
 
                     @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                    public final class DefaultNetworkService: NetworkService {}
+                    public final class DefaultNetworkService: NetworkService {
+                        public init() {}
+                    }
                     """,
                     """
                     import UIKit
@@ -960,7 +968,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     public protocol NetworkService {}
 
                     @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                    public final class DefaultNetworkService: NetworkService {}
+                    public final class DefaultNetworkService: NetworkService {
+                        public init() {}
+                    }
                     """,
                     """
                     public protocol AuthService {
@@ -1566,7 +1576,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     public protocol NetworkService {}
 
                     @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                    public final class DefaultNetworkService: NetworkService {}
+                    public final class DefaultNetworkService: NetworkService {
+                        public init() {}
+                    }
                     """,
                     """
                     import UIKit
@@ -1650,7 +1662,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     public protocol NetworkService {}
 
                     @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-                    public final class DefaultNetworkService: NetworkService {}
+                    public final class DefaultNetworkService: NetworkService {
+                        public init() {}
+                    }
                     """,
                     """
                     import UIKit

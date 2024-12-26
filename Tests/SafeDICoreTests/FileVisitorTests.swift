@@ -32,6 +32,10 @@ final class FileVisitorTests: XCTestCase {
 
         @Instantiable
         public final class LoggedInViewController: UIViewController {
+            public init(user: User, networkService: NetworkService) {
+                fatalError("SafeDI doesn't inspect the initializer body")
+            }
+
             @Forwarded
             private let user: User
 
@@ -90,6 +94,10 @@ final class FileVisitorTests: XCTestCase {
         fileVisitor.walk(Parser.parse(source: """
         @Instantiable
         public final class LoggedInViewController: UIViewController {
+            public init(user: User, networkService: NetworkService) {
+                fatalError("SafeDI doesn't inspect the initializer body")
+            }
+
             @Forwarded
             private let user: User
 
@@ -98,7 +106,9 @@ final class FileVisitorTests: XCTestCase {
         }
 
         @Instantiable
-        public struct SomeOtherInstantiable {}
+        public struct SomeOtherInstantiable {
+            public init() {}
+        }
         """))
         XCTAssertEqual(
             fileVisitor.instantiables,
