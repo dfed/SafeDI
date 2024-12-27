@@ -141,18 +141,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
                     let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
 
                     let propertyType = property.propertyType
-                    if
-                        propertyType.isErasedInstantiator,
-                        let firstForwardedProperty = forwardedProperties.first,
-                        let forwardedArgument = property.generics?.first,
-                        !(
-                            // The forwarded argument is the same type as our only `@Forwarded` property.
-                            (forwardedProperties.count == 1 && forwardedArgument == firstForwardedProperty.typeDescription)
-                                // The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
-                                || forwardedArgument == .nested(name: "ForwardedProperties", parentType: instantiable.concreteInstantiable)
-                                // The forwarded argument is the same as the tuple we generated for `InstantiableName.ForwardedProperties`.
-                                || forwardedArgument == forwardedProperties.asTupleTypeDescription
-                        )
+                    if propertyType.isErasedInstantiator,
+                       let firstForwardedProperty = forwardedProperties.first,
+                       let forwardedArgument = property.generics?.first,
+                       !(
+                           // The forwarded argument is the same type as our only `@Forwarded` property.
+                           (forwardedProperties.count == 1 && forwardedArgument == firstForwardedProperty.typeDescription)
+                               // The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
+                               || forwardedArgument == .nested(name: "ForwardedProperties", parentType: instantiable.concreteInstantiable)
+                               // The forwarded argument is the same as the tuple we generated for `InstantiableName.ForwardedProperties`.
+                               || forwardedArgument == forwardedProperties.asTupleTypeDescription
+                       )
                     {
                         throw GenerationError.erasedInstantiatorGenericDoesNotMatch(
                             property: property,
@@ -368,9 +367,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
                 }
             }
         func fulfill(_ scope: ScopeGenerator) {
-            guard
-                let property = scope.property,
-                propertyToUnfulfilledScopeMap[property] != nil
+            guard let property = scope.property,
+                  propertyToUnfulfilledScopeMap[property] != nil
             else {
                 return
             }

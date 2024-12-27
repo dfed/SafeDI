@@ -49,10 +49,9 @@ public struct InjectableMacro: PeerMacro {
                 throw InjectableError.fulfilledByTypeUseOnInstantiator
             }
 
-            if
-                let stringLiteralExpression = StringLiteralExprSyntax(fulfilledByType),
-                stringLiteralExpression.segments.count == 1,
-                let stringLiteral = stringLiteralExpression.segments.firstStringSegment
+            if let stringLiteralExpression = StringLiteralExprSyntax(fulfilledByType),
+               stringLiteralExpression.segments.count == 1,
+               let stringLiteral = stringLiteralExpression.segments.firstStringSegment
             {
                 switch TypeSyntax(stringLiteral: stringLiteral).typeDescription {
                 case .simple, .nested:
@@ -74,9 +73,8 @@ public struct InjectableMacro: PeerMacro {
         }
 
         if let fulfilledByDependencyNamed = macroWithParameters?.fulfilledByDependencyNamed {
-            guard
-                let stringLiteralExpression = StringLiteralExprSyntax(fulfilledByDependencyNamed),
-                stringLiteralExpression.segments.count == 1
+            guard let stringLiteralExpression = StringLiteralExprSyntax(fulfilledByDependencyNamed),
+                  stringLiteralExpression.segments.count == 1
             else {
                 throw InjectableError.fulfilledByDependencyNamedInvalidType
             }

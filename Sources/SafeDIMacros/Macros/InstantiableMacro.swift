@@ -30,10 +30,10 @@ public struct InstantiableMacro: MemberMacro {
         providingMembersOf declaration: some DeclGroupSyntax,
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
-        if
-            let fulfillingAdditionalTypesArgument = (
-                declaration.attributes.instantiableMacro
-            )?.fulfillingAdditionalTypes
+        if let fulfillingAdditionalTypesArgument = declaration
+            .attributes
+            .instantiableMacro?
+            .fulfillingAdditionalTypes
         {
             if let arrayExpression = ArrayExprSyntax(fulfillingAdditionalTypesArgument) {
                 if arrayExpression
@@ -47,8 +47,7 @@ public struct InstantiableMacro: MemberMacro {
             }
         }
 
-        if
-            let concreteDeclaration: ConcreteDeclSyntaxProtocol
+        if let concreteDeclaration: ConcreteDeclSyntaxProtocol
             = ActorDeclSyntax(declaration)
             ?? ClassDeclSyntax(declaration)
             ?? StructDeclSyntax(declaration)
