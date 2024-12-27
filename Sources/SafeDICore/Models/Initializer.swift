@@ -121,6 +121,18 @@ public struct Initializer: Codable, Hashable, Sendable {
         // We're good!
     }
 
+    public func mapArguments(_ transform: (Argument) -> Argument) -> Self? {
+        .init(
+            isPublicOrOpen: isPublicOrOpen,
+            isOptional: isOptional,
+            isAsync: isAsync,
+            doesThrow: doesThrow,
+            hasGenericParameter: hasGenericParameter,
+            hasGenericWhereClause: hasGenericWhereClause,
+            arguments: arguments.map(transform)
+        )
+    }
+
     public static func generateRequiredInitializer(
         for dependencies: [Dependency],
         declarationType: ConcreteDeclType,
@@ -261,6 +273,15 @@ public struct Initializer: Codable, Hashable, Sendable {
             self.innerLabel = innerLabel
             self.typeDescription = typeDescription
             self.hasDefaultValue = hasDefaultValue
+        }
+
+        public func withUpdatedTypeDescription(_ typeDescription: TypeDescription) -> Self {
+            .init(
+                outerLabel: outerLabel,
+                innerLabel: innerLabel,
+                typeDescription: typeDescription,
+                hasDefaultValue: hasDefaultValue
+            )
         }
 
         static let dependenciesArgumentName: TokenSyntax = .identifier("buildSafeDIDependencies")

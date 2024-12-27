@@ -56,25 +56,65 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
             parsedModule(loadSwiftFiles())
         )
 
+        let unnormalizedInstantiables = dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
+        let instantiableTypes = Set(unnormalizedInstantiables.flatMap(\.instantiableTypes))
+        let normalizedInstantiables = unnormalizedInstantiables.map { unnormalizedInstantiable in
+            let unnormalizedToNormalizedTypeMap = unnormalizedInstantiable.dependencies.reduce(
+                into: [TypeDescription: TypeDescription]()
+            ) { partialResult, nextDependency in
+                if let bestTypeDescription = TypeDescription.nestedOptions(
+                    referencedType: nextDependency.property.typeDescription,
+                    within: unnormalizedInstantiable.concreteInstantiable
+                ).first(where: { instantiableTypes.contains($0) }) {
+                    partialResult[nextDependency.property.typeDescription] = bestTypeDescription
+                }
+            }
+
+            let normalizedDependencies = unnormalizedInstantiable.dependencies.map {
+                if let bestTypeDescription = unnormalizedToNormalizedTypeMap[$0.property.typeDescription] {
+                    Dependency(
+                        property: $0.property.withUpdatedTypeDescription(bestTypeDescription),
+                        source: $0.source
+                    )
+                } else {
+                    // Default to what was in the code – we'll probably error later
+                    $0
+                }
+            }
+            let normalizedInitializer = unnormalizedInstantiable.initializer?.mapArguments {
+                $0.withUpdatedTypeDescription(unnormalizedToNormalizedTypeMap[$0.typeDescription, default: $0.typeDescription])
+            }
+            let normalizedAdditionalInstantiables = unnormalizedInstantiable.instantiableTypes.dropFirst().map {
+                if let enclosingType = unnormalizedInstantiable.concreteInstantiable.popNested,
+                   let bestTypeDescription = TypeDescription.nestedOptions(
+                       referencedType: $0,
+                       within: enclosingType
+                   ).first(where: { instantiableTypes.contains($0) })
+                {
+                    bestTypeDescription
+                } else {
+                    // Default to what was in the code – we'll probably error later
+                    $0
+                }
+            }
+            return Instantiable(
+                instantiableType: unnormalizedInstantiable.concreteInstantiable,
+                initializer: normalizedInitializer,
+                additionalInstantiables: normalizedAdditionalInstantiables,
+                dependencies: normalizedDependencies,
+                declarationType: unnormalizedInstantiable.declarationType
+            )
+        }
         let generator = try DependencyTreeGenerator(
             importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
             typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
-                instantiables: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
+                instantiables: normalizedInstantiables
             )
         )
         async let generatedCode: String? = try dependencyTreeOutput != nil
             ? generator.generateCodeTree()
             : nil
 
-        if !module.nestedInstantiableDecoratedTypeDescriptions.isEmpty {
-            throw CollectInstantiablesError
-                .foundNestedInstantiables(
-                    module
-                        .nestedInstantiableDecoratedTypeDescriptions
-                        .map(\.asSource)
-                        .sorted()
-                )
-        }
         if let moduleInfoOutput {
             try JSONEncoder().encode(ModuleInfo(
                 imports: module.imports,
@@ -188,13 +228,9 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
     private func parsedModule(_ swiftFileContent: [String]) -> ParsedModule {
         var imports = [ImportStatement]()
         var instantiables = [Instantiable]()
-        var nestedInstantiableDecoratedTypeDescriptions = [TypeDescription]()
         for content in swiftFileContent {
             let fileVisitor = FileVisitor()
             fileVisitor.walk(Parser.parse(source: content))
-            nestedInstantiableDecoratedTypeDescriptions.append(
-                contentsOf: fileVisitor.nestedInstantiableDecoratedTypeDescriptions
-            )
             if !fileVisitor.instantiables.isEmpty {
                 imports.append(contentsOf: fileVisitor.imports)
                 instantiables.append(contentsOf: fileVisitor.instantiables)
@@ -203,8 +239,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 
         return ParsedModule(
             imports: imports,
-            instantiables: instantiables,
-            nestedInstantiableDecoratedTypeDescriptions: nestedInstantiableDecoratedTypeDescriptions
+            instantiables: instantiables
         )
     }
 
@@ -267,17 +302,13 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
     private struct ParsedModule {
         let imports: [ImportStatement]
         let instantiables: [Instantiable]
-        let nestedInstantiableDecoratedTypeDescriptions: [TypeDescription]
     }
 
     private enum CollectInstantiablesError: Error, CustomStringConvertible {
-        case foundNestedInstantiables([String])
         case foundDuplicateInstantiable(String)
 
         var description: String {
             switch self {
-            case let .foundNestedInstantiables(nestedInstantiables):
-                "@\(InstantiableVisitor.macroName) types must be top-level declarations. Found the following nested @\(InstantiableVisitor.macroName) types: \(nestedInstantiables.joined(separator: ", "))"
             case let .foundDuplicateInstantiable(duplicateInstantiable):
                 "@\(InstantiableVisitor.macroName)-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `\(duplicateInstantiable)`"
             }

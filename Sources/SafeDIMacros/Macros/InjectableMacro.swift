@@ -55,9 +55,9 @@ public struct InjectableMacro: PeerMacro {
                 let stringLiteral = stringLiteralExpression.segments.firstStringSegment
             {
                 switch TypeSyntax(stringLiteral: stringLiteral).typeDescription {
-                case .simple:
+                case .simple, .nested:
                     break
-                case .nested, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown, .void:
+                case .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown, .void:
                     throw InjectableError.fulfilledByTypeArgumentInvalidTypeDescription
                 }
             } else {
@@ -141,7 +141,7 @@ public struct InjectableMacro: PeerMacro {
             case .fulfilledByTypeArgumentInvalidType:
                 "The argument `fulfilledByType` must be a string literal"
             case .fulfilledByTypeArgumentInvalidTypeDescription:
-                "The argument `fulfilledByType` must refer to a simple, unnested type"
+                "The argument `fulfilledByType` must refer to a simple type"
             case .fulfilledByDependencyNamedInvalidType:
                 "The argument `fulfilledByDependencyNamed` must be a string literal"
             case .fulfilledByTypeUseOnInstantiator:

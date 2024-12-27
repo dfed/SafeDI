@@ -40,6 +40,13 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
     /// The type to which the property conforms.
     public let typeDescription: TypeDescription
 
+    public func withUpdatedTypeDescription(_ typeDescription: TypeDescription) -> Self {
+        .init(
+            label: label,
+            typeDescription: typeDescription
+        )
+    }
+
     // MARK: Hashable
 
     public static func < (lhs: Property, rhs: Property) -> Bool {
@@ -127,14 +134,8 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
         typeDescription.propertyType
     }
 
-    var generics: [TypeDescription] {
-        switch typeDescription {
-        case let .simple(_, generics),
-             let .nested(_, _, generics):
-            generics
-        case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
-            []
-        }
+    var generics: [TypeDescription]? {
+        typeDescription.simpleNameAndGenerics?.generics
     }
 
     // MARK: PropertyType
