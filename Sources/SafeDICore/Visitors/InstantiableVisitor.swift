@@ -36,9 +36,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
     // MARK: SyntaxVisitor
 
     public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
-        guard
-            declarationType.isTypeDefinition,
-            node.modifiers.staticModifier == nil
+        guard declarationType.isTypeDefinition,
+              node.modifiers.staticModifier == nil
         else {
             return .skipChildren
         }
@@ -93,9 +92,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
                 ))
             }
 
-            if
-                let label = IdentifierPatternSyntax(binding.pattern)?.identifier.text,
-                let typeDescription = binding.typeAnnotation?.type.typeDescription
+            if let label = IdentifierPatternSyntax(binding.pattern)?.identifier.text,
+               let typeDescription = binding.typeAnnotation?.type.typeDescription
             {
                 dependencies.append(
                     Dependency(
@@ -380,9 +378,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
     }
 
     private func processAttributes(_: AttributeListSyntax, on macro: AttributeSyntax) {
-        guard
-            let fulfillingAdditionalTypesExpression = macro.fulfillingAdditionalTypes,
-            let fulfillingAdditionalTypesArray = ArrayExprSyntax(fulfillingAdditionalTypesExpression)
+        guard let fulfillingAdditionalTypesExpression = macro.fulfillingAdditionalTypes,
+              let fulfillingAdditionalTypesArray = ArrayExprSyntax(fulfillingAdditionalTypesExpression)
         else {
             // Nothing to do here.
             return

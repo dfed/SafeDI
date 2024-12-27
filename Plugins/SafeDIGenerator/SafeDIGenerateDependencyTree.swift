@@ -108,8 +108,7 @@ extension Target {
             }
 
             // We only care about first-party code. Ignore third-party dependencies.
-            guard
-                swiftModule
+            guard swiftModule
                 .directoryURL
                 .pathComponents
                 // Removing the module name.

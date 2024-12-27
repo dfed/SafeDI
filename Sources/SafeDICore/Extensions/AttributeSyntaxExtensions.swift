@@ -22,11 +22,10 @@ import SwiftSyntax
 
 extension AttributeSyntax {
     public var fulfillingAdditionalTypes: ExprSyntax? {
-        guard
-            let arguments,
-            let labeledExpressionList = LabeledExprListSyntax(arguments),
-            let firstLabeledExpression = labeledExpressionList.first,
-            firstLabeledExpression.label?.text == "fulfillingAdditionalTypes"
+        guard let arguments,
+              let labeledExpressionList = LabeledExprListSyntax(arguments),
+              let firstLabeledExpression = labeledExpressionList.first,
+              firstLabeledExpression.label?.text == "fulfillingAdditionalTypes"
         else {
             return nil
         }
@@ -35,11 +34,10 @@ extension AttributeSyntax {
     }
 
     public var fulfilledByDependencyNamed: ExprSyntax? {
-        guard
-            let arguments,
-            let labeledExpressionList = LabeledExprListSyntax(arguments),
-            let firstLabeledExpression = labeledExpressionList.first,
-            firstLabeledExpression.label?.text == "fulfilledByDependencyNamed"
+        guard let arguments,
+              let labeledExpressionList = LabeledExprListSyntax(arguments),
+              let firstLabeledExpression = labeledExpressionList.first,
+              firstLabeledExpression.label?.text == "fulfilledByDependencyNamed"
         else {
             return nil
         }
@@ -48,9 +46,8 @@ extension AttributeSyntax {
     }
 
     public var fulfillingPropertyName: String? {
-        guard
-            let fulfilledByDependencyNamed,
-            let stringLiteral = StringLiteralExprSyntax(fulfilledByDependencyNamed)
+        guard let fulfilledByDependencyNamed,
+              let stringLiteral = StringLiteralExprSyntax(fulfilledByDependencyNamed)
         else {
             return nil
         }
@@ -59,11 +56,10 @@ extension AttributeSyntax {
     }
 
     public var fulfilledByType: ExprSyntax? {
-        guard
-            let arguments,
-            let labeledExpressionList = LabeledExprListSyntax(arguments),
-            let firstLabeledExpression = labeledExpressionList.first,
-            firstLabeledExpression.label?.text == "fulfilledByType"
+        guard let arguments,
+              let labeledExpressionList = LabeledExprListSyntax(arguments),
+              let firstLabeledExpression = labeledExpressionList.first,
+              firstLabeledExpression.label?.text == "fulfilledByType"
         else {
             return nil
         }
@@ -72,11 +68,10 @@ extension AttributeSyntax {
     }
 
     public var ofType: ExprSyntax? {
-        guard
-            let arguments,
-            let labeledExpressionList = LabeledExprListSyntax(arguments),
-            let expectedOfTypeLabeledExpression = labeledExpressionList.dropFirst().first,
-            expectedOfTypeLabeledExpression.label?.text == "ofType"
+        guard let arguments,
+              let labeledExpressionList = LabeledExprListSyntax(arguments),
+              let expectedOfTypeLabeledExpression = labeledExpressionList.dropFirst().first,
+              expectedOfTypeLabeledExpression.label?.text == "ofType"
         else {
             return nil
         }
@@ -85,14 +80,13 @@ extension AttributeSyntax {
     }
 
     public var erasedToConcreteExistential: ExprSyntax? {
-        guard
-            let arguments,
-            let labeledExpressionList = LabeledExprListSyntax(arguments),
-            let erasedToConcreteExistentialLabeledExpression = labeledExpressionList.dropFirst().first(where: {
-                // In `@Instantiated`, the `erasedToConcreteExistential` parameter is the second parameter.
-                // In `@Received`, the `erasedToConcreteExistential` parameter is the third parameter.
-                $0.label?.text == "erasedToConcreteExistential"
-            })
+        guard let arguments,
+              let labeledExpressionList = LabeledExprListSyntax(arguments),
+              let erasedToConcreteExistentialLabeledExpression = labeledExpressionList.dropFirst().first(where: {
+                  // In `@Instantiated`, the `erasedToConcreteExistential` parameter is the second parameter.
+                  // In `@Received`, the `erasedToConcreteExistential` parameter is the third parameter.
+                  $0.label?.text == "erasedToConcreteExistential"
+              })
         else {
             return nil
         }
@@ -101,10 +95,9 @@ extension AttributeSyntax {
     }
 
     public var fulfillingTypeDescription: TypeDescription? {
-        if
-            let expression = fulfilledByType,
-            let stringLiteral = StringLiteralExprSyntax(expression),
-            let firstStringSegement = stringLiteral.segments.firstStringSegment
+        if let expression = fulfilledByType,
+           let stringLiteral = StringLiteralExprSyntax(expression),
+           let firstStringSegement = stringLiteral.segments.firstStringSegment
         {
             TypeSyntax(stringLiteral: firstStringSegement).typeDescription
         } else {
@@ -113,9 +106,8 @@ extension AttributeSyntax {
     }
 
     public var erasedToConcreteExistentialType: Bool {
-        guard
-            let erasedToConcreteExistential,
-            let erasedToConcreteExistentialType = BooleanLiteralExprSyntax(erasedToConcreteExistential)
+        guard let erasedToConcreteExistential,
+              let erasedToConcreteExistentialType = BooleanLiteralExprSyntax(erasedToConcreteExistential)
         else {
             // Default value for the `erasedToConcreteExistential` parameter is `false`.
             return false

@@ -63,9 +63,8 @@ public struct Dependency: Codable, Hashable, Sendable {
                     erasedToConcreteExistential: instantiatedMacro.erasedToConcreteExistentialType
                 )
             } else if let receivedMacro = node.receivedMacro {
-                if
-                    let fulfillingPropertyName = receivedMacro.fulfillingPropertyName,
-                    let fulfillingTypeDescription = receivedMacro.fulfillingTypeDescription
+                if let fulfillingPropertyName = receivedMacro.fulfillingPropertyName,
+                   let fulfillingTypeDescription = receivedMacro.fulfillingTypeDescription
                 {
                     self = .aliased(
                         fulfillingProperty: Property(
