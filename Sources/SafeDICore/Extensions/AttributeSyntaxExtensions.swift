@@ -33,6 +33,20 @@ extension AttributeSyntax {
         return firstLabeledExpression.expression
     }
 
+    public var conformsElsewhere: ExprSyntax? {
+        guard let arguments,
+              let labeledExpressionList = LabeledExprListSyntax(arguments),
+              let firstLabeledExpression = labeledExpressionList.first(where: {
+                  // In `@Instantiated`, the `conformsElsewhere` parameter is the second parameter, though the first parameter has a default.
+                  $0.label?.text == "conformsElsewhere"
+              })
+        else {
+            return nil
+        }
+
+        return firstLabeledExpression.expression
+    }
+
     public var fulfilledByDependencyNamed: ExprSyntax? {
         guard let arguments,
               let labeledExpressionList = LabeledExprListSyntax(arguments),

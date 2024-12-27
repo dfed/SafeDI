@@ -52,8 +52,16 @@ public struct InstantiableMacro: MemberMacro {
             ?? ClassDeclSyntax(declaration)
             ?? StructDeclSyntax(declaration)
         {
-            let extendsInstantiable = concreteDeclaration.inheritanceClause?.inheritedTypes.contains(where: \.type.typeDescription.isInstantiable) ?? false
-            if !extendsInstantiable {
+            lazy var extendsInstantiable = concreteDeclaration.inheritanceClause?.inheritedTypes.contains(where: \.type.typeDescription.isInstantiable) ?? false
+            let mustExtendInstantiable = if let conformsElsewhereArgument = declaration.attributes.instantiableMacro?.conformsElsewhere,
+                                            let boolExpression = BooleanLiteralExprSyntax(conformsElsewhereArgument)
+            {
+                boolExpression.literal.tokenKind == .keyword(.false)
+            } else {
+                true
+            }
+
+            if mustExtendInstantiable, !extendsInstantiable {
                 var modifiedDeclaration = concreteDeclaration
                 var inheritedType = InheritedTypeSyntax(
                     type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
@@ -161,8 +169,16 @@ public struct InstantiableMacro: MemberMacro {
             return generateForwardedProperties(from: forwardedProperties)
 
         } else if let extensionDeclaration = ExtensionDeclSyntax(declaration) {
-            let extendsInstantiable = extensionDeclaration.inheritanceClause?.inheritedTypes.contains(where: \.type.typeDescription.isInstantiable) ?? false
-            if !extendsInstantiable {
+            lazy var extendsInstantiable = extensionDeclaration.inheritanceClause?.inheritedTypes.contains(where: \.type.typeDescription.isInstantiable) ?? false
+            let mustExtendInstantiable = if let conformsElsewhereArgument = declaration.attributes.instantiableMacro?.conformsElsewhere,
+                                            let boolExpression = BooleanLiteralExprSyntax(conformsElsewhereArgument)
+            {
+                boolExpression.literal.tokenKind == .keyword(.false)
+            } else {
+                true
+            }
+
+            if mustExtendInstantiable, !extendsInstantiable {
                 var modifiedDeclaration = extensionDeclaration
                 var inheritedType = InheritedTypeSyntax(
                     type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
