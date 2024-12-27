@@ -107,6 +107,10 @@ public final class FileVisitor: SyntaxVisitor {
         return .visitChildren
     }
 
+    public override func visitPost(_: ExtensionDeclSyntax) {
+        exitType()
+    }
+
     // MARK: Public
 
     public private(set) var imports = [ImportStatement]()
@@ -142,8 +146,6 @@ public final class FileVisitor: SyntaxVisitor {
     }
 
     private func exitType() {
-        if let parentType {
-            self.parentType = parentType.popNested
-        }
+        parentType = parentType?.popNested
     }
 }
