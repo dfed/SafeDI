@@ -44,6 +44,46 @@ import SafeDICore
             }
         }
 
+        // MARK: Behavior Tests
+
+        func test_extension_expandsWithoutIssueOnTypeDeclarationWhenInstantiableConformanceMissingAndConformsElsewhereIsTrue() {
+            assertMacro {
+                """
+                @Instantiable(conformsElsewhere: true)
+                public final class ExampleService {
+                    public init() {}
+                }
+                """
+            } expansion: {
+                """
+                public final class ExampleService {
+                    public init() {}
+                }
+                """
+            }
+        }
+
+        func test_extension_expandsWithoutIssueOnExtensionWhenInstantiableConformanceMissingAndConformsElsewhereIsTrue() {
+            assertMacro {
+                """
+                @Instantiable(conformsElsewhere: true)
+                extension ExampleService: CustomStringConvertible {
+                    public static func instantiate() -> ExampleService { fatalError() }
+
+                    public var description: String { "ExampleService" }
+                }
+                """
+            } expansion: {
+                """
+                extension ExampleService: CustomStringConvertible {
+                    public static func instantiate() -> ExampleService { fatalError() }
+
+                    public var description: String { "ExampleService" }
+                }
+                """
+            }
+        }
+
         // MARK: Error tests
 
         func test_declaration_throwsErrorWhenOnProtocol() {
@@ -1401,6 +1441,44 @@ import SafeDICore
             }
         }
 
+        func test_declaration_fixit_addsFixitWhenInstantiableConformanceMissingAndConformsElsewhereIsFalse() {
+            assertMacro {
+                """
+                @Instantiable(conformsElsewhere: false)
+                public final class ExampleService: CustomStringConvertible {
+                    public init() {}
+                    public var description: String { "ExampleService" }
+                }
+                """
+            } diagnostics: {
+                """
+                @Instantiable(conformsElsewhere: false)
+                ┬──────────────────────────────────────
+                ╰─ 🛑 @Instantiable-decorated type or extension must declare conformance to `Instantiable`
+                   ✏️ Declare conformance to `Instantiable`
+                public final class ExampleService: CustomStringConvertible {
+                    public init() {}
+                    public var description: String { "ExampleService" }
+                }
+                """
+            } fixes: {
+                """
+                @Instantiable(conformsElsewhere: false)
+                public final class ExampleService: CustomStringConvertible, Instantiable {
+                    public init() {}
+                    public var description: String { "ExampleService" }
+                }
+                """
+            } expansion: {
+                """
+                public final class ExampleService: CustomStringConvertible, Instantiable {
+                    public init() {}
+                    public var description: String { "ExampleService" }
+                }
+                """
+            }
+        }
+
         func test_declaration_doesNotAddFixitWhenRetroactiveInstantiableConformanceExists() {
             assertMacro {
                 """
@@ -2111,6 +2189,48 @@ import SafeDICore
             } fixes: {
                 """
                 @Instantiable
+                extension ExampleService: CustomStringConvertible, Instantiable {
+                    public static func instantiate() -> ExampleService { fatalError() }
+
+                    public var description: String { "ExampleService" }
+                }
+                """
+            } expansion: {
+                """
+                extension ExampleService: CustomStringConvertible, Instantiable {
+                    public static func instantiate() -> ExampleService { fatalError() }
+
+                    public var description: String { "ExampleService" }
+                }
+                """
+            }
+        }
+
+        func test_extension_fixit_addsFixitWhenInstantiableConformanceMissingAndConformsElsewhereIsFalse() {
+            assertMacro {
+                """
+                @Instantiable(conformsElsewhere: false)
+                extension ExampleService: CustomStringConvertible {
+                    public static func instantiate() -> ExampleService { fatalError() }
+
+                    public var description: String { "ExampleService" }
+                }
+                """
+            } diagnostics: {
+                """
+                @Instantiable(conformsElsewhere: false)
+                ┬──────────────────────────────────────
+                ╰─ 🛑 @Instantiable-decorated type or extension must declare conformance to `Instantiable`
+                   ✏️ Declare conformance to `Instantiable`
+                extension ExampleService: CustomStringConvertible {
+                    public static func instantiate() -> ExampleService { fatalError() }
+
+                    public var description: String { "ExampleService" }
+                }
+                """
+            } fixes: {
+                """
+                @Instantiable(conformsElsewhere: false)
                 extension ExampleService: CustomStringConvertible, Instantiable {
                     public static func instantiate() -> ExampleService { fatalError() }
 
