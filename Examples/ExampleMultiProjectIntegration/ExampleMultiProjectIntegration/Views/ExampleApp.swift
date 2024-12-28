@@ -24,7 +24,7 @@ import Subproject
 import SwiftUI
 
 // @Instantiable macro marks this type as capable of being instantiated by SafeDI.
-@Instantiable
+@Instantiable(isRoot: true)
 @MainActor
 @main
 public struct NotesApp: Instantiable, App {

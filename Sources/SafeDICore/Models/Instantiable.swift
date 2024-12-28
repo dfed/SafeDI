@@ -23,12 +23,14 @@ public struct Instantiable: Codable, Hashable, Sendable {
 
     public init(
         instantiableType: TypeDescription,
+        isRoot: Bool,
         initializer: Initializer?,
         additionalInstantiables: [TypeDescription]?,
         dependencies: [Dependency],
         declarationType: DeclarationType
     ) {
         instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
+        self.isRoot = isRoot
         self.initializer = initializer
         self.dependencies = dependencies
         self.declarationType = declarationType
@@ -43,6 +45,8 @@ public struct Instantiable: Codable, Hashable, Sendable {
         instantiableTypes[0]
     }
 
+    /// Whether the instantiable type is a root of a dependency graph.
+    public let isRoot: Bool
     /// A memberwise initializer for the concrete instantiable type.
     /// If `nil`, the Instanitable type is incorrectly configured.
     public let initializer: Initializer?

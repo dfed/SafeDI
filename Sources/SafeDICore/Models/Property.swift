@@ -47,6 +47,11 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
         )
     }
 
+    /// The property represented as source code.
+    public var asSource: String {
+        "\(label): \(typeDescription.asSource)"
+    }
+
     // MARK: Hashable
 
     public static func < (lhs: Property, rhs: Property) -> Bool {
@@ -54,11 +59,6 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
     }
 
     // MARK: Internal
-
-    /// The property represented as source code.
-    var asSource: String {
-        "\(label): \(typeDescription.asSource)"
-    }
 
     var asFunctionParamter: FunctionParameterSyntax {
         switch typeDescription {
