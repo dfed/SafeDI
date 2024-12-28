@@ -243,15 +243,13 @@ public actor DependencyTreeGenerator {
         // Create the mapping.
         let typeDescriptionToScopeMap: [TypeDescription: Scope] = reachableTypeDescriptions
             .reduce(into: [TypeDescription: Scope]()) { partialResult, typeDescription in
-                guard let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription],
-                      partialResult[instantiable.concreteInstantiable] == nil
-                else {
-                    // We've already created a scope for this `instantiable`. Skip.
-                    return
-                }
-                let scope = Scope(instantiable: instantiable)
-                for instantiableType in instantiable.instantiableTypes {
-                    partialResult[instantiableType] = scope
+                if let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription],
+                   partialResult[instantiable.concreteInstantiable] == nil
+                {
+                    let scope = Scope(instantiable: instantiable)
+                    for instantiableType in instantiable.instantiableTypes {
+                        partialResult[instantiableType] = scope
+                    }
                 }
             }
 
