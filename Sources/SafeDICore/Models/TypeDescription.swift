@@ -148,8 +148,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 // Reference manual: https://docs.swift.org/swift-book/ReferenceManual/Types.html#grammar_type
                 return "\(specifiers.joined(separator: " ")) \(attributesFromList(attributes)) \(type.asSource)"
             case (.none, .none):
-                // This case represents an error.
-                return type.asSource
+                return type.asSource // This case represents an error.
             }
         case let .array(element):
             return "[\(element.asSource)]"
@@ -523,13 +522,12 @@ extension ExprSyntax {
                         .filter { BinaryOperatorExprSyntax($0) == nil }
                         .map(\.typeDescription)
                 ))
-            } else if
-                sequenceExpr.elements.count == 3,
-                let arguments = TupleExprSyntax(sequenceExpr.elements.first),
-                let arrow = ArrowExprSyntax(sequenceExpr.elements[
-                    sequenceExpr.elements.index(after: sequenceExpr.elements.startIndex)
-                ]),
-                let returnType = sequenceExpr.elements.last
+            } else if sequenceExpr.elements.count == 3,
+                      let arguments = TupleExprSyntax(sequenceExpr.elements.first),
+                      let arrow = ArrowExprSyntax(sequenceExpr.elements[
+                          sequenceExpr.elements.index(after: sequenceExpr.elements.startIndex)
+                      ]),
+                      let returnType = sequenceExpr.elements.last
             {
                 return .closure(
                     arguments: arguments.elements.map(\.expression.typeDescription),
@@ -540,17 +538,15 @@ extension ExprSyntax {
             }
         } else if let optionalChainingExpr = OptionalChainingExprSyntax(self) {
             return .optional(optionalChainingExpr.expression.typeDescription)
-        } else if
-            let arrayExpr = ArrayExprSyntax(self),
-            arrayExpr.elements.count == 1,
-            let onlyElement = arrayExpr.elements.first
+        } else if let arrayExpr = ArrayExprSyntax(self),
+                  arrayExpr.elements.count == 1,
+                  let onlyElement = arrayExpr.elements.first
         {
             return .array(element: onlyElement.expression.typeDescription)
-        } else if
-            let dictionaryExpr = DictionaryExprSyntax(self),
-            let content = DictionaryElementListSyntax(dictionaryExpr.content),
-            content.count == 1,
-            let onlyElement = DictionaryElementSyntax(content.first)
+        } else if let dictionaryExpr = DictionaryExprSyntax(self),
+                  let content = DictionaryElementListSyntax(dictionaryExpr.content),
+                  content.count == 1,
+                  let onlyElement = DictionaryElementSyntax(content.first)
         {
             return .dictionary(
                 key: onlyElement.key.typeDescription,
