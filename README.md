@@ -353,7 +353,7 @@ public struct ParentView: View, Instantiable {
 
 ### Creating the root of your dependency tree
 
-Any type decorated `@Instantiable(isRoot: true)` is a root of a SafeDI dependency tree. SafeDI creates a `public init()` initializer that instantiates the dependency tree in an extension on each root type.
+Any type decorated with `@Instantiable(isRoot: true)` is a root of a SafeDI dependency tree. SafeDI creates a no-parameter `public init()` initializer that instantiates the dependency tree in an extension on each root type.
 
 ### Comparing SafeDI and Manual Injection: Key Differences
 
