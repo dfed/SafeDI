@@ -156,6 +156,76 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     }
 
     @MainActor
+    func test_run_onCodeWithMultipleInstantiateMethodsForTheSameTypeWithSameParameters_throwsError() async {
+        await assertThrowsError(
+            """
+            @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `Container<Int>`
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    extension Container: Instantiable {}
+                    """,
+                    """
+                    @Instantiable(conformsElsewhere: true)
+                    extension Array {
+                        public static func instantiate() -> Container<Int> {
+                            .init(0)
+                        }
+                    }
+                    """,
+                    """
+                    @Instantiable(conformsElsewhere: true)
+                    extension Array {
+                        public static func instantiate() -> Container<Int> {
+                            .init(0)
+                        }
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
+    func test_run_onCodeWithMultipleInstantiateMethodsForTheSameTypeWithDifferentParameters_throwsError() async {
+        await assertThrowsError(
+            """
+            @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `Container<Int>`
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    extension Container: Instantiable {}
+                    """,
+                    """
+                    @Instantiable(conformsElsewhere: true)
+                    extension Array {
+                        public static func instantiate() -> Container<Int> {
+                            .init(0)
+                        }
+                    }
+                    """,
+                    """
+                    @Instantiable(conformsElsewhere: true)
+                    extension Array {
+                        public static func instantiate(intValue: Int) -> Container<Int> {
+                            .init(intValue)
+                        }
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
     func test_run_onCodeWithUnfulfillableInstantiatedProperty_throwsError() async {
         await assertThrowsError(
             """
