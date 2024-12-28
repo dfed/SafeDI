@@ -358,10 +358,7 @@ public actor DependencyTreeGenerator {
                 let parentContainsProperty = receivableProperties.contains(receivedProperty)
                 let propertyIsCreatedAtThisScope = createdProperties.contains(receivedProperty)
                 if !parentContainsProperty, !propertyIsCreatedAtThisScope {
-                    if property == nil {
-                        // This property's scope is not a real root instantiable! Remove it from the list.
-                        rootInstantiables.remove(scope.instantiable.concreteInstantiable)
-                    } else {
+                    if property != nil {
                         // This property is in a dependency tree and is unfulfillable. Record the problem.
                         unfulfillableProperties.insert(.init(
                             property: receivedProperty,
