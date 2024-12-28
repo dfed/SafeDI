@@ -148,8 +148,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 // Reference manual: https://docs.swift.org/swift-book/ReferenceManual/Types.html#grammar_type
                 return "\(specifiers.joined(separator: " ")) \(attributesFromList(attributes)) \(type.asSource)"
             case (.none, .none):
-                // This case represents an error.
-                return type.asSource
+                return type.asSource // This case represents an error.
             }
         case let .array(element):
             return "[\(element.asSource)]"
