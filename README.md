@@ -298,7 +298,7 @@ When you want to instantiate a dependency after `init(…)`, you need to declare
 The [`Instantiator`](Sources/SafeDI/DelayedInstantiation/Instantiator.swift) type is how SafeDI enables deferred instantiation of an `@Instantiable` type. `Instantiator` has a single generic that matches the type of the to-be-instantiated instance. Creating an `Instantiator` property is as simple as creating any other property in the SafeDI ecosystem:
 
 ```swift
-@Instantiable
+@Instantiable(isRoot: true)
 public struct MyApp: App, Instantiable {
     public init(contentViewInstantiator: Instantiator<ContentView>) {
         self.contentViewInstantiator = contentViewInstantiator
@@ -353,13 +353,7 @@ public struct ParentView: View, Instantiable {
 
 ### Creating the root of your dependency tree
 
-SafeDI automatically finds the root(s) of your dependency tree, and creates an extension on each root that contains a `public init()` function that instantiates the dependency tree.
-
-An `@Instantiable` type qualifies as the root of a dependency tree if and only if:
-
-1. The type‘s SafeDI-injected properties are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`
-2. The type‘s `@Received(fulfilledByDependencyNamed:ofType:)` properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type
-3. The type is not instantiated by another `@Instantiable` type
+Any type decorated with `@Instantiable(isRoot: true)` is a root of a SafeDI dependency tree. SafeDI creates a no-parameter `public init()` initializer that instantiates the dependency tree in an extension on each root type.
 
 ### Comparing SafeDI and Manual Injection: Key Differences
 

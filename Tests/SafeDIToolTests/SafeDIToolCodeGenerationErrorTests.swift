@@ -54,7 +54,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
                         @Instantiated(fulfilledByType: "DoesNotExist")
                         let networkService: NetworkService
@@ -81,7 +81,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import SafeDI
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class Root {
                         @Instantiated let childBuilder: Instantiator<Child>
                     }
@@ -125,7 +125,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import SafeDI
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class Root {
                         @Instantiated let childBuilder: Instantiator<Child>
                     }
@@ -248,7 +248,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
                         @Instantiated
                         let networkService: NetworkService
@@ -284,7 +284,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
                         @Instantiated
                         let networkService: NetworkService
@@ -311,7 +311,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import SafeDI
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class Root {
                         @Instantiated(fulfilledByType: "SomeErasedType") let erasedType: ErasedType
                         @Instantiated let child: Child
@@ -354,7 +354,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import SafeDI
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class Root {
                         @Instantiated(fulfilledByType: "SomeErasedType") let erasedType: any ErasedType
                         @Instantiated let child: Child
@@ -397,7 +397,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import SafeDI
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class Root {
                         @Instantiated let thing: Thing
                         @Instantiated let child: Child
@@ -438,7 +438,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import SafeDI
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class Root {
                         @Instantiated let thing: Thing!
                         @Instantiated let child: Child
@@ -479,7 +479,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import SafeDI
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class Root {
                         @Instantiated let thing: Thing
                         @Instantiated let child: Child
@@ -520,7 +520,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import SafeDI
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class Root {
                         @Instantiated let thing: Thing?
                         @Instantiated let child: Child
@@ -561,7 +561,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import SafeDI
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class Root {
                         @Instantiated let thing: Thing
                         @Instantiated let child: Child
@@ -606,7 +606,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import SafeDI
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class Root {
                         @Instantiated let thing: Thing
                         @Instantiated let otherThing: OtherThing
@@ -660,7 +660,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
                         @Instantiated
                         let networkService: NetworkService
@@ -683,7 +683,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
             try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class Root {
                         @Instantiated
                         let childA: ChildA
@@ -739,7 +739,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
             try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class Root {
                         @Instantiated
                         let childA: ChildA
@@ -825,7 +825,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
                         public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                             self.authService = authService
@@ -886,7 +886,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
                         public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                             self.authService = authService
@@ -929,7 +929,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
                         @Instantiated
                         let networkService: NetworkService
@@ -987,7 +987,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
                         @Instantiated
                         let networkService: NetworkService
@@ -1063,7 +1063,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
                         public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                             self.authService = authService
@@ -1104,7 +1104,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
                         @Instantiated
                         let urlSessionWrapper: URLSessionWrapper
@@ -1118,7 +1118,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     }
 
     @MainActor
-    func test_run_onCodeWithDuplicateInstantiable_throwsError() async {
+    func test_run_onCodeWithDuplicateInstantiableNames_throwsError() async {
         await assertThrowsError(
             """
             @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
@@ -1146,7 +1146,35 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     }
 
     @MainActor
-    func test_run_onCodeWithDuplicateInstantiableAndInstantiable_throwsError() async {
+    func test_run_onCodeWithDuplicateInstantiableNamesWhereOneIsRoot_throwsError() async {
+        await assertThrowsError(
+            """
+            @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    import UIKit
+
+                    @Instantiable(isRoot: true)
+                    public final class RootViewController: UIViewController {}
+                    """,
+                    """
+                    import UIKit
+
+                    @Instantiable
+                    public final class RootViewController: UIViewController {}
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
+    func test_run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtension_throwsError() async {
         await assertThrowsError(
             """
             @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
@@ -1178,7 +1206,71 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     }
 
     @MainActor
-    func test_run_onCodeWithDuplicateInstantiableViaExtension_throwsError() async {
+    func test_run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtensionWhereDeclarationIsRoot_throwsError() async {
+        await assertThrowsError(
+            """
+            @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    import UIKit
+
+                    @Instantiable(isRoot: true)
+                    public final class RootViewController: UIViewController {}
+                    """,
+                    """
+                    import UIKit
+
+                    @Instantiable
+                    extension RootViewController: Instantiable {
+                        public static func instantiate() -> RootViewController {
+                            RootViewController()
+                        }
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
+    func test_run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtensionWhereExtensionIsRoot_throwsError() async {
+        await assertThrowsError(
+            """
+            @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
+            """
+        ) {
+            try await executeSafeDIToolTest(
+                swiftFileContent: [
+                    """
+                    import UIKit
+
+                    @Instantiable
+                    public final class RootViewController: UIViewController {}
+                    """,
+                    """
+                    import UIKit
+
+                    @Instantiable(isRoot: true)
+                    extension RootViewController: Instantiable {
+                        public static func instantiate() -> RootViewController {
+                            RootViewController()
+                        }
+                    }
+                    """,
+                ],
+                buildDependencyTreeOutput: true,
+                filesToDelete: &filesToDelete
+            )
+        }
+    }
+
+    @MainActor
+    func test_run_onCodeWithDuplicateInstantiableNamesViaExtension_throwsError() async {
         await assertThrowsError(
             """
             @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `UserDefaults`
@@ -1225,7 +1317,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable(fulfillingAdditionalTypes: [UIViewController.self])
+                    @Instantiable(isRoot: true, fulfillingAdditionalTypes: [UIViewController.self])
                     public final class RootViewController: UIViewController {}
                     """,
                     """
@@ -1252,7 +1344,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
             try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class Root {
                         @Instantiated
                         let a: A
@@ -1297,7 +1389,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
             try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class Root {
                         @Instantiated let a: A
                     }
@@ -1338,7 +1430,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
             try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public struct Root {
                         @Instantiated let aBuilder: Instantiator<A>
                     }
@@ -1379,7 +1471,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
             try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public struct Root {
                         @Instantiated
                         let a: A
@@ -1424,7 +1516,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
             try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public struct Root {
                         @Instantiated
                         private let a: A
@@ -1473,7 +1565,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
             try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public struct Root {
                         @Instantiated
                         private let a: A
@@ -1524,7 +1616,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
             try await executeSafeDIToolTest(
                 swiftFileContent: [
                     """
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public struct Root {
                         @Instantiated
                         private let a: A
@@ -1600,7 +1692,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
                         public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>) {
                             self.authService = authService
@@ -1686,7 +1778,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     import UIKit
 
-                    @Instantiable
+                    @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
                         public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>) {
                             self.authService = authService

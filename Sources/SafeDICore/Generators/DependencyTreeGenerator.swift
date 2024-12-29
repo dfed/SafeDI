@@ -199,12 +199,11 @@ public actor DependencyTreeGenerator {
             .joined(separator: "\n")
     }
 
-    /// A collection of `@Instantiable`-decorated types that do not explicitly receive dependencies.
-    /// - Note: These are not necessarily roots in the build graph, since these types may be instantiated by another `@Instantiable`.
-    private lazy var possibleRootInstantiables: Set<TypeDescription> = Set(
+    /// A collection of `@Instantiable`-decorated types that are at the roots of their respective dependency trees.
+    private lazy var rootInstantiables: Set<TypeDescription> = Set(
         typeDescriptionToFulfillingInstantiableMap
             .values
-            .filter(\.dependencies.couldRepresentRoot)
+            .filter(\.isRoot)
             .map(\.concreteInstantiable)
     )
 
@@ -233,39 +232,24 @@ public actor DependencyTreeGenerator {
             }
         }
 
-        for reachableTypeDescription in possibleRootInstantiables {
+        for reachableTypeDescription in rootInstantiables {
             recordReachableTypeDescription(reachableTypeDescription)
         }
 
         return reachableTypeDescriptions
     }()
 
-    /// A collection of `@Instantiable`-decorated types that are at the roots of their respective dependency trees.
-    private lazy var rootInstantiables: Set<TypeDescription> = possibleRootInstantiables
-        // Remove all `@Instantiable`-decorated types that are instantiated by another
-        // `@Instantiable`-decorated type.
-        .subtracting(Set(
-            reachableTypeDescriptions
-                .compactMap { typeDescriptionToFulfillingInstantiableMap[$0] }
-                .flatMap(\.dependencies)
-                .filter(\.isInstantiated)
-                .map(\.asInstantiatedType)
-                .compactMap { typeDescriptionToFulfillingInstantiableMap[$0]?.concreteInstantiable }
-        ))
-
     private func createTypeDescriptionToScopeMapping() throws -> [TypeDescription: Scope] {
         // Create the mapping.
         let typeDescriptionToScopeMap: [TypeDescription: Scope] = reachableTypeDescriptions
             .reduce(into: [TypeDescription: Scope]()) { partialResult, typeDescription in
-                guard let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription],
-                      partialResult[instantiable.concreteInstantiable] == nil
-                else {
-                    // We've already created a scope for this `instantiable`. Skip.
-                    return
-                }
-                let scope = Scope(instantiable: instantiable)
-                for instantiableType in instantiable.instantiableTypes {
-                    partialResult[instantiableType] = scope
+                if let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription],
+                   partialResult[instantiable.concreteInstantiable] == nil
+                {
+                    let scope = Scope(instantiable: instantiable)
+                    for instantiableType in instantiable.instantiableTypes {
+                        partialResult[instantiableType] = scope
+                    }
                 }
             }
 
@@ -372,10 +356,7 @@ public actor DependencyTreeGenerator {
                 let parentContainsProperty = receivableProperties.contains(receivedProperty)
                 let propertyIsCreatedAtThisScope = createdProperties.contains(receivedProperty)
                 if !parentContainsProperty, !propertyIsCreatedAtThisScope {
-                    if property == nil {
-                        // This property's scope is not a real root instantiable! Remove it from the list.
-                        rootInstantiables.remove(scope.instantiable.concreteInstantiable)
-                    } else {
+                    if property != nil {
                         // This property is in a dependency tree and is unfulfillable. Record the problem.
                         unfulfillableProperties.insert(.init(
                             property: receivedProperty,
@@ -483,21 +464,6 @@ extension Dependency {
         case .aliased, .instantiated, .received:
             false
         }
-    }
-}
-
-// MARK: - Collection
-
-extension Collection<Dependency> {
-    fileprivate var couldRepresentRoot: Bool {
-        first(where: {
-            switch $0.source {
-            case .instantiated, .aliased:
-                false
-            case .forwarded, .received:
-                true
-            }
-        }) == nil
     }
 }
 

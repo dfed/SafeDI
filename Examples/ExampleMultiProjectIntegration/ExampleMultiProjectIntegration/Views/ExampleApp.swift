@@ -23,8 +23,8 @@ import SafeDI
 import Subproject
 import SwiftUI
 
-// @Instantiable macro marks this type as capable of being instantiated by SafeDI.
-@Instantiable
+// @Instantiable macro marks this type as capable of being instantiated by SafeDI. The `isRoot` parameter marks this type as being the root of the dependency tree.
+@Instantiable(isRoot: true)
 @MainActor
 @main
 public struct NotesApp: Instantiable, App {

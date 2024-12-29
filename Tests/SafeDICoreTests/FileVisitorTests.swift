@@ -48,6 +48,7 @@ final class FileVisitorTests: XCTestCase {
             [
                 Instantiable(
                     instantiableType: .simple(name: "LoggedInViewController"),
+                    isRoot: false,
                     initializer: Initializer(
                         arguments: [
                             .init(
@@ -111,6 +112,7 @@ final class FileVisitorTests: XCTestCase {
             [
                 Instantiable(
                     instantiableType: .simple(name: "LoggedInViewController"),
+                    isRoot: false,
                     initializer: Initializer(
                         arguments: [
                             .init(
@@ -146,6 +148,7 @@ final class FileVisitorTests: XCTestCase {
                 ),
                 Instantiable(
                     instantiableType: .simple(name: "SomeOtherInstantiable"),
+                    isRoot: false,
                     initializer: Initializer(arguments: []),
                     additionalInstantiables: nil,
                     dependencies: [],
@@ -173,6 +176,7 @@ final class FileVisitorTests: XCTestCase {
             [
                 Instantiable(
                     instantiableType: .simple(name: "OuterLevel"),
+                    isRoot: false,
                     initializer: Initializer(arguments: []),
                     additionalInstantiables: [
                         .simple(name: "SomeProtocol"),
@@ -182,6 +186,7 @@ final class FileVisitorTests: XCTestCase {
                 ),
                 Instantiable(
                     instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
+                    isRoot: false,
                     initializer: Initializer(arguments: []),
                     additionalInstantiables: [],
                     dependencies: [],
@@ -208,6 +213,7 @@ final class FileVisitorTests: XCTestCase {
             [
                 Instantiable(
                     instantiableType: .simple(name: "OuterLevel"),
+                    isRoot: false,
                     initializer: Initializer(arguments: []),
                     additionalInstantiables: [],
                     dependencies: [],
@@ -215,6 +221,7 @@ final class FileVisitorTests: XCTestCase {
                 ),
                 Instantiable(
                     instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
+                    isRoot: false,
                     initializer: Initializer(arguments: []),
                     additionalInstantiables: [],
                     dependencies: [],
@@ -252,6 +259,7 @@ final class FileVisitorTests: XCTestCase {
             [
                 Instantiable(
                     instantiableType: .simple(name: "OuterLevel"),
+                    isRoot: false,
                     initializer: Initializer(arguments: []),
                     additionalInstantiables: [],
                     dependencies: [],
@@ -259,6 +267,7 @@ final class FileVisitorTests: XCTestCase {
                 ),
                 Instantiable(
                     instantiableType: .nested(name: "InnerLevel1", parentType: .simple(name: "OuterLevel")),
+                    isRoot: false,
                     initializer: Initializer(arguments: []),
                     additionalInstantiables: [],
                     dependencies: [],
@@ -266,6 +275,7 @@ final class FileVisitorTests: XCTestCase {
                 ),
                 Instantiable(
                     instantiableType: .nested(name: "InnerLevel2", parentType: .simple(name: "OuterLevel")),
+                    isRoot: false,
                     initializer: Initializer(arguments: []),
                     additionalInstantiables: [],
                     dependencies: [],
@@ -273,6 +283,7 @@ final class FileVisitorTests: XCTestCase {
                 ),
                 Instantiable(
                     instantiableType: .nested(name: "InnerLevel3", parentType: .simple(name: "OuterLevel")),
+                    isRoot: false,
                     initializer: Initializer(arguments: []),
                     additionalInstantiables: [],
                     dependencies: [],
@@ -297,6 +308,7 @@ final class FileVisitorTests: XCTestCase {
             [
                 Instantiable(
                     instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
+                    isRoot: false,
                     initializer: Initializer(arguments: []),
                     additionalInstantiables: [],
                     dependencies: [],

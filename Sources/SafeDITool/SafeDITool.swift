@@ -99,6 +99,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
             }
             return Instantiable(
                 instantiableType: unnormalizedInstantiable.concreteInstantiable,
+                isRoot: unnormalizedInstantiable.isRoot,
                 initializer: normalizedInitializer,
                 additionalInstantiables: normalizedAdditionalInstantiables,
                 dependencies: normalizedDependencies,

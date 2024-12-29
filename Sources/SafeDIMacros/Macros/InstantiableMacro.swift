@@ -104,6 +104,26 @@ public struct InstantiableMacro: MemberMacro {
                 context.diagnose(diagnostic)
             }
 
+            if visitor.isRoot, let instantiableType = visitor.instantiableType {
+                let inheritedDependencies = visitor.dependencies.filter {
+                    switch $0.source {
+                    case let .aliased(fulfillingProperty, _):
+                        // Aliased properties must not be inherited from elsewhere.
+                        !visitor.dependencies.contains { $0.property == fulfillingProperty }
+                    case .instantiated:
+                        false
+                    case .forwarded, .received:
+                        true
+                    }
+                }
+                guard inheritedDependencies.isEmpty else {
+                    throw InstantiableError.cannotBeRoot(
+                        instantiableType,
+                        violatingDependencies: inheritedDependencies
+                    )
+                }
+            }
+
             let forwardedProperties = visitor
                 .dependencies
                 .filter { $0.source == .forwarded }
@@ -233,6 +253,15 @@ public struct InstantiableMacro: MemberMacro {
             visitor.walk(extensionDeclaration)
             for diagnostic in visitor.diagnostics {
                 context.diagnose(diagnostic)
+            }
+
+            if visitor.isRoot, let instantiableType = visitor.instantiableType {
+                guard visitor.instantiables.flatMap(\.dependencies).isEmpty else {
+                    throw InstantiableError.cannotBeRoot(
+                        instantiableType,
+                        violatingDependencies: visitor.instantiables.flatMap(\.dependencies)
+                    )
+                }
             }
 
             let instantiables = visitor.instantiables
@@ -371,6 +400,7 @@ public struct InstantiableMacro: MemberMacro {
         case fulfillingAdditionalTypesContainsOptional
         case fulfillingAdditionalTypesArgumentInvalid
         case tooManyInstantiateMethods(TypeDescription)
+        case cannotBeRoot(TypeDescription, violatingDependencies: [Dependency])
 
         var description: String {
             switch self {
@@ -382,6 +412,13 @@ public struct InstantiableMacro: MemberMacro {
                 "The argument `fulfillingAdditionalTypes` must be an inlined array"
             case let .tooManyInstantiateMethods(type):
                 "@\(InstantiableVisitor.macroName)-decorated extension must have a single `\(InstantiableVisitor.instantiateMethodName)(…)` method that returns `\(type.asSource)`"
+            case let .cannotBeRoot(declaredRootType, violatingDependencies):
+                """
+                Types decorated with `@\(InstantiableVisitor.macroName)(isRoot: true)` must only have dependencies that are all `@\(Dependency.Source.instantiatedRawValue)` or `@\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@\(Dependency.Source.instantiatedRawValue)` or `@\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
+
+                The following dependencies were found on \(declaredRootType.asSource) that violated this contract:
+                \(violatingDependencies.map(\.property.asSource).joined(separator: "\n"))
+                """
             }
         }
     }

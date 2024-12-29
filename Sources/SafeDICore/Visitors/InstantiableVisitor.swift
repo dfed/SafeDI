@@ -188,6 +188,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
         if let instantiableType = node.signature.returnClause?.type.typeDescription {
             extensionInstantiables.append(.init(
                 instantiableType: instantiableType,
+                isRoot: false,
                 initializer: initializer,
                 additionalInstantiables: additionalInstantiables,
                 dependencies: initializer.arguments.map {
@@ -280,6 +281,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
     // MARK: Public
 
+    public private(set) var isRoot = false
     public private(set) var dependencies = [Dependency]()
     public private(set) var initializers = [Initializer]()
     public private(set) var instantiableType: TypeDescription?
@@ -324,6 +326,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
                 [
                     Instantiable(
                         instantiableType: instantiableType,
+                        isRoot: isRoot,
                         initializer: initializers.first(where: { $0.isValid(forFulfilling: dependencies) }),
                         additionalInstantiables: additionalInstantiables,
                         dependencies: dependencies,
@@ -378,16 +381,31 @@ public final class InstantiableVisitor: SyntaxVisitor {
     }
 
     private func processAttributes(_: AttributeListSyntax, on macro: AttributeSyntax) {
-        guard let fulfillingAdditionalTypesExpression = macro.fulfillingAdditionalTypes,
-              let fulfillingAdditionalTypesArray = ArrayExprSyntax(fulfillingAdditionalTypesExpression)
-        else {
-            // Nothing to do here.
-            return
+        func processIsRoot() {
+            guard let isRootExpression = macro.isRoot,
+                  let boolExpression = BooleanLiteralExprSyntax(isRootExpression)
+            else {
+                // Nothing to do here.
+                return
+            }
+
+            isRoot = boolExpression.literal.tokenKind == .keyword(.true)
+        }
+        func processFulfillingAdditionalTypesParameter() {
+            guard let fulfillingAdditionalTypesExpression = macro.fulfillingAdditionalTypes,
+                  let fulfillingAdditionalTypesArray = ArrayExprSyntax(fulfillingAdditionalTypesExpression)
+            else {
+                // Nothing to do here.
+                return
+            }
+
+            additionalInstantiables = fulfillingAdditionalTypesArray
+                .elements
+                .map(\.expression.typeDescription.asInstantiatedType)
         }
 
-        additionalInstantiables = fulfillingAdditionalTypesArray
-            .elements
-            .map(\.expression.typeDescription.asInstantiatedType)
+        processIsRoot()
+        processFulfillingAdditionalTypesParameter()
     }
 
     private func processModifiers(_: DeclModifierListSyntax, on node: some ConcreteDeclSyntaxProtocol) {

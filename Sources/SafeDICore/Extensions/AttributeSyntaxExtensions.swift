@@ -21,11 +21,25 @@
 import SwiftSyntax
 
 extension AttributeSyntax {
-    public var fulfillingAdditionalTypes: ExprSyntax? {
+    public var isRoot: ExprSyntax? {
         guard let arguments,
               let labeledExpressionList = LabeledExprListSyntax(arguments),
               let firstLabeledExpression = labeledExpressionList.first,
-              firstLabeledExpression.label?.text == "fulfillingAdditionalTypes"
+              firstLabeledExpression.label?.text == "isRoot"
+        else {
+            return nil
+        }
+
+        return firstLabeledExpression.expression
+    }
+
+    public var fulfillingAdditionalTypes: ExprSyntax? {
+        guard let arguments,
+              let labeledExpressionList = LabeledExprListSyntax(arguments),
+              let firstLabeledExpression = labeledExpressionList.first(where: {
+                  // In `@Instantiatable`, the `fulfillingAdditionalTypes` parameter is the second parameter, though the first parameter has a default.
+                  $0.label?.text == "fulfillingAdditionalTypes"
+              })
         else {
             return nil
         }

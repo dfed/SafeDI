@@ -71,7 +71,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
 
                 public protocol NetworkService {}
 
-                @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+                @Instantiable(isRoot: true, fulfillingAdditionalTypes: [NetworkService.self])
                 public final class DefaultNetworkService: NetworkService {
                     let urlSession: URLSession = .shared
                 }
@@ -114,7 +114,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(networkService: NetworkService) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -166,7 +166,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public actor Root {
                     public init(networkService: NetworkService) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -218,7 +218,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     public init(networkService: NetworkService) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -270,7 +270,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root1 {
                     public init(networkService: NetworkService) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -280,7 +280,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root2 {
                     public init(networkService: NetworkService) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -327,7 +327,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     public init(userService: any UserService) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -394,7 +394,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class SomeInstantiated: Instantiable {
                     public init(someClass: any SomeProtocol<OtherType>) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -433,7 +433,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     public init(userService: UserService?) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -518,7 +518,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>) {
                         self.authService = authService
@@ -628,7 +628,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
@@ -731,7 +731,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(networkServiceBuilder: Instantiator<NetworkService>) {
                         self.networkServiceBuilder = networkServiceBuilder
@@ -811,7 +811,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>) {
                         self.authService = authService
@@ -941,7 +941,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>) {
                         self.authService = authService
@@ -1039,7 +1039,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import SwiftUI
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct RootView: View {
                     public init(splashScreenView: AnyView) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1093,7 +1093,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import SwiftUI
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct RootView: View {
                     public init(splashScreenViewBuilder: ErasedInstantiator<(), AnyView>) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1181,7 +1181,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
@@ -1303,7 +1303,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
@@ -1398,7 +1398,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable()
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1408,7 +1408,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class Child {
                     // This Child is incorrectly configured! It is missing the required initializer.
 
@@ -1418,7 +1418,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class Grandchild {
                     public init() {}
                 }
@@ -1454,7 +1454,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable()
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1464,7 +1464,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class Child {
                     public init(grandchild: Grandchild, nonInjectedProperty: Int = 5) {
                         self.grandchild = grandchild
@@ -1477,7 +1477,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class Grandchild {
                     public init() {}
                 }
@@ -1513,7 +1513,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable()
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1523,7 +1523,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 final class Child {
                     public init(grandchild: Grandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1533,7 +1533,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class Grandchild {
                     public init() {}
                 }
@@ -1569,7 +1569,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable()
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1579,7 +1579,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 final class Child {
                     public init(grandchild: Grandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1589,7 +1589,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class Grandchild {
                     public init() {}
                 }
@@ -1625,7 +1625,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable()
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(childA: ChildA, childB: ChildB, greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1637,7 +1637,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class ChildA {
                     public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1648,7 +1648,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAA {
                     public init(greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1658,7 +1658,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAB {
                     public init(greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1668,7 +1668,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class ChildB {
                     public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1679,7 +1679,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBA {
                     public init(greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1689,7 +1689,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBB {
                     public init(greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1699,7 +1699,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GreatGrandchild {
                     public init() {}
                 }
@@ -1744,7 +1744,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable()
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(childA: ChildA, childB: ChildB) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1755,7 +1755,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class ChildA {
                     public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB, greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1767,7 +1767,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAA {
                     public init(greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1777,7 +1777,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAB {
                     public init(greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1787,7 +1787,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class ChildB {
                     public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB, greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1799,7 +1799,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBA {
                     public init(greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1809,7 +1809,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBB {
                     public init(greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1819,7 +1819,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GreatGrandchild {
                     public init() {}
                 }
@@ -1865,7 +1865,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -1950,7 +1950,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child, recreated: Recreated) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2037,7 +2037,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child, recreated: Recreated) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2138,7 +2138,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2259,7 +2259,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(childABuilder: SendableErasedInstantiator<Recreated, ChildAProtocol>, childB: ChildB, recreated: Recreated) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2391,7 +2391,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable()
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(childA: ChildA, childB: ChildB) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2402,7 +2402,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class ChildA {
                     public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2413,7 +2413,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAA {
                     public init(greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2423,7 +2423,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAB {
                     public init(greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2433,7 +2433,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class ChildB {
                     public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2444,7 +2444,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBA {
                     public init(greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2454,7 +2454,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBB {
                     public init(greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2464,7 +2464,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GreatGrandchild {
                     public init() {}
                 }
@@ -2524,7 +2524,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable()
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child, keyValueStore: KeyValueStore) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2535,7 +2535,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class Child {
                     public init(keyValueStore: KeyValueStore) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2630,7 +2630,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>) {
                         self.authService = authService
@@ -2734,7 +2734,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let greatGrandchildModuleOutput = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GreatGrandchild: Sendable {
                     public init() {}
                 }
@@ -2749,7 +2749,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import GreatGrandchildModule
 
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAA {
                     public init(greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2761,7 +2761,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import GreatGrandchildModule
 
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAB {
                     public init(greatGrandchild: GreatGrandchild) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2773,7 +2773,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import GreatGrandchildModule
 
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBA {
                     public init(greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2785,7 +2785,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import GreatGrandchildModule
 
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBB {
                     public init(greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2820,7 +2820,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 @preconcurrency import GrandchildModule
 
-                @Instantiable()
+                @Instantiable
                 public final class ChildB {
                     public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2845,7 +2845,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 import ChildModule
 
                 @MainActor
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(childA: ChildA, childB: ChildB) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2930,7 +2930,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     public init(defaultUserService: DefaultUserService, userService: any UserService) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -2989,26 +2989,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 @Instantiable
                 public struct NotRoot {
-                    @Instantiated
-                    private let defaultUserService: DefaultUserService
-
-                    // This received property's alias is improperly configured, meaning that this type is not a root.
-                    @Received(fulfilledByDependencyNamed: "userService", ofType: DefaultUserService.self)
-                    private let userService: any UserService
-                }
-                """,
-                """
-                import Foundation
-
-                public protocol UserService {
-                    var userName: String? { get set }
-                }
-
-                @Instantiable(fulfillingAdditionalTypes: [UserService.self])
-                public final class DefaultUserService: UserService {
                     public init() {}
-
-                    public var userName: String?
                 }
                 """,
             ],
@@ -3023,9 +3004,32 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
             // Any modifications made to this file will be overwritten on subsequent builds.
             // Please refrain from editing this file directly.
 
-            #if canImport(Foundation)
-            import Foundation
-            #endif
+            // No root @Instantiable-decorated types found, or root types already had a `public init()` method.
+            """
+        )
+    }
+
+    @MainActor
+    func test_run_successfullyGeneratesOutputFileWhenIsRootIsFalse() async throws {
+        let output = try await executeSafeDIToolTest(
+            swiftFileContent: [
+                """
+                @Instantiable(isRoot: false)
+                public struct NotRoot {
+                    public init() {}
+                }
+                """,
+            ],
+            buildDependencyTreeOutput: true,
+            filesToDelete: &filesToDelete
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(output.dependencyTree),
+            """
+            // This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+            // Any modifications made to this file will be overwritten on subsequent builds.
+            // Please refrain from editing this file directly.
 
             // No root @Instantiable-decorated types found, or root types already had a `public init()` method.
             """
@@ -3084,7 +3088,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
@@ -3196,7 +3200,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(childBuilder: Instantiator<Child>) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -3314,7 +3318,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
@@ -3466,7 +3470,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService) {
                         self.authService = authService
@@ -3546,7 +3550,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService) {
                         self.authService = authService
@@ -3643,7 +3647,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
@@ -3802,7 +3806,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
@@ -3912,7 +3916,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -3988,7 +3992,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(a: A, b: B, c: C, d: D, e: E, f: F, g: G, h: H, i: I, j: J, k: K, l: L, m: M, n: N, o: O, p: P, q: Q, r: R, s: S, t: T, u: U, v: V, w: W, x: X, y: Y, z: Z) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -4374,7 +4378,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(childBuilder: Instantiator<Child>?) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -4419,7 +4423,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     public init(aBuilder: Instantiator<A>) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -4497,7 +4501,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     public init(a: A) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -4575,7 +4579,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     public init(a: A) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -4629,7 +4633,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     public init(aBuilder: Instantiator<A>) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -4684,7 +4688,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     public init(stringContainer: Container<String>, intContainer: Container<Int>, floatContainer: Container<Float>, voidContainer: Container<Void>) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -4746,7 +4750,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     public init(stringContainer: MyModule.Container<String>, intContainer: MyModule.Container<Int>, floatContainer: MyModule.Container<Float>, voidContainer: MyModule.Container<Void>) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -4825,7 +4829,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -4910,7 +4914,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -5004,7 +5008,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -5099,7 +5103,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -5167,7 +5171,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -5230,7 +5234,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     public init(child: Child) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -5283,7 +5287,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class TypeWithDependency {
                     public init(erasedType: ErasedType ) {
                         fatalError("SafeDI doesn't inspect the initializer body")
@@ -5336,7 +5340,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                     // Extension defined before an @Instantiable should not make a difference.
                 }
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class TypeWithDependency {
                     public init(erasedType: ErasedType ) {
                         fatalError("SafeDI doesn't inspect the initializer body")

@@ -76,7 +76,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     @Instantiated
                     let networkService: NetworkService
@@ -113,14 +113,14 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root1 {
                     @Instantiated
                     let networkService: NetworkService
                 }
                 """,
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root2 {
                     @Instantiated
                     let networkService: NetworkService
@@ -175,7 +175,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>) {
                         self.authService = authService
@@ -264,7 +264,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
@@ -366,7 +366,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>) {
                         self.authService = authService
@@ -476,7 +476,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>) {
                         self.authService = authService
@@ -583,7 +583,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
@@ -684,7 +684,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
@@ -760,7 +760,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable()
+                @Instantiable(isRoot: true)
                 public final class Root {
                     @Instantiated
                     let childA: ChildA
@@ -771,7 +771,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class ChildA {
                     @Instantiated
                     let grandchildAA: GrandchildAA
@@ -780,21 +780,21 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAA {
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAB {
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class ChildB {
                     @Instantiated
                     let grandchildBA: GrandchildBA
@@ -803,21 +803,21 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBA {
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBB {
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GreatGrandchild {}
                 """,
 
@@ -848,7 +848,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable()
+                @Instantiable(isRoot: true)
                 public final class Root {
                     @Instantiated
                     let childA: ChildA
@@ -857,7 +857,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class ChildA {
                     @Instantiated
                     let grandchildAA: GrandchildAA
@@ -868,21 +868,21 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAA {
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAB {
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class ChildB {
                     @Instantiated
                     let grandchildBA: GrandchildBA
@@ -893,21 +893,21 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBA {
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBB {
                     @Received
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GreatGrandchild {}
                 """,
 
@@ -939,7 +939,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     @Instantiated
                     let child: Child
@@ -1000,7 +1000,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable()
+                @Instantiable(isRoot: true)
                 public final class Root {
                     @Instantiated
                     let childA: ChildA
@@ -1009,7 +1009,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class ChildA {
                     @Instantiated
                     let grandchildAA: GrandchildAA
@@ -1018,21 +1018,21 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAA {
                     @Instantiated
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAB {
                     @Instantiated
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class ChildB {
                     @Instantiated
                     let grandchildBA: GrandchildBA
@@ -1041,21 +1041,21 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBA {
                     @Instantiated
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBB {
                     @Instantiated
                     let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GreatGrandchild {}
                 """,
 
@@ -1089,7 +1089,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         let greatGrandchildModuleOutput = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable()
+                @Instantiable
                 public final class GreatGrandchild: Sendable {}
                 """,
             ],
@@ -1102,7 +1102,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 import GreatGrandchildModule
 
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAA {
                     @Instantiated
                     let greatGrandchild: GreatGrandchild
@@ -1111,7 +1111,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 import GreatGrandchildModule
 
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildAB {
                     @Instantiated
                     let greatGrandchild: GreatGrandchild
@@ -1120,7 +1120,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 import GreatGrandchildModule
 
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBA {
                     @Instantiated
                     var greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>
@@ -1129,7 +1129,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 import GreatGrandchildModule
 
-                @Instantiable()
+                @Instantiable
                 public final class GrandchildBB {
                     @Instantiated
                     greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>
@@ -1159,7 +1159,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @preconcurrency import GrandchildModule
 
-                @Instantiable()
+                @Instantiable
                 public final class ChildB {
                     @Instantiated
                     let grandchildBA: GrandchildBA
@@ -1182,7 +1182,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 import ChildModule
 
                 @MainActor
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     @Instantiated
                     let childA: ChildA
@@ -1225,7 +1225,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     @Instantiated
                     private let defaultUserService: DefaultUserService
@@ -1302,7 +1302,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 import UIKit
 
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
                     public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
                         self.authService = authService
@@ -1342,7 +1342,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     @Instantiated
                     let child: Child
@@ -1398,7 +1398,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public final class Root {
                     @Instantiated
                     let a: A
@@ -1772,7 +1772,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     @Instantiated
                     let aBuilder: Instantiator<A>
@@ -1823,7 +1823,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     @Instantiated
                     let a: A
@@ -1874,7 +1874,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     @Instantiated
                     let a: A
@@ -1910,7 +1910,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     @Instantiated
                     let aBuilder: Instantiator<A>
@@ -1949,7 +1949,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     @Instantiated let stringContainer: Container<String>
                     @Instantiated let intContainer: Container<Int>
@@ -2001,7 +2001,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
-                @Instantiable
+                @Instantiable(isRoot: true)
                 public struct Root {
                     @Instantiated let stringContainer: MyModule.Container<String>
                     @Instantiated let intContainer: MyModule.Container<Int>

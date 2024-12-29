@@ -25,7 +25,7 @@ import Foundation
 import SafeDI
 import SharedModule
 
-@Instantiable @MainActor
+@Instantiable(isRoot: true) @MainActor
 public final class Root: Instantiable {
     public init(childA: ChildA, childB: ChildB, childC: ChildC, shared: SharedThing, userDefaults: UserDefaults) {
         self.childA = childA

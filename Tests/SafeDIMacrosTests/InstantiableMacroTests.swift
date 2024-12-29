@@ -184,6 +184,97 @@ import SafeDICore
             }
         }
 
+        func test_declaration_doesNotThrowWhenRootHasInstantiatedAndRenamedDependencies() {
+            assertMacro {
+                """
+                @Instantiable(isRoot: true)
+                public final class Foo: Instantiable {
+                    public init(dependency: Dependency, renamedDependency: Dependency, renamed2Dependency: Dependency) {
+                        fatalError("SafeDI doesn't inspect the initializer body")
+                    }
+
+                    @Instantiated private let dependency: Dependency
+                    @Received(fulfilledByDependencyNamed: "dependency", ofType: Dependency.self) private let renamedDependency: Dependency
+                    @Received(fulfilledByDependencyNamed: "renamedDependency", ofType: Dependency.self) private let renamed2Dependency: Dependency
+                }
+                """
+            } expansion: {
+                """
+                public final class Foo: Instantiable {
+                    public init(dependency: Dependency, renamedDependency: Dependency, renamed2Dependency: Dependency) {
+                        fatalError("SafeDI doesn't inspect the initializer body")
+                    }
+
+                    private let dependency: Dependency
+                    private let renamedDependency: Dependency
+                    private let renamed2Dependency: Dependency
+                }
+                """
+            }
+        }
+
+        func test_declaration_throwsErrorWhenRootHasReceivedDependency() {
+            assertMacro {
+                """
+                @Instantiable(isRoot: true)
+                public final class Foo: Instantiable {
+                    public init(dependency: Dependency) {
+                        fatalError("SafeDI doesn't inspect the initializer body")
+                    }
+
+                    @Received private let dependency: Dependency 
+                }
+                """
+            } diagnostics: {
+                """
+                @Instantiable(isRoot: true)
+                ┬──────────────────────────
+                ╰─ 🛑 Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
+
+                The following dependencies were found on Foo that violated this contract:
+                dependency: Dependency
+                public final class Foo: Instantiable {
+                    public init(dependency: Dependency) {
+                        fatalError("SafeDI doesn't inspect the initializer body")
+                    }
+
+                    @Received private let dependency: Dependency 
+                }
+                """
+            }
+        }
+
+        func test_declaration_throwsErrorWhenRootHasForwardedDependency() {
+            assertMacro {
+                """
+                @Instantiable(isRoot: true)
+                public final class Foo: Instantiable {
+                    public init(dependency: Dependency) {
+                        fatalError("SafeDI doesn't inspect the initializer body")
+                    }
+
+                    @Forwarded private let dependency: Dependency 
+                }
+                """
+            } diagnostics: {
+                """
+                @Instantiable(isRoot: true)
+                ┬──────────────────────────
+                ╰─ 🛑 Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
+
+                The following dependencies were found on Foo that violated this contract:
+                dependency: Dependency
+                public final class Foo: Instantiable {
+                    public init(dependency: Dependency) {
+                        fatalError("SafeDI doesn't inspect the initializer body")
+                    }
+
+                    @Forwarded private let dependency: Dependency 
+                }
+                """
+            }
+        }
+
         func test_extension_throwsErrorWhenFulfillingAdditionalTypesIsAPropertyReference() {
             assertMacro {
                 """
@@ -243,6 +334,46 @@ import SafeDICore
                 extension ExampleService: Instantiable {
                     public static func instantiate() -> ExampleService { fatalError() }
                     public static func instantiate(user: User) -> ExampleService { fatalError() }
+                }
+                """
+            }
+        }
+
+        func test_extension_doesNotThrowWhenRootHasNoDependencies() {
+            assertMacro {
+                """
+                @Instantiable(isRoot: true)
+                extension Foo: Instantiable {
+                    public static func instantiate() -> Foo { fatalError() }
+                }
+                """
+            } expansion: {
+                """
+                extension Foo: Instantiable {
+                    public static func instantiate() -> Foo { fatalError() }
+                }
+                """
+            }
+        }
+
+        func test_extension_throwsErrorWhenRootHasDependencies() {
+            assertMacro {
+                """
+                @Instantiable(isRoot: true)
+                extension Foo: Instantiable {
+                    public static func instantiate(bar: Bar) -> Foo { fatalError() }
+                }
+                """
+            } diagnostics: {
+                """
+                @Instantiable(isRoot: true)
+                ┬──────────────────────────
+                ╰─ 🛑 Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
+
+                The following dependencies were found on Foo that violated this contract:
+                bar: Bar
+                extension Foo: Instantiable {
+                    public static func instantiate(bar: Bar) -> Foo { fatalError() }
                 }
                 """
             }
