@@ -136,14 +136,24 @@ public struct Initializer: Codable, Hashable, Sendable {
     public static func generateRequiredInitializer(
         for dependencies: [Dependency],
         declarationType: ConcreteDeclType,
-        andAdditionalPropertiesWithLabels additionalPropertyLabels: [String] = []
+        andAdditionalPropertiesWithLabels additionalPropertyLabels: [String] = [],
+        formatForFixit: Bool = false
     ) -> InitializerDeclSyntax {
         InitializerDeclSyntax(
             modifiers: declarationType.initializerModifiers,
             signature: FunctionSignatureSyntax(
                 parameterClause: FunctionParameterClauseSyntax(
                     parameters: FunctionParameterListSyntax(itemsBuilder: {
-                        for functionParameter in dependencies.initializerFunctionParameters {
+                        for functionParameter in dependencies.initializerFunctionParameters.enumerated().map({ index, parameter in
+                            var parameter = parameter
+                            if formatForFixit, dependencies.initializerFunctionParameters.endIndex > 1 {
+                                if index == 0 {
+                                    parameter.leadingTrivia = .newline
+                                }
+                                parameter.trailingTrivia = .newline
+                            }
+                            return parameter
+                        }) {
                             functionParameter
                         }
                     })

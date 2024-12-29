@@ -139,7 +139,8 @@ public struct InstantiableMacro: MemberMacro {
                             leadingTrivia: .newline,
                             decl: Initializer.generateRequiredInitializer(
                                 for: visitor.dependencies,
-                                declarationType: concreteDeclaration.declType
+                                declarationType: concreteDeclaration.declType,
+                                formatForFixit: true
                             ),
                             trailingTrivia: .newline
                         ),
@@ -164,7 +165,8 @@ public struct InstantiableMacro: MemberMacro {
                             decl: Initializer.generateRequiredInitializer(
                                 for: visitor.dependencies,
                                 declarationType: concreteDeclaration.declType,
-                                andAdditionalPropertiesWithLabels: visitor.uninitializedNonOptionalPropertyNames
+                                andAdditionalPropertiesWithLabels: visitor.uninitializedNonOptionalPropertyNames,
+                                formatForFixit: true
                             ),
                             trailingTrivia: .newline
                         ),
