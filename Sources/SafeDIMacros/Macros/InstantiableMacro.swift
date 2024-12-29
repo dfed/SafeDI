@@ -133,8 +133,8 @@ public struct InstantiableMacro: MemberMacro {
                 .contains(where: { $0.isValid(forFulfilling: visitor.dependencies) })
             guard hasMemberwiseInitializerForInjectableProperties else {
                 if visitor.uninitializedNonOptionalPropertyNames.isEmpty {
-                    var membersWithInitializer = declaration.memberBlock.members
-                    membersWithInitializer.insert(
+                    var declarationWithInitializer = declaration
+                    declarationWithInitializer.memberBlock.members.insert(
                         MemberBlockItemSyntax(
                             leadingTrivia: .newline,
                             decl: Initializer.generateRequiredInitializer(
@@ -143,22 +143,22 @@ public struct InstantiableMacro: MemberMacro {
                             ),
                             trailingTrivia: .newline
                         ),
-                        at: membersWithInitializer.startIndex
+                        at: declarationWithInitializer.memberBlock.members.startIndex
                     )
                     context.diagnose(Diagnostic(
                         node: Syntax(declaration.memberBlock),
                         error: FixableInstantiableError.missingRequiredInitializer(.hasOnlyInjectableProperties),
                         changes: [
                             .replace(
-                                oldNode: Syntax(declaration.memberBlock.members),
-                                newNode: Syntax(membersWithInitializer)
+                                oldNode: Syntax(declaration),
+                                newNode: Syntax(declarationWithInitializer)
                             ),
                         ]
                     ))
                     return []
                 } else {
-                    var membersWithInitializer = declaration.memberBlock.members
-                    membersWithInitializer.insert(
+                    var declarationWithInitializer = declaration
+                    declarationWithInitializer.memberBlock.members.insert(
                         MemberBlockItemSyntax(
                             leadingTrivia: .newline,
                             decl: Initializer.generateRequiredInitializer(
@@ -168,7 +168,7 @@ public struct InstantiableMacro: MemberMacro {
                             ),
                             trailingTrivia: .newline
                         ),
-                        at: membersWithInitializer.startIndex
+                        at: declarationWithInitializer.memberBlock.members.startIndex
                     )
                     // TODO: Create separate fixit if just `public` or `open` are missing.
                     context.diagnose(Diagnostic(
@@ -178,8 +178,8 @@ public struct InstantiableMacro: MemberMacro {
                         ),
                         changes: [
                             .replace(
-                                oldNode: Syntax(declaration.memberBlock.members),
-                                newNode: Syntax(membersWithInitializer)
+                                oldNode: Syntax(declaration),
+                                newNode: Syntax(declarationWithInitializer)
                             ),
                         ]
                     ))
