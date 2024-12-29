@@ -6,7 +6,7 @@
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fdfed%2FSafeDI%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/dfed/SafeDI)
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fdfed%2FSafeDI%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/dfed/SafeDI)
 
-Compile-time safe dependency injection for Swift projects. SafeDI is built for engineers who want the safety and simplicity of manual dependency injection without the overhead of boilerplate code.
+Compile-time-safe dependency injection for Swift projects. SafeDI provides developers with the safety and simplicity of manual dependency injection, without the overhead of boilerplate code.
 
 ## Features
 
@@ -36,7 +36,7 @@ Compile-time safe dependency injection for Swift projects. SafeDI is built for e
 
 ## The core concept
 
-SafeDI reads your code, validates your dependencies, and generates a dependency tree all during the compilation of your project. If your code compiles, your dependency tree is valid.
+SafeDI reads your code, validates your dependencies, and generates a dependency tree–all during project compilation. If your code compiles, your dependency tree is valid.
 
 Opting a type into the SafeDI dependency tree is straightforward: add the `@Instantiable` macro to your type declaration, and decorate your type’s dependencies with macros to indicate the lifecycle of each property. Here is what a `Boiler` in a `CoffeeMaker` might look like in SafeDI:
 
@@ -51,7 +51,7 @@ public final class Boiler {
 
     …
 
-    // The boiler creates – or in SafeDI parlance ‘instantiates’ – its pump.
+    // The boiler creates–or in SafeDI parlance ‘instantiates’–its pump.
     @Instantiated private let pump: Pump
     // The boiler receives a reference to a water reservoir that has been instantiated by the coffee maker.
     @Received private let waterReservoir: WaterReservoir
@@ -62,17 +62,17 @@ That is all it takes! SafeDI utilizes macro decorations on your existing types t
 
 ## Getting started
 
-SafeDI utilizes both Swift macros and a code generation plugin to read your code and generate a dependency tree. In practice, this means that integrating SafeDI requires three steps:
+SafeDI utilizes both Swift macros and a code generation plugin to read your code and generate a dependency tree. In practice, integrating SafeDI requires three steps:
 
-1. [Add SafeDI as a dependency to your project](#depending-on-safedi)
+1. [Add SafeDI as a dependency to your project](#adding-safedi-as-a-dependency)
 1. [Integrate SafeDI’s code generation into your build](#generating-your-safedi-dependency-tree)
 1. [Create your dependency tree using SafeDI’s macros](Documentation/Manual.md)
 
 You can see sample integrations in the [Examples](Examples/) folder. If you are migrating an existing project to SafeDI, follow our [migration guide](Documentation/Manual.md#migrating-to-safedi).
 
-### Depending on SafeDI
+### Adding SafeDI as a Dependency
 
-To install the SafeDI framework into a [Swift Package Manager](https://github.com/apple/swift-package-manager) package, add the following lines to your `Package.swift` file:
+To add the SafeDI framework as a dependency to a package utilizing [Swift Package Manager](https://github.com/apple/swift-package-manager), add the following lines to your `Package.swift` file:
 
 ```swift
 dependencies: [
@@ -80,9 +80,9 @@ dependencies: [
 ]
 ```
 
-To install the SafeDI framework into an Xcode project with Swift Package Manager, follow [Apple’s instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to add the `https://github.com/dfed/SafeDI.git` dependency to your application.
+To install the SafeDI framework into an Xcode project with Swift Package Manager, follow [Apple’s instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to add the `https://github.com/dfed/SafeDI.git` as a dependency.
 
-### Generating your SafeDI dependency tree
+### Generating your dependency tree
 
 SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin works out of the box on a limited number of project configurations. If your project does not fall into these well-supported configurations, you can configure your build to utilize the `SafeDITool` command-line executable directly.
 
@@ -108,7 +108,7 @@ for faster builds, you can install a release version of `SafeDITool` [rather tha
 swift package --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
 ```
 
-#### Other configurations
+#### Additional configurations
 
 If your first-party code comprises multiple modules in Xcode, or a mix of Xcode Projects and Swift Packages, or some other configuration not listed above, once your Xcode project depends on the SafeDI package you will need to utilize the `SafeDITool` command-line executable directly in a pre-build script.
 
@@ -149,19 +149,19 @@ You can see this in integration in practice in the [ExampleMultiProjectIntegrati
 
 `SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Running this tool on each dependent module is currently left as an exercise to the reader.
 
-## Comparing SafeDI to other DI libraries
+## How SafeDI Compares to Other DI Libraries
 
-SafeDI’s compile-time-safe design makes it similar to [Needle](https://github.com/uber/needle) and [Weaver](https://github.com/scribd/Weaver). Unlike Needle, SafeDI does not require defining dependency protocols for each DI-tree-instantiable type. SafeDI’s capabilities are quite similar to Weaver’s, with the biggest difference being that SafeDI supports codebases with multiple modules, while Weaver does not. Beyond these differences, the choice between SafeDI, Needle, and Weaver largely depends on personal preference.
+SafeDI’s compile-time-safe design makes it similar to [Needle](https://github.com/uber/needle) and [Weaver](https://github.com/scribd/Weaver). Unlike Needle, SafeDI does not require defining dependency protocols for each type that can be instantiated within the DI tree. SafeDI’s capabilities are quite similar to Weaver’s, with the biggest difference being that SafeDI supports codebases with multiple modules, while Weaver does not. Beyond these differences, the choice between SafeDI, Needle, and Weaver largely depends on personal preference.
 
 Other Swift DI libraries like [Swinject](https://github.com/Swinject/Swinject) and [Cleanse](https://github.com/square/Cleanse) do not offer compile-time safety, though other features are similar. A primary benefit of the SafeDI library is that compilation validates your dependency tree.
 
-Meanwhile, libraries like [Factory](https://github.com/hmlongco/Factory) offer compile-time validation of the dependency tree, but do so by preventing hierarchical dependency scoping, meaning that it’s not possible for scoped systems to have compile-time-safe, non-optional access to scoped dependencies. For example, scoped dependencies – like a session object in a network layer – cannot be safely injected in Factory.
+Meanwhile, libraries like [Factory](https://github.com/hmlongco/Factory) offer compile-time validation of the dependency tree, but do so by preventing hierarchical dependency scoping, meaning that it’s not possible for scoped systems to have compile-time-safe, non-optional access to scoped dependencies. For example, scoped dependencies–like a session object in a network layer–cannot be safely injected in Factory.
 
 To read about on how SafeDI compares to manual injection, please refer to the [Key Differences section of the manual](Documentation/Manual.md#comparing-safedi-and-manual-injection-key-differences).
 
 ## Acknowledgements
 
-Huge thanks to [@kierajmumick](http://github.com/kierajmumick) for helping hone the early design of SafeDI.
+Special thanks to [@kierajmumick](http://github.com/kierajmumick) for helping shape the early design of SafeDI.
 
 ## Contributing
 
