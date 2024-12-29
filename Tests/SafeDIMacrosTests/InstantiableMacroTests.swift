@@ -1218,7 +1218,11 @@ import SafeDICore
                 """
                 @Instantiable
                 public struct ExampleService: Instantiable {
-                public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+                public init(
+                forwardedA: ForwardedA,
+                receivedA: ReceivedA,
+                receivedB: ReceivedB
+                ) {
                 self.forwardedA = forwardedA
                 self.receivedA = receivedA
                 self.receivedB = receivedB
@@ -1241,7 +1245,11 @@ import SafeDICore
             } expansion: {
                 """
                 public struct ExampleService: Instantiable {
-                public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+                public init(
+                forwardedA: ForwardedA,
+                receivedA: ReceivedA,
+                receivedB: ReceivedB
+                ) {
                 self.forwardedA = forwardedA
                 self.receivedA = receivedA
                 self.receivedB = receivedB
@@ -1291,7 +1299,10 @@ import SafeDICore
                 """
                 @Instantiable
                 public final class UserService: Instantiable {
-                public init(userID: String, userName: String) {
+                public init(
+                userID: String,
+                userName: String
+                ) {
                 self.userID = userID
                 self.userName = userName
                 }
@@ -1306,7 +1317,10 @@ import SafeDICore
             } expansion: {
                 """
                 public final class UserService: Instantiable {
-                public init(userID: String, userName: String) {
+                public init(
+                userID: String,
+                userName: String
+                ) {
                 self.userID = userID
                 self.userName = userName
                 }

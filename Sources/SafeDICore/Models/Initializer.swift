@@ -143,7 +143,16 @@ public struct Initializer: Codable, Hashable, Sendable {
             signature: FunctionSignatureSyntax(
                 parameterClause: FunctionParameterClauseSyntax(
                     parameters: FunctionParameterListSyntax(itemsBuilder: {
-                        for functionParameter in dependencies.initializerFunctionParameters {
+                        for functionParameter in dependencies.initializerFunctionParameters.enumerated().map({ index, parameter in
+                            var parameter = parameter
+                            if dependencies.initializerFunctionParameters.endIndex > 1 {
+                                if index == 0 {
+                                    parameter.leadingTrivia = .newline
+                                }
+                                parameter.trailingTrivia = .newline
+                            }
+                            return parameter
+                        }) {
                             functionParameter
                         }
                     })
