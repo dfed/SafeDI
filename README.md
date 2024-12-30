@@ -163,7 +163,7 @@ Thanks for being part of this journey, and happy injecting!
 
 ## Author
 
-SafeDI was created by [Dan Federman](https://github.com/dfed), the architect of Airbnb’s (closed source) Swift dependency injection system. Following his tenure at Airbnb, Dan developed SafeDI to share a modern, compile-time-safe dependency injection solution with the Swift community.
+SafeDI was created by [Dan Federman](https://github.com/dfed), the architect of Airbnb’s closed-source Swift dependency injection system. Following his tenure at Airbnb, Dan developed SafeDI to share a modern, compile-time-safe dependency injection solution with the Swift community.
 
 Dan has a proven track record of maintaining open-source libraries: he co-created [Valet](https://github.com/square/Valet) and has been maintaining the repo since its debut in 2015.
 
