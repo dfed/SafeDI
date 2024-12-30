@@ -1,6 +1,6 @@
 # SafeDI Manual
 
-This manual explains the ins and outs of how to use SafeDI.
+This manual provides a detailed guide to using SafeDI effectively in your Swift projects. You’ll learn how to create your dependency tree utilizing SafeDI’s macros, learn recommended approaches to adopting SafeDI, and get a tour of how SafeDI works under the hood.
 
 ## Macros
 
@@ -57,7 +57,7 @@ public final class UserService: Instantiable {
     /// An auth service instance that is instantiated when the `UserService` is instantiated.
     @Instantiated private let authService: AuthService
 
-    /// An instance of secure, persistent storage that is instantiated further up the SafeDI dependency tree.
+    /// An instance of secure, persistent storage that is instantiated further up the dependency tree.
     @Received private let securePersistentStorage: SecurePersistentStorage
 
     private func loadPersistedUser() -> User? {
@@ -341,7 +341,7 @@ The `@StateObject` documentation reads:
 
 > Declare state objects as private to prevent setting them from a memberwise initializer, which can conflict with the storage management that SwiftUI provides
 
-`@Instantiated`, `@Forwarded`, or `@Received` objects may be decorated with [`@ObservedObject`](https://developer.apple.com/documentation/swiftui/ObservedObject). Note that `@Instantiated` objects declared on a `View` will be re-initialized when the view is re-initialized. You can find a deep dive on SwiftUI view lifecycles [here](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
+`@Instantiated`, `@Forwarded`, or `@Received` objects may be decorated with [`@ObservedObject`](https://developer.apple.com/documentation/swiftui/ObservedObject). Keep in mind that `@Instantiated` objects in a `View` are re-initialized each time the view is recreated by SwiftUI. You can find a deep dive on SwiftUI view lifecycles [here](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
 
 ### Inheritance
 
@@ -357,7 +357,7 @@ We’ve tied everything together with an example multi-user notes application ba
 
 ## Under the hood
 
-SafeDI has a `SafeDITool` executable that the `SafeDIGenerator` plugin utilizes to read code and generate a dependency tree. The tool utilizes Apple’s [SwiftSyntax](https://github.com/apple/swift-syntax) library to parse your code and find your `@Instantiable` types’ initializers and dependencies. With this information, SafeDI creates a graph of your project’s dependencies. This graph is validated as part of the `SafeDITool`’s execution, and the tool emits human-readible errors if the dependency graph is not valid. Source code is only generated if the dependency graph is valid.
+SafeDI has a `SafeDITool` executable that the `SafeDIGenerator` plugin utilizes to read code and generate a dependency tree. The tool utilizes Apple’s [SwiftSyntax](https://github.com/apple/swift-syntax) library to parse your code and find your `@Instantiable` types’ initializers and dependencies. With this information, SafeDI generates a graph of your project’s dependencies, validates it during `SafeDITool` execution, and provides clear, human-readable error messages if the graph is invalid. Source code is only generated if the dependency graph is valid.
 
 The executable heavily utilizes asynchronous processing to avoid `SafeDITool` becoming a bottleneck in your build. Additionally, we only parse a Swift file with `SwiftSyntax` when the file contains the string `Instantiable`.
 
