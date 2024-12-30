@@ -167,9 +167,6 @@ SafeDI was created by [Dan Federman](https://github.com/dfed), the architect of 
 
 Dan has a proven track record of maintaining open-source libraries: he co-created [Valet](https://github.com/square/Valet) and has been maintaining the repo since its debut in 2015.
 
-* [LinkedIn](https://www.linkedin.com/in/dsfed)
-* [BlueSky](https://bsky.app/profile/dfed.me)
-
 ## Acknowledgements
 
 Special thanks to [@kierajmumick](http://github.com/kierajmumick) for helping shape the early design of SafeDI.
