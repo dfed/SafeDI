@@ -22,12 +22,11 @@ import SwiftSyntax
 
 extension StringLiteralSegmentListSyntax {
     public var firstStringSegment: String? {
-        guard let first else { return nil }
         switch first {
         case let .stringSegment(stringSegmentSyntax):
-            return stringSegmentSyntax.content.text
-        case .expressionSegment:
-            return nil
+            stringSegmentSyntax.content.text
+        case .expressionSegment, .none:
+            nil
         }
     }
 }
