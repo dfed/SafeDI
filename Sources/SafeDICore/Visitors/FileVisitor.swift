@@ -108,7 +108,8 @@ public final class FileVisitor: SyntaxVisitor {
     }
 
     public override func visitPost(_: ExtensionDeclSyntax) {
-        exitType()
+        // Extensions are always top-level.
+        parentType = nil
     }
 
     // MARK: Public
