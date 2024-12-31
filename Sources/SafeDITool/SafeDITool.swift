@@ -53,7 +53,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 
         let (dependentModuleInfo, module) = try await (
             loadSafeDIModuleInfo(),
-            parsedModule(loadSwiftFiles())
+            parsedModule()
         )
 
         let unnormalizedInstantiables = dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
@@ -199,48 +199,36 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
         }
     }
 
-    private func loadSwiftFiles() async throws -> [String] {
+    private func parsedModule() async throws -> ParsedModule {
         try await withThrowingTaskGroup(
-            of: String.self,
-            returning: [String].self
+            of: (imports: [ImportStatement], instantiables: [Instantiable])?.self,
+            returning: ParsedModule.self
         ) { taskGroup in
+            var imports = [ImportStatement]()
+            var instantiables = [Instantiable]()
             for filePath in try await findSwiftFiles() where !filePath.isEmpty {
                 taskGroup.addTask {
-                    let swiftFile = try String(contentsOfFile: filePath, encoding: .utf8)
-                    if swiftFile.contains("@\(InstantiableVisitor.macroName)") {
-                        return swiftFile
-                    } else {
-                        // We don't care about this file.
-                        return ""
-                    }
+                    let content = try String(contentsOfFile: filePath, encoding: .utf8)
+                    guard content.contains("@\(InstantiableVisitor.macroName)") else { return nil }
+                    let fileVisitor = FileVisitor()
+                    fileVisitor.walk(Parser.parse(source: content))
+                    guard !fileVisitor.instantiables.isEmpty else { return nil }
+                    return (imports: fileVisitor.imports, instantiables: fileVisitor.instantiables)
                 }
             }
-            var swiftFiles = [String]()
-            for try await swiftFile in taskGroup {
-                if !swiftFile.isEmpty {
-                    swiftFiles.append(swiftFile)
+
+            for try await fileInfo in taskGroup {
+                if let fileInfo {
+                    imports.append(contentsOf: fileInfo.imports)
+                    instantiables.append(contentsOf: fileInfo.instantiables)
                 }
             }
-            return swiftFiles
-        }
-    }
 
-    private func parsedModule(_ swiftFileContent: [String]) -> ParsedModule {
-        var imports = [ImportStatement]()
-        var instantiables = [Instantiable]()
-        for content in swiftFileContent {
-            let fileVisitor = FileVisitor()
-            fileVisitor.walk(Parser.parse(source: content))
-            if !fileVisitor.instantiables.isEmpty {
-                imports.append(contentsOf: fileVisitor.imports)
-                instantiables.append(contentsOf: fileVisitor.instantiables)
-            }
+            return ParsedModule(
+                imports: imports,
+                instantiables: instantiables
+            )
         }
-
-        return ParsedModule(
-            imports: imports,
-            instantiables: instantiables
-        )
     }
 
     var moduleInfoURLs: Set<URL> {
