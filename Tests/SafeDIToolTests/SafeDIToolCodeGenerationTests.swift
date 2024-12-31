@@ -5336,7 +5336,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                 }
                 """,
                 """
-                extension ErasedType {
+                extension ErasedType.SomeType {
                     // Extension defined before an @Instantiable should not make a difference.
                 }
 
