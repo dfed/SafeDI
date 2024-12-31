@@ -80,7 +80,7 @@ dependencies: [
 ]
 ```
 
-To install the SafeDI framework into an Xcode project with Swift Package Manager, follow [Apple’s instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to add the `https://github.com/dfed/SafeDI.git` as a dependency.
+To install the SafeDI framework into an Xcode project with Swift Package Manager, follow [Apple’s instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to add `https://github.com/dfed/SafeDI.git` as a dependency.
 
 ### Generating your dependency tree
 
@@ -102,15 +102,9 @@ If your first-party code is entirely contained in a Swift Package with one or mo
 
 You can see this integration in practice in the [ExamplePackageIntegration](Examples/ExamplePackageIntegration) package.
 
-for faster builds, you can install a release version of `SafeDITool` [rather than a debug version](https://github.com/apple/swift-package-manager/issues/7233) via the command line:
-
-```zsh
-swift package --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
-```
-
 #### Additional configurations
 
-If your first-party code comprises multiple modules in Xcode, or a mix of Xcode Projects and Swift Packages, or some other configuration not listed above, once your Xcode project depends on the SafeDI package you will need to utilize the `SafeDITool` command-line executable directly in a pre-build script.
+If your first-party code comprises multiple modules in Xcode, or a mix of Xcode Projects and Swift Packages, or some other configuration, once your Xcode project depends on the SafeDI package you will need to utilize the `SafeDITool` command-line executable directly in a pre-build script.
 
 ```sh
 set -e
@@ -118,6 +112,7 @@ set -e
 VERSION='<<VERSION>>'
 DESTINATION="$BUILD_DIR/SafeDITool-Release/$VERSION/safeditool"
 
+# Download the tool from Github releases.
 if [ -f "$DESTINATION" ]; then
     if [ ! -x "$DESTINATION" ]; then
         chmod +x "$DESTINATION"
@@ -138,6 +133,7 @@ else
     chmod +x "$DESTINATION"
 fi
 
+# Run the tool.
 $DESTINATION --include "$PROJECT_DIR/<<RELATIVE_PATH_TO_SOURCE_FILES>>" "$PROJECT_DIR/<<RELATIVE_PATH_TO_MORE_SOURCE_FILES>>" --dependency-tree-output "$PROJECT_DIR/<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>"
 ```
 
@@ -147,7 +143,7 @@ You can see this in integration in practice in the [ExampleMultiProjectIntegrati
 
 `SafeDITool` is designed to integrate into projects of any size or shape.
 
-`SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Running this tool on each dependent module is currently left as an exercise to the reader.
+`SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run `swift run SafeDITool --help` to see documentation of the tool’s supported arguments.
 
 ## Comparing SafeDI to other DI libraries
 
