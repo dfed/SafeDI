@@ -32,11 +32,9 @@
 ///         }
 ///
 ///         /// A dependency instance that is instantiated when the `FirstPartyType` is instantiated.
-///         @Instantiated
-///         private let createdDependency: Dependency
+///         @Instantiated private let createdDependency: Dependency
 ///         /// A dependency instance that was instantiated further up the dependency tree.
-///         @Received
-///         private let receivedDependency: Dependency
+///         @Received private let receivedDependency: Dependency
 ///     }
 ///
 /// An extension declaration decorated with `@Instantiable` makes the extended type capable of having properties of other `@Instantiable`-decorated types injected into it. Decorating extensions with `@Instantiable` enables third-party types to be instantiated by the SafeDI system.

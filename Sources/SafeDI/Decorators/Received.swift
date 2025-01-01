@@ -22,8 +22,7 @@
 ///
 /// An example of the macro in use:
 ///
-///     @Received
-///     private let dependency: DependencyType
+///     @Received private let dependency: DependencyType
 ///
 /// Note that the access level of the dependency in the above example does not affect the dependency tree – a `private` dependency can still be `@Received` by `@Instantiable`-decorated types further down the dependency tree.
 @attached(peer)
@@ -33,11 +32,9 @@ public macro Received() = #externalMacro(module: "SafeDIMacros", type: "Injectab
 ///
 /// Two examples of the macro in use:
 ///
-///     @Received(fulfilledByDependencyNamed: "dependency", ofType: "DependencyType")
-///     private let renamedDependency: DependencySuperType
+///     @Received(fulfilledByDependencyNamed: "dependency", ofType: "DependencyType") private let renamedDependency: DependencySuperType
 ///
-///     @Received(fulfilledByDependencyNamed: "dependency", ofType: "DependencyType", erasedToConcreteExistential: true)
-///     private let typeErasedDependency: AnyDependencyType
+///     @Received(fulfilledByDependencyNamed: "dependency", ofType: "DependencyType", erasedToConcreteExistential: true) private let typeErasedDependency: AnyDependencyType
 ///
 /// Note that the access level of the dependency in the above example does not affect the dependency tree – a `private` dependency can still be `@Received` by `@Instantiable`-decorated types further down the dependency tree.
 ///
