@@ -2640,14 +2640,11 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                         super.init(nibName: nil, bundle: nil)
                     }
 
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiated let networkService: NetworkService
 
-                    @Instantiated
-                    let authService: AuthService
+                    @Instantiated let authService: AuthService
 
-                    @Instantiated(fulfilledByType: "LoggedInViewController")
-                    let loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>
+                    @Instantiated(fulfilledByType: "LoggedInViewController") let loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>
 
                     private let derivedValue: Bool
 
@@ -3227,11 +3224,7 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                         fatalError("SafeDI doesn't inspect the initializer body")
                     }
 
-                    @Received(
-                        fulfilledByDependencyNamed: "iterator",
-                        ofType: IndexingIterator<Array<Element>>.self,
-                        erasedToConcreteExistential: true
-                    ) let anyIterator: AnyIterator
+                    @Received(fulfilledByDependencyNamed: "iterator", ofType: IndexingIterator<Array<Element>>.self, erasedToConcreteExistential: true) let anyIterator: AnyIterator
                 }
                 """,
             ],
@@ -3327,14 +3320,11 @@ final class SafeDIToolCodeGenerationTests: XCTestCase {
                         super.init(nibName: nil, bundle: nil)
                     }
 
-                    @Instantiated
-                    let authService: AuthService
+                    @Instantiated let authService: AuthService
 
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiated let networkService: NetworkService
 
-                    @Instantiated
-                    let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
+                    @Instantiated let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
                     func login(username: String, password: String) {
                         Task { @MainActor in

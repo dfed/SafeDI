@@ -241,8 +241,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
 
                     @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                     public final class DefaultNetworkService: NetworkService {
-                        @Instantiated
-                        let urlSession: URLSession // URLSession is not `@Instantiable`! This will fail!
+                        @Instantiated let urlSession: URLSession // URLSession is not `@Instantiable`! This will fail!
                     }
                     """,
                     """
@@ -250,8 +249,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
 
                     @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
-                        @Instantiated
-                        let networkService: NetworkService
+                        @Instantiated let networkService: NetworkService
                     }
                     """,
                 ],
@@ -277,8 +275,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
 
                     @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                     public final class DefaultNetworkService: NetworkService {
-                        @Received
-                        let urlSession: URLSession // URLSession is not `@Instantiable`! This will fail!
+                        @Received let urlSession: URLSession // URLSession is not `@Instantiable`! This will fail!
                     }
                     """,
                     """
@@ -286,8 +283,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
 
                     @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
-                        @Instantiated
-                        let networkService: NetworkService
+                        @Instantiated let networkService: NetworkService
                     }
                     """,
                 ],
@@ -653,8 +649,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
 
                     @Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
                     public final class DefaultNetworkService: NetworkService {
-                        @Forwarded
-                        let urlSession: URLSession
+                        @Forwarded let urlSession: URLSession
                     }
                     """,
                     """
@@ -662,8 +657,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
 
                     @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
-                        @Instantiated
-                        let networkService: NetworkService
+                        @Instantiated let networkService: NetworkService
                     }
                     """,
                 ],
@@ -685,33 +679,27 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     @Instantiable(isRoot: true)
                     public final class Root {
-                        @Instantiated
-                        let childA: ChildA
-                        @Instantiated
-                        let childB: ChildB
+                        @Instantiated let childA: ChildA
+                        @Instantiated let childB: ChildB
                     }
                     """,
                     """
                     @Instantiable
                     public final class ChildA {
-                        @Instantiated
-                        let grandchild: Grandchild
-                        @Instantiated
-                        let blankie: Blankie
+                        @Instantiated let grandchild: Grandchild
+                        @Instantiated let blankie: Blankie
                     }
                     """,
                     """
                     @Instantiable
                     public final class ChildB {
-                        @Instantiated
-                        let grandchild: Grandchild
+                        @Instantiated let grandchild: Grandchild
                     }
                     """,
                     """
                     @Instantiable
                     public final class Grandchild {
-                        @Received
-                        let blankie: Blankie
+                        @Received let blankie: Blankie
                     }
                     """,
                     """
@@ -741,35 +729,28 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     @Instantiable(isRoot: true)
                     public final class Root {
-                        @Instantiated
-                        let childA: ChildA
-                        @Instantiated
-                        let childB: ChildB
+                        @Instantiated let childA: ChildA
+                        @Instantiated let childB: ChildB
                     }
                     """,
                     """
                     @Instantiable
                     public final class ChildA {
-                        @Instantiated
-                        let grandchild: Grandchild
-                        @Instantiated
-                        let blankie: Blankie
+                        @Instantiated let grandchild: Grandchild
+                        @Instantiated let blankie: Blankie
                     }
                     """,
                     """
                     @Instantiable
                     public final class ChildB {
-                        @Instantiated
-                        let grandchild: Grandchild
+                        @Instantiated let grandchild: Grandchild
                     }
                     """,
                     """
                     @Instantiable
                     public final class Grandchild {
-                        @Received
-                        let blankie: Blankie
-                        @Received
-                        let blankie2: Blankie
+                        @Received let blankie: Blankie
+                        @Received let blankie2: Blankie
                     }
                     """,
                     """
@@ -815,11 +796,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                             User(username: username)
                         }
 
-                        @Instantiated
-                        let networkService: NetworkService
+                        @Instantiated let networkService: NetworkService
 
-                        @Instantiated
-                        let authService: AuthService
+                        @Instantiated let authService: AuthService
                     }
                     """,
                     """
@@ -833,8 +812,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                             super.init(nibName: nil, bundle: nil)
                         }
 
-                        @Instantiated
-                        let authService: AuthService
+                        @Instantiated let authService: AuthService
                     }
                     """,
                 ],
@@ -876,11 +854,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                             User(username: username)
                         }
 
-                        @Instantiated
-                        let networkService: NetworkService
+                        @Instantiated let networkService: NetworkService
 
-                        @Received
-                        let authService: AuthService
+                        @Received let authService: AuthService
                     }
                     """,
                     """
@@ -894,8 +870,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                             super.init(nibName: nil, bundle: nil)
                         }
 
-                        @Instantiated
-                        let authService: AuthService
+                        @Instantiated let authService: AuthService
                     }
                     """,
                 ],
@@ -931,11 +906,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
 
                     @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
-                        @Instantiated
-                        let networkService: NetworkService
+                        @Instantiated let networkService: NetworkService
 
-                        @Instantiated
-                        let authService: AuthService
+                        @Instantiated let authService: AuthService
                     }
                     """,
                     """
@@ -949,11 +922,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                             User(username: username)
                         }
 
-                        @Received(
-                            fulfilledByDependencyNamed: "networkService2",
-                            ofType: NetworkService.self
-                        )
-                        let networking: NetworkService
+                        @Received(fulfilledByDependencyNamed: "networkService2", ofType: NetworkService.self) let networking: NetworkService
                     }
                     """,
                 ],
@@ -989,11 +958,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
 
                     @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
-                        @Instantiated
-                        let networkService: NetworkService
+                        @Instantiated let networkService: NetworkService
 
-                        @Instantiated
-                        let authService: AuthService
+                        @Instantiated let authService: AuthService
                     }
                     """,
                     """
@@ -1007,11 +974,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                             User(username: username)
                         }
 
-                        @Received(
-                            fulfilledByDependencyNamed: "networkService",
-                            ofType: NetworkService2.self
-                        )
-                        let networking: NetworkService
+                        @Received(fulfilledByDependencyNamed: "networkService", ofType: NetworkService2.self) let networking: NetworkService
                     }
                     """,
                 ],
@@ -1053,11 +1016,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                             User(username: username)
                         }
 
-                        @Instantiated
-                        let networkService: NetworkService
+                        @Instantiated let networkService: NetworkService
 
-                        @Received(fulfilledByDependencyNamed: "authService", ofType: AuthService.self)
-                        let renamedAuthService: AuthService
+                        @Received(fulfilledByDependencyNamed: "authService", ofType: AuthService.self) let renamedAuthService: AuthService
                     }
                     """,
                     """
@@ -1071,8 +1032,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                             super.init(nibName: nil, bundle: nil)
                         }
 
-                        @Instantiated
-                        let authService: AuthService
+                        @Instantiated let authService: AuthService
                     }
                     """,
                 ],
@@ -1106,8 +1066,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
 
                     @Instantiable(isRoot: true)
                     public final class RootViewController: UIViewController {
-                        @Instantiated
-                        let urlSessionWrapper: URLSessionWrapper
+                        @Instantiated let urlSessionWrapper: URLSessionWrapper
                     }
                     """,
                 ],
@@ -1346,29 +1305,25 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     @Instantiable(isRoot: true)
                     public final class Root {
-                        @Instantiated
-                        let a: A
+                        @Instantiated let a: A
                     }
                     """,
                     """
                     @Instantiable
                     public final class A {
-                        @Instantiated
-                        let b: B
+                        @Instantiated let b: B
                     }
                     """,
                     """
                     @Instantiable
                     public final class B {
-                        @Instantiated
-                        let c: C
+                        @Instantiated let c: C
                     }
                     """,
                     """
                     @Instantiable
                     public final class C {
-                        @Instantiated
-                        let a: A
+                        @Instantiated let a: A
                     }
                     """,
                 ],
@@ -1473,29 +1428,25 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     @Instantiable(isRoot: true)
                     public struct Root {
-                        @Instantiated
-                        let a: A
+                        @Instantiated let a: A
                     }
                     """,
                     """
                     @Instantiable
                     public struct A {
-                        @Instantiated
-                        let b: B
+                        @Instantiated let b: B
                     }
                     """,
                     """
                     @Instantiable
                     public struct B {
-                        @Instantiated
-                        let c: C
+                        @Instantiated let c: C
                     }
                     """,
                     """
                     @Instantiable
                     public struct C {
-                        @Instantiated
-                        let a2: A
+                        @Instantiated let a2: A
                     }
                     """,
                 ],
@@ -1518,33 +1469,27 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     @Instantiable(isRoot: true)
                     public struct Root {
-                        @Instantiated
-                        private let a: A
-                        @Instantiated
-                        private let b: B
-                        @Instantiated
-                        private let c: C
+                        @Instantiated private let a: A
+                        @Instantiated private let b: B
+                        @Instantiated private let c: C
                     }
                     """,
                     """
                     @Instantiable
                     public struct A {
-                        @Received
-                        private let b: B
+                        @Received private let b: B
                     }
                     """,
                     """
                     @Instantiable
                     public struct B {
-                        @Received
-                        private let c: C
+                        @Received private let c: C
                     }
                     """,
                     """
                     @Instantiable
                     public struct C {
-                        @Received
-                        private let a: A
+                        @Received private let a: A
                     }
                     """,
                 ],
@@ -1567,35 +1512,28 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     @Instantiable(isRoot: true)
                     public struct Root {
-                        @Instantiated
-                        private let a: A
-                        @Instantiated
-                        private let b: B
-                        @Received(fulfilledByDependencyNamed: "b", ofType: B.self)
-                        private let renamedB: B
-                        @Instantiated
-                        private let c: C
+                        @Instantiated private let a: A
+                        @Instantiated private let b: B
+                        @Received(fulfilledByDependencyNamed: "b", ofType: B.self) private let renamedB: B
+                        @Instantiated private let c: C
                     }
                     """,
                     """
                     @Instantiable
                     public struct A {
-                        @Received
-                        private let renamedB: B
+                        @Received private let renamedB: B
                     }
                     """,
                     """
                     @Instantiable
                     public struct B {
-                        @Received
-                        private let c: C
+                        @Received private let c: C
                     }
                     """,
                     """
                     @Instantiable
                     public struct C {
-                        @Received
-                        private let a: A
+                        @Received private let a: A
                     }
                     """,
                 ],
@@ -1618,33 +1556,27 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                     """
                     @Instantiable(isRoot: true)
                     public struct Root {
-                        @Instantiated
-                        private let a: A
+                        @Instantiated private let a: A
                     }
                     """,
                     """
                     @Instantiable
                     public struct A {
-                        @Instantiated
-                        private let b: B
-                        @Received(fulfilledByDependencyNamed: "b", ofType: B.self)
-                        private let renamedB: B
-                        @Instantiated
-                        private let c: C
+                        @Instantiated private let b: B
+                        @Received(fulfilledByDependencyNamed: "b", ofType: B.self) private let renamedB: B
+                        @Instantiated private let c: C
                     }
                     """,
                     """
                     @Instantiable
                     public struct B {
-                        @Received
-                        private let c: C
+                        @Received private let c: C
                     }
                     """,
                     """
                     @Instantiable
                     public struct C {
-                        @Received
-                        private let renamedB: B
+                        @Received private let renamedB: B
                     }
                     """,
                 ],
@@ -1677,8 +1609,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                             User()
                         }
 
-                        @Received
-                        let networkService: NetworkService
+                        @Received let networkService: NetworkService
                     }
                     """,
                     """
@@ -1702,11 +1633,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                             super.init(nibName: nil, bundle: nil)
                         }
 
-                        @Instantiated
-                        let networkService: NetworkService
+                        @Instantiated let networkService: NetworkService
 
-                        @Instantiated
-                        let authService: AuthService
+                        @Instantiated let authService: AuthService
 
                         @Instantiated(fulfilledByType: "LoggedInViewController")
                         let loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>
@@ -1726,11 +1655,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
 
                     @Instantiable
                     public final class LoggedInViewController: UIViewController {
-                        @Forwarded
-                        private let user: User
+                        @Forwarded private let user: User
 
-                        @Received
-                        let networkService: NetworkService
+                        @Received let networkService: NetworkService
                     }
                     """,
                 ],
@@ -1763,8 +1690,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                             User()
                         }
 
-                        @Received
-                        let networkService: NetworkService
+                        @Received let networkService: NetworkService
                     }
                     """,
                     """
@@ -1788,11 +1714,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
                             super.init(nibName: nil, bundle: nil)
                         }
 
-                        @Instantiated
-                        let networkService: NetworkService
+                        @Instantiated let networkService: NetworkService
 
-                        @Instantiated
-                        let authService: AuthService
+                        @Instantiated let authService: AuthService
 
                         @Instantiated(fulfilledByType: "LoggedInViewController")
                         let loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>
@@ -1812,15 +1736,11 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
 
                     @Instantiable
                     public final class LoggedInViewController: UIViewController {
+                        @Forwarded private let user: User
 
-                        @Forwarded
-                        private let user: User
+                        @Forwarded private let userManager: UserManager
 
-                        @Forwarded
-                        private let userManager: UserManager
-
-                        @Received
-                        let networkService: NetworkService
+                        @Received let networkService: NetworkService
                     }
                     """,
                 ],

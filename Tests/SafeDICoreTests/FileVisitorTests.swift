@@ -36,11 +36,9 @@ final class FileVisitorTests: XCTestCase {
                 fatalError("SafeDI doesn't inspect the initializer body")
             }
 
-            @Forwarded
-            private let user: User
+            @Forwarded private let user: User
 
-            @Received
-            let networkService: NetworkService
+            @Received let networkService: NetworkService
         }
         """))
         XCTAssertEqual(
@@ -95,11 +93,9 @@ final class FileVisitorTests: XCTestCase {
                 fatalError("SafeDI doesn't inspect the initializer body")
             }
 
-            @Forwarded
-            private let user: User
+            @Forwarded private let user: User
 
-            @Received
-            let networkService: NetworkService
+            @Received let networkService: NetworkService
         }
 
         @Instantiable

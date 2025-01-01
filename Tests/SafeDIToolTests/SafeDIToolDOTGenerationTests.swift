@@ -78,8 +78,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable(isRoot: true)
                 public final class RootViewController: UIViewController {
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiated let networkService: NetworkService
                 }
                 """,
             ],
@@ -115,15 +114,13 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable(isRoot: true)
                 public struct Root1 {
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiated let networkService: NetworkService
                 }
                 """,
                 """
                 @Instantiable(isRoot: true)
                 public struct Root2 {
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiated let networkService: NetworkService
                 }
                 """,
             ],
@@ -185,14 +182,11 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                         super.init(nibName: nil, bundle: nil)
                     }
 
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiated let networkService: NetworkService
 
-                    @Instantiated
-                    let authService: AuthService
+                    @Instantiated let authService: AuthService
 
-                    @Instantiated(fulfilledByType: "LoggedInViewController")
-                    let loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>
+                    @Instantiated(fulfilledByType: "LoggedInViewController") let loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>
 
                     private let derivedValue: Bool
 
@@ -274,14 +268,11 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                         super.init(nibName: nil, bundle: nil)
                     }
 
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiated let networkService: NetworkService
 
-                    @Instantiated
-                    let authService: AuthService
+                    @Instantiated let authService: AuthService
 
-                    @Instantiated
-                    let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
+                    @Instantiated let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
                     private let derivedValue: Bool
 
@@ -297,8 +288,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable
                 public final class UserService {
-                    @Received
-                    let user: User
+                    @Received let user: User
                 }
                 """,
                 """
@@ -376,14 +366,11 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                         super.init(nibName: nil, bundle: nil)
                     }
 
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiated let networkService: NetworkService
 
-                    @Instantiated
-                    let authService: AuthService
+                    @Instantiated let authService: AuthService
 
-                    @Instantiated(fulfilledByType: "LoggedInViewController")
-                    let loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>
+                    @Instantiated(fulfilledByType: "LoggedInViewController") let loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>
 
                     private let derivedValue: Bool
 
@@ -399,11 +386,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable
                 public final class UserService {
-                    @Received
-                    let userName: String
+                    @Received let userName: String
 
-                    @Received
-                    let userID: String
+                    @Received let userID: String
                 }
                 """,
                 """
@@ -411,11 +396,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
 
                 @Instantiable
                 public final class LoggedInViewController: UIViewController {
-                    @Forwarded
-                    private let userName: String
+                    @Forwarded private let userName: String
 
-                    @Forwarded
-                    private let userID: String
+                    @Forwarded private let userID: String
 
                     @Received let networkService: NetworkService
                     @Instantiated let userService: UserService
@@ -486,14 +469,11 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                         super.init(nibName: nil, bundle: nil)
                     }
 
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiated let networkService: NetworkService
 
-                    @Instantiated
-                    let authService: AuthService
+                    @Instantiated let authService: AuthService
 
-                    @Instantiated(fulfilledByType: "LoggedInViewController")
-                    let loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>
+                    @Instantiated(fulfilledByType: "LoggedInViewController") let loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>
 
                     private let derivedValue: Bool
 
@@ -509,11 +489,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable
                 public final class UserService {
-                    @Received
-                    let userName: String
+                    @Received let userName: String
 
-                    @Received
-                    let userID: String
+                    @Received let userID: String
                 }
                 """,
                 """
@@ -521,11 +499,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
 
                 @Instantiable
                 public final class LoggedInViewController: UIViewController {
-                    @Forwarded
-                    private let userName: String
+                    @Forwarded private let userName: String
 
-                    @Forwarded
-                    private let userID: String
+                    @Forwarded private let userID: String
 
                     @Received let networkService: NetworkService
                     @Instantiated let userService: UserService
@@ -593,14 +569,11 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                         super.init(nibName: nil, bundle: nil)
                     }
 
-                    @Instantiated
-                    let authService: AuthService
+                    @Instantiated let authService: AuthService
 
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiated let networkService: NetworkService
 
-                    @Instantiated
-                    let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
+                    @Instantiated let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
                     private let derivedValue: Bool
 
@@ -616,11 +589,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable
                 public final class UserService {
-                    @Received
-                    let user: User
+                    @Received let user: User
 
-                    @Received
-                    private let networkService: NetworkService
+                    @Received private let networkService: NetworkService
                 }
                 """,
                 """
@@ -694,14 +665,11 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                         super.init(nibName: nil, bundle: nil)
                     }
 
-                    @Instantiated
-                    let authService: AuthService
+                    @Instantiated let authService: AuthService
 
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiated let networkService: NetworkService
 
-                    @Instantiated
-                    let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
+                    @Instantiated let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
                     private let derivedValue: Bool
 
@@ -717,11 +685,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable
                 public final class UserService {
-                    @Received
-                    let user: User
+                    @Received let user: User
 
-                    @Received
-                    private let networkService: NetworkService
+                    @Received private let networkService: NetworkService
                 }
                 """,
                 """
@@ -731,8 +697,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 public final class LoggedInViewController: UIViewController {
                     @Forwarded private let user: User
 
-                    @Instantiated
-                    let userServiceInstantiator: Instantiator<UserService>
+                    @Instantiated let userServiceInstantiator: Instantiator<UserService>
                 }
                 """,
             ],
@@ -762,58 +727,47 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable(isRoot: true)
                 public final class Root {
-                    @Instantiated
-                    let childA: ChildA
-                    @Instantiated
-                    let childB: ChildB
-                    @Instantiated
-                    let greatGrandchild: GreatGrandchild
+                    @Instantiated let childA: ChildA
+                    @Instantiated let childB: ChildB
+                    @Instantiated let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable
                 public final class ChildA {
-                    @Instantiated
-                    let grandchildAA: GrandchildAA
-                    @Instantiated
-                    let grandchildAB: GrandchildAB
+                    @Instantiated let grandchildAA: GrandchildAA
+                    @Instantiated let grandchildAB: GrandchildAB
                 }
                 """,
                 """
                 @Instantiable
                 public final class GrandchildAA {
-                    @Received
-                    let greatGrandchild: GreatGrandchild
+                    @Received let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable
                 public final class GrandchildAB {
-                    @Received
-                    let greatGrandchild: GreatGrandchild
+                    @Received let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable
                 public final class ChildB {
-                    @Instantiated
-                    let grandchildBA: GrandchildBA
-                    @Instantiated
-                    let grandchildBB: GrandchildBB
+                    @Instantiated let grandchildBA: GrandchildBA
+                    @Instantiated let grandchildBB: GrandchildBB
                 }
                 """,
                 """
                 @Instantiable
                 public final class GrandchildBA {
-                    @Received
-                    let greatGrandchild: GreatGrandchild
+                    @Received let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable
                 public final class GrandchildBB {
-                    @Received
-                    let greatGrandchild: GreatGrandchild
+                    @Received let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
@@ -850,60 +804,48 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable(isRoot: true)
                 public final class Root {
-                    @Instantiated
-                    let childA: ChildA
-                    @Instantiated
-                    let childB: ChildB
+                    @Instantiated let childA: ChildA
+                    @Instantiated let childB: ChildB
                 }
                 """,
                 """
                 @Instantiable
                 public final class ChildA {
-                    @Instantiated
-                    let grandchildAA: GrandchildAA
-                    @Instantiated
-                    let grandchildAB: GrandchildAB
-                    @Instantiated
-                    let greatGrandchild: GreatGrandchild
+                    @Instantiated let grandchildAA: GrandchildAA
+                    @Instantiated let grandchildAB: GrandchildAB
+                    @Instantiated let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable
                 public final class GrandchildAA {
-                    @Received
-                    let greatGrandchild: GreatGrandchild
+                    @Received let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable
                 public final class GrandchildAB {
-                    @Received
-                    let greatGrandchild: GreatGrandchild
+                    @Received let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable
                 public final class ChildB {
-                    @Instantiated
-                    let grandchildBA: GrandchildBA
-                    @Instantiated
-                    let grandchildBB: GrandchildBB
-                    @Instantiated
-                    let greatGrandchild: GreatGrandchild
+                    @Instantiated let grandchildBA: GrandchildBA
+                    @Instantiated let grandchildBB: GrandchildBB
+                    @Instantiated let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable
                 public final class GrandchildBA {
-                    @Received
-                    let greatGrandchild: GreatGrandchild
+                    @Received let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable
                 public final class GrandchildBB {
-                    @Received
-                    let greatGrandchild: GreatGrandchild
+                    @Received let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
@@ -941,8 +883,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable(isRoot: true)
                 public final class Root {
-                    @Instantiated
-                    let child: Child
+                    @Instantiated let child: Child
                 }
                 """,
                 """
@@ -952,26 +893,21 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable
                 public final class Child {
-                    @Instantiated
-                    let grandchild: Grandchild
-                    @Instantiated
-                    let recreated: Recreated
+                    @Instantiated let grandchild: Grandchild
+                    @Instantiated let recreated: Recreated
                 }
                 """,
                 """
                 @Instantiable
                 public final class Grandchild {
-                    @Instantiated
-                    let greatGrandchild: GreatGrandchild
-                    @Instantiated
-                    let recreated: Recreated
+                    @Instantiated let greatGrandchild: GreatGrandchild
+                    @Instantiated let recreated: Recreated
                 }
                 """,
                 """
                 @Instantiable
                 public final class GreatGrandchild {
-                    @Received
-                    let recreated: Recreated
+                    @Received let recreated: Recreated
                 }
                 """,
 
@@ -1002,56 +938,46 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable(isRoot: true)
                 public final class Root {
-                    @Instantiated
-                    let childA: ChildA
-                    @Instantiated
-                    let childB: ChildB
+                    @Instantiated let childA: ChildA
+                    @Instantiated let childB: ChildB
                 }
                 """,
                 """
                 @Instantiable
                 public final class ChildA {
-                    @Instantiated
-                    let grandchildAA: GrandchildAA
-                    @Instantiated
-                    let grandchildAB: GrandchildAB
+                    @Instantiated let grandchildAA: GrandchildAA
+                    @Instantiated let grandchildAB: GrandchildAB
                 }
                 """,
                 """
                 @Instantiable
                 public final class GrandchildAA {
-                    @Instantiated
-                    let greatGrandchild: GreatGrandchild
+                    @Instantiated let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable
                 public final class GrandchildAB {
-                    @Instantiated
-                    let greatGrandchild: GreatGrandchild
+                    @Instantiated let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable
                 public final class ChildB {
-                    @Instantiated
-                    let grandchildBA: GrandchildBA
-                    @Instantiated
-                    let grandchildBB: GrandchildBB
+                    @Instantiated let grandchildBA: GrandchildBA
+                    @Instantiated let grandchildBB: GrandchildBB
                 }
                 """,
                 """
                 @Instantiable
                 public final class GrandchildBA {
-                    @Instantiated
-                    let greatGrandchild: GreatGrandchild
+                    @Instantiated let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable
                 public final class GrandchildBB {
-                    @Instantiated
-                    let greatGrandchild: GreatGrandchild
+                    @Instantiated let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
@@ -1104,8 +1030,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
 
                 @Instantiable
                 public final class GrandchildAA {
-                    @Instantiated
-                    let greatGrandchild: GreatGrandchild
+                    @Instantiated let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
@@ -1113,8 +1038,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
 
                 @Instantiable
                 public final class GrandchildAB {
-                    @Instantiated
-                    let greatGrandchild: GreatGrandchild
+                    @Instantiated let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
@@ -1122,8 +1046,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
 
                 @Instantiable
                 public final class GrandchildBA {
-                    @Instantiated
-                    var greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>
+                    @Instantiated var greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>
                 }
                 """,
                 """
@@ -1131,8 +1054,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
 
                 @Instantiable
                 public final class GrandchildBB {
-                    @Instantiated
-                    greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>
+                    @Instantiated greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>
                 }
                 """,
             ],
@@ -1150,10 +1072,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 @MainActor
                 @Instantiable
                 public final class ChildA {
-                    @Instantiated
-                    let grandchildAA: GrandchildAA
-                    @Instantiated
-                    let grandchildAB: GrandchildAB
+                    @Instantiated let grandchildAA: GrandchildAA
+                    @Instantiated let grandchildAB: GrandchildAB
                 }
                 """,
                 """
@@ -1161,10 +1081,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
 
                 @Instantiable
                 public final class ChildB {
-                    @Instantiated
-                    let grandchildBA: GrandchildBA
-                    @Instantiated
-                    let grandchildBB: GrandchildBB
+                    @Instantiated let grandchildBA: GrandchildBA
+                    @Instantiated let grandchildBB: GrandchildBB
                 }
                 """,
             ],
@@ -1184,10 +1102,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 @MainActor
                 @Instantiable(isRoot: true)
                 public final class Root {
-                    @Instantiated
-                    let childA: ChildA
-                    @Instantiated
-                    let childB: ChildB
+                    @Instantiated let childA: ChildA
+                    @Instantiated let childB: ChildB
                 }
                 """,
             ],
@@ -1227,11 +1143,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable(isRoot: true)
                 public struct Root {
-                    @Instantiated
-                    private let defaultUserService: DefaultUserService
+                    @Instantiated private let defaultUserService: DefaultUserService
 
-                    @Received(fulfilledByDependencyNamed: "defaultUserService", ofType: DefaultUserService.self)
-                    private let userService: any UserService
+                    @Received(fulfilledByDependencyNamed: "defaultUserService", ofType: DefaultUserService.self) private let userService: any UserService
                 }
                 """,
                 """
@@ -1311,11 +1225,9 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                         super.init(nibName: nil, bundle: nil)
                     }
 
-                    @Instantiated
-                    let authService: AuthService
+                    @Instantiated let authService: AuthService
 
-                    @Instantiated
-                    let networkService: NetworkService
+                    @Instantiated let networkService: NetworkService
                 }
                 """,
             ],
@@ -1344,8 +1256,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable(isRoot: true)
                 public final class Root {
-                    @Instantiated
-                    let child: Child
+                    @Instantiated let child: Child
                 }
                 """,
                 """
@@ -1355,19 +1266,14 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable
                 public final class Child {
-                    @Instantiated
-                    let grandchild: Grandchild
-                    @Instantiated
-                    let unrelated: Unrelated
-                    @Instantiated
-                    let greatGrandchild: GreatGrandchild
+                    @Instantiated let grandchild: Grandchild
+                    @Instantiated let unrelated: Unrelated @Instantiated let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
                 @Instantiable
                 public final class Grandchild {
-                    @Received
-                    let greatGrandchild: GreatGrandchild
+                    @Received let greatGrandchild: GreatGrandchild
                 }
                 """,
                 """
@@ -1400,118 +1306,77 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable(isRoot: true)
                 public final class Root {
-                    @Instantiated
-                    let a: A
-                    @Instantiated
-                    let b: B
-                    @Instantiated
-                    let c: C
-                    @Instantiated
-                    let d: D
-                    @Instantiated
-                    let e: E
-                    @Instantiated
-                    let f: F
-                    @Instantiated
-                    let g: G
-                    @Instantiated
-                    let h: H
-                    @Instantiated
-                    let i: I
-                    @Instantiated
-                    let j: J
-                    @Instantiated
-                    let k: K
-                    @Instantiated
-                    let l: L
-                    @Instantiated
-                    let m: M
-                    @Instantiated
-                    let n: N
-                    @Instantiated
-                    let o: O
-                    @Instantiated
-                    let p: P
-                    @Instantiated
-                    let q: Q
-                    @Instantiated
-                    let r: R
-                    @Instantiated
-                    let s: S
-                    @Instantiated
-                    let t: T
-                    @Instantiated
-                    let u: U
-                    @Instantiated
-                    let v: V
-                    @Instantiated
-                    let w: W
-                    @Instantiated
-                    let x: X
-                    @Instantiated
-                    let y: Y
-                    @Instantiated
-                    let z: Z
+                    @Instantiated let a: A
+                    @Instantiated let b: B
+                    @Instantiated let c: C
+                    @Instantiated let d: D
+                    @Instantiated let e: E
+                    @Instantiated let f: F
+                    @Instantiated let g: G
+                    @Instantiated let h: H
+                    @Instantiated let i: I
+                    @Instantiated let j: J
+                    @Instantiated let k: K
+                    @Instantiated let l: L
+                    @Instantiated let m: M
+                    @Instantiated let n: N
+                    @Instantiated let o: O
+                    @Instantiated let p: P
+                    @Instantiated let q: Q
+                    @Instantiated let r: R
+                    @Instantiated let s: S
+                    @Instantiated let t: T
+                    @Instantiated let u: U
+                    @Instantiated let v: V
+                    @Instantiated let w: W
+                    @Instantiated let x: X
+                    @Instantiated let y: Y
+                    @Instantiated let z: Z
                 }
                 """,
                 """
                 @Instantiable
                 public final class A {
-                    @Received
-                    let x: X
+                    @Received let x: X
                 }
                 """,
                 """
                 @Instantiable
                 public final class B {
-                    @Received
-                    let a: A
-                    @Received
-                    let d: D
-                    @Received
-                    let t: T
-                    @Received
-                    let o: O
-                    @Received
-                    let y: Y
-                    @Received
-                    let s: S
+                    @Received let a: A
+                    @Received let d: D
+                    @Received let t: T
+                    @Received let o: O
+                    @Received let y: Y
+                    @Received let s: S
                 }
                 """,
                 """
                 @Instantiable
                 public final class C {
-                    @Received
-                    let u: U
-                    @Received
-                    let n: N
-                    @Received
-                    let y: Y
+                    @Received let u: U
+                    @Received let n: N
+                    @Received let y: Y
                 }
                 """,
                 """
                 @Instantiable
                 public final class D {
-                    @Received
-                    let o: O
-                    @Received
-                    let g: G
+                    @Received let o: O
+                    @Received let g: G
                 }
                 """,
                 """
                 @Instantiable
                 public final class E {
-                    @Received
-                    let g: G
+                    @Received let g: G
                 }
                 """,
                 """
                 @Instantiable
                 public final class F {
-                    @Received
-                    let a: A
-                    @Received
-                    let x: X
+                    @Received let a: A
+                    @Received let x: X
                 }
                 """,
                 """
@@ -1521,181 +1386,131 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable
                 public final class H {
-                    @Received
-                    let u: U
-                    @Received
-                    let g: G
+                    @Received let u: U
+                    @Received let g: G
                 }
                 """,
                 """
                 @Instantiable
                 public final class I {
-                    @Received
-                    let f: F
+                    @Received let f: F
                 }
                 """,
                 """
                 @Instantiable
                 public final class J {
-                    @Received
-                    let a: A
-                    @Received
-                    let g: G
+                    @Received let a: A
+                    @Received let g: G
                 }
                 """,
                 """
                 @Instantiable
                 public final class K {
-                    @Received
-                    let i: I
-                    @Received
-                    let t: T
+                    @Received let i: I
+                    @Received let t: T
                 }
                 """,
                 """
                 @Instantiable
                 public final class L {
-                    @Received
-                    let o: O
-                    @Received
-                    let v: V
-                    @Received
-                    let e: E
+                    @Received let o: O
+                    @Received let v: V
+                    @Received let e: E
                 }
                 """,
                 """
                 @Instantiable
                 public final class M {
-                    @Received
-                    let e: E
+                    @Received let e: E
                 }
                 """,
                 """
                 @Instantiable
                 public final class N {
-                    @Received
-                    let o: O
-                    @Received
-                    let p: P
-                    @Received
-                    let e: E
+                    @Received let o: O
+                    @Received let p: P
+                    @Received let e: E
                 }
                 """,
                 """
                 @Instantiable
                 public final class O {
-                    @Received
-                    let m: M
-                    @Received
-                    let e: E
-                    @Received
-                    let g: G
-                    @Received
-                    let a: A
+                    @Received let m: M
+                    @Received let e: E
+                    @Received let g: G
+                    @Received let a: A
                 }
                 """,
                 """
                 @Instantiable
                 public final class P {
-                    @Received
-                    let i: I
-                    @Received
-                    let x: X
+                    @Received let i: I
+                    @Received let x: X
                 }
                 """,
                 """
                 @Instantiable
                 public final class Q {
-                    @Received
-                    let u: U
-                    @Received
-                    let t: T
-                    @Received
-                    let e: E
+                    @Received let u: U
+                    @Received let t: T
+                    @Received let e: E
                 }
                 """,
                 """
                 @Instantiable
                 public final class R {
-                    @Received
-                    let a: A
-                    @Received
-                    let m: M
-                    @Received
-                    let o: O
-                    @Received
-                    let n: N
-                    @Received
-                    let e: E
+                    @Received let a: A
+                    @Received let m: M
+                    @Received let o: O
+                    @Received let n: N
+                    @Received let e: E
                 }
                 """,
                 """
                 @Instantiable
                 public final class S {
-                    @Received
-                    let a: A
-                    @Received
-                    let t: T
-                    @Received
-                    let o: O
-                    @Received
-                    let r: R
+                    @Received let a: A
+                    @Received let t: T
+                    @Received let o: O
+                    @Received let r: R
                 }
                 """,
                 """
                 @Instantiable
                 public final class T {
-                    @Received
-                    let e: E
-                    @Received
-                    let n: N
+                    @Received let e: E
+                    @Received let n: N
                 }
                 """,
                 """
                 @Instantiable
                 public final class U {
-                    @Received
-                    let p: P
-                    @Received
-                    let d: D
-                    @Received
-                    let o: O
-                    @Received
-                    let w: W
-                    @Received
-                    let n: N
+                    @Received let p: P
+                    @Received let d: D
+                    @Received let o: O
+                    @Received let w: W
+                    @Received let n: N
                 }
                 """,
                 """
                 @Instantiable
                 public final class V {
-                    @Received
-                    let a: A
-                    @Received
-                    let t: T
-                    @Received
-                    let o: O
-                    @Received
-                    let f: F
-                    @Received
-                    let c: C
-                    @Received
-                    let i: I
-                    @Received
-                    let d: D
+                    @Received let a: A
+                    @Received let t: T
+                    @Received let o: O
+                    @Received let f: F
+                    @Received let c: C
+                    @Received let i: I
+                    @Received let d: D
                 }
                 """,
                 """
                 @Instantiable
                 public final class W {
-                    @Received
-                    let a: A
-                    @Received
-                    let x: X
-                    @Received
-                    let o: O
-                    @Received
-                    let n: N
+                    @Received let a: A
+                    @Received let x: X
+                    @Received let o: O
+                    @Received let n: N
                 }
                 """,
                 """
@@ -1705,25 +1520,18 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable
                 public final class Y {
-                    @Received
-                    let u: U
-                    @Received
-                    let p: P
+                    @Received let u: U
+                    @Received let p: P
                 }
                 """,
                 """
                 @Instantiable
                 public final class Z {
-                    @Received
-                    let e: E
-                    @Received
-                    let p: P
-                    @Received
-                    let l: L
-                    @Received
-                    let i: I
-                    @Received
-                    let n: N
+                    @Received let e: E
+                    @Received let p: P
+                    @Received let l: L
+                    @Received let i: I
+                    @Received let n: N
                 }
                 """,
             ],
@@ -1774,29 +1582,25 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable(isRoot: true)
                 public struct Root {
-                    @Instantiated
-                    let aBuilder: Instantiator<A>
+                    @Instantiated let aBuilder: Instantiator<A>
                 }
                 """,
                 """
                 @Instantiable
                 public struct A {
-                    @Instantiated
-                    let bBuilder: Instantiator<B>
+                    @Instantiated let bBuilder: Instantiator<B>
                 }
                 """,
                 """
                 @Instantiable
                 public struct B {
-                    @Instantiated
-                    let cBuilder: Instantiator<C>
+                    @Instantiated let cBuilder: Instantiator<C>
                 }
                 """,
                 """
                 @Instantiable
                 public struct C {
-                    @Instantiated
-                    let aBuilder: Instantiator<A>
+                    @Instantiated let aBuilder: Instantiator<A>
                 }
                 """,
             ],
@@ -1825,29 +1629,25 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable(isRoot: true)
                 public struct Root {
-                    @Instantiated
-                    let a: A
+                    @Instantiated let a: A
                 }
                 """,
                 """
                 @Instantiable
                 public struct A {
-                    @Instantiated
-                    let b: B
+                    @Instantiated let b: B
                 }
                 """,
                 """
                 @Instantiable
                 public struct B {
-                    @Instantiated
-                    let cBuilder: Instantiator<C>
+                    @Instantiated let cBuilder: Instantiator<C>
                 }
                 """,
                 """
                 @Instantiable
                 public struct C {
-                    @Instantiated
-                    let a: A
+                    @Instantiated let a: A
                 }
                 """,
             ],
@@ -1876,15 +1676,13 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable(isRoot: true)
                 public struct Root {
-                    @Instantiated
-                    let a: A
+                    @Instantiated let a: A
                 }
                 """,
                 """
                 @Instantiable
                 public struct A {
-                    @Instantiated
-                    let aBuilder: Instantiator<A>
+                    @Instantiated let aBuilder: Instantiator<A>
                 }
                 """,
             ],
@@ -1912,17 +1710,14 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
                 """
                 @Instantiable(isRoot: true)
                 public struct Root {
-                    @Instantiated
-                    let aBuilder: Instantiator<A>
+                    @Instantiated let aBuilder: Instantiator<A>
                 }
                 """,
                 """
                 @Instantiable
                 public struct A {
-                    @Instantiated
-                    let aBuilder: Instantiator<A>
-                    @Forwarded
-                    let context: String
+                    @Instantiated let aBuilder: Instantiator<A>
+                    @Forwarded let context: String
                 }
                 """,
             ],

@@ -657,8 +657,7 @@ import SafeDICore
                 """
                 @Instantiable
                 public struct ExampleService: Instantiable {
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     public init(instantiatedA: InstantiatedA) {
                         self.instantiatedA = instantiatedA
@@ -686,8 +685,7 @@ import SafeDICore
                     public init(block closure: @escaping () -> Void) {
                         self.closure = closure
                     }
-                    @Forwarded
-                    let closure: () -> Void
+                    @Forwarded let closure: () -> Void
                 }
                 """
             } expansion: {
@@ -712,8 +710,7 @@ import SafeDICore
                     public init(closure: @escaping @Sendable () -> Void) {
                         self.closure = closure
                     }
-                    @Forwarded
-                    let closure: @Sendable () -> Void
+                    @Forwarded let closure: @Sendable () -> Void
                 }
                 """
             } expansion: {
@@ -738,8 +735,7 @@ import SafeDICore
                     public init(closure: @escaping @Sendable () -> Void) {
                         self.closure = closure
                     }
-                    @Forwarded
-                    let closure: (() -> Void)
+                    @Forwarded let closure: (() -> Void)
                 }
                 """
             } expansion: {
@@ -786,8 +782,7 @@ import SafeDICore
                 """
                 @Instantiable
                 public struct ExampleService: Instantiable {
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     let nonInjectedProperty: Int
 
@@ -818,8 +813,7 @@ import SafeDICore
                 """
                 @Instantiable
                 public struct ExampleService: Instantiable {
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
                 }
                 """
             } diagnostics: {
@@ -828,8 +822,7 @@ import SafeDICore
                 public struct ExampleService: Instantiable {
                                                            ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
                                                               ✏️ Add required initializer
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
                 }
                 """
             } fixes: {
@@ -840,8 +833,7 @@ import SafeDICore
                 self.instantiatedA = instantiatedA
                 }
 
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
                 }
                 """
             } expansion: {
@@ -850,6 +842,7 @@ import SafeDICore
                 public init(instantiatedA: InstantiatedA) {
                 self.instantiatedA = instantiatedA
                 }
+
                     let instantiatedA: InstantiatedA
                 }
                 """
@@ -861,8 +854,7 @@ import SafeDICore
                 """
                 @Instantiable
                 public final class ExampleService: Instantiable {
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     public enum NestedEnum {
                         // This won't compile but we should still generate an initializer.
@@ -885,8 +877,7 @@ import SafeDICore
                 public final class ExampleService: Instantiable {
                                                                 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
                                                                    ✏️ Add required initializer
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     public enum NestedEnum {
                         // This won't compile but we should still generate an initializer.
@@ -911,8 +902,7 @@ import SafeDICore
                 self.instantiatedA = instantiatedA
                 }
 
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     public enum NestedEnum {
                         // This won't compile but we should still generate an initializer.
@@ -935,6 +925,7 @@ import SafeDICore
                 public init(instantiatedA: InstantiatedA) {
                 self.instantiatedA = instantiatedA
                 }
+
                     let instantiatedA: InstantiatedA
 
                     public enum NestedEnum {
@@ -960,8 +951,7 @@ import SafeDICore
                 """
                 @Instantiable
                 public struct ExampleService: Instantiable {
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     let initializedProperty = 5
                 }
@@ -972,8 +962,7 @@ import SafeDICore
                 public struct ExampleService: Instantiable {
                                                            ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
                                                               ✏️ Add required initializer
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     let initializedProperty = 5
                 }
@@ -986,8 +975,7 @@ import SafeDICore
                 self.instantiatedA = instantiatedA
                 }
 
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     let initializedProperty = 5
                 }
@@ -998,6 +986,7 @@ import SafeDICore
                 public init(instantiatedA: InstantiatedA) {
                 self.instantiatedA = instantiatedA
                 }
+
                     let instantiatedA: InstantiatedA
 
                     let initializedProperty = 5
@@ -1011,8 +1000,7 @@ import SafeDICore
                 """
                 @Instantiable
                 public struct ExampleService: Instantiable {
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     let initializedProperty: Int = 5
                 }
@@ -1023,8 +1011,7 @@ import SafeDICore
                 public struct ExampleService: Instantiable {
                                                            ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
                                                               ✏️ Add required initializer
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     let initializedProperty: Int = 5
                 }
@@ -1037,8 +1024,7 @@ import SafeDICore
                 self.instantiatedA = instantiatedA
                 }
 
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     let initializedProperty: Int = 5
                 }
@@ -1049,6 +1035,7 @@ import SafeDICore
                 public init(instantiatedA: InstantiatedA) {
                 self.instantiatedA = instantiatedA
                 }
+
                     let instantiatedA: InstantiatedA
 
                     let initializedProperty: Int = 5
@@ -1062,8 +1049,7 @@ import SafeDICore
                 """
                 @Instantiable
                 public struct ExampleService: Instantiable {
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     var optionalProperty: Int?
                 }
@@ -1074,8 +1060,7 @@ import SafeDICore
                 public struct ExampleService: Instantiable {
                                                            ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
                                                               ✏️ Add required initializer
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     var optionalProperty: Int?
                 }
@@ -1088,8 +1073,7 @@ import SafeDICore
                 self.instantiatedA = instantiatedA
                 }
 
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     var optionalProperty: Int?
                 }
@@ -1100,6 +1084,7 @@ import SafeDICore
                 public init(instantiatedA: InstantiatedA) {
                 self.instantiatedA = instantiatedA
                 }
+
                     let instantiatedA: InstantiatedA
 
                     var optionalProperty: Int?
@@ -1113,8 +1098,7 @@ import SafeDICore
                 """
                 @Instantiable
                 public struct ExampleService: Instantiable {
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     // This won't compile but we should still generate an initializer.
                     public static let staticProperty: Int
@@ -1126,8 +1110,7 @@ import SafeDICore
                 public struct ExampleService: Instantiable {
                                                            ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
                                                               ✏️ Add required initializer
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     // This won't compile but we should still generate an initializer.
                     public static let staticProperty: Int
@@ -1141,8 +1124,7 @@ import SafeDICore
                 self.instantiatedA = instantiatedA
                 }
 
-                    @Instantiated
-                    let instantiatedA: InstantiatedA
+                    @Instantiated let instantiatedA: InstantiatedA
 
                     // This won't compile but we should still generate an initializer.
                     public static let staticProperty: Int
@@ -1154,6 +1136,7 @@ import SafeDICore
                 public init(instantiatedA: InstantiatedA) {
                 self.instantiatedA = instantiatedA
                 }
+
                     let instantiatedA: InstantiatedA
 
                     // This won't compile but we should still generate an initializer.
@@ -1174,12 +1157,9 @@ import SafeDICore
                         receivedB = ReceivedB()
                     }
 
-                    @Forwarded
-                    let forwardedA: ForwardedA
-                    @Received
-                    let receivedA: ReceivedA
-                    @Received
-                    let receivedB: ReceivedB
+                    @Forwarded let forwardedA: ForwardedA
+                    @Received let receivedA: ReceivedA
+                    @Received let receivedB: ReceivedB
                 }
                 """
             } diagnostics: {
@@ -1194,12 +1174,9 @@ import SafeDICore
                         receivedB = ReceivedB()
                     }
 
-                    @Forwarded
-                    let forwardedA: ForwardedA
-                    @Received
-                    let receivedA: ReceivedA
-                    @Received
-                    let receivedB: ReceivedB
+                    @Forwarded let forwardedA: ForwardedA
+                    @Received let receivedA: ReceivedA
+                    @Received let receivedB: ReceivedB
                 }
                 """
             } fixes: {
@@ -1222,12 +1199,9 @@ import SafeDICore
                         receivedB = ReceivedB()
                     }
 
-                    @Forwarded
-                    let forwardedA: ForwardedA
-                    @Received
-                    let receivedA: ReceivedA
-                    @Received
-                    let receivedB: ReceivedB
+                    @Forwarded let forwardedA: ForwardedA
+                    @Received let receivedA: ReceivedA
+                    @Received let receivedB: ReceivedB
                 }
                 """
             } expansion: {
@@ -1248,6 +1222,7 @@ import SafeDICore
                         self.receivedA = receivedA
                         receivedB = ReceivedB()
                     }
+
                     let forwardedA: ForwardedA
                     let receivedA: ReceivedA
                     let receivedB: ReceivedB
@@ -1263,11 +1238,9 @@ import SafeDICore
                 """
                 @Instantiable
                 public final class UserService: Instantiable {
-                    @Forwarded
-                    let userID: String
+                    @Forwarded let userID: String
 
-                    @Forwarded
-                    let userName: String
+                    @Forwarded let userName: String
                 }
                 """
             } diagnostics: {
@@ -1276,11 +1249,9 @@ import SafeDICore
                 public final class UserService: Instantiable {
                                                              ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
                                                                 ✏️ Add required initializer
-                    @Forwarded
-                    let userID: String
+                    @Forwarded let userID: String
 
-                    @Forwarded
-                    let userName: String
+                    @Forwarded let userName: String
                 }
                 """
             } fixes: {
@@ -1295,11 +1266,9 @@ import SafeDICore
                 self.userName = userName
                 }
 
-                    @Forwarded
-                    let userID: String
+                    @Forwarded let userID: String
 
-                    @Forwarded
-                    let userName: String
+                    @Forwarded let userName: String
                 }
                 """
             } expansion: {
@@ -1312,7 +1281,9 @@ import SafeDICore
                 self.userID = userID
                 self.userName = userName
                 }
+
                     let userID: String
+
                     let userName: String
 
                     public typealias ForwardedProperties = (userID: String, userName: String)
@@ -1326,8 +1297,7 @@ import SafeDICore
                 """
                 @Instantiable
                 public struct ExampleService: Instantiable {
-                    @Forwarded
-                    let closure: () -> Void
+                    @Forwarded let closure: () -> Void
                 }
                 """
             } diagnostics: {
@@ -1336,8 +1306,7 @@ import SafeDICore
                 public struct ExampleService: Instantiable {
                                                            ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
                                                               ✏️ Add required initializer
-                    @Forwarded
-                    let closure: () -> Void
+                    @Forwarded let closure: () -> Void
                 }
                 """
             } fixes: {
@@ -1348,8 +1317,7 @@ import SafeDICore
                 self.closure = closure
                 }
 
-                    @Forwarded
-                    let closure: () -> Void
+                    @Forwarded let closure: () -> Void
                 }
                 """
             } expansion: {
@@ -1358,6 +1326,7 @@ import SafeDICore
                 public init(closure: @escaping () -> Void) {
                 self.closure = closure
                 }
+
                     let closure: () -> Void
 
                     public typealias ForwardedProperties = () -> Void
@@ -1371,8 +1340,7 @@ import SafeDICore
                 """
                 @Instantiable
                 public struct ExampleService: Instantiable {
-                    @Forwarded
-                    let closure: @Sendable () -> Void
+                    @Forwarded let closure: @Sendable () -> Void
                 }
                 """
             } diagnostics: {
@@ -1381,8 +1349,7 @@ import SafeDICore
                 public struct ExampleService: Instantiable {
                                                            ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
                                                               ✏️ Add required initializer
-                    @Forwarded
-                    let closure: @Sendable () -> Void
+                    @Forwarded let closure: @Sendable () -> Void
                 }
                 """
             } fixes: {
@@ -1393,8 +1360,7 @@ import SafeDICore
                 self.closure = closure
                 }
 
-                    @Forwarded
-                    let closure: @Sendable () -> Void
+                    @Forwarded let closure: @Sendable () -> Void
                 }
                 """
             } expansion: {
@@ -1403,6 +1369,7 @@ import SafeDICore
                 public init(closure: @escaping @Sendable () -> Void) {
                 self.closure = closure
                 }
+
                     let closure: @Sendable () -> Void
 
                     public typealias ForwardedProperties = @Sendable () -> Void
@@ -1416,8 +1383,7 @@ import SafeDICore
                 """
                 @Instantiable
                 public struct ExampleService: Instantiable {
-                    @Instantiated
-                    private let instantiatableAInstantiator: Instantiator<ReceivedA>
+                    @Instantiated private let instantiatableAInstantiator: Instantiator<ReceivedA>
                 }
                 """
             } diagnostics: {
@@ -1426,8 +1392,7 @@ import SafeDICore
                 public struct ExampleService: Instantiable {
                                                            ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
                                                               ✏️ Add required initializer
-                    @Instantiated
-                    private let instantiatableAInstantiator: Instantiator<ReceivedA>
+                    @Instantiated private let instantiatableAInstantiator: Instantiator<ReceivedA>
                 }
                 """
             } fixes: {
@@ -1438,8 +1403,7 @@ import SafeDICore
                 self.instantiatableAInstantiator = instantiatableAInstantiator
                 }
 
-                    @Instantiated
-                    private let instantiatableAInstantiator: Instantiator<ReceivedA>
+                    @Instantiated private let instantiatableAInstantiator: Instantiator<ReceivedA>
                 }
                 """
             } expansion: {
@@ -1448,6 +1412,7 @@ import SafeDICore
                 public init(instantiatableAInstantiator: Instantiator<ReceivedA>) {
                 self.instantiatableAInstantiator = instantiatableAInstantiator
                 }
+
                     private let instantiatableAInstantiator: Instantiator<ReceivedA>
                 }
                 """
@@ -1640,9 +1605,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Received
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Received @Instantiated let receivedA: ReceivedA
                 }
                 """
             } diagnostics: {
@@ -1653,11 +1616,10 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Received
+                    @Received @Instantiated let receivedA: ReceivedA
+                    ┬──────────────────────
                     ╰─ 🛑 Dependency can have at most one of @Instantiated, @Received, or @Forwarded attached macro
                        ✏️ Remove excessive attached macros
-                    @Instantiated
-                    let receivedA: ReceivedA
                 }
                 """
             } fixes: {
@@ -1668,8 +1630,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Received
-                    let receivedA: ReceivedA
+                    @Received let receivedA: ReceivedA
                 }
                 """
             } expansion: {
@@ -1678,6 +1639,7 @@ import SafeDICore
                     public init(receivedA: ReceivedA) {
                         self.receivedA = receivedA
                     }
+
                     let receivedA: ReceivedA
                 }
                 """
@@ -1693,8 +1655,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA = .init()
+                    @Instantiated let receivedA: ReceivedA = .init()
                 }
                 """
             } diagnostics: {
@@ -1705,10 +1666,10 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
+                    @Instantiated let receivedA: ReceivedA = .init()
+                    ┬───────────────────────────────────────────────
                     ╰─ 🛑 Dependency must not have hand-written initializer
                        ✏️ Remove initializer
-                    let receivedA: ReceivedA = .init()
                 }
                 """
             } fixes: {
@@ -1719,8 +1680,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA 
+                    @Instantiated let receivedA: ReceivedA 
                 }
                 """
             } expansion: {
@@ -1729,6 +1689,7 @@ import SafeDICore
                     public init(receivedA: ReceivedA) {
                         self.receivedA = receivedA
                     }
+
                     let receivedA: ReceivedA 
                 }
                 """
@@ -1744,8 +1705,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } diagnostics: {
@@ -1758,8 +1718,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } fixes: {
@@ -1770,8 +1729,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } expansion: {
@@ -1780,6 +1738,7 @@ import SafeDICore
                     public init(receivedA: ReceivedA) {
                         self.receivedA = receivedA
                     }
+
                     let receivedA: ReceivedA
                 }
                 """
@@ -1795,8 +1754,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } diagnostics: {
@@ -1809,8 +1767,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } fixes: {
@@ -1821,8 +1778,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } expansion: {
@@ -1831,6 +1787,7 @@ import SafeDICore
                     public init(receivedA: ReceivedA) {
                         self.receivedA = receivedA
                     }
+
                     let receivedA: ReceivedA
                 }
                 """
@@ -1846,8 +1803,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } diagnostics: {
@@ -1860,8 +1816,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } fixes: {
@@ -1872,8 +1827,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } expansion: {
@@ -1882,6 +1836,7 @@ import SafeDICore
                     public init(receivedA: ReceivedA) {
                         self.receivedA = receivedA
                     }
+
                     let receivedA: ReceivedA
                 }
                 """
@@ -1897,8 +1852,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } diagnostics: {
@@ -1911,8 +1865,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } fixes: {
@@ -1923,8 +1876,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } expansion: {
@@ -1933,6 +1885,7 @@ import SafeDICore
                     public init(receivedA: ReceivedA) {
                         self.receivedA = receivedA
                     }
+
                     let receivedA: ReceivedA
                 }
                 """
@@ -1948,8 +1901,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } diagnostics: {
@@ -1962,8 +1914,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } fixes: {
@@ -1974,8 +1925,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } expansion: {
@@ -1984,6 +1934,7 @@ import SafeDICore
                     public init(receivedA: ReceivedA) {
                         self.receivedA = receivedA
                     }
+
                     let receivedA: ReceivedA
                 }
                 """
@@ -1999,8 +1950,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } diagnostics: {
@@ -2013,8 +1963,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } fixes: {
@@ -2025,8 +1974,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } expansion: {
@@ -2035,6 +1983,7 @@ import SafeDICore
                     public init(receivedA: ReceivedA) {
                         self.receivedA = receivedA
                     }
+
                     let receivedA: ReceivedA
                 }
                 """
@@ -2050,8 +1999,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } diagnostics: {
@@ -2064,8 +2012,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } fixes: {
@@ -2076,8 +2023,7 @@ import SafeDICore
                         self.receivedA = receivedA
                     }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
                 }
                 """
             } expansion: {
@@ -2086,6 +2032,7 @@ import SafeDICore
                     public init(receivedA: ReceivedA) {
                         self.receivedA = receivedA
                     }
+
                     let receivedA: ReceivedA
                 }
                 """
@@ -2140,8 +2087,7 @@ import SafeDICore
                 """
                 @Instantiable
                 public struct ExampleService: Instantiable {
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
 
                     let uninitializedProperty: Int
                 }
@@ -2152,8 +2098,7 @@ import SafeDICore
                 public struct ExampleService: Instantiable {
                                                            ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values.
                                                               ✏️ Add required initializer
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
 
                     let uninitializedProperty: Int
                 }
@@ -2169,8 +2114,7 @@ import SafeDICore
                 uninitializedProperty = <#T##assign_uninitializedProperty#>
                 }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
 
                     let uninitializedProperty: Int
                 }
@@ -2184,6 +2128,7 @@ import SafeDICore
                 // If the following properties were decorated with the @Instantiated, @Received, or @Forwarded macros, had default values, or were written as computed properties, this initializer could have been auto-generated by the @Instantiable macro.
                 uninitializedProperty = <#T##assign_uninitializedProperty#>
                 }
+
                     let receivedA: ReceivedA
 
                     let uninitializedProperty: Int
@@ -2197,8 +2142,7 @@ import SafeDICore
                 """
                 @Instantiable
                 public struct ExampleService: Instantiable {
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
 
                     var uninitializedProperty1: Int
                     let uninitializedProperty2: Int, uninitializedProperty3: Int, initializedProperty = "init"
@@ -2211,8 +2155,7 @@ import SafeDICore
                 public struct ExampleService: Instantiable {
                                                            ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values.
                                                               ✏️ Add required initializer
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
 
                     var uninitializedProperty1: Int
                     let uninitializedProperty2: Int, uninitializedProperty3: Int, initializedProperty = "init"
@@ -2233,8 +2176,7 @@ import SafeDICore
                 (uninitializedProperty4, uninitializedProperty5) = <#T##assign_(uninitializedProperty4, uninitializedProperty5)#>
                 }
 
-                    @Instantiated
-                    let receivedA: ReceivedA
+                    @Instantiated let receivedA: ReceivedA
 
                     var uninitializedProperty1: Int
                     let uninitializedProperty2: Int, uninitializedProperty3: Int, initializedProperty = "init"
@@ -2253,6 +2195,7 @@ import SafeDICore
                 uninitializedProperty3 = <#T##assign_uninitializedProperty3#>
                 (uninitializedProperty4, uninitializedProperty5) = <#T##assign_(uninitializedProperty4, uninitializedProperty5)#>
                 }
+
                     let receivedA: ReceivedA
 
                     var uninitializedProperty1: Int
