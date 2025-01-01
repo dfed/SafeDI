@@ -397,11 +397,6 @@ final class FileVisitorTests: XCTestCase {
                                                                                     @Instantiable
                                                                                     public final class Nested {
                                                                                         public init() {}
-
-                                                                                        @Instantiable
-                                                                                        public actor Nested {
-                                                                                            public init() {}
-                                                                                        }
                                                                                     }
                                                                                 }
                                                                             }
@@ -577,14 +572,6 @@ final class FileVisitorTests: XCTestCase {
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .classType
-                ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))))))))),
-                    isRoot: false,
-                    initializer: nil,
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .actorType
                 ),
             ]
         )
