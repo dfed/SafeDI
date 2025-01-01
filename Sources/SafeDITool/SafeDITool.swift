@@ -306,15 +306,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 
 extension Data {
     fileprivate func write(toPath filePath: String) throws {
-        #if os(Linux)
-            try write(to: URL(fileURLWithPath: filePath))
-        #else
-            if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
-                try write(to: URL(filePath: filePath))
-            } else {
-                try write(to: URL(fileURLWithPath: filePath))
-            }
-        #endif
+        try write(to: filePath.asFileURL)
     }
 }
 
