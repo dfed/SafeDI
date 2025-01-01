@@ -424,7 +424,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .simple(name: "Nested")),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .structType
@@ -432,7 +440,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .actorType
@@ -440,7 +456,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .classType
@@ -448,7 +472,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .actorType
@@ -456,7 +488,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .classType
@@ -464,7 +504,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .structType
@@ -472,7 +520,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .classType
@@ -480,7 +536,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .actorType
@@ -488,7 +552,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .actorType
@@ -496,7 +568,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .structType
@@ -504,7 +584,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .structType
@@ -512,7 +600,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .classType
@@ -520,7 +616,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .classType
@@ -528,7 +632,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .classType
@@ -536,7 +648,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .classType
@@ -544,7 +664,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .classType
@@ -552,7 +680,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .classType
@@ -560,7 +696,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .classType
@@ -568,7 +712,15 @@ final class FileVisitorTests: XCTestCase {
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))))))),
                     isRoot: false,
-                    initializer: Initializer(isPublicOrOpen: true, isOptional: false, isAsync: false, doesThrow: false, hasGenericParameter: false, hasGenericWhereClause: false, arguments: []),
+                    initializer: Initializer(
+                        isPublicOrOpen: true,
+                        isOptional: false,
+                        isAsync: false,
+                        doesThrow: false,
+                        hasGenericParameter: false,
+                        hasGenericWhereClause: false,
+                        arguments: []
+                    ),
                     additionalInstantiables: [],
                     dependencies: [],
                     declarationType: .classType
