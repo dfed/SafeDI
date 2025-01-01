@@ -122,7 +122,7 @@ import SafeDICore
             }
         }
 
-        func test_declaration_throwsErrorWhenFulfillingAdditionalTypesIncludesAShortformOptional() {
+        func test_declaration_throwsErrorWhenFulfillingAdditionalTypesIncludesAnOptional() {
             assertMacro {
                 """
                 @Instantiable(fulfillingAdditionalTypes: [AnyObject?.self])
@@ -132,22 +132,6 @@ import SafeDICore
                 """
                 @Instantiable(fulfillingAdditionalTypes: [AnyObject?.self])
                 ┬──────────────────────────────────────────────────────────
-                ╰─ 🛑 The argument `fulfillingAdditionalTypes` must not include optionals
-                public final class ExampleService: Instantiable {}
-                """
-            }
-        }
-
-        func test_declaration_throwsErrorWhenFulfillingAdditionalTypesIncludesALongformOptional() {
-            assertMacro {
-                """
-                @Instantiable(fulfillingAdditionalTypes: [Optional<AnyObject>.self])
-                public final class ExampleService: Instantiable {}
-                """
-            } diagnostics: {
-                """
-                @Instantiable(fulfillingAdditionalTypes: [Optional<AnyObject>.self])
-                ┬───────────────────────────────────────────────────────────────────
                 ╰─ 🛑 The argument `fulfillingAdditionalTypes` must not include optionals
                 public final class ExampleService: Instantiable {}
                 """

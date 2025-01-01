@@ -104,10 +104,10 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         case let .void(representation):
             return representation.description
         case let .simple(name, generics):
-            if generics.isEmpty {
-                return name
+            return if generics.isEmpty {
+                name
             } else {
-                return "\(name)<\(generics.map(\.asSource).joined(separator: ", "))>"
+                "\(name)<\(generics.map(\.asSource).joined(separator: ", "))>"
             }
         case let .composition(types):
             return types.map(\.asSource).joined(separator: " & ")
@@ -116,10 +116,10 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
         case let .implicitlyUnwrappedOptional(type):
             return "\(type.wrappedIfAmbiguous.asSource)!"
         case let .nested(name, parentType, generics):
-            if generics.isEmpty {
-                return "\(parentType.asSource).\(name)"
+            return if generics.isEmpty {
+                "\(parentType.asSource).\(name)"
             } else {
-                return "\(parentType.asSource).\(name)<\(generics.map(\.asSource).joined(separator: ", "))>"
+                "\(parentType.asSource).\(name)<\(generics.map(\.asSource).joined(separator: ", "))>"
             }
         case let .metatype(type, isType):
             return "\(type.wrappedIfAmbiguous.asSource).\(isType ? "Type" : "Protocol")"
@@ -133,11 +133,11 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                     .map { "@\($0)" }
                     .joined(separator: " ")
             }
-            switch (specifiers, attributes) {
+            return switch (specifiers, attributes) {
             case let (.some(specifiers), .none):
-                return "\(specifiers.joined(separator: " ")) \(type.asSource)"
+                "\(specifiers.joined(separator: " ")) \(type.asSource)"
             case let (.none, .some(attributes)):
-                return "\(attributesFromList(attributes)) \(type.asSource)"
+                "\(attributesFromList(attributes)) \(type.asSource)"
             case let (.some(specifiers), .some(attributes)):
                 // This case likely represents an error.
                 // We are unaware of type reference that compiles with both a specifier and attributes.
@@ -146,9 +146,9 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
                 // Only code where the specifier comes before the attribute parses as an AttributedTypeSyntax.
                 // As a result, we construct this source with the specifier first.
                 // Reference manual: https://docs.swift.org/swift-book/ReferenceManual/Types.html#grammar_type
-                return "\(specifiers.joined(separator: " ")) \(attributesFromList(attributes)) \(type.asSource)"
+                "\(specifiers.joined(separator: " ")) \(attributesFromList(attributes)) \(type.asSource)"
             case (.none, .none):
-                return type.asSource // This case represents an error.
+                type.asSource // This case represents an error.
             }
         case let .array(element):
             return "[\(element.asSource)]"
@@ -443,7 +443,6 @@ extension ExprSyntax {
     public var typeDescription: TypeDescription {
         if let typeExpr = TypeExprSyntax(self) {
             return typeExpr.type.typeDescription
-
         } else if let declReferenceExpr = DeclReferenceExprSyntax(self) {
             return TypeSyntax(
                 IdentifierTypeSyntax(
@@ -453,14 +452,14 @@ extension ExprSyntax {
             ).typeDescription
         } else if let memberAccessExpr = MemberAccessExprSyntax(self), let base = memberAccessExpr.base {
             let declName = memberAccessExpr.declName.baseName.text
-            if declName == "self" {
-                return base.typeDescription
+            return if declName == "self" {
+                base.typeDescription
             } else if declName == "Type" {
-                return .metatype(base.typeDescription, isType: true)
+                .metatype(base.typeDescription, isType: true)
             } else if declName == "Protocol" {
-                return .metatype(base.typeDescription, isType: false)
+                .metatype(base.typeDescription, isType: false)
             } else {
-                return .nested(
+                .nested(
                     name: declName,
                     parentType: base.typeDescription,
                     generics: []
@@ -469,39 +468,32 @@ extension ExprSyntax {
         } else if let genericExpr = GenericSpecializationExprSyntax(self) {
             let genericTypeVisitor = GenericArgumentVisitor(viewMode: .sourceAccurate)
             genericTypeVisitor.walk(genericExpr.genericArgumentClause)
-            switch genericExpr.expression.typeDescription {
+            return switch genericExpr.expression.typeDescription {
             case let .simple(name, _):
-                if name == "Optional",
-                   genericTypeVisitor.genericArguments.count == 1,
-                   let firstGenericArgument = genericTypeVisitor.genericArguments.first
-                {
-                    return .optional(firstGenericArgument)
-                } else {
-                    return .simple(
-                        name: name,
-                        generics: genericTypeVisitor.genericArguments
-                    )
-                }
+                .simple(
+                    name: name,
+                    generics: genericTypeVisitor.genericArguments
+                )
             case let .nested(name, parentType, _):
-                return .nested(
+                .nested(
                     name: name,
                     parentType: parentType, generics: genericTypeVisitor.genericArguments
                 )
             case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
-                return .unknown(text: trimmedDescription)
+                .unknown(text: trimmedDescription)
             }
         } else if let tupleExpr = TupleExprSyntax(self) {
             let tupleElements = tupleExpr.elements
-            if tupleElements.count == 1 {
+            return if tupleElements.count == 1 {
                 // Single-element tuple types must be unwrapped.
                 // Certain types can not be in a Any.Type list without being wrapped
                 // in a tuple. We care only about the underlying types in this case.
                 // A @Instantiable that fulfills an addition type `(some Collection).self`
                 // should be unwrapped as `some Collection` to enable the @Instantiable
                 // to fulfill `some Collection`.
-                return tupleElements.lazy.map(\.expression)[0].typeDescription
+                tupleElements.lazy.map(\.expression)[0].typeDescription
             } else {
-                return .tuple(tupleElements.map {
+                .tuple(tupleElements.map {
                     TypeDescription.TupleElement(
                         label: $0.label?.text,
                         $0.expression.typeDescription
