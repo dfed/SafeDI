@@ -75,12 +75,13 @@ extension AttributeSyntax {
 
     public var fulfillingPropertyName: String? {
         guard let fulfilledByDependencyNamed,
-              let stringLiteral = StringLiteralExprSyntax(fulfilledByDependencyNamed)
+              let stringLiteral = StringLiteralExprSyntax(fulfilledByDependencyNamed),
+              case let .stringSegment(firstSegment) = stringLiteral.segments.first
         else {
             return nil
         }
 
-        return stringLiteral.segments.firstStringSegment
+        return firstSegment.content.text
     }
 
     public var fulfilledByType: ExprSyntax? {
@@ -125,9 +126,9 @@ extension AttributeSyntax {
     public var fulfillingTypeDescription: TypeDescription? {
         if let expression = fulfilledByType,
            let stringLiteral = StringLiteralExprSyntax(expression),
-           let firstStringSegement = stringLiteral.segments.firstStringSegment
+           case let .stringSegment(firstSegment) = stringLiteral.segments.first
         {
-            TypeSyntax(stringLiteral: firstStringSegement).typeDescription
+            TypeSyntax(stringLiteral: firstSegment.content.text).typeDescription
         } else {
             ofType?.typeDescription
         }
