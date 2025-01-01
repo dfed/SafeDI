@@ -51,9 +51,9 @@ public struct InjectableMacro: PeerMacro {
 
             if let stringLiteralExpression = StringLiteralExprSyntax(fulfilledByType),
                stringLiteralExpression.segments.count == 1,
-               let stringLiteral = stringLiteralExpression.segments.firstStringSegment
+               case let .stringSegment(stringLiteral) = stringLiteralExpression.segments.first
             {
-                switch TypeSyntax(stringLiteral: stringLiteral).typeDescription {
+                switch TypeSyntax(stringLiteral: stringLiteral.content.text).typeDescription {
                 case .simple, .nested:
                     break
                 case .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown, .void:
