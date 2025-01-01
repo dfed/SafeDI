@@ -182,11 +182,10 @@ extension Data {
         #if os(Linux)
             try write(to: URL(fileURLWithPath: filePath))
         #else
-            if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
-                try write(to: URL(filePath: filePath))
-            } else {
+            guard #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) else {
                 try write(to: URL(fileURLWithPath: filePath))
             }
+            try write(to: URL(filePath: filePath))
         #endif
     }
 }

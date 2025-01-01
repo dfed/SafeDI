@@ -317,13 +317,12 @@ extension String {
 
     fileprivate var asFileURL: URL {
         #if os(Linux)
-            URL(fileURLWithPath: self)
+            return URL(fileURLWithPath: self)
         #else
-            if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
-                URL(filePath: self)
-            } else {
-                URL(fileURLWithPath: self)
+            guard #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) else {
+                return URL(fileURLWithPath: self)
             }
+            return URL(filePath: self)
         #endif
     }
 }
