@@ -45,6 +45,10 @@ import SafeDICore
 
         // MARK: Behavior Tests
 
+        func test_providingMacros_containsInjectable() {
+            XCTAssertTrue(SafeDIMacroPlugin().providingMacros.contains(where: { $0 == InjectableMacro.self }))
+        }
+
         func test_propertyIsFulfilledByTypeWithStringLiteral_expandsWithoutIssue() {
             assertMacro {
                 """

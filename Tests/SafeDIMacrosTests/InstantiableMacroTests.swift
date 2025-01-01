@@ -46,6 +46,10 @@ import SafeDICore
 
         // MARK: Behavior Tests
 
+        func test_providingMacros_containsInstantiable() {
+            XCTAssertTrue(SafeDIMacroPlugin().providingMacros.contains(where: { $0 == InstantiableMacro.self }))
+        }
+
         func test_extension_expandsWithoutIssueOnTypeDeclarationWhenInstantiableConformanceMissingAndConformsElsewhereIsTrue() {
             assertMacro {
                 """
