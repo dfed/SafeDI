@@ -91,13 +91,12 @@ struct TestOutput {
 extension URL {
     fileprivate static var temporaryFile: URL {
         #if os(Linux)
-            FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            return FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         #else
-            if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
-                URL.temporaryDirectory.appending(path: UUID().uuidString)
-            } else {
-                FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            guard #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) else {
+                return FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
             }
+            return URL.temporaryDirectory.appending(path: UUID().uuidString)
         #endif
     }
 }
