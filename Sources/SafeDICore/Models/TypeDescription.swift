@@ -451,26 +451,20 @@ extension ExprSyntax {
                     genericArgumentClause: nil
                 )
             ).typeDescription
-        } else if let memberAccessExpr = MemberAccessExprSyntax(self) {
-            if memberAccessExpr.declName.baseName.text == "self" {
-                if let base = memberAccessExpr.base {
-                    return base.typeDescription
-                }
+        } else if let memberAccessExpr = MemberAccessExprSyntax(self), let base = memberAccessExpr.base {
+            let declName = memberAccessExpr.declName.baseName.text
+            if declName == "self" {
+                return base.typeDescription
+            } else if declName == "Type" {
+                return .metatype(base.typeDescription, isType: true)
+            } else if declName == "Protocol" {
+                return .metatype(base.typeDescription, isType: false)
             } else {
-                if let base = memberAccessExpr.base {
-                    let declName = memberAccessExpr.declName.baseName.text
-                    if declName == "Type" {
-                        return .metatype(base.typeDescription, isType: true)
-                    } else if declName == "Protocol" {
-                        return .metatype(base.typeDescription, isType: false)
-                    } else {
-                        return .nested(
-                            name: declName,
-                            parentType: base.typeDescription,
-                            generics: []
-                        )
-                    }
-                }
+                return .nested(
+                    name: declName,
+                    parentType: base.typeDescription,
+                    generics: []
+                )
             }
         } else if let genericExpr = GenericSpecializationExprSyntax(self) {
             let genericTypeVisitor = GenericArgumentVisitor(viewMode: .sourceAccurate)
