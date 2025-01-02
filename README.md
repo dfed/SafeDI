@@ -72,6 +72,8 @@ You can see sample integrations in the [Examples folder](Examples/). If you are 
 
 ### Adding SafeDI as a Dependency
 
+#### Swift package manager
+
 To add the SafeDI framework as a dependency to a package utilizing [Swift Package Manager](https://github.com/apple/swift-package-manager), add the following lines to your `Package.swift` file:
 
 ```swift
@@ -81,6 +83,14 @@ dependencies: [
 ```
 
 To install the SafeDI framework into an Xcode project with Swift Package Manager, follow [Apple’s instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to add `https://github.com/dfed/SafeDI.git` as a dependency.
+
+#### Cocoapods
+
+To add the SafeDI framework as a dependency to a package utilizing [CocoaPods](http://cocoapods.org), add the following to your `Podfile`:
+
+```ruby
+pod 'SafeDI', '~> 1.0.0'
+```
 
 ### Generating your dependency tree
 
