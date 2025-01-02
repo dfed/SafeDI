@@ -102,6 +102,16 @@ jobs:
   pod-lint:
     name: Pod Lint
     runs-on: macos-15
+    strategy:
+      matrix:
+        platforms: [
+          "ios",
+          "tvos",
+          "watchos",
+          "macos",
+          "visionos",
+        ]
+      fail-fast: false
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -112,13 +122,14 @@ jobs:
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
       - name: Download visionOS
+        if: matrix.platforms == 'visionos'
         run: |
           sudo xcodebuild -runFirstLaunch
           sudo xcrun simctl list
           sudo xcodebuild -downloadPlatform visionOS
           sudo xcodebuild -runFirstLaunch
       - name: Lint Podspec
-        run: bundle exec pod lib lint --verbose --fail-fast --swift-version=6.0 --allow-warnings # We can stop allowing warnings once ZippyJSON creates a release that contains https://github.com/michaeleisel/ZippyJSON/pull/67
+        run: bundle exec pod lib lint --verbose --fail-fast --swift-version=6.0 --allow-warnings --platforms=${{ matrix.platforms }} # We can stop allowing warnings once ZippyJSON creates a release that contains https://github.com/michaeleisel/ZippyJSON/pull/67
 
   linux:
     name: Build and Test on Linux
