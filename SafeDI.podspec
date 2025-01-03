@@ -14,14 +14,14 @@ Pod::Spec.new do |s|
   s.visionos.deployment_target = '1.0'
 
   s.source_files = 'Sources/SafeDI/**/*.{swift}'
-  s.preserve_paths = 'CocoaPods/', 'Sources/SafeDIMacros', 'Sources/SafeDICore'
+  s.preserve_paths = 'Sources/SafeDIMacros', 'Sources/SafeDICore'
 
   # The below scripts and flags were inspired by https://soumyamahunt.medium.com/support-swift-macros-with-cocoapods-3911f9317042
   script = <<-SCRIPT.squish
   env -i PATH="$PATH" "$SHELL" -l -c
-  "set -x; swift build -c $(echo ${CONFIGURATION} | tr '[:upper:]' '[:lower:]') --product SafeDIMacros
+  "set -x; SAFEDI_MACRO_COCOAPODS_BUILD=1 swift build -c $(echo ${CONFIGURATION} | tr '[:upper:]' '[:lower:]') --product SafeDIMacros
   --sdk \\"`xcrun --show-sdk-path`\\"
-  --package-path \\"${PODS_TARGET_SRCROOT}/CocoaPods\\"
+  --package-path \\"${PODS_TARGET_SRCROOT}\\"
   --scratch-path \\"${PODS_BUILD_DIR}/Macros/SafeDIMacros\\""
   SCRIPT
 
