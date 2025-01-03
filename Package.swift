@@ -4,6 +4,9 @@
 import CompilerPluginSupport
 import PackageDescription
 
+// TODO: Once https://github.com/michaeleisel/ZippyJSON/pull/67 is in a release, remove this conditional.
+let isBuildingForCocoaPods = Context.environment["SAFEDI_MACRO_COCOAPODS_BUILD"] != nil
+
 let package = Package(
     name: "SafeDI",
     platforms: [
@@ -20,6 +23,7 @@ let package = Package(
             name: "SafeDI",
             targets: ["SafeDI"]
         ),
+    ] + (isBuildingForCocoaPods ? [] : [
         /// A SafeDI plugin that must be run on the root source module in a project.
         .plugin(
             name: "SafeDIGenerator",
@@ -29,14 +33,15 @@ let package = Package(
             name: "InstallSafeDITool",
             targets: ["InstallSafeDITool"]
         ),
-    ],
+    ]),
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.0"),
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.0.0"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
-        .package(url: "https://github.com/michaeleisel/ZippyJSON.git", from: "1.2.0"),
         .package(url: "https://github.com/pointfreeco/swift-macro-testing.git", from: "0.5.0"),
-    ],
+    ] + (isBuildingForCocoaPods ? [] : [
+        .package(url: "https://github.com/michaeleisel/ZippyJSON.git", from: "1.2.0"),
+    ]),
     targets: [
         // Macros
         .target(
@@ -85,35 +90,6 @@ let package = Package(
 
         // Plugins
         .plugin(
-            name: "SafeDIGenerator",
-            capability: .buildTool(),
-            dependencies: ["SafeDITool"]
-        ),
-        .executableTarget(
-            name: "SafeDITool",
-            dependencies: [
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                .product(name: "SwiftSyntax", package: "swift-syntax"),
-                .product(name: "SwiftParser", package: "swift-syntax"),
-                .byNameItem(name: "ZippyJSON", condition: .when(platforms: [.iOS, .tvOS, .macOS])),
-                "SafeDICore",
-            ],
-            swiftSettings: [
-                .swiftLanguageMode(.v6),
-            ]
-        ),
-        .testTarget(
-            name: "SafeDIToolTests",
-            dependencies: [
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                .byNameItem(name: "ZippyJSON", condition: .when(platforms: [.iOS, .tvOS, .macOS])),
-                "SafeDITool",
-            ],
-            swiftSettings: [
-                .swiftLanguageMode(.v6),
-            ]
-        ),
-        .plugin(
             name: "InstallSafeDITool",
             capability: .command(
                 intent: .custom(
@@ -148,5 +124,36 @@ let package = Package(
                 .swiftLanguageMode(.v6),
             ]
         ),
-    ]
+    ] + (isBuildingForCocoaPods ? [] : [
+        // Plugins
+        .plugin(
+            name: "SafeDIGenerator",
+            capability: .buildTool(),
+            dependencies: ["SafeDITool"]
+        ),
+        .executableTarget(
+            name: "SafeDITool",
+            dependencies: [
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax"),
+                .byNameItem(name: "ZippyJSON", condition: .when(platforms: [.iOS, .tvOS, .macOS])),
+                "SafeDICore",
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
+        ),
+        .testTarget(
+            name: "SafeDIToolTests",
+            dependencies: [
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .byNameItem(name: "ZippyJSON", condition: .when(platforms: [.iOS, .tvOS, .macOS])),
+                "SafeDITool",
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
+        ),
+    ])
 )
