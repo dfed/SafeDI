@@ -26,7 +26,7 @@ Pod::Spec.new do |s|
   SCRIPT
 
   s.script_phase = {
-    :name => 'Build SafeDIMacros macro plugin',
+    :name => 'Build SafeDI macro plugin',
     :script => script,
     :input_files => Dir.glob("{Package.swift,Sources/SafeDIMacros/**/*,Sources/SafeDICore/**/*").map {
       |path| "$(PODS_TARGET_SRCROOT)/#{path}"
