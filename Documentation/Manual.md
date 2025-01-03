@@ -114,6 +114,59 @@ extension SecurePersistentStorage: Instantiable {
 }
 ```
 
+#### Making generic types `@Instantiable`
+
+Generic types can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via functions of the form `public static func instantiate(…) -> GenericType<ConcreteType>`.
+
+Here we have a sample `Container<T>` wrapper that is `@Instantiable` when `T` is a common Swift type:
+
+```swift
+/// A generic container for a settable value.
+public final class Container<T> {
+    public init(_ value: T) {
+        self.value = value
+    }
+
+    public var value: T
+}
+
+/// An extension on the Container type that tells SafeDI how to instantiate a `Container<T>` where `T` is a common Swift type.
+@Instantiable
+extension Container: Instantiable {
+    public static func instantiate() -> Container<Bool> {
+        Container(false)
+    }
+
+    public static func instantiate() -> Container<Int> {
+        Container(0)
+    }
+
+    public static func instantiate() -> Container<String> {
+        Container("")
+    }
+
+    public static func instantiate() -> Container<URL?> {
+        Container(nil)
+    }
+}
+```
+
+Elsewhere, we make the `Container<T>` type `@Instantiable` when creating a `Container<MyEnum>` type:
+
+```swift
+public enum MyEnum {
+    …
+}
+
+/// An extension on the Container type that tells SafeDI how to instantiate a `Container<MyEnum>`. We tell the `@Instantiable` macro that this type already conforms to the `Instantiable` protocol elsewhere to prevent the macro from requiring that this extension declares a conformance to `Instantiable`.
+@Instantiable(conformsElsewhere: true)
+extension Container {
+    public static func instantiate() -> Container<MyEnum> {
+        Container(.defaultValue)
+    }
+}
+```
+
 ### @Instantiated
 
 Property declarations within `@Instantiable` types decorated with [`@Instantiated`](../Sources/SafeDI/PropertyDecoration/Instantiated.swift) are instantiated when its enclosing type is instantiated. `@Instantiated`-decorated properties are available to be `@Received` by objects instantiated further down the dependency tree.
