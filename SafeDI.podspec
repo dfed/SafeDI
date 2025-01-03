@@ -19,7 +19,7 @@ Pod::Spec.new do |s|
   # The below scripts and flags were inspired by https://soumyamahunt.medium.com/support-swift-macros-with-cocoapods-3911f9317042
   script = <<-SCRIPT.squish
   env -i PATH="$PATH" "$SHELL" -l -c
-  "swift build -c release --product SafeDIMacros
+  "swift build -c $(echo ${CONFIGURATION} | tr '[:upper:]' '[:lower:]') --product SafeDIMacros
   --sdk \\"`xcrun --show-sdk-path`\\"
   --package-path \\"$PODS_TARGET_SRCROOT\\"
   --scratch-path \\"${PODS_BUILD_DIR}/Macros/SafeDIMacros\\""
@@ -31,12 +31,12 @@ Pod::Spec.new do |s|
     :input_files => Dir.glob("{Package.swift,Sources/SafeDIMacros/**/*,Sources/SafeDICore/**/*").map {
       |path| "$(PODS_TARGET_SRCROOT)/#{path}"
     },
-    :output_files => ['$(PODS_BUILD_DIR)/Macros/SafeDIMacros/release/SafeDIMacros-tool'],
+    :output_files => ["$(PODS_BUILD_DIR)/Macros/SafeDIMacros/${CONFIGURATION}/SafeDIMacros-tool"],
     :execution_position => :before_compile
   }
 
   xcconfig = {
-    'OTHER_SWIFT_FLAGS' => "-Xfrontend -load-plugin-executable -Xfrontend ${PODS_BUILD_DIR}/Macros/SafeDIMacros/release/SafeDIMacros-tool#SafeDIMacros",
+    'OTHER_SWIFT_FLAGS' => "-Xfrontend -load-plugin-executable -Xfrontend ${PODS_BUILD_DIR}/Macros/SafeDIMacros/${CONFIGURATION}/SafeDIMacros-tool#SafeDIMacros",
     'SAFEDI_PLUGIN_BUILD_ENVIRONMENT' => 'SAFEDI_BEING_USED_FROM_COCOAPODS=true'
   }
   s.user_target_xcconfig = xcconfig
