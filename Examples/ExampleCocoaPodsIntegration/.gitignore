@@ -1,0 +1,5 @@
+ExampleCocoaPodsIntegration.xcodeproj/xcuserdata
+ExampleCocoaPodsIntegration.xcworkspace/
+Podfile.lock
+Pods/
+SafeDIOutput/SafeDI.swift
