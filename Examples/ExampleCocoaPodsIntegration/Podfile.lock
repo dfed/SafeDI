@@ -1,0 +1,16 @@
+PODS:
+  - SafeDI (1.0.0)
+
+DEPENDENCIES:
+  - SafeDI (from `../../`)
+
+EXTERNAL SOURCES:
+  SafeDI:
+    :path: "../../"
+
+SPEC CHECKSUMS:
+  SafeDI: dd07c5fb89bf6efad61af270149fdf99b04f0093
+
+PODFILE CHECKSUM: d4bab0152714182925f8589c33858a062c3158b9
+
+COCOAPODS: 1.16.2

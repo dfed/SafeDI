@@ -19,7 +19,7 @@ Pod::Spec.new do |s|
   # The below scripts and flags were inspired by https://soumyamahunt.medium.com/support-swift-macros-with-cocoapods-3911f9317042
   script = <<-SCRIPT.squish
   env -i PATH="$PATH" "$SHELL" -l -c
-  "swift build -c $(echo ${CONFIGURATION} | tr '[:upper:]' '[:lower:]') --product SafeDIMacros
+  "SAFEDI_COCOAPODS_PROTOCOL_PLUGIN=true swift build -c $(echo ${CONFIGURATION} | tr '[:upper:]' '[:lower:]') --product SafeDIMacros
   --sdk \\"`xcrun --show-sdk-path`\\"
   --package-path \\"$PODS_TARGET_SRCROOT\\"
   --scratch-path \\"${PODS_BUILD_DIR}/Macros/SafeDIMacros\\""

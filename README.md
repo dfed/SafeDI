@@ -96,11 +96,13 @@ pod 'SafeDI', '~> 1.0.0'
 
 SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin works out of the box on a limited number of project configurations. If your project does not fall into these well-supported configurations, you can configure your build to utilize the `SafeDITool` command-line executable directly.
 
-#### Single-module Xcode projects
+#### Swift package manager
+
+##### Single-module Xcode projects
 
 If your first-party code comprises a single module in an `.xcodeproj`, once your Xcode project depends on the SafeDI package you can integrate the Swift Package Plugin simply by going to your target’s `Build Phases`, expanding the `Run Build Tool Plug-ins` drop-down, and adding the `SafeDIGenerator` as a build tool plug-in. You can see this integration in practice in the [ExampleProjectIntegration](Examples/ExampleProjectIntegration) project.
 
-#### Swift package
+##### Swift package
 
 If your first-party code is entirely contained in a Swift Package with one or more modules, you can add the following lines to your root target’s definition:
 
@@ -112,44 +114,17 @@ If your first-party code is entirely contained in a Swift Package with one or mo
 
 You can see this integration in practice in the [ExamplePackageIntegration](Examples/ExamplePackageIntegration) package.
 
+#### CocoaPods
+
+Use a pre-build script ([example](Examples/ExampleCocoaPodsIntegration/safeditool.sh)) to download the `SafeDITool` binary and generate your SafeDI dependency tree. Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
+
+You can see this integration in practice in the [ExampleCocoaPodsIntegration](Examples/ExampleCocoaPodsIntegration) package. Run `bundle exec pod install --project-directory=Examples/ExampleCocoaPodsIntegration` to create the `ExampleCocoaPodsIntegration.xcworkspace`.
+
 #### Additional configurations
 
-If your first-party code comprises multiple modules in Xcode, or a mix of Xcode Projects and Swift Packages, or some other configuration, once your Xcode project depends on the SafeDI package you will need to utilize the `SafeDITool` command-line executable directly in a pre-build script.
+If your first-party code comprises multiple modules in Xcode, or a mix of Xcode Projects and Swift Packages, or some other configuration, once your Xcode project depends on the SafeDI package you will need to utilize the `SafeDITool` command-line executable directly in a pre-build script similar to the CocoaPods integration described above.
 
-```sh
-set -e
-
-VERSION='<<VERSION>>'
-DESTINATION="$BUILD_DIR/SafeDITool-Release/$VERSION/safeditool"
-
-# Download the tool from Github releases.
-if [ -f "$DESTINATION" ]; then
-    if [ ! -x "$DESTINATION" ]; then
-        chmod +x "$DESTINATION"
-    fi
-else
-    mkdir -p "$(dirname "$DESTINATION")"
-
-    ARCH=$(uname -m)
-    if [ "$ARCH" = "arm64" ]; then
-        ARCH_PATH="SafeDITool-arm64"
-    elif [ "$ARCH" = "x86_64" ]; then
-        ARCH_PATH="SafeDITool-x86_64"
-    else
-        echo "Unsupported architecture: $ARCH"
-        exit 1
-    fi
-    curl -L -o "$DESTINATION" "https://github.com/dfed/SafeDI/releases/download/$VERSION/$ARCH_PATH"
-    chmod +x "$DESTINATION"
-fi
-
-# Run the tool.
-$DESTINATION --include "$PROJECT_DIR/<<RELATIVE_PATH_TO_SOURCE_FILES>>" "$PROJECT_DIR/<<RELATIVE_PATH_TO_MORE_SOURCE_FILES>>" --dependency-tree-output "$PROJECT_DIR/<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>"
-```
-
-Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in your target, and to replace the `<<VERSION>>`, `<<RELATIVE_PATH_TO_SOURCE_FILES>>`, `<<RELATIVE_PATH_TO_MORE_SOURCE_FILES>>`, and `<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>` with the appropriate values. Also ensure that you add `$PROJECT_DIR/<<RELATIVE_PATH_TO_WRITE_OUTPUT_FILE>>` to the build script’s `Output Files` list.
-
-You can see this in integration in practice in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) package.
+You can see this integration in practice in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) package.
 
 `SafeDITool` is designed to integrate into projects of any size or shape.
 
