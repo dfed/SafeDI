@@ -1,6 +1,7 @@
 // swift-tools-version: 6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
+import CompilerPluginSupport
 import PackageDescription
 
 let package = Package(
@@ -13,15 +14,13 @@ let package = Package(
         .macCatalyst(.v13),
         .visionOS(.v1),
     ],
-    products: [
-        .executable(name: "SafeDIMacros", targets: ["SafeDIMacros"]),
-    ],
+    products: [],
     dependencies: [
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.0.0"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
     ],
     targets: [
-        .executableTarget(
+        .macro(
             name: "SafeDIMacros",
             dependencies: [
                 "SafeDICore",
