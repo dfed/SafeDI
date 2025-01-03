@@ -14,12 +14,12 @@ Pod::Spec.new do |s|
   s.visionos.deployment_target = '1.0'
 
   s.source_files = 'Sources/SafeDI/**/*.{swift}'
-  s.preserve_paths = 'Package.swift', 'Sources/SafeDIMacros'
+  s.preserve_paths = 'CocoaPods/', 'Sources/SafeDIMacros'
 
   # The below scripts and flags were inspired by https://soumyamahunt.medium.com/support-swift-macros-with-cocoapods-3911f9317042
   script = <<-SCRIPT.squish
   env -i PATH="$PATH" "$SHELL" -l -c
-  "SAFEDI_COCOAPODS_PROTOCOL_PLUGIN=true swift build -c $(echo ${CONFIGURATION} | tr '[:upper:]' '[:lower:]') --product SafeDIMacros
+  "swift build --package-path CocoaPods -c $(echo ${CONFIGURATION} | tr '[:upper:]' '[:lower:]') --product SafeDIMacros
   --sdk \\"`xcrun --show-sdk-path`\\"
   --package-path \\"$PODS_TARGET_SRCROOT\\"
   --scratch-path \\"${PODS_BUILD_DIR}/Macros/SafeDIMacros\\""
@@ -37,7 +37,6 @@ Pod::Spec.new do |s|
 
   xcconfig = {
     'OTHER_SWIFT_FLAGS' => "-Xfrontend -load-plugin-executable -Xfrontend ${PODS_BUILD_DIR}/Macros/SafeDIMacros/${CONFIGURATION}/SafeDIMacros-tool#SafeDIMacros",
-    'SAFEDI_PLUGIN_BUILD_ENVIRONMENT' => 'SAFEDI_BEING_USED_FROM_COCOAPODS=true'
   }
   s.user_target_xcconfig = xcconfig
   s.pod_target_xcconfig = xcconfig

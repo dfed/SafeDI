@@ -4,20 +4,6 @@
 import CompilerPluginSupport
 import PackageDescription
 
-let isBuildingForCocoapods = Context.environment["SAFEDI_COCOAPODS_PROTOCOL_PLUGIN"] != nil
-
-let commonSwiftSettings: [SwiftSetting] = [
-    .swiftLanguageMode(.v6),
-]
-let safeDIMacrosDependencies: [Target.Dependency] = [
-    "SafeDICore",
-    .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
-    .product(name: "SwiftDiagnostics", package: "swift-syntax"),
-    .product(name: "SwiftSyntax", package: "swift-syntax"),
-    .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-    .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-]
-
 let package = Package(
     name: "SafeDI",
     platforms: [
@@ -28,7 +14,7 @@ let package = Package(
         .macCatalyst(.v13),
         .visionOS(.v1),
     ],
-    products: [].appending(
+    products: [
         /// A library containing SafeDI macros, property wrappers, and types.
         .library(
             name: "SafeDI",
@@ -42,45 +28,23 @@ let package = Package(
         .plugin(
             name: "InstallSafeDITool",
             targets: ["InstallSafeDITool"]
-        ), if: !isBuildingForCocoapods
-    )
-    .appending(
-        .executable(name: "SafeDIMacros", targets: ["SafeDIMacros"]),
-        if: isBuildingForCocoapods
-    ),
+        ),
+    ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.0"),
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.0.0"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
-        .package(url: "https://github.com/pointfreeco/swift-macro-testing.git", from: "0.5.0"),
-    ]
-    .appending(
         .package(url: "https://github.com/michaeleisel/ZippyJSON.git", from: "1.2.0"),
-        if: !isBuildingForCocoapods
-    ),
+        .package(url: "https://github.com/pointfreeco/swift-macro-testing.git", from: "0.5.0"),
+    ],
     targets: [
-        .target(
-            name: "SafeDICore",
-            dependencies: [
-                .product(name: "Collections", package: "swift-collections"),
-                .product(name: "SwiftDiagnostics", package: "swift-syntax"),
-                .product(name: "SwiftSyntax", package: "swift-syntax"),
-                .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-            ],
-            swiftSettings: commonSwiftSettings
-        ),
-        .testTarget(
-            name: "SafeDICoreTests",
-            dependencies: ["SafeDICore"],
-            swiftSettings: commonSwiftSettings
-        ),
-    ]
-    .appending(
         // Macros
         .target(
             name: "SafeDI",
             dependencies: ["SafeDIMacros"],
-            swiftSettings: commonSwiftSettings
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
         ),
         .testTarget(
             name: "SafeDITests",
@@ -88,7 +52,23 @@ let package = Package(
                 "SafeDI",
                 "SafeDICore",
             ],
-            swiftSettings: commonSwiftSettings
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
+        ),
+        .macro(
+            name: "SafeDIMacros",
+            dependencies: [
+                "SafeDICore",
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+                .product(name: "SwiftDiagnostics", package: "swift-syntax"),
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
         ),
         .testTarget(
             name: "SafeDIMacrosTests",
@@ -98,12 +78,9 @@ let package = Package(
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
                 .product(name: "MacroTesting", package: "swift-macro-testing"),
             ],
-            swiftSettings: commonSwiftSettings
-        ),
-        .macro(
-            name: "SafeDIMacros",
-            dependencies: safeDIMacrosDependencies,
-            swiftSettings: commonSwiftSettings
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
         ),
 
         // Plugins
@@ -121,7 +98,9 @@ let package = Package(
                 .byNameItem(name: "ZippyJSON", condition: .when(platforms: [.iOS, .tvOS, .macOS])),
                 "SafeDICore",
             ],
-            swiftSettings: commonSwiftSettings
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
         ),
         .testTarget(
             name: "SafeDIToolTests",
@@ -130,7 +109,9 @@ let package = Package(
                 .byNameItem(name: "ZippyJSON", condition: .when(platforms: [.iOS, .tvOS, .macOS])),
                 "SafeDITool",
             ],
-            swiftSettings: commonSwiftSettings
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
         ),
         .plugin(
             name: "InstallSafeDITool",
@@ -145,21 +126,27 @@ let package = Package(
                 ]
             ),
             dependencies: []
-        ), if: !isBuildingForCocoapods
-    )
-    .appending(.executableTarget(
-        name: "SafeDIMacros",
-        dependencies: safeDIMacrosDependencies,
-        swiftSettings: commonSwiftSettings
-    ), if: isBuildingForCocoapods)
-)
+        ),
 
-extension Array {
-    func appending(_ elements: Element..., if condition: Bool) -> [Element] {
-        if condition {
-            self + elements
-        } else {
-            self
-        }
-    }
-}
+        // Core
+        .target(
+            name: "SafeDICore",
+            dependencies: [
+                .product(name: "Collections", package: "swift-collections"),
+                .product(name: "SwiftDiagnostics", package: "swift-syntax"),
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
+        ),
+        .testTarget(
+            name: "SafeDICoreTests",
+            dependencies: ["SafeDICore"],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
+        ),
+    ]
+)
