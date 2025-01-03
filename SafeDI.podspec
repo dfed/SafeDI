@@ -28,7 +28,7 @@ Pod::Spec.new do |s|
   s.script_phase = {
     :name => 'Build SafeDI macro plugin',
     :script => script,
-    :input_files => Dir.glob("{CocoaPods/Package.swift,Sources/SafeDIMacros/**/*,Sources/SafeDICore/**/*").map {
+    :input_files => Dir.glob("{Package.swift,Sources/SafeDIMacros/**/*,Sources/SafeDICore/**/*").map {
       |path| "$(PODS_TARGET_SRCROOT)/#{path}"
     },
     :output_files => ["$(PODS_BUILD_DIR)/Macros/SafeDIMacros/${CONFIGURATION}/SafeDIMacros-tool"],
