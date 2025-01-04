@@ -51,7 +51,7 @@ public final class Boiler {
 
     …
 
-    // The boiler creates—or in SafeDI parlance ‘instantiates’—its pump.
+    // The boiler creates, or in SafeDI parlance ‘instantiates’, its pump.
     @Instantiated private let pump: Pump
     // The boiler receives a reference to a water reservoir that has been instantiated by the coffee maker.
     @Received private let waterReservoir: WaterReservoir
