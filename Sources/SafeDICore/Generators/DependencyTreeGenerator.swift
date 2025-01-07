@@ -100,14 +100,14 @@ public actor DependencyTreeGenerator {
                 """
                 \(unfulfillableProperties.map {
                     """
-                    @\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(([$0.instantiable.concreteInstantiable] + $0.parentStack)
+                    @\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain:\n\t\(([$0.instantiable.concreteInstantiable] + $0.parentStack)
                         .reversed()
                         .map(\.asSource)
-                        .joined(separator: " -> "))\($0.suggestedAlternatives.isEmpty ? "" : "\nThe following similar properties are available in chain:\n\($0.suggestedAlternatives.map { "\t`\($0.asSource)`" }.joined(separator: "\n"))")
+                        .joined(separator: " -> "))\($0.suggestedAlternatives.isEmpty ? "" : "\n\nDid you mean one of the following available properties?\n\($0.suggestedAlternatives.map { "\t`\($0.asSource)`" }.joined(separator: "\n"))")
                     """
                 }
                 .sorted()
-                .joined(separator: "\n"))
+                .joined(separator: "\n\n"))
                 """
             case let .instantiableHasForwardedProperty(property, instantiable, parent):
                 "Property `\(property.asSource)` on \(parent.concreteInstantiable.asSource) has at least one @\(Dependency.Source.forwardedRawValue) property. Property should instead be of type `\(Dependency.instantiatorType)<\(instantiable.concreteInstantiable.asSource)>`."

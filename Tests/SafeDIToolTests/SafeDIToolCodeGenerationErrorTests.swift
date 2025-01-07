@@ -71,8 +71,10 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithPropertyWithUnknownTypeWithDotSuffixOfFulfillableType_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `value: NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild
-            The following similar properties are available in chain:
+            @Received property `value: NestedType` is not @Instantiated or @Forwarded in chain:
+            \tRoot -> Instantiator<Child> -> Grandchild
+
+            Did you mean one of the following available properties?
             \t`value: Grandchild.NestedType`
             """
         ) {
@@ -115,8 +117,10 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithPropertyWithUnknownTypeWithDotPrefixOfFulfillableType_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `value: Root.NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild
-            The following similar properties are available in chain:
+            @Received property `value: Root.NestedType` is not @Instantiated or @Forwarded in chain:
+            \tRoot -> Instantiator<Child> -> Grandchild
+
+            Did you mean one of the following available properties?
             \t`value: NestedType`
             """
         ) {
@@ -263,7 +267,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableReceivedProperty_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService
+            @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain:
+            \tRootViewController -> DefaultNetworkService
             """
         ) {
             try await executeSafeDIToolTest(
@@ -297,8 +302,10 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedAny_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `erasedType: any ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child
-            The following similar properties are available in chain:
+            @Received property `erasedType: any ErasedType` is not @Instantiated or @Forwarded in chain:
+            \tRoot -> Child
+
+            Did you mean one of the following available properties?
             \t`erasedType: ErasedType`
             """
         ) {
@@ -340,8 +347,10 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedAny_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `erasedType: ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child
-            The following similar properties are available in chain:
+            @Received property `erasedType: ErasedType` is not @Instantiated or @Forwarded in chain:
+            \tRoot -> Child
+
+            Did you mean one of the following available properties?
             \t`erasedType: any ErasedType`
             """
         ) {
@@ -383,8 +392,10 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedForceUnwrap_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `thing: Thing!` is not @Instantiated or @Forwarded in chain: Root -> Child
-            The following similar properties are available in chain:
+            @Received property `thing: Thing!` is not @Instantiated or @Forwarded in chain:
+            \tRoot -> Child
+
+            Did you mean one of the following available properties?
             \t`thing: Thing`
             """
         ) {
@@ -424,8 +435,10 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedForceUnwrap_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain: Root -> Child
-            The following similar properties are available in chain:
+            @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain:
+            \tRoot -> Child
+
+            Did you mean one of the following available properties?
             \t`thing: Thing!`
             """
         ) {
@@ -465,8 +478,10 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedOptional_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain: Root -> Child
-            The following similar properties are available in chain:
+            @Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain:
+            \tRoot -> Child
+
+            Did you mean one of the following available properties?
             \t`thing: Thing`
             """
         ) {
@@ -506,8 +521,10 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedOptional_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain: Root -> Child
-            The following similar properties are available in chain:
+            @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain:
+            \tRoot -> Child
+
+            Did you mean one of the following available properties?
             \t`thing: Thing?`
             """
         ) {
@@ -547,8 +564,10 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToIncorrectType_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain: Root -> Child
-            The following similar properties are available in chain:
+            @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain:
+            \tRoot -> Child
+
+            Did you mean one of the following available properties?
             \t`thing: Thing`
             """
         ) {
@@ -591,8 +610,10 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableInstantiatedPropertyDueToIncorrectTypeOrLabel_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain: Root -> Child
-            The following similar properties are available in chain:
+            @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain:
+            \tRoot -> Child
+
+            Did you mean one of the following available properties?
             \t`otherThing: OtherThing`
             \t`thing: Thing`
             """
@@ -671,7 +692,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithDiamondDependencyWhereAReceivedPropertyIsUnfulfillableOnOneBranch_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
+            @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain:
+            \tRoot -> ChildB -> Grandchild
             """
         ) {
             try await executeSafeDIToolTest(
@@ -717,11 +739,17 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithDiamondDependencyWhereMultipleReceivedPropertiesAreUnfulfillableOnOneBranch_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildA -> Grandchild
-            The following similar properties are available in chain:
+            @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain:
+            \tRoot -> ChildA -> Grandchild
+
+            Did you mean one of the following available properties?
             \t`blankie: Blankie`
-            @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
-            @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
+
+            @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain:
+            \tRoot -> ChildB -> Grandchild
+
+            @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain:
+            \tRoot -> ChildB -> Grandchild
             """
         ) {
             try await executeSafeDIToolTest(
@@ -884,8 +912,10 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableAliasedReceivedPropertyName_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `networkService2: NetworkService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
-            The following similar properties are available in chain:
+            @Received property `networkService2: NetworkService` is not @Instantiated or @Forwarded in chain:
+            \tRootViewController -> DefaultAuthService
+
+            Did you mean one of the following available properties?
             \t`networkService: NetworkService`
             """
         ) {
@@ -936,8 +966,10 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableAliasedReceivedPropertyType_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `networkService: NetworkService2` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
-            The following similar properties are available in chain:
+            @Received property `networkService: NetworkService2` is not @Instantiated or @Forwarded in chain:
+            \tRootViewController -> DefaultAuthService
+
+            Did you mean one of the following available properties?
             \t`networkService: NetworkService`
             """
         ) {
@@ -1046,7 +1078,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithUnfulfillableReceivedPropertyOnExtendedInstantiatedType_throwsError() async {
         await assertThrowsError(
             """
-            @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> URLSessionWrapper
+            @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain:
+            \tRootViewController -> URLSessionWrapper
             """
         ) {
             try await executeSafeDIToolTest(
