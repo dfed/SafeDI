@@ -796,8 +796,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithInstantiatedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """
-            Dependency cycle detected!
-            AuthService -> AuthService
+            Dependency cycle detected:
+            \tAuthService -> AuthService
             """
         ) {
             try await executeSafeDIToolTest(
@@ -854,8 +854,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithReceivedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """
-            Dependency received in same chain it is instantiated!
-            @Instantiated authService: AuthService -> @Received authService: AuthService
+            Dependency received in same chain it is instantiated:
+            \t@Instantiated authService: AuthService -> @Received authService: AuthService
             """
         ) {
             try await executeSafeDIToolTest(
@@ -1020,8 +1020,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWhereAliasedReceivedPropertyRefersToCurrentInstantiable_throwsError() async throws {
         await assertThrowsError(
             """
-            Dependency received in same chain it is instantiated!
-            @Instantiated authService: AuthService -> @Received authService: AuthService
+            Dependency received in same chain it is instantiated:
+            \t@Instantiated authService: AuthService -> @Received authService: AuthService
             """
         ) {
             try await executeSafeDIToolTest(
@@ -1329,8 +1329,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithCircularPropertyDependenciesImmediatelyInitialized_throwsError() async {
         await assertThrowsError(
             """
-            Dependency cycle detected!
-            A -> B -> C -> A
+            Dependency cycle detected:
+            \tA -> B -> C -> A
             """
         ) {
             try await executeSafeDIToolTest(
@@ -1370,8 +1370,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedAndReceived_throwsError() async {
         await assertThrowsError(
             """
-            Dependency cycle detected!
-            A -> B -> C -> A
+            Dependency cycle detected:
+            \tA -> B -> C -> A
             """
         ) {
             try await executeSafeDIToolTest(
@@ -1412,7 +1412,7 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         await assertThrowsError(
             """
             Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `C` as @Instantiated to fix. Full cycle:
-            Instantiator<A> -> Instantiator<B> -> Instantiator<C> -> Instantiator<A>
+            \tInstantiator<A> -> Instantiator<B> -> Instantiator<C> -> Instantiator<A>
             """
         ) {
             try await executeSafeDIToolTest(
@@ -1452,8 +1452,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithVaryingNames_throwsError() async {
         await assertThrowsError(
             """
-            Dependency cycle detected!
-            B -> C -> A -> B
+            Dependency cycle detected:
+            \tB -> C -> A -> B
             """
         ) {
             try await executeSafeDIToolTest(
@@ -1493,8 +1493,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithCircularReceivedDependencies_throwsError() async {
         await assertThrowsError(
             """
-            Dependency received in same chain it is instantiated!
-            @Instantiated a: A -> @Received b: B -> @Received c: C -> @Received a: A
+            Dependency received in same chain it is instantiated:
+            \t@Instantiated a: A -> @Received b: B -> @Received c: C -> @Received a: A
             """
         ) {
             try await executeSafeDIToolTest(
@@ -1536,8 +1536,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithCircularReceivedRenamedDependencies_throwsError() async {
         await assertThrowsError(
             """
-            Dependency received in same chain it is instantiated!
-            @Instantiated a: A -> @Received renamedB: B -> @Received c: C -> @Received a: A
+            Dependency received in same chain it is instantiated:
+            \t@Instantiated a: A -> @Received renamedB: B -> @Received c: C -> @Received a: A
             """
         ) {
             try await executeSafeDIToolTest(
@@ -1580,8 +1580,8 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
     func test_run_onCodeWithMultipleCircularReceivedRenamedDependencies_throwsError() async {
         await assertThrowsError(
             """
-            Dependency received in same chain it is instantiated!
-            @Instantiated c: C -> @Received renamedB: B -> @Received c: C
+            Dependency received in same chain it is instantiated:
+            \t@Instantiated c: C -> @Received renamedB: B -> @Received c: C
             """
         ) {
             try await executeSafeDIToolTest(
