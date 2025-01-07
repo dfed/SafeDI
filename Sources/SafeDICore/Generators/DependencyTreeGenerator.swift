@@ -100,21 +100,21 @@ public actor DependencyTreeGenerator {
                 """
                 \(unfulfillableProperties.map {
                     """
-                    @\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(([$0.instantiable.concreteInstantiable] + $0.parentStack)
+                    @\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain:\n\t\(([$0.instantiable.concreteInstantiable] + $0.parentStack)
                         .reversed()
                         .map(\.asSource)
-                        .joined(separator: " -> "))\($0.suggestedAlternatives.isEmpty ? "" : "\nThe following similar properties are available in chain:\n\($0.suggestedAlternatives.map { "\t`\($0.asSource)`" }.joined(separator: "\n"))")
+                        .joined(separator: " -> "))\($0.suggestedAlternatives.isEmpty ? "" : "\n\nDid you mean one of the following available properties?\n\($0.suggestedAlternatives.map { "\t`\($0.asSource)`" }.joined(separator: "\n"))")
                     """
                 }
                 .sorted()
-                .joined(separator: "\n"))
+                .joined(separator: "\n\n"))
                 """
             case let .instantiableHasForwardedProperty(property, instantiable, parent):
                 "Property `\(property.asSource)` on \(parent.concreteInstantiable.asSource) has at least one @\(Dependency.Source.forwardedRawValue) property. Property should instead be of type `\(Dependency.instantiatorType)<\(instantiable.concreteInstantiable.asSource)>`."
             case let .constantDependencyCycleDetected(instantiables):
                 """
-                Dependency cycle detected!
-                \(instantiables
+                Dependency cycle detected:
+                \t\(instantiables
                     .map(\.asSource)
                     .reversed()
                     .joined(separator: " -> "))
@@ -122,15 +122,15 @@ public actor DependencyTreeGenerator {
             case let .receivedInstantiatorDependencyCycleDetected(property, directParent, instantiables):
                 """
                 Dependency cycle detected! @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)` is @\(Dependency.Source.receivedRawValue) in tree created by @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)`. Declare @\(Dependency.Source.receivedRawValue) `\(property.asSource)` on `\(directParent.asSource)` as @\(Dependency.Source.instantiatedRawValue) to fix. Full cycle:
-                \(instantiables
+                \t\(instantiables
                     .map(\.asSource)
                     .reversed()
                     .joined(separator: " -> "))
                 """
             case let .receivedConstantCycleDetected(instantiated, receivedPropertyChain):
                 """
-                Dependency received in same chain it is instantiated!
-                \("@\(Dependency.Source.instantiatedRawValue) \(instantiated.asSource) -> "
+                Dependency received in same chain it is instantiated:
+                \t\("@\(Dependency.Source.instantiatedRawValue) \(instantiated.asSource) -> "
                     + receivedPropertyChain
                     .map { "@\(Dependency.Source.receivedRawValue) \($0.asSource)" }
                     .joined(separator: " -> "))
