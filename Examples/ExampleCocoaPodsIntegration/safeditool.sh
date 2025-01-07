@@ -2,7 +2,7 @@
 
 set -e
 
-VERSION='1.0.0-beta-2'
+VERSION='1.0.0'
 SAFEDI_LOCATION="$BUILD_DIR/SafeDITool-Release/$VERSION/safeditool"
 
 # Download the tool from Github releases.
