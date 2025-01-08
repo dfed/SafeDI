@@ -177,8 +177,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Link Checker
-        id: lychee
-        uses: lycheeverse/lychee-action@v2
+        uses: AlexanderDokuchaev/md-dead-link-check@v1.0.1
 
   lint-swift:
     name: Lint Swift
