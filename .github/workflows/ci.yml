@@ -113,8 +113,6 @@ jobs:
           fail_ci_if_error: true
           verbose: true
           os: macos
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   pod-lint:
     name: Pod Lint
@@ -167,8 +165,6 @@ jobs:
           fail_ci_if_error: true
           verbose: true
           os: linux
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   readme-validation:
     name: Check Markdown links
