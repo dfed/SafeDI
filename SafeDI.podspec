@@ -14,7 +14,7 @@ Pod::Spec.new do |s|
   s.visionos.deployment_target = '1.0'
 
   s.source_files = 'Sources/SafeDI/**/*.{swift}'
-  s.preserve_paths = 'Package.swift', 'Sources/', 'Tests/', 'Plugins/'
+  s.preserve_paths = 'Package.swift', 'Sources/**/*', 'Tests/**/*', 'Plugins/**/*'
 
   # The below scripts and flags were inspired by https://soumyamahunt.medium.com/support-swift-macros-with-cocoapods-3911f9317042
   script = <<-SCRIPT.squish
