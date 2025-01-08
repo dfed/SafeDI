@@ -65,7 +65,7 @@ That is all it takes! SafeDI utilizes macro decorations on your existing types t
 SafeDI utilizes both Swift macros and a code generation plugin to read your code and generate a dependency tree. To integrate SafeDI, follow these three steps:
 
 1. [Add SafeDI as a dependency to your project](#adding-safedi-as-a-dependency)
-1. [Integrate SafeDI’s code generation into your build](#generating-your-safedi-dependency-tree)
+1. [Integrate SafeDI’s code generation into your build](#generating-your-dependency-tree)
 1. [Create your dependency tree using SafeDI’s macros](Documentation/Manual.md)
 
 You can see sample integrations in the [Examples folder](Examples/). If you are migrating an existing project to SafeDI, follow our [migration guide](Documentation/Manual.md#migrating-to-safedi).
