@@ -122,11 +122,7 @@ You can see this integration in practice in the [ExampleCocoaPodsIntegration](Ex
 
 #### Additional configurations
 
-If your first-party code comprises multiple modules in Xcode, or a mix of Xcode Projects and Swift Packages, or some other configuration, once your Xcode project depends on the SafeDI package you will need to utilize the `SafeDITool` command-line executable directly in a pre-build script similar to the CocoaPods integration described above.
-
-You can see this integration in practice in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) package.
-
-`SafeDITool` is designed to integrate into projects of any size or shape.
+`SafeDITool` is designed to integrate into projects of any size or shape. If your first-party code comprises multiple modules in Xcode, or a mix of Xcode Projects and Swift Packages, or some other configuration, once your Xcode project depends on the SafeDI package you will need to utilize the `SafeDITool` command-line executable directly in a pre-build script similar to the CocoaPods integration described above.
 
 `SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run `swift run SafeDITool --help` to see documentation of the tool’s supported arguments.
 
