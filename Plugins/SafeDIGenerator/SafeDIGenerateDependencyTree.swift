@@ -150,7 +150,7 @@ extension Target {
             // only works if it is running on a single-module project, or if
             // all `@Instantiable`-decorated types are in the target module,
             // or if a .safedi/configuration/include.csv directs the plugin
-            // on what folders to search for Swift files.
+            // to search additional modules for Swift files.
             // https://github.com/apple/swift-package-manager/issues/6003
             let inputSwiftFiles = target
                 .inputFiles
