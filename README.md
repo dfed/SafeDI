@@ -116,7 +116,7 @@ You can see this integration in practice in the [ExamplePackageIntegration](Exam
 
 #### CocoaPods
 
-Use a pre-build script ([example](Examples/ExampleCocoaPodsIntegration/safeditool.sh)) to download the `SafeDITool` binary and generate your SafeDI dependency tree. Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
+Use a pre-build script to download the `SafeDITool` binary and generate your SafeDI dependency tree ([example](Examples/ExampleCocoaPodsIntegration/safeditool.sh)). Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
 
 You can see this integration in practice in the [ExampleCocoaPodsIntegration](Examples/ExampleCocoaPodsIntegration) package. Run `bundle exec pod install --project-directory=Examples/ExampleCocoaPodsIntegration` to create the `ExampleCocoaPodsIntegration.xcworkspace`.
 
