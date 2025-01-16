@@ -52,13 +52,19 @@ func executeSafeDIToolTest(
     let moduleInfoOutput = URL.temporaryFile.appendingPathExtension("safedi")
     let dependencyTreeOutput = URL.temporaryFile.appendingPathExtension("swift")
     let dotTreeOutput = URL.temporaryFile.appendingPathExtension("dot")
+
+    let includeFile = URL.temporaryFile.appendingPathExtension("include.csv")
+    try "".write(to: includeFile, atomically: true, encoding: .utf8)
+    let additionalImportedModulesFile = URL.temporaryFile.appendingPathExtension("additionalImportedModules.csv")
+    try "".write(to: additionalImportedModulesFile, atomically: true, encoding: .utf8)
+
     fileFinder = StubFileFinder(files: swiftFiles) // Successfully execute the file finder code path.
     var tool = SafeDITool()
     tool.swiftSourcesFilePath = swiftFileCSV.relativePath
     tool.include = ["Fake"]
-    tool.includeFilePath = nil
+    tool.includeFilePath = includeFile.relativePath
     tool.additionalImportedModules = []
-    tool.additionalImportedModulesFilePath = nil
+    tool.additionalImportedModulesFilePath = additionalImportedModulesFile.relativePath
     tool.moduleInfoOutput = moduleInfoOutput.relativePath
     tool.dependentModuleInfoFilePath = dependentModuleInfoPaths.isEmpty ? nil : dependentModuleInfoFileCSV.relativePath
     tool.dependencyTreeOutput = buildDependencyTreeOutput ? dependencyTreeOutput.relativePath : nil
