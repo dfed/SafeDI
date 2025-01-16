@@ -412,9 +412,9 @@ SwiftUI applications have a natural root: the `App`-conforming type that is init
 
 UIKit applications’ natural root is the `UIApplicationDelegate`-conforming app delegate, however, this type inherits from the Objective-C `NSObject` which already has a no-argument `init()`. As such, it is best to create a custom `@Instantiable(isRoot: true) public final class Root: Instantiable` type that is initialized and stored by the application’s app delegate.
 
-## Example application
+## Example applications
 
-We’ve tied everything together with an example multi-user notes application backed by SwiftUI. You can compile and run this code in Xcode in the included [ExampleProjectIntegration](../Examples/ExampleProjectIntegration) project. This same multi-user notes app also exists in [an example Xcode project with multiple modules](../Examples/ExampleMultiProjectIntegration), and also in [an example Xcode project using CocoaPods](../Examples/ExampleCocoaPodsIntegration). We have also created [an example multi-module `Package.swift` that integrates with SafeDI](../Examples/ExamplePackageIntegration).
+We’ve tied everything together with an example multi-user notes application backed by SwiftUI. You can compile and run this code in [an example single-module Xcode project](../Examples/ExampleProjectIntegration) project. This same multi-user notes app also exists in [an example multi-module Xcode project](../Examples/ExampleMultiProjectIntegration), and also in [an example Xcode project using CocoaPods](../Examples/ExampleCocoaPodsIntegration). We have also created [an example multi-module `Package.swift` that integrates with SafeDI](../Examples/ExamplePackageIntegration).
 
 ## Under the hood
 
