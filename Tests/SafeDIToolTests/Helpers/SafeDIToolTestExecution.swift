@@ -56,7 +56,9 @@ func executeSafeDIToolTest(
     var tool = SafeDITool()
     tool.swiftSourcesFilePath = swiftFileCSV.relativePath
     tool.include = ["Fake"]
+    tool.includeFilePath = nil
     tool.additionalImportedModules = []
+    tool.additionalImportedModulesFilePath = nil
     tool.moduleInfoOutput = moduleInfoOutput.relativePath
     tool.dependentModuleInfoFilePath = dependentModuleInfoPaths.isEmpty ? nil : dependentModuleInfoFileCSV.relativePath
     tool.dependencyTreeOutput = buildDependencyTreeOutput ? dependencyTreeOutput.relativePath : nil

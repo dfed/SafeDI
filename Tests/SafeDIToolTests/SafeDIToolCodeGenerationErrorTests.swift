@@ -1805,7 +1805,9 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         var tool = SafeDITool()
         tool.swiftSourcesFilePath = nil
         tool.include = ["Fake"]
+        tool.includeFilePath = nil
         tool.additionalImportedModules = []
+        tool.additionalImportedModulesFilePath = nil
         tool.moduleInfoOutput = nil
         tool.dependentModuleInfoFilePath = nil
         tool.dependencyTreeOutput = nil
@@ -1819,12 +1821,14 @@ final class SafeDIToolCodeGenerationErrorTests: XCTestCase {
         var tool = SafeDITool()
         tool.swiftSourcesFilePath = nil
         tool.include = []
+        tool.includeFilePath = nil
         tool.additionalImportedModules = []
+        tool.additionalImportedModulesFilePath = nil
         tool.moduleInfoOutput = nil
         tool.dependentModuleInfoFilePath = nil
         tool.dependencyTreeOutput = nil
         tool.dotFileOutput = nil
-        await assertThrowsError("Must provide either 'swift-sources-file-path' or '--include'.") {
+        await assertThrowsError("Must provide 'swift-sources-file-path', '--include', or '--include-file-path'.") {
             try await tool.run()
         }
     }

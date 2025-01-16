@@ -3,10 +3,11 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		320A3ECF2D39655700D8EC2E /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 320A3ECE2D39655700D8EC2E /* SafeDI */; };
 		324F1ECB2B314D8D0001AC0C /* UserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECA2B314D8D0001AC0C /* UserService.swift */; };
 		324F1ECD2B314DB20001AC0C /* StringStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECC2B314DB20001AC0C /* StringStorage.swift */; };
 		324F1ECF2B314E030001AC0C /* NameEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECE2B314E030001AC0C /* NameEntryView.swift */; };
@@ -15,7 +16,6 @@
 		32756FE62B24C042006BDD24 /* ExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FE52B24C042006BDD24 /* ExampleApp.swift */; };
 		32756FEA2B24C044006BDD24 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 32756FE92B24C044006BDD24 /* Assets.xcassets */; };
 		32756FEE2B24C044006BDD24 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 32756FED2B24C044006BDD24 /* Preview Assets.xcassets */; };
-		32B280A32B28176D00A33FED /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 32B280A22B28176D00A33FED /* SafeDI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,7 +36,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				32B280A32B28176D00A33FED /* SafeDI in Frameworks */,
+				320A3ECF2D39655700D8EC2E /* SafeDI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,11 +121,11 @@
 			buildRules = (
 			);
 			dependencies = (
-				321042552B2533F30088785D /* PBXTargetDependency */,
+				320A3ED32D3967BD00D8EC2E /* PBXTargetDependency */,
 			);
 			name = ExampleProjectIntegration;
 			packageProductDependencies = (
-				32B280A22B28176D00A33FED /* SafeDI */,
+				320A3ECE2D39655700D8EC2E /* SafeDI */,
 			);
 			productName = ExampleProjectIntegration;
 			productReference = 32756FE22B24C042006BDD24 /* ExampleProjectIntegration.app */;
@@ -156,7 +156,7 @@
 			);
 			mainGroup = 32756FD92B24C042006BDD24;
 			packageReferences = (
-				321042512B2533ED0088785D /* XCRemoteSwiftPackageReference "SafeDI" */,
+				320A3ECD2D39655700D8EC2E /* XCLocalSwiftPackageReference "../../../SafeDI" */,
 			);
 			productRefGroup = 32756FE32B24C042006BDD24 /* Products */;
 			projectDirPath = "";
@@ -196,9 +196,9 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		321042552B2533F30088785D /* PBXTargetDependency */ = {
+		320A3ED32D3967BD00D8EC2E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			productRef = 321042542B2533F30088785D /* SafeDIGenerator */;
+			productRef = 320A3ED22D3967BD00D8EC2E /* SafeDIGenerator */;
 		};
 /* End PBXTargetDependency section */
 
@@ -416,27 +416,22 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		321042512B2533ED0088785D /* XCRemoteSwiftPackageReference "SafeDI" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/dfed/SafeDI.git";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		320A3ECD2D39655700D8EC2E /* XCLocalSwiftPackageReference "../../../SafeDI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../../SafeDI;
 		};
-/* End XCRemoteSwiftPackageReference section */
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		321042542B2533F30088785D /* SafeDIGenerator */ = {
+		320A3ECE2D39655700D8EC2E /* SafeDI */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 321042512B2533ED0088785D /* XCRemoteSwiftPackageReference "SafeDI" */;
-			productName = "plugin:SafeDIGenerator";
-		};
-		32B280A22B28176D00A33FED /* SafeDI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 321042512B2533ED0088785D /* XCRemoteSwiftPackageReference "SafeDI" */;
 			productName = SafeDI;
+		};
+		320A3ED22D3967BD00D8EC2E /* SafeDIGenerator */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 320A3ECD2D39655700D8EC2E /* XCLocalSwiftPackageReference "../../../SafeDI" */;
+			productName = "plugin:SafeDIGenerator";
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
