@@ -116,17 +116,13 @@ You can see this integration in practice in the [ExamplePackageIntegration](Exam
 
 #### CocoaPods
 
-Use a pre-build script ([example](Examples/ExampleCocoaPodsIntegration/safeditool.sh)) to download the `SafeDITool` binary and generate your SafeDI dependency tree. Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
+Use a pre-build script to download the `SafeDITool` binary and generate your SafeDI dependency tree ([example](Examples/ExampleCocoaPodsIntegration/safeditool.sh)). Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
 
 You can see this integration in practice in the [ExampleCocoaPodsIntegration](Examples/ExampleCocoaPodsIntegration) package. Run `bundle exec pod install --project-directory=Examples/ExampleCocoaPodsIntegration` to create the `ExampleCocoaPodsIntegration.xcworkspace`.
 
 #### Additional configurations
 
-If your first-party code comprises multiple modules in Xcode, or a mix of Xcode Projects and Swift Packages, or some other configuration, once your Xcode project depends on the SafeDI package you will need to utilize the `SafeDITool` command-line executable directly in a pre-build script similar to the CocoaPods integration described above.
-
-You can see this integration in practice in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) package.
-
-`SafeDITool` is designed to integrate into projects of any size or shape.
+`SafeDITool` is designed to integrate into projects of any size or shape. If your first-party code comprises multiple modules in Xcode, or a mix of Xcode Projects and Swift Packages, or some other configuration, once your Xcode project depends on the SafeDI package you will need to utilize the `SafeDITool` command-line executable directly in a pre-build script similar to the CocoaPods integration described above.
 
 `SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run `swift run SafeDITool --help` to see documentation of the tool’s supported arguments.
 
