@@ -34,13 +34,13 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 
     @Option(parsing: .upToNextOption, help: "Directories containing Swift files to include, relative to the executing directory.") var include: [String] = []
 
-    @Option(help: "A path to a CSV file comprising directories containing Swift files to include, relative to the executing directory..") var includeFilePath: String?
+    @Option(help: "A path to a CSV file comprising directories containing Swift files to include, relative to the executing directory.") var includeFilePath: String?
 
     @Option(parsing: .upToNextOption, help: "The names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModules: [String] = []
 
     @Option(help: "A path to a CSV file comprising the names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModulesFilePath: String?
 
-    @Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project‘s non-root module. Must have a `.safedi` suffix") var moduleInfoOutput: String?
+    @Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project‘s non-root module. Must have a `.safedi` suffix.") var moduleInfoOutput: String?
 
     @Option(help: "A path to a CSV file containing paths of SafeDI representations of other modules to parse.") var dependentModuleInfoFilePath: String?
 
