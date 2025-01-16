@@ -51,7 +51,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
     // MARK: Internal
 
     func run() async throws {
-        if swiftSourcesFilePath == nil, include.isEmpty, includeFilePath?.isEmpty ?? true {
+        if swiftSourcesFilePath == nil, include.isEmpty, includeFilePath == nil {
             throw ValidationError("Must provide 'swift-sources-file-path', '--include', or '--include-file-path'.")
         }
 
