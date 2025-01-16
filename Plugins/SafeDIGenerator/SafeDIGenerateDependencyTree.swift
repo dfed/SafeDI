@@ -219,7 +219,6 @@ extension Target {
             ]
         }
     }
-
 #endif
 
 extension Array where Element: Equatable {

@@ -171,5 +171,4 @@ struct InstallSafeDITool: CommandPlugin {
             dispatchGroup.wait()
         }
     }
-
 #endif

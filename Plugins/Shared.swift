@@ -63,7 +63,6 @@ import PackagePlugin
             return expectedToolLocation
         }
     }
-
 #endif
 
 extension PackagePlugin.PluginContext {
