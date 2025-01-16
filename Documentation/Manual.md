@@ -404,7 +404,15 @@ In a manual DI system it is simple for superclasses to receive injected dependen
 
 It is strongly recommended that projects adopting SafeDI start their migration by identifying the root of their dependency tree and making it `@Instantiable(isRoot: true)`. Once your root object has adopted SafeDI, continue migrating dependencies to SafeDI in either a breadth-first or depth-first manner. As your adoption of SafeDI progresses, you’ll find that you are removing more code than you are adding: many of your dependencies are likely being passed through intermediary objects that do not utilize the dependency except to instantiate a dependency deeper in the tree. Once types further down the dependency tree have adopted SafeDI, you will be able to avoid receiving dependencies in intermediary types.
 
-## Example Application
+### Selecting a root in SwiftUI applications
+
+SwiftUI applications have a natural root: the `App`-conforming type that is initialized when the binary is launched.
+
+### Selecting a root in UIKit applications
+
+UIKit applications’ natural root is the `UIApplicationDelegate`-conforming app delegate, however, this type inherits from the Objective-C `NSObject` which already has a no-argument `init()`. As such, it is best to create a custom `@Instantiable(isRoot: true) public final class Root: Instantiable` type that is initialized and stored by the application’s app delegate.
+
+## Example application
 
 We’ve tied everything together with an example multi-user notes application backed by SwiftUI. You can compile and run this code in Xcode in the included [ExampleProjectIntegration](../Examples/ExampleProjectIntegration) project.
 
