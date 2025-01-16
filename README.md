@@ -102,6 +102,8 @@ SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin wo
 
 If your first-party code comprises a single module in an `.xcodeproj`, once your Xcode project depends on the SafeDI package you can integrate the Swift Package Plugin simply by going to your target’s `Build Phases`, expanding the `Run Build Tool Plug-ins` drop-down, and adding the `SafeDIGenerator` as a build tool plug-in. You can see this integration in practice in the [ExampleProjectIntegration](Examples/ExampleProjectIntegration) project.
 
+If your Xcode project comprises multiple modules, follow the above steps, and then also create a `.safedi/configuration/include.csv` file containing a comma-separated list of folders containing Swift source files in non-root modules to parse. The `.safedi/` folder must be placed in the same folder as your `*.xcodeproj`, and the paths must be relative to the same folder. You can see this integration in practice in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) project. To ensure that generated SafeDI code includes imports to all of your required modules, you can create a `.safedi/configuration/additionalImportedModules.csv` with a comma-separated list of module to import.
+
 ##### Swift package
 
 If your first-party code is entirely contained in a Swift Package with one or more modules, you can add the following lines to your root target’s definition:
