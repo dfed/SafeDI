@@ -414,7 +414,7 @@ UIKit applications’ natural root is the `UIApplicationDelegate`-conforming app
 
 ## Example application
 
-We’ve tied everything together with an example multi-user notes application backed by SwiftUI. You can compile and run this code in Xcode in the included [ExampleProjectIntegration](../Examples/ExampleProjectIntegration) project.
+We’ve tied everything together with an example multi-user notes application backed by SwiftUI. You can compile and run this code in Xcode in the included [ExampleProjectIntegration](../Examples/ExampleProjectIntegration) project. This same multi-user notes app also exists in [an example Xcode project with multiple modules](../Examples/ExampleMultiProjectIntegration), and also in [an example Xcode project using CocoaPods](../Examples/ExampleCocoaPodsIntegration). We have also created [an example multi-module `Package.swift` that integrates with SafeDI](../Examples/ExamplePackageIntegration).
 
 ## Under the hood
 
