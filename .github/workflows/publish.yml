@@ -7,7 +7,7 @@ on:
 jobs:
   build-release-cli:
     name: Build Release CLI
-    runs-on: macos-14
+    runs-on: macos-15
     strategy:
       matrix:
         architecture: [
