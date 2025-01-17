@@ -34,9 +34,13 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 
     @Option(parsing: .upToNextOption, help: "Directories containing Swift files to include, relative to the executing directory.") var include: [String] = []
 
+    @Option(help: "A path to a CSV file comprising directories containing Swift files to include, relative to the executing directory.") var includeFilePath: String?
+
     @Option(parsing: .upToNextOption, help: "The names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModules: [String] = []
 
-    @Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project‘s non-root module. Must have a `.safedi` suffix") var moduleInfoOutput: String?
+    @Option(help: "A path to a CSV file comprising the names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModulesFilePath: String?
+
+    @Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project‘s non-root module. Must have a `.safedi` suffix.") var moduleInfoOutput: String?
 
     @Option(help: "A path to a CSV file containing paths of SafeDI representations of other modules to parse.") var dependentModuleInfoFilePath: String?
 
@@ -47,8 +51,8 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
     // MARK: Internal
 
     func run() async throws {
-        if swiftSourcesFilePath == nil, include.isEmpty {
-            throw ValidationError("Must provide either 'swift-sources-file-path' or '--include'.")
+        if swiftSourcesFilePath == nil, include.isEmpty, includeFilePath == nil {
+            throw ValidationError("Must provide 'swift-sources-file-path', '--include', or '--include-file-path'.")
         }
 
         let (dependentModuleInfo, module) = try await (
@@ -107,7 +111,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
             )
         }
         let generator = try DependencyTreeGenerator(
-            importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
+            importStatements: dependentModuleInfo.flatMap(\.imports) + allAdditionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
             typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
                 instantiables: normalizedInstantiables
             )
@@ -160,7 +164,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
                 }
             }
             let fileFinder = await fileFinder
-            for included in include {
+            for included in try allDirectoriesToIncludes {
                 taskGroup.addTask {
                     let includedURL = included.asFileURL
                     let includedFileEnumerator = fileFinder
@@ -231,7 +235,31 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
         }
     }
 
-    var moduleInfoURLs: Set<URL> {
+    private var allDirectoriesToIncludes: [String] {
+        get throws {
+            if let includeFilePath {
+                try include + String(contentsOfFile: includeFilePath, encoding: .utf8)
+                    .components(separatedBy: CharacterSet(arrayLiteral: ","))
+                    .removingEmpty()
+            } else {
+                include
+            }
+        }
+    }
+
+    private var allAdditionalImportedModules: [String] {
+        get throws {
+            if let additionalImportedModulesFilePath {
+                try additionalImportedModules + String(contentsOfFile: additionalImportedModulesFilePath, encoding: .utf8)
+                    .components(separatedBy: CharacterSet(arrayLiteral: ","))
+                    .removingEmpty()
+            } else {
+                additionalImportedModules
+            }
+        }
+    }
+
+    private var moduleInfoURLs: Set<URL> {
         get throws {
             if let dependentModuleInfoFilePath {
                 try .init(

@@ -3,12 +3,10 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		3203E2232BF94B7D0094A988 /* SafeDI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3203E2222BF94B7D0094A988 /* SafeDI.swift */; };
-		3203E2312BF94D630094A988 /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 3203E2302BF94D630094A988 /* SafeDI */; };
 		324F1ECF2B314E030001AC0C /* NameEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECE2B314E030001AC0C /* NameEntryView.swift */; };
 		324F1ED22B3150480001AC0C /* NoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ED12B3150480001AC0C /* NoteView.swift */; };
 		32756FE62B24C042006BDD24 /* ExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FE52B24C042006BDD24 /* ExampleApp.swift */; };
@@ -20,7 +18,8 @@
 		3289B40D2BF955A10053F2E4 /* StringStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECC2B314DB20001AC0C /* StringStorage.swift */; };
 		3289B40E2BF955A10053F2E4 /* AnyObservableObject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ED62B3156810001AC0C /* AnyObservableObject.swift */; };
 		3289B40F2BF955A10053F2E4 /* UserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECA2B314D8D0001AC0C /* UserService.swift */; };
-		3289B4112BF955DF0053F2E4 /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 3289B4102BF955DF0053F2E4 /* SafeDI */; };
+		32B72E192D39763900F5EB6F /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 32B72E182D39763900F5EB6F /* SafeDI */; };
+		32B72E1B2D39764200F5EB6F /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 32B72E1A2D39764200F5EB6F /* SafeDI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -48,7 +47,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		3203E2222BF94B7D0094A988 /* SafeDI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeDI.swift; sourceTree = "<group>"; };
 		324F1ECA2B314D8D0001AC0C /* UserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserService.swift; sourceTree = "<group>"; };
 		324F1ECC2B314DB20001AC0C /* StringStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringStorage.swift; sourceTree = "<group>"; };
 		324F1ECE2B314E030001AC0C /* NameEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NameEntryView.swift; sourceTree = "<group>"; };
@@ -68,7 +66,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3203E2312BF94D630094A988 /* SafeDI in Frameworks */,
+				32B72E192D39763900F5EB6F /* SafeDI in Frameworks */,
 				3289B4072BF955720053F2E4 /* Subproject.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -77,7 +75,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3289B4112BF955DF0053F2E4 /* SafeDI in Frameworks */,
+				32B72E1B2D39764200F5EB6F /* SafeDI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -120,7 +118,6 @@
 				32756FE92B24C044006BDD24 /* Assets.xcassets */,
 				32756FEB2B24C044006BDD24 /* ExampleMultiProjectIntegration.entitlements */,
 				32756FEC2B24C044006BDD24 /* Preview Content */,
-				3203E2222BF94B7D0094A988 /* SafeDI.swift */,
 			);
 			path = ExampleMultiProjectIntegration;
 			sourceTree = "<group>";
@@ -169,7 +166,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 32756FF12B24C044006BDD24 /* Build configuration list for PBXNativeTarget "ExampleMultiProjectIntegration" */;
 			buildPhases = (
-				3203E2192BF7B4630094A988 /* Run SafeDITool */,
 				32756FDE2B24C042006BDD24 /* Sources */,
 				32756FDF2B24C042006BDD24 /* Frameworks */,
 				32756FE02B24C042006BDD24 /* Resources */,
@@ -178,11 +174,12 @@
 			buildRules = (
 			);
 			dependencies = (
+				32B72E1D2D39765B00F5EB6F /* PBXTargetDependency */,
 				3289B4062BF955720053F2E4 /* PBXTargetDependency */,
 			);
 			name = ExampleMultiProjectIntegration;
 			packageProductDependencies = (
-				3203E2302BF94D630094A988 /* SafeDI */,
+				32B72E182D39763900F5EB6F /* SafeDI */,
 			);
 			productName = ExampleMultiProjectIntegration;
 			productReference = 32756FE22B24C042006BDD24 /* ExampleMultiProjectIntegration.app */;
@@ -203,7 +200,7 @@
 			);
 			name = Subproject;
 			packageProductDependencies = (
-				3289B4102BF955DF0053F2E4 /* SafeDI */,
+				32B72E1A2D39764200F5EB6F /* SafeDI */,
 			);
 			productName = Subproject;
 			productReference = 3289B4012BF955710053F2E4 /* Subproject.framework */;
@@ -237,7 +234,7 @@
 			);
 			mainGroup = 32756FD92B24C042006BDD24;
 			packageReferences = (
-				3203E22C2BF94D3F0094A988 /* XCRemoteSwiftPackageReference "SafeDI" */,
+				32B72E172D39763900F5EB6F /* XCLocalSwiftPackageReference "../../../SafeDI" */,
 			);
 			productRefGroup = 32756FE32B24C042006BDD24 /* Products */;
 			projectDirPath = "";
@@ -268,29 +265,6 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
-		3203E2192BF7B4630094A988 /* Run SafeDITool */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Run SafeDITool";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				$PROJECT_DIR/ExampleMultiProjectIntegration/SafeDI.swift,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "xcrun swift run --package-path \"$BUILD_ROOT/../../SourcePackages/checkouts/SafeDI\" --scratch-path \"$BUILD_DIR/SafeDITool-$CONFIGURATION\" SafeDITool --include \"$PROJECT_DIR/ExampleMultiProjectIntegration\" \"$PROJECT_DIR/Subproject\" --dependency-tree-output \"$PROJECT_DIR/ExampleMultiProjectIntegration/SafeDI.swift\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
-
 /* Begin PBXSourcesBuildPhase section */
 		32756FDE2B24C042006BDD24 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -299,7 +273,6 @@
 				324F1ECF2B314E030001AC0C /* NameEntryView.swift in Sources */,
 				324F1ED22B3150480001AC0C /* NoteView.swift in Sources */,
 				32756FE62B24C042006BDD24 /* ExampleApp.swift in Sources */,
-				3203E2232BF94B7D0094A988 /* SafeDI.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -320,6 +293,10 @@
 			isa = PBXTargetDependency;
 			target = 3289B4002BF955710053F2E4 /* Subproject */;
 			targetProxy = 3289B4052BF955720053F2E4 /* PBXContainerItemProxy */;
+		};
+		32B72E1D2D39765B00F5EB6F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 32B72E1C2D39765B00F5EB6F /* SafeDIGenerator */;
 		};
 /* End PBXTargetDependency section */
 
@@ -630,27 +607,27 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		3203E22C2BF94D3F0094A988 /* XCRemoteSwiftPackageReference "SafeDI" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/dfed/SafeDI";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		32B72E172D39763900F5EB6F /* XCLocalSwiftPackageReference "../../../SafeDI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../../SafeDI;
 		};
-/* End XCRemoteSwiftPackageReference section */
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		3203E2302BF94D630094A988 /* SafeDI */ = {
+		32B72E182D39763900F5EB6F /* SafeDI */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 3203E22C2BF94D3F0094A988 /* XCRemoteSwiftPackageReference "SafeDI" */;
 			productName = SafeDI;
 		};
-		3289B4102BF955DF0053F2E4 /* SafeDI */ = {
+		32B72E1A2D39764200F5EB6F /* SafeDI */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 3203E22C2BF94D3F0094A988 /* XCRemoteSwiftPackageReference "SafeDI" */;
+			package = 32B72E172D39763900F5EB6F /* XCLocalSwiftPackageReference "../../../SafeDI" */;
 			productName = SafeDI;
+		};
+		32B72E1C2D39765B00F5EB6F /* SafeDIGenerator */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 32B72E172D39763900F5EB6F /* XCLocalSwiftPackageReference "../../../SafeDI" */;
+			productName = "plugin:SafeDIGenerator";
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

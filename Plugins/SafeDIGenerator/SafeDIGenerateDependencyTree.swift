@@ -46,32 +46,43 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
                     .sourceFiles(withSuffix: ".swift")
                     .map(\.url)
             }
-        let inputSourcesFilePath = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv").path()
-        try Data(
-            (targetSwiftFiles.map { $0.path(percentEncoded: false) } + dependenciesSourceFiles.map { $0.path(percentEncoded: false) })
-                .joined(separator: ",")
-                .utf8
-        )
-        .write(toPath: inputSourcesFilePath)
+        let inputSourcesFile = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv")
+        try (targetSwiftFiles.map { $0.path(percentEncoded: false) } + dependenciesSourceFiles.map { $0.path(percentEncoded: false) })
+            .joined(separator: ",")
+            .write(
+                to: inputSourcesFile,
+                atomically: true,
+                encoding: .utf8
+            )
+
+        let includeCSV = context.safediFolder.appending(components: "configuration", "include.csv")
+        let includeArguments: [String] = if FileManager.default.fileExists(atPath: includeCSV.path()) {
+            [
+                "--include-file-path",
+                includeCSV.path(),
+            ]
+        } else {
+            []
+        }
+        let additionalImportedModulesCSV = context.safediFolder.appending(components: "configuration", "additionalImportedModules.csv")
+        let additionalImportedModulesArguments: [String] = if FileManager.default.fileExists(atPath: additionalImportedModulesCSV.path()) {
+            [
+                "--additional-imported-modules-file-path",
+                additionalImportedModulesCSV.path(),
+            ]
+        } else {
+            []
+        }
+
         let arguments = [
-            inputSourcesFilePath,
+            inputSourcesFile.path(),
             "--dependency-tree-output",
             outputSwiftFile.path(),
-        ]
+        ] + includeArguments + additionalImportedModulesArguments
 
         let downloadedToolLocation = context.downloadedToolLocation
         let safeDIVersion = context.safeDIVersion
-        if context.hasSafeDIFolder, let safeDIVersion, downloadedToolLocation == nil {
-            Diagnostics.error("""
-            \(context.safediFolder.path()) exists, but contains no SafeDITool binary for version \(safeDIVersion).
-
-            To install the release SafeDITool binary for version \(safeDIVersion), run:
-            \tswift package --package-path \(context.package.directoryURL.path()) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
-
-            To use a debug SafeDITool binary instead, remove previous installs by running:
-            \trm -rf \(context.safediFolder.path())
-            """)
-        } else if downloadedToolLocation == nil, let safeDIVersion {
+        if downloadedToolLocation == nil, let safeDIVersion {
             Diagnostics.warning("""
             Using a debug SafeDITool binary, which is 15x slower than the release version.
 
@@ -137,7 +148,9 @@ extension Target {
             // As of Xcode 15.0.1, Swift Package Plugins in Xcode are unable
             // to inspect target dependencies. As a result, this Xcode plugin
             // only works if it is running on a single-module project, or if
-            // all `@Instantiable`-decorated types are in the target module.
+            // all `@Instantiable`-decorated types are in the target module,
+            // or if a .safedi/configuration/include.csv directs the plugin
+            // to search additional modules for Swift files.
             // https://github.com/apple/swift-package-manager/issues/6003
             let inputSwiftFiles = target
                 .inputFiles
@@ -149,19 +162,50 @@ extension Target {
             }
 
             let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
-            let inputSourcesFilePath = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv").path()
-            try Data(
-                inputSwiftFiles
-                    .map { $0.path(percentEncoded: false) }
-                    .joined(separator: ",")
-                    .utf8
-            )
-            .write(toPath: inputSourcesFilePath)
+            let inputSourcesFile = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv")
+            try inputSwiftFiles
+                .map { $0.path(percentEncoded: false) }
+                .joined(separator: ",")
+                .write(
+                    to: inputSourcesFile,
+                    atomically: true,
+                    encoding: .utf8
+                )
+
+            let includeCSV = context.safediFolder.appending(components: "configuration", "include.csv")
+            let includeArguments: [String] = if FileManager.default.fileExists(atPath: includeCSV.path()) {
+                [
+                    "--include-file-path",
+                    includeCSV.path(),
+                ]
+            } else {
+                []
+            }
+            let additionalImportedModulesCSV = context.safediFolder.appending(components: "configuration", "additionalImportedModules.csv")
+            let additionalImportedModulesArguments: [String] = if FileManager.default.fileExists(atPath: additionalImportedModulesCSV.path()) {
+                [
+                    "--additional-imported-modules-file-path",
+                    additionalImportedModulesCSV.path(),
+                ]
+            } else {
+                []
+            }
+
             let arguments = [
-                inputSourcesFilePath,
+                inputSourcesFile.path(),
                 "--dependency-tree-output",
                 outputSwiftFile.path(),
-            ]
+            ] + includeArguments + additionalImportedModulesArguments
+
+            let downloadedToolLocation = context.downloadedToolLocation
+            let safeDIVersion = context.safeDIVersion
+            if downloadedToolLocation == nil {
+                Diagnostics.warning("""
+                Using a debug SafeDITool binary, which is 15x slower than the release version.
+
+                To install the release SafeDITool binary for this version, run the `InstallSafeDITool` command plugin.
+                """)
+            }
 
             return try [
                 .buildCommand(
@@ -176,61 +220,6 @@ extension Target {
         }
     }
 #endif
-
-extension Data {
-    fileprivate func write(toPath filePath: String) throws {
-        #if os(Linux)
-            try write(to: URL(fileURLWithPath: filePath))
-        #else
-            guard #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) else {
-                try write(to: URL(fileURLWithPath: filePath))
-            }
-            try write(to: URL(filePath: filePath))
-        #endif
-    }
-}
-
-extension PackagePlugin.PluginContext {
-    var safeDIVersion: String? {
-        guard let safeDIOrigin = package.dependencies.first(where: { $0.package.displayName == "SafeDI" })?.package.origin else {
-            return nil
-        }
-        switch safeDIOrigin {
-        case let .repository(_, displayVersion, _):
-            // This regular expression is duplicated by InstallSafeDITool since plugins can not share code.
-            guard let versionMatch = try? /Optional\((.*?)\)|^(.*?)$/.firstMatch(in: displayVersion),
-                  let version = versionMatch.output.1 ?? versionMatch.output.2
-            else {
-                return nil
-            }
-            return String(version)
-        case .registry, .root, .local:
-            fallthrough
-        @unknown default:
-            return nil
-        }
-    }
-
-    var hasSafeDIFolder: Bool {
-        FileManager.default.fileExists(atPath: safediFolder.path())
-    }
-
-    var safediFolder: URL {
-        package.directoryURL.appending(
-            component: ".safedi"
-        )
-    }
-
-    var downloadedToolLocation: URL? {
-        guard let safeDIVersion else { return nil }
-        let location = safediFolder.appending(
-            components: safeDIVersion,
-            "safeditool"
-        )
-        guard FileManager.default.fileExists(atPath: location.path()) else { return nil }
-        return location
-    }
-}
 
 extension Array where Element: Equatable {
     public func dropLast(ifEquals value: Element) -> [Element] {

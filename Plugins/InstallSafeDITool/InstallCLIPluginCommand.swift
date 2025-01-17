@@ -34,25 +34,17 @@ struct InstallSafeDITool: CommandPlugin {
             Diagnostics.error("No package origin found for SafeDI package")
             exit(1)
         }
-        switch safeDIOrigin {
-        case let .repository(url, displayVersion, _):
-            // As of Xcode 16.0 Beta 6, the display version is of the form "Optional(version)".
-            // This regular expression is duplicated by SafeDIGenerateDependencyTree since plugins can not share code.
-            guard let versionMatch = try /Optional\((.*?)\)|^(.*?)$/.firstMatch(in: displayVersion),
-                  let versionSubstring = versionMatch.output.1 ?? versionMatch.output.2
-            else {
-                Diagnostics.error("Could not extract version for SafeDI")
-                exit(1)
-            }
-            let version = String(versionSubstring)
-            let safediFolder = context.package.directoryURL.appending(
-                component: ".safedi"
-            )
-            let expectedToolFolder = safediFolder.appending(
-                component: version
-            )
-            let expectedToolLocation = expectedToolFolder.appending(component: "safeditool")
 
+        guard let version = context.safeDIVersion,
+              let expectedToolFolder = context.expectedToolFolder,
+              let expectedToolLocation = context.expectedToolLocation
+        else {
+            Diagnostics.error("Could not extract version for SafeDI")
+            exit(1)
+        }
+
+        switch safeDIOrigin {
+        case let .repository(url, _, _):
             guard let url = URL(string: url)?.deletingPathExtension() else {
                 Diagnostics.error("No package url found for SafeDI package")
                 exit(1)
@@ -91,7 +83,7 @@ struct InstallSafeDITool: CommandPlugin {
                 at: downloadedURL,
                 to: expectedToolLocation
             )
-            let gitIgnoreLocation = safediFolder.appending(component: ".gitignore")
+            let gitIgnoreLocation = context.safediFolder.appending(component: ".gitignore")
             if !FileManager.default.fileExists(atPath: gitIgnoreLocation.path()) {
                 try """
                 */\(expectedToolLocation.lastPathComponent)
@@ -111,3 +103,72 @@ struct InstallSafeDITool: CommandPlugin {
         }
     }
 }
+
+#if canImport(XcodeProjectPlugin)
+    import XcodeProjectPlugin
+
+    extension InstallSafeDITool: XcodeCommandPlugin {
+        func performCommand(
+            context: XcodeProjectPlugin.XcodePluginContext,
+            arguments _: [String]
+        ) throws {
+            let version = context.safeDIVersion
+            let safediFolder = context.safediFolder
+            let expectedToolFolder = context.expectedToolFolder
+            let expectedToolLocation = context.expectedToolLocation
+
+            #if arch(arm64)
+                let toolName = "SafeDITool-arm64"
+            #elseif arch(x86_64)
+                let toolName = "SafeDITool-x86_64"
+            #else
+                Diagnostics.error("Unexpected architecture type")
+                exit(1)
+            #endif
+
+            let githubDownloadURL = context.safeDIOrigin.appending(
+                components: "releases",
+                "download",
+                version,
+                toolName
+            )
+
+            let dispatchGroup = DispatchGroup()
+            dispatchGroup.enter()
+            Task.detached {
+                defer { dispatchGroup.leave() }
+                let (downloadedURL, _) = try await URLSession.shared.download(
+                    for: URLRequest(url: githubDownloadURL)
+                )
+                let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path())
+                guard let currentPermissions = downloadedFileAttributes[.posixPermissions] as? NSNumber,
+                      // Add executable attributes to the downloaded file.
+                      chmod(downloadedURL.path(), mode_t(currentPermissions.uint32Value) | S_IXUSR | S_IXGRP | S_IXOTH) == 0
+                else {
+                    Diagnostics.error("Failed to make downloaded file \(downloadedURL.path()) executable")
+                    exit(1)
+                }
+                try FileManager.default.createDirectory(
+                    at: expectedToolFolder,
+                    withIntermediateDirectories: true
+                )
+                try FileManager.default.moveItem(
+                    at: downloadedURL,
+                    to: expectedToolLocation
+                )
+                let gitIgnoreLocation = safediFolder.appending(component: ".gitignore")
+                if !FileManager.default.fileExists(atPath: gitIgnoreLocation.path()) {
+                    try """
+                    */\(expectedToolLocation.lastPathComponent)
+                    """.write(
+                        to: gitIgnoreLocation,
+                        atomically: true,
+                        encoding: .utf8
+                    )
+                }
+            }
+            // Force the command to wait until the async work is done.
+            dispatchGroup.wait()
+        }
+    }
+#endif
