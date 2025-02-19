@@ -1,5 +1,5 @@
 {
-  "originHash" : "5bc17675d1aa3f88c956fc6d0dfd2370ad92a2c46f3cf83f74f4b153c85c4e77",
+  "originHash" : "b5d38c0bb20059d60cb48dd70475f594c53d1315d3f724ccb299232d31462fd3",
   "pins" : [
     {
       "identity" : "jjliso8601dateformatter",
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-macro-testing.git",
       "state" : {
-        "revision" : "20c1a8f3b624fb5d1503eadcaa84743050c350f4",
-        "version" : "0.5.2"
+        "revision" : "0b80a098d4805a21c412b65f01ffde7b01aab2fa",
+        "version" : "0.6.0"
       }
     },
     {
