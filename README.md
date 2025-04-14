@@ -134,7 +134,7 @@ You can see this integration in practice in the [ExampleCocoaPodsIntegration](Ex
 
 SafeDI’s compile-time safety and hierarchical dependency scoping make it similar to [Needle](https://github.com/uber/needle) and [Weaver](https://github.com/scribd/Weaver). Unlike Needle, SafeDI does not require defining dependency protocols for each type that can be instantiated within the DI tree. Unlike Weaver, SafeDI does not require defining and maintaining containers that live alongside your regular Swift code.
 
-Other Swift DI libraries, like [Swinject](https://github.com/Swinject/Swinject), do not offer compile-time safety. Meanwhile, libraries like [Factory](https://github.com/hmlongco/Factory) and [swift-dependencies](https://github.com/pointfreeco/swift-dependencies) do offer compile-time validation of the dependency tree, but prevent hierarchical dependency scoping. This means scoped dependencies—like an authentication token in a network layer—can only be optionally injected when using Factory.
+Other Swift DI libraries, like [Factory](https://github.com/hmlongco/Factory) and [swift-dependencies](https://github.com/pointfreeco/swift-dependencies) do offer compile-time validation of the dependency tree but do not have hierarchical dependency scoping. This means scoped dependencies—like an authentication token in a network layer—can only be optionally injected when using these libraries. Meanwhile, libraries like [Swinject](https://github.com/Swinject/Swinject) do not offer compile-time safety.
 
 ## Contributing
 
