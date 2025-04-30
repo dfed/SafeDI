@@ -1,15 +1,6 @@
 {
-  "originHash" : "4828c1967a8becd3449664c8ced8013fc851b1b749c97f36a6b6e17c68977693",
+  "originHash" : "b7815dfee08e3722e107ae744ad909dda08072366e33dbdb403fe85fb8c1012c",
   "pins" : [
-    {
-      "identity" : "jjliso8601dateformatter",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/michaeleisel/JJLISO8601DateFormatter",
-      "state" : {
-        "revision" : "de422afd9a47b72703c30a81423c478337191390",
-        "version" : "0.1.6"
-      }
-    },
     {
       "identity" : "swift-argument-parser",
       "kind" : "remoteSourceControl",
@@ -35,24 +26,6 @@
       "state" : {
         "revision" : "cb53fa1bd3219b0b23ded7dfdd3b2baff266fd25",
         "version" : "600.0.0"
-      }
-    },
-    {
-      "identity" : "zippyjson",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/michaeleisel/ZippyJSON.git",
-      "state" : {
-        "revision" : "c4ab804780b64979f19268619dfa563b6be58f7d",
-        "version" : "1.2.10"
-      }
-    },
-    {
-      "identity" : "zippyjsoncfamily",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/michaeleisel/ZippyJSONCFamily",
-      "state" : {
-        "revision" : "8abdd7a5e943afe68e7b03fdaa63b21c042a3893",
-        "version" : "1.2.9"
       }
     }
   ],
