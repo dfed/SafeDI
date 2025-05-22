@@ -14,3 +14,6 @@
 --enable isEmpty
 --enable wrapEnumCases
 --enable wrapMultilineStatementBraces
+
+# global
+--swiftversion 6.0
