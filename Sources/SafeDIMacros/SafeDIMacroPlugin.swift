@@ -23,8 +23,8 @@ import SwiftSyntaxMacros
 
 @main
 struct SafeDIMacroPlugin: CompilerPlugin {
-    let providingMacros: [Macro.Type] = [
-        InstantiableMacro.self,
-        InjectableMacro.self,
-    ]
+	let providingMacros: [Macro.Type] = [
+		InstantiableMacro.self,
+		InjectableMacro.self,
+	]
 }

@@ -21,52 +21,52 @@
 import SwiftDiagnostics
 
 public enum FixableInjectableError: DiagnosticError {
-    case unexpectedMutable
+	case unexpectedMutable
 
-    public var description: String {
-        switch self {
-        case .unexpectedMutable:
-            "Dependency can not be mutable unless it is decorated with a property wrapper. Mutations to a dependency are not propagated through the dependency tree."
-        }
-    }
+	public var description: String {
+		switch self {
+		case .unexpectedMutable:
+			"Dependency can not be mutable unless it is decorated with a property wrapper. Mutations to a dependency are not propagated through the dependency tree."
+		}
+	}
 
-    public var diagnostic: DiagnosticMessage {
-        InjectableDiagnosticMessage(error: self)
-    }
+	public var diagnostic: DiagnosticMessage {
+		InjectableDiagnosticMessage(error: self)
+	}
 
-    public var fixIt: FixItMessage {
-        InjectableFixItMessage(error: self)
-    }
+	public var fixIt: FixItMessage {
+		InjectableFixItMessage(error: self)
+	}
 
-    // MARK: - InjectableDiagnosticMessage
+	// MARK: - InjectableDiagnosticMessage
 
-    private struct InjectableDiagnosticMessage: DiagnosticMessage {
-        init(error: FixableInjectableError) {
-            diagnosticID = MessageID(domain: "\(Self.self)", id: error.description)
-            severity = switch error {
-            case .unexpectedMutable:
-                .error
-            }
-            message = error.description
-        }
+	private struct InjectableDiagnosticMessage: DiagnosticMessage {
+		init(error: FixableInjectableError) {
+			diagnosticID = MessageID(domain: "\(Self.self)", id: error.description)
+			severity = switch error {
+			case .unexpectedMutable:
+				.error
+			}
+			message = error.description
+		}
 
-        let diagnosticID: MessageID
-        let severity: DiagnosticSeverity
-        let message: String
-    }
+		let diagnosticID: MessageID
+		let severity: DiagnosticSeverity
+		let message: String
+	}
 
-    // MARK: - InjectableFixItMessage
+	// MARK: - InjectableFixItMessage
 
-    private struct InjectableFixItMessage: FixItMessage {
-        init(error: FixableInjectableError) {
-            message = switch error {
-            case .unexpectedMutable:
-                "Replace `var` with `let`"
-            }
-            fixItID = MessageID(domain: "\(Self.self)", id: error.description)
-        }
+	private struct InjectableFixItMessage: FixItMessage {
+		init(error: FixableInjectableError) {
+			message = switch error {
+			case .unexpectedMutable:
+				"Replace `var` with `let`"
+			}
+			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
+		}
 
-        let message: String
-        let fixItID: MessageID
-    }
+		let message: String
+		let fixItID: MessageID
+	}
 }

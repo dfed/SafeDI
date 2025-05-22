@@ -27,44 +27,44 @@ import SwiftUI
 @MainActor
 @main
 public struct NotesApp: Instantiable, App {
-    public var body: some Scene {
-        WindowGroup {
-            if let userName = userService.userName {
-                // Returns a new instance of `NoteView`.
-                noteViewBuilder.instantiate(userName)
-            } else {
-                // Returns a new instance of a `NameEntryView`.
-                nameEntryViewBuilder.instantiate()
-            }
-        }
-    }
+	public var body: some Scene {
+		WindowGroup {
+			if let userName = userService.userName {
+				// Returns a new instance of `NoteView`.
+				noteViewBuilder.instantiate(userName)
+			} else {
+				// Returns a new instance of a `NameEntryView`.
+				nameEntryViewBuilder.instantiate()
+			}
+		}
+	}
 
-    // Memberwise initializer to satisfy SafeDI.
-    // `public init()` will be generated for this type because this type is a root.
-    // SafeDI identifies this type as a root because:
-    // 1. It only has `@Instantiated` properties (nothing `@Received` or `@Forwarded`)
-    // 2. No other type has an `@Instantiated` property of this type
-    public init(
-        userService: any UserService,
-        stringStorage: StringStorage,
-        nameEntryViewBuilder: Instantiator<NameEntryView>,
-        noteViewBuilder: Instantiator<NoteView>
-    ) {
-        self.userService = userService
-        self.stringStorage = stringStorage
-        self.nameEntryViewBuilder = nameEntryViewBuilder
-        self.noteViewBuilder = noteViewBuilder
-        observedUserService = AnyObservableObject(userService)
-    }
+	// Memberwise initializer to satisfy SafeDI.
+	// `public init()` will be generated for this type because this type is a root.
+	// SafeDI identifies this type as a root because:
+	// 1. It only has `@Instantiated` properties (nothing `@Received` or `@Forwarded`)
+	// 2. No other type has an `@Instantiated` property of this type
+	public init(
+		userService: any UserService,
+		stringStorage: StringStorage,
+		nameEntryViewBuilder: Instantiator<NameEntryView>,
+		noteViewBuilder: Instantiator<NoteView>
+	) {
+		self.userService = userService
+		self.stringStorage = stringStorage
+		self.nameEntryViewBuilder = nameEntryViewBuilder
+		self.noteViewBuilder = noteViewBuilder
+		observedUserService = AnyObservableObject(userService)
+	}
 
-    /// A private property that is instantiated when the app is instantiated and manages the User state.
-    @Instantiated private let userService: any UserService
-    /// A private property that is instantiated when the app is instantiated and manages the persistence of strings.
-    @Instantiated private let stringStorage: StringStorage
-    /// A private property that is instantiated when the app is instantiated and can create a NameEntryView on demand.
-    @Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
-    /// A private property that is instantiated when the app is instantiated and can create a NoteView on demand.
-    @Instantiated private let noteViewBuilder: Instantiator<NoteView>
-    /// A mechanism for observing updates to the user service.
-    @ObservedObject private var observedUserService: AnyObservableObject
+	/// A private property that is instantiated when the app is instantiated and manages the User state.
+	@Instantiated private let userService: any UserService
+	/// A private property that is instantiated when the app is instantiated and manages the persistence of strings.
+	@Instantiated private let stringStorage: StringStorage
+	/// A private property that is instantiated when the app is instantiated and can create a NameEntryView on demand.
+	@Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
+	/// A private property that is instantiated when the app is instantiated and can create a NoteView on demand.
+	@Instantiated private let noteViewBuilder: Instantiator<NoteView>
+	/// A mechanism for observing updates to the user service.
+	@ObservedObject private var observedUserService: AnyObservableObject
 }

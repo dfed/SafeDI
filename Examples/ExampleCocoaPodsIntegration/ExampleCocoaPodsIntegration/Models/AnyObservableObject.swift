@@ -21,12 +21,12 @@
 import Combine
 
 final class AnyObservableObject: ObservableObject {
-    init(_ observable: some ObservableObject) {
-        objectWillChange = observable
-            .objectWillChange
-            .map { _ in () }
-            .eraseToAnyPublisher()
-    }
+	init(_ observable: some ObservableObject) {
+		objectWillChange = observable
+			.objectWillChange
+			.map { _ in () }
+			.eraseToAnyPublisher()
+	}
 
-    let objectWillChange: AnyPublisher<Void, Never>
+	let objectWillChange: AnyPublisher<Void, Never>
 }

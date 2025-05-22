@@ -24,12 +24,12 @@ import SharedModule
 
 @Instantiable
 public final class ChildB: Instantiable {
-    public init(shared: SharedThing, grandchildB: GrandchildB) {
-        self.shared = shared
-        self.grandchildB = grandchildB
-    }
+	public init(shared: SharedThing, grandchildB: GrandchildB) {
+		self.shared = shared
+		self.grandchildB = grandchildB
+	}
 
-    @Received let shared: SharedThing
+	@Received let shared: SharedThing
 
-    @Instantiated let grandchildB: GrandchildB
+	@Instantiated let grandchildB: GrandchildB
 }

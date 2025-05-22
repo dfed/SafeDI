@@ -22,7 +22,7 @@ import SwiftDiagnostics
 import SwiftSyntax
 
 public protocol DiagnosticError: Error, CustomStringConvertible {
-    var diagnostic: DiagnosticMessage { get }
+	var diagnostic: DiagnosticMessage { get }
 
-    var fixIt: FixItMessage { get }
+	var fixIt: FixItMessage { get }
 }

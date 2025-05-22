@@ -21,44 +21,44 @@
 import SwiftSyntax
 
 extension AttributeListSyntax {
-    public var instantiableMacro: AttributeSyntax? {
-        guard let attribute = first(where: { element in
-            element.instantiableMacro != nil
-        }) else {
-            return nil
-        }
-        return AttributeSyntax(attribute)
-    }
+	public var instantiableMacro: AttributeSyntax? {
+		guard let attribute = first(where: { element in
+			element.instantiableMacro != nil
+		}) else {
+			return nil
+		}
+		return AttributeSyntax(attribute)
+	}
 
-    public var instantiatedMacro: AttributeSyntax? {
-        guard let attribute = first(where: { element in
-            element.instantiatedMacro != nil
-        }) else {
-            return nil
-        }
-        return AttributeSyntax(attribute)
-    }
+	public var instantiatedMacro: AttributeSyntax? {
+		guard let attribute = first(where: { element in
+			element.instantiatedMacro != nil
+		}) else {
+			return nil
+		}
+		return AttributeSyntax(attribute)
+	}
 
-    public var receivedMacro: AttributeSyntax? {
-        guard let attribute = first(where: { element in
-            element.receivedMacro != nil
-        }) else {
-            return nil
-        }
-        return AttributeSyntax(attribute)
-    }
+	public var receivedMacro: AttributeSyntax? {
+		guard let attribute = first(where: { element in
+			element.receivedMacro != nil
+		}) else {
+			return nil
+		}
+		return AttributeSyntax(attribute)
+	}
 
-    public var dependencySources: [(source: Dependency.Source, node: AttributeListSyntax.Element)] {
-        compactMap {
-            switch $0 {
-            case .attribute:
-                guard let source = Dependency.Source(node: $0) else {
-                    return nil
-                }
-                return (source: source, node: $0)
-            case .ifConfigDecl:
-                return nil
-            }
-        }
-    }
+	public var dependencySources: [(source: Dependency.Source, node: AttributeListSyntax.Element)] {
+		compactMap {
+			switch $0 {
+			case .attribute:
+				guard let source = Dependency.Source(node: $0) else {
+					return nil
+				}
+				return (source: source, node: $0)
+			case .ifConfigDecl:
+				return nil
+			}
+		}
+	}
 }

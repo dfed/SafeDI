@@ -22,109 +22,109 @@ import Collections
 
 /// A model of the scoped dependencies required for an `@Instantiable` in the reachable dependency tree.
 final class Scope: Hashable {
-    // MARK: Initialization
+	// MARK: Initialization
 
-    init(instantiable: Instantiable) {
-        self.instantiable = instantiable
-    }
+	init(instantiable: Instantiable) {
+		self.instantiable = instantiable
+	}
 
-    // MARK: Equatable
+	// MARK: Equatable
 
-    static func == (lhs: Scope, rhs: Scope) -> Bool {
-        // Scopes are only identicial if they are the same object
-        lhs === rhs
-    }
+	static func == (lhs: Scope, rhs: Scope) -> Bool {
+		// Scopes are only identicial if they are the same object
+		lhs === rhs
+	}
 
-    // MARK: Hashable
+	// MARK: Hashable
 
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(ObjectIdentifier(self))
-    }
+	func hash(into hasher: inout Hasher) {
+		hasher.combine(ObjectIdentifier(self))
+	}
 
-    // MARK: Internal
+	// MARK: Internal
 
-    let instantiable: Instantiable
+	let instantiable: Instantiable
 
-    /// The properties that this scope is responsible for instantiating.
-    var propertiesToGenerate = [PropertyToGenerate]()
+	/// The properties that this scope is responsible for instantiating.
+	var propertiesToGenerate = [PropertyToGenerate]()
 
-    enum PropertyToGenerate {
-        case instantiated(Property, Scope, erasedToConcreteExistential: Bool)
-        case aliased(Property, fulfilledBy: Property, erasedToConcreteExistential: Bool)
-    }
+	enum PropertyToGenerate {
+		case instantiated(Property, Scope, erasedToConcreteExistential: Bool)
+		case aliased(Property, fulfilledBy: Property, erasedToConcreteExistential: Bool)
+	}
 
-    var properties: [Property] {
-        instantiable
-            .dependencies
-            .map(\.property)
-    }
+	var properties: [Property] {
+		instantiable
+			.dependencies
+			.map(\.property)
+	}
 
-    var receivedProperties: [Property] {
-        instantiable
-            .dependencies
-            .compactMap {
-                switch $0.source {
-                case .received:
-                    $0.property
-                case let .aliased(fulfillingProperty, _):
-                    fulfillingProperty
-                case .forwarded,
-                     .instantiated:
-                    nil
-                }
-            }
-    }
+	var receivedProperties: [Property] {
+		instantiable
+			.dependencies
+			.compactMap {
+				switch $0.source {
+				case .received:
+					$0.property
+				case let .aliased(fulfillingProperty, _):
+					fulfillingProperty
+				case .forwarded,
+				     .instantiated:
+					nil
+				}
+			}
+	}
 
-    func createScopeGenerator(
-        for property: Property?,
-        propertyStack: OrderedSet<Property>,
-        erasedToConcreteExistential: Bool
-    ) throws -> ScopeGenerator {
-        var childPropertyStack = propertyStack
-        let isPropertyCycle: Bool
-        if let property {
-            isPropertyCycle = propertyStack.contains(property)
-            childPropertyStack.insert(property, at: 0)
-        } else {
-            isPropertyCycle = false
-        }
-        let scopeGenerator = try ScopeGenerator(
-            instantiable: instantiable,
-            property: property,
-            propertiesToGenerate: isPropertyCycle ? [] : propertiesToGenerate.map {
-                switch $0 {
-                case let .instantiated(property, scope, erasedToConcreteExistential):
-                    try scope.createScopeGenerator(
-                        for: property,
-                        propertyStack: childPropertyStack,
-                        erasedToConcreteExistential: erasedToConcreteExistential
-                    )
-                case let .aliased(property, fulfillingProperty, erasedToConcreteExistential):
-                    ScopeGenerator(
-                        property: property,
-                        fulfillingProperty: fulfillingProperty,
-                        erasedToConcreteExistential: erasedToConcreteExistential
-                    )
-                }
-            },
-            erasedToConcreteExistential: erasedToConcreteExistential,
-            isPropertyCycle: isPropertyCycle
-        )
-        Task.detached {
-            // Kick off code generation.
-            try await scopeGenerator.generateCode()
-        }
-        return scopeGenerator
-    }
+	func createScopeGenerator(
+		for property: Property?,
+		propertyStack: OrderedSet<Property>,
+		erasedToConcreteExistential: Bool
+	) throws -> ScopeGenerator {
+		var childPropertyStack = propertyStack
+		let isPropertyCycle: Bool
+		if let property {
+			isPropertyCycle = propertyStack.contains(property)
+			childPropertyStack.insert(property, at: 0)
+		} else {
+			isPropertyCycle = false
+		}
+		let scopeGenerator = try ScopeGenerator(
+			instantiable: instantiable,
+			property: property,
+			propertiesToGenerate: isPropertyCycle ? [] : propertiesToGenerate.map {
+				switch $0 {
+				case let .instantiated(property, scope, erasedToConcreteExistential):
+					try scope.createScopeGenerator(
+						for: property,
+						propertyStack: childPropertyStack,
+						erasedToConcreteExistential: erasedToConcreteExistential
+					)
+				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential):
+					ScopeGenerator(
+						property: property,
+						fulfillingProperty: fulfillingProperty,
+						erasedToConcreteExistential: erasedToConcreteExistential
+					)
+				}
+			},
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			isPropertyCycle: isPropertyCycle
+		)
+		Task.detached {
+			// Kick off code generation.
+			try await scopeGenerator.generateCode()
+		}
+		return scopeGenerator
+	}
 }
 
 extension Dependency.Source {
-    var isReceived: Bool {
-        switch self {
-        case .received:
-            true
-        case .instantiated, .aliased, .forwarded:
-            false
-        }
-    }
+	var isReceived: Bool {
+		switch self {
+		case .received:
+			true
+		case .instantiated, .aliased, .forwarded:
+			false
+		}
+	}
 }

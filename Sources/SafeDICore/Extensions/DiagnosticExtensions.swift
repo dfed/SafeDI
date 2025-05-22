@@ -22,26 +22,26 @@ import SwiftDiagnostics
 import SwiftSyntax
 
 extension Diagnostic {
-    public init(
-        node: some SyntaxProtocol,
-        position: AbsolutePosition? = nil,
-        error: some DiagnosticError,
-        highlights: [Syntax]? = nil,
-        notes: [Note] = [],
-        changes: [FixIt.Change]
-    ) {
-        self.init(
-            node: node,
-            position: position,
-            message: error.diagnostic,
-            highlights: highlights,
-            notes: notes,
-            fixIts: [
-                FixIt(
-                    message: error.fixIt,
-                    changes: changes
-                ),
-            ]
-        )
-    }
+	public init(
+		node: some SyntaxProtocol,
+		position: AbsolutePosition? = nil,
+		error: some DiagnosticError,
+		highlights: [Syntax]? = nil,
+		notes: [Note] = [],
+		changes: [FixIt.Change]
+	) {
+		self.init(
+			node: node,
+			position: position,
+			message: error.diagnostic,
+			highlights: highlights,
+			notes: notes,
+			fixIts: [
+				FixIt(
+					message: error.fixIt,
+					changes: changes
+				),
+			]
+		)
+	}
 }

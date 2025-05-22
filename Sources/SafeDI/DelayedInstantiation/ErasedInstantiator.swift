@@ -25,30 +25,30 @@
 /// - SeeAlso: `SendableInstantiator`
 /// - SeeAlso: `SendableErasedInstantiator`
 public final class ErasedInstantiator<ForwardedProperties, Instantiable> {
-    /// - Parameter instantiator: A closure that takes `ForwardedProperties` and returns an instance of `Instantiable`.
-    public init(_ instantiator: @escaping (ForwardedProperties) -> Instantiable) {
-        self.instantiator = instantiator
-    }
+	/// - Parameter instantiator: A closure that takes `ForwardedProperties` and returns an instance of `Instantiable`.
+	public init(_ instantiator: @escaping (ForwardedProperties) -> Instantiable) {
+		self.instantiator = instantiator
+	}
 
-    /// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
-    public init(_ instantiator: @escaping () -> Instantiable) where ForwardedProperties == Void {
-        self.instantiator = { _ in instantiator() }
-    }
+	/// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
+	public init(_ instantiator: @escaping () -> Instantiable) where ForwardedProperties == Void {
+		self.instantiator = { _ in instantiator() }
+	}
 
-    /// Instantiates and returns a new instance of the `@Instantiable` type, using the provided arguments.
-    ///
-    /// - Parameter arguments: Arguments required for instantiation.
-    /// - Returns: An `Instantiable` instance.
-    public func instantiate(_ arguments: ForwardedProperties) -> Instantiable {
-        instantiator(arguments)
-    }
+	/// Instantiates and returns a new instance of the `@Instantiable` type, using the provided arguments.
+	///
+	/// - Parameter arguments: Arguments required for instantiation.
+	/// - Returns: An `Instantiable` instance.
+	public func instantiate(_ arguments: ForwardedProperties) -> Instantiable {
+		instantiator(arguments)
+	}
 
-    /// Instantiates and returns a new instance of the `@Instantiable` type.
-    ///
-    /// - Returns: An `Instantiable` instance.
-    public func instantiate() -> Instantiable where ForwardedProperties == Void {
-        instantiator(())
-    }
+	/// Instantiates and returns a new instance of the `@Instantiable` type.
+	///
+	/// - Returns: An `Instantiable` instance.
+	public func instantiate() -> Instantiable where ForwardedProperties == Void {
+		instantiator(())
+	}
 
-    private let instantiator: (ForwardedProperties) -> Instantiable
+	private let instantiator: (ForwardedProperties) -> Instantiable
 }

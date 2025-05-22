@@ -22,21 +22,21 @@ import Foundation
 import SafeDI
 
 public protocol StringStorage {
-    func string(forKey key: String) -> String?
-    func setString(_ string: String?, forKey key: String)
+	func string(forKey key: String) -> String?
+	func setString(_ string: String?, forKey key: String)
 }
 
 @Instantiable(fulfillingAdditionalTypes: [StringStorage.self])
 extension UserDefaults: @retroactive Instantiable, StringStorage {
-    public static func instantiate() -> UserDefaults {
-        .standard
-    }
+	public static func instantiate() -> UserDefaults {
+		.standard
+	}
 
-    public func string(forKey key: String) -> String? {
-        object(forKey: key) as? String
-    }
+	public func string(forKey key: String) -> String? {
+		object(forKey: key) as? String
+	}
 
-    public func setString(_ string: String?, forKey key: String) {
-        set(string, forKey: key)
-    }
+	public func setString(_ string: String?, forKey key: String) {
+		set(string, forKey: key)
+	}
 }

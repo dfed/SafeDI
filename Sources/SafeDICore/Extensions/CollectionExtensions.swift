@@ -22,55 +22,55 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 
 extension Collection<Dependency> {
-    var initializerFunctionParameters: [FunctionParameterSyntax] {
-        map(\.property)
-            .initializerFunctionParameters
-    }
+	var initializerFunctionParameters: [FunctionParameterSyntax] {
+		map(\.property)
+			.initializerFunctionParameters
+	}
 }
 
 extension Collection<Property> {
-    public var asTuple: TupleTypeSyntax {
-        let tupleElements = sorted()
-            .map(\.asTupleElement)
-            .transformUntilLast {
-                var node = $0
-                node.trailingComma = .commaToken(trailingTrivia: .space)
-                return node
-            }
-        var tuple = TupleTypeSyntax(elements: TupleTypeElementListSyntax())
-        for element in tupleElements {
-            tuple.elements.append(element)
-        }
-        return tuple
-    }
+	public var asTuple: TupleTypeSyntax {
+		let tupleElements = sorted()
+			.map(\.asTupleElement)
+			.transformUntilLast {
+				var node = $0
+				node.trailingComma = .commaToken(trailingTrivia: .space)
+				return node
+			}
+		var tuple = TupleTypeSyntax(elements: TupleTypeElementListSyntax())
+		for element in tupleElements {
+			tuple.elements.append(element)
+		}
+		return tuple
+	}
 
-    var asTupleTypeDescription: TypeDescription {
-        TypeSyntax(asTuple).typeDescription
-    }
+	var asTupleTypeDescription: TypeDescription {
+		TypeSyntax(asTuple).typeDescription
+	}
 
-    var initializerFunctionParameters: [FunctionParameterSyntax] {
-        map(\.asFunctionParamter)
-            .transformUntilLast {
-                var node = $0
-                node.trailingComma = .commaToken(trailingTrivia: .space)
-                return node
-            }
-    }
+	var initializerFunctionParameters: [FunctionParameterSyntax] {
+		map(\.asFunctionParamter)
+			.transformUntilLast {
+				var node = $0
+				node.trailingComma = .commaToken(trailingTrivia: .space)
+				return node
+			}
+	}
 }
 
 extension Collection {
-    private func transformUntilLast(_ transform: (Element) throws -> Element) rethrows -> [Element] {
-        var arrayToTransform = Array(self)
-        guard let lastItem = arrayToTransform.popLast() else {
-            // Array is empty.
-            return []
-        }
-        return try arrayToTransform.map { try transform($0) } + [lastItem]
-    }
+	private func transformUntilLast(_ transform: (Element) throws -> Element) rethrows -> [Element] {
+		var arrayToTransform = Array(self)
+		guard let lastItem = arrayToTransform.popLast() else {
+			// Array is empty.
+			return []
+		}
+		return try arrayToTransform.map { try transform($0) } + [lastItem]
+	}
 }
 
 extension Collection<String> {
-    public func removingEmpty() -> [Element] {
-        filter { !$0.isEmpty }
-    }
+	public func removingEmpty() -> [Element] {
+		filter { !$0.isEmpty }
+	}
 }

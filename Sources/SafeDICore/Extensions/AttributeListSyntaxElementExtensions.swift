@@ -21,30 +21,30 @@
 import SwiftSyntax
 
 extension AttributeListSyntax.Element {
-    var instantiableMacro: AttributeSyntax? {
-        attributeIfNameEquals(InstantiableVisitor.macroName)
-    }
+	var instantiableMacro: AttributeSyntax? {
+		attributeIfNameEquals(InstantiableVisitor.macroName)
+	}
 
-    var instantiatedMacro: AttributeSyntax? {
-        attributeIfNameEquals(Dependency.Source.instantiatedRawValue)
-    }
+	var instantiatedMacro: AttributeSyntax? {
+		attributeIfNameEquals(Dependency.Source.instantiatedRawValue)
+	}
 
-    var receivedMacro: AttributeSyntax? {
-        attributeIfNameEquals(Dependency.Source.receivedRawValue)
-    }
+	var receivedMacro: AttributeSyntax? {
+		attributeIfNameEquals(Dependency.Source.receivedRawValue)
+	}
 
-    var forwardedMacro: AttributeSyntax? {
-        attributeIfNameEquals(Dependency.Source.forwardedRawValue)
-    }
+	var forwardedMacro: AttributeSyntax? {
+		attributeIfNameEquals(Dependency.Source.forwardedRawValue)
+	}
 
-    private func attributeIfNameEquals(_ expectedName: String) -> AttributeSyntax? {
-        if case let .attribute(attribute) = self,
-           let identifier = IdentifierTypeSyntax(attribute.attributeName),
-           identifier.name.text == expectedName
-        {
-            attribute
-        } else {
-            nil
-        }
-    }
+	private func attributeIfNameEquals(_ expectedName: String) -> AttributeSyntax? {
+		if case let .attribute(attribute) = self,
+		   let identifier = IdentifierTypeSyntax(attribute.attributeName),
+		   identifier.name.text == expectedName
+		{
+			attribute
+		} else {
+			nil
+		}
+	}
 }

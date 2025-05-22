@@ -22,131 +22,131 @@ import SwiftSyntax
 
 /// A syntax visitor that can read an entire file.
 public final class FileVisitor: SyntaxVisitor {
-    // MARK: Initialization
+	// MARK: Initialization
 
-    public init() {
-        super.init(viewMode: .sourceAccurate)
-    }
+	public init() {
+		super.init(viewMode: .sourceAccurate)
+	}
 
-    // MARK: SyntaxVisitor
+	// MARK: SyntaxVisitor
 
-    public override func visit(_: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
-        .skipChildren
-    }
+	public override func visit(_: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
+		.skipChildren
+	}
 
-    public override func visit(_: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
-        .skipChildren
-    }
+	public override func visit(_: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+		.skipChildren
+	}
 
-    public override func visit(_: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
-        .skipChildren
-    }
+	public override func visit(_: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+		.skipChildren
+	}
 
-    public override func visit(_ node: ImportDeclSyntax) -> SyntaxVisitorContinueKind {
-        imports.append(node.asImportStatement)
-        return .skipChildren
-    }
+	public override func visit(_ node: ImportDeclSyntax) -> SyntaxVisitorContinueKind {
+		imports.append(node.asImportStatement)
+		return .skipChildren
+	}
 
-    public override func visit(_: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-        .skipChildren
-    }
+	public override func visit(_: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+		.skipChildren
+	}
 
-    public override func visit(_: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
-        .skipChildren
-    }
+	public override func visit(_: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+		.skipChildren
+	}
 
-    public override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
-        visitDecl(node)
-    }
+	public override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
+		visitDecl(node)
+	}
 
-    public override func visitPost(_: ClassDeclSyntax) {
-        exitType()
-    }
+	public override func visitPost(_: ClassDeclSyntax) {
+		exitType()
+	}
 
-    public override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
-        visitDecl(node)
-    }
+	public override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
+		visitDecl(node)
+	}
 
-    public override func visitPost(_: ActorDeclSyntax) {
-        exitType()
-    }
+	public override func visitPost(_: ActorDeclSyntax) {
+		exitType()
+	}
 
-    public override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-        visitDecl(node)
-    }
+	public override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
+		visitDecl(node)
+	}
 
-    public override func visitPost(_: StructDeclSyntax) {
-        exitType()
-    }
+	public override func visitPost(_: StructDeclSyntax) {
+		exitType()
+	}
 
-    public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
-        // Enums can't be instantiable because they can't have `let` properties.
-        // However, they can have nested types within them that are instantiable.
-        enterTypeNamed(node.name.text)
-        return .visitChildren
-    }
+	public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+		// Enums can't be instantiable because they can't have `let` properties.
+		// However, they can have nested types within them that are instantiable.
+		enterTypeNamed(node.name.text)
+		return .visitChildren
+	}
 
-    public override func visitPost(_: EnumDeclSyntax) {
-        exitType()
-    }
+	public override func visitPost(_: EnumDeclSyntax) {
+		exitType()
+	}
 
-    public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
-        let instantiableVisitor = InstantiableVisitor(
-            declarationType: .extensionDecl,
-            parentType: nil
-        )
-        instantiableVisitor.walk(node)
-        for instantiable in instantiableVisitor.instantiables {
-            instantiables.append(instantiable)
-        }
+	public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
+		let instantiableVisitor = InstantiableVisitor(
+			declarationType: .extensionDecl,
+			parentType: nil
+		)
+		instantiableVisitor.walk(node)
+		for instantiable in instantiableVisitor.instantiables {
+			instantiables.append(instantiable)
+		}
 
-        // Extensions are always top-level.
-        parentType = node.extendedType.typeDescription
+		// Extensions are always top-level.
+		parentType = node.extendedType.typeDescription
 
-        // Continue to find child types.
-        return .visitChildren
-    }
+		// Continue to find child types.
+		return .visitChildren
+	}
 
-    public override func visitPost(_: ExtensionDeclSyntax) {
-        // Extensions are always top-level.
-        parentType = nil
-    }
+	public override func visitPost(_: ExtensionDeclSyntax) {
+		// Extensions are always top-level.
+		parentType = nil
+	}
 
-    // MARK: Public
+	// MARK: Public
 
-    public private(set) var imports = [ImportStatement]()
-    public private(set) var instantiables = [Instantiable]()
+	public private(set) var imports = [ImportStatement]()
+	public private(set) var instantiables = [Instantiable]()
 
-    // MARK: Private
+	// MARK: Private
 
-    private var parentType: TypeDescription?
+	private var parentType: TypeDescription?
 
-    private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
-        let instantiableVisitor = InstantiableVisitor(
-            declarationType: .concreteDecl,
-            parentType: parentType
-        )
-        instantiableVisitor.walk(node)
-        for instantiable in instantiableVisitor.instantiables {
-            instantiables.append(instantiable)
-        }
+	private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
+		let instantiableVisitor = InstantiableVisitor(
+			declarationType: .concreteDecl,
+			parentType: parentType
+		)
+		instantiableVisitor.walk(node)
+		for instantiable in instantiableVisitor.instantiables {
+			instantiables.append(instantiable)
+		}
 
-        // Keep track of how nested we are.
-        enterTypeNamed(node.name.text)
+		// Keep track of how nested we are.
+		enterTypeNamed(node.name.text)
 
-        // Continue to find child types.
-        return .visitChildren
-    }
+		// Continue to find child types.
+		return .visitChildren
+	}
 
-    private func enterTypeNamed(_ name: String) {
-        if let parentType {
-            self.parentType = .nested(name: name, parentType: parentType)
-        } else {
-            parentType = .simple(name: name)
-        }
-    }
+	private func enterTypeNamed(_ name: String) {
+		if let parentType {
+			self.parentType = .nested(name: name, parentType: parentType)
+		} else {
+			parentType = .simple(name: name)
+		}
+	}
 
-    private func exitType() {
-        parentType = parentType?.popNested
-    }
+	private func exitType() {
+		parentType = parentType?.popNested
+	}
 }

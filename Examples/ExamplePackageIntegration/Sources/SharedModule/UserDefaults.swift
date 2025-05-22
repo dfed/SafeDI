@@ -23,7 +23,7 @@ import SafeDI
 
 @Instantiable
 extension UserDefaults: SafeDI.Instantiable {
-    public static func instantiate() -> UserDefaults {
-        .standard
-    }
+	public static func instantiate() -> UserDefaults {
+		.standard
+	}
 }

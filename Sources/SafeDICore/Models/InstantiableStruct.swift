@@ -19,56 +19,56 @@
 // SOFTWARE.
 
 public struct Instantiable: Codable, Hashable, Sendable {
-    // MARK: Initialization
+	// MARK: Initialization
 
-    public init(
-        instantiableType: TypeDescription,
-        isRoot: Bool,
-        initializer: Initializer?,
-        additionalInstantiables: [TypeDescription]?,
-        dependencies: [Dependency],
-        declarationType: DeclarationType
-    ) {
-        instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
-        self.isRoot = isRoot
-        self.initializer = initializer
-        self.dependencies = dependencies
-        self.declarationType = declarationType
-    }
+	public init(
+		instantiableType: TypeDescription,
+		isRoot: Bool,
+		initializer: Initializer?,
+		additionalInstantiables: [TypeDescription]?,
+		dependencies: [Dependency],
+		declarationType: DeclarationType
+	) {
+		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
+		self.isRoot = isRoot
+		self.initializer = initializer
+		self.dependencies = dependencies
+		self.declarationType = declarationType
+	}
 
-    // MARK: Public
+	// MARK: Public
 
-    /// The types that can be fulfilled with this Instantiable.
-    public let instantiableTypes: [TypeDescription]
-    /// The concrete type that fulfills `instantiableTypes`.
-    public var concreteInstantiable: TypeDescription {
-        instantiableTypes[0]
-    }
+	/// The types that can be fulfilled with this Instantiable.
+	public let instantiableTypes: [TypeDescription]
+	/// The concrete type that fulfills `instantiableTypes`.
+	public var concreteInstantiable: TypeDescription {
+		instantiableTypes[0]
+	}
 
-    /// Whether the instantiable type is a root of a dependency graph.
-    public let isRoot: Bool
-    /// A memberwise initializer for the concrete instantiable type.
-    /// If `nil`, the Instanitable type is incorrectly configured.
-    public let initializer: Initializer?
-    /// The ordered dependencies of this Instantiable.
-    public let dependencies: [Dependency]
-    /// The declaration type of the Instantiable’s concrete type.
-    public let declarationType: DeclarationType
+	/// Whether the instantiable type is a root of a dependency graph.
+	public let isRoot: Bool
+	/// A memberwise initializer for the concrete instantiable type.
+	/// If `nil`, the Instanitable type is incorrectly configured.
+	public let initializer: Initializer?
+	/// The ordered dependencies of this Instantiable.
+	public let dependencies: [Dependency]
+	/// The declaration type of the Instantiable’s concrete type.
+	public let declarationType: DeclarationType
 
-    /// The type of declaration where this Instantiable was defined.
-    public enum DeclarationType: Codable, Hashable, Sendable {
-        case classType
-        case actorType
-        case structType
-        case extensionType
+	/// The type of declaration where this Instantiable was defined.
+	public enum DeclarationType: Codable, Hashable, Sendable {
+		case classType
+		case actorType
+		case structType
+		case extensionType
 
-        public var isExtension: Bool {
-            switch self {
-            case .extensionType:
-                true
-            case .actorType, .classType, .structType:
-                false
-            }
-        }
-    }
+		public var isExtension: Bool {
+			switch self {
+			case .extensionType:
+				true
+			case .actorType, .classType, .structType:
+				false
+			}
+		}
+	}
 }

@@ -29,27 +29,27 @@
 /// - SeeAlso: `ErasedInstantiator`
 /// - SeeAlso: `SendableErasedInstantiator`
 public final class SendableInstantiator<T: Instantiable>: Sendable {
-    /// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
-    public init(_ instantiator: @escaping @Sendable (T.ForwardedProperties) -> T) {
-        self.instantiator = instantiator
-    }
+	/// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
+	public init(_ instantiator: @escaping @Sendable (T.ForwardedProperties) -> T) {
+		self.instantiator = instantiator
+	}
 
-    /// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
-    public init(_ instantiator: @escaping @Sendable () -> T) where T.ForwardedProperties == Void {
-        self.instantiator = { _ in instantiator() }
-    }
+	/// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
+	public init(_ instantiator: @escaping @Sendable () -> T) where T.ForwardedProperties == Void {
+		self.instantiator = { _ in instantiator() }
+	}
 
-    /// Instantiates and returns a new instance of the `@Instantiable` type.
-    /// - Returns: An instance of `T`.
-    public func instantiate(_ forwardedProperties: T.ForwardedProperties) -> T {
-        instantiator(forwardedProperties)
-    }
+	/// Instantiates and returns a new instance of the `@Instantiable` type.
+	/// - Returns: An instance of `T`.
+	public func instantiate(_ forwardedProperties: T.ForwardedProperties) -> T {
+		instantiator(forwardedProperties)
+	}
 
-    /// Instantiates and returns a new instance of the `@Instantiable` type.
-    /// - Returns: An instance of `T`.
-    public func instantiate() -> T where T.ForwardedProperties == Void {
-        instantiator(())
-    }
+	/// Instantiates and returns a new instance of the `@Instantiable` type.
+	/// - Returns: An instance of `T`.
+	public func instantiate() -> T where T.ForwardedProperties == Void {
+		instantiator(())
+	}
 
-    private let instantiator: @Sendable (T.ForwardedProperties) -> T
+	private let instantiator: @Sendable (T.ForwardedProperties) -> T
 }

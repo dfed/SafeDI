@@ -21,36 +21,36 @@
 import SwiftSyntax
 
 extension ImportDeclSyntax {
-    // MARK: Public
+	// MARK: Public
 
-    public var asImportStatement: ImportStatement {
-        ImportStatement(
-            attribute: attribute,
-            kind: kind,
-            moduleName: path.first?.name.text ?? "",
-            type: path
-                .map(\.name.text)
-                .dropFirst()
-                .joined(separator: ".")
-        )
-    }
+	public var asImportStatement: ImportStatement {
+		ImportStatement(
+			attribute: attribute,
+			kind: kind,
+			moduleName: path.first?.name.text ?? "",
+			type: path
+				.map(\.name.text)
+				.dropFirst()
+				.joined(separator: ".")
+		)
+	}
 
-    // MARK: Private
+	// MARK: Private
 
-    /// Finds the type of an import
-    ///
-    /// - Parameter syntaxNode: The Swift Syntax import declaration node
-    ///
-    /// - Returns: A string representing the kind of the import
-    ///            e.g `import class UIKit.UIViewController` returns class
-    ///            while `import UIKit` and `import UIKit.UIViewController` return an empty String
-    private var kind: String {
-        importKindSpecifier?.text ?? ""
-    }
+	/// Finds the type of an import
+	///
+	/// - Parameter syntaxNode: The Swift Syntax import declaration node
+	///
+	/// - Returns: A string representing the kind of the import
+	///            e.g `import class UIKit.UIViewController` returns class
+	///            while `import UIKit` and `import UIKit.UIViewController` return an empty String
+	private var kind: String {
+		importKindSpecifier?.text ?? ""
+	}
 
-    private var attribute: String {
-        // This AttributeList is of the form ["@", "attribute"]
-        // Grab the whole thing.
-        attributes.trimmedDescription
-    }
+	private var attribute: String {
+		// This AttributeList is of the form ["@", "attribute"]
+		// Grab the whole thing.
+		attributes.trimmedDescription
+	}
 }

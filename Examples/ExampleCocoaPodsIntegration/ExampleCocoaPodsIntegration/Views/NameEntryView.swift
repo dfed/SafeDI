@@ -24,31 +24,31 @@ import SwiftUI
 @MainActor
 @Instantiable
 public struct NameEntryView: Instantiable, View {
-    public init(userService: any UserService) {
-        self.userService = userService
-    }
+	public init(userService: any UserService) {
+		self.userService = userService
+	}
 
-    public var body: some View {
-        VStack {
-            TextField(
-                text: $name,
-                prompt: Text("Enter your name"),
-                label: {}
-            )
-            Button(action: {
-                userService.userName = name
-            }, label: {
-                Text("Log in")
-            })
-        }
-        .padding()
-    }
+	public var body: some View {
+		VStack {
+			TextField(
+				text: $name,
+				prompt: Text("Enter your name"),
+				label: {}
+			)
+			Button(action: {
+				userService.userName = name
+			}, label: {
+				Text("Log in")
+			})
+		}
+		.padding()
+	}
 
-    @State private var name: String = ""
+	@State private var name: String = ""
 
-    @Received private let userService: any UserService
+	@Received private let userService: any UserService
 }
 
 #Preview {
-    NameEntryView(userService: DefaultUserService(stringStorage: UserDefaults.standard))
+	NameEntryView(userService: DefaultUserService(stringStorage: UserDefaults.standard))
 }
