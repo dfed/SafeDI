@@ -20,12 +20,13 @@
 
 import SwiftParser
 import SwiftSyntax
-import XCTest
+import Testing
 
 @testable import SafeDICore
 
-final class FileVisitorTests: XCTestCase {
-    func test_walk_findsInstantiable() {
+struct FileVisitorTests {
+    @Test
+    func walk_findsInstantiable() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         import UIKit
@@ -41,50 +42,48 @@ final class FileVisitorTests: XCTestCase {
             @Received let networkService: NetworkService
         }
         """))
-        XCTAssertEqual(
-            fileVisitor.instantiables,
-            [
-                Instantiable(
-                    instantiableType: .simple(name: "LoggedInViewController"),
-                    isRoot: false,
-                    initializer: Initializer(
-                        arguments: [
-                            .init(
-                                innerLabel: "user",
-                                typeDescription: .simple(name: "User"),
-                                hasDefaultValue: false
-                            ),
-                            .init(
-                                innerLabel: "networkService",
-                                typeDescription: .simple(name: "NetworkService"),
-                                hasDefaultValue: false
-                            ),
-                        ]
-                    ),
-                    additionalInstantiables: nil,
-                    dependencies: [
-                        Dependency(
-                            property: Property(
-                                label: "user",
-                                typeDescription: .simple(name: "User")
-                            ),
-                            source: .forwarded
+        #expect(fileVisitor.instantiables == [
+            Instantiable(
+                instantiableType: .simple(name: "LoggedInViewController"),
+                isRoot: false,
+                initializer: Initializer(
+                    arguments: [
+                        .init(
+                            innerLabel: "user",
+                            typeDescription: .simple(name: "User"),
+                            hasDefaultValue: false
                         ),
-                        Dependency(
-                            property: Property(
-                                label: "networkService",
-                                typeDescription: .simple(name: "NetworkService")
-                            ),
-                            source: .received
+                        .init(
+                            innerLabel: "networkService",
+                            typeDescription: .simple(name: "NetworkService"),
+                            hasDefaultValue: false
                         ),
-                    ],
-                    declarationType: .classType
+                    ]
                 ),
-            ]
-        )
+                additionalInstantiables: nil,
+                dependencies: [
+                    Dependency(
+                        property: Property(
+                            label: "user",
+                            typeDescription: .simple(name: "User")
+                        ),
+                        source: .forwarded
+                    ),
+                    Dependency(
+                        property: Property(
+                            label: "networkService",
+                            typeDescription: .simple(name: "NetworkService")
+                        ),
+                        source: .received
+                    ),
+                ],
+                declarationType: .classType
+            ),
+        ])
     }
 
-    func test_walk_findsMultipleInstantiables() {
+    @Test
+    func walk_findsMultipleInstantiables() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         @Instantiable
@@ -103,58 +102,56 @@ final class FileVisitorTests: XCTestCase {
             public init() {}
         }
         """))
-        XCTAssertEqual(
-            fileVisitor.instantiables,
-            [
-                Instantiable(
-                    instantiableType: .simple(name: "LoggedInViewController"),
-                    isRoot: false,
-                    initializer: Initializer(
-                        arguments: [
-                            .init(
-                                innerLabel: "user",
-                                typeDescription: .simple(name: "User"),
-                                hasDefaultValue: false
-                            ),
-                            .init(
-                                innerLabel: "networkService",
-                                typeDescription: .simple(name: "NetworkService"),
-                                hasDefaultValue: false
-                            ),
-                        ]
+        #expect(fileVisitor.instantiables == [
+            Instantiable(
+                instantiableType: .simple(name: "LoggedInViewController"),
+                isRoot: false,
+                initializer: Initializer(
+                    arguments: [
+                        .init(
+                            innerLabel: "user",
+                            typeDescription: .simple(name: "User"),
+                            hasDefaultValue: false
+                        ),
+                        .init(
+                            innerLabel: "networkService",
+                            typeDescription: .simple(name: "NetworkService"),
+                            hasDefaultValue: false
+                        ),
+                    ]
+                ),
+                additionalInstantiables: nil,
+                dependencies: [
+                    Dependency(
+                        property: Property(
+                            label: "user",
+                            typeDescription: .simple(name: "User")
+                        ),
+                        source: .forwarded
                     ),
-                    additionalInstantiables: nil,
-                    dependencies: [
-                        Dependency(
-                            property: Property(
-                                label: "user",
-                                typeDescription: .simple(name: "User")
-                            ),
-                            source: .forwarded
+                    Dependency(
+                        property: Property(
+                            label: "networkService",
+                            typeDescription: .simple(name: "NetworkService")
                         ),
-                        Dependency(
-                            property: Property(
-                                label: "networkService",
-                                typeDescription: .simple(name: "NetworkService")
-                            ),
-                            source: .received
-                        ),
-                    ],
-                    declarationType: .classType
-                ),
-                Instantiable(
-                    instantiableType: .simple(name: "SomeOtherInstantiable"),
-                    isRoot: false,
-                    initializer: Initializer(arguments: []),
-                    additionalInstantiables: nil,
-                    dependencies: [],
-                    declarationType: .structType
-                ),
-            ]
-        )
+                        source: .received
+                    ),
+                ],
+                declarationType: .classType
+            ),
+            Instantiable(
+                instantiableType: .simple(name: "SomeOtherInstantiable"),
+                isRoot: false,
+                initializer: Initializer(arguments: []),
+                additionalInstantiables: nil,
+                dependencies: [],
+                declarationType: .structType
+            ),
+        ])
     }
 
-    func test_walk_findsInstantiableNestedInOuterInstantiableConcreteDeclaration() {
+    @Test
+    func walk_findsInstantiableNestedInOuterInstantiableConcreteDeclaration() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         @Instantiable(fulfillingAdditionalTypes: [SomeProtocol.self])
@@ -167,32 +164,30 @@ final class FileVisitorTests: XCTestCase {
             }
         }
         """))
-        XCTAssertEqual(
-            fileVisitor.instantiables,
-            [
-                Instantiable(
-                    instantiableType: .simple(name: "OuterLevel"),
-                    isRoot: false,
-                    initializer: Initializer(arguments: []),
-                    additionalInstantiables: [
-                        .simple(name: "SomeProtocol"),
-                    ],
-                    dependencies: [],
-                    declarationType: .structType
-                ),
-                Instantiable(
-                    instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
-                    isRoot: false,
-                    initializer: Initializer(arguments: []),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .structType
-                ),
-            ]
-        )
+        #expect(fileVisitor.instantiables == [
+            Instantiable(
+                instantiableType: .simple(name: "OuterLevel"),
+                isRoot: false,
+                initializer: Initializer(arguments: []),
+                additionalInstantiables: [
+                    .simple(name: "SomeProtocol"),
+                ],
+                dependencies: [],
+                declarationType: .structType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
+                isRoot: false,
+                initializer: Initializer(arguments: []),
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .structType
+            ),
+        ])
     }
 
-    func test_walk_findsInstantiableNestedInOuterExtendedInstantiable() {
+    @Test
+    func walk_findsInstantiableNestedInOuterExtendedInstantiable() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         extension OuterLevel {
@@ -204,30 +199,28 @@ final class FileVisitorTests: XCTestCase {
             }
         }
         """))
-        XCTAssertEqual(
-            fileVisitor.instantiables,
-            [
-                Instantiable(
-                    instantiableType: .simple(name: "OuterLevel"),
-                    isRoot: false,
-                    initializer: Initializer(arguments: []),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .extensionType
-                ),
-                Instantiable(
-                    instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
-                    isRoot: false,
-                    initializer: Initializer(arguments: []),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .structType
-                ),
-            ]
-        )
+        #expect(fileVisitor.instantiables == [
+            Instantiable(
+                instantiableType: .simple(name: "OuterLevel"),
+                isRoot: false,
+                initializer: Initializer(arguments: []),
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .extensionType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
+                isRoot: false,
+                initializer: Initializer(arguments: []),
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .structType
+            ),
+        ])
     }
 
-    func test_walk_findsInstantiablesNestedInOuterExtendedInstantiable() {
+    @Test
+    func walk_findsInstantiablesNestedInOuterExtendedInstantiable() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         extension OuterLevel {
@@ -250,46 +243,44 @@ final class FileVisitorTests: XCTestCase {
             }
         }
         """))
-        XCTAssertEqual(
-            fileVisitor.instantiables,
-            [
-                Instantiable(
-                    instantiableType: .simple(name: "OuterLevel"),
-                    isRoot: false,
-                    initializer: Initializer(arguments: []),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .extensionType
-                ),
-                Instantiable(
-                    instantiableType: .nested(name: "InnerLevel1", parentType: .simple(name: "OuterLevel")),
-                    isRoot: false,
-                    initializer: Initializer(arguments: []),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .actorType
-                ),
-                Instantiable(
-                    instantiableType: .nested(name: "InnerLevel2", parentType: .simple(name: "OuterLevel")),
-                    isRoot: false,
-                    initializer: Initializer(arguments: []),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .classType
-                ),
-                Instantiable(
-                    instantiableType: .nested(name: "InnerLevel3", parentType: .simple(name: "OuterLevel")),
-                    isRoot: false,
-                    initializer: Initializer(arguments: []),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .structType
-                ),
-            ]
-        )
+        #expect(fileVisitor.instantiables == [
+            Instantiable(
+                instantiableType: .simple(name: "OuterLevel"),
+                isRoot: false,
+                initializer: Initializer(arguments: []),
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .extensionType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "InnerLevel1", parentType: .simple(name: "OuterLevel")),
+                isRoot: false,
+                initializer: Initializer(arguments: []),
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .actorType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "InnerLevel2", parentType: .simple(name: "OuterLevel")),
+                isRoot: false,
+                initializer: Initializer(arguments: []),
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .classType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "InnerLevel3", parentType: .simple(name: "OuterLevel")),
+                isRoot: false,
+                initializer: Initializer(arguments: []),
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .structType
+            ),
+        ])
     }
 
-    func test_walk_findsInstantiableNestedWithinEnum() {
+    @Test
+    func walk_findsInstantiableNestedWithinEnum() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         public enum OuterLevel {
@@ -299,22 +290,20 @@ final class FileVisitorTests: XCTestCase {
             }
         }
         """))
-        XCTAssertEqual(
-            fileVisitor.instantiables,
-            [
-                Instantiable(
-                    instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
-                    isRoot: false,
-                    initializer: Initializer(arguments: []),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .structType
-                ),
-            ]
-        )
+        #expect(fileVisitor.instantiables == [
+            Instantiable(
+                instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
+                isRoot: false,
+                initializer: Initializer(arguments: []),
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .structType
+            ),
+        ])
     }
 
-    func test_walk_findsDeeplyNestedInstantiables() {
+    @Test
+    func walk_findsDeeplyNestedInstantiables() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         public enum Nested {
@@ -414,314 +403,311 @@ final class FileVisitorTests: XCTestCase {
             }
         }
         """))
-        XCTAssertEqual(
-            fileVisitor.instantiables,
-            [
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .simple(name: "Nested")),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .structType
+        #expect(fileVisitor.instantiables == [
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .simple(name: "Nested")),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .actorType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .structType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .classType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .actorType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .actorType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .classType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .classType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .actorType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .structType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .classType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .classType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .structType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .actorType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .classType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .actorType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .actorType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .structType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .actorType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .structType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .structType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .classType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .structType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .classType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .classType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .classType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .classType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .classType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .classType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .classType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .classType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .classType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .classType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .classType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .classType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-                Instantiable(
-                    instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))))))),
-                    isRoot: false,
-                    initializer: Initializer(
-                        isPublicOrOpen: true,
-                        isOptional: false,
-                        isAsync: false,
-                        doesThrow: false,
-                        hasGenericParameter: false,
-                        hasGenericWhereClause: false,
-                        arguments: []
-                    ),
-                    additionalInstantiables: [],
-                    dependencies: [],
-                    declarationType: .classType
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .classType
+            ),
+            Instantiable(
+                instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))))))),
+                isRoot: false,
+                initializer: Initializer(
+                    isPublicOrOpen: true,
+                    isOptional: false,
+                    isAsync: false,
+                    doesThrow: false,
+                    hasGenericParameter: false,
+                    hasGenericWhereClause: false,
+                    arguments: []
                 ),
-            ]
-        )
+                additionalInstantiables: [],
+                dependencies: [],
+                declarationType: .classType
+            ),
+        ])
     }
 }

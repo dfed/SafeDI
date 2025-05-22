@@ -18,41 +18,37 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
 import SafeDICore
-import XCTest
+import Testing
 
 @testable import SafeDITool
 
-final class SafeDIToolDOTGenerationTests: XCTestCase {
-    // MARK: XCTestCase
+@Suite(.serialized)
+final class SafeDIToolDOTGenerationTests {
+    // MARK: Initialization
 
-    override func setUpWithError() throws {
-        try super.setUpWithError()
-
+    init() throws {
         filesToDelete = [URL]()
     }
 
-    override func tearDownWithError() throws {
-        try super.tearDownWithError()
-
+    deinit {
         for fileToDelete in filesToDelete {
-            try FileManager.default.removeItem(at: fileToDelete)
+            try! FileManager.default.removeItem(at: fileToDelete)
         }
     }
 
     // MARK: DOT Generation Tests
 
-    @MainActor
-    func test_run_successfullyGeneratesOutputFileWhenNoCodeInput() async throws {
+    @Test
+    func run_successfullyGeneratesOutputFileWhenNoCodeInput() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [],
             buildDOTFileOutput: true,
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
 
@@ -61,8 +57,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenSingleRoot() async throws {
+    @Test
+    func run_writesDOTTree_whenSingleRoot() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -86,9 +82,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -97,8 +91,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenMultipleRootsExist() async throws {
+    @Test
+    func run_writesDOTTree_whenMultipleRootsExist() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -128,9 +122,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root1 -- "networkService: NetworkService"
@@ -141,8 +133,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenRootHasMultipleLayers() async throws {
+    @Test
+    func run_writesDOTTree_whenRootHasMultipleLayers() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -213,9 +205,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -227,8 +217,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenRootInstantiatesPropertiesThatUtilizesSingleForwardedPropertyInSubBuilders() async throws {
+    @Test
+    func run_writesDOTTree_whenRootInstantiatesPropertiesThatUtilizesSingleForwardedPropertyInSubBuilders() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -307,9 +297,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -322,8 +310,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenRootInstantiatesPropertiesThatUtilizeMultipleForwardedPropertiesInSubBuilders() async throws {
+    @Test
+    func run_writesDOTTree_whenRootInstantiatesPropertiesThatUtilizeMultipleForwardedPropertiesInSubBuilders() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -409,9 +397,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -425,8 +411,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenRootInstantiatesPropertiesThatUtilizeMultipleForwardedPropertiesAndDependencyInversionInSubBuilders() async throws {
+    @Test
+    func run_writesDOTTree_whenRootInstantiatesPropertiesThatUtilizeMultipleForwardedPropertiesAndDependencyInversionInSubBuilders() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -512,9 +498,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -528,8 +512,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenRootInstantiatesPropertiesThatUtilizePropertiesNotDirectlyProvidedByParent() async throws {
+    @Test
+    func run_writesDOTTree_whenRootInstantiatesPropertiesThatUtilizePropertiesNotDirectlyProvidedByParent() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -609,9 +593,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -624,8 +606,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleLayersOfInstantiators() async throws {
+    @Test
+    func run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleLayersOfInstantiators() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -705,9 +687,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -720,8 +700,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleTreesThatReceiveTheSameProperty() async throws {
+    @Test
+    func run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleTreesThatReceiveTheSameProperty() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -780,9 +760,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "greatGrandchild: GreatGrandchild"
@@ -797,8 +775,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyInMiddleLevel() async throws {
+    @Test
+    func run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyInMiddleLevel() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -858,9 +836,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "childA: ChildA"
@@ -876,8 +852,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesTheSamePropertyAtMultipleLevels() async throws {
+    @Test
+    func run_writesDOTTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesTheSamePropertyAtMultipleLevels() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -916,9 +892,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "child: Child"
@@ -931,8 +905,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyMultipleLayersDeep() async throws {
+    @Test
+    func run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyMultipleLayersDeep() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -990,9 +964,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "childA: ChildA"
@@ -1010,8 +982,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyAcrossMultipleModules() async throws {
+    @Test
+    func run_writesDOTTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyAcrossMultipleModules() async throws {
         let greatGrandchildModuleOutput = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -1116,9 +1088,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(topLevelModuleOutput.dotTree),
-            """
+        #expect(try #require(topLevelModuleOutput.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "childA: ChildA"
@@ -1136,8 +1106,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenRootHasReceivedAliasOfInstantiable() async throws {
+    @Test
+    func run_writesDOTTree_whenRootHasReceivedAliasOfInstantiable() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -1167,9 +1137,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "defaultUserService: DefaultUserService"
@@ -1179,8 +1147,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenReceivedPropertyIsAliasedTwice() async throws {
+    @Test
+    func run_writesDOTTree_whenReceivedPropertyIsAliasedTwice() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -1235,9 +1203,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -1249,8 +1215,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenFirstPropertyDependsOnLastPropertyAndMiddlePropertyHasNoDependencyEntanglementsWithEither() async throws {
+    @Test
+    func run_writesDOTTree_whenFirstPropertyDependsOnLastPropertyAndMiddlePropertyHasNoDependencyEntanglementsWithEither() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -1285,9 +1251,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "child: Child"
@@ -1299,8 +1263,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenRootHasLotsOfDependenciesThatDependOnOneAnother() async throws {
+    @Test
+    func run_writesDOTTree_whenRootHasLotsOfDependenciesThatDependOnOneAnother() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -1539,9 +1503,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "x: X"
@@ -1575,8 +1537,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenLazyInstantiationCycleExists() async throws {
+    @Test
+    func run_writesDOTTree_whenLazyInstantiationCycleExists() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -1608,9 +1570,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "aBuilder: Instantiator<A>"
@@ -1622,8 +1582,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenPartiallyLazyInstantiationCycleExists() async throws {
+    @Test
+    func run_writesDOTTree_whenPartiallyLazyInstantiationCycleExists() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -1655,9 +1615,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "a: A"
@@ -1669,8 +1627,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenLazySelfInstantiationCycleExists() async throws {
+    @Test
+    func run_writesDOTTree_whenLazySelfInstantiationCycleExists() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -1690,9 +1648,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "a: A"
@@ -1703,8 +1659,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenLazySelfForwardingInstantiationCycleExists() async throws {
+    @Test
+    func run_writesDOTTree_whenLazySelfForwardingInstantiationCycleExists() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -1725,9 +1681,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "aBuilder: Instantiator<A>"
@@ -1739,8 +1693,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenAGenericTypeIsAnExtendedInstantiableWithMultipleGenericReturnTypes() async throws {
+    @Test
+    func run_writesDOTTree_whenAGenericTypeIsAnExtendedInstantiableWithMultipleGenericReturnTypes() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -1777,9 +1731,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "stringContainer: Container<String>"
@@ -1791,8 +1743,8 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func test_run_writesDOTTree_whenAGenericTypeIsAnExtendedInstantiableWithMultipleGenericFullyQualifiedReturnTypes() async throws {
+    @Test
+    func run_writesDOTTree_whenAGenericTypeIsAnExtendedInstantiableWithMultipleGenericFullyQualifiedReturnTypes() async throws {
         let output = try await executeSafeDIToolTest(
             swiftFileContent: [
                 """
@@ -1829,9 +1781,7 @@ final class SafeDIToolDOTGenerationTests: XCTestCase {
             filesToDelete: &filesToDelete
         )
 
-        XCTAssertEqual(
-            try XCTUnwrap(output.dotTree),
-            """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "stringContainer: MyModule.Container<String>"

@@ -18,28 +18,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import XCTest
+import Foundation
+import Testing
 
 @testable import SafeDI
 
-final class InstantiatorTests: XCTestCase {
-    func test_instantiate_returnsNewObjectEachTime() async {
-        await Task { @MainActor in
-            let systemUnderTest = Instantiator { BuiltProduct() }
-            let firstBuiltProduct = systemUnderTest.instantiate()
-            let secondBuiltProduct = systemUnderTest.instantiate()
-            XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
-        }.value
+struct InstantiatorTests {
+    @Test @MainActor
+    func instantiate_returnsNewObjectEachTime() async {
+        let systemUnderTest = Instantiator { BuiltProduct() }
+        let firstBuiltProduct = systemUnderTest.instantiate()
+        let secondBuiltProduct = systemUnderTest.instantiate()
+        #expect(firstBuiltProduct !== secondBuiltProduct)
     }
 
-    func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() async {
-        await Task { @MainActor in
-            let systemUnderTest = Instantiator { id in BuiltProductWithForwardedArgument(id: id) }
-            let id = UUID().uuidString
-            let firstBuiltProduct = systemUnderTest.instantiate(id)
-            let secondBuiltProduct = systemUnderTest.instantiate(id)
-            XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
-        }.value
+    @Test @MainActor
+    func instantiate_withForwardedArgument_returnsNewObjectEachTime() async {
+        let systemUnderTest = Instantiator { id in BuiltProductWithForwardedArgument(id: id) }
+        let id = UUID().uuidString
+        let firstBuiltProduct = systemUnderTest.instantiate(id)
+        let secondBuiltProduct = systemUnderTest.instantiate(id)
+        #expect(firstBuiltProduct !== secondBuiltProduct)
     }
 
     private final class BuiltProduct: Instantiable {

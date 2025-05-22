@@ -20,7 +20,7 @@
 
 import Foundation
 import SafeDICore
-import XCTest
+import Testing
 
 @testable import SafeDITool
 
@@ -144,13 +144,13 @@ struct StubFileFinder: FileFinder {
 
 func assertThrowsError(
     _ errorDescription: String,
-    line: UInt = #line,
+    sourceLocation: SourceLocation = #_sourceLocation,
     block: @MainActor () async throws -> some Sendable
 ) async {
     do {
         _ = try await block()
-        XCTFail("Did not throw error!", line: line)
+        Issue.record("Did not throw error!", sourceLocation: sourceLocation)
     } catch {
-        XCTAssertEqual("\(error)", errorDescription, line: line)
+        #expect(errorDescription == "\(error)", sourceLocation: sourceLocation)
     }
 }
