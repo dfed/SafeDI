@@ -710,28 +710,24 @@ struct TypeDescriptionTests {
 
     @Test
     func equality_isTrueWhenComparingLexigraphicallyEquivalentCompositions() {
-        #expect(
-            TypeDescription.composition([
-                .simple(name: "Foo"),
-                .simple(name: "Bar"),
-            ]) == TypeDescription.composition([
-                .simple(name: "Foo"),
-                .simple(name: "Bar"),
-            ])
-        )
+        #expect(TypeDescription.composition([
+            .simple(name: "Foo"),
+            .simple(name: "Bar"),
+        ]) == TypeDescription.composition([
+            .simple(name: "Foo"),
+            .simple(name: "Bar"),
+        ]))
     }
 
     @Test
     func equality_isTrueWhenComparingReversedCompositions() {
-        #expect(
-            TypeDescription.composition([
-                .simple(name: "Foo"),
-                .simple(name: "Bar"),
-            ]) == TypeDescription.composition([
-                .simple(name: "Bar"),
-                .simple(name: "Foo"),
-            ])
-        )
+        #expect(TypeDescription.composition([
+            .simple(name: "Foo"),
+            .simple(name: "Bar"),
+        ]) == TypeDescription.composition([
+            .simple(name: "Bar"),
+            .simple(name: "Foo"),
+        ]))
     }
 
     // MARK: - Visitors

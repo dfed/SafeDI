@@ -48,8 +48,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
 
@@ -83,8 +82,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -124,8 +122,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root1 -- "networkService: NetworkService"
@@ -208,8 +205,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -301,8 +297,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -402,8 +397,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -504,8 +498,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -600,8 +593,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -695,8 +687,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -769,8 +760,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "greatGrandchild: GreatGrandchild"
@@ -846,8 +836,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "childA: ChildA"
@@ -903,8 +892,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "child: Child"
@@ -976,8 +964,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "childA: ChildA"
@@ -1101,8 +1088,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(topLevelModuleOutput.dotTree) == """
+        #expect(try #require(topLevelModuleOutput.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "childA: ChildA"
@@ -1151,8 +1137,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "defaultUserService: DefaultUserService"
@@ -1218,8 +1203,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 RootViewController -- "networkService: NetworkService"
@@ -1267,8 +1251,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "child: Child"
@@ -1520,8 +1503,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "x: X"
@@ -1588,8 +1570,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "aBuilder: Instantiator<A>"
@@ -1634,8 +1615,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "a: A"
@@ -1668,8 +1648,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "a: A"
@@ -1702,8 +1681,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "aBuilder: Instantiator<A>"
@@ -1753,8 +1731,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "stringContainer: Container<String>"
@@ -1804,8 +1781,7 @@ final class SafeDIToolDOTGenerationTests {
             filesToDelete: &filesToDelete
         )
 
-        #expect(
-            try #require(output.dotTree) == """
+        #expect(try #require(output.dotTree) == """
             graph SafeDI {
                 ranksep=2
                 Root -- "stringContainer: MyModule.Container<String>"
