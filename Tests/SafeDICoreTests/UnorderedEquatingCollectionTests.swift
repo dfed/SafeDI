@@ -18,39 +18,38 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import XCTest
+import Foundation
+import Testing
 
 @testable import SafeDICore
 
-final class UnorderedEquatingCollectionTests: XCTestCase {
-    func test_makeIterator_iteratesInOrder() {
+struct UnorderedEquatingCollectionTests {
+    @Test
+    func makeIterator_iteratesInOrder() {
         for (index, value) in UnorderedEquatingCollection([1, 2, 3]).enumerated() {
             if index == 0 {
-                XCTAssertEqual(value, 1)
+                #expect(value == 1)
             } else if index == 1 {
-                XCTAssertEqual(value, 2)
+                #expect(value == 2)
             } else {
-                XCTAssertEqual(index, 2)
-                XCTAssertEqual(value, 3)
+                #expect(index == 2)
+                #expect(value == 3)
             }
         }
     }
 
-    func test_hashInto_hashesEquivalentCollectionsIdentically() {
-        XCTAssertEqual(
-            UnorderedEquatingCollection([1, 2, 3]).hashValue,
-            UnorderedEquatingCollection([2, 1, 3]).hashValue
-        )
+    @Test
+    func hashInto_hashesEquivalentCollectionsIdentically() {
+        #expect(UnorderedEquatingCollection([1, 2, 3]).hashValue == UnorderedEquatingCollection([2, 1, 3]).hashValue)
     }
 
-    func test_codable_canDecodeFromEncodedValue() throws {
+    @Test
+    func codable_canDecodeFromEncodedValue() throws {
         let originalCollection = UnorderedEquatingCollection([1, 2, 3])
-        XCTAssertEqual(
-            originalCollection,
-            try JSONDecoder().decode(
-                UnorderedEquatingCollection.self,
-                from: JSONEncoder().encode(originalCollection)
-            )
+        let decodedCollection = try JSONDecoder().decode(
+            UnorderedEquatingCollection<Int>.self,
+            from: JSONEncoder().encode(originalCollection)
         )
+        #expect(originalCollection == decodedCollection)
     }
 }

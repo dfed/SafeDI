@@ -20,12 +20,13 @@
 
 import SwiftParser
 import SwiftSyntax
-import XCTest
+import Testing
 
 @testable import SafeDICore
 
-final class FileVisitorTests: XCTestCase {
-    func test_walk_findsInstantiable() {
+struct FileVisitorTests {
+    @Test
+    func walk_findsInstantiable() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         import UIKit
@@ -41,9 +42,8 @@ final class FileVisitorTests: XCTestCase {
             @Received let networkService: NetworkService
         }
         """))
-        XCTAssertEqual(
-            fileVisitor.instantiables,
-            [
+        #expect(
+            fileVisitor.instantiables == [
                 Instantiable(
                     instantiableType: .simple(name: "LoggedInViewController"),
                     isRoot: false,
@@ -84,7 +84,8 @@ final class FileVisitorTests: XCTestCase {
         )
     }
 
-    func test_walk_findsMultipleInstantiables() {
+    @Test
+    func walk_findsMultipleInstantiables() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         @Instantiable
@@ -103,9 +104,8 @@ final class FileVisitorTests: XCTestCase {
             public init() {}
         }
         """))
-        XCTAssertEqual(
-            fileVisitor.instantiables,
-            [
+        #expect(
+            fileVisitor.instantiables == [
                 Instantiable(
                     instantiableType: .simple(name: "LoggedInViewController"),
                     isRoot: false,
@@ -154,7 +154,8 @@ final class FileVisitorTests: XCTestCase {
         )
     }
 
-    func test_walk_findsInstantiableNestedInOuterInstantiableConcreteDeclaration() {
+    @Test
+    func walk_findsInstantiableNestedInOuterInstantiableConcreteDeclaration() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         @Instantiable(fulfillingAdditionalTypes: [SomeProtocol.self])
@@ -167,9 +168,8 @@ final class FileVisitorTests: XCTestCase {
             }
         }
         """))
-        XCTAssertEqual(
-            fileVisitor.instantiables,
-            [
+        #expect(
+            fileVisitor.instantiables == [
                 Instantiable(
                     instantiableType: .simple(name: "OuterLevel"),
                     isRoot: false,
@@ -192,7 +192,8 @@ final class FileVisitorTests: XCTestCase {
         )
     }
 
-    func test_walk_findsInstantiableNestedInOuterExtendedInstantiable() {
+    @Test
+    func walk_findsInstantiableNestedInOuterExtendedInstantiable() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         extension OuterLevel {
@@ -204,9 +205,8 @@ final class FileVisitorTests: XCTestCase {
             }
         }
         """))
-        XCTAssertEqual(
-            fileVisitor.instantiables,
-            [
+        #expect(
+            fileVisitor.instantiables == [
                 Instantiable(
                     instantiableType: .simple(name: "OuterLevel"),
                     isRoot: false,
@@ -227,7 +227,8 @@ final class FileVisitorTests: XCTestCase {
         )
     }
 
-    func test_walk_findsInstantiablesNestedInOuterExtendedInstantiable() {
+    @Test
+    func walk_findsInstantiablesNestedInOuterExtendedInstantiable() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         extension OuterLevel {
@@ -250,9 +251,8 @@ final class FileVisitorTests: XCTestCase {
             }
         }
         """))
-        XCTAssertEqual(
-            fileVisitor.instantiables,
-            [
+        #expect(
+            fileVisitor.instantiables == [
                 Instantiable(
                     instantiableType: .simple(name: "OuterLevel"),
                     isRoot: false,
@@ -289,7 +289,8 @@ final class FileVisitorTests: XCTestCase {
         )
     }
 
-    func test_walk_findsInstantiableNestedWithinEnum() {
+    @Test
+    func walk_findsInstantiableNestedWithinEnum() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         public enum OuterLevel {
@@ -299,9 +300,8 @@ final class FileVisitorTests: XCTestCase {
             }
         }
         """))
-        XCTAssertEqual(
-            fileVisitor.instantiables,
-            [
+        #expect(
+            fileVisitor.instantiables == [
                 Instantiable(
                     instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
                     isRoot: false,
@@ -314,7 +314,8 @@ final class FileVisitorTests: XCTestCase {
         )
     }
 
-    func test_walk_findsDeeplyNestedInstantiables() {
+    @Test
+    func walk_findsDeeplyNestedInstantiables() {
         let fileVisitor = FileVisitor()
         fileVisitor.walk(Parser.parse(source: """
         public enum Nested {
@@ -414,9 +415,8 @@ final class FileVisitorTests: XCTestCase {
             }
         }
         """))
-        XCTAssertEqual(
-            fileVisitor.instantiables,
-            [
+        #expect(
+            fileVisitor.instantiables == [
                 Instantiable(
                     instantiableType: .nested(name: "Nested", parentType: .simple(name: "Nested")),
                     isRoot: false,

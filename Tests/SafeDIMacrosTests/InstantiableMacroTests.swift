@@ -21,36 +21,33 @@
 import MacroTesting
 import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
-import XCTest
+import Testing
 
 import SafeDICore
 
 #if canImport(SafeDIMacros)
     @testable import SafeDIMacros
 
-    final class InstantiableMacroTests: XCTestCase {
-        let testMacros: [String: Macro.Type] = [
-            InstantiableVisitor.macroName: InstantiableMacro.self,
-            Dependency.Source.instantiatedRawValue: InjectableMacro.self,
-            Dependency.Source.receivedRawValue: InjectableMacro.self,
-            Dependency.Source.forwardedRawValue: InjectableMacro.self,
-        ]
-
-        // MARK: XCTestCase
-
-        override func invokeTest() {
-            withMacroTesting(macros: testMacros) {
-                super.invokeTest()
-            }
-        }
-
+    @Suite(
+        .macros(
+            [
+                InstantiableVisitor.macroName: InstantiableMacro.self,
+                Dependency.Source.instantiatedRawValue: InjectableMacro.self,
+                Dependency.Source.receivedRawValue: InjectableMacro.self,
+                Dependency.Source.forwardedRawValue: InjectableMacro.self,
+            ]
+        )
+    )
+    struct InstantiableMacroTests {
         // MARK: Behavior Tests
 
-        func test_providingMacros_containsInstantiable() {
-            XCTAssertTrue(SafeDIMacroPlugin().providingMacros.contains(where: { $0 == InstantiableMacro.self }))
+        @Test
+        func providingMacros_containsInstantiable() {
+            #expect(SafeDIMacroPlugin().providingMacros.contains(where: { $0 == InstantiableMacro.self }))
         }
 
-        func test_extension_expandsWithoutIssueOnTypeDeclarationWhenInstantiableConformanceMissingAndConformsElsewhereIsTrue() {
+        @Test
+        func extension_expandsWithoutIssueOnTypeDeclarationWhenInstantiableConformanceMissingAndConformsElsewhereIsTrue() {
             assertMacro {
                 """
                 @Instantiable(conformsElsewhere: true)
@@ -67,7 +64,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_expandsWithoutIssueOnExtensionWhenInstantiableConformanceMissingAndConformsElsewhereIsTrue() {
+        @Test
+        func extension_expandsWithoutIssueOnExtensionWhenInstantiableConformanceMissingAndConformsElsewhereIsTrue() {
             assertMacro {
                 """
                 @Instantiable(conformsElsewhere: true)
@@ -90,7 +88,8 @@ import SafeDICore
 
         // MARK: Error tests
 
-        func test_declaration_throwsErrorWhenOnProtocol() {
+        @Test
+        func declaration_throwsErrorWhenOnProtocol() {
             assertMacro {
                 """
                 @Instantiable
@@ -106,7 +105,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_throwsErrorWhenOnEnum() {
+        @Test
+        func declaration_throwsErrorWhenOnEnum() {
             assertMacro {
                 """
                 @Instantiable
@@ -122,7 +122,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_throwsErrorWhenFulfillingAdditionalTypesIncludesAnOptional() {
+        @Test
+        func declaration_throwsErrorWhenFulfillingAdditionalTypesIncludesAnOptional() {
             assertMacro {
                 """
                 @Instantiable(fulfillingAdditionalTypes: [AnyObject?.self])
@@ -138,7 +139,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_throwsErrorWhenFulfillingAdditionalTypesIsAPropertyReference() {
+        @Test
+        func declaration_throwsErrorWhenFulfillingAdditionalTypesIsAPropertyReference() {
             assertMacro {
                 """
                 let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
@@ -156,7 +158,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_throwsErrorWhenFulfillingAdditionalTypesIsAClosure() {
+        @Test
+        func declaration_throwsErrorWhenFulfillingAdditionalTypesIsAClosure() {
             assertMacro {
                 """
                 @Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
@@ -172,7 +175,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_doesNotThrowWhenRootHasInstantiatedAndRenamedDependencies() {
+        @Test
+        func declaration_doesNotThrowWhenRootHasInstantiatedAndRenamedDependencies() {
             assertMacro {
                 """
                 @Instantiable(isRoot: true)
@@ -201,7 +205,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_throwsErrorWhenRootHasReceivedDependency() {
+        @Test
+        func declaration_throwsErrorWhenRootHasReceivedDependency() {
             assertMacro {
                 """
                 @Instantiable(isRoot: true)
@@ -232,7 +237,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_throwsErrorWhenRootHasForwardedDependency() {
+        @Test
+        func declaration_throwsErrorWhenRootHasForwardedDependency() {
             assertMacro {
                 """
                 @Instantiable(isRoot: true)
@@ -263,7 +269,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_throwsErrorWhenFulfillingAdditionalTypesIsAPropertyReference() {
+        @Test
+        func extension_throwsErrorWhenFulfillingAdditionalTypesIsAPropertyReference() {
             assertMacro {
                 """
                 let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
@@ -285,7 +292,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_throwsErrorWhenFulfillingAdditionalTypesIsAClosure() {
+        @Test
+        func extension_throwsErrorWhenFulfillingAdditionalTypesIsAClosure() {
             assertMacro {
                 """
                 @Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
@@ -305,7 +313,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_throwsErrorWhenMoreThanOneInstantiateMethodForSameType() {
+        @Test
+        func extension_throwsErrorWhenMoreThanOneInstantiateMethodForSameType() {
             assertMacro {
                 """
                 @Instantiable
@@ -327,7 +336,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_doesNotThrowWhenRootHasNoDependencies() {
+        @Test
+        func extension_doesNotThrowWhenRootHasNoDependencies() {
             assertMacro {
                 """
                 @Instantiable(isRoot: true)
@@ -344,7 +354,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_throwsErrorWhenRootHasDependencies() {
+        @Test
+        func extension_throwsErrorWhenRootHasDependencies() {
             assertMacro {
                 """
                 @Instantiable(isRoot: true)
@@ -369,7 +380,8 @@ import SafeDICore
 
         // MARK: FixIt tests
 
-        func test_declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesOnStruct() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesOnStruct() {
             assertMacro {
                 """
                 @Instantiable
@@ -402,7 +414,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesOnClass() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesOnClass() {
             assertMacro {
                 """
                 @Instantiable
@@ -435,7 +448,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesOnActor() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesOnActor() {
             assertMacro {
                 """
                 @Instantiable
@@ -468,7 +482,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_doesNotGenerateFixitWithoutDependenciesIfItAlreadyExists() {
+        @Test
+        func declaration_doesNotGenerateFixitWithoutDependenciesIfItAlreadyExists() {
             assertMacro {
                 """
                 @Instantiable
@@ -485,7 +500,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesAndInitializedVariable() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesAndInitializedVariable() {
             assertMacro {
                 """
                 @Instantiable
@@ -522,7 +538,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesAndVariableWithAccessor() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesAndVariableWithAccessor() {
             assertMacro {
                 """
                 @Instantiable
@@ -559,7 +576,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerEvenWhenPropertyDecoratedWithUnknownMacro() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerEvenWhenPropertyDecoratedWithUnknownMacro() {
             assertMacro {
                 """
                 @Instantiable
@@ -600,7 +618,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerEvenWhenPropertyDecoratedWithUnknownMacroInIfConfig() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerEvenWhenPropertyDecoratedWithUnknownMacroInIfConfig() {
             assertMacro {
                 """
                 @Instantiable
@@ -652,7 +671,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_doesNotGenerateRequiredInitializerWithDependenciesIfItAlreadyExists() {
+        @Test
+        func declaration_doesNotGenerateRequiredInitializerWithDependenciesIfItAlreadyExists() {
             assertMacro {
                 """
                 @Instantiable
@@ -677,7 +697,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithClosureDependency() {
+        @Test
+        func declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithClosureDependency() {
             assertMacro {
                 """
                 @Instantiable
@@ -702,7 +723,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithSendableClosureDependency() {
+        @Test
+        func declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithSendableClosureDependency() {
             assertMacro {
                 """
                 @Instantiable
@@ -727,7 +749,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithTupleWrappedClosureDependency() {
+        @Test
+        func declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithTupleWrappedClosureDependency() {
             assertMacro {
                 """
                 @Instantiable
@@ -752,7 +775,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithDefaultArguments() {
+        @Test
+        func declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithDefaultArguments() {
             assertMacro {
                 """
                 @Instantiable
@@ -777,7 +801,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_doesNotGenerateRequiredInitializerWithDependenciesSatisfyingInitializerIfItAlreadyExistsWithDefaultArguments() {
+        @Test
+        func declaration_doesNotGenerateRequiredInitializerWithDependenciesSatisfyingInitializerIfItAlreadyExistsWithDefaultArguments() {
             assertMacro {
                 """
                 @Instantiable
@@ -808,7 +833,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerWithDependencies() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerWithDependencies() {
             assertMacro {
                 """
                 @Instantiable
@@ -849,7 +875,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerWithDependenciesWhenNestedTypesHaveUninitializedProperties() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerWithDependenciesWhenNestedTypesHaveUninitializedProperties() {
             assertMacro {
                 """
                 @Instantiable
@@ -946,7 +973,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerWithDependenciesWhenPropertyHasInitializerAndNoType() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerWithDependenciesWhenPropertyHasInitializerAndNoType() {
             assertMacro {
                 """
                 @Instantiable
@@ -995,7 +1023,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerWithDependenciesWhenPropertyHasInitializerAndType() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerWithDependenciesWhenPropertyHasInitializerAndType() {
             assertMacro {
                 """
                 @Instantiable
@@ -1044,7 +1073,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerWithDependenciesWhenPropertyIsOptional() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerWithDependenciesWhenPropertyIsOptional() {
             assertMacro {
                 """
                 @Instantiable
@@ -1093,7 +1123,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerWithDependenciesWhenPropertyIsStatic() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerWithDependenciesWhenPropertyIsStatic() {
             assertMacro {
                 """
                 @Instantiable
@@ -1146,7 +1177,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerWhenDependencyMissingFromInit() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerWhenDependencyMissingFromInit() {
             assertMacro {
                 """
                 @Instantiable
@@ -1233,7 +1265,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesInitWithForwardedPropertiesWhenThereAreMultipleForwardedProperties() {
+        @Test
+        func declaration_fixit_generatesInitWithForwardedPropertiesWhenThereAreMultipleForwardedProperties() {
             assertMacro {
                 """
                 @Instantiable
@@ -1292,7 +1325,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerWithClosureDependency() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerWithClosureDependency() {
             assertMacro {
                 """
                 @Instantiable
@@ -1335,7 +1369,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesFixitForRequiredInitializerWithSendableClosureDependency() {
+        @Test
+        func declaration_fixit_generatesFixitForRequiredInitializerWithSendableClosureDependency() {
             assertMacro {
                 """
                 @Instantiable
@@ -1378,7 +1413,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_generatesRequiredInitializerWhenInstantiatorDependencyMissingFromInit() {
+        @Test
+        func declaration_fixit_generatesRequiredInitializerWhenInstantiatorDependencyMissingFromInit() {
             assertMacro {
                 """
                 @Instantiable
@@ -1419,7 +1455,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_doesNotThrowErrorWhenMoreThanOneInstantiateMethodForSameBaseTypeWithDifferingGeneric() {
+        @Test
+        func extension_doesNotThrowErrorWhenMoreThanOneInstantiateMethodForSameBaseTypeWithDifferingGeneric() {
             assertMacro {
                 """
                 @Instantiable
@@ -1446,7 +1483,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_doesNotThrowErrorWhenFulfillingAdditionalType() {
+        @Test
+        func extension_doesNotThrowErrorWhenFulfillingAdditionalType() {
             assertMacro {
                 """
                 @Instantiable(fulfillingAdditionalTypes: [SendableContainer<String>.self])
@@ -1467,7 +1505,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitWhenNoConformancesDeclared() {
+        @Test
+        func declaration_fixit_addsFixitWhenNoConformancesDeclared() {
             assertMacro {
                 """
                 @Instantiable
@@ -1501,7 +1540,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitWhenInstantiableConformanceMissing() {
+        @Test
+        func declaration_fixit_addsFixitWhenInstantiableConformanceMissing() {
             assertMacro {
                 """
                 @Instantiable
@@ -1539,7 +1579,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitWhenInstantiableConformanceMissingAndConformsElsewhereIsFalse() {
+        @Test
+        func declaration_fixit_addsFixitWhenInstantiableConformanceMissingAndConformsElsewhereIsFalse() {
             assertMacro {
                 """
                 @Instantiable(conformsElsewhere: false)
@@ -1577,7 +1618,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_doesNotAddFixitWhenRetroactiveInstantiableConformanceExists() {
+        @Test
+        func declaration_doesNotAddFixitWhenRetroactiveInstantiableConformanceExists() {
             assertMacro {
                 """
                 @Instantiable
@@ -1596,7 +1638,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitWhenMultipleInjectableMacrosOnTopOfSingleProperty() {
+        @Test
+        func declaration_fixit_addsFixitWhenMultipleInjectableMacrosOnTopOfSingleProperty() {
             assertMacro {
                 """
                 @Instantiable
@@ -1646,7 +1689,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitWhenInjectableParameterHasInitializer() {
+        @Test
+        func declaration_fixit_addsFixitWhenInjectableParameterHasInitializer() {
             assertMacro {
                 """
                 @Instantiable
@@ -1696,7 +1740,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitWhenInjectableActorIsNotPublicOrOpen() {
+        @Test
+        func declaration_fixit_addsFixitWhenInjectableActorIsNotPublicOrOpen() {
             assertMacro {
                 """
                 @Instantiable
@@ -1745,7 +1790,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitWhenInjectableClassIsNotPublicOrOpen() {
+        @Test
+        func declaration_fixit_addsFixitWhenInjectableClassIsNotPublicOrOpen() {
             assertMacro {
                 """
                 @Instantiable
@@ -1794,7 +1840,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitWhenInjectableFinalClassIsNotPublicOrOpen() {
+        @Test
+        func declaration_fixit_addsFixitWhenInjectableFinalClassIsNotPublicOrOpen() {
             assertMacro {
                 """
                 @Instantiable
@@ -1843,7 +1890,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitWhenInjectableClassIsInternal() {
+        @Test
+        func declaration_fixit_addsFixitWhenInjectableClassIsInternal() {
             assertMacro {
                 """
                 @Instantiable
@@ -1892,7 +1940,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitWhenInjectableClassIsFileprivate() {
+        @Test
+        func declaration_fixit_addsFixitWhenInjectableClassIsFileprivate() {
             assertMacro {
                 """
                 @Instantiable
@@ -1941,7 +1990,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitWhenInjectableClassIsPrivate() {
+        @Test
+        func declaration_fixit_addsFixitWhenInjectableClassIsPrivate() {
             assertMacro {
                 """
                 @Instantiable
@@ -1990,7 +2040,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitWhenInjectableStructIsNotPublicOrOpen() {
+        @Test
+        func declaration_fixit_addsFixitWhenInjectableStructIsNotPublicOrOpen() {
             assertMacro {
                 """
                 @Instantiable
@@ -2039,7 +2090,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitMissingRequiredInitializerWhenPropertyIsMissingInitializerAndThereAreNoDependencies() {
+        @Test
+        func declaration_fixit_addsFixitMissingRequiredInitializerWhenPropertyIsMissingInitializerAndThereAreNoDependencies() {
             assertMacro {
                 """
                 @Instantiable
@@ -2082,7 +2134,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitMissingRequiredInitializerWhenPropertyIsMissingInitializer() {
+        @Test
+        func declaration_fixit_addsFixitMissingRequiredInitializerWhenPropertyIsMissingInitializer() {
             assertMacro {
                 """
                 @Instantiable
@@ -2137,7 +2190,8 @@ import SafeDICore
             }
         }
 
-        func test_declaration_fixit_addsFixitMissingRequiredInitializerWhenMultiplePropertiesAreMissingInitializer() {
+        @Test
+        func declaration_fixit_addsFixitMissingRequiredInitializerWhenMultiplePropertiesAreMissingInitializer() {
             assertMacro {
                 """
                 @Instantiable
@@ -2206,7 +2260,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenNoConformancesDeclared() {
+        @Test
+        func extension_fixit_addsFixitWhenNoConformancesDeclared() {
             assertMacro {
                 """
                 @Instantiable
@@ -2240,7 +2295,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenInstantiableConformanceMissing() {
+        @Test
+        func extension_fixit_addsFixitWhenInstantiableConformanceMissing() {
             assertMacro {
                 """
                 @Instantiable
@@ -2282,7 +2338,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenInstantiableConformanceMissingAndConformsElsewhereIsFalse() {
+        @Test
+        func extension_fixit_addsFixitWhenInstantiableConformanceMissingAndConformsElsewhereIsFalse() {
             assertMacro {
                 """
                 @Instantiable(conformsElsewhere: false)
@@ -2324,7 +2381,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenInstantiateMethodMissing() {
+        @Test
+        func extension_fixit_addsFixitWhenInstantiateMethodMissing() {
             assertMacro {
                 """
                 @Instantiable
@@ -2361,7 +2419,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenInstantiateMethodIsNotPublic() {
+        @Test
+        func extension_fixit_addsFixitWhenInstantiateMethodIsNotPublic() {
             assertMacro {
                 """
                 @Instantiable
@@ -2395,7 +2454,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenInstantiateMethodIsNotStatic() {
+        @Test
+        func extension_fixit_addsFixitWhenInstantiateMethodIsNotStatic() {
             assertMacro {
                 """
                 @Instantiable
@@ -2429,7 +2489,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenInstantiateMethodIsNotStaticOrPublic() {
+        @Test
+        func extension_fixit_addsFixitWhenInstantiateMethodIsNotStaticOrPublic() {
             assertMacro {
                 """
                 @Instantiable
@@ -2463,7 +2524,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenInstantiateMethodReturnsIncorrectType() {
+        @Test
+        func extension_fixit_addsFixitWhenInstantiateMethodReturnsIncorrectType() {
             assertMacro {
                 """
                 @Instantiable
@@ -2497,7 +2559,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenInstantiateMethodReturnsTypeWrappedInArray() {
+        @Test
+        func extension_fixit_addsFixitWhenInstantiateMethodReturnsTypeWrappedInArray() {
             assertMacro {
                 """
                 @Instantiable
@@ -2531,7 +2594,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenInstantiateMethodIsAsync() {
+        @Test
+        func extension_fixit_addsFixitWhenInstantiateMethodIsAsync() {
             assertMacro {
                 """
                 @Instantiable
@@ -2565,7 +2629,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenInstantiateMethodThrows() {
+        @Test
+        func extension_fixit_addsFixitWhenInstantiateMethodThrows() {
             assertMacro {
                 """
                 @Instantiable
@@ -2599,7 +2664,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenInstantiateMethodIsAsyncAndThrows() {
+        @Test
+        func extension_fixit_addsFixitWhenInstantiateMethodIsAsyncAndThrows() {
             assertMacro {
                 """
                 @Instantiable
@@ -2633,7 +2699,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenInstantiateMethodHasGenericParameter() {
+        @Test
+        func extension_fixit_addsFixitWhenInstantiateMethodHasGenericParameter() {
             assertMacro {
                 """
                 @Instantiable
@@ -2667,7 +2734,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenInstantiateMethodHasGenericWhereClause() {
+        @Test
+        func extension_fixit_addsFixitWhenInstantiateMethodHasGenericWhereClause() {
             assertMacro {
                 """
                 @Instantiable
@@ -2701,7 +2769,8 @@ import SafeDICore
             }
         }
 
-        func test_extension_fixit_addsFixitWhenExtensionHasGenericWhereClause() {
+        @Test
+        func extension_fixit_addsFixitWhenExtensionHasGenericWhereClause() {
             assertMacro {
                 """
                 @Instantiable

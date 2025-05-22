@@ -18,64 +18,61 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import XCTest
+import Testing
 
 @testable import SafeDICore
 
-final class InitializerTests: XCTestCase {
-    func test_generateSafeDIInitializer_throwsWhenInitializerIsNotPublicOrOpen() throws {
+struct InitializerTests {
+    @Test
+    func generateSafeDIInitializer_throwsWhenInitializerIsNotPublicOrOpen() throws {
         let initializer = Initializer(
             isPublicOrOpen: false,
             arguments: []
         )
 
-        XCTAssertThrowsError(
+        #expect(throws: Initializer.GenerationError.inaccessibleInitializer, performing: {
             try initializer.validate(fulfilling: [])
-        ) { error in
-            XCTAssertEqual(error as? Initializer.GenerationError, .inaccessibleInitializer)
-        }
+        })
     }
 
-    func test_generateSafeDIInitializer_throwsWhenInitializerIsOptional() throws {
+    @Test
+    func generateSafeDIInitializer_throwsWhenInitializerIsOptional() throws {
         let initializer = Initializer(
             isOptional: true,
             arguments: []
         )
 
-        XCTAssertThrowsError(
+        #expect(throws: Initializer.GenerationError.optionalInitializer, performing: {
             try initializer.validate(fulfilling: [])
-        ) { error in
-            XCTAssertEqual(error as? Initializer.GenerationError, .optionalInitializer)
-        }
+        })
     }
 
-    func test_generateSafeDIInitializer_throwsWhenInitializerIsAsync() throws {
+    @Test
+    func generateSafeDIInitializer_throwsWhenInitializerIsAsync() throws {
         let initializer = Initializer(
             isAsync: true,
             arguments: []
         )
 
-        XCTAssertThrowsError(
+        #expect(throws: Initializer.GenerationError.asyncInitializer, performing: {
             try initializer.validate(fulfilling: [])
-        ) { error in
-            XCTAssertEqual(error as? Initializer.GenerationError, .asyncInitializer)
-        }
+        })
     }
 
-    func test_generateSafeDIInitializer_throwsWhenInitializerThrows() throws {
+    @Test
+    func generateSafeDIInitializer_throwsWhenInitializerThrows() throws {
         let initializer = Initializer(
             doesThrow: true,
             arguments: []
         )
 
-        XCTAssertThrowsError(
+        #expect(throws: Initializer.GenerationError.throwingInitializer, performing: {
             try initializer.validate(fulfilling: [])
-        ) { error in
-            XCTAssertEqual(error as? Initializer.GenerationError, .throwingInitializer)
-        }
+        })
     }
 
-    func test_generateSafeDIInitializer_throwsWhenInitializerHasGenericParameters() throws {
+    @Test
+    func generateSafeDIInitializer_throwsWhenInitializerHasGenericParameters() throws {
         let initializer = Initializer(
             hasGenericParameter: true,
             arguments: [
@@ -87,7 +84,7 @@ final class InitializerTests: XCTestCase {
             ]
         )
 
-        XCTAssertThrowsError(
+        #expect(throws: Initializer.GenerationError.genericParameterInInitializer, performing: {
             try initializer.validate(
                 fulfilling: [
                     .init(
@@ -99,12 +96,11 @@ final class InitializerTests: XCTestCase {
                     ),
                 ]
             )
-        ) { error in
-            XCTAssertEqual(error as? Initializer.GenerationError, .genericParameterInInitializer)
-        }
+        })
     }
 
-    func test_generateSafeDIInitializer_throwsWhenInitializerHasGenericWhereClause() throws {
+    @Test
+    func generateSafeDIInitializer_throwsWhenInitializerHasGenericWhereClause() throws {
         let initializer = Initializer(
             hasGenericWhereClause: true,
             arguments: [
@@ -116,7 +112,7 @@ final class InitializerTests: XCTestCase {
             ]
         )
 
-        XCTAssertThrowsError(
+        #expect(throws: Initializer.GenerationError.whereClauseOnInitializer, performing: {
             try initializer.validate(
                 fulfilling: [
                     .init(
@@ -128,12 +124,11 @@ final class InitializerTests: XCTestCase {
                     ),
                 ]
             )
-        ) { error in
-            XCTAssertEqual(error as? Initializer.GenerationError, .whereClauseOnInitializer)
-        }
+        })
     }
 
-    func test_generateSafeDIInitializer_throwsWhenInitializerHasUnexpectedArgument() throws {
+    @Test
+    func generateSafeDIInitializer_throwsWhenInitializerHasUnexpectedArgument() throws {
         let initializer = Initializer(
             arguments: [
                 .init(
@@ -144,17 +139,16 @@ final class InitializerTests: XCTestCase {
             ]
         )
 
-        XCTAssertThrowsError(
+        #expect(throws: Initializer.GenerationError.unexpectedArgument("variant: Variant"), performing: {
             try initializer.validate(fulfilling: [])
-        ) { error in
-            XCTAssertEqual(error as? Initializer.GenerationError, .unexpectedArgument("variant: Variant"))
-        }
+        })
     }
 
-    func test_generateSafeDIInitializer_throwsWhenInitializerIsMissingArgumentsAndDependenciesExist() throws {
+    @Test
+    func generateSafeDIInitializer_throwsWhenInitializerIsMissingArgumentsAndDependenciesExist() throws {
         let initializer = Initializer(arguments: [])
 
-        XCTAssertThrowsError(
+        #expect(throws: Initializer.GenerationError.missingArguments(["variant: Variant"]), performing: {
             try initializer.validate(
                 fulfilling: [
                     .init(
@@ -166,12 +160,11 @@ final class InitializerTests: XCTestCase {
                     ),
                 ]
             )
-        ) { error in
-            XCTAssertEqual(error as? Initializer.GenerationError, .missingArguments(["variant: Variant"]))
-        }
+        })
     }
 
-    func test_generateSafeDIInitializer_throwsWhenInitializerIsMissingArgumentLabel() throws {
+    @Test
+    func generateSafeDIInitializer_throwsWhenInitializerIsMissingArgumentLabel() throws {
         let initializer = Initializer(
             arguments: [
                 .init(
@@ -182,7 +175,7 @@ final class InitializerTests: XCTestCase {
             ]
         )
 
-        XCTAssertThrowsError(
+        #expect(throws: Initializer.GenerationError.unexpectedArgument("someVariant: Variant"), performing: {
             try initializer.validate(
                 fulfilling: [
                     .init(
@@ -194,12 +187,11 @@ final class InitializerTests: XCTestCase {
                     ),
                 ]
             )
-        ) { error in
-            XCTAssertEqual(error as? Initializer.GenerationError, .unexpectedArgument("someVariant: Variant"))
-        }
+        })
     }
 
-    func test_generateSafeDIInitializer_throwsWhenInitializerIsMissingArgumentType() throws {
+    @Test
+    func generateSafeDIInitializer_throwsWhenInitializerIsMissingArgumentType() throws {
         let initializer = Initializer(
             arguments: [
                 .init(
@@ -210,7 +202,7 @@ final class InitializerTests: XCTestCase {
             ]
         )
 
-        XCTAssertThrowsError(
+        #expect(throws: Initializer.GenerationError.unexpectedArgument("variant: NotThatVariant"), performing: {
             try initializer.validate(
                 fulfilling: [
                     .init(
@@ -222,8 +214,6 @@ final class InitializerTests: XCTestCase {
                     ),
                 ]
             )
-        ) { error in
-            XCTAssertEqual(error as? Initializer.GenerationError, .unexpectedArgument("variant: NotThatVariant"))
-        }
+        })
     }
 }

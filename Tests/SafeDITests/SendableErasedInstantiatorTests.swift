@@ -18,24 +18,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import XCTest
+import Foundation
+import Testing
 
 @testable import SafeDI
 
-final class SendableErasedInstantiatorTests: XCTestCase {
-    func test_instantiate_returnsNewObjectEachTime() {
+struct SendableErasedInstantiatorTests {
+    @Test
+    func instantiate_returnsNewObjectEachTime() {
         let systemUnderTest = SendableErasedInstantiator<Void, BuiltProduct>() { BuiltProduct() }
         let firstBuiltProduct = systemUnderTest.instantiate()
         let secondBuiltProduct = systemUnderTest.instantiate()
-        XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
+        #expect(firstBuiltProduct !== secondBuiltProduct)
     }
 
-    func test_instantiate_withForwardedArgument_returnsNewObjectEachTime() {
+    @Test
+    func instantiate_withForwardedArgument_returnsNewObjectEachTime() {
         let systemUnderTest = SendableErasedInstantiator { id in BuiltProductWithForwardedArgument(id: id) }
         let id = UUID().uuidString
         let firstBuiltProduct = systemUnderTest.instantiate(id)
         let secondBuiltProduct = systemUnderTest.instantiate(id)
-        XCTAssertFalse(firstBuiltProduct === secondBuiltProduct)
+        #expect(firstBuiltProduct !== secondBuiltProduct)
     }
 
     private final class BuiltProduct {

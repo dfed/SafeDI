@@ -21,35 +21,32 @@
 import MacroTesting
 import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
-import XCTest
+import Testing
 
 import SafeDICore
 
 #if canImport(SafeDIMacros)
     @testable import SafeDIMacros
 
-    final class InjectableMacroTests: XCTestCase {
-        let testMacros: [String: Macro.Type] = [
-            Dependency.Source.instantiatedRawValue: InjectableMacro.self,
-            Dependency.Source.receivedRawValue: InjectableMacro.self,
-            Dependency.Source.forwardedRawValue: InjectableMacro.self,
-        ]
-
-        // MARK: XCTestCase
-
-        override func invokeTest() {
-            withMacroTesting(macros: testMacros) {
-                super.invokeTest()
-            }
-        }
-
+    @Suite(
+        .macros(
+            [
+                Dependency.Source.instantiatedRawValue: InjectableMacro.self,
+                Dependency.Source.receivedRawValue: InjectableMacro.self,
+                Dependency.Source.forwardedRawValue: InjectableMacro.self,
+            ]
+        )
+    )
+    struct InjectableMacroTests {
         // MARK: Behavior Tests
 
-        func test_providingMacros_containsInjectable() {
-            XCTAssertTrue(SafeDIMacroPlugin().providingMacros.contains(where: { $0 == InjectableMacro.self }))
+        @Test
+        func providingMacros_containsInjectable() {
+            #expect(SafeDIMacroPlugin().providingMacros.contains(where: { $0 == InjectableMacro.self }))
         }
 
-        func test_propertyIsFulfilledByTypeWithStringLiteral_expandsWithoutIssue() {
+        @Test
+        func propertyIsFulfilledByTypeWithStringLiteral_expandsWithoutIssue() {
             assertMacro {
                 """
                 public struct ExampleService {
@@ -65,7 +62,8 @@ import SafeDICore
             }
         }
 
-        func test_propertyIsFulfilledByTypeWithStringLiteralNestedType_expandsWithoutIssue() {
+        @Test
+        func propertyIsFulfilledByTypeWithStringLiteralNestedType_expandsWithoutIssue() {
             assertMacro {
                 """
                 public struct ExampleService {
@@ -91,7 +89,8 @@ import SafeDICore
 
         // MARK: Fixit Tests
 
-        func test_fixit_addsFixitWhenInjectableParameterIsMutable() {
+        @Test
+        func fixit_addsFixitWhenInjectableParameterIsMutable() {
             assertMacro {
                 """
                 public struct ExampleService {
@@ -138,7 +137,8 @@ import SafeDICore
             }
         }
 
-        func test_fixit_doesNotAddFixitWhenInjectableParameterIsMutableWithPropertyWrapper() {
+        @Test
+        func fixit_doesNotAddFixitWhenInjectableParameterIsMutableWithPropertyWrapper() {
             assertMacro {
                 """
                 import SwiftUI
@@ -178,7 +178,8 @@ import SafeDICore
 
         // MARK: Error tests
 
-        func test_throwsErrorWhenUsingFulfilledByTypeOnInstantiator() {
+        @Test
+        func throwsErrorWhenUsingFulfilledByTypeOnInstantiator() {
             assertMacro {
                 """
                 public struct ExampleService {
@@ -196,7 +197,8 @@ import SafeDICore
             }
         }
 
-        func test_throwsErrorWhenErasedInstantiatorUsedWithoutFulfilledByTypeArgument() {
+        @Test
+        func throwsErrorWhenErasedInstantiatorUsedWithoutFulfilledByTypeArgument() {
             assertMacro {
                 """
                 public struct ExampleService {
@@ -214,7 +216,8 @@ import SafeDICore
             }
         }
 
-        func test_throwsErrorWhenInjectableMacroAttachedtoStaticProperty() {
+        @Test
+        func throwsErrorWhenInjectableMacroAttachedtoStaticProperty() {
             assertMacro {
                 """
                 public struct ExampleService {
@@ -240,7 +243,8 @@ import SafeDICore
             }
         }
 
-        func test_throwsErrorWhenOnProtocol() {
+        @Test
+        func throwsErrorWhenOnProtocol() {
             assertMacro {
                 """
                 @Instantiated
@@ -256,7 +260,8 @@ import SafeDICore
             }
         }
 
-        func test_throwsErrorWhenFulfilledByTypeIsNotALiteral() {
+        @Test
+        func throwsErrorWhenFulfilledByTypeIsNotALiteral() {
             assertMacro {
                 """
                 public struct ExampleService {
@@ -284,7 +289,8 @@ import SafeDICore
             }
         }
 
-        func test_throwsErrorWhenFulfilledByTypeIsNotAStringExpression() {
+        @Test
+        func throwsErrorWhenFulfilledByTypeIsNotAStringExpression() {
             assertMacro {
                 """
                 public struct ExampleService {
@@ -312,7 +318,8 @@ import SafeDICore
             }
         }
 
-        func test_throwsErrorWhenFulfilledByTypeIsAnOptionalType() {
+        @Test
+        func throwsErrorWhenFulfilledByTypeIsAnOptionalType() {
             assertMacro {
                 """
                 public struct ExampleService {
@@ -338,7 +345,8 @@ import SafeDICore
             }
         }
 
-        func test_throwsErrorWhenFulfilledByTypeIsAnImplicitlyUnwrappedType() {
+        @Test
+        func throwsErrorWhenFulfilledByTypeIsAnImplicitlyUnwrappedType() {
             assertMacro {
                 """
                 public struct ExampleService {
@@ -364,7 +372,8 @@ import SafeDICore
             }
         }
 
-        func test_throwsErrorWhenfulfilledByDependencyNamedIsNotAStringLiteral() {
+        @Test
+        func throwsErrorWhenfulfilledByDependencyNamedIsNotAStringLiteral() {
             assertMacro {
                 """
                 @Instantiable
@@ -386,7 +395,8 @@ import SafeDICore
             }
         }
 
-        func test_throwsErrorWhenOfTypeIsAnInvalidType() {
+        @Test
+        func throwsErrorWhenOfTypeIsAnInvalidType() {
             assertMacro {
                 """
                 @Instantiable
@@ -406,7 +416,8 @@ import SafeDICore
             }
         }
 
-        func test_throwsErrorWhenIsExistentialIsAnInvalidType() {
+        @Test
+        func throwsErrorWhenIsExistentialIsAnInvalidType() {
             assertMacro {
                 """
                 @Instantiable
