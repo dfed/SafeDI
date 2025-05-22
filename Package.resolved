@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-macro-testing.git",
       "state" : {
-        "revision" : "972875feb966225bec9e4fd0b94129a0eace27b3",
-        "version" : "0.6.1"
+        "revision" : "cfe474c7e97d429ea31eefed2e9ab8c7c74260f9",
+        "version" : "0.6.2"
       }
     },
     {
