@@ -98,7 +98,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_16.1.app/Contents/Developer
       - name: Build and Test Framework
         run: |
           for i in {1..5}; do # Run tests a few times to ensure code-gen is stable.
