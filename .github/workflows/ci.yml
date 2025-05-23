@@ -183,4 +183,4 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Lint Swift
-        run: swift run --package-path CLI swiftformat --swiftversion 6.0 . --lint
+        run: swift run --package-path CLI swiftformat . --lint
