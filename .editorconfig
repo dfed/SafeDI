@@ -10,10 +10,6 @@ indent_style = tab
 [*.sh]
 indent_style = tab
 
-# graphql
-[*.graphql]
-indent_style = tab
-
 # documentation, utils
 [*.{md,mdx,diff}]
 trim_trailing_whitespace = false
