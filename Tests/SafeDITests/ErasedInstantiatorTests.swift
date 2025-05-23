@@ -24,34 +24,34 @@ import Testing
 @testable import SafeDI
 
 struct ErasedInstantiatorTests {
-    @Test @MainActor
-    func instantiate_returnsNewObjectEachTime() async {
-        let systemUnderTest = ErasedInstantiator<Void, BuiltProduct>() { BuiltProduct() }
-        let firstBuiltProduct = systemUnderTest.instantiate()
-        let secondBuiltProduct = systemUnderTest.instantiate()
-        #expect(firstBuiltProduct !== secondBuiltProduct)
-    }
+	@Test @MainActor
+	func instantiate_returnsNewObjectEachTime() async {
+		let systemUnderTest = ErasedInstantiator<Void, BuiltProduct>() { BuiltProduct() }
+		let firstBuiltProduct = systemUnderTest.instantiate()
+		let secondBuiltProduct = systemUnderTest.instantiate()
+		#expect(firstBuiltProduct !== secondBuiltProduct)
+	}
 
-    @Test @MainActor
-    func instantiate_withForwardedArgument_returnsNewObjectEachTime() async {
-        let systemUnderTest = ErasedInstantiator { id in BuiltProductWithForwardedArgument(id: id) }
-        let id = UUID().uuidString
-        let firstBuiltProduct = systemUnderTest.instantiate(id)
-        let secondBuiltProduct = systemUnderTest.instantiate(id)
-        #expect(firstBuiltProduct !== secondBuiltProduct)
-    }
+	@Test @MainActor
+	func instantiate_withForwardedArgument_returnsNewObjectEachTime() async {
+		let systemUnderTest = ErasedInstantiator { id in BuiltProductWithForwardedArgument(id: id) }
+		let id = UUID().uuidString
+		let firstBuiltProduct = systemUnderTest.instantiate(id)
+		let secondBuiltProduct = systemUnderTest.instantiate(id)
+		#expect(firstBuiltProduct !== secondBuiltProduct)
+	}
 
-    private final class BuiltProduct {
-        let id = UUID().uuidString
-    }
+	private final class BuiltProduct {
+		let id = UUID().uuidString
+	}
 
-    private final class BuiltProductWithForwardedArgument {
-        init(id: String) {
-            self.id = id
-        }
+	private final class BuiltProductWithForwardedArgument {
+		init(id: String) {
+			self.id = id
+		}
 
-        typealias ForwardedProperties = String
+		typealias ForwardedProperties = String
 
-        @Forwarded let id: String
-    }
+		@Forwarded let id: String
+	}
 }

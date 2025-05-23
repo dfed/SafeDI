@@ -55,14 +55,14 @@
 ///   - conformsElsewhere: Whether the decorated type already conforms to the `Instantiable` protocol elsewhere. If set to `true`, the macro does not enforce that this declaration conforms to `Instantiable`.
 @attached(member, names: named(ForwardedProperties))
 public macro Instantiable(
-    isRoot: Bool = false,
-    fulfillingAdditionalTypes additionalTypes: [Any.Type] = [],
-    conformsElsewhere: Bool = false
+	isRoot: Bool = false,
+	fulfillingAdditionalTypes additionalTypes: [Any.Type] = [],
+	conformsElsewhere: Bool = false
 ) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")
 
 /// A type that can be instantiated with runtime-injected properties.
 public protocol Instantiable {
-    /// The forwarded properties required to instantiate the type.
-    /// Defaults to `Void`.
-    associatedtype ForwardedProperties = Void
+	/// The forwarded properties required to instantiate the type.
+	/// Defaults to `Void`.
+	associatedtype ForwardedProperties = Void
 }

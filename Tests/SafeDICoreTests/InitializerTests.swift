@@ -23,197 +23,197 @@ import Testing
 @testable import SafeDICore
 
 struct InitializerTests {
-    @Test
-    func generateSafeDIInitializer_throwsWhenInitializerIsNotPublicOrOpen() throws {
-        let initializer = Initializer(
-            isPublicOrOpen: false,
-            arguments: []
-        )
+	@Test
+	func generateSafeDIInitializer_throwsWhenInitializerIsNotPublicOrOpen() throws {
+		let initializer = Initializer(
+			isPublicOrOpen: false,
+			arguments: []
+		)
 
-        #expect(throws: Initializer.GenerationError.inaccessibleInitializer, performing: {
-            try initializer.validate(fulfilling: [])
-        })
-    }
+		#expect(throws: Initializer.GenerationError.inaccessibleInitializer, performing: {
+			try initializer.validate(fulfilling: [])
+		})
+	}
 
-    @Test
-    func generateSafeDIInitializer_throwsWhenInitializerIsOptional() throws {
-        let initializer = Initializer(
-            isOptional: true,
-            arguments: []
-        )
+	@Test
+	func generateSafeDIInitializer_throwsWhenInitializerIsOptional() throws {
+		let initializer = Initializer(
+			isOptional: true,
+			arguments: []
+		)
 
-        #expect(throws: Initializer.GenerationError.optionalInitializer, performing: {
-            try initializer.validate(fulfilling: [])
-        })
-    }
+		#expect(throws: Initializer.GenerationError.optionalInitializer, performing: {
+			try initializer.validate(fulfilling: [])
+		})
+	}
 
-    @Test
-    func generateSafeDIInitializer_throwsWhenInitializerIsAsync() throws {
-        let initializer = Initializer(
-            isAsync: true,
-            arguments: []
-        )
+	@Test
+	func generateSafeDIInitializer_throwsWhenInitializerIsAsync() throws {
+		let initializer = Initializer(
+			isAsync: true,
+			arguments: []
+		)
 
-        #expect(throws: Initializer.GenerationError.asyncInitializer, performing: {
-            try initializer.validate(fulfilling: [])
-        })
-    }
+		#expect(throws: Initializer.GenerationError.asyncInitializer, performing: {
+			try initializer.validate(fulfilling: [])
+		})
+	}
 
-    @Test
-    func generateSafeDIInitializer_throwsWhenInitializerThrows() throws {
-        let initializer = Initializer(
-            doesThrow: true,
-            arguments: []
-        )
+	@Test
+	func generateSafeDIInitializer_throwsWhenInitializerThrows() throws {
+		let initializer = Initializer(
+			doesThrow: true,
+			arguments: []
+		)
 
-        #expect(throws: Initializer.GenerationError.throwingInitializer, performing: {
-            try initializer.validate(fulfilling: [])
-        })
-    }
+		#expect(throws: Initializer.GenerationError.throwingInitializer, performing: {
+			try initializer.validate(fulfilling: [])
+		})
+	}
 
-    @Test
-    func generateSafeDIInitializer_throwsWhenInitializerHasGenericParameters() throws {
-        let initializer = Initializer(
-            hasGenericParameter: true,
-            arguments: [
-                .init(
-                    innerLabel: "variant",
-                    typeDescription: .simple(name: "Variant"),
-                    hasDefaultValue: false
-                ),
-            ]
-        )
+	@Test
+	func generateSafeDIInitializer_throwsWhenInitializerHasGenericParameters() throws {
+		let initializer = Initializer(
+			hasGenericParameter: true,
+			arguments: [
+				.init(
+					innerLabel: "variant",
+					typeDescription: .simple(name: "Variant"),
+					hasDefaultValue: false
+				),
+			]
+		)
 
-        #expect(throws: Initializer.GenerationError.genericParameterInInitializer, performing: {
-            try initializer.validate(
-                fulfilling: [
-                    .init(
-                        property: .init(
-                            label: "variant",
-                            typeDescription: .simple(name: "Variant")
-                        ),
-                        source: .forwarded
-                    ),
-                ]
-            )
-        })
-    }
+		#expect(throws: Initializer.GenerationError.genericParameterInInitializer, performing: {
+			try initializer.validate(
+				fulfilling: [
+					.init(
+						property: .init(
+							label: "variant",
+							typeDescription: .simple(name: "Variant")
+						),
+						source: .forwarded
+					),
+				]
+			)
+		})
+	}
 
-    @Test
-    func generateSafeDIInitializer_throwsWhenInitializerHasGenericWhereClause() throws {
-        let initializer = Initializer(
-            hasGenericWhereClause: true,
-            arguments: [
-                .init(
-                    innerLabel: "variant",
-                    typeDescription: .simple(name: "Variant"),
-                    hasDefaultValue: false
-                ),
-            ]
-        )
+	@Test
+	func generateSafeDIInitializer_throwsWhenInitializerHasGenericWhereClause() throws {
+		let initializer = Initializer(
+			hasGenericWhereClause: true,
+			arguments: [
+				.init(
+					innerLabel: "variant",
+					typeDescription: .simple(name: "Variant"),
+					hasDefaultValue: false
+				),
+			]
+		)
 
-        #expect(throws: Initializer.GenerationError.whereClauseOnInitializer, performing: {
-            try initializer.validate(
-                fulfilling: [
-                    .init(
-                        property: .init(
-                            label: "variant",
-                            typeDescription: .simple(name: "Variant")
-                        ),
-                        source: .forwarded
-                    ),
-                ]
-            )
-        })
-    }
+		#expect(throws: Initializer.GenerationError.whereClauseOnInitializer, performing: {
+			try initializer.validate(
+				fulfilling: [
+					.init(
+						property: .init(
+							label: "variant",
+							typeDescription: .simple(name: "Variant")
+						),
+						source: .forwarded
+					),
+				]
+			)
+		})
+	}
 
-    @Test
-    func generateSafeDIInitializer_throwsWhenInitializerHasUnexpectedArgument() throws {
-        let initializer = Initializer(
-            arguments: [
-                .init(
-                    innerLabel: "variant",
-                    typeDescription: .simple(name: "Variant"),
-                    hasDefaultValue: false
-                ),
-            ]
-        )
+	@Test
+	func generateSafeDIInitializer_throwsWhenInitializerHasUnexpectedArgument() throws {
+		let initializer = Initializer(
+			arguments: [
+				.init(
+					innerLabel: "variant",
+					typeDescription: .simple(name: "Variant"),
+					hasDefaultValue: false
+				),
+			]
+		)
 
-        #expect(throws: Initializer.GenerationError.unexpectedArgument("variant: Variant"), performing: {
-            try initializer.validate(fulfilling: [])
-        })
-    }
+		#expect(throws: Initializer.GenerationError.unexpectedArgument("variant: Variant"), performing: {
+			try initializer.validate(fulfilling: [])
+		})
+	}
 
-    @Test
-    func generateSafeDIInitializer_throwsWhenInitializerIsMissingArgumentsAndDependenciesExist() throws {
-        let initializer = Initializer(arguments: [])
+	@Test
+	func generateSafeDIInitializer_throwsWhenInitializerIsMissingArgumentsAndDependenciesExist() throws {
+		let initializer = Initializer(arguments: [])
 
-        #expect(throws: Initializer.GenerationError.missingArguments(["variant: Variant"]), performing: {
-            try initializer.validate(
-                fulfilling: [
-                    .init(
-                        property: .init(
-                            label: "variant",
-                            typeDescription: .simple(name: "Variant")
-                        ),
-                        source: .forwarded
-                    ),
-                ]
-            )
-        })
-    }
+		#expect(throws: Initializer.GenerationError.missingArguments(["variant: Variant"]), performing: {
+			try initializer.validate(
+				fulfilling: [
+					.init(
+						property: .init(
+							label: "variant",
+							typeDescription: .simple(name: "Variant")
+						),
+						source: .forwarded
+					),
+				]
+			)
+		})
+	}
 
-    @Test
-    func generateSafeDIInitializer_throwsWhenInitializerIsMissingArgumentLabel() throws {
-        let initializer = Initializer(
-            arguments: [
-                .init(
-                    innerLabel: "someVariant",
-                    typeDescription: .simple(name: "Variant"),
-                    hasDefaultValue: false
-                ),
-            ]
-        )
+	@Test
+	func generateSafeDIInitializer_throwsWhenInitializerIsMissingArgumentLabel() throws {
+		let initializer = Initializer(
+			arguments: [
+				.init(
+					innerLabel: "someVariant",
+					typeDescription: .simple(name: "Variant"),
+					hasDefaultValue: false
+				),
+			]
+		)
 
-        #expect(throws: Initializer.GenerationError.unexpectedArgument("someVariant: Variant"), performing: {
-            try initializer.validate(
-                fulfilling: [
-                    .init(
-                        property: .init(
-                            label: "variant",
-                            typeDescription: .simple(name: "Variant")
-                        ),
-                        source: .forwarded
-                    ),
-                ]
-            )
-        })
-    }
+		#expect(throws: Initializer.GenerationError.unexpectedArgument("someVariant: Variant"), performing: {
+			try initializer.validate(
+				fulfilling: [
+					.init(
+						property: .init(
+							label: "variant",
+							typeDescription: .simple(name: "Variant")
+						),
+						source: .forwarded
+					),
+				]
+			)
+		})
+	}
 
-    @Test
-    func generateSafeDIInitializer_throwsWhenInitializerIsMissingArgumentType() throws {
-        let initializer = Initializer(
-            arguments: [
-                .init(
-                    innerLabel: "variant",
-                    typeDescription: .simple(name: "NotThatVariant"),
-                    hasDefaultValue: false
-                ),
-            ]
-        )
+	@Test
+	func generateSafeDIInitializer_throwsWhenInitializerIsMissingArgumentType() throws {
+		let initializer = Initializer(
+			arguments: [
+				.init(
+					innerLabel: "variant",
+					typeDescription: .simple(name: "NotThatVariant"),
+					hasDefaultValue: false
+				),
+			]
+		)
 
-        #expect(throws: Initializer.GenerationError.unexpectedArgument("variant: NotThatVariant"), performing: {
-            try initializer.validate(
-                fulfilling: [
-                    .init(
-                        property: .init(
-                            label: "variant",
-                            typeDescription: .simple(name: "Variant")
-                        ),
-                        source: .forwarded
-                    ),
-                ]
-            )
-        })
-    }
+		#expect(throws: Initializer.GenerationError.unexpectedArgument("variant: NotThatVariant"), performing: {
+			try initializer.validate(
+				fulfilling: [
+					.init(
+						property: .init(
+							label: "variant",
+							typeDescription: .simple(name: "Variant")
+						),
+						source: .forwarded
+					),
+				]
+			)
+		})
+	}
 }

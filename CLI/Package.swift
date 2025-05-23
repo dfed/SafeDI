@@ -4,13 +4,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "CLI",
-    platforms: [
-        .macOS(.v14),
-    ],
-    products: [],
-    dependencies: [
-        .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.50.4"),
-    ],
-    targets: []
+	name: "CLI",
+	platforms: [
+		.macOS(.v14),
+	],
+	products: [],
+	dependencies: [
+		.package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.50.4"),
+	],
+	targets: []
 )

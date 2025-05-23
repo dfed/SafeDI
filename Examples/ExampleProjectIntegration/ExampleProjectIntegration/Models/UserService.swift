@@ -22,30 +22,30 @@ import Combine
 import SafeDI
 
 public protocol UserService: ObservableObject {
-    var userName: String? { get set }
-    var observableObjectPublisher: ObservableObjectPublisher { get }
+	var userName: String? { get set }
+	var observableObjectPublisher: ObservableObjectPublisher { get }
 }
 
 @Instantiable(fulfillingAdditionalTypes: [UserService.self])
 public final class DefaultUserService: Instantiable, UserService {
-    public init(stringStorage: StringStorage) {
-        self.stringStorage = stringStorage
-    }
+	public init(stringStorage: StringStorage) {
+		self.stringStorage = stringStorage
+	}
 
-    public var userName: String? {
-        get {
-            stringStorage.string(forKey: #function)
-        }
-        set {
-            objectWillChange.send()
-            stringStorage.setString(newValue, forKey: #function)
-        }
-    }
+	public var userName: String? {
+		get {
+			stringStorage.string(forKey: #function)
+		}
+		set {
+			objectWillChange.send()
+			stringStorage.setString(newValue, forKey: #function)
+		}
+	}
 
-    public var observableObjectPublisher: ObservableObjectPublisher {
-        objectWillChange
-    }
+	public var observableObjectPublisher: ObservableObjectPublisher {
+		objectWillChange
+	}
 
-    @Received
-    @Published private var stringStorage: StringStorage
+	@Received
+	@Published private var stringStorage: StringStorage
 }

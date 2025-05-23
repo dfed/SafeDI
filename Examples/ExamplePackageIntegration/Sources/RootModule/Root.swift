@@ -27,23 +27,23 @@ import SharedModule
 
 @Instantiable(isRoot: true) @MainActor
 public final class Root: Instantiable {
-    public init(childA: ChildA, childB: ChildB, childC: ChildC, shared: SharedThing, userDefaults: UserDefaults) {
-        self.childA = childA
-        self.childB = childB
-        self.childC = childC
-        self.shared = shared
-        self.userDefaults = userDefaults
-    }
+	public init(childA: ChildA, childB: ChildB, childC: ChildC, shared: SharedThing, userDefaults: UserDefaults) {
+		self.childA = childA
+		self.childB = childB
+		self.childC = childC
+		self.shared = shared
+		self.userDefaults = userDefaults
+	}
 
-    static let shared = Root()
+	static let shared = Root()
 
-    @Instantiated let childA: ChildA
+	@Instantiated let childA: ChildA
 
-    @Instantiated let childB: ChildB
+	@Instantiated let childB: ChildB
 
-    @Instantiated let childC: ChildC
+	@Instantiated let childC: ChildC
 
-    @Instantiated let shared: SharedThing
+	@Instantiated let shared: SharedThing
 
-    @Instantiated let userDefaults: UserDefaults
+	@Instantiated let userDefaults: UserDefaults
 }

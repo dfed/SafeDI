@@ -21,7 +21,7 @@
 import SwiftSyntax
 
 extension PatternBindingSyntax {
-    var isOptionalOrInitialized: Bool {
-        (typeAnnotation?.type.typeDescription.isOptional ?? false) || (initializer != nil)
-    }
+	var isOptionalOrInitialized: Bool {
+		(typeAnnotation?.type.typeDescription.isOptional ?? false) || (initializer != nil)
+	}
 }

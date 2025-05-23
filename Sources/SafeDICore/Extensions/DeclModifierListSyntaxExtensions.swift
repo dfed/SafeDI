@@ -21,16 +21,16 @@
 import SwiftSyntax
 
 extension DeclModifierListSyntax {
-    public var containsPublicOrOpen: Bool {
-        contains(where: { modifier in
-            modifier.name.text == "public"
-                || modifier.name.text == "open"
-        })
-    }
+	public var containsPublicOrOpen: Bool {
+		contains(where: { modifier in
+			modifier.name.text == "public"
+				|| modifier.name.text == "open"
+		})
+	}
 
-    public var staticModifier: Element? {
-        first(where: { modifier in
-            modifier.name.text == "static"
-        })
-    }
+	public var staticModifier: Element? {
+		first(where: { modifier in
+			modifier.name.text == "static"
+		})
+	}
 }

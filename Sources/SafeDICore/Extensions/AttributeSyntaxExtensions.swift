@@ -21,126 +21,126 @@
 import SwiftSyntax
 
 extension AttributeSyntax {
-    public var isRoot: ExprSyntax? {
-        guard let arguments,
-              let labeledExpressionList = LabeledExprListSyntax(arguments),
-              let firstLabeledExpression = labeledExpressionList.first,
-              firstLabeledExpression.label?.text == "isRoot"
-        else {
-            return nil
-        }
+	public var isRoot: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let firstLabeledExpression = labeledExpressionList.first,
+		      firstLabeledExpression.label?.text == "isRoot"
+		else {
+			return nil
+		}
 
-        return firstLabeledExpression.expression
-    }
+		return firstLabeledExpression.expression
+	}
 
-    public var fulfillingAdditionalTypes: ExprSyntax? {
-        guard let arguments,
-              let labeledExpressionList = LabeledExprListSyntax(arguments),
-              let firstLabeledExpression = labeledExpressionList.first(where: {
-                  // In `@Instantiatable`, the `fulfillingAdditionalTypes` parameter is the second parameter, though the first parameter has a default.
-                  $0.label?.text == "fulfillingAdditionalTypes"
-              })
-        else {
-            return nil
-        }
+	public var fulfillingAdditionalTypes: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let firstLabeledExpression = labeledExpressionList.first(where: {
+		      	// In `@Instantiatable`, the `fulfillingAdditionalTypes` parameter is the second parameter, though the first parameter has a default.
+		      	$0.label?.text == "fulfillingAdditionalTypes"
+		      })
+		else {
+			return nil
+		}
 
-        return firstLabeledExpression.expression
-    }
+		return firstLabeledExpression.expression
+	}
 
-    public var conformsElsewhere: ExprSyntax? {
-        guard let arguments,
-              let labeledExpressionList = LabeledExprListSyntax(arguments),
-              let firstLabeledExpression = labeledExpressionList.first(where: {
-                  // In `@Instantiated`, the `conformsElsewhere` parameter is the second parameter, though the first parameter has a default.
-                  $0.label?.text == "conformsElsewhere"
-              })
-        else {
-            return nil
-        }
+	public var conformsElsewhere: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let firstLabeledExpression = labeledExpressionList.first(where: {
+		      	// In `@Instantiated`, the `conformsElsewhere` parameter is the second parameter, though the first parameter has a default.
+		      	$0.label?.text == "conformsElsewhere"
+		      })
+		else {
+			return nil
+		}
 
-        return firstLabeledExpression.expression
-    }
+		return firstLabeledExpression.expression
+	}
 
-    public var fulfilledByDependencyNamed: ExprSyntax? {
-        guard let arguments,
-              let labeledExpressionList = LabeledExprListSyntax(arguments),
-              let firstLabeledExpression = labeledExpressionList.first,
-              firstLabeledExpression.label?.text == "fulfilledByDependencyNamed"
-        else {
-            return nil
-        }
+	public var fulfilledByDependencyNamed: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let firstLabeledExpression = labeledExpressionList.first,
+		      firstLabeledExpression.label?.text == "fulfilledByDependencyNamed"
+		else {
+			return nil
+		}
 
-        return firstLabeledExpression.expression
-    }
+		return firstLabeledExpression.expression
+	}
 
-    public var fulfillingPropertyName: String? {
-        guard let fulfilledByDependencyNamed,
-              let stringLiteral = StringLiteralExprSyntax(fulfilledByDependencyNamed),
-              case let .stringSegment(firstSegment) = stringLiteral.segments.first
-        else {
-            return nil
-        }
+	public var fulfillingPropertyName: String? {
+		guard let fulfilledByDependencyNamed,
+		      let stringLiteral = StringLiteralExprSyntax(fulfilledByDependencyNamed),
+		      case let .stringSegment(firstSegment) = stringLiteral.segments.first
+		else {
+			return nil
+		}
 
-        return firstSegment.content.text
-    }
+		return firstSegment.content.text
+	}
 
-    public var fulfilledByType: ExprSyntax? {
-        guard let arguments,
-              let labeledExpressionList = LabeledExprListSyntax(arguments),
-              let firstLabeledExpression = labeledExpressionList.first,
-              firstLabeledExpression.label?.text == "fulfilledByType"
-        else {
-            return nil
-        }
+	public var fulfilledByType: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let firstLabeledExpression = labeledExpressionList.first,
+		      firstLabeledExpression.label?.text == "fulfilledByType"
+		else {
+			return nil
+		}
 
-        return firstLabeledExpression.expression
-    }
+		return firstLabeledExpression.expression
+	}
 
-    public var ofType: ExprSyntax? {
-        guard let arguments,
-              let labeledExpressionList = LabeledExprListSyntax(arguments),
-              let expectedOfTypeLabeledExpression = labeledExpressionList.dropFirst().first,
-              expectedOfTypeLabeledExpression.label?.text == "ofType"
-        else {
-            return nil
-        }
+	public var ofType: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let expectedOfTypeLabeledExpression = labeledExpressionList.dropFirst().first,
+		      expectedOfTypeLabeledExpression.label?.text == "ofType"
+		else {
+			return nil
+		}
 
-        return expectedOfTypeLabeledExpression.expression
-    }
+		return expectedOfTypeLabeledExpression.expression
+	}
 
-    public var erasedToConcreteExistential: ExprSyntax? {
-        guard let arguments,
-              let labeledExpressionList = LabeledExprListSyntax(arguments),
-              let erasedToConcreteExistentialLabeledExpression = labeledExpressionList.dropFirst().first(where: {
-                  // In `@Instantiated`, the `erasedToConcreteExistential` parameter is the second parameter.
-                  // In `@Received`, the `erasedToConcreteExistential` parameter is the third parameter.
-                  $0.label?.text == "erasedToConcreteExistential"
-              })
-        else {
-            return nil
-        }
+	public var erasedToConcreteExistential: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let erasedToConcreteExistentialLabeledExpression = labeledExpressionList.dropFirst().first(where: {
+		      	// In `@Instantiated`, the `erasedToConcreteExistential` parameter is the second parameter.
+		      	// In `@Received`, the `erasedToConcreteExistential` parameter is the third parameter.
+		      	$0.label?.text == "erasedToConcreteExistential"
+		      })
+		else {
+			return nil
+		}
 
-        return erasedToConcreteExistentialLabeledExpression.expression
-    }
+		return erasedToConcreteExistentialLabeledExpression.expression
+	}
 
-    public var fulfillingTypeDescription: TypeDescription? {
-        if let expression = fulfilledByType,
-           let stringLiteral = StringLiteralExprSyntax(expression),
-           case let .stringSegment(firstSegment) = stringLiteral.segments.first
-        {
-            TypeSyntax(stringLiteral: firstSegment.content.text).typeDescription
-        } else {
-            ofType?.typeDescription
-        }
-    }
+	public var fulfillingTypeDescription: TypeDescription? {
+		if let expression = fulfilledByType,
+		   let stringLiteral = StringLiteralExprSyntax(expression),
+		   case let .stringSegment(firstSegment) = stringLiteral.segments.first
+		{
+			TypeSyntax(stringLiteral: firstSegment.content.text).typeDescription
+		} else {
+			ofType?.typeDescription
+		}
+	}
 
-    public var erasedToConcreteExistentialType: Bool {
-        guard let erasedToConcreteExistential,
-              let erasedToConcreteExistentialType = BooleanLiteralExprSyntax(erasedToConcreteExistential)
-        else {
-            // Default value for the `erasedToConcreteExistential` parameter is `false`.
-            return false
-        }
-        return erasedToConcreteExistentialType.literal.text == "true"
-    }
+	public var erasedToConcreteExistentialType: Bool {
+		guard let erasedToConcreteExistential,
+		      let erasedToConcreteExistentialType = BooleanLiteralExprSyntax(erasedToConcreteExistential)
+		else {
+			// Default value for the `erasedToConcreteExistential` parameter is `false`.
+			return false
+		}
+		return erasedToConcreteExistentialType.literal.text == "true"
+	}
 }

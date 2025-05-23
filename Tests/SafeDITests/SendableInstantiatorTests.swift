@@ -24,34 +24,34 @@ import Testing
 @testable import SafeDI
 
 struct SendableInstantiatorTests {
-    @Test
-    func instantiate_returnsNewObjectEachTime() {
-        let systemUnderTest = SendableInstantiator { BuiltProduct() }
-        let firstBuiltProduct = systemUnderTest.instantiate()
-        let secondBuiltProduct = systemUnderTest.instantiate()
-        #expect(firstBuiltProduct !== secondBuiltProduct)
-    }
+	@Test
+	func instantiate_returnsNewObjectEachTime() {
+		let systemUnderTest = SendableInstantiator { BuiltProduct() }
+		let firstBuiltProduct = systemUnderTest.instantiate()
+		let secondBuiltProduct = systemUnderTest.instantiate()
+		#expect(firstBuiltProduct !== secondBuiltProduct)
+	}
 
-    @Test
-    func instantiate_withForwardedArgument_returnsNewObjectEachTime() {
-        let systemUnderTest = SendableInstantiator { id in BuiltProductWithForwardedArgument(id: id) }
-        let id = UUID().uuidString
-        let firstBuiltProduct = systemUnderTest.instantiate(id)
-        let secondBuiltProduct = systemUnderTest.instantiate(id)
-        #expect(firstBuiltProduct !== secondBuiltProduct)
-    }
+	@Test
+	func instantiate_withForwardedArgument_returnsNewObjectEachTime() {
+		let systemUnderTest = SendableInstantiator { id in BuiltProductWithForwardedArgument(id: id) }
+		let id = UUID().uuidString
+		let firstBuiltProduct = systemUnderTest.instantiate(id)
+		let secondBuiltProduct = systemUnderTest.instantiate(id)
+		#expect(firstBuiltProduct !== secondBuiltProduct)
+	}
 
-    private final class BuiltProduct: Instantiable {
-        let id = UUID().uuidString
-    }
+	private final class BuiltProduct: Instantiable {
+		let id = UUID().uuidString
+	}
 
-    private final class BuiltProductWithForwardedArgument: Instantiable {
-        init(id: String) {
-            self.id = id
-        }
+	private final class BuiltProductWithForwardedArgument: Instantiable {
+		init(id: String) {
+			self.id = id
+		}
 
-        typealias ForwardedProperties = String
+		typealias ForwardedProperties = String
 
-        @Forwarded let id: String
-    }
+		@Forwarded let id: String
+	}
 }

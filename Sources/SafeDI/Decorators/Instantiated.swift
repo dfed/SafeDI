@@ -45,6 +45,6 @@ public macro Instantiated() = #externalMacro(module: "SafeDIMacros", type: "Inje
 ///  - SeeAlso: [The Swift Programming Lanaguage’s explanation of existential types](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/#Boxed-Protocol-Types)
 @attached(peer)
 public macro Instantiated(
-    fulfilledByType concreteTypeName: StaticString,
-    erasedToConcreteExistential: Bool = false
+	fulfilledByType concreteTypeName: StaticString,
+	erasedToConcreteExistential: Bool = false
 ) = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")

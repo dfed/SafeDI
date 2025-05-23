@@ -19,67 +19,67 @@
 // SOFTWARE.
 
 public struct UnorderedEquatingCollection<Element: Hashable>: Hashable, Collection, ExpressibleByArrayLiteral {
-    // MARK: Initialization
+	// MARK: Initialization
 
-    public init(_ array: [Element]) {
-        self.array = array
-        set = Set(array)
-    }
+	public init(_ array: [Element]) {
+		self.array = array
+		set = Set(array)
+	}
 
-    // MARK: Equatable
+	// MARK: Equatable
 
-    public static func == (lhs: UnorderedEquatingCollection, rhs: UnorderedEquatingCollection) -> Bool {
-        lhs.set == rhs.set
-    }
+	public static func == (lhs: UnorderedEquatingCollection, rhs: UnorderedEquatingCollection) -> Bool {
+		lhs.set == rhs.set
+	}
 
-    // MARK: Hashable
+	// MARK: Hashable
 
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(set)
-    }
+	public func hash(into hasher: inout Hasher) {
+		hasher.combine(set)
+	}
 
-    // MARK: Collection
+	// MARK: Collection
 
-    public func makeIterator() -> IndexingIterator<[Element]> { array.makeIterator() }
-    public var startIndex: Int { array.startIndex }
-    public var endIndex: Int { array.endIndex }
-    public func index(after i: Int) -> Int {
-        array.index(after: i)
-    }
+	public func makeIterator() -> IndexingIterator<[Element]> { array.makeIterator() }
+	public var startIndex: Int { array.startIndex }
+	public var endIndex: Int { array.endIndex }
+	public func index(after i: Int) -> Int {
+		array.index(after: i)
+	}
 
-    public subscript(position: Int) -> Element {
-        array[position]
-    }
+	public subscript(position: Int) -> Element {
+		array[position]
+	}
 
-    // MARK: ExpressibleByArrayLiteral
+	// MARK: ExpressibleByArrayLiteral
 
-    public init(arrayLiteral elements: Element...) {
-        self.init(elements)
-    }
+	public init(arrayLiteral elements: Element...) {
+		self.init(elements)
+	}
 
-    public typealias ArrayLiteralElement = Element
+	public typealias ArrayLiteralElement = Element
 
-    // MARK: Private
+	// MARK: Private
 
-    private let array: [Element]
-    private let set: Set<Element>
+	private let array: [Element]
+	private let set: Set<Element>
 }
 
 // MARK: - Encodable
 
 extension UnorderedEquatingCollection: Encodable where Element: Encodable {
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(array)
-    }
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.singleValueContainer()
+		try container.encode(array)
+	}
 }
 
 // MARK: - Decodable
 
 extension UnorderedEquatingCollection: Decodable where Element: Decodable {
-    public init(from decoder: Decoder) throws {
-        try self.init(decoder.singleValueContainer().decode([Element].self))
-    }
+	public init(from decoder: Decoder) throws {
+		try self.init(decoder.singleValueContainer().decode([Element].self))
+	}
 }
 
 // MARK: - Sendable

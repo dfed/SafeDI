@@ -19,60 +19,60 @@
 // SOFTWARE.
 
 public struct ImportStatement: Codable, Hashable, Sendable {
-    // MARK: Initialization
+	// MARK: Initialization
 
-    public init(
-        attribute: String = "",
-        kind: String = "",
-        moduleName: String,
-        type: String = ""
-    ) {
-        self.attribute = attribute
-        self.kind = kind
-        self.moduleName = moduleName
-        self.type = type
-    }
+	public init(
+		attribute: String = "",
+		kind: String = "",
+		moduleName: String,
+		type: String = ""
+	) {
+		self.attribute = attribute
+		self.kind = kind
+		self.moduleName = moduleName
+		self.type = type
+	}
 
-    // MARK: Public
+	// MARK: Public
 
-    /// Attributes on the import (i.e. `@testable`)
-    public let attribute: String
-    /// The kind of import, if specified (i.e. `class`, `struct`, etc).
-    public let kind: String
-    /// The name of the module.
-    public let moduleName: String
-    /// The type imported from the module.
-    public let type: String
+	/// Attributes on the import (i.e. `@testable`)
+	public let attribute: String
+	/// The kind of import, if specified (i.e. `class`, `struct`, etc).
+	public let kind: String
+	/// The name of the module.
+	public let moduleName: String
+	/// The type imported from the module.
+	public let type: String
 
-    /// A canonical representation of this import that can be used in source code.
-    public var asSource: String {
-        """
-        \(attributeStatement)import \(kind.isEmpty ? "" : kind + " ")\(moduleName)\(type.isEmpty ? "" : "." + type)
-        """
-    }
+	/// A canonical representation of this import that can be used in source code.
+	public var asSource: String {
+		"""
+		\(attributeStatement)import \(kind.isEmpty ? "" : kind + " ")\(moduleName)\(type.isEmpty ? "" : "." + type)
+		"""
+	}
 
-    // MARK: Private
+	// MARK: Private
 
-    private var attributeToGenerate: String {
-        if Self.attributesToFilterOut.contains(attribute) {
-            ""
-        } else {
-            attribute
-        }
-    }
+	private var attributeToGenerate: String {
+		if Self.attributesToFilterOut.contains(attribute) {
+			""
+		} else {
+			attribute
+		}
+	}
 
-    private var attributeStatement: String {
-        let attributeToGenerate = attributeToGenerate
-        return if attributeToGenerate.isEmpty {
-            ""
-        } else {
-            attributeToGenerate + " "
-        }
-    }
+	private var attributeStatement: String {
+		let attributeToGenerate = attributeToGenerate
+		return if attributeToGenerate.isEmpty {
+			""
+		} else {
+			attributeToGenerate + " "
+		}
+	}
 
-    private static let attributesToFilterOut = Set([
-        // We don't use concurrency in generated code, so including this attribute leads to a warning:
-        //     '@preconcurrency' attribute on module 'ImportedModule' is unused
-        "@preconcurrency",
-    ])
+	private static let attributesToFilterOut = Set([
+		// We don't use concurrency in generated code, so including this attribute leads to a warning:
+		//     '@preconcurrency' attribute on module 'ImportedModule' is unused
+		"@preconcurrency",
+	])
 }

@@ -26,131 +26,131 @@ import Testing
 
 @MainActor
 func executeSafeDIToolTest(
-    swiftFileContent: [String],
-    dependentModuleInfoPaths: [String] = [],
-    additionalImportedModules: [String] = [],
-    buildDependencyTreeOutput: Bool = false,
-    buildDOTFileOutput: Bool = false,
-    filesToDelete: inout [URL],
-    includeFolders: [String] = []
+	swiftFileContent: [String],
+	dependentModuleInfoPaths: [String] = [],
+	additionalImportedModules: [String] = [],
+	buildDependencyTreeOutput: Bool = false,
+	buildDOTFileOutput: Bool = false,
+	filesToDelete: inout [URL],
+	includeFolders: [String] = []
 ) async throws -> TestOutput {
-    let swiftFileCSV = URL.temporaryFile
-    let swiftFiles = try swiftFileContent
-        .map {
-            let location = URL.temporaryFile.appendingPathExtension("swift")
-            try $0.write(to: location, atomically: true, encoding: .utf8)
-            return location
-        }
-    try swiftFiles
-        .map(\.relativePath)
-        .joined(separator: ",")
-        .write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+	let swiftFileCSV = URL.temporaryFile
+	let swiftFiles = try swiftFileContent
+		.map {
+			let location = URL.temporaryFile.appendingPathExtension("swift")
+			try $0.write(to: location, atomically: true, encoding: .utf8)
+			return location
+		}
+	try swiftFiles
+		.map(\.relativePath)
+		.joined(separator: ",")
+		.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
-    let dependentModuleInfoFileCSV = URL.temporaryFile
-    try dependentModuleInfoPaths
-        .joined(separator: ",")
-        .write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
+	let dependentModuleInfoFileCSV = URL.temporaryFile
+	try dependentModuleInfoPaths
+		.joined(separator: ",")
+		.write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
 
-    let moduleInfoOutput = URL.temporaryFile.appendingPathExtension("safedi")
-    let dependencyTreeOutput = URL.temporaryFile.appendingPathExtension("swift")
-    let dotTreeOutput = URL.temporaryFile.appendingPathExtension("dot")
+	let moduleInfoOutput = URL.temporaryFile.appendingPathExtension("safedi")
+	let dependencyTreeOutput = URL.temporaryFile.appendingPathExtension("swift")
+	let dotTreeOutput = URL.temporaryFile.appendingPathExtension("dot")
 
-    let includeFile = URL.temporaryFile.appendingPathExtension("include.csv")
-    try includeFolders.joined(separator: ",").write(to: includeFile, atomically: true, encoding: .utf8)
-    let additionalImportedModulesFile = URL.temporaryFile.appendingPathExtension("additionalImportedModules.csv")
-    try additionalImportedModules.joined(separator: ",").write(to: additionalImportedModulesFile, atomically: true, encoding: .utf8)
+	let includeFile = URL.temporaryFile.appendingPathExtension("include.csv")
+	try includeFolders.joined(separator: ",").write(to: includeFile, atomically: true, encoding: .utf8)
+	let additionalImportedModulesFile = URL.temporaryFile.appendingPathExtension("additionalImportedModules.csv")
+	try additionalImportedModules.joined(separator: ",").write(to: additionalImportedModulesFile, atomically: true, encoding: .utf8)
 
-    fileFinder = StubFileFinder(files: swiftFiles) // Successfully execute the file finder code path.
-    var tool = SafeDITool()
-    tool.swiftSourcesFilePath = swiftFileCSV.relativePath
-    tool.include = []
-    tool.includeFilePath = !includeFolders.isEmpty ? includeFile.relativePath : nil
-    tool.additionalImportedModules = []
-    tool.additionalImportedModulesFilePath = !additionalImportedModules.isEmpty ? additionalImportedModulesFile.relativePath : nil
-    tool.moduleInfoOutput = moduleInfoOutput.relativePath
-    tool.dependentModuleInfoFilePath = dependentModuleInfoPaths.isEmpty ? nil : dependentModuleInfoFileCSV.relativePath
-    tool.dependencyTreeOutput = buildDependencyTreeOutput ? dependencyTreeOutput.relativePath : nil
-    tool.dotFileOutput = buildDOTFileOutput ? dotTreeOutput.relativePath : nil
-    try await tool.run()
+	fileFinder = StubFileFinder(files: swiftFiles) // Successfully execute the file finder code path.
+	var tool = SafeDITool()
+	tool.swiftSourcesFilePath = swiftFileCSV.relativePath
+	tool.include = []
+	tool.includeFilePath = !includeFolders.isEmpty ? includeFile.relativePath : nil
+	tool.additionalImportedModules = []
+	tool.additionalImportedModulesFilePath = !additionalImportedModules.isEmpty ? additionalImportedModulesFile.relativePath : nil
+	tool.moduleInfoOutput = moduleInfoOutput.relativePath
+	tool.dependentModuleInfoFilePath = dependentModuleInfoPaths.isEmpty ? nil : dependentModuleInfoFileCSV.relativePath
+	tool.dependencyTreeOutput = buildDependencyTreeOutput ? dependencyTreeOutput.relativePath : nil
+	tool.dotFileOutput = buildDOTFileOutput ? dotTreeOutput.relativePath : nil
+	try await tool.run()
 
-    filesToDelete.append(swiftFileCSV)
-    filesToDelete += swiftFiles
-    filesToDelete.append(moduleInfoOutput)
-    if buildDependencyTreeOutput {
-        filesToDelete.append(dependencyTreeOutput)
-    }
-    if buildDOTFileOutput {
-        filesToDelete.append(dotTreeOutput)
-    }
+	filesToDelete.append(swiftFileCSV)
+	filesToDelete += swiftFiles
+	filesToDelete.append(moduleInfoOutput)
+	if buildDependencyTreeOutput {
+		filesToDelete.append(dependencyTreeOutput)
+	}
+	if buildDOTFileOutput {
+		filesToDelete.append(dotTreeOutput)
+	}
 
-    return try TestOutput(
-        moduleInfo: JSONDecoder().decode(SafeDITool.ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
-        moduleInfoOutputPath: moduleInfoOutput.relativePath,
-        dependencyTree: buildDependencyTreeOutput ? String(data: Data(contentsOf: dependencyTreeOutput), encoding: .utf8) : nil,
-        dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil
-    )
+	return try TestOutput(
+		moduleInfo: JSONDecoder().decode(SafeDITool.ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
+		moduleInfoOutputPath: moduleInfoOutput.relativePath,
+		dependencyTree: buildDependencyTreeOutput ? String(data: Data(contentsOf: dependencyTreeOutput), encoding: .utf8) : nil,
+		dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil
+	)
 }
 
 struct TestOutput {
-    let moduleInfo: SafeDITool.ModuleInfo
-    let moduleInfoOutputPath: String
-    let dependencyTree: String?
-    let dotTree: String?
+	let moduleInfo: SafeDITool.ModuleInfo
+	let moduleInfoOutputPath: String
+	let dependencyTree: String?
+	let dotTree: String?
 }
 
 extension URL {
-    fileprivate static var temporaryFile: URL {
-        #if os(Linux)
-            return FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        #else
-            guard #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) else {
-                return FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-            }
-            return URL.temporaryDirectory.appending(path: UUID().uuidString)
-        #endif
-    }
+	fileprivate static var temporaryFile: URL {
+		#if os(Linux)
+			return FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+		#else
+			guard #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) else {
+				return FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+			}
+			return URL.temporaryDirectory.appending(path: UUID().uuidString)
+		#endif
+	}
 }
 
 struct StubFileFinder: FileFinder {
-    func enumerator(
-        at _: URL,
-        includingPropertiesForKeys _: [URLResourceKey]?,
-        options _: FileManager.DirectoryEnumerationOptions,
-        errorHandler _: ((URL, any Error) -> Bool)?
-    ) -> FileManager.DirectoryEnumerator? {
-        StubDirectoryEnumerator(files: files)
-    }
+	func enumerator(
+		at _: URL,
+		includingPropertiesForKeys _: [URLResourceKey]?,
+		options _: FileManager.DirectoryEnumerationOptions,
+		errorHandler _: ((URL, any Error) -> Bool)?
+	) -> FileManager.DirectoryEnumerator? {
+		StubDirectoryEnumerator(files: files)
+	}
 
-    final class StubDirectoryEnumerator: FileManager.DirectoryEnumerator {
-        init(files: [URL]) {
-            self.files = files
-                // Also include a random file in the glob.
-                + [URL.temporaryFile]
-        }
+	final class StubDirectoryEnumerator: FileManager.DirectoryEnumerator {
+		init(files: [URL]) {
+			self.files = files
+				// Also include a random file in the glob.
+				+ [URL.temporaryFile]
+		}
 
-        override func nextObject() -> Any? {
-            if files.isEmpty {
-                nil
-            } else {
-                files.removeFirst()
-            }
-        }
+		override func nextObject() -> Any? {
+			if files.isEmpty {
+				nil
+			} else {
+				files.removeFirst()
+			}
+		}
 
-        var files: [URL]
-    }
+		var files: [URL]
+	}
 
-    let files: [URL]
+	let files: [URL]
 }
 
 func assertThrowsError(
-    _ errorDescription: String,
-    sourceLocation: SourceLocation = #_sourceLocation,
-    block: @MainActor () async throws -> some Sendable
+	_ errorDescription: String,
+	sourceLocation: SourceLocation = #_sourceLocation,
+	block: @MainActor () async throws -> some Sendable
 ) async {
-    do {
-        _ = try await block()
-        Issue.record("Did not throw error!", sourceLocation: sourceLocation)
-    } catch {
-        #expect(errorDescription == "\(error)", sourceLocation: sourceLocation)
-    }
+	do {
+		_ = try await block()
+		Issue.record("Did not throw error!", sourceLocation: sourceLocation)
+	} catch {
+		#expect(errorDescription == "\(error)", sourceLocation: sourceLocation)
+	}
 }

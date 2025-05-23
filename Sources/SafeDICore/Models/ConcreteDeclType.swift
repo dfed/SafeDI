@@ -19,18 +19,18 @@
 // SOFTWARE.
 
 public enum ConcreteDeclType {
-    case actorType
-    case classType
-    case structType
+	case actorType
+	case classType
+	case structType
 
-    var asDeclarationType: Instantiable.DeclarationType {
-        switch self {
-        case .actorType:
-            .actorType
-        case .classType:
-            .classType
-        case .structType:
-            .structType
-        }
-    }
+	var asDeclarationType: Instantiable.DeclarationType {
+		switch self {
+		case .actorType:
+			.actorType
+		case .classType:
+			.classType
+		case .structType:
+			.structType
+		}
+	}
 }
