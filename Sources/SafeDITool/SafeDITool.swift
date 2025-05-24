@@ -144,6 +144,8 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 		let instantiables: [Instantiable]
 	}
 
+	@TaskLocal static var fileFinder: FileFinder = FileManager.default
+
 	// MARK: Private
 
 	private func findSwiftFiles() async throws -> Set<String> {
@@ -160,11 +162,10 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 					[]
 				}
 			}
-			let fileFinder = await fileFinder
 			for included in try allDirectoriesToIncludes {
 				taskGroup.addTask {
 					let includedURL = included.asFileURL
-					let includedFileEnumerator = fileFinder
+					let includedFileEnumerator = Self.fileFinder
 						.enumerator(
 							at: includedURL,
 							includingPropertiesForKeys: nil,
@@ -361,5 +362,3 @@ extension FileManager: @retroactive @unchecked Sendable {
 	// FileManager is thread safe:
 	// https://developer.apple.com/documentation/foundation/nsfilemanager#1651181
 }
-
-@MainActor var fileFinder: FileFinder = FileManager.default

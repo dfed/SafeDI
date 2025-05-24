@@ -24,8 +24,7 @@ import Testing
 
 @testable import SafeDITool
 
-@Suite(.serialized)
-final class SafeDIToolCodeGenerationTests {
+struct SafeDIToolCodeGenerationTests: ~Copyable {
 	// MARK: Initialization
 
 	init() throws {
@@ -41,7 +40,7 @@ final class SafeDIToolCodeGenerationTests {
 	// MARK: Code Generation Tests
 
 	@Test
-	func run_successfullyGeneratesOutputFileWhenNoCodeInput() async throws {
+	mutating func run_successfullyGeneratesOutputFileWhenNoCodeInput() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [],
 			buildDependencyTreeOutput: true,
@@ -59,7 +58,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_doesNotWriteExtensionIfRootAlreadyHasEmptyInitializer() async throws {
+	mutating func run_doesNotWriteExtensionIfRootAlreadyHasEmptyInitializer() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -92,7 +91,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootIsClass() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootIsClass() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -142,7 +141,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootIsActor() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootIsActor() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -192,7 +191,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootIsStruct() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootIsStruct() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -242,7 +241,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenMultipleRootsExist() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenMultipleRootsExist() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -309,7 +308,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootHasAnAnyProperty() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootHasAnAnyProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -361,7 +360,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootHasAnAnyPropertyFulfilledByAnyAdditionalType() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootHasAnAnyPropertyFulfilledByAnyAdditionalType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -411,7 +410,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootHasAnOptionalProperty() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootHasAnOptionalProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -463,7 +462,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootHasMultipleLayers() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootHasMultipleLayers() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -571,7 +570,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesSingleForwardedPropertyInSubBuilders() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesSingleForwardedPropertyInSubBuilders() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -691,7 +690,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesSingleEscapingForwardedProperty() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesSingleEscapingForwardedProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -747,7 +746,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizeMultipleForwardedPropertiesInSubBuilders() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizeMultipleForwardedPropertiesInSubBuilders() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -875,7 +874,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizeMultipleForwardedPropertiesAndDependencyInversionInSubBuilders() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizeMultipleForwardedPropertiesAndDependencyInversionInSubBuilders() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1003,7 +1002,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesDependencyInversionOfExistentialTypeInSubBuilder() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesDependencyInversionOfExistentialTypeInSubBuilder() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1055,7 +1054,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesLazyDependencyInversionOfExistentialTypeInSubBuilder() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesLazyDependencyInversionOfExistentialTypeInSubBuilder() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1112,7 +1111,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizePropertiesNotDirectlyProvidedByParent() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizePropertiesNotDirectlyProvidedByParent() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1233,7 +1232,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleLayersOfInstantiators() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleLayersOfInstantiators() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1356,7 +1355,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertyWithMissingInstantiableInitializer() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertyWithMissingInstantiableInitializer() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1410,7 +1409,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertyWithInitializerWithDefaultArgumentForNonInjectedProperty() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertyWithInitializerWithDefaultArgumentForNonInjectedProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1467,7 +1466,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertyWithNotPublicInstantiableInitializer() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertyWithNotPublicInstantiableInitializer() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1521,7 +1520,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesNonPublicProperty() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesNonPublicProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1575,7 +1574,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatReceiveTheSameProperty() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatReceiveTheSameProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1692,7 +1691,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyInMiddleLevel() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyInMiddleLevel() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1811,7 +1810,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesTheSamePropertyAtMultipleLevels() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesTheSamePropertyAtMultipleLevels() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1894,7 +1893,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesAReceivedPropertyBelowWhereItIsReceived() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesAReceivedPropertyBelowWhereItIsReceived() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1979,7 +1978,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesAReceivedPropertyMultipleLevelsBelowWhereItIsFirstReceived() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesAReceivedPropertyMultipleLevelsBelowWhereItIsFirstReceived() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2078,7 +2077,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesAPropertyReceivedInOneChildBranchMultipleLevelsBelowWhereItIsFirstReceived() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesAPropertyReceivedInOneChildBranchMultipleLevelsBelowWhereItIsFirstReceived() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2197,7 +2196,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesAPropertyForwardedByAChild_doesNotRequirePuttingInstantiatedPropertyBeforeErasedInstantiator() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesAPropertyForwardedByAChild_doesNotRequirePuttingInstantiatedPropertyBeforeErasedInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2327,7 +2326,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyMultipleLayersDeep() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyMultipleLayersDeep() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2458,7 +2457,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesInstantiablePropertyWithNoArguments() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesInstantiablePropertyWithNoArguments() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2530,7 +2529,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesInstantiablePropertyWithArguments() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesInstantiablePropertyWithArguments() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2661,7 +2660,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyAcrossMultipleModules() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyAcrossMultipleModules() async throws {
 		let greatGrandchildModuleOutput = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2855,7 +2854,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootHasReceivedAliasOfInstantiable() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootHasReceivedAliasOfInstantiable() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2910,7 +2909,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_successfullyGeneratesOutputFileWhenNoRootFound() async throws {
+	mutating func run_successfullyGeneratesOutputFileWhenNoRootFound() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2935,7 +2934,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_successfullyGeneratesOutputFileWhenNoRootFoundAndAdditionalImportedModulesSet() async throws {
+	mutating func run_successfullyGeneratesOutputFileWhenNoRootFoundAndAdditionalImportedModulesSet() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2966,7 +2965,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_successfullyGeneratesOutputFileWhenIsRootIsFalse() async throws {
+	mutating func run_successfullyGeneratesOutputFileWhenIsRootIsFalse() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2991,7 +2990,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliased() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliased() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -3148,7 +3147,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedAndExistential() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedAndExistential() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -3213,7 +3212,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedALevelAboveWhereItIsReceived() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedALevelAboveWhereItIsReceived() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -3374,7 +3373,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWhenInstantiated() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWhenInstantiated() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -3451,7 +3450,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedTwice() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedTwice() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -3533,7 +3532,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWhenForwarded() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWhenForwarded() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -3690,7 +3689,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWasALevelBelowWhereItWasForwarded() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWasALevelBelowWhereItWasForwarded() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -3845,7 +3844,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenFirstPropertyDependsOnLastPropertyAndMiddlePropertyHasNoDependencyEntanglementsWithEither() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenFirstPropertyDependsOnLastPropertyAndMiddlePropertyHasNoDependencyEntanglementsWithEither() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -3919,7 +3918,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootHasLotsOfDependenciesThatDependOnOneAnother() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootHasLotsOfDependenciesThatDependOnOneAnother() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4303,7 +4302,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenRootPropertyWithOptionalInstantiator() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootPropertyWithOptionalInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4346,7 +4345,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenLazyInstantiationCycleExists() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenLazyInstantiationCycleExists() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4422,7 +4421,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenPartiallyLazyInstantiationCycleExists() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenPartiallyLazyInstantiationCycleExists() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4498,7 +4497,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenLazySelfInstantiationCycleExists() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenLazySelfInstantiationCycleExists() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4550,7 +4549,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenLazySelfForwardingInstantiationCycleExists() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenLazySelfForwardingInstantiationCycleExists() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4603,7 +4602,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenAGenericTypeIsAnExtendedInstantiableWithMultipleGenericReturnTypes() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenAGenericTypeIsAnExtendedInstantiableWithMultipleGenericReturnTypes() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4663,7 +4662,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenAGenericTypeIsAnExtendedInstantiableWithMultipleGenericFullyQualifiedReturnTypes() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenAGenericTypeIsAnExtendedInstantiableWithMultipleGenericFullyQualifiedReturnTypes() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4723,7 +4722,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedType() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4782,7 +4781,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypesWithNoQualification() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypesWithNoQualification() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4874,7 +4873,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypesWithMixedQualification() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypesWithMixedQualification() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4966,7 +4965,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypesWithSameObjectReferencedWithDifferingQualification() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypesWithSameObjectReferencedWithDifferingQualification() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -5055,7 +5054,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypeFulfillingAdditionalNestedTypes() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypeFulfillingAdditionalNestedTypes() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -5116,7 +5115,7 @@ final class SafeDIToolCodeGenerationTests {
 	}
 
 	@Test
-	func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypeFulfillingAdditionalFullyQualifiedNestedTypes() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypeFulfillingAdditionalFullyQualifiedNestedTypes() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -5176,7 +5175,8 @@ final class SafeDIToolCodeGenerationTests {
 		)
 	}
 
-	func test_run_writesConvenienceExtensionOnRootOfTree_whenTypeIsFulfilledByNestedType() async throws {
+	@Test
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTypeIsFulfilledByNestedType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -5219,7 +5219,8 @@ final class SafeDIToolCodeGenerationTests {
 		)
 	}
 
-	func test_run_writesConvenienceExtensionOnRootOfTree_whenTypeIsFulfilledByNestedTypeAndExtensionIsDefinedFirst() async throws {
+	@Test
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTypeIsFulfilledByNestedTypeAndExtensionIsDefinedFirst() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
