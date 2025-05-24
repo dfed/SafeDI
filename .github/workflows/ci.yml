@@ -178,7 +178,7 @@ jobs:
   lint-swift:
     name: Lint Swift
     runs-on: ubuntu-latest
-    container: swift:6.0
+    container: swift:6.1
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
