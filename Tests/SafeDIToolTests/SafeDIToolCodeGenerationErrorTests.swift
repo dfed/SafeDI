@@ -24,8 +24,7 @@ import Testing
 
 @testable import SafeDITool
 
-@Suite(.serialized)
-final class SafeDIToolCodeGenerationErrorTests {
+struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	// MARK: Initialization
 
 	init() throws {
@@ -40,8 +39,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 
 	// MARK: Error Tests
 
-	@MainActor @Test
-	func run_onCodeWithPropertyWithUnknownFulfilledType_throwsError() async {
+	@Test
+	mutating func run_onCodeWithPropertyWithUnknownFulfilledType_throwsError() async {
 		await assertThrowsError(
 			"""
 			No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `DoesNotExist`
@@ -65,8 +64,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithPropertyWithUnknownTypeWithDotSuffixOfFulfillableType_throwsError() async {
+	@Test
+	mutating func run_onCodeWithPropertyWithUnknownTypeWithDotSuffixOfFulfillableType_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `value: NestedType` is not @Instantiated or @Forwarded in chain:
@@ -111,8 +110,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithPropertyWithUnknownTypeWithDotPrefixOfFulfillableType_throwsError() async {
+	@Test
+	mutating func run_onCodeWithPropertyWithUnknownTypeWithDotPrefixOfFulfillableType_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `value: Root.NestedType` is not @Instantiated or @Forwarded in chain:
@@ -157,8 +156,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithMultipleInstantiateMethodsForTheSameTypeWithSameParameters_throwsError() async {
+	@Test
+	mutating func run_onCodeWithMultipleInstantiateMethodsForTheSameTypeWithSameParameters_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `Container<Int>`
@@ -192,8 +191,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithMultipleInstantiateMethodsForTheSameTypeWithDifferentParameters_throwsError() async {
+	@Test
+	mutating func run_onCodeWithMultipleInstantiateMethodsForTheSameTypeWithDifferentParameters_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `Container<Int>`
@@ -227,8 +226,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithUnfulfillableInstantiatedProperty_throwsError() async {
+	@Test
+	mutating func run_onCodeWithUnfulfillableInstantiatedProperty_throwsError() async {
 		await assertThrowsError(
 			"""
 			No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `URLSession`
@@ -261,8 +260,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithUnfulfillableReceivedProperty_throwsError() async {
+	@Test
+	mutating func run_onCodeWithUnfulfillableReceivedProperty_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain:
@@ -296,8 +295,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedAny_throwsError() async {
+	@Test
+	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedAny_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `erasedType: any ErasedType` is not @Instantiated or @Forwarded in chain:
@@ -341,8 +340,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedAny_throwsError() async {
+	@Test
+	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedAny_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `erasedType: ErasedType` is not @Instantiated or @Forwarded in chain:
@@ -386,8 +385,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedForceUnwrap_throwsError() async {
+	@Test
+	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedForceUnwrap_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `thing: Thing!` is not @Instantiated or @Forwarded in chain:
@@ -429,8 +428,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedForceUnwrap_throwsError() async {
+	@Test
+	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedForceUnwrap_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `thing: Thing` is not @Instantiated or @Forwarded in chain:
@@ -472,8 +471,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedOptional_throwsError() async {
+	@Test
+	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedOptional_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain:
@@ -515,8 +514,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedOptional_throwsError() async {
+	@Test
+	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedOptional_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `thing: Thing` is not @Instantiated or @Forwarded in chain:
@@ -558,8 +557,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithUnfulfillableInstantiatedPropertyDueToIncorrectType_throwsError() async {
+	@Test
+	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToIncorrectType_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain:
@@ -604,8 +603,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithUnfulfillableInstantiatedPropertyDueToIncorrectTypeOrLabel_throwsError() async {
+	@Test
+	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToIncorrectTypeOrLabel_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain:
@@ -652,8 +651,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithInstantiatedPropertyWithForwardedArgument_throwsError() async {
+	@Test
+	mutating func run_onCodeWithInstantiatedPropertyWithForwardedArgument_throwsError() async {
 		await assertThrowsError(
 			"""
 			Property `networkService: NetworkService` on RootViewController has at least one @Forwarded property. Property should instead be of type `Instantiator<DefaultNetworkService>`.
@@ -686,8 +685,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithDiamondDependencyWhereAReceivedPropertyIsUnfulfillableOnOneBranch_throwsError() async {
+	@Test
+	mutating func run_onCodeWithDiamondDependencyWhereAReceivedPropertyIsUnfulfillableOnOneBranch_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain:
@@ -733,8 +732,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithDiamondDependencyWhereMultipleReceivedPropertiesAreUnfulfillableOnOneBranch_throwsError() async {
+	@Test
+	mutating func run_onCodeWithDiamondDependencyWhereMultipleReceivedPropertiesAreUnfulfillableOnOneBranch_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain:
@@ -790,8 +789,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithInstantiatedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
+	@Test
+	mutating func run_onCodeWithInstantiatedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
 		await assertThrowsError(
 			"""
 			Dependency cycle detected:
@@ -848,8 +847,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithReceivedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
+	@Test
+	mutating func run_onCodeWithReceivedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
 		await assertThrowsError(
 			"""
 			Dependency received in same chain it is instantiated:
@@ -906,8 +905,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithUnfulfillableAliasedReceivedPropertyName_throwsError() async {
+	@Test
+	mutating func run_onCodeWithUnfulfillableAliasedReceivedPropertyName_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `networkService2: NetworkService` is not @Instantiated or @Forwarded in chain:
@@ -960,8 +959,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithUnfulfillableAliasedReceivedPropertyType_throwsError() async {
+	@Test
+	mutating func run_onCodeWithUnfulfillableAliasedReceivedPropertyType_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `networkService: NetworkService2` is not @Instantiated or @Forwarded in chain:
@@ -1014,8 +1013,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWhereAliasedReceivedPropertyRefersToCurrentInstantiable_throwsError() async throws {
+	@Test
+	mutating func run_onCodeWhereAliasedReceivedPropertyRefersToCurrentInstantiable_throwsError() async throws {
 		await assertThrowsError(
 			"""
 			Dependency received in same chain it is instantiated:
@@ -1072,8 +1071,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithUnfulfillableReceivedPropertyOnExtendedInstantiatedType_throwsError() async {
+	@Test
+	mutating func run_onCodeWithUnfulfillableReceivedPropertyOnExtendedInstantiatedType_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain:
@@ -1107,8 +1106,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithDuplicateInstantiableNames_throwsError() async {
+	@Test
+	mutating func run_onCodeWithDuplicateInstantiableNames_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
@@ -1135,8 +1134,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithDuplicateInstantiableNamesWhereOneIsRoot_throwsError() async {
+	@Test
+	mutating func run_onCodeWithDuplicateInstantiableNamesWhereOneIsRoot_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
@@ -1163,8 +1162,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtension_throwsError() async {
+	@Test
+	mutating func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtension_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
@@ -1195,8 +1194,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtensionWhereDeclarationIsRoot_throwsError() async {
+	@Test
+	mutating func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtensionWhereDeclarationIsRoot_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
@@ -1227,8 +1226,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtensionWhereExtensionIsRoot_throwsError() async {
+	@Test
+	mutating func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtensionWhereExtensionIsRoot_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
@@ -1259,8 +1258,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithDuplicateInstantiableNamesViaExtension_throwsError() async {
+	@Test
+	mutating func run_onCodeWithDuplicateInstantiableNamesViaExtension_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `UserDefaults`
@@ -1295,8 +1294,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithDuplicateInstantiableFulfillment_throwsError() async {
+	@Test
+	mutating func run_onCodeWithDuplicateInstantiableFulfillment_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `UIViewController`
@@ -1323,8 +1322,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithCircularPropertyDependenciesImmediatelyInitialized_throwsError() async {
+	@Test
+	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitialized_throwsError() async {
 		await assertThrowsError(
 			"""
 			Dependency cycle detected:
@@ -1364,8 +1363,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedAndReceived_throwsError() async {
+	@Test
+	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedAndReceived_throwsError() async {
 		await assertThrowsError(
 			"""
 			Dependency cycle detected:
@@ -1405,8 +1404,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndReceived_throwsError() async throws {
+	@Test
+	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndReceived_throwsError() async throws {
 		await assertThrowsError(
 			"""
 			Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `C` as @Instantiated to fix. Full cycle:
@@ -1446,8 +1445,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithVaryingNames_throwsError() async {
+	@Test
+	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithVaryingNames_throwsError() async {
 		await assertThrowsError(
 			"""
 			Dependency cycle detected:
@@ -1487,8 +1486,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithCircularReceivedDependencies_throwsError() async {
+	@Test
+	mutating func run_onCodeWithCircularReceivedDependencies_throwsError() async {
 		await assertThrowsError(
 			"""
 			Dependency received in same chain it is instantiated:
@@ -1530,8 +1529,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithCircularReceivedRenamedDependencies_throwsError() async {
+	@Test
+	mutating func run_onCodeWithCircularReceivedRenamedDependencies_throwsError() async {
 		await assertThrowsError(
 			"""
 			Dependency received in same chain it is instantiated:
@@ -1574,8 +1573,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithMultipleCircularReceivedRenamedDependencies_throwsError() async {
+	@Test
+	mutating func run_onCodeWithMultipleCircularReceivedRenamedDependencies_throwsError() async {
 		await assertThrowsError(
 			"""
 			Dependency received in same chain it is instantiated:
@@ -1617,8 +1616,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasSingleForwardedProperty_throwsError() async throws {
+	@Test
+	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasSingleForwardedProperty_throwsError() async throws {
 		await assertThrowsError(
 			"""
 			Property `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>`.
@@ -1698,8 +1697,8 @@ final class SafeDIToolCodeGenerationErrorTests {
 		}
 	}
 
-	@MainActor @Test
-	func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasMultipleForwardedProperty_throwsError() async throws {
+	@Test
+	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasMultipleForwardedProperty_throwsError() async throws {
 		await assertThrowsError(
 			"""
 			Property `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>`.
@@ -1783,7 +1782,7 @@ final class SafeDIToolCodeGenerationErrorTests {
 
 	// MARK: Argument handling error tests
 
-	@MainActor @Test
+	@Test
 	func include_throwsErrorWhenCanNotCreateEnumerator() async {
 		final class FailingFileFinder: FileFinder {
 			func enumerator(
@@ -1795,27 +1794,25 @@ final class SafeDIToolCodeGenerationErrorTests {
 				nil
 			}
 		}
-		fileFinder = FailingFileFinder()
-		defer {
-			fileFinder = FileManager.default
-		}
-
-		var tool = SafeDITool()
-		tool.swiftSourcesFilePath = nil
-		tool.include = ["Fake"]
-		tool.includeFilePath = nil
-		tool.additionalImportedModules = []
-		tool.additionalImportedModulesFilePath = nil
-		tool.moduleInfoOutput = nil
-		tool.dependentModuleInfoFilePath = nil
-		tool.dependencyTreeOutput = nil
-		tool.dotFileOutput = nil
-		await assertThrowsError("Could not create file enumerator for directory 'Fake'") {
-			try await tool.run()
+		await SafeDITool.$fileFinder.withValue(FailingFileFinder()) {
+			var tool = SafeDITool()
+			tool.swiftSourcesFilePath = nil
+			tool.include = ["Fake"]
+			tool.includeFilePath = nil
+			tool.additionalImportedModules = []
+			tool.additionalImportedModulesFilePath = nil
+			tool.moduleInfoOutput = nil
+			tool.dependentModuleInfoFilePath = nil
+			tool.dependencyTreeOutput = nil
+			tool.dotFileOutput = nil
+			await assertThrowsError("Could not create file enumerator for directory 'Fake'") {
+				try await tool.run()
+			}
 		}
 	}
 
-	func test_include_throwsErrorWhenNoSwiftSourcesFilePathAndNoInclude() async {
+	@Test
+	func include_throwsErrorWhenNoSwiftSourcesFilePathAndNoInclude() async {
 		var tool = SafeDITool()
 		tool.swiftSourcesFilePath = nil
 		tool.include = []

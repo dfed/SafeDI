@@ -86,7 +86,7 @@ To install the SafeDI framework into an Xcode project with Swift Package Manager
 
 #### CocoaPods
 
-To add the SafeDI framework as a dependency to a package utilizing [CocoaPods](http://cocoapods.org), add the following to your `Podfile`:
+To add the SafeDI framework as a dependency to a package utilizing [CocoaPods](https://blog.cocoapods.org/CocoaPods-Specs-Repo), add the following to your `Podfile`:
 
 ```ruby
 pod 'SafeDI', '~> 1.0.0'
