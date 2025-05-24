@@ -1795,23 +1795,20 @@ final class SafeDIToolCodeGenerationErrorTests {
 				nil
 			}
 		}
-		fileFinder = FailingFileFinder()
-		defer {
-			fileFinder = FileManager.default
-		}
-
-		var tool = SafeDITool()
-		tool.swiftSourcesFilePath = nil
-		tool.include = ["Fake"]
-		tool.includeFilePath = nil
-		tool.additionalImportedModules = []
-		tool.additionalImportedModulesFilePath = nil
-		tool.moduleInfoOutput = nil
-		tool.dependentModuleInfoFilePath = nil
-		tool.dependencyTreeOutput = nil
-		tool.dotFileOutput = nil
-		await assertThrowsError("Could not create file enumerator for directory 'Fake'") {
-			try await tool.run()
+		await SafeDITool.$fileFinder.withValue(FailingFileFinder()) {
+			var tool = SafeDITool()
+			tool.swiftSourcesFilePath = nil
+			tool.include = ["Fake"]
+			tool.includeFilePath = nil
+			tool.additionalImportedModules = []
+			tool.additionalImportedModulesFilePath = nil
+			tool.moduleInfoOutput = nil
+			tool.dependentModuleInfoFilePath = nil
+			tool.dependencyTreeOutput = nil
+			tool.dotFileOutput = nil
+			await assertThrowsError("Could not create file enumerator for directory 'Fake'") {
+				try await tool.run()
+			}
 		}
 	}
 
