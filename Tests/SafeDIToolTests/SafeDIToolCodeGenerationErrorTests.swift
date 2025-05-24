@@ -1783,7 +1783,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	// MARK: Argument handling error tests
 
 	@Test
-	mutating func include_throwsErrorWhenCanNotCreateEnumerator() async {
+	func include_throwsErrorWhenCanNotCreateEnumerator() async {
 		final class FailingFileFinder: FileFinder {
 			func enumerator(
 				at _: URL,
@@ -1811,7 +1811,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 	}
 
-	func test_include_throwsErrorWhenNoSwiftSourcesFilePathAndNoInclude() async {
+	@Test
+	func include_throwsErrorWhenNoSwiftSourcesFilePathAndNoInclude() async {
 		var tool = SafeDITool()
 		tool.swiftSourcesFilePath = nil
 		tool.include = []
