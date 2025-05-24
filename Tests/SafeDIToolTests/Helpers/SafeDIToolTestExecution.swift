@@ -24,7 +24,6 @@ import Testing
 
 @testable import SafeDITool
 
-@MainActor
 func executeSafeDIToolTest(
 	swiftFileContent: [String],
 	dependentModuleInfoPaths: [String] = [],
@@ -146,7 +145,7 @@ struct StubFileFinder: FileFinder {
 func assertThrowsError(
 	_ errorDescription: String,
 	sourceLocation: SourceLocation = #_sourceLocation,
-	block: @MainActor () async throws -> some Sendable
+	block: () async throws -> some Sendable
 ) async {
 	do {
 		_ = try await block()
