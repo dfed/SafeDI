@@ -132,59 +132,38 @@ public struct InstantiableMacro: MemberMacro {
 				.initializers
 				.contains(where: { $0.isValid(forFulfilling: visitor.dependencies) })
 			guard hasMemberwiseInitializerForInjectableProperties else {
-				if visitor.uninitializedNonOptionalPropertyNames.isEmpty {
-					var declarationWithInitializer = declaration
-					declarationWithInitializer.memberBlock.members.insert(
-						MemberBlockItemSyntax(
-							leadingTrivia: .newline,
-							decl: Initializer.generateRequiredInitializer(
-								for: visitor.dependencies,
-								declarationType: concreteDeclaration.declType
-							),
-							trailingTrivia: .newline
+				var declarationWithInitializer = declaration
+				declarationWithInitializer.memberBlock.members.insert(
+					MemberBlockItemSyntax(
+						leadingTrivia: .newline,
+						decl: Initializer.generateRequiredInitializer(
+							for: visitor.dependencies,
+							declarationType: concreteDeclaration.declType,
+							andAdditionalPropertiesWithLabels: visitor.uninitializedNonOptionalPropertyNames
 						),
-						at: declarationWithInitializer.memberBlock.members.startIndex
-					)
-					context.diagnose(Diagnostic(
-						node: Syntax(declaration.memberBlock),
-						error: FixableInstantiableError.missingRequiredInitializer(.hasOnlyInjectableProperties),
-						changes: [
-							.replace(
-								oldNode: Syntax(declaration),
-								newNode: Syntax(declarationWithInitializer)
-							),
-						]
-					))
-					return []
+						trailingTrivia: .newline
+					),
+					at: declarationWithInitializer.memberBlock.members.startIndex
+				)
+				let errorType: FixableInstantiableError.MissingInitializer = if visitor.uninitializedNonOptionalPropertyNames.isEmpty {
+					.hasOnlyInjectableProperties
+				} else if visitor.dependencies.isEmpty {
+					.hasNoInjectableProperties
 				} else {
-					var declarationWithInitializer = declaration
-					declarationWithInitializer.memberBlock.members.insert(
-						MemberBlockItemSyntax(
-							leadingTrivia: .newline,
-							decl: Initializer.generateRequiredInitializer(
-								for: visitor.dependencies,
-								declarationType: concreteDeclaration.declType,
-								andAdditionalPropertiesWithLabels: visitor.uninitializedNonOptionalPropertyNames
-							),
-							trailingTrivia: .newline
-						),
-						at: declarationWithInitializer.memberBlock.members.startIndex
-					)
-					// TODO: Create separate fixit if just `public` or `open` are missing.
-					context.diagnose(Diagnostic(
-						node: Syntax(declaration.memberBlock),
-						error: FixableInstantiableError.missingRequiredInitializer(
-							visitor.dependencies.isEmpty ? .hasNoInjectableProperties : .hasInjectableAndNotInjectableProperties
-						),
-						changes: [
-							.replace(
-								oldNode: Syntax(declaration),
-								newNode: Syntax(declarationWithInitializer)
-							),
-						]
-					))
-					return []
+					.hasInjectableAndNotInjectableProperties
 				}
+				// TODO: Create separate fixit if just `public` or `open` are missing.
+				context.diagnose(Diagnostic(
+					node: Syntax(declaration.memberBlock),
+					error: FixableInstantiableError.missingRequiredInitializer(errorType),
+					changes: [
+						.replace(
+							oldNode: Syntax(declaration),
+							newNode: Syntax(declarationWithInitializer)
+						),
+					]
+				))
+				return []
 			}
 			return generateForwardedProperties(from: forwardedProperties)
 
