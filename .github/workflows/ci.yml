@@ -47,7 +47,7 @@ jobs:
         run: xcrun swift build --package-path Examples/ExamplePackageIntegration
 
   spm-prebuilt-package-integration:
-    name: Build Package Integration on Xcode 16
+    name: Build Prebuilt Package Integration on Xcode 16
     runs-on: macos-15
     steps:
       - name: Checkout Repo
