@@ -86,13 +86,25 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		let toolLocation = if let downloadedToolLocation {
 			downloadedToolLocation
 		} else if let safeDIVersion {
-			Diagnostics.error("""
-			Install the release SafeDITool binary for version \(safeDIVersion):
-			\tswift package --package-path \(context.package.directoryURL.path()) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
-			""")
-			throw NoReleaseBinaryFoundError()
+			struct NoReleaseBinaryFoundError: Error, CustomStringConvertible {
+				let safeDIVersion: String
+				let packagePath: String
+
+				var description: String {
+					"""
+					Install the release SafeDITool binary for version \(safeDIVersion):
+					\tswift package --package-path \(packagePath) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
+					"""
+				}
+			}
+			throw NoReleaseBinaryFoundError(safeDIVersion: safeDIVersion, packagePath: context.package.directoryURL.path())
 		} else {
-			throw NoReleaseBinaryFoundError()
+			struct NoReleaseBinaryAvailableError: Error, CustomStringConvertible {
+				var description: String {
+					"SafeDIPrebuiltGenerator is only supported when using a versioned release."
+				}
+			}
+			throw NoReleaseBinaryAvailableError()
 		}
 
 		return [
@@ -132,12 +144,6 @@ extension Target {
 			}
 			return swiftModule
 		}
-	}
-}
-
-struct NoReleaseBinaryFoundError: Error, CustomStringConvertible {
-	var description: String {
-		"No release SafeDITool binary found"
 	}
 }
 
@@ -205,9 +211,11 @@ struct NoReleaseBinaryFoundError: Error, CustomStringConvertible {
 			let toolLocation = if let downloadedToolLocation {
 				downloadedToolLocation
 			} else {
-				Diagnostics.error("""
-				To install the release SafeDITool binary for this version, run the `InstallSafeDITool` command plugin.
-				""")
+				struct NoReleaseBinaryFoundError: Error, CustomStringConvertible {
+					var description: String {
+						"To install the release SafeDITool binary for this version, run the `InstallSafeDITool` command plugin."
+					}
+				}
 				throw NoReleaseBinaryFoundError()
 			}
 
