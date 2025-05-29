@@ -34,7 +34,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
 		// Swift Package Plugins did not (as of Swift 5.9) allow for
 		// creating dependencies between plugin output at the time of writing.
-		// Since our current build system didnot support depending on the
+		// Since our current build system did not support depending on the
 		// output of other plugins, we must forgo searching for `.safeDI` files
 		// and instead parse the entire project at once.
 		// TODO: https://github.com/dfed/SafeDI/issues/92
