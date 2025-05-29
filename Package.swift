@@ -63,6 +63,7 @@ let package = Package(
 		.macro(
 			name: "SafeDIMacros",
 			dependencies: [
+				"SafeDICore",
 				.product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
 				.product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
 			],
