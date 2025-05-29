@@ -46,6 +46,19 @@ jobs:
       - name: Build Package Integration
         run: xcrun swift build --package-path Examples/ExamplePackageIntegration
 
+  spm-prebuilt-package-integration:
+    name: Build Package Integration on Xcode 16
+    runs-on: macos-15
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
+      - name: Build Package Integration
+        run: |
+          xcrun swift package --package-path Examples/ExamplePrebuiltPackageIntegration --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
+          xcrun swift build --package-path Examples/ExamplePrebuiltPackageIntegration
+
   spm-project-integration:
     name: Build Project Integration on Xcode 16
     runs-on: macos-15
