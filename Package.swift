@@ -130,7 +130,10 @@ let package = Package(
 		.plugin(
 			name: "SafeDIPrebuiltGenerator",
 			capability: .buildTool(),
-			dependencies: []
+			dependencies: [],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			]
 		),
 
 		// Core
