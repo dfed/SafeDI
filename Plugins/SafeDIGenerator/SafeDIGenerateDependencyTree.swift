@@ -198,7 +198,6 @@ extension Target {
 			] + includeArguments + additionalImportedModulesArguments
 
 			let downloadedToolLocation = context.downloadedToolLocation
-			let safeDIVersion = context.safeDIVersion
 			if downloadedToolLocation == nil {
 				Diagnostics.warning("""
 				Using a debug SafeDITool binary, which is 15x slower than the release version.

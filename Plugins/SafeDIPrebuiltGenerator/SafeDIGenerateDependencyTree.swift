@@ -86,14 +86,13 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		let toolLocation = if let downloadedToolLocation {
 			downloadedToolLocation
 		} else if let safeDIVersion {
-			fatalError("""
-			No release SafeDITool binary found.
-
-			To install the release SafeDITool binary for version \(safeDIVersion), run:
+			Diagnostics.error("""
+			Install the release SafeDITool binary for version \(safeDIVersion):
 			\tswift package --package-path \(context.package.directoryURL.path()) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
 			""")
+			throw NoReleaseBinaryFoundError()
 		} else {
-			fatalError("SafeDIPrebuiltGenerator is only supported when using a versioned release.")
+			throw NoReleaseBinaryFoundError()
 		}
 
 		return [
@@ -133,6 +132,12 @@ extension Target {
 			}
 			return swiftModule
 		}
+	}
+}
+
+struct NoReleaseBinaryFoundError: Error, CustomStringConvertible {
+	var description: String {
+		"No release SafeDITool binary found"
 	}
 }
 
@@ -197,15 +202,13 @@ extension Target {
 			] + includeArguments + additionalImportedModulesArguments
 
 			let downloadedToolLocation = context.downloadedToolLocation
-			let safeDIVersion = context.safeDIVersion
 			let toolLocation = if let downloadedToolLocation {
 				downloadedToolLocation
 			} else {
-				fatalError("""
-				No release SafeDITool binary found.
-
+				Diagnostics.error("""
 				To install the release SafeDITool binary for this version, run the `InstallSafeDITool` command plugin.
 				""")
+				throw NoReleaseBinaryFoundError()
 			}
 
 			return try [
