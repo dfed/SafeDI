@@ -1,13 +1,13 @@
 {
-  "originHash" : "042f37742ef6cac6cc3fe1ce4a268017ff0758187c4c7dd357d880f327fa1e9d",
+  "originHash" : "d254ffc02b73274b2b4527bd3a73f0459643d8e7f7c8ba2be8c30b726c3fbaf8",
   "pins" : [
     {
       "identity" : "safedi",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/dfed/SafeDI.git",
       "state" : {
-        "revision" : "1920328cf9b2721f059b63a3f1228077c8957808",
-        "version" : "1.2.0-alpha-3"
+        "revision" : "755633afc8f8a0af57cd959a126434e89b5fee4a",
+        "version" : "1.2.0-alpha-5"
       }
     },
     {
