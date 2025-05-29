@@ -25,6 +25,11 @@ let package = Package(
 			name: "SafeDIGenerator",
 			targets: ["SafeDIGenerator"]
 		),
+		/// A SafeDI plugin that must be run on the root source module in a project that does not build SwiftSyntax from source.
+		.plugin(
+			name: "SafeDIPrebuiltGenerator",
+			targets: ["SafeDIPrebuiltGenerator"]
+		),
 		.plugin(
 			name: "InstallSafeDITool",
 			targets: ["InstallSafeDITool"]
@@ -95,28 +100,6 @@ let package = Package(
 			dependencies: []
 		),
 
-		// Core
-		.target(
-			name: "SafeDICore",
-			dependencies: [
-				.product(name: "Collections", package: "swift-collections"),
-				.product(name: "SwiftDiagnostics", package: "swift-syntax"),
-				.product(name: "SwiftSyntax", package: "swift-syntax"),
-				.product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-			],
-			swiftSettings: [
-				.swiftLanguageMode(.v6),
-			]
-		),
-		.testTarget(
-			name: "SafeDICoreTests",
-			dependencies: ["SafeDICore"],
-			swiftSettings: [
-				.swiftLanguageMode(.v6),
-			]
-		),
-
-		// Plugins
 		.plugin(
 			name: "SafeDIGenerator",
 			capability: .buildTool(),
@@ -139,6 +122,33 @@ let package = Package(
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
 				"SafeDITool",
 			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			]
+		),
+
+		.plugin(
+			name: "SafeDIPrebuiltGenerator",
+			capability: .buildTool(),
+			dependencies: []
+		),
+
+		// Core
+		.target(
+			name: "SafeDICore",
+			dependencies: [
+				.product(name: "Collections", package: "swift-collections"),
+				.product(name: "SwiftDiagnostics", package: "swift-syntax"),
+				.product(name: "SwiftSyntax", package: "swift-syntax"),
+				.product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			]
+		),
+		.testTarget(
+			name: "SafeDICoreTests",
+			dependencies: ["SafeDICore"],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
 			]

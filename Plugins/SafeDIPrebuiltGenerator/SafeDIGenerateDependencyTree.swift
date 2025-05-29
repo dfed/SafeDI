@@ -82,19 +82,18 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 
 		let downloadedToolLocation = context.downloadedToolLocation
 		let safeDIVersion = context.safeDIVersion
-		if downloadedToolLocation == nil, let safeDIVersion {
-			Diagnostics.warning("""
-			Using a debug SafeDITool binary, which is 15x slower than the release version.
+
+		let toolLocation = if let downloadedToolLocation {
+			downloadedToolLocation
+		} else if let safeDIVersion {
+			fatalError("""
+			No release SafeDITool binary found.
 
 			To install the release SafeDITool binary for version \(safeDIVersion), run:
 			\tswift package --package-path \(context.package.directoryURL.path()) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
 			""")
-		}
-
-		let toolLocation = if let downloadedToolLocation {
-			downloadedToolLocation
 		} else {
-			try context.tool(named: "SafeDITool").url
+			fatalError("SafeDIPrebuiltGenerator is only supported when using a versioned release.")
 		}
 
 		return [
@@ -199,17 +198,14 @@ extension Target {
 
 			let downloadedToolLocation = context.downloadedToolLocation
 			let safeDIVersion = context.safeDIVersion
-			if downloadedToolLocation == nil {
-				Diagnostics.warning("""
-				Using a debug SafeDITool binary, which is 15x slower than the release version.
-
-				To install the release SafeDITool binary for this version, run the `InstallSafeDITool` command plugin.
-				""")
-			}
 			let toolLocation = if let downloadedToolLocation {
 				downloadedToolLocation
 			} else {
-				try context.tool(named: "SafeDITool").url
+				fatalError("""
+				No release SafeDITool binary found.
+
+				To install the release SafeDITool binary for this version, run the `InstallSafeDITool` command plugin.
+				""")
 			}
 
 			return try [
