@@ -79,6 +79,9 @@ struct InstallSafeDITool: CommandPlugin {
 				at: expectedToolFolder,
 				withIntermediateDirectories: true
 			)
+			if FileManager.default.fileExists(atPath: expectedToolLocation.path()) {
+				try FileManager.default.removeItem(at: expectedToolLocation)
+			}
 			try FileManager.default.moveItem(
 				at: downloadedURL,
 				to: expectedToolLocation
