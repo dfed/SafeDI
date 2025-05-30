@@ -25,6 +25,11 @@ let package = Package(
 			name: "SafeDIGenerator",
 			targets: ["SafeDIGenerator"]
 		),
+		/// A SafeDI plugin that must be run on the root source module in a project that does not build SwiftSyntax from source.
+		.plugin(
+			name: "SafeDIPrebuiltGenerator",
+			targets: ["SafeDIPrebuiltGenerator"]
+		),
 		.plugin(
 			name: "InstallSafeDITool",
 			targets: ["InstallSafeDITool"]
@@ -58,8 +63,14 @@ let package = Package(
 		.macro(
 			name: "SafeDIMacros",
 			dependencies: [
-				"SafeDICore",
+				// We need to have the same dependencies as SafeDICore, since we simlink to SafeDICore's code.
+				// We simlink to SafeDICore becuase as of Xcode 16.4 and Swift 6.1.1, Xcode fails to build with IDEPackageEnablePrebuilts enabled when a module (like SafeDICore) with a SwiftSyntax dependency is shared between a Macro and a Plugin.
+				// See https://forums.swift.org/t/preview-swift-syntax-prebuilts-for-macros/80202/14
+				.product(name: "Collections", package: "swift-collections"),
 				.product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+				.product(name: "SwiftDiagnostics", package: "swift-syntax"),
+				.product(name: "SwiftSyntax", package: "swift-syntax"),
+				.product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
 				.product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
 			],
 			swiftSettings: [
@@ -70,7 +81,6 @@ let package = Package(
 			name: "SafeDIMacrosTests",
 			dependencies: [
 				"SafeDIMacros",
-				"SafeDICore",
 				.product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
 				.product(name: "MacroTesting", package: "swift-macro-testing"),
 			],
@@ -95,28 +105,6 @@ let package = Package(
 			dependencies: []
 		),
 
-		// Core
-		.target(
-			name: "SafeDICore",
-			dependencies: [
-				.product(name: "Collections", package: "swift-collections"),
-				.product(name: "SwiftDiagnostics", package: "swift-syntax"),
-				.product(name: "SwiftSyntax", package: "swift-syntax"),
-				.product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-			],
-			swiftSettings: [
-				.swiftLanguageMode(.v6),
-			]
-		),
-		.testTarget(
-			name: "SafeDICoreTests",
-			dependencies: ["SafeDICore"],
-			swiftSettings: [
-				.swiftLanguageMode(.v6),
-			]
-		),
-
-		// Plugins
 		.plugin(
 			name: "SafeDIGenerator",
 			capability: .buildTool(),
@@ -139,6 +127,33 @@ let package = Package(
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
 				"SafeDITool",
 			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			]
+		),
+
+		.plugin(
+			name: "SafeDIPrebuiltGenerator",
+			capability: .buildTool(),
+			dependencies: []
+		),
+
+		// Core
+		.target(
+			name: "SafeDICore",
+			dependencies: [
+				.product(name: "Collections", package: "swift-collections"),
+				.product(name: "SwiftDiagnostics", package: "swift-syntax"),
+				.product(name: "SwiftSyntax", package: "swift-syntax"),
+				.product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			]
+		),
+		.testTarget(
+			name: "SafeDICoreTests",
+			dependencies: ["SafeDICore"],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
 			]

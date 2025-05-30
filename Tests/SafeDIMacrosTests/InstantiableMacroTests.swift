@@ -23,8 +23,6 @@ import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
 import Testing
 
-import SafeDICore
-
 #if canImport(SafeDIMacros)
 	@testable import SafeDIMacros
 
