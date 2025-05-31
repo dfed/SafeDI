@@ -1176,15 +1176,145 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_generatesRequiredInitializerWhenDependencyMissingFromInit() {
+		func declaration_fixit_updatesRequiredInitializerWhenFirstDependencyMissingFromInit() {
 			assertMacro {
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
-				    public init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+					public init(receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(receivedA: ReceivedA, receivedB: ReceivedB) {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
+				    ✏️ Add arguments for forwardedA: ForwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} expansion: {
+				"""
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					let forwardedA: ForwardedA
+					let receivedA: ReceivedA
+					let receivedB: ReceivedB
+
+					public typealias ForwardedProperties = ForwardedA
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesRequiredInitializerWhenMiddleDependencyMissingFromInit() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedB: ReceivedB) {
+						self.forwardedA = forwardedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedB: ReceivedB) {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
+				    ✏️ Add arguments for receivedA: ReceivedA
+						self.forwardedA = forwardedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.forwardedA = forwardedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} expansion: {
+				"""
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.forwardedA = forwardedA
+						self.receivedB = receivedB
+					}
+
+					let forwardedA: ForwardedA
+					let receivedA: ReceivedA
+					let receivedB: ReceivedB
+
+					public typealias ForwardedProperties = ForwardedA
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesRequiredInitializerWhenLastDependencyMissingFromInit() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(
+						forwardedA: ForwardedA,
+						receivedA: ReceivedA
+					) {
 				        self.forwardedA = forwardedA
 				        self.receivedA = receivedA
-				        receivedB = ReceivedB()
 				    }
 
 				    @Forwarded let forwardedA: ForwardedA
@@ -1196,12 +1326,14 @@ import Testing
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                              ✏️ Add required initializer
-				    public init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+				    public init(
+				    ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
+				       ✏️ Add arguments for receivedB: ReceivedB
+						forwardedA: ForwardedA,
+						receivedA: ReceivedA
+					) {
 				        self.forwardedA = forwardedA
 				        self.receivedA = receivedA
-				        receivedB = ReceivedB()
 				    }
 
 				    @Forwarded let forwardedA: ForwardedA
@@ -1213,20 +1345,13 @@ import Testing
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
-				public init(
-				forwardedA: ForwardedA,
-				receivedA: ReceivedA,
-				receivedB: ReceivedB
-				) {
-				self.forwardedA = forwardedA
-				self.receivedA = receivedA
-				self.receivedB = receivedB
-				}
-
-				    public init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+				    public init(
+						forwardedA: ForwardedA,
+						receivedA: ReceivedA,
+						receivedB: ReceivedB
+					) {
 				        self.forwardedA = forwardedA
 				        self.receivedA = receivedA
-				        receivedB = ReceivedB()
 				    }
 
 				    @Forwarded let forwardedA: ForwardedA
@@ -1237,20 +1362,13 @@ import Testing
 			} expansion: {
 				"""
 				public struct ExampleService: Instantiable {
-				public init(
-				forwardedA: ForwardedA,
-				receivedA: ReceivedA,
-				receivedB: ReceivedB
-				) {
-				self.forwardedA = forwardedA
-				self.receivedA = receivedA
-				self.receivedB = receivedB
-				}
-
-				    public init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+				    public init(
+						forwardedA: ForwardedA,
+						receivedA: ReceivedA,
+						receivedB: ReceivedB
+					) {
 				        self.forwardedA = forwardedA
 				        self.receivedA = receivedA
-				        receivedB = ReceivedB()
 				    }
 
 				    let forwardedA: ForwardedA
@@ -1258,6 +1376,533 @@ import Testing
 				    let receivedB: ReceivedB
 
 				    public typealias ForwardedProperties = ForwardedA
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesRequiredInitializerWhenFirstDependencyMissingFromInitAndNonDependencyParameterExists() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
+				    ✏️ Add arguments for forwardedA: ForwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} expansion: {
+				"""
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					let forwardedA: ForwardedA
+					let receivedA: ReceivedA
+					let receivedB: ReceivedB
+
+					public typealias ForwardedProperties = ForwardedA
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesRequiredInitializerWhenMiddleDependencyMissingFromInitAndNonDependencyParameterExists() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(
+						customizable: String = "",
+						forwardedA: ForwardedA,
+						receivedB: ReceivedB
+					) {
+						self.forwardedA = forwardedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
+				    ✏️ Add arguments for receivedA: ReceivedA
+						customizable: String = "",
+						forwardedA: ForwardedA,
+						receivedB: ReceivedB
+					) {
+						self.forwardedA = forwardedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(
+						customizable: String = "",
+						forwardedA: ForwardedA,
+						receivedA: ReceivedA,
+						receivedB: ReceivedB
+					) {
+						self.forwardedA = forwardedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} expansion: {
+				"""
+				public struct ExampleService: Instantiable {
+					public init(
+						customizable: String = "",
+						forwardedA: ForwardedA,
+						receivedA: ReceivedA,
+						receivedB: ReceivedB
+					) {
+						self.forwardedA = forwardedA
+						self.receivedB = receivedB
+					}
+
+					let forwardedA: ForwardedA
+					let receivedA: ReceivedA
+					let receivedB: ReceivedB
+
+					public typealias ForwardedProperties = ForwardedA
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesRequiredInitializerWhenLastDependencyMissingFromInitAndNonDependencyParameterExists() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String = "") {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String = "") {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
+				    ✏️ Add arguments for receivedB: ReceivedB
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} expansion: {
+				"""
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					let forwardedA: ForwardedA
+					let receivedA: ReceivedA
+					let receivedB: ReceivedB
+
+					public typealias ForwardedProperties = ForwardedA
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesRequiredInitializerWhenIncorrectAccessibilityOnInitAndOtherNonConformingInitializersExist() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					public init(receivedA: ReceivedA, customizable: String = "") {
+						self.receivedA = receivedA
+					}
+
+					private init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					public init(receivedA: ReceivedA, customizable: String = "") {
+						self.receivedA = receivedA
+					}
+
+					private init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
+				    ✏️ Add `public` modifier
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					public init(receivedA: ReceivedA, customizable: String = "") {
+						self.receivedA = receivedA
+					}
+
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} expansion: {
+				"""
+				public struct ExampleService: Instantiable {
+					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					public init(receivedA: ReceivedA, customizable: String = "") {
+						self.receivedA = receivedA
+					}
+
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					let forwardedA: ForwardedA
+					let receivedA: ReceivedA
+					let receivedB: ReceivedB
+
+					public typealias ForwardedProperties = ForwardedA
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesRequiredInitializerWhenDependencyMissingFromInitAndOtherNonConformingInitializersExist() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					private init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					private init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
+				    ✏️ Add arguments for forwardedA: ForwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					private init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} expansion: {
+				"""
+				public struct ExampleService: Instantiable {
+					private init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					let forwardedA: ForwardedA
+					let receivedA: ReceivedA
+					let receivedB: ReceivedB
+
+					public typealias ForwardedProperties = ForwardedA
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesRequiredInitializerWhenDependencyMissingFromInitAndAccessibilityModifierMissing() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
+				    ✏️ Add arguments for forwardedA: ForwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
 				}
 				"""
 			}
@@ -1448,6 +2093,534 @@ import Testing
 				}
 
 				    private let instantiatableAInstantiator: Instantiator<ReceivedA>
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesInitWhenExistingInitIsMissingAccessModifier() {
+			assertMacro {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					init(a: A, b: B, c: C) {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
+				    ✏️ Add `public` modifier
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} expansion: {
+				"""
+				public final class UserService: Instantiable {
+					public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					let a: A
+					let b: B
+					let c: C
+
+					public typealias ForwardedProperties = C
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesInitWhenExistingInitIsMissingAccessModifierWithOtherModifier() {
+			assertMacro {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					final init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					final init(a: A, b: B, c: C) {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
+				    ✏️ Add `public` modifier
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					final public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} expansion: {
+				"""
+				public final class UserService: Instantiable {
+					final public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					let a: A
+					let b: B
+					let c: C
+
+					public typealias ForwardedProperties = C
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesInitWhenExistingInitHasIncorrectAccessModifier() {
+			assertMacro {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					private init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					private init(a: A, b: B, c: C) {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
+				    ✏️ Add `public` modifier
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} expansion: {
+				"""
+				public final class UserService: Instantiable {
+					public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					let a: A
+					let b: B
+					let c: C
+
+					public typealias ForwardedProperties = C
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesInitWhenExistingInitHasIncorrectAccessModifierWithCorrectEarlierModifier() {
+			assertMacro {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					final private init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					final private init(a: A, b: B, c: C) {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
+				    ✏️ Add `public` modifier
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					final public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} expansion: {
+				"""
+				public final class UserService: Instantiable {
+					final public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					let a: A
+					let b: B
+					let c: C
+
+					public typealias ForwardedProperties = C
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesInitWhenExistingInitHasIncorrectAccessModifierWithCorrectLaterModifier() {
+			assertMacro {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					private final init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					private final init(a: A, b: B, c: C) {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
+				    ✏️ Add `public` modifier
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					public final init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} expansion: {
+				"""
+				public final class UserService: Instantiable {
+					public final init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					let a: A
+					let b: B
+					let c: C
+
+					public typealias ForwardedProperties = C
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesInitWhenExistingInitIsMissingAccessModifierAndAnotherInitializerWithMissingArgument() {
+			assertMacro {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					private init(a: A, b: B) {
+						self.a = a
+						self.b = b
+						c = C()
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					init(a: A, b: B, c: C) {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
+				    ✏️ Add `public` modifier
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					private init(a: A, b: B) {
+						self.a = a
+						self.b = b
+						c = C()
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					private init(a: A, b: B) {
+						self.a = a
+						self.b = b
+						c = C()
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} expansion: {
+				"""
+				public final class UserService: Instantiable {
+					public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					private init(a: A, b: B) {
+						self.a = a
+						self.b = b
+						c = C()
+					}
+
+					let a: A
+					let b: B
+					let c: C
+
+					public typealias ForwardedProperties = C
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesInitWhenExistingInitIsMissingAccessModifierAndAnotherInitializerExistsWithExtraArgument() {
+			assertMacro {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					public init(a: A, b: B, c: C, d: D) {
+						self.a = a
+						self.b = b
+						self.c = c
+						_ = d
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					init(a: A, b: B, c: C) {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
+				    ✏️ Add `public` modifier
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					public init(a: A, b: B, c: C, d: D) {
+						self.a = a
+						self.b = b
+						self.c = c
+						_ = d
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					public init(a: A, b: B, c: C, d: D) {
+						self.a = a
+						self.b = b
+						self.c = c
+						_ = d
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				"""
+			} expansion: {
+				"""
+				public final class UserService: Instantiable {
+					public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					public init(a: A, b: B, c: C, d: D) {
+						self.a = a
+						self.b = b
+						self.c = c
+						_ = d
+					}
+
+					let a: A
+					let b: B
+					let c: C
+
+					public typealias ForwardedProperties = C
 				}
 				"""
 			}

@@ -114,7 +114,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		guard declarationType.isTypeDefinition else {
 			return .skipChildren
 		}
-		initializers.append(Initializer(node))
+		let initializer = Initializer(node)
+		initializerToInitSyntaxMap[initializer] = node
+		initializers.append(initializer)
 		return .skipChildren
 	}
 
@@ -284,6 +286,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var isRoot = false
 	public private(set) var dependencies = [Dependency]()
 	public private(set) var initializers = [Initializer]()
+	public private(set) var initializerToInitSyntaxMap: [Initializer: InitializerDeclSyntax] = [:]
 	public private(set) var instantiableType: TypeDescription?
 	public private(set) var additionalInstantiables: [TypeDescription]?
 	public private(set) var diagnostics = [Diagnostic]()
