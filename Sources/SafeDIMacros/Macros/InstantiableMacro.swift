@@ -587,7 +587,7 @@ extension TypeDescription {
 	}
 }
 
-// MARK: Initializer.GenerationError
+// MARK: Initializer
 
 extension Initializer {
 	fileprivate enum FixableError: Comparable, Hashable, Sendable {
