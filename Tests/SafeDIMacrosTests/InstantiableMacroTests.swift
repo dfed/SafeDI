@@ -2219,7 +2219,7 @@ import Testing
 				"""
 				@Instantiable
 				public final class UserService: Instantiable {
-					final public init(a: A, b: B, c: C) {
+					public final init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -2233,7 +2233,7 @@ import Testing
 			} expansion: {
 				"""
 				public final class UserService: Instantiable {
-					final public init(a: A, b: B, c: C) {
+					public final init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c

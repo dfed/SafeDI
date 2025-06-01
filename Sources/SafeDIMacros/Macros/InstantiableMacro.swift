@@ -264,17 +264,20 @@ public struct InstantiableMacro: MemberMacro {
 							}
 						})
 						if !fixedSyntax.modifiers.containsPublicOrOpen {
-							fixedSyntax.modifiers.append(.init(
+							if syntaxToFix.modifiers.first != nil {
+								fixedSyntax.modifiers[fixedSyntax.modifiers.startIndex].leadingTrivia = []
+							}
+							fixedSyntax.modifiers.insert(.init(
 								leadingTrivia: fixedSyntax.modifiers.isEmpty ? .newline : [],
 								name: TokenSyntax(
 									TokenKind.keyword(.public),
 									presence: .present
 								),
 								trailingTrivia: .space
-							))
+							), at: fixedSyntax.modifiers.startIndex)
 						}
-						if let firstOriginalModifier = syntaxToFix.modifiers.first {
-							fixedSyntax.modifiers[fixedSyntax.modifiers.startIndex].leadingTrivia = firstOriginalModifier.leadingTrivia
+						if let firstModifier = syntaxToFix.modifiers.first {
+							fixedSyntax.modifiers[fixedSyntax.modifiers.startIndex].leadingTrivia = firstModifier.leadingTrivia
 						} else {
 							fixedSyntax.modifiers[fixedSyntax.modifiers.startIndex].leadingTrivia = fixedSyntax.initKeyword.leadingTrivia
 							fixedSyntax.initKeyword.leadingTrivia = []
