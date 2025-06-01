@@ -1212,6 +1212,7 @@ import Testing
 				@Instantiable
 				public struct ExampleService: Instantiable {
 					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
@@ -1225,6 +1226,7 @@ import Testing
 				"""
 				public struct ExampleService: Instantiable {
 					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
@@ -1277,6 +1279,7 @@ import Testing
 				public struct ExampleService: Instantiable {
 					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
 						self.forwardedA = forwardedA
+						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
 
@@ -1290,6 +1293,7 @@ import Testing
 				public struct ExampleService: Instantiable {
 					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
 						self.forwardedA = forwardedA
+						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
 
@@ -1352,6 +1356,7 @@ import Testing
 					) {
 				        self.forwardedA = forwardedA
 				        self.receivedA = receivedA
+				        self.receivedB = receivedB
 				    }
 
 				    @Forwarded let forwardedA: ForwardedA
@@ -1369,6 +1374,7 @@ import Testing
 					) {
 				        self.forwardedA = forwardedA
 				        self.receivedA = receivedA
+				        self.receivedB = receivedB
 				    }
 
 				    let forwardedA: ForwardedA
@@ -1418,6 +1424,7 @@ import Testing
 				@Instantiable
 				public struct ExampleService: Instantiable {
 					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
@@ -1431,6 +1438,7 @@ import Testing
 				"""
 				public struct ExampleService: Instantiable {
 					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
@@ -1496,6 +1504,7 @@ import Testing
 						receivedB: ReceivedB
 					) {
 						self.forwardedA = forwardedA
+						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
 
@@ -1514,6 +1523,7 @@ import Testing
 						receivedB: ReceivedB
 					) {
 						self.forwardedA = forwardedA
+						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
 
@@ -1566,6 +1576,7 @@ import Testing
 					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
 						self.forwardedA = forwardedA
 						self.receivedA = receivedA
+						self.receivedB = receivedB
 					}
 
 					@Forwarded let forwardedA: ForwardedA
@@ -1579,6 +1590,7 @@ import Testing
 					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
 						self.forwardedA = forwardedA
 						self.receivedA = receivedA
+						self.receivedB = receivedB
 					}
 
 					let forwardedA: ForwardedA
@@ -1817,6 +1829,7 @@ import Testing
 					}
 
 					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
@@ -1845,6 +1858,7 @@ import Testing
 					}
 
 					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
@@ -1896,6 +1910,7 @@ import Testing
 				@Instantiable
 				public struct ExampleService: Instantiable {
 					init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}

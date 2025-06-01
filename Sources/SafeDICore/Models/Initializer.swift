@@ -176,23 +176,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 			),
 			bodyBuilder: {
 				for dependency in dependencies {
-					CodeBlockItemSyntax(
-						item: .expr(ExprSyntax(InfixOperatorExprSyntax(
-							leadingTrivia: .newline,
-							leftOperand: MemberAccessExprSyntax(
-								base: DeclReferenceExprSyntax(baseName: TokenSyntax.keyword(.`self`)),
-								name: TokenSyntax.identifier(dependency.property.label)
-							),
-							operator: AssignmentExprSyntax(
-								leadingTrivia: .space,
-								trailingTrivia: .space
-							),
-							rightOperand: DeclReferenceExprSyntax(
-								baseName: TokenSyntax.identifier(dependency.property.label),
-								trailingTrivia: dependency == dependencies.last ? .newline : nil
-							)
-						)))
-					)
+					dependency.property.asPropertyAssignment(withTrailingNewline: dependency == dependencies.last)
 				}
 				for (index, additionalPropertyLabel) in additionalPropertyLabels.enumerated() {
 					CodeBlockItemSyntax(

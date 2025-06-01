@@ -201,6 +201,35 @@ public struct InstantiableMacro: MemberMacro {
 							return parameter
 						})
 
+						if let body = fixedSyntax.body {
+							let propertyLabelToPropertyMap = properties.reduce(into: [String: Property]()) { partialResult, next in
+								partialResult[next.label] = next
+							}
+							let existingPropertyAssignment = body.statements.reduce(into: [Property: CodeBlockItemSyntax]()) { partialResult, next in
+								if let infixOperatorExpression = InfixOperatorExprSyntax(next.item),
+								   let memberAcessExpression = MemberAccessExprSyntax(infixOperatorExpression.leftOperand),
+								   DeclReferenceExprSyntax(memberAcessExpression.base)?.baseName.text == TokenSyntax.keyword(.`self`).text,
+								   let property = propertyLabelToPropertyMap[memberAcessExpression.declName.baseName.text]
+								{
+									partialResult[property] = next
+								}
+							}
+
+							let propertyAssignments = properties.map {
+								if let existingAssignment = existingPropertyAssignment[$0] {
+									return existingAssignment
+								} else {
+									var propertyAssignment = $0.asPropertyAssignment()
+									propertyAssignment.leadingTrivia = body.statements.first?.leadingTrivia ?? []
+									return propertyAssignment
+								}
+							}
+
+							fixedSyntax.body?.statements = propertyAssignments + body.statements.filter {
+								!existingPropertyAssignment.values.contains($0)
+							}
+						}
+
 						context.diagnose(Diagnostic(
 							node: Syntax(syntaxToFix),
 							error: FixableInstantiableError.missingRequiredInitializer(.missingArguments(arguments)),
