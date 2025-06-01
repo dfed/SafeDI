@@ -495,7 +495,7 @@ public struct InstantiableMacro: MemberMacro {
 						modifiers: DeclModifierListSyntax(
 							arrayLiteral: DeclModifierSyntax(
 								name: TokenSyntax(
-									TokenKind.identifier("public"),
+									TokenKind.keyword(.public),
 									presence: .present
 								),
 								trailingTrivia: .space
@@ -517,7 +517,7 @@ public struct InstantiableMacro: MemberMacro {
 						modifiers: DeclModifierListSyntax(
 							arrayLiteral: DeclModifierSyntax(
 								name: TokenSyntax(
-									TokenKind.identifier("public"),
+									TokenKind.keyword(.public),
 									presence: .present
 								),
 								trailingTrivia: .space
