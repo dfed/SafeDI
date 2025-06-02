@@ -248,8 +248,8 @@ public struct InstantiableMacro: MemberMacro {
 							var existingPropertyAssignment = [Property: CodeBlockItemSyntax]()
 							var nonPropertyAssignmentStatements = [CodeBlockItemSyntax]()
 							for statement in body.statements {
-								// Ideally we'd check if this is an `InfixOperatorExprSyntax`, but as of Xcode 16.4 doesn't parse this properly.
-								// Instead, it treats what should be a `InfixOperatorExprSyntax` instead as an `ExprListSyntax`.
+								// Ideally we'd check if this is an `InfixOperatorExprSyntax`, but Xcode 16.4 doesn't parse this properly.
+								// Instead, the macro receives `ExprListSyntax` when running inside Xcode.
 								// Checking the description isn't ideal, but it's close enough for our purposes today.
 //								if let infixOperatorExpression = InfixOperatorExprSyntax(statement.item),
 //								   let memberAcessExpression = MemberAccessExprSyntax(infixOperatorExpression.leftOperand),
