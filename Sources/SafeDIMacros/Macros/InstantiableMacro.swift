@@ -151,28 +151,54 @@ public struct InstantiableMacro: MemberMacro {
 				if let initializerToFix {
 					let syntaxToFix = initializerToFix.syntax
 					switch initializerToFix.error.asErrorToFix {
-					case let .missingArguments(arguments):
+					case let .missingArguments(missingArguments):
 						var fixedSyntax = syntaxToFix
-						let firstArgumentLeadingTrivia = syntaxToFix.signature.parameterClause.parameters.first?.leadingTrivia ?? .newline
-						let firstArgumentTrailingComma = syntaxToFix.signature.parameterClause.parameters.first?.trailingComma
+						let existingArgumentCount = syntaxToFix.signature.parameterClause.parameters.count
+						let firstArgumentLeadingTrivia: Trivia = if existingArgumentCount > 1 {
+							syntaxToFix.signature.parameterClause.parameters.first?.leadingTrivia ?? []
+						} else if existingArgumentCount + missingArguments.count > 1 {
+							.newline
+						} else {
+							[]
+						}
+						let firstArgumentTrailingComma: TokenSyntax? = if existingArgumentCount > 1 {
+							syntaxToFix.signature.parameterClause.parameters.first?.trailingComma
+						} else if existingArgumentCount + missingArguments.count > 1 {
+							.commaToken(trailingTrivia: .newline)
+						} else {
+							.commaToken()
+						}
 						let lastArgumentLeadingTrivia = syntaxToFix.signature.parameterClause.parameters.last?.leadingTrivia ?? []
-						let lastArgumentTrailingTrivia = syntaxToFix.signature.parameterClause.parameters.last?.trailingTrivia ?? .newline
+						let lastArgumentTrailingTrivia: Trivia = if existingArgumentCount > 1 {
+							syntaxToFix.signature.parameterClause.parameters.last?.trailingTrivia ?? .newline
+						} else if existingArgumentCount + missingArguments.count > 1 {
+							.newline
+						} else {
+							[]
+						}
 						let properties = visitor.dependencies.map(\.property)
 
 						var existingParameters = fixedSyntax.signature.parameterClause.parameters.reduce(into: [Property: FunctionParameterSyntax]()) { partialResult, next in
 							partialResult[Initializer.Argument(next).asProperty] = next
 						}
 						fixedSyntax.signature.parameterClause.parameters = []
+						func normalizeFunctionParameter(_ parameter: FunctionParameterSyntax, for property: Property) -> FunctionParameterSyntax {
+							var parameter = parameter
+							if let indexOfDependency = properties.firstIndex(of: property) {
+								parameter.leadingTrivia = indexOfDependency == 0 ? firstArgumentLeadingTrivia : lastArgumentLeadingTrivia
+								parameter.trailingTrivia = []
+							}
+							return parameter
+						}
 						for property in properties {
 							if let existingParameter = existingParameters[property] {
-								fixedSyntax.signature.parameterClause.parameters.append(existingParameter)
+								fixedSyntax.signature.parameterClause.parameters.append(
+									normalizeFunctionParameter(existingParameter, for: property)
+								)
 							} else {
-								var functionParameter = property.asFunctionParamter
-								if let indexOfDependency = properties.firstIndex(of: property) {
-									functionParameter.leadingTrivia = indexOfDependency == 0 ? firstArgumentLeadingTrivia : lastArgumentLeadingTrivia
-									functionParameter.trailingTrivia = []
-									fixedSyntax.signature.parameterClause.parameters.append(functionParameter)
-								}
+								fixedSyntax.signature.parameterClause.parameters.append(
+									normalizeFunctionParameter(property.asFunctionParamter, for: property)
+								)
 							}
 							existingParameters[property] = nil
 						}
@@ -183,7 +209,7 @@ public struct InstantiableMacro: MemberMacro {
 									existingParameter,
 									at: fixedSyntax.signature.parameterClause.parameters.index(
 										priorIndex,
-										offsetBy: priorIndex == syntaxToFix.signature.parameterClause.parameters.startIndex ? 0 : arguments.count
+										offsetBy: priorIndex == syntaxToFix.signature.parameterClause.parameters.startIndex ? 0 : missingArguments.count
 									)
 								)
 							}
@@ -205,12 +231,18 @@ public struct InstantiableMacro: MemberMacro {
 							let propertyLabelToPropertyMap = properties.reduce(into: [String: Property]()) { partialResult, next in
 								partialResult[next.label] = next
 							}
-							let existingPropertyAssignment = body.statements.reduce(into: [Property: CodeBlockItemSyntax]()) { partialResult, next in
-								if let infixOperatorExpression = InfixOperatorExprSyntax(next.item),
+							func propertyIfPropertyAssignment(_ codeBlock: CodeBlockItemSyntax) -> Property? {
+								if let infixOperatorExpression = InfixOperatorExprSyntax(codeBlock.item),
 								   let memberAcessExpression = MemberAccessExprSyntax(infixOperatorExpression.leftOperand),
-								   DeclReferenceExprSyntax(memberAcessExpression.base)?.baseName.text == TokenSyntax.keyword(.`self`).text,
-								   let property = propertyLabelToPropertyMap[memberAcessExpression.declName.baseName.text]
+								   DeclReferenceExprSyntax(memberAcessExpression.base)?.baseName.text == TokenSyntax.keyword(.`self`).text
 								{
+									propertyLabelToPropertyMap[memberAcessExpression.declName.baseName.text]
+								} else {
+									nil
+								}
+							}
+							let existingPropertyAssignment = body.statements.reduce(into: [Property: CodeBlockItemSyntax]()) { partialResult, next in
+								if let property = propertyIfPropertyAssignment(next) {
 									partialResult[property] = next
 								}
 							}
@@ -226,14 +258,13 @@ public struct InstantiableMacro: MemberMacro {
 							}
 
 							fixedSyntax.body?.statements = propertyAssignments + body.statements.filter {
-								// Using the actual code block value works great in tests, but in Xcode we seem to need more than that.
-								!existingPropertyAssignment.values.map(\.trimmed.description).contains($0.trimmed.description)
+								propertyIfPropertyAssignment($0) == nil
 							}
 						}
 
 						context.diagnose(Diagnostic(
 							node: Syntax(syntaxToFix),
-							error: FixableInstantiableError.missingRequiredInitializer(.missingArguments(arguments)),
+							error: FixableInstantiableError.missingRequiredInitializer(.missingArguments(missingArguments)),
 							changes: [
 								.replace(
 									oldNode: Syntax(syntaxToFix),
