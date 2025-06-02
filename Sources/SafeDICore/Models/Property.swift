@@ -58,9 +58,9 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		lhs.label < rhs.label
 	}
 
-	// MARK: Internal
+	// MARK: Public
 
-	var asFunctionParamter: FunctionParameterSyntax {
+	public var asFunctionParamter: FunctionParameterSyntax {
 		switch typeDescription {
 		case .closure:
 			FunctionParameterSyntax(
@@ -121,6 +121,28 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 			)
 		}
 	}
+
+	public func asPropertyAssignment(withTrailingNewline trailingNewline: Bool = false) -> CodeBlockItemSyntax {
+		.init(
+			item: .expr(ExprSyntax(InfixOperatorExprSyntax(
+				leadingTrivia: .newline,
+				leftOperand: MemberAccessExprSyntax(
+					base: DeclReferenceExprSyntax(baseName: TokenSyntax.keyword(.`self`)),
+					name: TokenSyntax.identifier(label)
+				),
+				operator: AssignmentExprSyntax(
+					leadingTrivia: .space,
+					trailingTrivia: .space
+				),
+				rightOperand: DeclReferenceExprSyntax(
+					baseName: TokenSyntax.identifier(label),
+					trailingTrivia: trailingNewline ? .newline : nil
+				)
+			)))
+		)
+	}
+
+	// MARK: Internal
 
 	var asTupleElement: TupleTypeElementSyntax {
 		TupleTypeElementSyntax(

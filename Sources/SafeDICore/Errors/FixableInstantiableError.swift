@@ -37,6 +37,8 @@ public enum FixableInstantiableError: DiagnosticError {
 		case hasOnlyInjectableProperties
 		case hasInjectableAndNotInjectableProperties
 		case hasNoInjectableProperties
+		case isNotPublicOrOpen
+		case missingArguments([Property])
 	}
 
 	public var description: String {
@@ -69,6 +71,10 @@ public enum FixableInstantiableError: DiagnosticError {
 				"@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values."
 			case .hasNoInjectableProperties:
 				"@\(InstantiableVisitor.macroName)-decorated type with no @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated properties must have a `public` or `open` initializer that either takes no parameters or has a default value for each parameter."
+			case .isNotPublicOrOpen:
+				"@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer."
+			case .missingArguments:
+				"@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property."
 			}
 		}
 	}
@@ -133,8 +139,17 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Remove initializer"
 			case .missingPublicOrOpenAttribute:
 				"Add `public` modifier"
-			case .missingRequiredInitializer:
-				"Add required initializer"
+			case let .missingRequiredInitializer(missingInitError):
+				switch missingInitError {
+				case .hasOnlyInjectableProperties,
+				     .hasInjectableAndNotInjectableProperties,
+				     .hasNoInjectableProperties:
+					"Add required initializer"
+				case .isNotPublicOrOpen:
+					"Add `public` modifier"
+				case let .missingArguments(properties):
+					"Add arguments for \(properties.map(\.asSource).joined(separator: ", "))"
+				}
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}

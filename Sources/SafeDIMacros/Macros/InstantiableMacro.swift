@@ -132,37 +132,199 @@ public struct InstantiableMacro: MemberMacro {
 				.initializers
 				.contains(where: { $0.isValid(forFulfilling: visitor.dependencies) })
 			guard hasMemberwiseInitializerForInjectableProperties else {
-				var declarationWithInitializer = declaration
-				declarationWithInitializer.memberBlock.members.insert(
-					MemberBlockItemSyntax(
-						leadingTrivia: .newline,
-						decl: Initializer.generateRequiredInitializer(
-							for: visitor.dependencies,
-							declarationType: concreteDeclaration.declType,
-							andAdditionalPropertiesWithLabels: visitor.uninitializedNonOptionalPropertyNames
-						),
-						trailingTrivia: .newline
-					),
-					at: declarationWithInitializer.memberBlock.members.startIndex
-				)
-				let errorType: FixableInstantiableError.MissingInitializer = if visitor.uninitializedNonOptionalPropertyNames.isEmpty {
-					.hasOnlyInjectableProperties
-				} else if visitor.dependencies.isEmpty {
-					.hasNoInjectableProperties
-				} else {
-					.hasInjectableAndNotInjectableProperties
+				func associatedError(for initializer: Initializer) -> (initializer: Initializer, syntax: InitializerDeclSyntax, error: Initializer.FixableError)? {
+					do {
+						try initializer.validate(fulfilling: visitor.dependencies)
+					} catch {
+						if let fixableError = error.asFixableError, let syntax = visitor.initializerToInitSyntaxMap[initializer] {
+							return (initializer: initializer, syntax: syntax, error: fixableError)
+						}
+					}
+					return nil
 				}
-				// TODO: Create separate fixit if just `public` or `open` are missing.
-				context.diagnose(Diagnostic(
-					node: Syntax(declaration.memberBlock),
-					error: FixableInstantiableError.missingRequiredInitializer(errorType),
-					changes: [
-						.replace(
-							oldNode: Syntax(declaration),
-							newNode: Syntax(declarationWithInitializer)
+				let initializerToFix: (initializer: Initializer, syntax: InitializerDeclSyntax, error: Initializer.FixableError)? = visitor.initializers.compactMap {
+					associatedError(for: $0)
+				}.sorted {
+					$0.error < $1.error
+				}.first
+
+				if let initializerToFix {
+					let syntaxToFix = initializerToFix.syntax
+					switch initializerToFix.error.asErrorToFix {
+					case let .missingArguments(arguments):
+						var fixedSyntax = syntaxToFix
+						let firstArgumentLeadingTrivia = syntaxToFix.signature.parameterClause.parameters.first?.leadingTrivia ?? .newline
+						let firstArgumentTrailingComma = syntaxToFix.signature.parameterClause.parameters.first?.trailingComma
+						let lastArgumentLeadingTrivia = syntaxToFix.signature.parameterClause.parameters.last?.leadingTrivia ?? []
+						let lastArgumentTrailingTrivia = syntaxToFix.signature.parameterClause.parameters.last?.trailingTrivia ?? .newline
+						let properties = visitor.dependencies.map(\.property)
+
+						var existingParameters = fixedSyntax.signature.parameterClause.parameters.reduce(into: [Property: FunctionParameterSyntax]()) { partialResult, next in
+							partialResult[Initializer.Argument(next).asProperty] = next
+						}
+						fixedSyntax.signature.parameterClause.parameters = []
+						for property in properties {
+							if let existingParameter = existingParameters[property] {
+								fixedSyntax.signature.parameterClause.parameters.append(existingParameter)
+							} else {
+								var functionParameter = property.asFunctionParamter
+								if let indexOfDependency = properties.firstIndex(of: property) {
+									functionParameter.leadingTrivia = indexOfDependency == 0 ? firstArgumentLeadingTrivia : lastArgumentLeadingTrivia
+									functionParameter.trailingTrivia = []
+									fixedSyntax.signature.parameterClause.parameters.append(functionParameter)
+								}
+							}
+							existingParameters[property] = nil
+						}
+
+						for existingParameter in existingParameters.map(\.value) {
+							if let priorIndex = syntaxToFix.signature.parameterClause.parameters.firstIndex(of: existingParameter) {
+								fixedSyntax.signature.parameterClause.parameters.insert(
+									existingParameter,
+									at: fixedSyntax.signature.parameterClause.parameters.index(
+										priorIndex,
+										offsetBy: priorIndex == syntaxToFix.signature.parameterClause.parameters.startIndex ? 0 : arguments.count
+									)
+								)
+							}
+						}
+
+						let lastParameter = fixedSyntax.signature.parameterClause.parameters.last
+						fixedSyntax.signature.parameterClause.parameters = .init(fixedSyntax.signature.parameterClause.parameters.map { parameter in
+							var parameter = parameter
+							if parameter == lastParameter {
+								parameter.trailingComma = nil
+								parameter.trailingTrivia = lastArgumentTrailingTrivia
+							} else {
+								parameter.trailingComma = firstArgumentTrailingComma
+							}
+							return parameter
+						})
+
+						if let body = fixedSyntax.body {
+							let propertyLabelToPropertyMap = properties.reduce(into: [String: Property]()) { partialResult, next in
+								partialResult[next.label] = next
+							}
+							let existingPropertyAssignment = body.statements.reduce(into: [Property: CodeBlockItemSyntax]()) { partialResult, next in
+								if let infixOperatorExpression = InfixOperatorExprSyntax(next.item),
+								   let memberAcessExpression = MemberAccessExprSyntax(infixOperatorExpression.leftOperand),
+								   DeclReferenceExprSyntax(memberAcessExpression.base)?.baseName.text == TokenSyntax.keyword(.`self`).text,
+								   let property = propertyLabelToPropertyMap[memberAcessExpression.declName.baseName.text]
+								{
+									partialResult[property] = next
+								}
+							}
+
+							let propertyAssignments = properties.map {
+								if let existingAssignment = existingPropertyAssignment[$0] {
+									return existingAssignment
+								} else {
+									var propertyAssignment = $0.asPropertyAssignment()
+									propertyAssignment.leadingTrivia = body.statements.first?.leadingTrivia ?? []
+									return propertyAssignment
+								}
+							}
+
+							fixedSyntax.body?.statements = propertyAssignments + body.statements.filter {
+								!existingPropertyAssignment.values.contains($0)
+							}
+						}
+
+						context.diagnose(Diagnostic(
+							node: Syntax(syntaxToFix),
+							error: FixableInstantiableError.missingRequiredInitializer(.missingArguments(arguments)),
+							changes: [
+								.replace(
+									oldNode: Syntax(syntaxToFix),
+									newNode: Syntax(fixedSyntax)
+								),
+							]
+						))
+
+					case .inaccessibleInitializer:
+						let disallowedModifiers = Set([
+							"private",
+							"fileprivate",
+							"internal",
+							"package",
+						])
+						var fixedSyntax = syntaxToFix
+						fixedSyntax.modifiers = .init(fixedSyntax.modifiers.map {
+							if disallowedModifiers.contains($0.name.text) {
+								.init(
+									leadingTrivia: $0.leadingTrivia,
+									name: TokenSyntax(
+										TokenKind.keyword(.public),
+										presence: .present
+									),
+									trailingTrivia: $0.trailingTrivia
+								)
+							} else {
+								$0
+							}
+						})
+						if !fixedSyntax.modifiers.containsPublicOrOpen {
+							if syntaxToFix.modifiers.first != nil {
+								fixedSyntax.modifiers[fixedSyntax.modifiers.startIndex].leadingTrivia = []
+							}
+							fixedSyntax.modifiers.insert(.init(
+								leadingTrivia: fixedSyntax.modifiers.isEmpty ? .newline : [],
+								name: TokenSyntax(
+									TokenKind.keyword(.public),
+									presence: .present
+								),
+								trailingTrivia: .space
+							), at: fixedSyntax.modifiers.startIndex)
+						}
+						if let firstModifier = syntaxToFix.modifiers.first {
+							fixedSyntax.modifiers[fixedSyntax.modifiers.startIndex].leadingTrivia = firstModifier.leadingTrivia
+						} else {
+							fixedSyntax.modifiers[fixedSyntax.modifiers.startIndex].leadingTrivia = fixedSyntax.initKeyword.leadingTrivia
+							fixedSyntax.initKeyword.leadingTrivia = []
+						}
+						context.diagnose(Diagnostic(
+							node: Syntax(syntaxToFix),
+							error: FixableInstantiableError.missingRequiredInitializer(.isNotPublicOrOpen),
+							changes: [
+								.replace(
+									oldNode: Syntax(syntaxToFix),
+									newNode: Syntax(fixedSyntax)
+								),
+							]
+						))
+					}
+				} else {
+					var declarationWithInitializer = declaration
+					declarationWithInitializer.memberBlock.members.insert(
+						MemberBlockItemSyntax(
+							leadingTrivia: .newline,
+							decl: Initializer.generateRequiredInitializer(
+								for: visitor.dependencies,
+								declarationType: concreteDeclaration.declType,
+								andAdditionalPropertiesWithLabels: visitor.uninitializedNonOptionalPropertyNames
+							),
+							trailingTrivia: .newline
 						),
-					]
-				))
+						at: declarationWithInitializer.memberBlock.members.startIndex
+					)
+					let errorType: FixableInstantiableError.MissingInitializer = if visitor.uninitializedNonOptionalPropertyNames.isEmpty {
+						.hasOnlyInjectableProperties
+					} else if visitor.dependencies.isEmpty {
+						.hasNoInjectableProperties
+					} else {
+						.hasInjectableAndNotInjectableProperties
+					}
+					context.diagnose(Diagnostic(
+						node: Syntax(declaration.memberBlock),
+						error: FixableInstantiableError.missingRequiredInitializer(errorType),
+						changes: [
+							.replace(
+								oldNode: Syntax(declaration),
+								newNode: Syntax(declarationWithInitializer)
+							),
+						]
+					))
+				}
 				return []
 			}
 			return generateForwardedProperties(from: forwardedProperties)
@@ -336,7 +498,7 @@ public struct InstantiableMacro: MemberMacro {
 						modifiers: DeclModifierListSyntax(
 							arrayLiteral: DeclModifierSyntax(
 								name: TokenSyntax(
-									TokenKind.identifier("public"),
+									TokenKind.keyword(.public),
 									presence: .present
 								),
 								trailingTrivia: .space
@@ -358,7 +520,7 @@ public struct InstantiableMacro: MemberMacro {
 						modifiers: DeclModifierListSyntax(
 							arrayLiteral: DeclModifierSyntax(
 								name: TokenSyntax(
-									TokenKind.identifier("public"),
+									TokenKind.keyword(.public),
 									presence: .present
 								),
 								trailingTrivia: .space
@@ -425,5 +587,69 @@ extension TypeDescription {
 					attributes: ["retroactive"]
 				)
 			)
+	}
+}
+
+// MARK: Initializer
+
+extension Initializer {
+	fileprivate enum FixableError: Comparable, Hashable, Sendable {
+		case inaccessibleInitializer
+		case missingArguments([Property])
+		indirect case multiple([FixableError])
+
+		// Compare in terms of delta from what SafeDI needs – smallest requires the smallest change to make satisfactory.
+		fileprivate static func < (lhs: FixableError, rhs: FixableError) -> Bool {
+			switch (lhs, rhs) {
+			case (.inaccessibleInitializer, _):
+				lhs != rhs
+			case let (.missingArguments(lhs), .missingArguments(rhs)):
+				lhs.count < rhs.count
+			case (.missingArguments, _):
+				lhs != rhs
+			case let (.multiple(lhs), .multiple(rhs)):
+				lhs.count < rhs.count
+			case (.multiple, _):
+				false
+			}
+		}
+
+		fileprivate enum ErrorToFix {
+			case inaccessibleInitializer
+			case missingArguments([Property])
+		}
+
+		fileprivate var asErrorToFix: ErrorToFix {
+			switch self {
+			case .inaccessibleInitializer:
+				.inaccessibleInitializer
+			case let .missingArguments(arguments):
+				.missingArguments(arguments)
+			case let .multiple(errors):
+				errors.sorted().first!.asErrorToFix
+			}
+		}
+	}
+}
+
+// MARK: Initializer.GenerationError
+
+extension Initializer.GenerationError {
+	fileprivate var asFixableError: Initializer.FixableError? {
+		switch self {
+		case let .missingArguments(arguments):
+			.missingArguments(arguments)
+		case .inaccessibleInitializer:
+			.inaccessibleInitializer
+		case let .multiple(errors):
+			.multiple(errors.compactMap(\.asFixableError))
+		case .asyncInitializer,
+		     .genericParameterInInitializer,
+		     .optionalInitializer,
+		     .throwingInitializer,
+		     .unexpectedArgument,
+		     .whereClauseOnInitializer:
+			nil
+		}
 	}
 }

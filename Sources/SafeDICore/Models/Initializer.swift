@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Collections
 @preconcurrency import SwiftSyntax
 import SwiftSyntaxBuilder
 
@@ -82,40 +83,54 @@ public struct Initializer: Codable, Hashable, Sendable {
 
 	public func isValid(forFulfilling dependencies: [Dependency]) -> Bool {
 		do {
-			try validate(fulfilling: dependencies)
+			try validate(fulfilling: dependencies, throwOnFirstError: true)
 			return true
 		} catch {
 			return false
 		}
 	}
 
-	public func validate(fulfilling dependencies: [Dependency]) throws {
-		guard isPublicOrOpen else {
-			throw GenerationError.inaccessibleInitializer
+	public func validate(fulfilling dependencies: [Dependency], throwOnFirstError: Bool = false) throws(GenerationError) {
+		var reasons = [GenerationError]()
+		func recordError(_ generationError: GenerationError) throws(GenerationError) {
+			if throwOnFirstError {
+				throw generationError
+			} else {
+				reasons.append(generationError)
+			}
 		}
-		guard !isOptional else {
-			throw GenerationError.optionalInitializer
+		if !isPublicOrOpen {
+			try recordError(.inaccessibleInitializer)
 		}
-		guard !isAsync else {
-			throw GenerationError.asyncInitializer
+		if isOptional {
+			try recordError(.optionalInitializer)
 		}
-		guard !doesThrow else {
-			throw GenerationError.throwingInitializer
+		if isAsync {
+			try recordError(.asyncInitializer)
 		}
-		guard !hasGenericParameter else {
-			throw GenerationError.genericParameterInInitializer
+		if doesThrow {
+			try recordError(.throwingInitializer)
 		}
-		guard !hasGenericWhereClause else {
-			throw GenerationError.whereClauseOnInitializer
+		if hasGenericParameter {
+			try recordError(.genericParameterInInitializer)
+		}
+		if hasGenericWhereClause {
+			try recordError(.whereClauseOnInitializer)
 		}
 
 		let dependencyAndArgumentBinding = try createDependencyAndArgumentBinding(given: dependencies)
 
 		let initializerFulfulledDependencies = Set(dependencyAndArgumentBinding.map(\.dependency))
-		let missingArguments = Set(dependencies).subtracting(initializerFulfulledDependencies)
+		let missingArguments = OrderedSet(dependencies).subtracting(initializerFulfulledDependencies)
 
-		guard missingArguments.isEmpty else {
-			throw GenerationError.missingArguments(missingArguments.map(\.property.asSource))
+		if !missingArguments.isEmpty {
+			try recordError(.missingArguments(missingArguments.map(\.property)))
+		}
+
+		if reasons.count > 1 {
+			throw .multiple(reasons)
+		} else if let firstReason = reasons.first {
+			throw firstReason
 		}
 
 		// We're good!
@@ -161,23 +176,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 			),
 			bodyBuilder: {
 				for dependency in dependencies {
-					CodeBlockItemSyntax(
-						item: .expr(ExprSyntax(InfixOperatorExprSyntax(
-							leadingTrivia: .newline,
-							leftOperand: MemberAccessExprSyntax(
-								base: DeclReferenceExprSyntax(baseName: TokenSyntax.keyword(.`self`)),
-								name: TokenSyntax.identifier(dependency.property.label)
-							),
-							operator: AssignmentExprSyntax(
-								leadingTrivia: .space,
-								trailingTrivia: .space
-							),
-							rightOperand: DeclReferenceExprSyntax(
-								baseName: TokenSyntax.identifier(dependency.property.label),
-								trailingTrivia: dependency == dependencies.last ? .newline : nil
-							)
-						)))
-					)
+					dependency.property.asPropertyAssignment(withTrailingNewline: dependency == dependencies.last)
 				}
 				for (index, additionalPropertyLabel) in additionalPropertyLabels.enumerated() {
 					CodeBlockItemSyntax(
@@ -205,8 +204,9 @@ public struct Initializer: Codable, Hashable, Sendable {
 
 	// MARK: - Internal
 
-	func createDependencyAndArgumentBinding(given dependencies: [Dependency]) throws -> [(dependency: Dependency, argument: Argument)] {
-		try arguments.reduce(into: [(dependency: Dependency, argument: Argument)]()) { partialResult, argument in
+	func createDependencyAndArgumentBinding(given dependencies: [Dependency]) throws(GenerationError) -> [(dependency: Dependency, argument: Argument)] {
+		var bindings = [(dependency: Dependency, argument: Argument)]()
+		for argument in arguments {
 			guard let dependency = dependencies.first(where: {
 				$0.property.label == argument.innerLabel
 					&& $0.property.typeDescription.isEqualToFunctionArgument(argument.typeDescription)
@@ -215,13 +215,14 @@ public struct Initializer: Codable, Hashable, Sendable {
 					throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
 				}
 				// We do not care about this argument because it has a default value.
-				return
+				continue
 			}
-			partialResult.append((dependency: dependency, argument: argument))
+			bindings.append((dependency: dependency, argument: argument))
 		}
+		return bindings
 	}
 
-	func createInitializerArgumentList(given dependencies: [Dependency]) throws -> String {
+	func createInitializerArgumentList(given dependencies: [Dependency]) throws(GenerationError) -> String {
 		try createDependencyAndArgumentBinding(given: dependencies)
 			.map { "\($0.argument.label): \($0.argument.innerLabel)" }
 			.joined(separator: ", ")
@@ -237,9 +238,10 @@ public struct Initializer: Codable, Hashable, Sendable {
 		case genericParameterInInitializer
 		case whereClauseOnInitializer
 		/// The initializer is missing arguments for injected properties.
-		case missingArguments([String])
+		case missingArguments([Property])
 		/// The initializer has an argument that does not map to any injected properties.
 		case unexpectedArgument(String)
+		indirect case multiple([GenerationError])
 	}
 
 	// MARK: - Argument
@@ -295,8 +297,6 @@ public struct Initializer: Codable, Hashable, Sendable {
 
 		static let dependenciesArgumentName: TokenSyntax = .identifier("buildSafeDIDependencies")
 	}
-
-	static let dependenciesToken: TokenSyntax = .identifier("dependencies")
 }
 
 // MARK: - ConcreteDeclType
@@ -306,7 +306,7 @@ extension ConcreteDeclType {
 		DeclModifierListSyntax(
 			arrayLiteral: DeclModifierSyntax(
 				name: TokenSyntax(
-					TokenKind.identifier("public"),
+					TokenKind.keyword(.public),
 					presence: .present
 				),
 				trailingTrivia: .space

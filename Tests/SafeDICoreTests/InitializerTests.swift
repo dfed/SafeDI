@@ -148,7 +148,7 @@ struct InitializerTests {
 	func generateSafeDIInitializer_throwsWhenInitializerIsMissingArgumentsAndDependenciesExist() throws {
 		let initializer = Initializer(arguments: [])
 
-		#expect(throws: Initializer.GenerationError.missingArguments(["variant: Variant"]), performing: {
+		#expect(throws: Initializer.GenerationError.missingArguments([.init(label: "variant", typeDescription: .simple(name: "Variant"))]), performing: {
 			try initializer.validate(
 				fulfilling: [
 					.init(
