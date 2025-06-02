@@ -185,7 +185,13 @@ public struct InstantiableMacro: MemberMacro {
 						func normalizeFunctionParameter(_ parameter: FunctionParameterSyntax, for property: Property) -> FunctionParameterSyntax {
 							var parameter = parameter
 							if let indexOfDependency = properties.firstIndex(of: property) {
-								parameter.leadingTrivia = indexOfDependency == 0 ? firstArgumentLeadingTrivia : lastArgumentLeadingTrivia
+								parameter.leadingTrivia = if indexOfDependency == 0 {
+									firstArgumentLeadingTrivia
+								} else if existingArgumentCount != 1 {
+									lastArgumentLeadingTrivia
+								} else {
+									[]
+								}
 								parameter.trailingTrivia = []
 							}
 							return parameter
@@ -225,6 +231,13 @@ public struct InstantiableMacro: MemberMacro {
 								parameter.trailingComma = firstArgumentTrailingComma
 							}
 							return parameter
+						})
+						fixedSyntax.signature.parameterClause.rightParen.leadingTrivia = .init(pieces: fixedSyntax.signature.parameterClause.rightParen.leadingTrivia.pieces.filter {
+							if lastArgumentTrailingTrivia.contains(where: \.isNewline) {
+								!$0.isNewline
+							} else {
+								true
+							}
 						})
 
 						if let body = fixedSyntax.body {

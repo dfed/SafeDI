@@ -1294,6 +1294,76 @@ import Testing
 		}
 
 		@Test
+		func declaration_fixit_updatesRequiredInitializerWhenSecondDependencyMissingFromInitAndNewlinesInArgumentList() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(
+						receivedA: ReceivedA
+					) {
+						self.receivedA = receivedA
+						_ = "keep me"
+					}
+
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
+				    ✏️ Add arguments for receivedB: ReceivedB
+						receivedA: ReceivedA
+					) {
+						self.receivedA = receivedA
+						_ = "keep me"
+					}
+
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(
+				receivedA: ReceivedA,
+				receivedB: ReceivedB
+					) {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+						_ = "keep me"
+					}
+
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} expansion: {
+				"""
+				public struct ExampleService: Instantiable {
+					public init(
+				receivedA: ReceivedA,
+				receivedB: ReceivedB
+					) {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+						_ = "keep me"
+					}
+
+					let receivedA: ReceivedA
+					let receivedB: ReceivedB
+				}
+				"""
+			}
+		}
+
+		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenFirstDependencyMissingFromInit() {
 			assertMacro {
 				"""
