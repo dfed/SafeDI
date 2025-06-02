@@ -231,19 +231,26 @@ public struct InstantiableMacro: MemberMacro {
 							let propertyLabelToPropertyMap = properties.reduce(into: [String: Property]()) { partialResult, next in
 								partialResult[next.label] = next
 							}
-							func propertyIfPropertyAssignment(_ codeBlock: CodeBlockItemSyntax) -> Property? {
-								if let infixOperatorExpression = InfixOperatorExprSyntax(codeBlock.item),
-								   let memberAcessExpression = MemberAccessExprSyntax(infixOperatorExpression.leftOperand),
-								   DeclReferenceExprSyntax(memberAcessExpression.base)?.baseName.text == TokenSyntax.keyword(.`self`).text
+
+							var existingPropertyAssignment = [Property: CodeBlockItemSyntax]()
+							var nonPropertyAssignmentStatements = [CodeBlockItemSyntax]()
+							for statement in body.statements {
+								// Ideally we'd check if this is an `InfixOperatorExprSyntax`, but as of Xcode 16.4 doesn't parse this properly.
+								// Instead, it treats what should be a `InfixOperatorExprSyntax` instead as an `ExprListSyntax`.
+								// Checking the description isn't ideal, but it's close enough for our purposes today.
+//								if let infixOperatorExpression = InfixOperatorExprSyntax(statement.item),
+//								   let memberAcessExpression = MemberAccessExprSyntax(infixOperatorExpression.leftOperand),
+//								   DeclReferenceExprSyntax(memberAcessExpression.base)?.baseName.text == TokenSyntax.keyword(.`self`).text,
+//								   let property = propertyLabelToPropertyMap[memberAcessExpression.declName.baseName.text]
+								let splitStatement = statement.item.trimmed.description.split { $0 == "." || $0 == " " }
+								if splitStatement.count > 2,
+								   splitStatement[0] == "self",
+								   splitStatement[2] == "=",
+								   let property = propertyLabelToPropertyMap[String(splitStatement[1])]
 								{
-									propertyLabelToPropertyMap[memberAcessExpression.declName.baseName.text]
+									existingPropertyAssignment[property] = statement
 								} else {
-									nil
-								}
-							}
-							let existingPropertyAssignment = body.statements.reduce(into: [Property: CodeBlockItemSyntax]()) { partialResult, next in
-								if let property = propertyIfPropertyAssignment(next) {
-									partialResult[property] = next
+									nonPropertyAssignmentStatements.append(statement)
 								}
 							}
 
@@ -257,9 +264,7 @@ public struct InstantiableMacro: MemberMacro {
 								}
 							}
 
-							fixedSyntax.body?.statements = propertyAssignments + body.statements.filter {
-								propertyIfPropertyAssignment($0) == nil
-							}
+							fixedSyntax.body?.statements = propertyAssignments + .init(nonPropertyAssignmentStatements)
 						}
 
 						context.diagnose(Diagnostic(
