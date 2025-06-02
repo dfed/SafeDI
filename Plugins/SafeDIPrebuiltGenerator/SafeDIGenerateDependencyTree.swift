@@ -219,7 +219,7 @@ extension Target {
 				throw NoReleaseBinaryFoundError()
 			}
 
-			return try [
+			return [
 				.buildCommand(
 					displayName: "SafeDIGenerateDependencyTree",
 					executable: toolLocation,
