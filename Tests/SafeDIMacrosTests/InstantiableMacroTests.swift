@@ -1308,6 +1308,74 @@ import Testing
 		}
 
 		@Test
+		func declaration_fixit_updatesRequiredInitializerWhenMiddleDependencyMissingFromInitAndArgumentAlreadySet() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedB: ReceivedB) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedB: ReceivedB) {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
+				    ✏️ Add arguments for receivedA: ReceivedA
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} expansion: {
+				"""
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					let forwardedA: ForwardedA
+					let receivedA: ReceivedA
+					let receivedB: ReceivedB
+
+					public typealias ForwardedProperties = ForwardedA
+				}
+				"""
+			}
+		}
+
+		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenLastDependencyMissingFromInit() {
 			assertMacro {
 				"""
