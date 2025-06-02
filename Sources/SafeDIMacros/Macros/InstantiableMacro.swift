@@ -226,7 +226,8 @@ public struct InstantiableMacro: MemberMacro {
 							}
 
 							fixedSyntax.body?.statements = propertyAssignments + body.statements.filter {
-								!existingPropertyAssignment.values.contains($0)
+								// Using the actual code block value works great in tests, but in Xcode we seem to need more than that.
+								!existingPropertyAssignment.values.map(\.trimmed.description).contains($0.trimmed.description)
 							}
 						}
 
