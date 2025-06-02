@@ -20,7 +20,7 @@ let package = Package(
 		),
 	],
 	dependencies: [
-		.package(url: "https://github.com/dfed/SafeDI.git", exact: "1.2.0-rc-6"),
+		.package(url: "https://github.com/dfed/SafeDI.git", from: "1.2.0"),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
