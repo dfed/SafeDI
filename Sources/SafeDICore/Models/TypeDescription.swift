@@ -549,7 +549,9 @@ private final class GenericArgumentVisitor: SyntaxVisitor {
 	private(set) var genericArguments = [TypeDescription]()
 
 	override func visit(_ node: GenericArgumentSyntax) -> SyntaxVisitorContinueKind {
-		genericArguments.append(node.argument.typeDescription)
+		if let typeSyntax = node.argument.as(TypeSyntax.self) {
+			genericArguments.append(typeSyntax.typeDescription)
+		}
 		return .skipChildren
 	}
 }
