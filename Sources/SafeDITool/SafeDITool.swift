@@ -59,6 +59,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 				nil
 			}
 		}.value
+
 		let (dependentModuleInfo, module) = try await (
 			loadSafeDIModuleInfo(),
 			parsedModule()
