@@ -52,6 +52,13 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 			throw ValidationError("Must provide 'swift-sources-file-path', '--include', or '--include-file-path'.")
 		}
 
+		async let existingGeneratedCode: String? = Task.detached {
+			if let dependencyTreeOutput {
+				try? String(contentsOf: dependencyTreeOutput.asFileURL, encoding: .utf8)
+			} else {
+				nil
+			}
+		}.value
 		let (dependentModuleInfo, module) = try await (
 			loadSafeDIModuleInfo(),
 			parsedModule()
@@ -124,7 +131,11 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 			)).write(toPath: moduleInfoOutput)
 		}
 
-		if let dependencyTreeOutput, let generatedCode = try await generatedCode {
+		if let dependencyTreeOutput,
+		   let generatedCode = try await generatedCode,
+		   // Only update the file if the file has changed.
+		   await existingGeneratedCode != generatedCode
+		{
 			try generatedCode.write(toPath: dependencyTreeOutput)
 		}
 
