@@ -29,7 +29,7 @@ import PackagePlugin
 			// As of Xcode 15.0, Xcode command plugins have no way to read the package manifest, therefore we must hardcode the version number.
 			// It is okay for this number to be behind the most current release if the inputs and outputs to SafeDITool have not changed.
 			// Unlike SPM plugins, Xcode plugins can not determine the current version number, so we must hardcode it.
-			"1.2.1"
+			"1.2.2"
 		}
 
 		var safeDIOrigin: URL {
