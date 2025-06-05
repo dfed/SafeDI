@@ -267,7 +267,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 			)
 		}
 
-		init(_ node: FunctionParameterSyntax) {
+		public init(_ node: FunctionParameterSyntax) {
 			if let secondName = node.secondName {
 				outerLabel = node.firstName.text
 				innerLabel = secondName.text
