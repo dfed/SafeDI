@@ -116,24 +116,23 @@ final class Scope: Hashable {
 			isPropertyCycle = false
 		}
 		let receivableProperties = receivableProperties.union(createdProperties)
+		func isPropertyUnavailable(_ property: Property) -> Bool {
+			let propertyIsAvailableInParentStack = receivableProperties.contains(property) && !propertyStack.contains(property)
+			let unwrappedPropertyIsAvailableInParentStack = receivableProperties.contains(property.asUnwrappedProperty) && !propertyStack.contains(property.asUnwrappedProperty)
+			return !(propertyIsAvailableInParentStack || unwrappedPropertyIsAvailableInParentStack)
+		}
 		let unavailableOptionalProperties = Set<Property>(instantiable.dependencies.compactMap { dependency in
 			switch dependency.source {
 			case .instantiated, .forwarded:
 				nil
 			case let .received(onlyIfAvailable):
-				if onlyIfAvailable,
-				   !((receivableProperties.contains(dependency.property) && !propertyStack.contains(dependency.property))
-				   	|| (receivableProperties.contains(dependency.property.asUnwrappedProperty) && !propertyStack.contains(dependency.property.asUnwrappedProperty)))
-				{
+				if onlyIfAvailable, isPropertyUnavailable(dependency.property) {
 					dependency.property
 				} else {
 					nil
 				}
 			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-				if onlyIfAvailable,
-				   !((receivableProperties.contains(fulfillingProperty) && !propertyStack.contains(fulfillingProperty))
-				   	|| (receivableProperties.contains(fulfillingProperty.asUnwrappedProperty) && !propertyStack.contains(fulfillingProperty.asUnwrappedProperty)))
-				{
+				if onlyIfAvailable, isPropertyUnavailable(fulfillingProperty) {
 					fulfillingProperty
 				} else {
 					nil
