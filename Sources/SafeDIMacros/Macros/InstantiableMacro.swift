@@ -107,7 +107,7 @@ public struct InstantiableMacro: MemberMacro {
 			if visitor.isRoot, let instantiableType = visitor.instantiableType {
 				let inheritedDependencies = visitor.dependencies.filter {
 					switch $0.source {
-					case let .aliased(fulfillingProperty, _):
+					case let .aliased(fulfillingProperty, _, _):
 						// Aliased properties must not be inherited from elsewhere.
 						!visitor.dependencies.contains { $0.property == fulfillingProperty }
 					case .instantiated:

@@ -36,7 +36,7 @@ public struct Dependency: Codable, Hashable, Sendable {
 			asInstantiatedType = property.typeDescription.asInstantiatedType
 		case let .instantiated(fulfillingTypeDescription, _):
 			asInstantiatedType = (fulfillingTypeDescription ?? property.typeDescription).asInstantiatedType
-		case let .aliased(fulfillingProperty, _):
+		case let .aliased(fulfillingProperty, _, _):
 			asInstantiatedType = fulfillingProperty.typeDescription.asInstantiatedType
 		}
 	}
@@ -52,15 +52,15 @@ public struct Dependency: Codable, Hashable, Sendable {
 
 	public enum Source: Codable, Hashable, Sendable {
 		case instantiated(fulfillingTypeDescription: TypeDescription?, erasedToConcreteExistential: Bool)
-		case received
-		case aliased(fulfillingProperty: Property, erasedToConcreteExistential: Bool)
+		case received(onlyIfAvailable: Bool)
+		case aliased(fulfillingProperty: Property, erasedToConcreteExistential: Bool, onlyIfAvailable: Bool)
 		case forwarded
 
 		public init?(node: AttributeListSyntax.Element) {
 			if let instantiatedMacro = node.instantiatedMacro {
 				self = .instantiated(
 					fulfillingTypeDescription: instantiatedMacro.fulfillingTypeDescription,
-					erasedToConcreteExistential: instantiatedMacro.erasedToConcreteExistentialType
+					erasedToConcreteExistential: instantiatedMacro.erasedToConcreteExistentialValue
 				)
 			} else if let receivedMacro = node.receivedMacro {
 				if let fulfillingPropertyName = receivedMacro.fulfillingPropertyName,
@@ -71,10 +71,11 @@ public struct Dependency: Codable, Hashable, Sendable {
 							label: fulfillingPropertyName,
 							typeDescription: fulfillingTypeDescription
 						),
-						erasedToConcreteExistential: receivedMacro.erasedToConcreteExistentialType
+						erasedToConcreteExistential: receivedMacro.erasedToConcreteExistentialValue,
+						onlyIfAvailable: receivedMacro.onlyIfAvailableValue
 					)
 				} else {
-					self = .received
+					self = .received(onlyIfAvailable: receivedMacro.onlyIfAvailableValue)
 				}
 			} else if node.forwardedMacro != nil {
 				self = .forwarded
@@ -85,7 +86,7 @@ public struct Dependency: Codable, Hashable, Sendable {
 
 		public var fulfillingProperty: Property? {
 			switch self {
-			case let .aliased(fulfillingProperty, _):
+			case let .aliased(fulfillingProperty, _, _):
 				fulfillingProperty
 			case .instantiated, .received, .forwarded:
 				nil

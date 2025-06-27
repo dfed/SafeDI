@@ -91,6 +91,12 @@ public struct InjectableMacro: PeerMacro {
 			}
 		}
 
+		if let onlyIfAvailable = macroWithParameters?.onlyIfAvailable {
+			if BooleanLiteralExprSyntax(onlyIfAvailable) == nil {
+				throw InjectableError.onlyIfAvailableInvalidType
+			}
+		}
+
 		if variableDecl.bindingSpecifier.text != TokenSyntax.keyword(.let).text,
 		   // If there is only one attribute, we know the variable is not decorated with a property wrapper.
 		   variableDecl.attributes.count == 1
@@ -128,6 +134,7 @@ public struct InjectableMacro: PeerMacro {
 		case ofTypeArgumentInvalidType
 		case erasedToConcreteExistentialInvalidType
 		case erasedInstantiatorUsedWithoutFulfilledByType
+		case onlyIfAvailableInvalidType
 
 		var description: String {
 			switch self {
@@ -149,6 +156,8 @@ public struct InjectableMacro: PeerMacro {
 				"The argument `erasedToConcreteExistential` must be a bool literal"
 			case .erasedInstantiatorUsedWithoutFulfilledByType:
 				"`ErasedInstantiator` and `SendableErasedInstantiator` require use of the argument `fulfilledByType`"
+			case .onlyIfAvailableInvalidType:
+				"The argument `onlyIfAvailable` must be a type literal"
 			}
 		}
 	}

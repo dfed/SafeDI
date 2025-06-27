@@ -163,6 +163,7 @@ public actor DependencyTreeGenerator {
 						try typeDescriptionToScopeMap[$0]?.createScopeGenerator(
 							for: nil,
 							propertyStack: [],
+							receivableProperties: [],
 							erasedToConcreteExistential: false
 						)
 					}
@@ -279,11 +280,12 @@ public actor DependencyTreeGenerator {
 							erasedToConcreteExistential: erasedToConcreteExistential
 						))
 					}
-				case let .aliased(fulfillingProperty, erasedToConcreteExistential):
+				case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
 					scope.propertiesToGenerate.append(.aliased(
 						dependency.property,
 						fulfilledBy: fulfillingProperty,
-						erasedToConcreteExistential: erasedToConcreteExistential
+						erasedToConcreteExistential: erasedToConcreteExistential,
+						onlyIfAvailable: onlyIfAvailable
 					))
 				case .forwarded, .received:
 					continue
@@ -302,30 +304,12 @@ public actor DependencyTreeGenerator {
 			propertyStack: OrderedSet<Property>,
 			root: TypeDescription
 		) throws {
-			let createdProperties = Set(
-				scope
-					.instantiable
-					.dependencies
-					.filter {
-						switch $0.source {
-						case .instantiated, .forwarded:
-							// The source is being injected into the dependency tree.
-							true
-						case .aliased:
-							// This property is being re-injected into the dependency tree under a new alias.
-							true
-						case .received:
-							false
-						}
-					}
-					.map(\.property)
-			)
 			if let property {
 				func validateNoCycleInReceivedProperties(
 					scope: Scope,
 					receivedPropertyStack: OrderedSet<Property>
 				) throws {
-					for childProperty in scope.receivedProperties {
+					for childProperty in scope.requiredReceivedProperties {
 						guard childProperty != property else {
 							throw DependencyTreeGeneratorError.receivedConstantCycleDetected(
 								instantiated: property,
@@ -352,10 +336,18 @@ public actor DependencyTreeGenerator {
 				)
 			}
 
-			for receivedProperty in scope.receivedProperties {
+			for receivedProperty in scope.requiredReceivedProperties {
 				let parentContainsProperty = receivableProperties.contains(receivedProperty)
-				let propertyIsCreatedAtThisScope = createdProperties.contains(receivedProperty)
+				let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
 				if !parentContainsProperty, !propertyIsCreatedAtThisScope {
+					if receivedProperty.typeDescription.isOptional {
+						let unwrappedReceivedProperty = receivedProperty.asUnwrappedProperty
+						let parentContainsUnwrappedProperty = receivableProperties.contains(unwrappedReceivedProperty)
+						let unwrappedPropertyIsCreatedAtThisScope = scope.createdProperties.contains(unwrappedReceivedProperty)
+						if parentContainsUnwrappedProperty || unwrappedPropertyIsCreatedAtThisScope {
+							continue
+						}
+					}
 					if property != nil {
 						// This property is in a dependency tree and is unfulfillable. Record the problem.
 						unfulfillableProperties.insert(.init(

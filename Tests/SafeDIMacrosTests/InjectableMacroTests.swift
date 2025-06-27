@@ -436,5 +436,28 @@ import Testing
 				"""
 			}
 		}
+
+		@Test
+		func throwsErrorWhenOnlyIfAvailableIsAnInvalidType() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService {
+					static let onlyIfAvailable = true
+					@Received(onlyIfAvailable: onlyIfAvailable) let receivedA: AnyReceivedA?
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public struct ExampleService {
+					static let onlyIfAvailable = true
+					@Received(onlyIfAvailable: onlyIfAvailable) let receivedA: AnyReceivedA?
+				 ┬──────────────────────────────────────────
+				 ╰─ 🛑 The argument `onlyIfAvailable` must be a type literal
+				}
+				"""
+			}
+		}
 	}
 #endif

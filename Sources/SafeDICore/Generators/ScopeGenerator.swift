@@ -28,6 +28,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		instantiable: Instantiable,
 		property: Property?,
 		propertiesToGenerate: [ScopeGenerator],
+		unavailableOptionalProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
 		isPropertyCycle: Bool
 	) {
@@ -52,6 +53,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.property = property
 		self.propertiesToGenerate = propertiesToGenerate
 		propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property))
+		self.unavailableOptionalProperties = unavailableOptionalProperties
 		requiredReceivedProperties = Set(
 			propertiesToGenerate.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
 				// All the properties this child and its children require be passed in.
@@ -72,7 +74,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						nil
 					case .received:
 						$0.property
-					case let .aliased(fulfillingProperty, _):
+					case let .aliased(fulfillingProperty, _, _):
 						fulfillingProperty
 					}
 				}
@@ -82,17 +84,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	init(
 		property: Property,
 		fulfillingProperty: Property,
-		erasedToConcreteExistential: Bool
+		unavailableOptionalProperties: Set<Property>,
+		erasedToConcreteExistential: Bool,
+		onlyIfAvailable: Bool
 	) {
 		scopeData = .alias(
 			property: property,
 			fulfillingProperty: fulfillingProperty,
-			erasedToConcreteExistential: erasedToConcreteExistential
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			onlyIfAvailable: onlyIfAvailable
 		)
 		requiredReceivedProperties = [fulfillingProperty]
 		description = property.asSource
 		propertiesToGenerate = []
 		propertiesToDeclare = []
+		self.unavailableOptionalProperties = unavailableOptionalProperties
 		self.property = property
 	}
 
@@ -102,9 +108,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	// MARK: Internal
 
-	func generateCode(leadingWhitespace: String = "") async throws -> String {
+	func generateCode(
+		propertiesAlreadyGeneratedAtThisScope: Set<Property> = [],
+		leadingWhitespace: String = ""
+	) async throws -> String {
 		let generatedCode: String
-		if let generateCodeTask {
+		let unavailableProperties = unavailableOptionalProperties
+			.filter {
+				!(propertiesAlreadyGeneratedAtThisScope.contains($0) || propertiesAlreadyGeneratedAtThisScope.contains($0.asUnwrappedProperty))
+			}
+		if let generateCodeTask = unavailablePropertiesToGenerateCodeTask[unavailableProperties] {
 			generatedCode = try await generateCodeTask.value
 		} else {
 			let generateCodeTask = Task {
@@ -131,7 +144,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					erasedToConcreteExistential,
 					isPropertyCycle
 				):
-					let argumentList = try instantiable.generateArgumentList()
+					let argumentList = try instantiable.generateArgumentList(
+						unavailableProperties: unavailableProperties
+					)
 					let concreteTypeName = instantiable.concreteInstantiable.asSource
 					let instantiationDeclaration = if instantiable.declarationType.isExtension {
 						"\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
@@ -202,11 +217,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						let typeDescription = property.typeDescription.asSource
 						let unwrappedTypeDescription = property
 							.typeDescription
-							.unwrappedTypeDescription
+							.unwrapped
 							.asSource
 						let instantiatedTypeDescription = property
 							.typeDescription
-							.unwrappedTypeDescription
+							.unwrapped
 							.asInstantiatedType
 							.asSource
 						let propertyDeclaration = if !instantiable.declarationType.isExtension, typeDescription == unwrappedTypeDescription {
@@ -270,15 +285,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						}
 						return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 					}
-				case let .alias(property, fulfillingProperty, erasedToConcreteExistential):
-					if erasedToConcreteExistential {
-						return "let \(property.label) = \(property.typeDescription.asSource)(\(fulfillingProperty.label))"
+				case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
+					return if onlyIfAvailable, unavailableOptionalProperties.contains(fulfillingProperty) {
+						"// Did not create `\(property.asSource)` because `\(fulfillingProperty.asSource)` is unavailable."
 					} else {
-						return "let \(property.asSource) = \(fulfillingProperty.label)"
+						if erasedToConcreteExistential {
+							"let \(property.label) = \(property.typeDescription.asSource)(\(fulfillingProperty.label))"
+						} else {
+							"let \(property.asSource) = \(fulfillingProperty.label)"
+						}
 					}
 				}
 			}
-			self.generateCodeTask = generateCodeTask
+			unavailablePropertiesToGenerateCodeTask[unavailableProperties] = generateCodeTask
 			generatedCode = try await generateCodeTask.value
 		}
 		if leadingWhitespace.isEmpty {
@@ -323,7 +342,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case alias(
 			property: Property,
 			fulfillingProperty: Property,
-			erasedToConcreteExistential: Bool
+			erasedToConcreteExistential: Bool,
+			onlyIfAvailable: Bool
 		)
 
 		var forwardedProperties: Set<Property> {
@@ -341,7 +361,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				instantiable.concreteInstantiable.asSource
 			case let .property(_, property, _, _, _):
 				"\"\(property.asSource)\""
-			case let .alias(property, fulfillingProperty, _):
+			case let .alias(property, fulfillingProperty, _, _):
 				"\"\(property.asSource) <- \(fulfillingProperty.asSource)\""
 			}
 		}
@@ -350,13 +370,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let scopeData: ScopeData
 	/// Properties that we require in order to satisfy our (and our children’s) dependencies.
 	private let requiredReceivedProperties: Set<Property>
+	/// Received properties that are optional and not created by a parent.
+	private let unavailableOptionalProperties: Set<Property>
 	/// Properties that will be generated as `let` constants.
 	private let propertiesToGenerate: [ScopeGenerator]
 	/// Properties that this scope declares as a `let` constant.
 	private let propertiesToDeclare: Set<Property>
 	private let property: Property?
 
-	private var generateCodeTask: Task<String, Error>?
+	private var unavailablePropertiesToGenerateCodeTask = [Set<Property>: Task<String, Error>]()
 
 	private var orderedPropertiesToGenerate: [ScopeGenerator] {
 		var orderedPropertiesToGenerate = [ScopeGenerator]()
@@ -375,11 +397,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let scopeDependencies = propertyToUnfulfilledScopeMap
 				.keys
 				.intersection(scope.requiredReceivedProperties)
+				.union(scope.unavailableOptionalProperties)
+				.union(scope.unavailableOptionalProperties.map(\.asUnwrappedProperty))
 				.compactMap { propertyToUnfulfilledScopeMap[$0] }
 			// Fulfill the scopes we depend upon.
 			for dependentScope in scopeDependencies {
 				fulfill(dependentScope)
 			}
+
 			// We can now be marked as fulfilled!
 			orderedPropertiesToGenerate.append(scope)
 			propertyToUnfulfilledScopeMap[property] = nil
@@ -394,10 +419,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	private func generateProperties(leadingMemberWhitespace: String) async throws -> [String] {
 		var generatedProperties = [String]()
-		for childGenerator in orderedPropertiesToGenerate {
+		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
 			try await generatedProperties.append(
-				childGenerator
-					.generateCode(leadingWhitespace: leadingMemberWhitespace)
+				childGenerator.generateCode(
+					propertiesAlreadyGeneratedAtThisScope: .init(orderedPropertiesToGenerate[0..<index].compactMap(\.property)),
+					leadingWhitespace: leadingMemberWhitespace
+				)
 			)
 		}
 		return generatedProperties
@@ -426,25 +453,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 // MARK: - Instantiable
 
 extension Instantiable {
-	fileprivate func generateArgumentList() throws -> String {
+	fileprivate func generateArgumentList(
+		unavailableProperties: Set<Property>? = nil
+	) throws -> String {
 		try initializer?
 			.createInitializerArgumentList(
-				given: dependencies
+				given: dependencies,
+				unavailableProperties: unavailableProperties
 			) ?? "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
-	}
-}
-
-// MARK: - TypeDescription
-
-extension TypeDescription {
-	fileprivate var unwrappedTypeDescription: TypeDescription {
-		switch self {
-		case
-			let .optional(type),
-			let .implicitlyUnwrappedOptional(type):
-			type.unwrappedTypeDescription
-		case .any, .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .simple, .some, .tuple, .unknown, .void:
-			self
-		}
 	}
 }

@@ -50,7 +50,7 @@ final class Scope: Hashable {
 
 	enum PropertyToGenerate {
 		case instantiated(Property, Scope, erasedToConcreteExistential: Bool)
-		case aliased(Property, fulfilledBy: Property, erasedToConcreteExistential: Bool)
+		case aliased(Property, fulfilledBy: Property, erasedToConcreteExistential: Bool, onlyIfAvailable: Bool)
 	}
 
 	var properties: [Property] {
@@ -59,15 +59,41 @@ final class Scope: Hashable {
 			.map(\.property)
 	}
 
-	var receivedProperties: [Property] {
+	private(set) lazy var createdProperties = Set(
+		instantiable
+			.dependencies
+			.filter {
+				switch $0.source {
+				case .instantiated, .forwarded:
+					// The source is being injected into the dependency tree.
+					true
+				case .aliased:
+					// This property is being re-injected into the dependency tree under a new alias.
+					true
+				case .received:
+					false
+				}
+			}
+			.map(\.property)
+	)
+
+	var requiredReceivedProperties: [Property] {
 		instantiable
 			.dependencies
 			.compactMap {
 				switch $0.source {
-				case .received:
-					$0.property
-				case let .aliased(fulfillingProperty, _):
-					fulfillingProperty
+				case let .received(onlyIfAvailable):
+					if onlyIfAvailable {
+						nil
+					} else {
+						$0.property
+					}
+				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+					if onlyIfAvailable {
+						nil
+					} else {
+						fulfillingProperty
+					}
 				case .forwarded,
 				     .instantiated:
 					nil
@@ -78,6 +104,7 @@ final class Scope: Hashable {
 	func createScopeGenerator(
 		for property: Property?,
 		propertyStack: OrderedSet<Property>,
+		receivableProperties: Set<Property>,
 		erasedToConcreteExistential: Bool
 	) throws -> ScopeGenerator {
 		var childPropertyStack = propertyStack
@@ -88,6 +115,29 @@ final class Scope: Hashable {
 		} else {
 			isPropertyCycle = false
 		}
+		let receivableProperties = receivableProperties.union(createdProperties)
+		let unavailableOptionalProperties = Set<Property>(instantiable.dependencies.compactMap { dependency in
+			switch dependency.source {
+			case .instantiated, .forwarded:
+				nil
+			case let .received(onlyIfAvailable):
+				if onlyIfAvailable,
+				   !(receivableProperties.contains(dependency.property) || receivableProperties.contains(dependency.property.asUnwrappedProperty))
+				{
+					dependency.property
+				} else {
+					nil
+				}
+			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+				if onlyIfAvailable,
+				   !(receivableProperties.contains(fulfillingProperty) || receivableProperties.contains(fulfillingProperty.asUnwrappedProperty))
+				{
+					fulfillingProperty
+				} else {
+					nil
+				}
+			}
+		})
 		let scopeGenerator = try ScopeGenerator(
 			instantiable: instantiable,
 			property: property,
@@ -97,16 +147,20 @@ final class Scope: Hashable {
 					try scope.createScopeGenerator(
 						for: property,
 						propertyStack: childPropertyStack,
+						receivableProperties: receivableProperties,
 						erasedToConcreteExistential: erasedToConcreteExistential
 					)
-				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential):
+				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
 					ScopeGenerator(
 						property: property,
 						fulfillingProperty: fulfillingProperty,
-						erasedToConcreteExistential: erasedToConcreteExistential
+						unavailableOptionalProperties: unavailableOptionalProperties,
+						erasedToConcreteExistential: erasedToConcreteExistential,
+						onlyIfAvailable: onlyIfAvailable
 					)
 				}
 			},
+			unavailableOptionalProperties: unavailableOptionalProperties,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			isPropertyCycle: isPropertyCycle
 		)

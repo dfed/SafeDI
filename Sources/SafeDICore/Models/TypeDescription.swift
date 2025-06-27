@@ -256,6 +256,28 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	public var unwrapped: TypeDescription {
+		switch self {
+		case .any,
+		     .array,
+		     .attributed,
+		     .closure,
+		     .composition,
+		     .dictionary,
+		     .implicitlyUnwrappedOptional,
+		     .metatype,
+		     .nested,
+		     .simple,
+		     .some,
+		     .tuple,
+		     .unknown,
+		     .void:
+			self
+		case let .optional(unwrapped):
+			unwrapped
+		}
+	}
+
 	public var popNested: TypeDescription? {
 		switch self {
 		case let .nested(_, parentType, _):
