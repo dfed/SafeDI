@@ -115,7 +115,7 @@ public struct InjectableMacro: PeerMacro {
 								}
 							}))
 						),
-					],
+					]
 				))
 			}
 		}
