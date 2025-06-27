@@ -475,11 +475,11 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedOptional_throwsError() async {
 		await assertThrowsError(
 			"""
-			@Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain:
+			@Received property `thing: Thing` is not @Instantiated or @Forwarded in chain:
 			\tRoot -> Child
 
 			Did you mean one of the following available properties?
-			\t`thing: Thing`
+			\t`thing: Thing?`
 			"""
 		) {
 			try await executeSafeDIToolTest(
@@ -489,7 +489,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 					@Instantiable(isRoot: true)
 					public final class Root {
-					    @Instantiated let thing: Thing
+					    @Instantiated let thing: Thing?
 					    @Instantiated let child: Child
 					}
 					""",
@@ -504,7 +504,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 					@Instantiable
 					public final class Child {
-					    @Received let thing: Thing?
+					    @Received let thing: Thing
 					}
 					""",
 				],
