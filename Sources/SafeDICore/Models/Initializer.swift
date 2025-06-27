@@ -185,7 +185,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 								pieces: [TriviaPiece.newlines(1)]
 									+ (index == 0 ? [
 										.lineComment("// The following properties are not decorated with the @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue) macros, do not have default values, and are not computed properties."),
-										TriviaPiece.newlines(1)
+										TriviaPiece.newlines(1),
 									] : [])
 							),
 							leftOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(additionalPropertyLabel)),
