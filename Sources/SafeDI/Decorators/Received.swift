@@ -27,7 +27,7 @@
 /// Note that the access level of the dependency in the above example does not affect the dependency tree – a `private` dependency can still be `@Received` by `@Instantiable`-decorated types further down the dependency tree.
 ///
 /// - Parameters:
-///   - onlyIfAvailable: Whether to allow the dependency to be received only when a parent has made it available
+///   - onlyIfAvailable: Whether to allow the dependency to be received only when a parent has made it available.
 @attached(peer)
 public macro Received(onlyIfAvailable: Bool = false) = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
 
@@ -47,7 +47,7 @@ public macro Received(onlyIfAvailable: Bool = false) = #externalMacro(module: "S
 ///   - fulfilledByDependencyNamed: The name of the property belonging to an `@Instantiable` instance higher up in the dependency tree whose name and/or type is being changed from the dependency‘s initial declaration.
 ///   - concreteType: The type of the property belonging to an `@Instantiable` instance higher up in the dependency tree whose name and/or type is being changed from the dependency‘s initial declaration.
 ///   - erasedToConcreteExistential: Whether the concrete type is being erased to a concrete existential type – a type that encapsulates a value conforming to a protocol without revealing the underlying type. Set this parameter to `true` to encapsulate the renamed or retyped instance of `concreteType` in a no-label initializer of the property’s type (e.g. `AnyDependencyType(dependency)`).
-///   - onlyIfAvailable: Whether to allow the dependency to be received only when a parent has made it available
+///   - onlyIfAvailable: Whether to allow the dependency to be received only when a parent has made it available.
 ///
 ///  - SeeAlso: [The Swift Programming Lanaguage’s explanation of existential types](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/#Boxed-Protocol-Types)
 @attached(peer)
