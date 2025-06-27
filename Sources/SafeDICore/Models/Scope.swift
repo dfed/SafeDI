@@ -121,21 +121,21 @@ final class Scope: Hashable {
 			let unwrappedPropertyIsAvailableInParentStack = receivableProperties.contains(property.asUnwrappedProperty) && !propertyStack.contains(property.asUnwrappedProperty)
 			return !(propertyIsAvailableInParentStack || unwrappedPropertyIsAvailableInParentStack)
 		}
-		let unavailableOptionalProperties = Set<Property>(instantiable.dependencies.compactMap { dependency in
+		let unavailableOptionalProperties = Set<Property>(instantiable.dependencies.flatMap { dependency in
 			switch dependency.source {
 			case .instantiated, .forwarded:
-				nil
+				[Property]()
 			case let .received(onlyIfAvailable):
 				if onlyIfAvailable, isPropertyUnavailable(dependency.property) {
-					dependency.property
+					[dependency.property]
 				} else {
-					nil
+					[Property]()
 				}
 			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 				if onlyIfAvailable, isPropertyUnavailable(fulfillingProperty) {
-					fulfillingProperty
+					[dependency.property, fulfillingProperty]
 				} else {
-					nil
+					[Property]()
 				}
 			}
 		})

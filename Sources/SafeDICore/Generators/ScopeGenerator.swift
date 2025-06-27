@@ -286,7 +286,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 					}
 				case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
-					return if onlyIfAvailable, unavailableOptionalProperties.contains(fulfillingProperty) {
+					return if onlyIfAvailable, unavailableProperties.contains(fulfillingProperty) {
 						"// Did not create `\(property.asSource)` because `\(fulfillingProperty.asSource)` is unavailable."
 					} else {
 						if erasedToConcreteExistential {

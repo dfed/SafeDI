@@ -1617,6 +1617,63 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
+	mutating func run_OnCodeWithOptionalPropertyAliasAndMarkedOnlyIfAvailableAndItIsOnlyAvialableViaCircularDependency_throws_error() async throws {
+		await assertThrowsError(
+			"""
+			Dependency cycle detected:
+				C -> B -> C
+			"""
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root {
+						public init(aBuilder: Instantiator<A>) {
+							fatalError("SafeDI doesn't inspect the initializer body")
+						}
+
+						@Instantiated let aBuilder: Instantiator<A>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A {
+						public init(c: C) {
+							fatalError("SafeDI doesn't inspect the initializer body")
+						}
+
+						@Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B {
+						public init(cRenamed: CRenamed?) {
+							fatalError("SafeDI doesn't inspect the initializer body")
+						}
+
+						@Received(fulfilledByDependencyNamed: "c", ofType: C.self, onlyIfAvailable: true) let cRenamed: CRenamed?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C {
+						public init(b: B) {
+							fatalError("SafeDI doesn't inspect the initializer body")
+						}
+
+						@Instantiated let b: B
+					}
+					""",
+				],
+				buildDependencyTreeOutput: true,
+				filesToDelete: &filesToDelete
+			)
+		}
+	}
+
+	@Test
 	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasSingleForwardedProperty_throwsError() async throws {
 		await assertThrowsError(
 			"""
