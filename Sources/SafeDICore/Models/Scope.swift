@@ -122,7 +122,8 @@ final class Scope: Hashable {
 				nil
 			case let .received(onlyIfAvailable):
 				if onlyIfAvailable,
-				   !(receivableProperties.contains(dependency.property) || receivableProperties.contains(dependency.property.asUnwrappedProperty))
+				   !((receivableProperties.contains(dependency.property) && !propertyStack.contains(dependency.property))
+				   	|| (receivableProperties.contains(dependency.property.asUnwrappedProperty) && !propertyStack.contains(dependency.property.asUnwrappedProperty)))
 				{
 					dependency.property
 				} else {
@@ -130,7 +131,8 @@ final class Scope: Hashable {
 				}
 			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 				if onlyIfAvailable,
-				   !(receivableProperties.contains(fulfillingProperty) || receivableProperties.contains(fulfillingProperty.asUnwrappedProperty))
+				   !((receivableProperties.contains(fulfillingProperty) && !propertyStack.contains(fulfillingProperty))
+				   	|| (receivableProperties.contains(fulfillingProperty.asUnwrappedProperty) && !propertyStack.contains(fulfillingProperty.asUnwrappedProperty)))
 				{
 					fulfillingProperty
 				} else {
