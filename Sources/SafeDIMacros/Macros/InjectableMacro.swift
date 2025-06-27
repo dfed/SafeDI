@@ -95,6 +95,29 @@ public struct InjectableMacro: PeerMacro {
 			if BooleanLiteralExprSyntax(onlyIfAvailable) == nil {
 				throw InjectableError.onlyIfAvailableInvalidType
 			}
+			if !variableDecl.bindings.compactMap(\.typeAnnotation).allSatisfy(\.type.typeDescription.isOptional) {
+				context.diagnose(Diagnostic(
+					node: variableDecl.bindings,
+					error: FixableInjectableError.onlyIfAvailableNotOptionalSpelledWithQuestionMark,
+					changes: [
+						.replace(
+							oldNode: Syntax(variableDecl.bindings),
+							newNode: Syntax(PatternBindingListSyntax(itemsBuilder: {
+								variableDecl.bindings.compactMap {
+									$0.with(\.typeAnnotation, $0.typeAnnotation.map {
+										$0.with(\.type, {
+											TypeSyntax(OptionalTypeSyntax(
+												wrappedType: $0.type,
+												questionMark: .postfixQuestionMarkToken()
+											))
+										}($0))
+									})
+								}
+							}))
+						),
+					],
+				))
+			}
 		}
 
 		if variableDecl.bindingSpecifier.text != TokenSyntax.keyword(.let).text,

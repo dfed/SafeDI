@@ -85,6 +85,25 @@ import Testing
 			}
 		}
 
+		@Test
+		func propertyIsOnlyIfAvailableAndOptional_expandsWthoutIssue() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService {
+					@Received(onlyIfAvailable: true) let receivedA: AnyReceivedA?
+				}
+				"""
+			} expansion: {
+				"""
+				@Instantiable
+				public struct ExampleService {
+					let receivedA: AnyReceivedA?
+				}
+				"""
+			}
+		}
+
 		// MARK: Fixit Tests
 
 		@Test
@@ -455,6 +474,42 @@ import Testing
 					@Received(onlyIfAvailable: onlyIfAvailable) let receivedA: AnyReceivedA?
 				 ┬──────────────────────────────────────────
 				 ╰─ 🛑 The argument `onlyIfAvailable` must be a type literal
+				}
+				"""
+			}
+		}
+
+		@Test
+		func throwsErrorWhenOnlyIfAvailableIsNotOptional() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService {
+					@Received(onlyIfAvailable: true) let receivedA: AnyReceivedA
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public struct ExampleService {
+					@Received(onlyIfAvailable: true) let receivedA: AnyReceivedA
+				                                      ┬──────────────────────
+				                                      ╰─ 🛑 The type of a dependency decorated with `onlyIfAvailable: true` must be marked as optional utilizing the `?` spelling
+				                                         ✏️ Mark the type as optional using `?`
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public struct ExampleService {
+					@Received(onlyIfAvailable: true) let receivedA: AnyReceivedA?
+				}
+				"""
+			} expansion: {
+				"""
+				@Instantiable
+				public struct ExampleService {
+					let receivedA: AnyReceivedA?
 				}
 				"""
 			}
