@@ -340,14 +340,6 @@ public actor DependencyTreeGenerator {
 				let parentContainsProperty = receivableProperties.contains(receivedProperty)
 				let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
 				if !parentContainsProperty, !propertyIsCreatedAtThisScope {
-					if receivedProperty.typeDescription.isOptional {
-						let unwrappedReceivedProperty = receivedProperty.asUnwrappedProperty
-						let parentContainsUnwrappedProperty = receivableProperties.contains(unwrappedReceivedProperty)
-						let unwrappedPropertyIsCreatedAtThisScope = scope.createdProperties.contains(unwrappedReceivedProperty)
-						if parentContainsUnwrappedProperty || unwrappedPropertyIsCreatedAtThisScope {
-							continue
-						}
-					}
 					if property != nil {
 						// This property is in a dependency tree and is unfulfillable. Record the problem.
 						unfulfillableProperties.insert(.init(
