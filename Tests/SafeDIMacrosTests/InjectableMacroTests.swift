@@ -104,6 +104,25 @@ import Testing
 			}
 		}
 
+		@Test
+		func propertyIsOnlyIfAvailableAndDoubleOptional_expandsWthoutIssue() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService {
+					@Received(onlyIfAvailable: true) let receivedA: AnyReceivedA??
+				}
+				"""
+			} expansion: {
+				"""
+				@Instantiable
+				public struct ExampleService {
+					let receivedA: AnyReceivedA??
+				}
+				"""
+			}
+		}
+
 		// MARK: Fixit Tests
 
 		@Test
