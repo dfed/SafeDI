@@ -478,8 +478,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			@Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain:
 			\tRoot -> Child
 
-			Did you mean one of the following available properties?
-			\t`thing: Thing`
+			The non-optional `thing: Thing` is available in chain. Did you mean to decorate this property with `@Received(onlyIfAvailable: true)`?
 			"""
 		) {
 			try await executeSafeDIToolTest(

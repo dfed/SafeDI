@@ -99,12 +99,26 @@ public actor DependencyTreeGenerator {
 			case let .unfulfillableProperties(unfulfillableProperties):
 				"""
 				\(unfulfillableProperties.map {
-					"""
-					@\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain:\n\t\(([$0.instantiable.concreteInstantiable] + $0.parentStack)
-						.reversed()
-						.map(\.asSource)
-						.joined(separator: " -> "))\($0.suggestedAlternatives.isEmpty ? "" : "\n\nDid you mean one of the following available properties?\n\($0.suggestedAlternatives.map { "\t`\($0.asSource)`" }.joined(separator: "\n"))")
-					"""
+					if $0.property.typeDescription.isOptional,
+					   let nonOptionalAlternative = $0.suggestedAlternatives.first(where: { [unfulfilledProperty = $0.property] alternative in
+					   	alternative.label == unfulfilledProperty.label
+					   		&& alternative.typeDescription == unfulfilledProperty.typeDescription.unwrapped
+					   })
+					{
+						"""
+						@\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain:\n\t\(([$0.instantiable.concreteInstantiable] + $0.parentStack)
+							.reversed()
+							.map(\.asSource)
+							.joined(separator: " -> "))\($0.suggestedAlternatives.isEmpty ? "" : "\n\nThe non-optional `\(nonOptionalAlternative.asSource)` is available in chain. Did you mean to decorate this property with `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)`?")
+						"""
+					} else {
+						"""
+						@\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain:\n\t\(([$0.instantiable.concreteInstantiable] + $0.parentStack)
+							.reversed()
+							.map(\.asSource)
+							.joined(separator: " -> "))\($0.suggestedAlternatives.isEmpty ? "" : "\n\nDid you mean one of the following available properties?\n\($0.suggestedAlternatives.map { "\t`\($0.asSource)`" }.joined(separator: "\n"))")
+						"""
+					}
 				}
 				.sorted()
 				.joined(separator: "\n\n"))
@@ -468,9 +482,21 @@ extension TypeDescription {
 		switch self {
 		case let .nested(name, _, generics):
 			.simple(name: name, generics: generics)
-		case let .any(typeDescription), let .implicitlyUnwrappedOptional(typeDescription), let .optional(typeDescription), let .some(typeDescription):
+		case let .any(typeDescription),
+		     let .implicitlyUnwrappedOptional(typeDescription),
+		     let .optional(typeDescription),
+		     let .some(typeDescription):
 			typeDescription.leastQualifiedTypeDescription
-		case .array, .attributed, .closure, .composition, .dictionary, .metatype, .simple, .tuple, .unknown, .void:
+		case .array,
+		     .attributed,
+		     .closure,
+		     .composition,
+		     .dictionary,
+		     .metatype,
+		     .simple,
+		     .tuple,
+		     .unknown,
+		     .void:
 			self
 		}
 	}
