@@ -756,7 +756,7 @@ import Testing
 				    public init(closure: @escaping @Sendable () -> Void) {
 				        self.closure = closure
 				    }
-				    @Forwarded let closure: (() -> Void)
+				    @Forwarded let closure: (@Sendable () -> Void)
 				}
 				"""
 			} expansion: {
@@ -765,9 +765,9 @@ import Testing
 				    public init(closure: @escaping @Sendable () -> Void) {
 				        self.closure = closure
 				    }
-				    let closure: (() -> Void)
+				    let closure: (@Sendable () -> Void)
 
-				    public typealias ForwardedProperties = () -> Void
+				    public typealias ForwardedProperties = @Sendable () -> Void
 				}
 				"""
 			}
