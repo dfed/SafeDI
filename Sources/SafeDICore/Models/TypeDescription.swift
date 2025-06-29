@@ -234,6 +234,37 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	public var asFunctionParameter: TypeDescription {
+		switch self {
+		case .any,
+			 .array,
+			 .composition,
+			 .dictionary,
+			 .implicitlyUnwrappedOptional,
+			 .metatype,
+			 .nested,
+			 .optional,
+			 .simple,
+			 .some,
+			 .tuple,
+			 .unknown,
+			 .void:
+			self
+		case .closure:
+			.attributed(self, specifiers: nil, attributes: ["escaping"])
+		case let .attributed(type, specifiers: specifiers, attributes: attributes):
+			if let attributes {
+				if attributes.contains(where: { $0 == "escaping" }) {
+					.attributed(type, specifiers: specifiers, attributes: attributes)
+				} else {
+					.attributed(type, specifiers: specifiers, attributes: ["escaping"] + attributes)
+				}
+			} else {
+				.attributed(type, specifiers: specifiers, attributes: ["escaping"])
+			}
+		}
+	}
+
 	public var isOptional: Bool {
 		switch self {
 		case .any,
