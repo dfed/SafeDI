@@ -756,7 +756,7 @@ import Testing
 				    public init(closure: @escaping @Sendable () -> Void) {
 				        self.closure = closure
 				    }
-				    @Forwarded let closure: (() -> Void)
+				    @Forwarded let closure: (@Sendable () -> Void)
 				}
 				"""
 			} expansion: {
@@ -765,9 +765,9 @@ import Testing
 				    public init(closure: @escaping @Sendable () -> Void) {
 				        self.closure = closure
 				    }
-				    let closure: (() -> Void)
+				    let closure: (@Sendable () -> Void)
 
-				    public typealias ForwardedProperties = () -> Void
+				    public typealias ForwardedProperties = @Sendable () -> Void
 				}
 				"""
 			}
@@ -1854,6 +1854,80 @@ import Testing
 					let receivedB: ReceivedB
 
 					public typealias ForwardedProperties = ForwardedA
+				}
+				"""
+			}
+		}
+
+		@Test
+		func declaration_fixit_updatesRequiredInitializerWhenLastDependencyMissingFromInitAndEscapingDependencyParameterExists() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(customizable: @escaping (String) -> Void, forwardedA: ForwardedA, receivedA: ReceivedA) {
+						self.customizable = customizable
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					@Forwarded let customizable: (String) -> Void
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(customizable: @escaping (String) -> Void, forwardedA: ForwardedA, receivedA: ReceivedA) {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
+				    ✏️ Add arguments for receivedB: ReceivedB
+						self.customizable = customizable
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					@Forwarded let customizable: (String) -> Void
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(customizable: @escaping (String) -> Void, forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.customizable = customizable
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let customizable: (String) -> Void
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				"""
+			} expansion: {
+				"""
+				public struct ExampleService: Instantiable {
+					public init(customizable: @escaping (String) -> Void, forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.customizable = customizable
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					let customizable: (String) -> Void
+					let forwardedA: ForwardedA
+					let receivedA: ReceivedA
+					let receivedB: ReceivedB
+
+					public typealias ForwardedProperties = (customizable: (String) -> Void, forwardedA: ForwardedA)
 				}
 				"""
 			}
