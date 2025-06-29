@@ -253,15 +253,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		case .closure:
 			.attributed(self, specifiers: nil, attributes: ["escaping"])
 		case let .attributed(type, specifiers: specifiers, attributes: attributes):
-			if let attributes {
-				if attributes.contains(where: { $0 == "escaping" }) {
-					.attributed(type, specifiers: specifiers, attributes: attributes)
-				} else {
-					.attributed(type, specifiers: specifiers, attributes: ["escaping"] + attributes)
-				}
-			} else {
-				.attributed(type, specifiers: specifiers, attributes: ["escaping"])
-			}
+			.attributed(type, specifiers: specifiers, attributes: ["escaping"] + (attributes ?? []).filter { $0 != "escaping" })
 		}
 	}
 
