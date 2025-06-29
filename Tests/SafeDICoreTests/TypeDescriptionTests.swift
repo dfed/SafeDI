@@ -730,6 +730,75 @@ struct TypeDescriptionTests {
 		]))
 	}
 
+	@Test
+	func asFunctionParameter_doesNotChangeOrderingOfEscapingWhenEscapingIsLast() {
+		#expect(TypeDescription.attributed(
+			.closure(
+				arguments: [.void(.tuple)],
+				isAsync: false,
+				doesThrow: false,
+				returnType: .void(.identifier)
+			),
+			specifiers: nil,
+			attributes: ["autoclosure", "escaping"]
+		).asFunctionParameter == TypeDescription.attributed(
+			.closure(
+				arguments: [.void(.tuple)],
+				isAsync: false,
+				doesThrow: false,
+				returnType: .void(.identifier)
+			),
+			specifiers: nil,
+			attributes: ["autoclosure", "escaping"]
+		))
+	}
+
+	@Test
+	func asFunctionParameter_doesNotChangeOrderingOfEscapingWhenEscapingIsFirst() {
+		#expect(TypeDescription.attributed(
+			.closure(
+				arguments: [.void(.tuple)],
+				isAsync: false,
+				doesThrow: false,
+				returnType: .void(.identifier)
+			),
+			specifiers: nil,
+			attributes: ["escaping", "autoclosure"]
+		).asFunctionParameter == TypeDescription.attributed(
+			.closure(
+				arguments: [.void(.tuple)],
+				isAsync: false,
+				doesThrow: false,
+				returnType: .void(.identifier)
+			),
+			specifiers: nil,
+			attributes: ["escaping", "autoclosure"]
+		))
+	}
+
+	@Test
+	func asFunctionParameter_addsEscapingWhenNoAttributesFound() {
+		#expect(TypeDescription.attributed(
+			.closure(
+				arguments: [.void(.tuple)],
+				isAsync: false,
+				doesThrow: false,
+				returnType: .void(.identifier)
+			),
+			specifiers: nil,
+			attributes: nil
+		).asFunctionParameter == TypeDescription.attributed(
+			.closure(
+				arguments: [.void(.tuple)],
+				isAsync: false,
+				doesThrow: false,
+				returnType: .void(.identifier)
+			),
+			specifiers: nil,
+			attributes: ["escaping"]
+		))
+	}
+
 	// MARK: - Visitors
 
 	private final class TypeIdentifierSyntaxVisitor: SyntaxVisitor {

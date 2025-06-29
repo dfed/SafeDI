@@ -197,16 +197,20 @@ public struct InstantiableMacro: MemberMacro {
 							return parameter
 						}
 						for property in properties {
-							if let existingParameter = existingParameters[property] {
+							let functionArgumentProperty = Property(
+								label: property.label,
+								typeDescription: property.typeDescription.asFunctionParameter
+							)
+							if let existingParameter = existingParameters[functionArgumentProperty] {
 								fixedSyntax.signature.parameterClause.parameters.append(
-									normalizeFunctionParameter(existingParameter, for: property)
+									normalizeFunctionParameter(existingParameter, for: functionArgumentProperty)
 								)
 							} else {
 								fixedSyntax.signature.parameterClause.parameters.append(
-									normalizeFunctionParameter(property.asFunctionParamter, for: property)
+									normalizeFunctionParameter(property.asFunctionParamter, for: functionArgumentProperty)
 								)
 							}
-							existingParameters[property] = nil
+							existingParameters[functionArgumentProperty] = nil
 						}
 
 						for existingParameter in existingParameters.map(\.value) {

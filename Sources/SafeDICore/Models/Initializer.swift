@@ -328,46 +328,6 @@ extension ConcreteDeclType {
 
 extension TypeDescription {
 	fileprivate func isEqualToFunctionArgument(_ argument: TypeDescription) -> Bool {
-		switch argument {
-		case let .attributed(argumentTypeDescription, argumentSpecifiers, argumentAttributes):
-			switch self {
-			case .simple,
-			     .nested,
-			     .composition,
-			     .optional,
-			     .implicitlyUnwrappedOptional,
-			     .some,
-			     .any,
-			     .metatype,
-			     .array,
-			     .dictionary,
-			     .tuple,
-			     .closure,
-			     .unknown,
-			     .void:
-				self == argumentTypeDescription
-					&& argumentSpecifiers?.isEmpty ?? true
-					&& (argumentAttributes ?? []).contains("escaping")
-			case let .attributed(parameterTypeDescription, parameterSpecifiers, parameterAttributes):
-				parameterTypeDescription == argumentTypeDescription
-					&& Set(parameterSpecifiers ?? []) == Set(argumentSpecifiers ?? [])
-					&& Set(argumentAttributes ?? []).subtracting(parameterAttributes ?? []) == ["escaping"]
-			}
-		case .simple,
-		     .nested,
-		     .composition,
-		     .optional,
-		     .implicitlyUnwrappedOptional,
-		     .some,
-		     .any,
-		     .metatype,
-		     .closure,
-		     .array,
-		     .dictionary,
-		     .tuple,
-		     .unknown,
-		     .void:
-			self == argument
-		}
+		asFunctionParameter == argument
 	}
 }
