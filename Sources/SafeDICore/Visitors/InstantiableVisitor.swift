@@ -196,7 +196,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				dependencies: initializer.arguments.map {
 					Dependency(
 						property: $0.asProperty,
-						source: .received
+						source: .received(onlyIfAvailable: false)
 					)
 				},
 				declarationType: .extensionType

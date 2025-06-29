@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name     = 'SafeDI'
-  s.version  = '1.2.2'
+  s.version  = '1.3.0'
   s.summary  = 'Compile-time-safe dependency injection'
   s.homepage = 'https://github.com/dfed/SafeDI'
   s.license  = 'MIT'

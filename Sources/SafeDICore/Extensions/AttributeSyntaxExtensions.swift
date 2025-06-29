@@ -123,6 +123,19 @@ extension AttributeSyntax {
 		return erasedToConcreteExistentialLabeledExpression.expression
 	}
 
+	public var onlyIfAvailable: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let erasedToConcreteExistentialLabeledExpression = labeledExpressionList.reversed().first(where: {
+		      	$0.label?.text == "onlyIfAvailable"
+		      })
+		else {
+			return nil
+		}
+
+		return erasedToConcreteExistentialLabeledExpression.expression
+	}
+
 	public var fulfillingTypeDescription: TypeDescription? {
 		if let expression = fulfilledByType,
 		   let stringLiteral = StringLiteralExprSyntax(expression),
@@ -134,7 +147,7 @@ extension AttributeSyntax {
 		}
 	}
 
-	public var erasedToConcreteExistentialType: Bool {
+	public var erasedToConcreteExistentialValue: Bool {
 		guard let erasedToConcreteExistential,
 		      let erasedToConcreteExistentialType = BooleanLiteralExprSyntax(erasedToConcreteExistential)
 		else {
@@ -142,5 +155,15 @@ extension AttributeSyntax {
 			return false
 		}
 		return erasedToConcreteExistentialType.literal.text == "true"
+	}
+
+	public var onlyIfAvailableValue: Bool {
+		guard let onlyIfAvailable,
+		      let onlyIfAvailable = BooleanLiteralExprSyntax(onlyIfAvailable)
+		else {
+			// Default value for the `onlyIfAvailable` parameter is `false`.
+			return false
+		}
+		return onlyIfAvailable.literal.text == "true"
 	}
 }

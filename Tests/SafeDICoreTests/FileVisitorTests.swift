@@ -74,7 +74,7 @@ struct FileVisitorTests {
 							label: "networkService",
 							typeDescription: .simple(name: "NetworkService")
 						),
-						source: .received
+						source: .received(onlyIfAvailable: false)
 					),
 				],
 				declarationType: .classType
@@ -134,7 +134,7 @@ struct FileVisitorTests {
 							label: "networkService",
 							typeDescription: .simple(name: "NetworkService")
 						),
-						source: .received
+						source: .received(onlyIfAvailable: false)
 					),
 				],
 				declarationType: .classType

@@ -160,6 +160,10 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		typeDescription.simpleNameAndGenerics?.generics
 	}
 
+	var asUnwrappedProperty: Property {
+		Property(label: label, typeDescription: typeDescription.unwrapped)
+	}
+
 	// MARK: PropertyType
 
 	public enum PropertyType {
