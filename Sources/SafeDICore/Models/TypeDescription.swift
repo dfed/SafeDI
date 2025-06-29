@@ -237,18 +237,18 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	public var asFunctionParameter: TypeDescription {
 		switch self {
 		case .any,
-			 .array,
-			 .composition,
-			 .dictionary,
-			 .implicitlyUnwrappedOptional,
-			 .metatype,
-			 .nested,
-			 .optional,
-			 .simple,
-			 .some,
-			 .tuple,
-			 .unknown,
-			 .void:
+		     .array,
+		     .composition,
+		     .dictionary,
+		     .implicitlyUnwrappedOptional,
+		     .metatype,
+		     .nested,
+		     .optional,
+		     .simple,
+		     .some,
+		     .tuple,
+		     .unknown,
+		     .void:
 			self
 		case .closure:
 			.attributed(self, specifiers: nil, attributes: ["escaping"])
