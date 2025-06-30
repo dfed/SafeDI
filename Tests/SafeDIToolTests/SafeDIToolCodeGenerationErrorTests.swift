@@ -478,8 +478,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			@Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain:
 			\tRoot -> Child
 
-			Did you mean one of the following available properties?
-			\t`thing: Thing`
+			The non-optional `thing: Thing` is available in chain. Did you mean to decorate this property with `@Received(onlyIfAvailable: true)`?
 			"""
 		) {
 			try await executeSafeDIToolTest(
@@ -1607,6 +1606,63 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					@Instantiable
 					public struct C {
 					    @Received private let renamedB: B
+					}
+					""",
+				],
+				buildDependencyTreeOutput: true,
+				filesToDelete: &filesToDelete
+			)
+		}
+	}
+
+	@Test
+	mutating func run_OnCodeWithOptionalPropertyAliasAndMarkedOnlyIfAvailableAndItIsOnlyAvialableViaCircularDependency_throws_error() async throws {
+		await assertThrowsError(
+			"""
+			Dependency cycle detected:
+				C -> B -> C
+			"""
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root {
+						public init(aBuilder: Instantiator<A>) {
+							fatalError("SafeDI doesn't inspect the initializer body")
+						}
+
+						@Instantiated let aBuilder: Instantiator<A>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A {
+						public init(c: C) {
+							fatalError("SafeDI doesn't inspect the initializer body")
+						}
+
+						@Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B {
+						public init(cRenamed: CRenamed?) {
+							fatalError("SafeDI doesn't inspect the initializer body")
+						}
+
+						@Received(fulfilledByDependencyNamed: "c", ofType: C.self, onlyIfAvailable: true) let cRenamed: CRenamed?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C {
+						public init(b: B) {
+							fatalError("SafeDI doesn't inspect the initializer body")
+						}
+
+						@Instantiated let b: B
 					}
 					""",
 				],

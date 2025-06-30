@@ -222,9 +222,18 @@ public struct Initializer: Codable, Hashable, Sendable {
 		return bindings
 	}
 
-	func createInitializerArgumentList(given dependencies: [Dependency]) throws(GenerationError) -> String {
+	func createInitializerArgumentList(
+		given dependencies: [Dependency],
+		unavailableProperties: Set<Property>? = nil
+	) throws(GenerationError) -> String {
 		try createDependencyAndArgumentBinding(given: dependencies)
-			.map { "\($0.argument.label): \($0.argument.innerLabel)" }
+			.map {
+				if let unavailableProperties, unavailableProperties.contains($0.dependency.property) {
+					"\($0.argument.label): nil"
+				} else {
+					"\($0.argument.label): \($0.argument.innerLabel)"
+				}
+			}
 			.joined(separator: ", ")
 	}
 

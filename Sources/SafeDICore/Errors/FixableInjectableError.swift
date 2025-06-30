@@ -22,11 +22,14 @@ import SwiftDiagnostics
 
 public enum FixableInjectableError: DiagnosticError {
 	case unexpectedMutable
+	case onlyIfAvailableNotOptionalSpelledWithQuestionMark
 
 	public var description: String {
 		switch self {
 		case .unexpectedMutable:
 			"Dependency can not be mutable unless it is decorated with a property wrapper. Mutations to a dependency are not propagated through the dependency tree."
+		case .onlyIfAvailableNotOptionalSpelledWithQuestionMark:
+			"The type of a dependency decorated with `onlyIfAvailable: true` must be marked as optional utilizing the `?` spelling"
 		}
 	}
 
@@ -44,7 +47,8 @@ public enum FixableInjectableError: DiagnosticError {
 		init(error: FixableInjectableError) {
 			diagnosticID = MessageID(domain: "\(Self.self)", id: error.description)
 			severity = switch error {
-			case .unexpectedMutable:
+			case .unexpectedMutable,
+			     .onlyIfAvailableNotOptionalSpelledWithQuestionMark:
 				.error
 			}
 			message = error.description
@@ -62,6 +66,8 @@ public enum FixableInjectableError: DiagnosticError {
 			message = switch error {
 			case .unexpectedMutable:
 				"Replace `var` with `let`"
+			case .onlyIfAvailableNotOptionalSpelledWithQuestionMark:
+				"Mark the type as optional using `?`"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}

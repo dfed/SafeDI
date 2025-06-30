@@ -243,7 +243,7 @@ Here we have an example of a `UserManager` type that is received as a `UserVendo
 
 ```swift
 public struct User {
-    ... // User information.  
+    ... // User information.
 }
 
 public protocol UserVendor {
@@ -274,8 +274,8 @@ public struct LoggedInView: View, Instantiable {
     public var body: some View {
         ... // A logged in user experience
     }
-    
-    @Forwarded private let userManager: UserManager 
+
+    @Forwarded private let userManager: UserManager
 
     @Instantiated private let profileViewBuilder: Instantiator<ProfileView>
 }
@@ -307,6 +307,62 @@ public struct EditProfileView: View, Instantiable {
     }
 
     @Received private let userVendor: UserVendor
+}
+```
+
+#### Conditionally receiving dependencies
+
+It is possible to receive an optional dependency only when that dependency has been `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree with the `@Received(onlyIfAvailable: true)` macro. This functionality is particularly useful when `@Instantiable` types are created by multiple `@Instantiable` parents with different available dependencies.
+
+Here’s an example of a feed view in a social app that optionally receives a `user` object:
+
+```swift
+public struct User {
+    ... // User information.
+}
+
+import SwiftUI
+
+@Instantiable
+public struct LoggedOutView: View, Instantiable {
+    public init(feedViewBuilder: Instantiator<FeedView>) {
+        self.feedViewBuilder = feedViewBuilder
+    }
+
+    public var body: some View {
+        ... // A logged out user experience that shows a feed
+    }
+
+    @Instantiated private let feedViewBuilder: Instantiator<FeedView>
+}
+
+@Instantiable
+public struct LoggedInView: View, Instantiable {
+    public init(user: User, feedViewBuilder: Instantiator<FeedView>) {
+        self.user = user
+        self.feedViewBuilder = feedViewBuilder
+    }
+
+    public var body: some View {
+        ... // A logged in user experience that shows a feed customized for this user
+    }
+
+    @Forwarded private let user: User
+
+    @Instantiated private let feedViewBuilder: Instantiator<FeedView>
+}
+
+@Instantiable
+public struct FeedView: View, Instantiable {
+    public init(user: User?) {
+        self.user = user
+    }
+
+    public var body: some View {
+        ... // A feed experience that is customized when a user is present.
+    }
+
+    @Received(onlyIfAvailable: true) private let user: User?
 }
 ```
 

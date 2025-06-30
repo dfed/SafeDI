@@ -99,12 +99,26 @@ public actor DependencyTreeGenerator {
 			case let .unfulfillableProperties(unfulfillableProperties):
 				"""
 				\(unfulfillableProperties.map {
-					"""
-					@\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain:\n\t\(([$0.instantiable.concreteInstantiable] + $0.parentStack)
-						.reversed()
-						.map(\.asSource)
-						.joined(separator: " -> "))\($0.suggestedAlternatives.isEmpty ? "" : "\n\nDid you mean one of the following available properties?\n\($0.suggestedAlternatives.map { "\t`\($0.asSource)`" }.joined(separator: "\n"))")
-					"""
+					if $0.property.typeDescription.isOptional,
+					   let nonOptionalAlternative = $0.suggestedAlternatives.first(where: { [unfulfilledProperty = $0.property] alternative in
+					   	alternative.label == unfulfilledProperty.label
+					   		&& alternative.typeDescription == unfulfilledProperty.typeDescription.unwrapped
+					   })
+					{
+						"""
+						@\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain:\n\t\(([$0.instantiable.concreteInstantiable] + $0.parentStack)
+							.reversed()
+							.map(\.asSource)
+							.joined(separator: " -> "))\($0.suggestedAlternatives.isEmpty ? "" : "\n\nThe non-optional `\(nonOptionalAlternative.asSource)` is available in chain. Did you mean to decorate this property with `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)`?")
+						"""
+					} else {
+						"""
+						@\(Dependency.Source.receivedRawValue) property `\($0.property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain:\n\t\(([$0.instantiable.concreteInstantiable] + $0.parentStack)
+							.reversed()
+							.map(\.asSource)
+							.joined(separator: " -> "))\($0.suggestedAlternatives.isEmpty ? "" : "\n\nDid you mean one of the following available properties?\n\($0.suggestedAlternatives.map { "\t`\($0.asSource)`" }.joined(separator: "\n"))")
+						"""
+					}
 				}
 				.sorted()
 				.joined(separator: "\n\n"))
@@ -163,6 +177,7 @@ public actor DependencyTreeGenerator {
 						try typeDescriptionToScopeMap[$0]?.createScopeGenerator(
 							for: nil,
 							propertyStack: [],
+							receivableProperties: [],
 							erasedToConcreteExistential: false
 						)
 					}
@@ -279,11 +294,12 @@ public actor DependencyTreeGenerator {
 							erasedToConcreteExistential: erasedToConcreteExistential
 						))
 					}
-				case let .aliased(fulfillingProperty, erasedToConcreteExistential):
+				case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
 					scope.propertiesToGenerate.append(.aliased(
 						dependency.property,
 						fulfilledBy: fulfillingProperty,
-						erasedToConcreteExistential: erasedToConcreteExistential
+						erasedToConcreteExistential: erasedToConcreteExistential,
+						onlyIfAvailable: onlyIfAvailable
 					))
 				case .forwarded, .received:
 					continue
@@ -302,30 +318,12 @@ public actor DependencyTreeGenerator {
 			propertyStack: OrderedSet<Property>,
 			root: TypeDescription
 		) throws {
-			let createdProperties = Set(
-				scope
-					.instantiable
-					.dependencies
-					.filter {
-						switch $0.source {
-						case .instantiated, .forwarded:
-							// The source is being injected into the dependency tree.
-							true
-						case .aliased:
-							// This property is being re-injected into the dependency tree under a new alias.
-							true
-						case .received:
-							false
-						}
-					}
-					.map(\.property)
-			)
 			if let property {
 				func validateNoCycleInReceivedProperties(
 					scope: Scope,
 					receivedPropertyStack: OrderedSet<Property>
 				) throws {
-					for childProperty in scope.receivedProperties {
+					for childProperty in scope.requiredReceivedProperties {
 						guard childProperty != property else {
 							throw DependencyTreeGeneratorError.receivedConstantCycleDetected(
 								instantiated: property,
@@ -352,9 +350,9 @@ public actor DependencyTreeGenerator {
 				)
 			}
 
-			for receivedProperty in scope.receivedProperties {
+			for receivedProperty in scope.requiredReceivedProperties {
 				let parentContainsProperty = receivableProperties.contains(receivedProperty)
-				let propertyIsCreatedAtThisScope = createdProperties.contains(receivedProperty)
+				let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
 				if !parentContainsProperty, !propertyIsCreatedAtThisScope {
 					if property != nil {
 						// This property is in a dependency tree and is unfulfillable. Record the problem.
@@ -484,9 +482,21 @@ extension TypeDescription {
 		switch self {
 		case let .nested(name, _, generics):
 			.simple(name: name, generics: generics)
-		case let .any(typeDescription), let .implicitlyUnwrappedOptional(typeDescription), let .optional(typeDescription), let .some(typeDescription):
+		case let .any(typeDescription),
+		     let .implicitlyUnwrappedOptional(typeDescription),
+		     let .optional(typeDescription),
+		     let .some(typeDescription):
 			typeDescription.leastQualifiedTypeDescription
-		case .array, .attributed, .closure, .composition, .dictionary, .metatype, .simple, .tuple, .unknown, .void:
+		case .array,
+		     .attributed,
+		     .closure,
+		     .composition,
+		     .dictionary,
+		     .metatype,
+		     .simple,
+		     .tuple,
+		     .unknown,
+		     .void:
 			self
 		}
 	}
