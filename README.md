@@ -94,7 +94,7 @@ pod 'SafeDI', '~> 1.0.0'
 
 ### Generating your dependency tree
 
-SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin works out of the box on most project configurations. If your project used a custom build system, you can configure your build to utilize the `SafeDITool` command-line executable directly.
+SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin works out of the box on most project configurations. If your project uses a custom build system, you can configure your build to utilize the `SafeDITool` command-line executable directly.
 
 #### Swift package manager
 
@@ -117,6 +117,10 @@ If your first-party code is entirely contained in a Swift Package with one or mo
 You can see this integration in practice in the [ExamplePackageIntegration](Examples/ExamplePackageIntegration) package.
 
 Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may create a `.safedi/configuration/additionalImportedModules.csv` with a comma-separated list of module names to import. The `.safedi/` folder must be placed in the same folder as your `Package.swift` file.
+
+##### Unlocking faster builds with Swift Package Manager plugins
+
+SafeDI vends a `SafeDIPrebuiltGenerator` plugin for both Xcode and Swift package manager. This plugin utilizes a prebuilt binary for dependency tree generation and does not require compiling `SwiftSyntax`. Integrating this plugin will guide you through the one-step process of downloading the binary to the expected location. Note that avoiding compiling SwiftSyntax requires [some additional configuration](https://forums.swift.org/t/preview-swift-syntax-prebuilts-for-macros/80202) when using a Swift compiler version below 6.2.
 
 #### CocoaPods
 
