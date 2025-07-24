@@ -60,7 +60,14 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 
 	// MARK: Public
 
-	public var asFunctionParamter: FunctionParameterSyntax {
+	public var asFunctionParamter: Property {
+		.init(
+			label: label,
+			typeDescription: typeDescription.asFunctionParameter
+		)
+	}
+
+	public var asFunctionParamterSyntax: FunctionParameterSyntax {
 		switch typeDescription {
 		case .closure:
 			FunctionParameterSyntax(
