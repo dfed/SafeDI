@@ -94,7 +94,7 @@ pod 'SafeDI', '~> 1.0.0'
 
 ### Generating your dependency tree
 
-SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin works out of the box on a limited number of project configurations. If your project does not fall into these well-supported configurations, you can configure your build to utilize the `SafeDITool` command-line executable directly.
+SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin works out of the box on most project configurations. If your project uses a custom build system, you can configure your build to utilize the `SafeDITool` command-line executable directly.
 
 #### Swift package manager
 
@@ -118,6 +118,10 @@ You can see this integration in practice in the [ExamplePackageIntegration](Exam
 
 Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may create a `.safedi/configuration/additionalImportedModules.csv` with a comma-separated list of module names to import. The `.safedi/` folder must be placed in the same folder as your `Package.swift` file.
 
+##### Unlocking faster builds with Swift Package Manager plugins
+
+SafeDI vends a `SafeDIPrebuiltGenerator` plugin for both Xcode and Swift package manager. This plugin utilizes a prebuilt binary for dependency tree generation and does not require compiling `SwiftSyntax`. Integrating this plugin will guide you through the one-step process of downloading the binary to the expected location. Note that avoiding compiling SwiftSyntax requires [some additional configuration](https://forums.swift.org/t/preview-swift-syntax-prebuilts-for-macros/80202) when using a Swift compiler version below 6.2.
+
 #### CocoaPods
 
 Use a pre-build script to download the `SafeDITool` binary and generate your SafeDI dependency tree ([example](Examples/ExampleCocoaPodsIntegration/safeditool.sh)). Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
@@ -126,7 +130,7 @@ You can see this integration in practice in the [ExampleCocoaPodsIntegration](Ex
 
 #### Additional configurations
 
-`SafeDITool` is designed to integrate into projects of any size or shape. If your first-party code comprises a mix of Xcode Projects and Swift Packages or some other configuration, once your Xcode project depends on the SafeDI package you will need to utilize the `SafeDITool` command-line executable directly in a pre-build script similar to the CocoaPods integration linked above.
+`SafeDITool` is designed to integrate into projects of any size or shape. Our [Releases](https://github.com/dfed/SafeDI/releases) page has prebuilt, codesigned release binaries of the `SafeDITool`  that can be downloaded and utilizied directly in a pre-build script, similar to the CocoaPods integration linked above.
 
 `SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run `swift run SafeDITool --help` to see documentation of the tool’s supported arguments.
 
