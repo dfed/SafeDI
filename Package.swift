@@ -63,10 +63,7 @@ let package = Package(
 		.macro(
 			name: "SafeDIMacros",
 			dependencies: [
-				// We need to have the same dependencies as SafeDICore, since we simlink to SafeDICore's code.
-				// We simlink to SafeDICore becuase as of Xcode 16.4 and Swift 6.1.1, Xcode fails to build with IDEPackageEnablePrebuilts enabled when a module (like SafeDICore) with a SwiftSyntax dependency is shared between a Macro and a Plugin.
-				// See https://forums.swift.org/t/preview-swift-syntax-prebuilts-for-macros/80202/14
-				.product(name: "Collections", package: "swift-collections"),
+				"SafeDICore",
 				.product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
 				.product(name: "SwiftDiagnostics", package: "swift-syntax"),
 				.product(name: "SwiftSyntax", package: "swift-syntax"),
@@ -81,6 +78,7 @@ let package = Package(
 			name: "SafeDIMacrosTests",
 			dependencies: [
 				"SafeDIMacros",
+				"SafeDICore",
 				.product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
 				.product(name: "MacroTesting", package: "swift-macro-testing"),
 			],

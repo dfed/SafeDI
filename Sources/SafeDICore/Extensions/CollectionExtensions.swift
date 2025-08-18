@@ -49,7 +49,7 @@ extension Collection<Property> {
 	}
 
 	var initializerFunctionParameters: [FunctionParameterSyntax] {
-		map(\.asFunctionParamter)
+		map(\.asFunctionParamterSyntax)
 			.transformUntilLast {
 				var node = $0
 				node.trailingComma = .commaToken(trailingTrivia: .space)
