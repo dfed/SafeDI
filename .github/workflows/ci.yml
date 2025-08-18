@@ -23,9 +23,11 @@ jobs:
           'generic/platform=visionos'
         ]
       fail-fast: false
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
       - name: Download visionOS
@@ -41,9 +43,11 @@ jobs:
   spm-package-integration:
     name: Build Package Integration on Xcode 16
     runs-on: macos-15
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
       - name: Build Package Integration
@@ -52,9 +56,11 @@ jobs:
   spm-prebuilt-package-integration:
     name: Build Prebuilt Package Integration on Xcode 16
     runs-on: macos-15
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
       - name: Build Package Integration
@@ -65,9 +71,11 @@ jobs:
   spm-project-integration:
     name: Build Project Integration on Xcode 16
     runs-on: macos-15
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
       - name: Replace 'main' branch with the current branch
@@ -79,9 +87,11 @@ jobs:
   spm-multi-project-integration:
     name: Build Multi Project Integration on Xcode 16
     runs-on: macos-15
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
       - name: Replace 'main' branch with the current branch
@@ -93,9 +103,11 @@ jobs:
   pod-project-integration:
     name: Build CocoaPods Integration on Xcode 16
     runs-on: macos-15
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3.5'
@@ -110,9 +122,11 @@ jobs:
   spm:
     name: Build and Test on Xcode 16
     runs-on: macos-15
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_16.3.app/Contents/Developer
       - name: Build and Test Framework
@@ -124,7 +138,7 @@ jobs:
         run: ./Scripts/prepare-coverage-reports.sh
       - name: Upload Coverage Reports
         if: success()
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           fail_ci_if_error: true
           verbose: true
@@ -143,9 +157,11 @@ jobs:
           "visionos",
         ]
       fail-fast: false
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3.5'
@@ -166,17 +182,23 @@ jobs:
     name: Build and Test on Linux
     runs-on: ubuntu-latest
     container: swift:6.1
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Build and Test Framework
         run: swift test -c release --enable-code-coverage -Xswiftc -enable-testing
+      - name: Install curl for Codecov
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends curl ca-certificates
       - name: Prepare Coverage Reports
         run: |
           llvm-cov export -format="lcov" .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest -instr-profile .build/x86_64-unknown-linux-gnu/release/codecov/default.profdata > coverage.lcov
       - name: Upload Coverage Reports
         if: success()
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           fail_ci_if_error: true
           verbose: true
@@ -185,18 +207,22 @@ jobs:
   readme-validation:
     name: Check Markdown links
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Link Checker
-        uses: AlexanderDokuchaev/md-dead-link-check@v1.0.1
+        uses: AlexanderDokuchaev/md-dead-link-check@d5a37e0b14e5918605d22b34562532762ccb2e47 # v1.2.0
 
   lint-swift:
     name: Lint Swift
     runs-on: ubuntu-latest
     container: swift:6.1
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Lint Swift
         run: swift run --package-path CLI swiftformat . --lint
