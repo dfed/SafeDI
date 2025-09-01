@@ -36,7 +36,7 @@ public final class SendableInstantiator<T: Instantiable>: Sendable {
 
 	/// - Parameter instantiator: A closure that returns an instance of `Instantiable`.
 	public init(_ instantiator: @escaping @Sendable () -> T) where T.ForwardedProperties == Void {
-		self.instantiator = { _ in instantiator() }
+		self.instantiator = Self.createInstantiator(from: instantiator)
 	}
 
 	/// Instantiates and returns a new instance of the `@Instantiable` type.
@@ -52,4 +52,9 @@ public final class SendableInstantiator<T: Instantiable>: Sendable {
 	}
 
 	private let instantiator: @Sendable (T.ForwardedProperties) -> T
+
+	// This shouldn't be necessary. We're working around https://github.com/swiftlang/swift/issues/82133
+	private static func createInstantiator(from instantiator: @escaping @Sendable (T.ForwardedProperties) -> T) -> @Sendable (T.ForwardedProperties) -> T {
+		instantiator
+	}
 }
