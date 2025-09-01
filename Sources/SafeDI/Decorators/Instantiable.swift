@@ -60,9 +60,22 @@ public macro Instantiable(
 	conformsElsewhere: Bool = false
 ) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")
 
-/// A type that can be instantiated with runtime-injected properties.
-public protocol Instantiable {
-	/// The forwarded properties required to instantiate the type.
-	/// Defaults to `Void`.
-	associatedtype ForwardedProperties = Void
-}
+#if swift(>=6.2)
+
+	/// A type that can be instantiated with runtime-injected properties.
+	public protocol Instantiable: SendableMetatype {
+		/// The forwarded properties required to instantiate the type.
+		/// Defaults to `Void`.
+		associatedtype ForwardedProperties = Void
+	}
+
+#else
+
+	/// A type that can be instantiated with runtime-injected properties.
+	public protocol Instantiable {
+		/// The forwarded properties required to instantiate the type.
+		/// Defaults to `Void`.
+		associatedtype ForwardedProperties = Void
+	}
+
+#endif
