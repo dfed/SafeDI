@@ -168,12 +168,12 @@ jobs:
           bundler-cache: true
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
-      - name: Download visionOS
-        if: matrix.platforms == 'visionos'
+      - name: Download Simulator
+        if: matrix.platforms != 'macos'
         run: |
           sudo xcodebuild -runFirstLaunch
           sudo xcrun simctl list
-          sudo xcodebuild -downloadPlatform visionOS
+          sudo xcodebuild -downloadPlatform ${{ matrix.platforms }}
           sudo xcodebuild -runFirstLaunch
       - name: Lint Podspec
         run: bundle exec pod lib lint --verbose --fail-fast --swift-version=6.0 --platforms=${{ matrix.platforms }}
