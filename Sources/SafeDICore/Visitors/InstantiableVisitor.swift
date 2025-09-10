@@ -295,6 +295,14 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public static let macroName = "Instantiable"
 	public static let instantiateMethodName = "instantiate"
 
+	public func walk(_ node: some ConcreteDeclSyntaxProtocol) {
+		super.walk(node)
+	}
+
+	public func walk(_ node: ExtensionDeclSyntax) {
+		super.walk(node)
+	}
+
 	// MARK: DeclarationType
 
 	public enum DeclarationType {
