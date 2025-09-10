@@ -436,7 +436,7 @@ extension TypeSyntax {
 
 		} else if let typeIdentifier = AttributedTypeSyntax(self) {
 			let attributes: [String] = typeIdentifier.attributes.compactMap {
-				AttributeSyntax($0)?.attributeName.as(IdentifierTypeSyntax.self)?.name.text
+				(AttributeSyntax($0)?.attributeName).map(IdentifierTypeSyntax.init(_:))??.name.text
 			}
 			return .attributed(
 				typeIdentifier.baseType.typeDescription,
@@ -602,7 +602,7 @@ private final class GenericArgumentVisitor: SyntaxVisitor {
 	private(set) var genericArguments = [TypeDescription]()
 
 	override func visit(_ node: GenericArgumentSyntax) -> SyntaxVisitorContinueKind {
-		if let typeSyntax = node.argument.as(TypeSyntax.self) {
+		if let typeSyntax = TypeSyntax(node.argument) {
 			genericArguments.append(typeSyntax.typeDescription)
 		}
 		return .skipChildren
