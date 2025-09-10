@@ -169,6 +169,7 @@ jobs:
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
       - name: Download Simulator
+        if: matrix.platforms != 'macos'
         run: |
           sudo xcodebuild -runFirstLaunch
           sudo xcrun simctl list
