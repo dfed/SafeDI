@@ -478,7 +478,7 @@ SafeDI has a `SafeDITool` executable that the `SafeDIGenerator` plugin utilizes 
 
 The executable heavily utilizes asynchronous processing to avoid `SafeDITool` becoming a bottleneck in your build. Additionally, we only parse a Swift file with `SwiftSyntax` when the file contains the string `Instantiable`.
 
-Due to limitations in Apple’s [Swift Package Manager Plugins](https://github.com/apple/swift-package-manager/blob/main/Documentation/Plugins.md), the `SafeDIGenerator` plugin parses all of your first-party Swift files in a single pass. Projects that utilize `SafeDITool` directly can process Swift files on a per-module basis to further reduce the build-time bottleneck.
+Due to limitations in Apple’s [Swift Package Manager Plugins](https://github.com/swiftlang/swift-package-manager/blob/main/Sources/PackageManagerDocs/Documentation.docc/Plugins.md), the `SafeDIGenerator` plugin parses all of your first-party Swift files in a single pass. Projects that utilize `SafeDITool` directly can process Swift files on a per-module basis to further reduce the build-time bottleneck.
 
 ## Introspecting a SafeDI tree
 
