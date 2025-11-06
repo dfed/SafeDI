@@ -19,7 +19,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
       - name: Build SafeDITool
