@@ -378,8 +378,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let propertiesToDeclare: Set<Property>
 	private let property: Property?
 
-	nonisolated
-	private var onlyIfAvailableUnwrappedReceivedProperties: Set<Property> {
+	nonisolated private var onlyIfAvailableUnwrappedReceivedProperties: Set<Property> {
 		switch scopeData {
 		case let .property(instantiable, _, _, _, _):
 			.init(instantiable.dependencies.compactMap {
