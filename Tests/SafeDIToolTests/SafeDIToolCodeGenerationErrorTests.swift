@@ -1484,6 +1484,47 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
+	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndOnlyIfAvailableReceived_throwsError() async throws {
+		await assertThrowsError(
+			"""
+			Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>?` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>?`. Declare @Received `aBuilder: Instantiator<A>?` on `C` as @Instantiated to fix. Full cycle:
+			\tInstantiator<A>? -> Instantiator<B> -> Instantiator<C> -> Instantiator<A>?
+			"""
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root {
+					    @Instantiated let aBuilder: Instantiator<A>?
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A {
+					    @Instantiated let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B {
+					    @Instantiated let cBuilder: Instantiator<C>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct C {
+					    @Received(onlyIfAvailable: true) let aBuilder: Instantiator<A>?
+					}
+					""",
+				],
+				buildDependencyTreeOutput: true,
+				filesToDelete: &filesToDelete
+			)
+		}
+	}
+
+	@Test
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithVaryingNames_throwsError() async {
 		await assertThrowsError(
 			"""
