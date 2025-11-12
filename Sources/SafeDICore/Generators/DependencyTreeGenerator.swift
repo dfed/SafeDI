@@ -410,12 +410,6 @@ public actor DependencyTreeGenerator {
 					if !typesInCycle.contains(where: { !$0.propertyType.isConstant }) {
 						throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
 					}
-				} else if dependency.source.isReceived {
-					throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
-						property: propertyForDependency,
-						directParent: scope.instantiable.concreteInstantiable,
-						cycle: typesInCycle
-					)
 				}
 			}
 
