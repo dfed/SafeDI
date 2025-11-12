@@ -1363,6 +1363,45 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
+	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithMixOfReceivedAndInstantiated_throwsError() async throws {
+		await assertThrowsError(
+			"""
+			Dependency cycle detected:
+			\tA -> C -> B -> A
+			"""
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root {
+						@Instantiated public let a: A // A -> C -> Received B
+						@Instantiated public let b: B // B -> Received A
+					}
+
+					@Instantiable
+					public final class A {
+						@Instantiated let c: C
+					}
+
+					@Instantiable
+					public final class B {
+						@Received public let a: A
+					}
+
+					@Instantiable
+					public final class C {
+						@Received public let b: B
+					}
+					""",
+				],
+				buildDependencyTreeOutput: true,
+				filesToDelete: &filesToDelete
+			)
+		}
+	}
+
+	@Test
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedAndReceived_throwsError() async {
 		await assertThrowsError(
 			"""
