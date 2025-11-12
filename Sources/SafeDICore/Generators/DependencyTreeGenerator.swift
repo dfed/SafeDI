@@ -321,7 +321,8 @@ public actor DependencyTreeGenerator {
 			if let property {
 				func validateNoCycleInReceivedProperties(
 					scope: Scope,
-					receivedPropertyStack: OrderedSet<Property>
+					receivedPropertyStack: OrderedSet<Property>,
+					instantiationStack: OrderedSet<Property>
 				) throws {
 					for childProperty in scope.requiredReceivedProperties {
 						guard childProperty != property else {
@@ -334,19 +335,43 @@ public actor DependencyTreeGenerator {
 							// We've found a cycle, but it's not our cycle. Bail and let a future loop find this.
 							return
 						}
-						if let receivedPropertyScope = typeDescriptionToScopeMap[childProperty.typeDescription] {
+						if let cycleIndex = instantiationStack.firstIndex(of: childProperty) {
+							let instantiationProperties = Array(instantiationStack.elements[0...cycleIndex])
+							let typesInCycle = (
+								[childProperty]
+									+ receivedPropertyStack.reversed()
+									+ instantiationProperties
+							).map(\.typeDescription)
+							switch childProperty.propertyType {
+							case .instantiator,
+							     .erasedInstantiator,
+							     .sendableInstantiator,
+							     .sendableErasedInstantiator:
+								throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
+									property: childProperty,
+									directParent: scope.instantiable.concreteInstantiable,
+									cycle: typesInCycle
+								)
+							case .constant:
+								throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
+							}
+						} else if let receivedPropertyScope = typeDescriptionToScopeMap[childProperty.typeDescription] {
 							var childPropertyStack = receivedPropertyStack
 							childPropertyStack.append(childProperty)
 							try validateNoCycleInReceivedProperties(
 								scope: receivedPropertyScope,
-								receivedPropertyStack: childPropertyStack
+								receivedPropertyStack: childPropertyStack,
+								instantiationStack: instantiationStack
 							)
 						}
 					}
 				}
+				var instantiationStack = propertyStack
+				instantiationStack.insert(property, at: 0)
 				try validateNoCycleInReceivedProperties(
 					scope: scope,
-					receivedPropertyStack: []
+					receivedPropertyStack: [],
+					instantiationStack: instantiationStack
 				)
 			}
 
