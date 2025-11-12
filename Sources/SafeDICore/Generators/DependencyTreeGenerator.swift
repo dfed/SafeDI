@@ -342,14 +342,17 @@ public actor DependencyTreeGenerator {
 									+ receivedPropertyStack.reversed()
 									+ instantiationProperties
 							).map(\.typeDescription)
-							let propertyType = childProperty.propertyType
-							if propertyType.isInstantiator || propertyType.isErasedInstantiator {
+							switch childProperty.propertyType {
+							case .instantiator,
+							     .erasedInstantiator,
+							     .sendableInstantiator,
+							     .sendableErasedInstantiator:
 								throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
 									property: childProperty,
 									directParent: scope.instantiable.concreteInstantiable,
 									cycle: typesInCycle
 								)
-							} else {
+							case .constant:
 								throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
 							}
 						} else if let receivedPropertyScope = typeDescriptionToScopeMap[childProperty.typeDescription] {
