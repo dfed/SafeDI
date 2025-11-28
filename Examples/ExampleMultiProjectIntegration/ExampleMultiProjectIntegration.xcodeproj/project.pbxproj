@@ -16,7 +16,6 @@
 		3289B4072BF955720053F2E4 /* Subproject.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3289B4012BF955710053F2E4 /* Subproject.framework */; };
 		3289B4082BF955720053F2E4 /* Subproject.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3289B4012BF955710053F2E4 /* Subproject.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3289B40D2BF955A10053F2E4 /* StringStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECC2B314DB20001AC0C /* StringStorage.swift */; };
-		3289B40E2BF955A10053F2E4 /* AnyObservableObject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ED62B3156810001AC0C /* AnyObservableObject.swift */; };
 		3289B40F2BF955A10053F2E4 /* UserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECA2B314D8D0001AC0C /* UserService.swift */; };
 		32B72E192D39763900F5EB6F /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 32B72E182D39763900F5EB6F /* SafeDI */; };
 		32B72E1B2D39764200F5EB6F /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 32B72E1A2D39764200F5EB6F /* SafeDI */; };
@@ -51,7 +50,6 @@
 		324F1ECC2B314DB20001AC0C /* StringStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringStorage.swift; sourceTree = "<group>"; };
 		324F1ECE2B314E030001AC0C /* NameEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NameEntryView.swift; sourceTree = "<group>"; };
 		324F1ED12B3150480001AC0C /* NoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteView.swift; sourceTree = "<group>"; };
-		324F1ED62B3156810001AC0C /* AnyObservableObject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyObservableObject.swift; sourceTree = "<group>"; };
 		32756FE22B24C042006BDD24 /* ExampleMultiProjectIntegration.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ExampleMultiProjectIntegration.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		32756FE52B24C042006BDD24 /* ExampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExampleApp.swift; sourceTree = "<group>"; };
 		32756FE92B24C044006BDD24 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -135,7 +133,6 @@
 			children = (
 				324F1ECA2B314D8D0001AC0C /* UserService.swift */,
 				324F1ECC2B314DB20001AC0C /* StringStorage.swift */,
-				324F1ED62B3156810001AC0C /* AnyObservableObject.swift */,
 				3289B4032BF955720053F2E4 /* Subproject.h */,
 			);
 			path = Subproject;
@@ -280,7 +277,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3289B40E2BF955A10053F2E4 /* AnyObservableObject.swift in Sources */,
 				3289B40D2BF955A10053F2E4 /* StringStorage.swift in Sources */,
 				3289B40F2BF955A10053F2E4 /* UserService.swift in Sources */,
 			);

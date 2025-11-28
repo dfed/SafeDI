@@ -26,6 +26,34 @@ public protocol UserService: ObservableObject {
 	var observableObjectPublisher: ObservableObjectPublisher { get }
 }
 
+/// A type-erased wrapper around a `UserService` that is itself a `UserService` and `ObservableObject`.
+public final class AnyUserService: UserService, ObservableObject {
+	public init(_ userService: some UserService) {
+		self.userService = userService
+		objectWillChange = userService
+			.objectWillChange
+			.map { _ in () }
+			.eraseToAnyPublisher()
+	}
+
+	public var userName: String? {
+		get {
+			userService.userName
+		}
+		set {
+			userService.userName = newValue
+		}
+	}
+
+	public var observableObjectPublisher: ObservableObjectPublisher {
+		userService.observableObjectPublisher
+	}
+
+	public let objectWillChange: AnyPublisher<Void, Never>
+
+	private let userService: any UserService
+}
+
 @Instantiable(fulfillingAdditionalTypes: [UserService.self])
 public final class DefaultUserService: Instantiable, UserService {
 	public init(stringStorage: StringStorage) {

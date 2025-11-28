@@ -25,7 +25,7 @@ import SwiftUI
 @MainActor
 @Instantiable
 public struct NoteView: Instantiable, View {
-	public init(userName: String, userService: any UserService, stringStorage: StringStorage) {
+	public init(userName: String, userService: AnyUserService, stringStorage: StringStorage) {
 		self.userName = userName
 		self.userService = userService
 		self.stringStorage = stringStorage
@@ -49,7 +49,7 @@ public struct NoteView: Instantiable, View {
 	}
 
 	@Forwarded private let userName: String
-	@Received private let userService: any UserService
+	@Received private let userService: AnyUserService
 	@Received private let stringStorage: StringStorage
 
 	@State private var note: String = ""
@@ -58,7 +58,7 @@ public struct NoteView: Instantiable, View {
 #Preview {
 	NoteView(
 		userName: "dfed",
-		userService: DefaultUserService(stringStorage: UserDefaults.standard),
+		userService: .init(DefaultUserService(stringStorage: UserDefaults.standard)),
 		stringStorage: UserDefaults.standard
 	)
 }
