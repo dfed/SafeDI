@@ -24,7 +24,7 @@ import SwiftUI
 @MainActor
 @Instantiable
 public struct NameEntryView: Instantiable, View {
-	public init(userService: any UserService) {
+	public init(userService: AnyUserService) {
 		self.userService = userService
 	}
 
@@ -46,9 +46,9 @@ public struct NameEntryView: Instantiable, View {
 
 	@State private var name: String = ""
 
-	@Received private let userService: any UserService
+	@Received private let userService: AnyUserService
 }
 
 #Preview {
-	NameEntryView(userService: DefaultUserService(stringStorage: UserDefaults.standard))
+	NameEntryView(userService: .init(DefaultUserService(stringStorage: UserDefaults.standard)))
 }

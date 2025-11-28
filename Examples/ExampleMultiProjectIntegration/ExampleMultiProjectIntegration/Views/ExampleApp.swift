@@ -43,7 +43,7 @@ public struct NotesApp: Instantiable, App {
 	// Memberwise initializer to satisfy SafeDI.
 	// `public init()` will be generated for this type because this type is a root.
 	public init(
-		userService: any UserService,
+		userService: AnyUserService,
 		stringStorage: StringStorage,
 		nameEntryViewBuilder: Instantiator<NameEntryView>,
 		noteViewBuilder: Instantiator<NoteView>
@@ -52,17 +52,14 @@ public struct NotesApp: Instantiable, App {
 		self.stringStorage = stringStorage
 		self.nameEntryViewBuilder = nameEntryViewBuilder
 		self.noteViewBuilder = noteViewBuilder
-		observedUserService = AnyObservableObject(userService)
 	}
 
 	/// A private property that is instantiated when the app is instantiated and manages the User state.
-	@Instantiated private let userService: any UserService
+	@ObservedObject @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) private var userService: AnyUserService
 	/// A private property that is instantiated when the app is instantiated and manages the persistence of strings.
 	@Instantiated private let stringStorage: StringStorage
 	/// A private property that is instantiated when the app is instantiated and can create a NameEntryView on demand.
 	@Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
 	/// A private property that is instantiated when the app is instantiated and can create a NoteView on demand.
 	@Instantiated private let noteViewBuilder: Instantiator<NoteView>
-	/// A mechanism for observing updates to the user service.
-	@ObservedObject private var observedUserService: AnyObservableObject
 }
