@@ -41,9 +41,6 @@ public struct NotesApp: Instantiable, App {
 
 	// Memberwise initializer to satisfy SafeDI.
 	// `public init()` will be generated for this type because this type is a root.
-	// SafeDI identifies this type as a root because:
-	// 1. It only has `@Instantiated` properties (nothing `@Received` or `@Forwarded`)
-	// 2. No other type has an `@Instantiated` property of this type
 	public init(
 		userService: any UserService,
 		stringStorage: StringStorage,
