@@ -181,12 +181,12 @@ A `@Forwarded` property is forwarded into the SafeDI dependency tree by an [`Ins
 
 Forwarded property types do not need to be decorated with the `@Instantiable` macro.
 
-Here’s an example showing how to forward a runtime value into a view:
+Here’s an example showing how to forward a runtime value into an `@Instantiable` type:
 
 ```swift
-// A view that requires a runtime value (the user’s name)
+// A view that requires a runtime value (the user’s name).
 @Instantiable
-public struct NoteView: View, Instantiable {
+public struct LoggedInView: View, Instantiable {
     public init(userName: String) {
         self.userName = userName
     }
@@ -198,19 +198,27 @@ public struct NoteView: View, Instantiable {
     @Forwarded private let userName: String
 }
 
-// A parent that creates NoteView on demand
+// A view that creates LoggedInView when there is a user.
 @Instantiable
-public struct ParentView: View, Instantiable {
-    public init(noteViewBuilder: Instantiator<NoteView>) {
-        self.noteViewBuilder = noteViewBuilder
+public struct Rootiew: View, Instantiable {
+    public init(loggedInViewBuilder: Instantiator<LoggedInView>, loggedOutViewBuilder: Instantiator<LoggedOutView>, userService: UserService) {
+        self.loggedInViewBuilder = loggedInViewBuilder
+        self.loggedOutViewBuilder = loggedOutViewBuilder
+        self.userService = userService
     }
 
     public var body: some View {
-        // Pass the forwarded property when instantiating
-        noteViewBuilder.instantiate("Alice")
+        if let userName = userService.currentUser?.name {
+            // Pass the forwarded property when instantiating.
+            loggedInViewBuilder.instantiate(userName)
+        } else {
+            loggedOutViewBuilder.instantiate()
+        }
     }
 
-    @Instantiated private let noteViewBuilder: Instantiator<NoteView>
+    @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
+    @Instantiated private let loggedOutViewBuilder: Instantiator<LoggedOutView>
+    @Instantiated private let userService: UserService
 }
 ```
 
