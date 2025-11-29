@@ -200,7 +200,7 @@ public struct LoggedInView: View, Instantiable {
 
 // A view that creates LoggedInView when there is a user.
 @Instantiable
-public struct Rootiew: View, Instantiable {
+public struct RootView: View, Instantiable {
     public init(loggedInViewBuilder: Instantiator<LoggedInView>, loggedOutViewBuilder: Instantiator<LoggedOutView>, userService: UserService) {
         self.loggedInViewBuilder = loggedInViewBuilder
         self.loggedOutViewBuilder = loggedOutViewBuilder
