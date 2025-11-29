@@ -177,14 +177,14 @@ Property declarations within `@Instantiable` types decorated with [`@Instantiate
 
 Property declarations within `@Instantiable` types decorated with [`@Forwarded`](../Sources/SafeDI/Decorators/Forwarded.swift) represent dependencies that come from the runtime, e.g. user input or backend-delivered content. Like an `@Instantiated`-decorated property, a `@Forwarded`-decorated property is available to be `@Received` by objects instantiated further down the dependency tree.
 
-A `@Forwarded` property is forwarded into the SafeDI dependency tree by an [`Instantiator`](#instantiator)'s `instantiate(_:)` function that creates an instance of the property's enclosing type.
+A `@Forwarded` property is forwarded into the SafeDI dependency tree by an [`Instantiator`](#instantiator)’s `instantiate(_:)` function that creates an instance of the property’s enclosing type.
 
 Forwarded property types do not need to be decorated with the `@Instantiable` macro.
 
-Here's an example showing how to forward a runtime value into a view:
+Here’s an example showing how to forward a runtime value into a view:
 
 ```swift
-// A view that requires a runtime value (the user's name)
+// A view that requires a runtime value (the user’s name)
 @Instantiable
 public struct NoteView: View, Instantiable {
     public init(userName: String) {
