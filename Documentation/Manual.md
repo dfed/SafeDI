@@ -177,9 +177,50 @@ Property declarations within `@Instantiable` types decorated with [`@Instantiate
 
 Property declarations within `@Instantiable` types decorated with [`@Forwarded`](../Sources/SafeDI/Decorators/Forwarded.swift) represent dependencies that come from the runtime, e.g. user input or backend-delivered content. Like an `@Instantiated`-decorated property, a `@Forwarded`-decorated property is available to be `@Received` by objects instantiated further down the dependency tree.
 
-A `@Forwarded` property is forwarded into the SafeDI dependency tree by a [`Instantiator`](#instantiator)’s `instantiate(_ forwardedProperties: T.ForwardedProperties) -> T` function that creates an instance of the property’s enclosing type.
+A `@Forwarded` property is forwarded into the SafeDI dependency tree by an [`Instantiator`](#instantiator)’s `instantiate(_:)` function that creates an instance of the property’s enclosing type.
 
 Forwarded property types do not need to be decorated with the `@Instantiable` macro.
+
+Here’s an example showing how to forward a runtime value into an `@Instantiable` type:
+
+```swift
+// A view that requires a runtime value (the user’s name).
+@Instantiable
+public struct LoggedInView: View, Instantiable {
+    public init(userName: String) {
+        self.userName = userName
+    }
+
+    public var body: some View {
+        Text("Hello, \(userName)")
+    }
+
+    @Forwarded private let userName: String
+}
+
+// A view that creates LoggedInView when there is a user.
+@Instantiable
+public struct RootView: View, Instantiable {
+    public init(loggedInViewBuilder: Instantiator<LoggedInView>, loggedOutViewBuilder: Instantiator<LoggedOutView>, userService: UserService) {
+        self.loggedInViewBuilder = loggedInViewBuilder
+        self.loggedOutViewBuilder = loggedOutViewBuilder
+        self.userService = userService
+    }
+
+    public var body: some View {
+        if let userName = userService.currentUser?.name {
+            // Pass the forwarded property when instantiating.
+            loggedInViewBuilder.instantiate(userName)
+        } else {
+            loggedOutViewBuilder.instantiate()
+        }
+    }
+
+    @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
+    @Instantiated private let loggedOutViewBuilder: Instantiator<LoggedOutView>
+    @Instantiated private let userService: UserService
+}
+```
 
 ### @Received
 
