@@ -5880,6 +5880,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	mutating func run_doesNotWriteConvenienceExtensionOnRootOfTree_whenUnexpectedSwiftNodesAreEncountered() async throws {
+		// If this test begins to fail after updating Swift, put the below code into an AST parser.
+		// The follow code generates unexpected nodes on Swift 6.2, but does not on Swift `main`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
