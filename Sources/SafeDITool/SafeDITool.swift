@@ -126,11 +126,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 			: nil
 
 		if let moduleInfoOutput {
-			try JSONEncoder().encode(ModuleInfo(
-				imports: module.imports,
-				instantiables: module.instantiables,
-				filesWithUnexpectedNodes: module.filesWithUnexpectedNodes
-			)).write(toPath: moduleInfoOutput)
+			try JSONEncoder().encode(module).write(toPath: moduleInfoOutput)
 		}
 
 		if let dependencyTreeOutput {
@@ -228,14 +224,14 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 		}
 	}
 
-	private func parsedModule() async throws -> ParsedModule {
+	private func parsedModule() async throws -> ModuleInfo {
 		try await withThrowingTaskGroup(
 			of: (
 				imports: [ImportStatement],
 				instantiables: [Instantiable],
 				encounteredUnexpectedNodeInFile: String?
 			)?.self,
-			returning: ParsedModule.self
+			returning: ModuleInfo.self
 		) { taskGroup in
 			var imports = [ImportStatement]()
 			var instantiables = [Instantiable]()
@@ -267,7 +263,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 				}
 			}
 
-			return ParsedModule(
+			return ModuleInfo(
 				imports: imports,
 				instantiables: instantiables,
 				filesWithUnexpectedNodes: filesWithUnexpectedNodes.isEmpty ? nil : filesWithUnexpectedNodes
@@ -348,12 +344,6 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 			}
 		}
 		return typeDescriptionToFulfillingInstantiableMap
-	}
-
-	private struct ParsedModule {
-		let imports: [ImportStatement]
-		let instantiables: [Instantiable]
-		let filesWithUnexpectedNodes: [String]?
 	}
 
 	private enum CollectInstantiablesError: Error, CustomStringConvertible {
