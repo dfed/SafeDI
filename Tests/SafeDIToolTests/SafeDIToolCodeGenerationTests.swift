@@ -5881,29 +5881,35 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@Test
 	mutating func run_doesNotWriteConvenienceExtensionOnRootOfTree_whenUnexpectedSwiftNodesAreEncountered() async throws {
 		// If this test begins to fail after updating Swift, put the below code into an AST parser and see if unexpected nodes are still encountered.
-		// The following code generates unexpected nodes on Swift 6.2, but does not on Swift `main`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
 				@Instantiable
 				public final class A: Instantiable {
-					public init() {}
+					public init(b: B) {
+						self.b = b
+					}
 					
 					private var foo: Foo {
-							.init(
-								a: {},
-								b: {} // oh no! Missing trailing comma!
-								c: {},
-								d: { [weak self] in
-									guard let self else { return }
-									doSomething()
-								},
-							)
+						.init(
+							a: {},
+							b: {} // oh no! Missing trailing comma!
+							c: {},
+							d: { [weak self] in
+								guard let self else { return }
+								doSomething()
+							},
+						)
 					}
-				  
-					func doSomething() {}
+
+					private func doSomething() {
+						SomeModule:: // on no! Missing code after the module selector
+					}
+
+					@Instantiated private let b: B
 				}
 
+				// In some versions of Swift, the class B cannot be found because earlier code included parser-breaking syntax.
 				@Instantiable
 				public final class B: Instantiable {
 					public init() {}
