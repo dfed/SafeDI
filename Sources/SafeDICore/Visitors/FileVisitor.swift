@@ -112,10 +112,16 @@ public final class FileVisitor: SyntaxVisitor {
 		parentType = nil
 	}
 
+	public override func visit(_: UnexpectedNodesSyntax) -> SyntaxVisitorContinueKind {
+		encounteredUnexpectedNodesSyntax = true
+		return .skipChildren
+	}
+
 	// MARK: Public
 
 	public private(set) var imports = [ImportStatement]()
 	public private(set) var instantiables = [Instantiable]()
+	public private(set) var encounteredUnexpectedNodesSyntax = false
 
 	// MARK: Private
 
