@@ -1933,6 +1933,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await SafeDITool.$fileFinder.withValue(FailingFileFinder()) {
 			var tool = SafeDITool()
 			tool.swiftSourcesFilePath = nil
+			tool.showVersion = false
 			tool.include = ["Fake"]
 			tool.includeFilePath = nil
 			tool.additionalImportedModules = []
@@ -1951,6 +1952,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	func include_throwsErrorWhenNoSwiftSourcesFilePathAndNoInclude() async {
 		var tool = SafeDITool()
 		tool.swiftSourcesFilePath = nil
+		tool.showVersion = false
 		tool.include = []
 		tool.includeFilePath = nil
 		tool.additionalImportedModules = []
