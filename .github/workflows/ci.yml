@@ -36,7 +36,6 @@ jobs:
           sudo xcodebuild -runFirstLaunch
           sudo xcrun simctl list
           sudo xcodebuild -downloadPlatform visionOS
-          sudo xcodebuild -runFirstLaunch
       - name: Build Framework
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
 
@@ -121,7 +120,6 @@ jobs:
           sudo xcodebuild -runFirstLaunch
           sudo xcrun simctl list
           sudo xcodebuild -downloadPlatform iOS -buildVersion 22F77
-          sudo xcodebuild -runFirstLaunch
       - name: Build CocoaPods Integration
         run: xcrun xcodebuild build -scheme ExampleCocoaPodsIntegration -configuration Debug -workspace Examples/ExampleCocoaPodsIntegration/ExampleCocoaPodsIntegration.xcworkspace -destination 'platform=iOS Simulator,OS=18.5,name=iPad (10th generation)' # Explicitly test the Debug build. Our pod lint jobs are already testing the Release build.
 
@@ -180,7 +178,6 @@ jobs:
           sudo xcodebuild -runFirstLaunch
           sudo xcrun simctl list
           sudo xcodebuild -downloadPlatform ${{ matrix.platforms }}
-          sudo xcodebuild -runFirstLaunch
       - name: Lint Podspec
         run: bundle exec pod lib lint --verbose --fail-fast --swift-version=6.0 --platforms=${{ matrix.platforms }}
 
