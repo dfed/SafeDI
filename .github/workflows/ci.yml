@@ -36,7 +36,6 @@ jobs:
           sudo xcodebuild -runFirstLaunch
           sudo xcrun simctl list
           sudo xcodebuild -downloadPlatform visionOS
-          sudo xcodebuild -runFirstLaunch
       - name: Build Framework
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
 
@@ -116,8 +115,13 @@ jobs:
         run: sudo xcode-select --switch /Applications/Xcode_16.4.0.app/Contents/Developer
       - name: Install Pod
         run: bundle exec pod install --project-directory=Examples/ExampleCocoaPodsIntegration
+      - name: Download iOS
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          sudo xcrun simctl list
+          sudo xcodebuild -downloadPlatform iOS -buildVersion 22F77
       - name: Build CocoaPods Integration
-        run: xcrun xcodebuild build -scheme ExampleCocoaPodsIntegration -configuration Debug -workspace Examples/ExampleCocoaPodsIntegration/ExampleCocoaPodsIntegration.xcworkspace -destination 'platform=iOS Simulator,OS=18.4,name=iPad (10th generation)' # Explicitly test the Debug build. Our pod lint jobs are already testing the Release build.
+        run: xcrun xcodebuild build -scheme ExampleCocoaPodsIntegration -configuration Debug -workspace Examples/ExampleCocoaPodsIntegration/ExampleCocoaPodsIntegration.xcworkspace -destination 'platform=iOS Simulator,OS=18.5,name=iPad (10th generation)' # Explicitly test the Debug build. Our pod lint jobs are already testing the Release build.
 
   spm:
     name: Build and Test on Xcode 16
@@ -174,7 +178,6 @@ jobs:
           sudo xcodebuild -runFirstLaunch
           sudo xcrun simctl list
           sudo xcodebuild -downloadPlatform ${{ matrix.platforms }}
-          sudo xcodebuild -runFirstLaunch
       - name: Lint Podspec
         run: bundle exec pod lib lint --verbose --fail-fast --swift-version=6.0 --platforms=${{ matrix.platforms }}
 

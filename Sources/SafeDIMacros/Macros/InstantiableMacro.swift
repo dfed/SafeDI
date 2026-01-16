@@ -274,7 +274,9 @@ public struct InstantiableMacro: MemberMacro {
 									return existingAssignment
 								} else {
 									var propertyAssignment = $0.asPropertyAssignment()
-									propertyAssignment.leadingTrivia = body.statements.first?.leadingTrivia ?? []
+									if let leadingTrivia = body.statements.first?.leadingTrivia {
+										propertyAssignment.leadingTrivia = leadingTrivia
+									}
 									return propertyAssignment
 								}
 							}
