@@ -1968,13 +1968,13 @@ import SafeDICore
 				@Instantiable
 				public struct ExampleService: Instantiable {
 					public init(
-						received: Received,
-						instantiated: Instantiated,
-						forwarded: Forwarded
-					) {
-						self.received = received
-						self.instantiated = instantiated
-						self.forwarded = forwarded
+				received: Received,
+				instantiated: Instantiated,
+				forwarded: Forwarded
+				) {
+				self.received = received
+				self.instantiated = instantiated
+				self.forwarded = forwarded
 					}
 
 					@Received let received: Received
@@ -1986,13 +1986,13 @@ import SafeDICore
 				"""
 				public struct ExampleService: Instantiable {
 					public init(
-						received: Received,
-						instantiated: Instantiated,
-						forwarded: Forwarded
-					) {
-						 self.received = received
-						 self.instantiated = instantiated
-						 self.forwarded = forwarded
+				received: Received,
+				instantiated: Instantiated,
+				forwarded: Forwarded
+				) {
+				self.received = received
+				self.instantiated = instantiated
+				self.forwarded = forwarded
 					}
 
 					let received: Received
