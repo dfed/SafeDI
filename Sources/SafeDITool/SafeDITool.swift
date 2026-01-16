@@ -29,6 +29,8 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 
 	@Argument(help: "A path to a CSV file containing paths of Swift files to parse.") var swiftSourcesFilePath: String?
 
+	@Flag(name: .customLong("version"), help: "Print the SafeDITool version and exit.") var showVersion = false
+
 	@Option(parsing: .upToNextOption, help: "Directories containing Swift files to include, relative to the executing directory.") var include: [String] = []
 
 	@Option(help: "A path to a CSV file comprising directories containing Swift files to include, relative to the executing directory.") var includeFilePath: String?
@@ -47,7 +49,16 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 
 	// MARK: Internal
 
+	static var currentVersion: String {
+		"1.5.0"
+	}
+
 	func run() async throws {
+		guard !showVersion else {
+			print(Self.currentVersion)
+			return
+		}
+
 		if swiftSourcesFilePath == nil, include.isEmpty, includeFilePath == nil {
 			throw ValidationError("Must provide 'swift-sources-file-path', '--include', or '--include-file-path'.")
 		}

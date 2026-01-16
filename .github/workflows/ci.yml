@@ -10,6 +10,17 @@ on:
   pull_request:
 
 jobs:
+  version-check:
+    name: Version Consistency Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+      - name: Check version consistency
+        run: ./Scripts/check-version-consistency.sh
+
   xcodebuild:
     name: Build with xcodebuild on Xcode 16
     runs-on: macos-15

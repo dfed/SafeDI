@@ -62,6 +62,7 @@ func executeSafeDIToolTest(
 	return try await SafeDITool.$fileFinder.withValue(StubFileFinder(files: swiftFiles)) { // Successfully execute the file finder code path.
 		var tool = SafeDITool()
 		tool.swiftSourcesFilePath = swiftFileCSV.relativePath
+		tool.showVersion = false
 		tool.include = []
 		tool.includeFilePath = !includeFolders.isEmpty ? includeFile.relativePath : nil
 		tool.additionalImportedModules = []
