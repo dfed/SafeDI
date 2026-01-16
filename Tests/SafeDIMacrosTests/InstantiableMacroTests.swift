@@ -1936,6 +1936,76 @@ import SafeDICore
 		}
 
 		@Test
+		func declaration_fixit_updatesRequiredInitializerWhenAllDependenciesMissingFromInit() {
+			assertMacro {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init() {
+					}
+
+					@Received let received: Received
+					@Instantiated let instantiated: Instantiated
+					@Forwarded let forwarded: Forwarded
+				}
+				"""
+			} diagnostics: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init() {
+				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
+				    ✏️ Add arguments for received: Received, instantiated: Instantiated, forwarded: Forwarded
+					}
+
+					@Received let received: Received
+					@Instantiated let instantiated: Instantiated
+					@Forwarded let forwarded: Forwarded
+				}
+				"""
+			} fixes: {
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(
+						received: Received,
+						instantiated: Instantiated,
+						forwarded: Forwarded
+					) {
+						self.received = received
+						self.instantiated = instantiated
+						self.forwarded = forwarded
+					}
+
+					@Received let received: Received
+					@Instantiated let instantiated: Instantiated
+					@Forwarded let forwarded: Forwarded
+				}
+				"""
+			} expansion: {
+				"""
+				public struct ExampleService: Instantiable {
+					public init(
+						received: Received,
+						instantiated: Instantiated,
+						forwarded: Forwarded
+					) {
+						 self.received = received
+						 self.instantiated = instantiated
+						 self.forwarded = forwarded
+					}
+
+					let received: Received
+					let instantiated: Instantiated
+					let forwarded: Forwarded
+
+					public typealias ForwardedProperties = Forwarded
+				}
+				"""
+			}
+		}
+
+		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenIncorrectAccessibilityOnInitAndOtherNonConformingInitializersExist() {
 			assertMacro {
 				"""
