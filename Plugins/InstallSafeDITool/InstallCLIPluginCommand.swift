@@ -67,19 +67,19 @@ struct InstallSafeDITool: CommandPlugin {
 			let (downloadedURL, _) = try await URLSession.shared.download(
 				for: URLRequest(url: githubDownloadURL)
 			)
-			let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path())
+			let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path(percentEncoded: false))
 			guard let currentPermissions = downloadedFileAttributes[.posixPermissions] as? NSNumber,
 			      // Add executable attributes to the downloaded file.
-			      chmod(downloadedURL.path(), mode_t(currentPermissions.uint32Value) | S_IXUSR | S_IXGRP | S_IXOTH) == 0
+			      chmod(downloadedURL.path(percentEncoded: false), mode_t(currentPermissions.uint32Value) | S_IXUSR | S_IXGRP | S_IXOTH) == 0
 			else {
-				Diagnostics.error("Failed to make downloaded file \(downloadedURL.path()) executable")
+				Diagnostics.error("Failed to make downloaded file \(downloadedURL.path(percentEncoded: false)) executable")
 				exit(1)
 			}
 			try FileManager.default.createDirectory(
 				at: expectedToolFolder,
 				withIntermediateDirectories: true
 			)
-			if FileManager.default.fileExists(atPath: expectedToolLocation.path()) {
+			if FileManager.default.fileExists(atPath: expectedToolLocation.path(percentEncoded: false)) {
 				try FileManager.default.removeItem(at: expectedToolLocation)
 			}
 			try FileManager.default.moveItem(
@@ -87,7 +87,7 @@ struct InstallSafeDITool: CommandPlugin {
 				to: expectedToolLocation
 			)
 			let gitIgnoreLocation = context.safediFolder.appending(component: ".gitignore")
-			if !FileManager.default.fileExists(atPath: gitIgnoreLocation.path()) {
+			if !FileManager.default.fileExists(atPath: gitIgnoreLocation.path(percentEncoded: false)) {
 				try """
 				*/\(expectedToolLocation.lastPathComponent)
 				""".write(
@@ -143,19 +143,19 @@ struct InstallSafeDITool: CommandPlugin {
 				let (downloadedURL, _) = try await URLSession.shared.download(
 					for: URLRequest(url: githubDownloadURL)
 				)
-				let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path())
+				let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path(percentEncoded: false))
 				guard let currentPermissions = downloadedFileAttributes[.posixPermissions] as? NSNumber,
 				      // Add executable attributes to the downloaded file.
-				      chmod(downloadedURL.path(), mode_t(currentPermissions.uint32Value) | S_IXUSR | S_IXGRP | S_IXOTH) == 0
+				      chmod(downloadedURL.path(percentEncoded: false), mode_t(currentPermissions.uint32Value) | S_IXUSR | S_IXGRP | S_IXOTH) == 0
 				else {
-					Diagnostics.error("Failed to make downloaded file \(downloadedURL.path()) executable")
+					Diagnostics.error("Failed to make downloaded file \(downloadedURL.path(percentEncoded: false)) executable")
 					exit(1)
 				}
 				try FileManager.default.createDirectory(
 					at: expectedToolFolder,
 					withIntermediateDirectories: true
 				)
-				if FileManager.default.fileExists(atPath: expectedToolLocation.path()) {
+				if FileManager.default.fileExists(atPath: expectedToolLocation.path(percentEncoded: false)) {
 					try FileManager.default.removeItem(at: expectedToolLocation)
 				}
 				try FileManager.default.moveItem(
@@ -163,7 +163,7 @@ struct InstallSafeDITool: CommandPlugin {
 					to: expectedToolLocation
 				)
 				let gitIgnoreLocation = safediFolder.appending(component: ".gitignore")
-				if !FileManager.default.fileExists(atPath: gitIgnoreLocation.path()) {
+				if !FileManager.default.fileExists(atPath: gitIgnoreLocation.path(percentEncoded: false)) {
 					try """
 					*/\(expectedToolLocation.lastPathComponent)
 					""".write(
