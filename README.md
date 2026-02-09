@@ -114,7 +114,7 @@ If your first-party code is entirely contained in a Swift Package with one or mo
     ]
 ```
 
-You can see this integration in practice in the [Example Package Integration](<Examples/Example Package Integration>) package.
+You can see this integration in practice in the [Example Package Integration](Examples/Example Package Integration) package.
 
 Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may create a `.safedi/configuration/additionalImportedModules.csv` with a comma-separated list of module names to import. The `.safedi/` folder must be placed in the same folder as your `Package.swift` file.
 
