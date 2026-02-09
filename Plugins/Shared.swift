@@ -59,7 +59,7 @@ import PackagePlugin
 		}
 
 		var downloadedToolLocation: URL? {
-			guard FileManager.default.fileExists(atPath: expectedToolLocation.path()) else { return nil }
+			guard FileManager.default.fileExists(atPath: expectedToolLocation.path(percentEncoded: false)) else { return nil }
 			return expectedToolLocation
 		}
 	}
@@ -111,7 +111,7 @@ extension PackagePlugin.PluginContext {
 
 	var downloadedToolLocation: URL? {
 		guard let expectedToolLocation,
-		      FileManager.default.fileExists(atPath: expectedToolLocation.path())
+		      FileManager.default.fileExists(atPath: expectedToolLocation.path(percentEncoded: false))
 		else { return nil }
 		return expectedToolLocation
 	}

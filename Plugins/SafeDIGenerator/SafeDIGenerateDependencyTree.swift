@@ -56,28 +56,28 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			)
 
 		let includeCSV = context.safediFolder.appending(components: "configuration", "include.csv")
-		let includeArguments: [String] = if FileManager.default.fileExists(atPath: includeCSV.path()) {
+		let includeArguments: [String] = if FileManager.default.fileExists(atPath: includeCSV.path(percentEncoded: false)) {
 			[
 				"--include-file-path",
-				includeCSV.path(),
+				includeCSV.path(percentEncoded: false),
 			]
 		} else {
 			[]
 		}
 		let additionalImportedModulesCSV = context.safediFolder.appending(components: "configuration", "additionalImportedModules.csv")
-		let additionalImportedModulesArguments: [String] = if FileManager.default.fileExists(atPath: additionalImportedModulesCSV.path()) {
+		let additionalImportedModulesArguments: [String] = if FileManager.default.fileExists(atPath: additionalImportedModulesCSV.path(percentEncoded: false)) {
 			[
 				"--additional-imported-modules-file-path",
-				additionalImportedModulesCSV.path(),
+				additionalImportedModulesCSV.path(percentEncoded: false),
 			]
 		} else {
 			[]
 		}
 
 		let arguments = [
-			inputSourcesFile.path(),
+			inputSourcesFile.path(percentEncoded: false),
 			"--dependency-tree-output",
-			outputSwiftFile.path(),
+			outputSwiftFile.path(percentEncoded: false),
 		] + includeArguments + additionalImportedModulesArguments
 
 		let downloadedToolLocation = context.downloadedToolLocation
@@ -87,7 +87,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			Using a debug SafeDITool binary, which is 15x slower than the release version.
 
 			To install the release SafeDITool binary for version \(safeDIVersion), run:
-			\tswift package --package-path \(context.package.directoryURL.path()) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
+			\tswift package --package-path \(context.package.directoryURL.path(percentEncoded: false)) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
 			""")
 		}
 
@@ -173,28 +173,28 @@ extension Target {
 				)
 
 			let includeCSV = context.safediFolder.appending(components: "configuration", "include.csv")
-			let includeArguments: [String] = if FileManager.default.fileExists(atPath: includeCSV.path()) {
+			let includeArguments: [String] = if FileManager.default.fileExists(atPath: includeCSV.path(percentEncoded: false)) {
 				[
 					"--include-file-path",
-					includeCSV.path(),
+					includeCSV.path(percentEncoded: false),
 				]
 			} else {
 				[]
 			}
 			let additionalImportedModulesCSV = context.safediFolder.appending(components: "configuration", "additionalImportedModules.csv")
-			let additionalImportedModulesArguments: [String] = if FileManager.default.fileExists(atPath: additionalImportedModulesCSV.path()) {
+			let additionalImportedModulesArguments: [String] = if FileManager.default.fileExists(atPath: additionalImportedModulesCSV.path(percentEncoded: false)) {
 				[
 					"--additional-imported-modules-file-path",
-					additionalImportedModulesCSV.path(),
+					additionalImportedModulesCSV.path(percentEncoded: false),
 				]
 			} else {
 				[]
 			}
 
 			let arguments = [
-				inputSourcesFile.path(),
+				inputSourcesFile.path(percentEncoded: false),
 				"--dependency-tree-output",
-				outputSwiftFile.path(),
+				outputSwiftFile.path(percentEncoded: false),
 			] + includeArguments + additionalImportedModulesArguments
 
 			let downloadedToolLocation = context.downloadedToolLocation

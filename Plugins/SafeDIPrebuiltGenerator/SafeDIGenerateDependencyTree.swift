@@ -56,28 +56,28 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			)
 
 		let includeCSV = context.safediFolder.appending(components: "configuration", "include.csv")
-		let includeArguments: [String] = if FileManager.default.fileExists(atPath: includeCSV.path()) {
+		let includeArguments: [String] = if FileManager.default.fileExists(atPath: includeCSV.path(percentEncoded: false)) {
 			[
 				"--include-file-path",
-				includeCSV.path(),
+				includeCSV.path(percentEncoded: false),
 			]
 		} else {
 			[]
 		}
 		let additionalImportedModulesCSV = context.safediFolder.appending(components: "configuration", "additionalImportedModules.csv")
-		let additionalImportedModulesArguments: [String] = if FileManager.default.fileExists(atPath: additionalImportedModulesCSV.path()) {
+		let additionalImportedModulesArguments: [String] = if FileManager.default.fileExists(atPath: additionalImportedModulesCSV.path(percentEncoded: false)) {
 			[
 				"--additional-imported-modules-file-path",
-				additionalImportedModulesCSV.path(),
+				additionalImportedModulesCSV.path(percentEncoded: false),
 			]
 		} else {
 			[]
 		}
 
 		let arguments = [
-			inputSourcesFile.path(),
+			inputSourcesFile.path(percentEncoded: false),
 			"--dependency-tree-output",
-			outputSwiftFile.path(),
+			outputSwiftFile.path(percentEncoded: false),
 		] + includeArguments + additionalImportedModulesArguments
 
 		let downloadedToolLocation = context.downloadedToolLocation
@@ -97,7 +97,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					"""
 				}
 			}
-			throw NoReleaseBinaryFoundError(safeDIVersion: safeDIVersion, packagePath: context.package.directoryURL.path())
+			throw NoReleaseBinaryFoundError(safeDIVersion: safeDIVersion, packagePath: context.package.directoryURL.path(percentEncoded: false))
 		} else {
 			struct NoReleaseBinaryAvailableError: Error, CustomStringConvertible {
 				var description: String {
@@ -183,28 +183,28 @@ extension Target {
 				)
 
 			let includeCSV = context.safediFolder.appending(components: "configuration", "include.csv")
-			let includeArguments: [String] = if FileManager.default.fileExists(atPath: includeCSV.path()) {
+			let includeArguments: [String] = if FileManager.default.fileExists(atPath: includeCSV.path(percentEncoded: false)) {
 				[
 					"--include-file-path",
-					includeCSV.path(),
+					includeCSV.path(percentEncoded: false),
 				]
 			} else {
 				[]
 			}
 			let additionalImportedModulesCSV = context.safediFolder.appending(components: "configuration", "additionalImportedModules.csv")
-			let additionalImportedModulesArguments: [String] = if FileManager.default.fileExists(atPath: additionalImportedModulesCSV.path()) {
+			let additionalImportedModulesArguments: [String] = if FileManager.default.fileExists(atPath: additionalImportedModulesCSV.path(percentEncoded: false)) {
 				[
 					"--additional-imported-modules-file-path",
-					additionalImportedModulesCSV.path(),
+					additionalImportedModulesCSV.path(percentEncoded: false),
 				]
 			} else {
 				[]
 			}
 
 			let arguments = [
-				inputSourcesFile.path(),
+				inputSourcesFile.path(percentEncoded: false),
 				"--dependency-tree-output",
-				outputSwiftFile.path(),
+				outputSwiftFile.path(percentEncoded: false),
 			] + includeArguments + additionalImportedModulesArguments
 
 			let downloadedToolLocation = context.downloadedToolLocation
