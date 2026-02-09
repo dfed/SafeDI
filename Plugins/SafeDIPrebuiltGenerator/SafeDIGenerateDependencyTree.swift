@@ -93,7 +93,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 				var description: String {
 					"""
 					Install the release SafeDITool binary for version \(safeDIVersion):
-					\tswift package --package-path \(packagePath) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
+					\tswift package --package-path "\(packagePath)" --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
 					"""
 				}
 			}
