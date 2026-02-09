@@ -87,7 +87,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			Using a debug SafeDITool binary, which is 15x slower than the release version.
 
 			To install the release SafeDITool binary for version \(safeDIVersion), run:
-			\tswift package --package-path \(context.package.directoryURL.path(percentEncoded: false)) --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
+			\tswift package --package-path "\(context.package.directoryURL.path(percentEncoded: false))" --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
 			""")
 		}
 
