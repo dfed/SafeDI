@@ -61,7 +61,7 @@ jobs:
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
       - name: Build Package Integration
-        run: xcrun swift build --package-path Examples/ExamplePackageIntegration
+        run: xcrun swift build --package-path "Examples/Example Package Integration"
 
   spm-prebuilt-package-integration:
     name: Build Prebuilt Package Integration on Xcode 16
