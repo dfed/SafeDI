@@ -665,6 +665,9 @@ import SafeDICore
 				public init(instantiatedA: InstantiatedA) {
 				self.instantiatedA = instantiatedA
 				}
+				    #if DEBUG
+				    @Unknown
+				    #endif
 				    let instantiatedA: InstantiatedA
 				}
 				"""
