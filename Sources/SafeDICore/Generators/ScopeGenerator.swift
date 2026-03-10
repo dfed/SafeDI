@@ -378,32 +378,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let propertiesToDeclare: Set<Property>
 	private let property: Property?
 
-	nonisolated private var onlyIfAvailableUnwrappedReceivedProperties: Set<Property> {
-		switch scopeData {
-		case let .property(instantiable, _, _, _, _):
-			.init(instantiable.dependencies.compactMap {
-				switch $0.source {
-				case .instantiated, .forwarded:
-					nil
-				case let .received(onlyIfAvailable):
-					if onlyIfAvailable {
-						$0.property.asUnwrappedProperty
-					} else {
-						nil
-					}
-				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-					if onlyIfAvailable {
-						fulfillingProperty.asUnwrappedProperty
-					} else {
-						nil
-					}
-				}
-			})
-		case .root, .alias:
-			[]
-		}
-	}
-
 	private var unavailablePropertiesToGenerateCodeTask = [Set<Property>: Task<String, Error>]()
 
 	private var orderedPropertiesToGenerate: [ScopeGenerator] {
@@ -422,8 +396,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			let scopeDependencies = propertyToUnfulfilledScopeMap
 				.keys
-				.intersection(scope.receivedProperties)
-				.union(scope.onlyIfAvailableUnwrappedReceivedProperties)
+				.intersection(
+					scope.receivedProperties
+						.union(Set(scope.receivedProperties.map(\.asUnwrappedProperty)))
+				)
 				.compactMap { propertyToUnfulfilledScopeMap[$0] }
 			// Fulfill the scopes we depend upon.
 			for dependentScope in scopeDependencies {
