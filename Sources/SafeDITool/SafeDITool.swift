@@ -50,7 +50,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 	// MARK: Internal
 
 	static var currentVersion: String {
-		"1.5.2"
+		"1.5.3"
 	}
 
 	func run() async throws {
