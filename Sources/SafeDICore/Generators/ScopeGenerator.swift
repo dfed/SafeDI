@@ -394,6 +394,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			else {
 				return
 			}
+			// Mark as fulfilled before recursing to prevent cycles.
+			propertyToUnfulfilledScopeMap[property] = nil
 			let scopeDependencies = propertyToUnfulfilledScopeMap
 				.keys
 				.intersection(
@@ -406,9 +408,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fulfill(dependentScope)
 			}
 
-			// We can now be marked as fulfilled!
 			orderedPropertiesToGenerate.append(scope)
-			propertyToUnfulfilledScopeMap[property] = nil
 		}
 
 		for scope in propertiesToGenerate {
