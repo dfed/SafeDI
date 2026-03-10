@@ -79,6 +79,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				}
 		)
+		onlyIfAvailableUnwrappedReceivedProperties = Set(
+			propertiesToGenerate.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
+				propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
+					.subtracting(propertiesToDeclare)
+					.subtracting(scopeData.forwardedProperties)
+			}
+		)
+		.union(
+			instantiable
+				.dependencies
+				.compactMap {
+					switch $0.source {
+					case .instantiated, .forwarded:
+						nil
+					case let .received(onlyIfAvailable):
+						if onlyIfAvailable {
+							$0.property.asUnwrappedProperty
+						} else {
+							nil
+						}
+					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+						if onlyIfAvailable {
+							fulfillingProperty.asUnwrappedProperty
+						} else {
+							nil
+						}
+					}
+				}
+		)
 	}
 
 	init(
@@ -95,6 +124,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			onlyIfAvailable: onlyIfAvailable
 		)
 		receivedProperties = [fulfillingProperty]
+		onlyIfAvailableUnwrappedReceivedProperties = if onlyIfAvailable {
+			[fulfillingProperty.asUnwrappedProperty]
+		} else {
+			[]
+		}
 		description = property.asSource
 		propertiesToGenerate = []
 		propertiesToDeclare = []
@@ -370,6 +404,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let scopeData: ScopeData
 	/// Properties that we require in order to satisfy our (and our children’s) dependencies.
 	private let receivedProperties: Set<Property>
+	/// Unwrapped versions of received properties from transitive `@Received(onlyIfAvailable: true)` dependencies.
+	private let onlyIfAvailableUnwrappedReceivedProperties: Set<Property>
 	/// Received properties that are optional and not created by a parent.
 	private let unavailableOptionalProperties: Set<Property>
 	/// Properties that will be generated as `let` constants.
@@ -400,7 +436,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.keys
 				.intersection(
 					scope.receivedProperties
-						.union(Set(scope.receivedProperties.map(\.asUnwrappedProperty)))
+						.union(scope.onlyIfAvailableUnwrappedReceivedProperties)
 				)
 				.compactMap { propertyToUnfulfilledScopeMap[$0] }
 			// Fulfill the scopes we depend upon.
