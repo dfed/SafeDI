@@ -18,9 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import MacroTesting
 import SwiftSyntaxMacros
-import SwiftSyntaxMacrosTestSupport
+import SwiftSyntaxMacrosGenericTestSupport
 import Testing
 
 import SafeDICore
@@ -28,16 +27,13 @@ import SafeDICore
 #if canImport(SafeDIMacros)
 	@testable import SafeDIMacros
 
-	@Suite(
-		.macros(
-			[
-				InstantiableVisitor.macroName: InstantiableMacro.self,
-				Dependency.Source.instantiatedRawValue: InjectableMacro.self,
-				Dependency.Source.receivedRawValue: InjectableMacro.self,
-				Dependency.Source.forwardedRawValue: InjectableMacro.self,
-			]
-		)
-	)
+	let instantiableTestMacros: [String: Macro.Type] = [
+		InstantiableVisitor.macroName: InstantiableMacro.self,
+		Dependency.Source.instantiatedRawValue: InjectableMacro.self,
+		Dependency.Source.receivedRawValue: InjectableMacro.self,
+		Dependency.Source.forwardedRawValue: InjectableMacro.self,
+	]
+
 	struct InstantiableMacroTests {
 		// MARK: Behavior Tests
 
@@ -48,25 +44,25 @@ import SafeDICore
 
 		@Test
 		func extension_expandsWithoutIssueOnTypeDeclarationWhenInstantiableConformanceMissingAndConformsElsewhereIsTrue() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable(conformsElsewhere: true)
 				public final class ExampleService {
 				    public init() {}
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				public final class ExampleService {
 				    public init() {}
 				}
-				"""
-			}
+				""",
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func extension_expandsWithoutIssueOnExtensionWhenInstantiableConformanceMissingAndConformsElsewhereIsTrue() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable(conformsElsewhere: true)
 				extension ExampleService: CustomStringConvertible {
@@ -74,110 +70,135 @@ import SafeDICore
 
 				    public var description: String { "ExampleService" }
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				extension ExampleService: CustomStringConvertible {
 				    public static func instantiate() -> ExampleService { fatalError() }
 
 				    public var description: String { "ExampleService" }
 				}
-				"""
-			}
+				""",
+				macros: instantiableTestMacros
+			)
 		}
 
 		// MARK: Error tests
 
 		@Test
 		func declaration_throwsErrorWhenOnProtocol() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public protocol ExampleService {}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				┬────────────
-				╰─ 🛑 @Instantiable must decorate an extension on a type or a class, struct, or actor declaration
+				""",
+				expandedSource: """
 				public protocol ExampleService {}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable must decorate an extension on a type or a class, struct, or actor declaration",
+						line: 1,
+						column: 1,
+						severity: .error
+					),
+				],
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_throwsErrorWhenOnEnum() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public enum ExampleService: Instantiable {}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				┬────────────
-				╰─ 🛑 @Instantiable must decorate an extension on a type or a class, struct, or actor declaration
+				""",
+				expandedSource: """
 				public enum ExampleService: Instantiable {}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable must decorate an extension on a type or a class, struct, or actor declaration",
+						line: 1,
+						column: 1,
+						severity: .error
+					),
+				],
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_throwsErrorWhenFulfillingAdditionalTypesIncludesAnOptional() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [AnyObject?.self])
 				public final class ExampleService: Instantiable {}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable(fulfillingAdditionalTypes: [AnyObject?.self])
-				┬──────────────────────────────────────────────────────────
-				╰─ 🛑 The argument `fulfillingAdditionalTypes` must not include optionals
+				""",
+				expandedSource: """
 				public final class ExampleService: Instantiable {}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `fulfillingAdditionalTypes` must not include optionals",
+						line: 1,
+						column: 1,
+						severity: .error
+					),
+				],
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_throwsErrorWhenFulfillingAdditionalTypesIsAPropertyReference() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
 				@Instantiable(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
 				public final class ExampleService: Instantiable {}
-				"""
-			} diagnostics: {
-				"""
+				""",
+				expandedSource: """
 				let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
-				@Instantiable(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
-				┬──────────────────────────────────────────────────────────────────
-				╰─ 🛑 The argument `fulfillingAdditionalTypes` must be an inlined array
 				public final class ExampleService: Instantiable {}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `fulfillingAdditionalTypes` must be an inlined array",
+						line: 2,
+						column: 1,
+						severity: .error
+					),
+				],
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_throwsErrorWhenFulfillingAdditionalTypesIsAClosure() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
 				public final class ExampleService: Instantiable {}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
-				┬───────────────────────────────────────────────────────────────
-				╰─ 🛑 The argument `fulfillingAdditionalTypes` must be an inlined array
+				""",
+				expandedSource: """
 				public final class ExampleService: Instantiable {}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `fulfillingAdditionalTypes` must be an inlined array",
+						line: 1,
+						column: 1,
+						severity: .error
+					),
+				],
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_doesNotThrowWhenRootHasInstantiatedAndRenamedDependencies() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable(isRoot: true)
 				public final class Foo: Instantiable {
@@ -189,9 +210,8 @@ import SafeDICore
 				    @Received(fulfilledByDependencyNamed: "dependency", ofType: Dependency.self) private let renamedDependency: Dependency
 				    @Received(fulfilledByDependencyNamed: "renamedDependency", ofType: Dependency.self) private let renamed2Dependency: Dependency
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				public final class Foo: Instantiable {
 				    public init(dependency: Dependency, renamedDependency: Dependency, renamed2Dependency: Dependency) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -201,13 +221,14 @@ import SafeDICore
 				    private let renamedDependency: Dependency
 				    private let renamed2Dependency: Dependency
 				}
-				"""
-			}
+				""",
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_throwsErrorWhenRootHasReceivedDependency() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable(isRoot: true)
 				public final class Foo: Instantiable {
@@ -217,29 +238,36 @@ import SafeDICore
 
 				    @Received private let dependency: Dependency 
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable(isRoot: true)
-				┬──────────────────────────
-				╰─ 🛑 Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
-
-				The following dependencies were found on Foo that violated this contract:
-				dependency: Dependency
+				""",
+				expandedSource: """
 				public final class Foo: Instantiable {
 				    public init(dependency: Dependency) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
 
-				    @Received private let dependency: Dependency 
+				    private let dependency: Dependency 
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: """
+						Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
+
+						The following dependencies were found on Foo that violated this contract:
+						dependency: Dependency
+						""",
+						line: 1,
+						column: 1,
+						severity: .error
+					),
+				],
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_throwsErrorWhenRootHasForwardedDependency() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable(isRoot: true)
 				public final class Foo: Instantiable {
@@ -249,277 +277,325 @@ import SafeDICore
 
 				    @Forwarded private let dependency: Dependency 
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable(isRoot: true)
-				┬──────────────────────────
-				╰─ 🛑 Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
-
-				The following dependencies were found on Foo that violated this contract:
-				dependency: Dependency
+				""",
+				expandedSource: """
 				public final class Foo: Instantiable {
 				    public init(dependency: Dependency) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
 
-				    @Forwarded private let dependency: Dependency 
+				    private let dependency: Dependency 
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: """
+						Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
+
+						The following dependencies were found on Foo that violated this contract:
+						dependency: Dependency
+						""",
+						line: 1,
+						column: 1,
+						severity: .error
+					),
+				],
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func extension_throwsErrorWhenFulfillingAdditionalTypesIsAPropertyReference() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
 				@Instantiable(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
+				""",
+				expandedSource: """
 				let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
-				@Instantiable(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
-				┬──────────────────────────────────────────────────────────────────
-				╰─ 🛑 The argument `fulfillingAdditionalTypes` must be an inlined array
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `fulfillingAdditionalTypes` must be an inlined array",
+						line: 2,
+						column: 1,
+						severity: .error
+					),
+				],
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func extension_throwsErrorWhenFulfillingAdditionalTypesIsAClosure() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
-				┬───────────────────────────────────────────────────────────────
-				╰─ 🛑 The argument `fulfillingAdditionalTypes` must be an inlined array
+				""",
+				expandedSource: """
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `fulfillingAdditionalTypes` must be an inlined array",
+						line: 1,
+						column: 1,
+						severity: .error
+					),
+				],
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func extension_throwsErrorWhenMoreThanOneInstantiateMethodForSameType() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				    public static func instantiate(user: User) -> ExampleService { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				┬────────────
-				╰─ 🛑 @Instantiable-decorated extension must have a single `instantiate(…)` method that returns `ExampleService`
+				""",
+				expandedSource: """
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				    public static func instantiate(user: User) -> ExampleService { fatalError() }
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension must have a single `instantiate(…)` method that returns `ExampleService`",
+						line: 1,
+						column: 1,
+						severity: .error
+					),
+				],
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func extension_doesNotThrowWhenRootHasNoDependencies() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable(isRoot: true)
 				extension Foo: Instantiable {
 				    public static func instantiate() -> Foo { fatalError() }
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				extension Foo: Instantiable {
 				    public static func instantiate() -> Foo { fatalError() }
 				}
-				"""
-			}
+				""",
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func extension_throwsErrorWhenRootHasDependencies() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable(isRoot: true)
 				extension Foo: Instantiable {
 				    public static func instantiate(bar: Bar) -> Foo { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable(isRoot: true)
-				┬──────────────────────────
-				╰─ 🛑 Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
+				""",
+				expandedSource: """
+				extension Foo: Instantiable {
+				    public static func instantiate(bar: Bar) -> Foo { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: """
+						Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
 
-				The following dependencies were found on Foo that violated this contract:
-				bar: Bar
-				extension Foo: Instantiable {
-				    public static func instantiate(bar: Bar) -> Foo { fatalError() }
-				}
-				"""
-			}
+						The following dependencies were found on Foo that violated this contract:
+						bar: Bar
+						""",
+						line: 1,
+						column: 1,
+						severity: .error
+					),
+				],
+				macros: instantiableTestMacros
+			)
 		}
 
 		// MARK: FixIt tests
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesOnStruct() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                              ✏️ Add required initializer
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				public init() {}
 
 				}
 				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init() {}
-
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesOnClass() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public class ExampleService: Instantiable {
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public class ExampleService: Instantiable {
-				                                          ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                             ✏️ Add required initializer
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 43,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
 				@Instantiable
 				public class ExampleService: Instantiable {
 				public init() {}
 
 				}
 				"""
-			} expansion: {
-				"""
-				public class ExampleService: Instantiable {
-				public init() {}
-
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesOnActor() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public actor ExampleService: Instantiable {
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public actor ExampleService: Instantiable {
-				                                          ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                             ✏️ Add required initializer
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 43,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
 				@Instantiable
 				public actor ExampleService: Instantiable {
 				public init() {}
 
 				}
 				"""
-			} expansion: {
-				"""
-				public actor ExampleService: Instantiable {
-				public init() {}
-
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_doesNotGenerateFixitWithoutDependenciesIfItAlreadyExists() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				    public init() {}
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 				    public init() {}
 				}
-				"""
-			}
+				""",
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesAndInitializedVariable() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				    var initializedVariable = "test"
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                              ✏️ Add required initializer
 				    var initializedVariable = "test"
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				public init() {}
@@ -527,37 +603,39 @@ import SafeDICore
 				    var initializedVariable = "test"
 				}
 				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init() {}
-
-				    var initializedVariable = "test"
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerWithoutAnyDependenciesAndVariableWithAccessor() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				    var initializedVariable { "test" }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                              ✏️ Add required initializer
 				    var initializedVariable { "test" }
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				public init() {}
@@ -565,62 +643,54 @@ import SafeDICore
 				    var initializedVariable { "test" }
 				}
 				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init() {}
-
-				    var initializedVariable { "test" }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerEvenWhenPropertyDecoratedWithUnknownMacro() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				    @Instantiated @Unknown let instantiatedA: InstantiatedA
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                              ✏️ Add required initializer
-				    @Instantiated @Unknown let instantiatedA: InstantiatedA
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
-				    @Instantiated @Unknown let instantiatedA: InstantiatedA
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
 				    @Unknown let instantiatedA: InstantiatedA
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				public init(instantiatedA: InstantiatedA) {
+				self.instantiatedA = instantiatedA
+				}
+
+				    @Instantiated @Unknown let instantiatedA: InstantiatedA
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerEvenWhenPropertyDecoratedWithUnknownMacroInIfConfig() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -630,22 +700,31 @@ import SafeDICore
 				    #endif
 				    let instantiatedA: InstantiatedA
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                              ✏️ Add required initializer
-				    @Instantiated
 				    #if DEBUG
 				    @Unknown
 				    #endif
 				    let instantiatedA: InstantiatedA
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				public init(instantiatedA: InstantiatedA) {
@@ -659,24 +738,12 @@ import SafeDICore
 				    let instantiatedA: InstantiatedA
 				}
 				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-				    #if DEBUG
-				    @Unknown
-				    #endif
-				    let instantiatedA: InstantiatedA
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_doesNotGenerateRequiredInitializerWithDependenciesIfItAlreadyExists() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -686,9 +753,8 @@ import SafeDICore
 				        self.instantiatedA = instantiatedA
 				    }
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 				    let instantiatedA: InstantiatedA
 
@@ -696,13 +762,14 @@ import SafeDICore
 				        self.instantiatedA = instantiatedA
 				    }
 				}
-				"""
-			}
+				""",
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithClosureDependency() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -711,9 +778,8 @@ import SafeDICore
 				    }
 				    @Forwarded let closure: () -> Void
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 				    public init(block closure: @escaping () -> Void) {
 				        self.closure = closure
@@ -722,13 +788,14 @@ import SafeDICore
 
 				    public typealias ForwardedProperties = () -> Void
 				}
-				"""
-			}
+				""",
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithSendableClosureDependency() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -737,9 +804,8 @@ import SafeDICore
 				    }
 				    @Forwarded let closure: @Sendable () -> Void
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 				    public init(closure: @escaping @Sendable () -> Void) {
 				        self.closure = closure
@@ -748,13 +814,14 @@ import SafeDICore
 
 				    public typealias ForwardedProperties = @Sendable () -> Void
 				}
-				"""
-			}
+				""",
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithTupleWrappedClosureDependency() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -763,9 +830,8 @@ import SafeDICore
 				    }
 				    @Forwarded let closure: (@Sendable () -> Void)
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 				    public init(closure: @escaping @Sendable () -> Void) {
 				        self.closure = closure
@@ -774,13 +840,44 @@ import SafeDICore
 
 				    public typealias ForwardedProperties = @Sendable () -> Void
 				}
+				""",
+				macros: instantiableTestMacros
+			)
+		}
+
+		@Test
+		func declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithMultipleForwardedDependencies() {
+			assertMacroExpansion(
 				"""
-			}
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(userID: String, userName: String) {
+				        self.userID = userID
+				        self.userName = userName
+				    }
+				    @Forwarded let userID: String
+				    @Forwarded let userName: String
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(userID: String, userName: String) {
+				        self.userID = userID
+				        self.userName = userName
+				    }
+				    let userID: String
+				    let userName: String
+
+				    public typealias ForwardedProperties = (userID: String, userName: String)
+				}
+				""",
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithDefaultArguments() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -790,9 +887,8 @@ import SafeDICore
 				        self.nonInjectedProperty = nonInjectedProperty
 				    }
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 				    let nonInjectedProperty: Int
 
@@ -800,13 +896,14 @@ import SafeDICore
 				        self.nonInjectedProperty = nonInjectedProperty
 				    }
 				}
-				"""
-			}
+				""",
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_doesNotGenerateRequiredInitializerWithDependenciesSatisfyingInitializerIfItAlreadyExistsWithDefaultArguments() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -819,9 +916,8 @@ import SafeDICore
 				        self.nonInjectedProperty = nonInjectedProperty
 				    }
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 				    let instantiatedA: InstantiatedA
 
@@ -832,55 +928,56 @@ import SafeDICore
 				        self.nonInjectedProperty = nonInjectedProperty
 				    }
 				}
-				"""
-			}
+				""",
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerWithDependencies() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				    @Instantiated let instantiatedA: InstantiatedA
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                              ✏️ Add required initializer
-				    @Instantiated let instantiatedA: InstantiatedA
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
-				    @Instantiated let instantiatedA: InstantiatedA
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
 				    let instantiatedA: InstantiatedA
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				public init(instantiatedA: InstantiatedA) {
+				self.instantiatedA = instantiatedA
+				}
+
+				    @Instantiated let instantiatedA: InstantiatedA
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerWithDependenciesWhenNestedTypesHaveUninitializedProperties() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class ExampleService: Instantiable {
@@ -900,62 +997,9 @@ import SafeDICore
 				        let uninitializedProperty: Any
 				    }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public final class ExampleService: Instantiable {
-				                                                ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                                   ✏️ Add required initializer
-				    @Instantiated let instantiatedA: InstantiatedA
-
-				    public enum NestedEnum {
-				        // This won't compile but we should still generate an initializer.
-				        let uninitializedProperty: Any
-				    }
-				    public struct NestedStruct {
-				        let uninitializedProperty: Any
-				    }
-				    public actor NestedActor {
-				        let uninitializedProperty: Any
-				    }
-				    public final class NestedClass {
-				        let uninitializedProperty: Any
-				    }
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public final class ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
-				    @Instantiated let instantiatedA: InstantiatedA
-
-				    public enum NestedEnum {
-				        // This won't compile but we should still generate an initializer.
-				        let uninitializedProperty: Any
-				    }
-				    public struct NestedStruct {
-				        let uninitializedProperty: Any
-				    }
-				    public actor NestedActor {
-				        let uninitializedProperty: Any
-				    }
-				    public final class NestedClass {
-				        let uninitializedProperty: Any
-				    }
-				}
-				"""
-			} expansion: {
-				"""
-				public final class ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
 				    let instantiatedA: InstantiatedA
 
 				    public enum NestedEnum {
@@ -972,13 +1016,52 @@ import SafeDICore
 				        let uninitializedProperty: Any
 				    }
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 49,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class ExampleService: Instantiable {
+				public init(instantiatedA: InstantiatedA) {
+				self.instantiatedA = instantiatedA
+				}
+
+				    @Instantiated let instantiatedA: InstantiatedA
+
+				    public enum NestedEnum {
+				        // This won't compile but we should still generate an initializer.
+				        let uninitializedProperty: Any
+				    }
+				    public struct NestedStruct {
+				        let uninitializedProperty: Any
+				    }
+				    public actor NestedActor {
+				        let uninitializedProperty: Any
+				    }
+				    public final class NestedClass {
+				        let uninitializedProperty: Any
+				    }
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerWithDependenciesWhenPropertyHasInitializerAndNoType() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -986,49 +1069,47 @@ import SafeDICore
 
 				    let initializedProperty = 5
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                              ✏️ Add required initializer
-				    @Instantiated let instantiatedA: InstantiatedA
-
-				    let initializedProperty = 5
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
-				    @Instantiated let instantiatedA: InstantiatedA
-
-				    let initializedProperty = 5
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
 				    let instantiatedA: InstantiatedA
 
 				    let initializedProperty = 5
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				public init(instantiatedA: InstantiatedA) {
+				self.instantiatedA = instantiatedA
+				}
+
+				    @Instantiated let instantiatedA: InstantiatedA
+
+				    let initializedProperty = 5
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerWithDependenciesWhenPropertyHasInitializerAndType() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1036,49 +1117,47 @@ import SafeDICore
 
 				    let initializedProperty: Int = 5
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                              ✏️ Add required initializer
-				    @Instantiated let instantiatedA: InstantiatedA
-
-				    let initializedProperty: Int = 5
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
-				    @Instantiated let instantiatedA: InstantiatedA
-
-				    let initializedProperty: Int = 5
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
 				    let instantiatedA: InstantiatedA
 
 				    let initializedProperty: Int = 5
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				public init(instantiatedA: InstantiatedA) {
+				self.instantiatedA = instantiatedA
+				}
+
+				    @Instantiated let instantiatedA: InstantiatedA
+
+				    let initializedProperty: Int = 5
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerWithDependenciesWhenPropertyIsOptional() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1086,49 +1165,47 @@ import SafeDICore
 
 				    var optionalProperty: Int?
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                              ✏️ Add required initializer
-				    @Instantiated let instantiatedA: InstantiatedA
-
-				    var optionalProperty: Int?
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
-				    @Instantiated let instantiatedA: InstantiatedA
-
-				    var optionalProperty: Int?
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
 				    let instantiatedA: InstantiatedA
 
 				    var optionalProperty: Int?
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				public init(instantiatedA: InstantiatedA) {
+				self.instantiatedA = instantiatedA
+				}
+
+				    @Instantiated let instantiatedA: InstantiatedA
+
+				    var optionalProperty: Int?
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerWithDependenciesWhenPropertyIsStatic() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1137,52 +1214,49 @@ import SafeDICore
 				    // This won't compile but we should still generate an initializer.
 				    public static let staticProperty: Int
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                              ✏️ Add required initializer
-				    @Instantiated let instantiatedA: InstantiatedA
-
-				    // This won't compile but we should still generate an initializer.
-				    public static let staticProperty: Int
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
-				    @Instantiated let instantiatedA: InstantiatedA
-
-				    // This won't compile but we should still generate an initializer.
-				    public static let staticProperty: Int
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
 				    let instantiatedA: InstantiatedA
 
 				    // This won't compile but we should still generate an initializer.
 				    public static let staticProperty: Int
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				public init(instantiatedA: InstantiatedA) {
+				self.instantiatedA = instantiatedA
+				}
+
+				    @Instantiated let instantiatedA: InstantiatedA
+
+				    // This won't compile but we should still generate an initializer.
+				    public static let staticProperty: Int
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenOnlyDependencyMissingFromInit() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1192,49 +1266,48 @@ import SafeDICore
 
 					@Received let receivedA: ReceivedA
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 					public init() {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				    ✏️ Add arguments for receivedA: ReceivedA
-						_ = "keep me"
-					}
-
-					@Received let receivedA: ReceivedA
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-					public init(receivedA: ReceivedA) {
-						self.receivedA = receivedA
-						_ = "keep me"
-					}
-
-					@Received let receivedA: ReceivedA
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-					public init(receivedA: ReceivedA) {
-						self.receivedA = receivedA
 						_ = "keep me"
 					}
 
 					let receivedA: ReceivedA
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for receivedA: ReceivedA"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for receivedA: ReceivedA",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(receivedA: ReceivedA) {
+						self.receivedA = receivedA
+						_ = "keep me"
+					}
+
+					@Received let receivedA: ReceivedA
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenSecondDependencyMissingFromInit() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1246,61 +1319,55 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 					public init(receivedA: ReceivedA) {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				    ✏️ Add arguments for receivedB: ReceivedB
 						self.receivedA = receivedA
-						_ = "keep me"
-					}
-
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-					public init(
-				receivedA: ReceivedA,
-				receivedB: ReceivedB
-				) {
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-						_ = "keep me"
-					}
-
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-					public init(
-				receivedA: ReceivedA,
-				receivedB: ReceivedB
-				) {
-						self.receivedA = receivedA
-						self.receivedB = receivedB
 						_ = "keep me"
 					}
 
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for receivedB: ReceivedB"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for receivedB: ReceivedB",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(
+				receivedA: ReceivedA,
+				receivedB: ReceivedB
+				) {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+						_ = "keep me"
+					}
+
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenSecondDependencyMissingFromInitAndNewlinesInArgumentList() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1314,63 +1381,57 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 					public init(
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				    ✏️ Add arguments for receivedB: ReceivedB
 						receivedA: ReceivedA
 					) {
 						self.receivedA = receivedA
-						_ = "keep me"
-					}
-
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-					public init(
-				receivedA: ReceivedA,
-				receivedB: ReceivedB
-					) {
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-						_ = "keep me"
-					}
-
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-					public init(
-				receivedA: ReceivedA,
-				receivedB: ReceivedB
-					) {
-						self.receivedA = receivedA
-						self.receivedB = receivedB
 						_ = "keep me"
 					}
 
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for receivedB: ReceivedB"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for receivedB: ReceivedB",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(
+				receivedA: ReceivedA,
+				receivedB: ReceivedB
+					) {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+						_ = "keep me"
+					}
+
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenFirstDependencyMissingFromInit() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1383,43 +1444,10 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 					public init(receivedA: ReceivedA, receivedB: ReceivedB) {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				    ✏️ Add arguments for forwardedA: ForwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
-						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
@@ -1427,16 +1455,43 @@ import SafeDICore
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for forwardedA: ForwardedA"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for forwardedA: ForwardedA",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
 
-					public typealias ForwardedProperties = ForwardedA
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenMiddleDependencyMissingFromInit() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1449,60 +1504,54 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 					public init(forwardedA: ForwardedA, receivedB: ReceivedB) {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				    ✏️ Add arguments for receivedA: ReceivedA
 						self.forwardedA = forwardedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
 
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for receivedA: ReceivedA"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for receivedA: ReceivedA",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
 
-					public typealias ForwardedProperties = ForwardedA
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenMiddleDependencyMissingFromInitAndArgumentAlreadySet() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1516,43 +1565,10 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 					public init(forwardedA: ForwardedA, receivedB: ReceivedB) {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				    ✏️ Add arguments for receivedA: ReceivedA
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
 						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
@@ -1561,16 +1577,43 @@ import SafeDICore
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for receivedA: ReceivedA"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for receivedA: ReceivedA",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
 
-					public typealias ForwardedProperties = ForwardedA
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenLastDependencyMissingFromInit() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1586,71 +1629,61 @@ import SafeDICore
 				    @Received let receivedA: ReceivedA
 				    @Received let receivedB: ReceivedB
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 				    public init(
-				    ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				       ✏️ Add arguments for receivedB: ReceivedB
 						forwardedA: ForwardedA,
 						receivedA: ReceivedA
 					) {
 				        self.forwardedA = forwardedA
 				        self.receivedA = receivedA
-				    }
-
-				    @Forwarded let forwardedA: ForwardedA
-				    @Received let receivedA: ReceivedA
-				    @Received let receivedB: ReceivedB
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-				    public init(
-						forwardedA: ForwardedA,
-						receivedA: ReceivedA,
-						receivedB: ReceivedB
-					) {
-				        self.forwardedA = forwardedA
-				        self.receivedA = receivedA
-				        self.receivedB = receivedB
-				    }
-
-				    @Forwarded let forwardedA: ForwardedA
-				    @Received let receivedA: ReceivedA
-				    @Received let receivedB: ReceivedB
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				    public init(
-						forwardedA: ForwardedA,
-						receivedA: ReceivedA,
-						receivedB: ReceivedB
-					) {
-				        self.forwardedA = forwardedA
-				        self.receivedA = receivedA
-				        self.receivedB = receivedB
 				    }
 
 				    let forwardedA: ForwardedA
 				    let receivedA: ReceivedA
 				    let receivedB: ReceivedB
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for receivedB: ReceivedB"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for receivedB: ReceivedB",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(
+						forwardedA: ForwardedA,
+						receivedA: ReceivedA,
+						receivedB: ReceivedB
+					) {
+				        self.forwardedA = forwardedA
+				        self.receivedA = receivedA
+				        self.receivedB = receivedB
+				    }
 
-				    public typealias ForwardedProperties = ForwardedA
+				    @Forwarded let forwardedA: ForwardedA
+				    @Received let receivedA: ReceivedA
+				    @Received let receivedB: ReceivedB
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenFirstDependencyMissingFromInitAndNonDependencyParameterExists() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1663,43 +1696,10 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				    ✏️ Add arguments for forwardedA: ForwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
@@ -1707,16 +1707,43 @@ import SafeDICore
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for forwardedA: ForwardedA"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for forwardedA: ForwardedA",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
 
-					public typealias ForwardedProperties = ForwardedA
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenMiddleDependencyMissingFromInitAndNonDependencyParameterExists() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1733,74 +1760,63 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 					public init(
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				    ✏️ Add arguments for receivedA: ReceivedA
 						customizable: String = "",
 						forwardedA: ForwardedA,
 						receivedB: ReceivedB
 					) {
 						self.forwardedA = forwardedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-					public init(
-						customizable: String = "",
-						forwardedA: ForwardedA,
-						receivedA: ReceivedA,
-						receivedB: ReceivedB
-					) {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-					public init(
-						customizable: String = "",
-						forwardedA: ForwardedA,
-						receivedA: ReceivedA,
-						receivedB: ReceivedB
-					) {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
 
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for receivedA: ReceivedA"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for receivedA: ReceivedA",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(
+						customizable: String = "",
+						forwardedA: ForwardedA,
+						receivedA: ReceivedA,
+						receivedB: ReceivedB
+					) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
 
-					public typealias ForwardedProperties = ForwardedA
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenLastDependencyMissingFromInitAndNonDependencyParameterExists() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1813,60 +1829,54 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 					public init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String = "") {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				    ✏️ Add arguments for receivedB: ReceivedB
 						self.forwardedA = forwardedA
 						self.receivedA = receivedA
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
 					}
 
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for receivedB: ReceivedB"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for receivedB: ReceivedB",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
 
-					public typealias ForwardedProperties = ForwardedA
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenLastDependencyMissingFromInitAndEscapingDependencyParameterExists() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1881,66 +1891,58 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 					public init(customizable: @escaping (String) -> Void, forwardedA: ForwardedA, receivedA: ReceivedA) {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				    ✏️ Add arguments for receivedB: ReceivedB
 						self.customizable = customizable
 						self.forwardedA = forwardedA
 						self.receivedA = receivedA
-					}
-
-					@Forwarded let customizable: (String) -> Void
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-					public init(customizable: @escaping (String) -> Void, forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
-						self.customizable = customizable
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let customizable: (String) -> Void
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-					public init(customizable: @escaping (String) -> Void, forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
-						self.customizable = customizable
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
 					}
 
 					let customizable: (String) -> Void
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for receivedB: ReceivedB"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for receivedB: ReceivedB",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(customizable: @escaping (String) -> Void, forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+						self.customizable = customizable
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
 
-					public typealias ForwardedProperties = (customizable: (String) -> Void, forwardedA: ForwardedA)
+					@Forwarded let customizable: (String) -> Void
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenAllDependenciesMissingFromInit() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -1951,66 +1953,56 @@ import SafeDICore
 					@Instantiated let instantiated: Instantiated
 					@Forwarded let forwarded: Forwarded
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 					public init() {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				    ✏️ Add arguments for received: Received, instantiated: Instantiated, forwarded: Forwarded
-					}
-
-					@Received let received: Received
-					@Instantiated let instantiated: Instantiated
-					@Forwarded let forwarded: Forwarded
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-					public init(
-				received: Received,
-				instantiated: Instantiated,
-				forwarded: Forwarded
-				) {
-				self.received = received
-				self.instantiated = instantiated
-				self.forwarded = forwarded
-					}
-
-					@Received let received: Received
-					@Instantiated let instantiated: Instantiated
-					@Forwarded let forwarded: Forwarded
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-					public init(
-				received: Received,
-				instantiated: Instantiated,
-				forwarded: Forwarded
-				) {
-				self.received = received
-				self.instantiated = instantiated
-				self.forwarded = forwarded
 					}
 
 					let received: Received
 					let instantiated: Instantiated
 					let forwarded: Forwarded
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for received: Received, instantiated: Instantiated, forwarded: Forwarded"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for received: Received, instantiated: Instantiated, forwarded: Forwarded",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(
+				received: Received,
+				instantiated: Instantiated,
+				forwarded: Forwarded
+				) {
+				self.received = received
+				self.instantiated = instantiated
+				self.forwarded = forwarded
+					}
 
-					public typealias ForwardedProperties = Forwarded
+					@Received let received: Received
+					@Instantiated let instantiated: Instantiated
+					@Forwarded let forwarded: Forwarded
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenIncorrectAccessibilityOnInitAndOtherNonConformingInitializersExist() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -2043,10 +2035,8 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
 						self.forwardedA = forwardedA
@@ -2068,75 +2058,6 @@ import SafeDICore
 					}
 
 					private init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
-				    ✏️ Add `public` modifier
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-					}
-
-					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-					}
-
-					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					public init(receivedA: ReceivedA, customizable: String = "") {
-						self.receivedA = receivedA
-					}
-
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-					}
-
-					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-					}
-
-					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					public init(receivedA: ReceivedA, customizable: String = "") {
-						self.receivedA = receivedA
-					}
-
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
 						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
@@ -2145,16 +2066,62 @@ import SafeDICore
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						line: 22,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
 
-					public typealias ForwardedProperties = ForwardedA
+					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					public init(receivedA: ReceivedA, customizable: String = "") {
+						self.receivedA = receivedA
+					}
+
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenDependencyMissingFromInitAndOtherNonConformingInitializersExist() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -2182,10 +2149,8 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 					private init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
 						self.receivedA = receivedA
@@ -2203,67 +2168,6 @@ import SafeDICore
 					}
 
 					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				    ✏️ Add arguments for forwardedA: ForwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-					private init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-					}
-
-					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-					}
-
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-					private init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-						self.receivedA = receivedA
-						self.receivedB = receivedB
-					}
-
-					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-					}
-
-					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
-						self.forwardedA = forwardedA
-						self.receivedA = receivedA
-					}
-
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
@@ -2271,16 +2175,58 @@ import SafeDICore
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 18,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for forwardedA: ForwardedA"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for forwardedA: ForwardedA",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					private init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
 
-					public typealias ForwardedProperties = ForwardedA
+					fileprivate init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenDependencyMissingFromInitAndAccessibilityModifierMissing() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -2293,25 +2239,35 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 					init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				    ✏️ Add arguments for forwardedA: ForwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
 
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
+					let forwardedA: ForwardedA
+					let receivedA: ReceivedA
+					let receivedB: ReceivedB
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for forwardedA: ForwardedA"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for forwardedA: ForwardedA",
+				],
+				fixedSource: """
 				@Instantiable
 				public struct ExampleService: Instantiable {
 					init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
@@ -2325,12 +2281,12 @@ import SafeDICore
 					@Received let receivedB: ReceivedB
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesInitWithForwardedPropertiesWhenThereAreMultipleForwardedProperties() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class UserService: Instantiable {
@@ -2338,189 +2294,177 @@ import SafeDICore
 
 				    @Forwarded let userName: String
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public final class UserService: Instantiable {
-				                                             ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                                ✏️ Add required initializer
-				    @Forwarded let userID: String
-
-				    @Forwarded let userName: String
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public final class UserService: Instantiable {
-				public init(
-				userID: String,
-				userName: String
-				) {
-				self.userID = userID
-				self.userName = userName
-				}
-
-				    @Forwarded let userID: String
-
-				    @Forwarded let userName: String
-				}
-				"""
-			} expansion: {
-				"""
-				public final class UserService: Instantiable {
-				public init(
-				userID: String,
-				userName: String
-				) {
-				self.userID = userID
-				self.userName = userName
-				}
-
 				    let userID: String
 
 				    let userName: String
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 46,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class UserService: Instantiable {
+				public init(
+				userID: String,
+				userName: String
+				) {
+				self.userID = userID
+				self.userName = userName
+				}
 
-				    public typealias ForwardedProperties = (userID: String, userName: String)
+				    @Forwarded let userID: String
+
+				    @Forwarded let userName: String
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerWithClosureDependency() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				    @Forwarded let closure: () -> Void
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                              ✏️ Add required initializer
-				    @Forwarded let closure: () -> Void
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-				public init(closure: @escaping () -> Void) {
-				self.closure = closure
-				}
-
-				    @Forwarded let closure: () -> Void
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init(closure: @escaping () -> Void) {
-				self.closure = closure
-				}
-
 				    let closure: () -> Void
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				public init(closure: @escaping () -> Void) {
+				self.closure = closure
+				}
 
-				    public typealias ForwardedProperties = () -> Void
+				    @Forwarded let closure: () -> Void
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesFixitForRequiredInitializerWithSendableClosureDependency() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				    @Forwarded let closure: @Sendable () -> Void
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                              ✏️ Add required initializer
-				    @Forwarded let closure: @Sendable () -> Void
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-				public init(closure: @escaping @Sendable () -> Void) {
-				self.closure = closure
-				}
-
-				    @Forwarded let closure: @Sendable () -> Void
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init(closure: @escaping @Sendable () -> Void) {
-				self.closure = closure
-				}
-
 				    let closure: @Sendable () -> Void
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				public init(closure: @escaping @Sendable () -> Void) {
+				self.closure = closure
+				}
 
-				    public typealias ForwardedProperties = @Sendable () -> Void
+				    @Forwarded let closure: @Sendable () -> Void
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_generatesRequiredInitializerWhenInstantiatorDependencyMissingFromInit() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				    @Instantiated private let instantiatableAInstantiator: Instantiator<ReceivedA>
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.
-				                                              ✏️ Add required initializer
-				    @Instantiated private let instantiatableAInstantiator: Instantiator<ReceivedA>
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-				public init(instantiatableAInstantiator: Instantiator<ReceivedA>) {
-				self.instantiatableAInstantiator = instantiatableAInstantiator
-				}
-
-				    @Instantiated private let instantiatableAInstantiator: Instantiator<ReceivedA>
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init(instantiatableAInstantiator: Instantiator<ReceivedA>) {
-				self.instantiatableAInstantiator = instantiatableAInstantiator
-				}
-
 				    private let instantiatableAInstantiator: Instantiator<ReceivedA>
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				public init(instantiatableAInstantiator: Instantiator<ReceivedA>) {
+				self.instantiatableAInstantiator = instantiatableAInstantiator
+				}
+
+				    @Instantiated private let instantiatableAInstantiator: Instantiator<ReceivedA>
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesInitWhenExistingInitIsMissingAccessModifier() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class UserService: Instantiable {
@@ -2534,43 +2478,10 @@ import SafeDICore
 					@Instantiated let b: B
 					@Forwarded let c: C
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public final class UserService: Instantiable {
 					init(a: A, b: B, c: C) {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
-				    ✏️ Add `public` modifier
-						self.a = a
-						self.b = b
-						self.c = c
-					}
-
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
-						self.a = a
-						self.b = b
-						self.c = c
-					}
-
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
-				}
-				"""
-			} expansion: {
-				"""
-				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -2579,16 +2490,43 @@ import SafeDICore
 					let a: A
 					let b: B
 					let c: C
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class UserService: Instantiable {
+					public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
 
-					public typealias ForwardedProperties = C
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesInitWhenExistingInitIsMissingAccessModifierWithOtherModifier() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class UserService: Instantiable {
@@ -2602,43 +2540,10 @@ import SafeDICore
 					@Instantiated let b: B
 					@Forwarded let c: C
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public final class UserService: Instantiable {
 					final init(a: A, b: B, c: C) {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
-				    ✏️ Add `public` modifier
-						self.a = a
-						self.b = b
-						self.c = c
-					}
-
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public final class UserService: Instantiable {
-					public final init(a: A, b: B, c: C) {
-						self.a = a
-						self.b = b
-						self.c = c
-					}
-
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
-				}
-				"""
-			} expansion: {
-				"""
-				public final class UserService: Instantiable {
-					public final init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -2647,16 +2552,43 @@ import SafeDICore
 					let a: A
 					let b: B
 					let c: C
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class UserService: Instantiable {
+					public final init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
 
-					public typealias ForwardedProperties = C
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesInitWhenExistingInitHasIncorrectAccessModifier() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class UserService: Instantiable {
@@ -2670,43 +2602,10 @@ import SafeDICore
 					@Instantiated let b: B
 					@Forwarded let c: C
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public final class UserService: Instantiable {
 					private init(a: A, b: B, c: C) {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
-				    ✏️ Add `public` modifier
-						self.a = a
-						self.b = b
-						self.c = c
-					}
-
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
-						self.a = a
-						self.b = b
-						self.c = c
-					}
-
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
-				}
-				"""
-			} expansion: {
-				"""
-				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -2715,16 +2614,43 @@ import SafeDICore
 					let a: A
 					let b: B
 					let c: C
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class UserService: Instantiable {
+					public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
 
-					public typealias ForwardedProperties = C
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesInitWhenExistingInitHasIncorrectAccessModifierWithCorrectEarlierModifier() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class UserService: Instantiable {
@@ -2738,43 +2664,10 @@ import SafeDICore
 					@Instantiated let b: B
 					@Forwarded let c: C
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public final class UserService: Instantiable {
 					final private init(a: A, b: B, c: C) {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
-				    ✏️ Add `public` modifier
-						self.a = a
-						self.b = b
-						self.c = c
-					}
-
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public final class UserService: Instantiable {
-					final public init(a: A, b: B, c: C) {
-						self.a = a
-						self.b = b
-						self.c = c
-					}
-
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
-				}
-				"""
-			} expansion: {
-				"""
-				public final class UserService: Instantiable {
-					final public init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -2783,16 +2676,43 @@ import SafeDICore
 					let a: A
 					let b: B
 					let c: C
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class UserService: Instantiable {
+					final public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
 
-					public typealias ForwardedProperties = C
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesInitWhenExistingInitHasIncorrectAccessModifierWithCorrectLaterModifier() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class UserService: Instantiable {
@@ -2806,43 +2726,10 @@ import SafeDICore
 					@Instantiated let b: B
 					@Forwarded let c: C
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public final class UserService: Instantiable {
 					private final init(a: A, b: B, c: C) {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
-				    ✏️ Add `public` modifier
-						self.a = a
-						self.b = b
-						self.c = c
-					}
-
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public final class UserService: Instantiable {
-					public final init(a: A, b: B, c: C) {
-						self.a = a
-						self.b = b
-						self.c = c
-					}
-
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
-				}
-				"""
-			} expansion: {
-				"""
-				public final class UserService: Instantiable {
-					public final init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -2851,16 +2738,43 @@ import SafeDICore
 					let a: A
 					let b: B
 					let c: C
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class UserService: Instantiable {
+					public final init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
 
-					public typealias ForwardedProperties = C
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesInitWhenExistingInitIsMissingAccessModifierAndAnotherInitializerWithMissingArgument() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class UserService: Instantiable {
@@ -2880,55 +2794,10 @@ import SafeDICore
 					@Instantiated let b: B
 					@Forwarded let c: C
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public final class UserService: Instantiable {
 					init(a: A, b: B, c: C) {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
-				    ✏️ Add `public` modifier
-						self.a = a
-						self.b = b
-						self.c = c
-					}
-
-					private init(a: A, b: B) {
-						self.a = a
-						self.b = b
-						c = C()
-					}
-
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
-						self.a = a
-						self.b = b
-						self.c = c
-					}
-
-					private init(a: A, b: B) {
-						self.a = a
-						self.b = b
-						c = C()
-					}
-
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
-				}
-				"""
-			} expansion: {
-				"""
-				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -2943,16 +2812,49 @@ import SafeDICore
 					let a: A
 					let b: B
 					let c: C
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class UserService: Instantiable {
+					public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
 
-					public typealias ForwardedProperties = C
+					private init(a: A, b: B) {
+						self.a = a
+						self.b = b
+						c = C()
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_updatesInitWhenExistingInitIsMissingAccessModifierAndAnotherInitializerExistsWithExtraArgument() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class UserService: Instantiable {
@@ -2973,57 +2875,10 @@ import SafeDICore
 					@Instantiated let b: B
 					@Forwarded let c: C
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public final class UserService: Instantiable {
 					init(a: A, b: B, c: C) {
-				 ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer.
-				    ✏️ Add `public` modifier
-						self.a = a
-						self.b = b
-						self.c = c
-					}
-
-					public init(a: A, b: B, c: C, d: D) {
-						self.a = a
-						self.b = b
-						self.c = c
-						_ = d
-					}
-
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
-						self.a = a
-						self.b = b
-						self.c = c
-					}
-
-					public init(a: A, b: B, c: C, d: D) {
-						self.a = a
-						self.b = b
-						self.c = c
-						_ = d
-					}
-
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
-				}
-				"""
-			} expansion: {
-				"""
-				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -3039,16 +2894,50 @@ import SafeDICore
 					let a: A
 					let b: B
 					let c: C
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class UserService: Instantiable {
+					public init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
 
-					public typealias ForwardedProperties = C
+					public init(a: A, b: B, c: C, d: D) {
+						self.a = a
+						self.b = b
+						self.c = c
+						_ = d
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
 				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_doesNotThrowErrorWhenMoreThanOneInstantiateMethodForSameBaseTypeWithDifferingGeneric() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension Container: Instantiable {
@@ -3059,9 +2948,8 @@ import SafeDICore
 				        .init(value: 0)
 				    }
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				extension Container: Instantiable {
 				    public static func instantiate() -> Container<String> {
 				        .init(value: "")
@@ -3070,13 +2958,14 @@ import SafeDICore
 				        .init(value: 0)
 				    }
 				}
-				"""
-			}
+				""",
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func extension_doesNotThrowErrorWhenFulfillingAdditionalType() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [SendableContainer<String>.self])
 				extension Container: Instantiable {
@@ -3084,154 +2973,161 @@ import SafeDICore
 				        .init(value: "")
 				    }
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				extension Container: Instantiable {
 				    public static func instantiate() -> Container<String> {
 				        .init(value: "")
 				    }
 				}
-				"""
-			}
+				""",
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitWhenNoConformancesDeclared() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class ExampleService {
 				    public init() {}
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				┬────────────
-				╰─ 🛑 @Instantiable-decorated type or extension must declare conformance to `Instantiable`
-				   ✏️ Declare conformance to `Instantiable`
+				""",
+				expandedSource: """
 				public final class ExampleService {
 				    public init() {}
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`",
+						line: 1,
+						column: 1,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Declare conformance to `Instantiable`"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Declare conformance to `Instantiable`",
+				],
+				fixedSource: """
 				@Instantiable
 				public final class ExampleService: Instantiable {
 				    public init() {}
 				}
 				"""
-			} expansion: {
-				"""
-				public final class ExampleService: Instantiable {
-				    public init() {}
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitWhenInstantiableConformanceMissing() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class ExampleService: CustomStringConvertible {
 				    public init() {}
 				    public var description: String { "ExampleService" }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				┬────────────
-				╰─ 🛑 @Instantiable-decorated type or extension must declare conformance to `Instantiable`
-				   ✏️ Declare conformance to `Instantiable`
+				""",
+				expandedSource: """
 				public final class ExampleService: CustomStringConvertible {
 				    public init() {}
 				    public var description: String { "ExampleService" }
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`",
+						line: 1,
+						column: 1,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Declare conformance to `Instantiable`"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Declare conformance to `Instantiable`",
+				],
+				fixedSource: """
 				@Instantiable
 				public final class ExampleService: CustomStringConvertible, Instantiable {
 				    public init() {}
 				    public var description: String { "ExampleService" }
 				}
 				"""
-			} expansion: {
-				"""
-				public final class ExampleService: CustomStringConvertible, Instantiable {
-				    public init() {}
-				    public var description: String { "ExampleService" }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitWhenInstantiableConformanceMissingAndConformsElsewhereIsFalse() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable(conformsElsewhere: false)
 				public final class ExampleService: CustomStringConvertible {
 				    public init() {}
 				    public var description: String { "ExampleService" }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable(conformsElsewhere: false)
-				┬──────────────────────────────────────
-				╰─ 🛑 @Instantiable-decorated type or extension must declare conformance to `Instantiable`
-				   ✏️ Declare conformance to `Instantiable`
+				""",
+				expandedSource: """
 				public final class ExampleService: CustomStringConvertible {
 				    public init() {}
 				    public var description: String { "ExampleService" }
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`",
+						line: 1,
+						column: 1,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Declare conformance to `Instantiable`"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Declare conformance to `Instantiable`",
+				],
+				fixedSource: """
 				@Instantiable(conformsElsewhere: false)
 				public final class ExampleService: CustomStringConvertible, Instantiable {
 				    public init() {}
 				    public var description: String { "ExampleService" }
 				}
 				"""
-			} expansion: {
-				"""
-				public final class ExampleService: CustomStringConvertible, Instantiable {
-				    public init() {}
-				    public var description: String { "ExampleService" }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_doesNotAddFixitWhenRetroactiveInstantiableConformanceExists() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class ExampleService: @retroactive Instantiable, @retroactive CustomStringConvertible {
 				    public init() {}
 				    public var description: String { "ExampleService" }
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				public final class ExampleService: @retroactive Instantiable, @retroactive CustomStringConvertible {
 				    public init() {}
 				    public var description: String { "ExampleService" }
 				}
-				"""
-			}
+				""",
+				macros: instantiableTestMacros
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitWhenMultipleInjectableMacrosOnTopOfSingleProperty() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -3241,23 +3137,32 @@ import SafeDICore
 
 				    @Received @Instantiated let receivedA: ReceivedA
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
 
-				    @Received @Instantiated let receivedA: ReceivedA
-				    ┬──────────────────────
-				    ╰─ 🛑 Dependency can have at most one of @Instantiated, @Received, or @Forwarded attached macro
-				       ✏️ Remove excessive attached macros
+				    let receivedA: ReceivedA
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Dependency can have at most one of @Instantiated, @Received, or @Forwarded attached macro",
+						line: 7,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove excessive attached macros"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove excessive attached macros",
+				],
+				fixedSource: """
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
@@ -3267,22 +3172,12 @@ import SafeDICore
 				    @Received let receivedA: ReceivedA
 				}
 				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    let receivedA: ReceivedA
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitWhenInjectableParameterHasInitializer() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -3292,23 +3187,32 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA = .init()
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
 
-				    @Instantiated let receivedA: ReceivedA = .init()
-				    ┬───────────────────────────────────────────────
-				    ╰─ 🛑 Dependency must not have hand-written initializer
-				       ✏️ Remove initializer
+				    let receivedA: ReceivedA = .init()
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Dependency must not have hand-written initializer",
+						line: 7,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove initializer",
+				],
+				fixedSource: """
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
@@ -3318,22 +3222,12 @@ import SafeDICore
 				    @Instantiated let receivedA: ReceivedA 
 				}
 				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    let receivedA: ReceivedA 
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitWhenInjectableActorIsNotPublicOrOpen() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				actor ExampleService: Instantiable {
@@ -3343,47 +3237,47 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
-				   ✏️ Add `public` modifier
+				""",
+				expandedSource: """
 				actor ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public actor ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				"""
-			} expansion: {
-				"""
-				public actor ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
 
 				    let receivedA: ReceivedA
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must be `public` or `open`",
+						line: 1,
+						column: 1,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public actor ExampleService: Instantiable {
+				    public init(receivedA: ReceivedA) {
+				        self.receivedA = receivedA
+				    }
+
+				    @Instantiated let receivedA: ReceivedA
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitWhenInjectableClassIsNotPublicOrOpen() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				class ExampleService: Instantiable {
@@ -3393,47 +3287,47 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
-				   ✏️ Add `public` modifier
+				""",
+				expandedSource: """
 				class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				"""
-			} expansion: {
-				"""
-				public class ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
 
 				    let receivedA: ReceivedA
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must be `public` or `open`",
+						line: 1,
+						column: 1,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public class ExampleService: Instantiable {
+				    public init(receivedA: ReceivedA) {
+				        self.receivedA = receivedA
+				    }
+
+				    @Instantiated let receivedA: ReceivedA
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitWhenInjectableFinalClassIsNotPublicOrOpen() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				final class ExampleService: Instantiable {
@@ -3443,47 +3337,47 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
-				   ✏️ Add `public` modifier
+				""",
+				expandedSource: """
 				final class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public final class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				"""
-			} expansion: {
-				"""
-				public final class ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
 
 				    let receivedA: ReceivedA
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must be `public` or `open`",
+						line: 1,
+						column: 1,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class ExampleService: Instantiable {
+				    public init(receivedA: ReceivedA) {
+				        self.receivedA = receivedA
+				    }
+
+				    @Instantiated let receivedA: ReceivedA
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitWhenInjectableClassIsInternal() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				internal class ExampleService: Instantiable {
@@ -3493,47 +3387,47 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
-				   ✏️ Add `public` modifier
+				""",
+				expandedSource: """
 				internal class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				"""
-			} expansion: {
-				"""
-				public class ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
 
 				    let receivedA: ReceivedA
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must be `public` or `open`",
+						line: 1,
+						column: 1,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public class ExampleService: Instantiable {
+				    public init(receivedA: ReceivedA) {
+				        self.receivedA = receivedA
+				    }
+
+				    @Instantiated let receivedA: ReceivedA
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitWhenInjectableClassIsFileprivate() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				fileprivate class ExampleService: Instantiable {
@@ -3543,47 +3437,47 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
-				   ✏️ Add `public` modifier
+				""",
+				expandedSource: """
 				fileprivate class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				"""
-			} expansion: {
-				"""
-				public class ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
 
 				    let receivedA: ReceivedA
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must be `public` or `open`",
+						line: 1,
+						column: 1,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public class ExampleService: Instantiable {
+				    public init(receivedA: ReceivedA) {
+				        self.receivedA = receivedA
+				    }
+
+				    @Instantiated let receivedA: ReceivedA
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitWhenInjectableClassIsPrivate() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				private class ExampleService: Instantiable {
@@ -3593,47 +3487,47 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
-				   ✏️ Add `public` modifier
+				""",
+				expandedSource: """
 				private class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				"""
-			} expansion: {
-				"""
-				public class ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
 
 				    let receivedA: ReceivedA
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must be `public` or `open`",
+						line: 1,
+						column: 1,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public class ExampleService: Instantiable {
+				    public init(receivedA: ReceivedA) {
+				        self.receivedA = receivedA
+				    }
+
+				    @Instantiated let receivedA: ReceivedA
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitWhenInjectableStructIsNotPublicOrOpen() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				struct ExampleService: Instantiable {
@@ -3643,64 +3537,74 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				╰─ 🛑 @Instantiable-decorated type must be `public` or `open`
-				   ✏️ Add `public` modifier
+				""",
+				expandedSource: """
 				struct ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
 
 				    let receivedA: ReceivedA
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must be `public` or `open`",
+						line: 1,
+						column: 1,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(receivedA: ReceivedA) {
+				        self.receivedA = receivedA
+				    }
+
+				    @Instantiated let receivedA: ReceivedA
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitMissingRequiredInitializerWhenPropertyIsMissingInitializerAndThereAreNoDependencies() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				    let uninitializedProperty: Int
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type with no @Instantiated, @Received, or @Forwarded-decorated properties must have a `public` or `open` initializer that either takes no parameters or has a default value for each parameter.
-				                                              ✏️ Add required initializer
 				    let uninitializedProperty: Int
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type with no @Instantiated, @Received, or @Forwarded-decorated properties must have a `public` or `open` initializer that either takes no parameters or has a default value for each parameter.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				public init() {
@@ -3711,23 +3615,12 @@ import SafeDICore
 				    let uninitializedProperty: Int
 				}
 				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init() {
-				// The following properties are not decorated with the @Instantiated, @Received, or @Forwarded macros, do not have default values, and are not computed properties.
-				uninitializedProperty = <#T##assign_uninitializedProperty#>
-				}
-
-				    let uninitializedProperty: Int
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitMissingRequiredInitializerWhenPropertyIsMissingInitializer() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -3735,55 +3628,50 @@ import SafeDICore
 
 				    let uninitializedProperty: Int
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values.
-				                                              ✏️ Add required initializer
-				    @Instantiated let receivedA: ReceivedA
-
-				    let uninitializedProperty: Int
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-				public init(receivedA: ReceivedA) {
-				self.receivedA = receivedA
-
-				// The following properties are not decorated with the @Instantiated, @Received, or @Forwarded macros, do not have default values, and are not computed properties.
-				uninitializedProperty = <#T##assign_uninitializedProperty#>
-				}
-
-				    @Instantiated let receivedA: ReceivedA
-
-				    let uninitializedProperty: Int
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init(receivedA: ReceivedA) {
-				self.receivedA = receivedA
-
-				// The following properties are not decorated with the @Instantiated, @Received, or @Forwarded macros, do not have default values, and are not computed properties.
-				uninitializedProperty = <#T##assign_uninitializedProperty#>
-				}
-
 				    let receivedA: ReceivedA
 
 				    let uninitializedProperty: Int
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				public init(receivedA: ReceivedA) {
+				self.receivedA = receivedA
+
+				// The following properties are not decorated with the @Instantiated, @Received, or @Forwarded macros, do not have default values, and are not computed properties.
+				uninitializedProperty = <#T##assign_uninitializedProperty#>
+				}
+
+				    @Instantiated let receivedA: ReceivedA
+
+				    let uninitializedProperty: Int
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func declaration_fixit_addsFixitMissingRequiredInitializerWhenMultiplePropertiesAreMissingInitializer() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
@@ -3793,102 +3681,95 @@ import SafeDICore
 				    let uninitializedProperty2: Int, uninitializedProperty3: Int, initializedProperty = "init"
 				    let (uninitializedProperty4, uninitializedProperty5): (Int, Int)
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				public struct ExampleService: Instantiable {
-				                                           ╰─ 🛑 @Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values.
-				                                              ✏️ Add required initializer
-				    @Instantiated let receivedA: ReceivedA
-
-				    var uninitializedProperty1: Int
-				    let uninitializedProperty2: Int, uninitializedProperty3: Int, initializedProperty = "init"
-				    let (uninitializedProperty4, uninitializedProperty5): (Int, Int)
-				}
-				"""
-			} fixes: {
-				"""
-				@Instantiable
-				public struct ExampleService: Instantiable {
-				public init(receivedA: ReceivedA) {
-				self.receivedA = receivedA
-
-				// The following properties are not decorated with the @Instantiated, @Received, or @Forwarded macros, do not have default values, and are not computed properties.
-				uninitializedProperty1 = <#T##assign_uninitializedProperty1#>
-				uninitializedProperty2 = <#T##assign_uninitializedProperty2#>
-				uninitializedProperty3 = <#T##assign_uninitializedProperty3#>
-				(uninitializedProperty4, uninitializedProperty5) = <#T##assign_(uninitializedProperty4, uninitializedProperty5)#>
-				}
-
-				    @Instantiated let receivedA: ReceivedA
-
-				    var uninitializedProperty1: Int
-				    let uninitializedProperty2: Int, uninitializedProperty3: Int, initializedProperty = "init"
-				    let (uninitializedProperty4, uninitializedProperty5): (Int, Int)
-				}
-				"""
-			} expansion: {
-				"""
-				public struct ExampleService: Instantiable {
-				public init(receivedA: ReceivedA) {
-				self.receivedA = receivedA
-
-				// The following properties are not decorated with the @Instantiated, @Received, or @Forwarded macros, do not have default values, and are not computed properties.
-				uninitializedProperty1 = <#T##assign_uninitializedProperty1#>
-				uninitializedProperty2 = <#T##assign_uninitializedProperty2#>
-				uninitializedProperty3 = <#T##assign_uninitializedProperty3#>
-				(uninitializedProperty4, uninitializedProperty5) = <#T##assign_(uninitializedProperty4, uninitializedProperty5)#>
-				}
-
 				    let receivedA: ReceivedA
 
 				    var uninitializedProperty1: Int
 				    let uninitializedProperty2: Int, uninitializedProperty3: Int, initializedProperty = "init"
 				    let (uninitializedProperty4, uninitializedProperty5): (Int, Int)
 				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				public init(receivedA: ReceivedA) {
+				self.receivedA = receivedA
+
+				// The following properties are not decorated with the @Instantiated, @Received, or @Forwarded macros, do not have default values, and are not computed properties.
+				uninitializedProperty1 = <#T##assign_uninitializedProperty1#>
+				uninitializedProperty2 = <#T##assign_uninitializedProperty2#>
+				uninitializedProperty3 = <#T##assign_uninitializedProperty3#>
+				(uninitializedProperty4, uninitializedProperty5) = <#T##assign_(uninitializedProperty4, uninitializedProperty5)#>
+				}
+
+				    @Instantiated let receivedA: ReceivedA
+
+				    var uninitializedProperty1: Int
+				    let uninitializedProperty2: Int, uninitializedProperty3: Int, initializedProperty = "init"
+				    let (uninitializedProperty4, uninitializedProperty5): (Int, Int)
+				}
 				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenNoConformancesDeclared() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension ExampleService {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				┬────────────
-				╰─ 🛑 @Instantiable-decorated type or extension must declare conformance to `Instantiable`
-				   ✏️ Declare conformance to `Instantiable`
+				""",
+				expandedSource: """
 				extension ExampleService {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`",
+						line: 1,
+						column: 1,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Declare conformance to `Instantiable`"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Declare conformance to `Instantiable`",
+				],
+				fixedSource: """
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
 				"""
-			} expansion: {
-				"""
-				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenInstantiableConformanceMissing() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension ExampleService: CustomStringConvertible {
@@ -3896,21 +3777,30 @@ import SafeDICore
 
 				    public var description: String { "ExampleService" }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				┬────────────
-				╰─ 🛑 @Instantiable-decorated type or extension must declare conformance to `Instantiable`
-				   ✏️ Declare conformance to `Instantiable`
+				""",
+				expandedSource: """
 				extension ExampleService: CustomStringConvertible {
 				    public static func instantiate() -> ExampleService { fatalError() }
 
 				    public var description: String { "ExampleService" }
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`",
+						line: 1,
+						column: 1,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Declare conformance to `Instantiable`"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Declare conformance to `Instantiable`",
+				],
+				fixedSource: """
 				@Instantiable
 				extension ExampleService: CustomStringConvertible, Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
@@ -3918,20 +3808,12 @@ import SafeDICore
 				    public var description: String { "ExampleService" }
 				}
 				"""
-			} expansion: {
-				"""
-				extension ExampleService: CustomStringConvertible, Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
-
-				    public var description: String { "ExampleService" }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenInstantiableConformanceMissingAndConformsElsewhereIsFalse() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable(conformsElsewhere: false)
 				extension ExampleService: CustomStringConvertible {
@@ -3939,21 +3821,30 @@ import SafeDICore
 
 				    public var description: String { "ExampleService" }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable(conformsElsewhere: false)
-				┬──────────────────────────────────────
-				╰─ 🛑 @Instantiable-decorated type or extension must declare conformance to `Instantiable`
-				   ✏️ Declare conformance to `Instantiable`
+				""",
+				expandedSource: """
 				extension ExampleService: CustomStringConvertible {
 				    public static func instantiate() -> ExampleService { fatalError() }
 
 				    public var description: String { "ExampleService" }
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`",
+						line: 1,
+						column: 1,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Declare conformance to `Instantiable`"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Declare conformance to `Instantiable`",
+				],
+				fixedSource: """
 				@Instantiable(conformsElsewhere: false)
 				extension ExampleService: CustomStringConvertible, Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
@@ -3961,35 +3852,37 @@ import SafeDICore
 				    public var description: String { "ExampleService" }
 				}
 				"""
-			} expansion: {
-				"""
-				extension ExampleService: CustomStringConvertible, Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
-
-				    public var description: String { "ExampleService" }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenInstantiateMethodMissing() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension ExampleService: Instantiable {
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				extension ExampleService: Instantiable {
-				                                        ╰─ 🛑 @Instantiable-decorated extension of ExampleService must have a `public static func instantiate() -> ExampleService` method
-				                                           ✏️ Add `public static func instantiate() -> ExampleService` method
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension of ExampleService must have a `public static func instantiate() -> ExampleService` method",
+						line: 2,
+						column: 41,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public static func instantiate() -> ExampleService` method"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public static func instantiate() -> ExampleService` method",
+				],
+				fixedSource: """
 				@Instantiable
 				extension ExampleService: Instantiable {
 				public static func instantiate() -> ExampleService
@@ -3998,401 +3891,425 @@ import SafeDICore
 
 				}
 				"""
-			} expansion: {
-				"""
-				extension ExampleService: Instantiable {
-				public static func instantiate() -> ExampleService
-				{}
-
-
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenInstantiateMethodIsNotPublic() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				extension ExampleService: Instantiable {
 				    static func instantiate() -> ExampleService { fatalError() }
-				    ┬───────────────────────────────────────────────────────────
-				    ╰─ 🛑 @Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`
-				       ✏️ Set `public static` modifiers
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Set `public static` modifiers"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Set `public static` modifiers",
+				],
+				fixedSource: """
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
 				"""
-			} expansion: {
-				"""
-				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenInstantiateMethodIsNotStatic() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				extension ExampleService: Instantiable {
 				    public func instantiate() -> ExampleService { fatalError() }
-				    ┬───────────────────────────────────────────────────────────
-				    ╰─ 🛑 @Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`
-				       ✏️ Set `public static` modifiers
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Set `public static` modifiers"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Set `public static` modifiers",
+				],
+				fixedSource: """
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
 				"""
-			} expansion: {
-				"""
-				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenInstantiateMethodIsNotStaticOrPublic() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				extension ExampleService: Instantiable {
 				    func instantiate() -> ExampleService { fatalError() }
-				    ┬────────────────────────────────────────────────────
-				    ╰─ 🛑 @Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`
-				       ✏️ Set `public static` modifiers
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Set `public static` modifiers"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Set `public static` modifiers",
+				],
+				fixedSource: """
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
 				"""
-			} expansion: {
-				"""
-				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenInstantiateMethodReturnsIncorrectType() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> OtherExampleService { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> OtherExampleService { fatalError() }
-				    ┬───────────────────────────────────────────────────────────────────────
-				    ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must return the same base type as the extended type
-				       ✏️ Make `instantiate()`’s return type the same base type as the extended type
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension’s `instantiate()` method must return the same base type as the extended type",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Make `instantiate()`’s return type the same base type as the extended type"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Make `instantiate()`’s return type the same base type as the extended type",
+				],
+				fixedSource: """
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
 				"""
-			} expansion: {
-				"""
-				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenInstantiateMethodReturnsTypeWrappedInArray() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> [ExampleService] { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> [ExampleService] { fatalError() }
-				    ┬────────────────────────────────────────────────────────────────────
-				    ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must return the same base type as the extended type
-				       ✏️ Make `instantiate()`’s return type the same base type as the extended type
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension’s `instantiate()` method must return the same base type as the extended type",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Make `instantiate()`’s return type the same base type as the extended type"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Make `instantiate()`’s return type the same base type as the extended type",
+				],
+				fixedSource: """
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
 				"""
-			} expansion: {
-				"""
-				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenInstantiateMethodIsAsync() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() async -> ExampleService { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				extension ExampleService: Instantiable {
 				    public static func instantiate() async -> ExampleService { fatalError() }
-				    ┬────────────────────────────────────────────────────────────────────────
-				    ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must not throw or be async
-				       ✏️ Remove effect specifiers
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension’s `instantiate()` method must not throw or be async",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove effect specifiers"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove effect specifiers",
+				],
+				fixedSource: """
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
 				"""
-			} expansion: {
-				"""
-				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenInstantiateMethodThrows() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() throws -> ExampleService { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				extension ExampleService: Instantiable {
 				    public static func instantiate() throws -> ExampleService { fatalError() }
-				    ┬─────────────────────────────────────────────────────────────────────────
-				    ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must not throw or be async
-				       ✏️ Remove effect specifiers
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension’s `instantiate()` method must not throw or be async",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove effect specifiers"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove effect specifiers",
+				],
+				fixedSource: """
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
 				"""
-			} expansion: {
-				"""
-				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenInstantiateMethodIsAsyncAndThrows() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() async throws -> ExampleService { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				extension ExampleService: Instantiable {
 				    public static func instantiate() async throws -> ExampleService { fatalError() }
-				    ┬───────────────────────────────────────────────────────────────────────────────
-				    ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must not throw or be async
-				       ✏️ Remove effect specifiers
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension’s `instantiate()` method must not throw or be async",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove effect specifiers"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove effect specifiers",
+				],
+				fixedSource: """
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
 				"""
-			} expansion: {
-				"""
-				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenInstantiateMethodHasGenericParameter() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate<T>() -> ExampleService { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				extension ExampleService: Instantiable {
 				    public static func instantiate<T>() -> ExampleService { fatalError() }
-				    ┬─────────────────────────────────────────────────────────────────────
-				    ╰─ 🛑 @Instantiable-decorated extension’s `instantiate()` method must not have a generic parameter
-				       ✏️ Remove generic parameter
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension’s `instantiate()` method must not have a generic parameter",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove generic parameter"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove generic parameter",
+				],
+				fixedSource: """
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
 				"""
-			} expansion: {
-				"""
-				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenInstantiateMethodHasGenericWhereClause() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension Array: Instantiable {
 				    public static func instantiate() -> Array where Element == String { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
+				""",
+				expandedSource: """
 				extension Array: Instantiable {
 				    public static func instantiate() -> Array where Element == String { fatalError() }
-				    ┬─────────────────────────────────────────────────────────────────────────────────
-				    ╰─ 🛑 @Instantiable-decorated extension must not have a generic `where` clause
-				       ✏️ Remove generic `where` clause
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension must not have a generic `where` clause",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove generic `where` clause"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove generic `where` clause",
+				],
+				fixedSource: """
 				@Instantiable
 				extension Array: Instantiable {
 				    public static func instantiate() -> Array { fatalError() }
 				}
 				"""
-			} expansion: {
-				"""
-				extension Array: Instantiable {
-				    public static func instantiate() -> Array { fatalError() }
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func extension_fixit_addsFixitWhenExtensionHasGenericWhereClause() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension Array: Instantiable where Element == String {
 				    public static func instantiate() -> Array { fatalError() }
 				}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiable
-				┬────────────
-				╰─ 🛑 @Instantiable-decorated extension must not have a generic `where` clause
-				   ✏️ Remove generic `where` clause
+				""",
+				expandedSource: """
 				extension Array: Instantiable where Element == String {
 				    public static func instantiate() -> Array { fatalError() }
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension must not have a generic `where` clause",
+						line: 1,
+						column: 1,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove generic `where` clause"),
+						]
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove generic `where` clause",
+				],
+				fixedSource: """
 				@Instantiable
 				extension Array: Instantiable {
 				    public static func instantiate() -> Array { fatalError() }
 				}
 				"""
-			} expansion: {
-				"""
-				extension Array: Instantiable {
-				    public static func instantiate() -> Array { fatalError() }
-				}
-				"""
-			}
+			)
 		}
 	}
 #endif

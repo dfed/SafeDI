@@ -18,9 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import MacroTesting
 import SwiftSyntaxMacros
-import SwiftSyntaxMacrosTestSupport
+import SwiftSyntaxMacrosGenericTestSupport
 import Testing
 
 import SafeDICore
@@ -28,15 +27,12 @@ import SafeDICore
 #if canImport(SafeDIMacros)
 	@testable import SafeDIMacros
 
-	@Suite(
-		.macros(
-			[
-				Dependency.Source.instantiatedRawValue: InjectableMacro.self,
-				Dependency.Source.receivedRawValue: InjectableMacro.self,
-				Dependency.Source.forwardedRawValue: InjectableMacro.self,
-			]
-		)
-	)
+	let injectableTestMacros: [String: Macro.Type] = [
+		Dependency.Source.instantiatedRawValue: InjectableMacro.self,
+		Dependency.Source.receivedRawValue: InjectableMacro.self,
+		Dependency.Source.forwardedRawValue: InjectableMacro.self,
+	]
+
 	struct InjectableMacroTests {
 		// MARK: Behavior Tests
 
@@ -47,24 +43,24 @@ import SafeDICore
 
 		@Test
 		func propertyIsFulfilledByTypeWithStringLiteral_expandsWithoutIssue() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				public struct ExampleService {
 				    @Instantiated(fulfilledByType: "SomethingElse") let something: Something
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService {
 				    let something: Something
 				}
-				"""
-			}
+				""",
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func propertyIsFulfilledByTypeWithStringLiteralNestedType_expandsWithoutIssue() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
@@ -73,9 +69,8 @@ import SafeDICore
 
 				    @Instantiated(fulfilledByType: "Module.ConcreteType") let instantiatedA: InstantiatedA
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
 				        self.instantiatedA = instantiatedA
@@ -83,53 +78,54 @@ import SafeDICore
 
 				    let instantiatedA: InstantiatedA
 				}
-				"""
-			}
+				""",
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func propertyIsOnlyIfAvailableAndOptional_expandsWthoutIssue() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService {
 					@Received(onlyIfAvailable: true) let receivedA: AnyReceivedA?
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				@Instantiable
 				public struct ExampleService {
 					let receivedA: AnyReceivedA?
 				}
-				"""
-			}
+				""",
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func propertyIsOnlyIfAvailableAndDoubleOptional_expandsWthoutIssue() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService {
 					@Received(onlyIfAvailable: true) let receivedA: AnyReceivedA??
 				}
-				"""
-			} expansion: {
-				"""
+				""",
+				expandedSource: """
 				@Instantiable
 				public struct ExampleService {
 					let receivedA: AnyReceivedA??
 				}
-				"""
-			}
+				""",
+				macros: injectableTestMacros
+			)
 		}
 
 		// MARK: Fixit Tests
 
 		@Test
 		func fixit_addsFixitWhenInjectableParameterIsMutable() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
@@ -138,22 +134,28 @@ import SafeDICore
 
 				    @Instantiated var instantiatedA: InstantiatedA
 				}
-				"""
-			} diagnostics: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
 				        self.instantiatedA = instantiatedA
 				    }
 
-				    @Instantiated var instantiatedA: InstantiatedA
-				                  ┬──
-				                  ╰─ 🛑 Dependency can not be mutable unless it is decorated with a property wrapper. Mutations to a dependency are not propagated through the dependency tree.
-				                     ✏️ Replace `var` with `let`
+				    var instantiatedA: InstantiatedA
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Dependency can not be mutable unless it is decorated with a property wrapper. Mutations to a dependency are not propagated through the dependency tree.",
+						line: 6,
+						column: 19,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Replace `var` with `let`")]
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Replace `var` with `let`"],
+				fixedSource: """
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
 				        self.instantiatedA = instantiatedA
@@ -162,22 +164,12 @@ import SafeDICore
 				    @Instantiated  let instantiatedA: InstantiatedA
 				}
 				"""
-			} expansion: {
-				"""
-				public struct ExampleService {
-				    init(instantiatedA: InstantiatedA) {
-				        self.instantiatedA = instantiatedA
-				    }
-
-				    let instantiatedA: InstantiatedA
-				}
-				"""
-			}
+			)
 		}
 
 		@Test
 		func fixit_doesNotAddFixitWhenInjectableParameterIsMutableWithPropertyWrapper() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				import SwiftUI
 
@@ -193,9 +185,8 @@ import SafeDICore
 				        Text("\\(ObjectIdentifier(instantiatedA))")
 				    }
 				}
-				"""
-			} expansion: {
-				#"""
+				""",
+				expandedSource: #"""
 				import SwiftUI
 
 				public struct ExampleView {
@@ -210,53 +201,66 @@ import SafeDICore
 				        Text("\(ObjectIdentifier(instantiatedA))")
 				    }
 				}
-				"""#
-			}
+				"""#,
+				macros: injectableTestMacros
+			)
 		}
 
 		// MARK: Error tests
 
 		@Test
 		func throwsErrorWhenUsingFulfilledByTypeOnInstantiator() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				public struct ExampleService {
 				    @Instantiated(fulfilledByType: "LoginViewController") let loginViewControllerBuilder: Instantiator<UIViewController>
 				}
-				"""
-			} diagnostics: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService {
-				    @Instantiated(fulfilledByType: "LoginViewController") let loginViewControllerBuilder: Instantiator<UIViewController>
-				    ┬────────────────────────────────────────────────────
-				    ╰─ 🛑 The argument `fulfilledByType` can not be used on an `Instantiator` or `SendableInstantiator`. Use an `ErasedInstantiator` or `SendableErasedInstantiator` instead
+				    let loginViewControllerBuilder: Instantiator<UIViewController>
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `fulfilledByType` can not be used on an `Instantiator` or `SendableInstantiator`. Use an `ErasedInstantiator` or `SendableErasedInstantiator` instead",
+						line: 2,
+						column: 5,
+						severity: .error
+					),
+				],
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func throwsErrorWhenErasedInstantiatorUsedWithoutFulfilledByTypeArgument() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				public struct ExampleService {
 				    @Instantiated let loginViewControllerBuilder: ErasedInstantiator<UIViewController>
 				}
-				"""
-			} diagnostics: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService {
-				    @Instantiated let loginViewControllerBuilder: ErasedInstantiator<UIViewController>
-				    ┬────────────
-				    ╰─ 🛑 `ErasedInstantiator` and `SendableErasedInstantiator` require use of the argument `fulfilledByType`
+				    let loginViewControllerBuilder: ErasedInstantiator<UIViewController>
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`ErasedInstantiator` and `SendableErasedInstantiator` require use of the argument `fulfilledByType`",
+						line: 2,
+						column: 5,
+						severity: .error
+					),
+				],
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func throwsErrorWhenInjectableMacroAttachedtoStaticProperty() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
@@ -265,42 +269,53 @@ import SafeDICore
 
 				    @Received static let instantiatedA: InstantiatedA
 				}
-				"""
-			} diagnostics: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
 				        self.instantiatedA = instantiatedA
 				    }
 
-				    @Received static let instantiatedA: InstantiatedA
-				    ┬────────
-				    ╰─ 🛑 This macro can not decorate `static` variables
+				    static let instantiatedA: InstantiatedA
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This macro can not decorate `static` variables",
+						line: 6,
+						column: 5,
+						severity: .error
+					),
+				],
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func throwsErrorWhenOnProtocol() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiated
 				protocol ExampleService {}
-				"""
-			} diagnostics: {
-				"""
-				@Instantiated
-				┬────────────
-				╰─ 🛑 This macro must decorate a instance variable
+				""",
+				expandedSource: """
 				protocol ExampleService {}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This macro must decorate a instance variable",
+						line: 1,
+						column: 1,
+						severity: .error
+					),
+				],
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func throwsErrorWhenFulfilledByTypeIsNotALiteral() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
@@ -310,26 +325,32 @@ import SafeDICore
 				    static let fulfilledByType = "ConcreteType"
 				    @Instantiated(fulfilledByType: fulfilledByType) let instantiatedA: InstantiatedA
 				}
-				"""
-			} diagnostics: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
 				        self.instantiatedA = instantiatedA
 				    }
 
 				    static let fulfilledByType = "ConcreteType"
-				    @Instantiated(fulfilledByType: fulfilledByType) let instantiatedA: InstantiatedA
-				    ┬──────────────────────────────────────────────
-				    ╰─ 🛑 The argument `fulfilledByType` must be a string literal
+				    let instantiatedA: InstantiatedA
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `fulfilledByType` must be a string literal",
+						line: 7,
+						column: 5,
+						severity: .error
+					),
+				],
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func throwsErrorWhenFulfilledByTypeIsNotAStringExpression() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
@@ -339,26 +360,32 @@ import SafeDICore
 				    static let fulfilledByType = "ConcreteType"
 				    @Instantiated(fulfilledByType: "\\(Self.fulfilledByType)") let instantiatedA: InstantiatedA
 				}
-				"""
-			} diagnostics: {
-				#"""
+				""",
+				expandedSource: """
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
 				        self.instantiatedA = instantiatedA
 				    }
 
 				    static let fulfilledByType = "ConcreteType"
-				    @Instantiated(fulfilledByType: "\(Self.fulfilledByType)") let instantiatedA: InstantiatedA
-				    ┬────────────────────────────────────────────────────────
-				    ╰─ 🛑 The argument `fulfilledByType` must be a string literal
+				    let instantiatedA: InstantiatedA
 				}
-				"""#
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `fulfilledByType` must be a string literal",
+						line: 7,
+						column: 5,
+						severity: .error
+					),
+				],
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func throwsErrorWhenFulfilledByTypeIsAnOptionalType() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
@@ -367,25 +394,31 @@ import SafeDICore
 
 				    @Instantiated(fulfilledByType: "ConcreteType?") let instantiatedA: InstantiatedA
 				}
-				"""
-			} diagnostics: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
 				        self.instantiatedA = instantiatedA
 				    }
 
-				    @Instantiated(fulfilledByType: "ConcreteType?") let instantiatedA: InstantiatedA
-				    ┬──────────────────────────────────────────────
-				    ╰─ 🛑 The argument `fulfilledByType` must refer to a simple type
+				    let instantiatedA: InstantiatedA
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `fulfilledByType` must refer to a simple type",
+						line: 6,
+						column: 5,
+						severity: .error
+					),
+				],
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func throwsErrorWhenFulfilledByTypeIsAnImplicitlyUnwrappedType() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
@@ -394,146 +427,175 @@ import SafeDICore
 
 				    @Instantiated(fulfilledByType: "ConcreteType!") let instantiatedA: InstantiatedA
 				}
-				"""
-			} diagnostics: {
-				"""
+				""",
+				expandedSource: """
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
 				        self.instantiatedA = instantiatedA
 				    }
 
-				    @Instantiated(fulfilledByType: "ConcreteType!") let instantiatedA: InstantiatedA
-				    ┬──────────────────────────────────────────────
-				    ╰─ 🛑 The argument `fulfilledByType` must refer to a simple type
+				    let instantiatedA: InstantiatedA
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `fulfilledByType` must refer to a simple type",
+						line: 6,
+						column: 5,
+						severity: .error
+					),
+				],
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func throwsErrorWhenfulfilledByDependencyNamedIsNotAStringLiteral() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService {
 				    static let instantiatedAName: StaticString = "instantiatedA"
 				    @Received(fulfilledByDependencyNamed: instantiatedAName, ofType: InstantiatedA.self) let receivedA: ReceivedA
 				}
-				"""
-			} diagnostics: {
-				"""
+				""",
+				expandedSource: """
 				@Instantiable
 				public struct ExampleService {
 				    static let instantiatedAName: StaticString = "instantiatedA"
-				    @Received(fulfilledByDependencyNamed: instantiatedAName, ofType: InstantiatedA.self) let receivedA: ReceivedA
-				    ┬───────────────────────────────────────────────────────────────────────────────────
-				    ╰─ 🛑 The argument `fulfilledByDependencyNamed` must be a string literal
+				    let receivedA: ReceivedA
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `fulfilledByDependencyNamed` must be a string literal",
+						line: 4,
+						column: 5,
+						severity: .error
+					),
+				],
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func throwsErrorWhenOfTypeIsAnInvalidType() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService {
 				    @Received(fulfilledByDependencyNamed: "instantiatedA", ofType: "InstantiatedA") let receivedA: ReceivedA
 				}
-				"""
-			} diagnostics: {
-				"""
+				""",
+				expandedSource: """
 				@Instantiable
 				public struct ExampleService {
-				    @Received(fulfilledByDependencyNamed: "instantiatedA", ofType: "InstantiatedA") let receivedA: ReceivedA
-				    ┬──────────────────────────────────────────────────────────────────────────────
-				    ╰─ 🛑 The argument `ofType` must be a type literal
+				    let receivedA: ReceivedA
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `ofType` must be a type literal",
+						line: 3,
+						column: 5,
+						severity: .error
+					),
+				],
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func throwsErrorWhenIsExistentialIsAnInvalidType() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService {
 				    static let erasedToConcreteExistential = true
 				    @Received(fulfilledByDependencyNamed: "receivedA", ofType: ReceivedA.self, erasedToConcreteExistential: erasedToConcreteExistential) let receivedA: AnyReceivedA
 				}
-				"""
-			} diagnostics: {
-				"""
+				""",
+				expandedSource: """
 				@Instantiable
 				public struct ExampleService {
 				    static let erasedToConcreteExistential = true
-				    @Received(fulfilledByDependencyNamed: "receivedA", ofType: ReceivedA.self, erasedToConcreteExistential: erasedToConcreteExistential) let receivedA: AnyReceivedA
-				    ┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-				    ╰─ 🛑 The argument `erasedToConcreteExistential` must be a bool literal
+				    let receivedA: AnyReceivedA
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `erasedToConcreteExistential` must be a bool literal",
+						line: 4,
+						column: 5,
+						severity: .error
+					),
+				],
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func throwsErrorWhenOnlyIfAvailableIsAnInvalidType() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService {
 					static let onlyIfAvailable = true
 					@Received(onlyIfAvailable: onlyIfAvailable) let receivedA: AnyReceivedA?
 				}
-				"""
-			} diagnostics: {
-				"""
+				""",
+				expandedSource: """
 				@Instantiable
 				public struct ExampleService {
 					static let onlyIfAvailable = true
-					@Received(onlyIfAvailable: onlyIfAvailable) let receivedA: AnyReceivedA?
-				 ┬──────────────────────────────────────────
-				 ╰─ 🛑 The argument `onlyIfAvailable` must be a type literal
+					let receivedA: AnyReceivedA?
 				}
-				"""
-			}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `onlyIfAvailable` must be a type literal",
+						line: 4,
+						column: 2,
+						severity: .error
+					),
+				],
+				macros: injectableTestMacros
+			)
 		}
 
 		@Test
 		func throwsErrorWhenOnlyIfAvailableIsNotOptional() {
-			assertMacro {
+			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService {
 					@Received(onlyIfAvailable: true) let receivedA: AnyReceivedA
 				}
-				"""
-			} diagnostics: {
-				"""
+				""",
+				expandedSource: """
 				@Instantiable
 				public struct ExampleService {
-					@Received(onlyIfAvailable: true) let receivedA: AnyReceivedA
-				                                      ┬──────────────────────
-				                                      ╰─ 🛑 The type of a dependency decorated with `onlyIfAvailable: true` must be marked as optional utilizing the `?` spelling
-				                                         ✏️ Mark the type as optional using `?`
+					let receivedA: AnyReceivedA
 				}
-				"""
-			} fixes: {
-				"""
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type of a dependency decorated with `onlyIfAvailable: true` must be marked as optional utilizing the `?` spelling",
+						line: 3,
+						column: 39,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Mark the type as optional using `?`")]
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Mark the type as optional using `?`"],
+				fixedSource: """
 				@Instantiable
 				public struct ExampleService {
 					@Received(onlyIfAvailable: true) let receivedA: AnyReceivedA?
 				}
 				"""
-			} expansion: {
-				"""
-				@Instantiable
-				public struct ExampleService {
-					let receivedA: AnyReceivedA?
-				}
-				"""
-			}
+			)
 		}
 	}
 #endif

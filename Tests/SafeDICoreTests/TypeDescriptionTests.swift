@@ -239,7 +239,7 @@ struct TypeDescriptionTests {
 	@Test
 	func typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAnAttributedTypeSyntax_withAttributes_findsTheType() throws {
 		let content = """
-		@autoclosure () -> Void
+		func test(parameter: @autoclosure () -> Void) {}
 		"""
 
 		let visitor = AttributedTypeSyntaxVisitor(viewMode: .sourceAccurate)
