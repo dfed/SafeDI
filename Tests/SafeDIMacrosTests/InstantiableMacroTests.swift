@@ -19,7 +19,7 @@
 // SOFTWARE.
 
 import SwiftSyntaxMacros
-import SwiftSyntaxMacrosTestSupport
+import SwiftSyntaxMacrosGenericTestSupport
 import Testing
 
 import SafeDICore
@@ -92,7 +92,6 @@ import SafeDICore
 				public protocol ExampleService {}
 				""",
 				expandedSource: """
-				@Instantiable
 				public protocol ExampleService {}
 				""",
 				diagnostics: [
@@ -115,7 +114,6 @@ import SafeDICore
 				public enum ExampleService: Instantiable {}
 				""",
 				expandedSource: """
-				@Instantiable
 				public enum ExampleService: Instantiable {}
 				""",
 				diagnostics: [
@@ -138,7 +136,6 @@ import SafeDICore
 				public final class ExampleService: Instantiable {}
 				""",
 				expandedSource: """
-				@Instantiable(fulfillingAdditionalTypes: [AnyObject?.self])
 				public final class ExampleService: Instantiable {}
 				""",
 				diagnostics: [
@@ -163,7 +160,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
-				@Instantiable(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
 				public final class ExampleService: Instantiable {}
 				""",
 				diagnostics: [
@@ -186,7 +182,6 @@ import SafeDICore
 				public final class ExampleService: Instantiable {}
 				""",
 				expandedSource: """
-				@Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
 				public final class ExampleService: Instantiable {}
 				""",
 				diagnostics: [
@@ -245,13 +240,12 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				@Instantiable(isRoot: true)
 				public final class Foo: Instantiable {
 				    public init(dependency: Dependency) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
 
-				    @Received private let dependency: Dependency 
+				    private let dependency: Dependency 
 				}
 				""",
 				diagnostics: [
@@ -285,13 +279,12 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				@Instantiable(isRoot: true)
 				public final class Foo: Instantiable {
 				    public init(dependency: Dependency) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
 
-				    @Forwarded private let dependency: Dependency 
+				    private let dependency: Dependency 
 				}
 				""",
 				diagnostics: [
@@ -323,7 +316,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				let fulfillingAdditionalTypes: [Any.Type] = [AnyObject.self]
-				@Instantiable(fulfillingAdditionalTypes: fulfillingAdditionalTypes)
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
@@ -350,7 +342,6 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				@Instantiable(fulfillingAdditionalTypes: { [AnyObject.self] }())
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
@@ -378,7 +369,6 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				    public static func instantiate(user: User) -> ExampleService { fatalError() }
@@ -424,7 +414,6 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				@Instantiable(isRoot: true)
 				extension Foo: Instantiable {
 				    public static func instantiate(bar: Bar) -> Foo { fatalError() }
 				}
@@ -458,8 +447,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init() {}
-
 				}
 				""",
 				diagnostics: [
@@ -497,8 +484,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public class ExampleService: Instantiable {
-				public init() {}
-
 				}
 				""",
 				diagnostics: [
@@ -536,8 +521,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public actor ExampleService: Instantiable {
-				public init() {}
-
 				}
 				""",
 				diagnostics: [
@@ -594,8 +577,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init() {}
-
 				    var initializedVariable = "test"
 				}
 				""",
@@ -636,8 +617,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init() {}
-
 				    var initializedVariable { "test" }
 				}
 				""",
@@ -678,10 +657,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
 				    @Unknown let instantiatedA: InstantiatedA
 				}
 				""",
@@ -728,9 +703,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
 				    #if DEBUG
 				    @Unknown
 				    #endif
@@ -942,10 +914,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
 				    let instantiatedA: InstantiatedA
 				}
 				""",
@@ -1002,10 +970,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public final class ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
 				    let instantiatedA: InstantiatedA
 
 				    public enum NestedEnum {
@@ -1078,10 +1042,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
 				    let instantiatedA: InstantiatedA
 
 				    let initializedProperty = 5
@@ -1130,10 +1090,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
 				    let instantiatedA: InstantiatedA
 
 				    let initializedProperty: Int = 5
@@ -1182,10 +1138,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
 				    let instantiatedA: InstantiatedA
 
 				    var optionalProperty: Int?
@@ -1235,10 +1187,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init(instantiatedA: InstantiatedA) {
-				self.instantiatedA = instantiatedA
-				}
-
 				    let instantiatedA: InstantiatedA
 
 				    // This won't compile but we should still generate an initializer.
@@ -1291,8 +1239,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-					public init(receivedA: ReceivedA) {
-						self.receivedA = receivedA
+					public init() {
 						_ = "keep me"
 					}
 
@@ -1345,12 +1292,8 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-					public init(
-				receivedA: ReceivedA,
-				receivedB: ReceivedB
-				) {
+					public init(receivedA: ReceivedA) {
 						self.receivedA = receivedA
-						self.receivedB = receivedB
 						_ = "keep me"
 					}
 
@@ -1412,11 +1355,9 @@ import SafeDICore
 				expandedSource: """
 				public struct ExampleService: Instantiable {
 					public init(
-				receivedA: ReceivedA,
-				receivedB: ReceivedB
+						receivedA: ReceivedA
 					) {
 						self.receivedA = receivedA
-						self.receivedB = receivedB
 						_ = "keep me"
 					}
 
@@ -1476,8 +1417,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
-						self.forwardedA = forwardedA
+					public init(receivedA: ReceivedA, receivedB: ReceivedB) {
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
@@ -1485,8 +1425,6 @@ import SafeDICore
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
-
-					public typealias ForwardedProperties = ForwardedA
 				}
 				""",
 				diagnostics: [
@@ -1539,17 +1477,14 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+					public init(forwardedA: ForwardedA, receivedB: ReceivedB) {
 						self.forwardedA = forwardedA
-						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
 
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
-
-					public typealias ForwardedProperties = ForwardedA
 				}
 				""",
 				diagnostics: [
@@ -1603,7 +1538,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+					public init(forwardedA: ForwardedA, receivedB: ReceivedB) {
 						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
@@ -1612,8 +1547,6 @@ import SafeDICore
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
-
-					public typealias ForwardedProperties = ForwardedA
 				}
 				""",
 				diagnostics: [
@@ -1671,19 +1604,15 @@ import SafeDICore
 				public struct ExampleService: Instantiable {
 				    public init(
 						forwardedA: ForwardedA,
-						receivedA: ReceivedA,
-						receivedB: ReceivedB
+						receivedA: ReceivedA
 					) {
 				        self.forwardedA = forwardedA
 				        self.receivedA = receivedA
-				        self.receivedB = receivedB
 				    }
 
 				    let forwardedA: ForwardedA
 				    let receivedA: ReceivedA
 				    let receivedB: ReceivedB
-
-				    public typealias ForwardedProperties = ForwardedA
 				}
 				""",
 				diagnostics: [
@@ -1740,8 +1669,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-						self.forwardedA = forwardedA
+					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
@@ -1749,8 +1677,6 @@ import SafeDICore
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
-
-					public typealias ForwardedProperties = ForwardedA
 				}
 				""",
 				diagnostics: [
@@ -1810,19 +1736,15 @@ import SafeDICore
 					public init(
 						customizable: String = "",
 						forwardedA: ForwardedA,
-						receivedA: ReceivedA,
 						receivedB: ReceivedB
 					) {
 						self.forwardedA = forwardedA
-						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
 
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
-
-					public typealias ForwardedProperties = ForwardedA
 				}
 				""",
 				diagnostics: [
@@ -1880,17 +1802,14 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, customizable: String = "") {
 						self.forwardedA = forwardedA
 						self.receivedA = receivedA
-						self.receivedB = receivedB
 					}
 
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
-
-					public typealias ForwardedProperties = ForwardedA
 				}
 				""",
 				diagnostics: [
@@ -1945,19 +1864,16 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-					public init(customizable: @escaping (String) -> Void, forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
+					public init(customizable: @escaping (String) -> Void, forwardedA: ForwardedA, receivedA: ReceivedA) {
 						self.customizable = customizable
 						self.forwardedA = forwardedA
 						self.receivedA = receivedA
-						self.receivedB = receivedB
 					}
 
 					let customizable: (String) -> Void
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
-
-					public typealias ForwardedProperties = (customizable: (String) -> Void, forwardedA: ForwardedA)
 				}
 				""",
 				diagnostics: [
@@ -2010,21 +1926,12 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-					public init(
-				received: Received,
-				instantiated: Instantiated,
-				forwarded: Forwarded
-				) {
-				self.received = received
-				self.instantiated = instantiated
-				self.forwarded = forwarded
+					public init() {
 					}
 
 					let received: Received
 					let instantiated: Instantiated
 					let forwarded: Forwarded
-
-					public typealias ForwardedProperties = Forwarded
 				}
 				""",
 				diagnostics: [
@@ -2120,7 +2027,7 @@ import SafeDICore
 						self.receivedA = receivedA
 					}
 
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+					private init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
 						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
@@ -2129,8 +2036,6 @@ import SafeDICore
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
-
-					public typealias ForwardedProperties = ForwardedA
 				}
 				""",
 				diagnostics: [
@@ -2232,8 +2137,7 @@ import SafeDICore
 						self.receivedA = receivedA
 					}
 
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-						self.forwardedA = forwardedA
+					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
@@ -2241,8 +2145,6 @@ import SafeDICore
 					let forwardedA: ForwardedA
 					let receivedA: ReceivedA
 					let receivedB: ReceivedB
-
-					public typealias ForwardedProperties = ForwardedA
 				}
 				""",
 				diagnostics: [
@@ -2309,16 +2211,15 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				@Instantiable
 				public struct ExampleService: Instantiable {
 					init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
 
-					@Forwarded let forwardedA: ForwardedA
-					@Received let receivedA: ReceivedA
-					@Received let receivedB: ReceivedB
+					let forwardedA: ForwardedA
+					let receivedA: ReceivedA
+					let receivedB: ReceivedB
 				}
 				""",
 				diagnostics: [
@@ -2366,19 +2267,9 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public final class UserService: Instantiable {
-				public init(
-				userID: String,
-				userName: String
-				) {
-				self.userID = userID
-				self.userName = userName
-				}
-
 				    let userID: String
 
 				    let userName: String
-
-				    public typealias ForwardedProperties = (userID: String, userName: String)
 				}
 				""",
 				diagnostics: [
@@ -2426,13 +2317,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init(closure: @escaping () -> Void) {
-				self.closure = closure
-				}
-
 				    let closure: () -> Void
-
-				    public typealias ForwardedProperties = () -> Void
 				}
 				""",
 				diagnostics: [
@@ -2474,13 +2359,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init(closure: @escaping @Sendable () -> Void) {
-				self.closure = closure
-				}
-
 				    let closure: @Sendable () -> Void
-
-				    public typealias ForwardedProperties = @Sendable () -> Void
 				}
 				""",
 				diagnostics: [
@@ -2522,10 +2401,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init(instantiatableAInstantiator: Instantiator<ReceivedA>) {
-				self.instantiatableAInstantiator = instantiatableAInstantiator
-				}
-
 				    private let instantiatableAInstantiator: Instantiator<ReceivedA>
 				}
 				""",
@@ -2576,7 +2451,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
+					init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -2585,8 +2460,6 @@ import SafeDICore
 					let a: A
 					let b: B
 					let c: C
-
-					public typealias ForwardedProperties = C
 				}
 				""",
 				diagnostics: [
@@ -2640,7 +2513,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public final class UserService: Instantiable {
-					public final init(a: A, b: B, c: C) {
+					final init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -2649,8 +2522,6 @@ import SafeDICore
 					let a: A
 					let b: B
 					let c: C
-
-					public typealias ForwardedProperties = C
 				}
 				""",
 				diagnostics: [
@@ -2704,7 +2575,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
+					private init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -2713,8 +2584,6 @@ import SafeDICore
 					let a: A
 					let b: B
 					let c: C
-
-					public typealias ForwardedProperties = C
 				}
 				""",
 				diagnostics: [
@@ -2768,7 +2637,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public final class UserService: Instantiable {
-					final public init(a: A, b: B, c: C) {
+					final private init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -2777,8 +2646,6 @@ import SafeDICore
 					let a: A
 					let b: B
 					let c: C
-
-					public typealias ForwardedProperties = C
 				}
 				""",
 				diagnostics: [
@@ -2832,7 +2699,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public final class UserService: Instantiable {
-					public final init(a: A, b: B, c: C) {
+					private final init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -2841,8 +2708,6 @@ import SafeDICore
 					let a: A
 					let b: B
 					let c: C
-
-					public typealias ForwardedProperties = C
 				}
 				""",
 				diagnostics: [
@@ -2902,7 +2767,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
+					init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -2917,8 +2782,6 @@ import SafeDICore
 					let a: A
 					let b: B
 					let c: C
-
-					public typealias ForwardedProperties = C
 				}
 				""",
 				diagnostics: [
@@ -2985,7 +2848,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
+					init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -3001,8 +2864,6 @@ import SafeDICore
 					let a: A
 					let b: B
 					let c: C
-
-					public typealias ForwardedProperties = C
 				}
 				""",
 				diagnostics: [
@@ -3104,7 +2965,7 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				public final class ExampleService: Instantiable {
+				public final class ExampleService {
 				    public init() {}
 				}
 				""",
@@ -3143,7 +3004,7 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				public final class ExampleService: CustomStringConvertible, Instantiable {
+				public final class ExampleService: CustomStringConvertible {
 				    public init() {}
 				    public var description: String { "ExampleService" }
 				}
@@ -3184,7 +3045,7 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				public final class ExampleService: CustomStringConvertible, Instantiable {
+				public final class ExampleService: CustomStringConvertible {
 				    public init() {}
 				    public var description: String { "ExampleService" }
 				}
@@ -3303,7 +3164,7 @@ import SafeDICore
 				        self.receivedA = receivedA
 				    }
 
-				    let receivedA: ReceivedA 
+				    let receivedA: ReceivedA = .init()
 				}
 				""",
 				diagnostics: [
@@ -3348,7 +3209,7 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				public actor ExampleService: Instantiable {
+				actor ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
@@ -3398,7 +3259,7 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				public class ExampleService: Instantiable {
+				class ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
@@ -3448,7 +3309,7 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				public final class ExampleService: Instantiable {
+				final class ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
@@ -3498,7 +3359,7 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				public class ExampleService: Instantiable {
+				internal class ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
@@ -3548,7 +3409,7 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				public class ExampleService: Instantiable {
+				fileprivate class ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
@@ -3598,7 +3459,7 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				public class ExampleService: Instantiable {
+				private class ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
@@ -3648,7 +3509,7 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				public struct ExampleService: Instantiable {
+				struct ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
@@ -3695,11 +3556,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init() {
-				// The following properties are not decorated with the @Instantiated, @Received, or @Forwarded macros, do not have default values, and are not computed properties.
-				uninitializedProperty = <#T##assign_uninitializedProperty#>
-				}
-
 				    let uninitializedProperty: Int
 				}
 				""",
@@ -3745,13 +3601,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init(receivedA: ReceivedA) {
-				self.receivedA = receivedA
-
-				// The following properties are not decorated with the @Instantiated, @Received, or @Forwarded macros, do not have default values, and are not computed properties.
-				uninitializedProperty = <#T##assign_uninitializedProperty#>
-				}
-
 				    let receivedA: ReceivedA
 
 				    let uninitializedProperty: Int
@@ -3805,16 +3654,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService: Instantiable {
-				public init(receivedA: ReceivedA) {
-				self.receivedA = receivedA
-
-				// The following properties are not decorated with the @Instantiated, @Received, or @Forwarded macros, do not have default values, and are not computed properties.
-				uninitializedProperty1 = <#T##assign_uninitializedProperty1#>
-				uninitializedProperty2 = <#T##assign_uninitializedProperty2#>
-				uninitializedProperty3 = <#T##assign_uninitializedProperty3#>
-				(uninitializedProperty4, uninitializedProperty5) = <#T##assign_(uninitializedProperty4, uninitializedProperty5)#>
-				}
-
 				    let receivedA: ReceivedA
 
 				    var uninitializedProperty1: Int
@@ -3870,7 +3709,7 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				extension ExampleService: Instantiable {
+				extension ExampleService {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
 				""",
@@ -3910,7 +3749,7 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				extension ExampleService: CustomStringConvertible, Instantiable {
+				extension ExampleService: CustomStringConvertible {
 				    public static func instantiate() -> ExampleService { fatalError() }
 
 				    public var description: String { "ExampleService" }
@@ -3954,7 +3793,7 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				extension ExampleService: CustomStringConvertible, Instantiable {
+				extension ExampleService: CustomStringConvertible {
 				    public static func instantiate() -> ExampleService { fatalError() }
 
 				    public var description: String { "ExampleService" }
@@ -3996,10 +3835,6 @@ import SafeDICore
 				""",
 				expandedSource: """
 				extension ExampleService: Instantiable {
-				public static func instantiate() -> ExampleService
-				{}
-
-
 				}
 				""",
 				diagnostics: [
@@ -4040,7 +3875,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
+				    static func instantiate() -> ExampleService { fatalError() }
 				}
 				""",
 				diagnostics: [
@@ -4078,7 +3913,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
+				    public func instantiate() -> ExampleService { fatalError() }
 				}
 				""",
 				diagnostics: [
@@ -4116,7 +3951,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
+				    func instantiate() -> ExampleService { fatalError() }
 				}
 				""",
 				diagnostics: [
@@ -4154,7 +3989,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
+				    public static func instantiate() -> OtherExampleService { fatalError() }
 				}
 				""",
 				diagnostics: [
@@ -4192,7 +4027,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
+				    public static func instantiate() -> [ExampleService] { fatalError() }
 				}
 				""",
 				diagnostics: [
@@ -4230,7 +4065,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
+				    public static func instantiate() async -> ExampleService { fatalError() }
 				}
 				""",
 				diagnostics: [
@@ -4268,7 +4103,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
+				    public static func instantiate() throws -> ExampleService { fatalError() }
 				}
 				""",
 				diagnostics: [
@@ -4306,7 +4141,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
+				    public static func instantiate() async throws -> ExampleService { fatalError() }
 				}
 				""",
 				diagnostics: [
@@ -4344,7 +4179,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
+				    public static func instantiate<T>() -> ExampleService { fatalError() }
 				}
 				""",
 				diagnostics: [
@@ -4382,7 +4217,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				extension Array: Instantiable {
-				    public static func instantiate() -> Array { fatalError() }
+				    public static func instantiate() -> Array where Element == String { fatalError() }
 				}
 				""",
 				diagnostics: [
@@ -4419,7 +4254,7 @@ import SafeDICore
 				}
 				""",
 				expandedSource: """
-				extension Array: Instantiable {
+				extension Array: Instantiable where Element == String {
 				    public static func instantiate() -> Array { fatalError() }
 				}
 				""",

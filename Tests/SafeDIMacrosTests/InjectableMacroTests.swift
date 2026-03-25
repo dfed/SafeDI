@@ -19,7 +19,7 @@
 // SOFTWARE.
 
 import SwiftSyntaxMacros
-import SwiftSyntaxMacrosTestSupport
+import SwiftSyntaxMacrosGenericTestSupport
 import Testing
 
 import SafeDICore
@@ -218,7 +218,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService {
-				    @Instantiated(fulfilledByType: "LoginViewController") let loginViewControllerBuilder: Instantiator<UIViewController>
+				    let loginViewControllerBuilder: Instantiator<UIViewController>
 				}
 				""",
 				diagnostics: [
@@ -243,7 +243,7 @@ import SafeDICore
 				""",
 				expandedSource: """
 				public struct ExampleService {
-				    @Instantiated let loginViewControllerBuilder: ErasedInstantiator<UIViewController>
+				    let loginViewControllerBuilder: ErasedInstantiator<UIViewController>
 				}
 				""",
 				diagnostics: [
@@ -276,7 +276,7 @@ import SafeDICore
 				        self.instantiatedA = instantiatedA
 				    }
 
-				    @Received static let instantiatedA: InstantiatedA
+				    static let instantiatedA: InstantiatedA
 				}
 				""",
 				diagnostics: [
@@ -299,7 +299,6 @@ import SafeDICore
 				protocol ExampleService {}
 				""",
 				expandedSource: """
-				@Instantiated
 				protocol ExampleService {}
 				""",
 				diagnostics: [
@@ -334,7 +333,7 @@ import SafeDICore
 				    }
 
 				    static let fulfilledByType = "ConcreteType"
-				    @Instantiated(fulfilledByType: fulfilledByType) let instantiatedA: InstantiatedA
+				    let instantiatedA: InstantiatedA
 				}
 				""",
 				diagnostics: [
@@ -362,16 +361,16 @@ import SafeDICore
 				    @Instantiated(fulfilledByType: "\\(Self.fulfilledByType)") let instantiatedA: InstantiatedA
 				}
 				""",
-				expandedSource: #"""
+				expandedSource: """
 				public struct ExampleService {
 				    init(instantiatedA: InstantiatedA) {
 				        self.instantiatedA = instantiatedA
 				    }
 
 				    static let fulfilledByType = "ConcreteType"
-				    @Instantiated(fulfilledByType: "\(Self.fulfilledByType)") let instantiatedA: InstantiatedA
+				    let instantiatedA: InstantiatedA
 				}
-				"""#,
+				""",
 				diagnostics: [
 					DiagnosticSpec(
 						message: "The argument `fulfilledByType` must be a string literal",
@@ -402,7 +401,7 @@ import SafeDICore
 				        self.instantiatedA = instantiatedA
 				    }
 
-				    @Instantiated(fulfilledByType: "ConcreteType?") let instantiatedA: InstantiatedA
+				    let instantiatedA: InstantiatedA
 				}
 				""",
 				diagnostics: [
@@ -435,7 +434,7 @@ import SafeDICore
 				        self.instantiatedA = instantiatedA
 				    }
 
-				    @Instantiated(fulfilledByType: "ConcreteType!") let instantiatedA: InstantiatedA
+				    let instantiatedA: InstantiatedA
 				}
 				""",
 				diagnostics: [
@@ -464,7 +463,7 @@ import SafeDICore
 				@Instantiable
 				public struct ExampleService {
 				    static let instantiatedAName: StaticString = "instantiatedA"
-				    @Received(fulfilledByDependencyNamed: instantiatedAName, ofType: InstantiatedA.self) let receivedA: ReceivedA
+				    let receivedA: ReceivedA
 				}
 				""",
 				diagnostics: [
@@ -491,7 +490,7 @@ import SafeDICore
 				expandedSource: """
 				@Instantiable
 				public struct ExampleService {
-				    @Received(fulfilledByDependencyNamed: "instantiatedA", ofType: "InstantiatedA") let receivedA: ReceivedA
+				    let receivedA: ReceivedA
 				}
 				""",
 				diagnostics: [
@@ -520,7 +519,7 @@ import SafeDICore
 				@Instantiable
 				public struct ExampleService {
 				    static let erasedToConcreteExistential = true
-				    @Received(fulfilledByDependencyNamed: "receivedA", ofType: ReceivedA.self, erasedToConcreteExistential: erasedToConcreteExistential) let receivedA: AnyReceivedA
+				    let receivedA: AnyReceivedA
 				}
 				""",
 				diagnostics: [
@@ -549,7 +548,7 @@ import SafeDICore
 				@Instantiable
 				public struct ExampleService {
 					static let onlyIfAvailable = true
-					@Received(onlyIfAvailable: onlyIfAvailable) let receivedA: AnyReceivedA?
+					let receivedA: AnyReceivedA?
 				}
 				""",
 				diagnostics: [
@@ -576,14 +575,14 @@ import SafeDICore
 				expandedSource: """
 				@Instantiable
 				public struct ExampleService {
-					@Received(onlyIfAvailable: true) let receivedA: AnyReceivedA
+					let receivedA: AnyReceivedA
 				}
 				""",
 				diagnostics: [
 					DiagnosticSpec(
 						message: "The type of a dependency decorated with `onlyIfAvailable: true` must be marked as optional utilizing the `?` spelling",
 						line: 3,
-						column: 35,
+						column: 39,
 						severity: .error,
 						fixIts: [FixItSpec(message: "Mark the type as optional using `?`")]
 					),

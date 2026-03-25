@@ -78,7 +78,7 @@ let package = Package(
 			dependencies: [
 				"SafeDIMacros",
 				"SafeDICore",
-				.product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
+				.product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
