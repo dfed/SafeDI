@@ -846,6 +846,36 @@ import SafeDICore
 		}
 
 		@Test
+		func declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithMultipleForwardedDependencies() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(userID: String, userName: String) {
+				        self.userID = userID
+				        self.userName = userName
+				    }
+				    @Forwarded let userID: String
+				    @Forwarded let userName: String
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(userID: String, userName: String) {
+				        self.userID = userID
+				        self.userName = userName
+				    }
+				    let userID: String
+				    let userName: String
+
+				    public typealias ForwardedProperties = (userID: String, userName: String)
+				}
+				""",
+				macros: instantiableTestMacros
+			)
+		}
+
+		@Test
 		func declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithDefaultArguments() {
 			assertMacroExpansion(
 				"""
