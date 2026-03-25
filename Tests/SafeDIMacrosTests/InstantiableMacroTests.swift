@@ -257,11 +257,11 @@ import SafeDICore
 				diagnostics: [
 					DiagnosticSpec(
 						message: """
-							Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
+						Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
 
-							The following dependencies were found on Foo that violated this contract:
-							dependency: Dependency
-							""",
+						The following dependencies were found on Foo that violated this contract:
+						dependency: Dependency
+						""",
 						line: 1,
 						column: 1,
 						severity: .error
@@ -297,11 +297,11 @@ import SafeDICore
 				diagnostics: [
 					DiagnosticSpec(
 						message: """
-							Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
+						Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
 
-							The following dependencies were found on Foo that violated this contract:
-							dependency: Dependency
-							""",
+						The following dependencies were found on Foo that violated this contract:
+						dependency: Dependency
+						""",
 						line: 1,
 						column: 1,
 						severity: .error
@@ -432,11 +432,11 @@ import SafeDICore
 				diagnostics: [
 					DiagnosticSpec(
 						message: """
-							Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
+						Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
 
-							The following dependencies were found on Foo that violated this contract:
-							bar: Bar
-							""",
+						The following dependencies were found on Foo that violated this contract:
+						bar: Bar
+						""",
 						line: 1,
 						column: 1,
 						severity: .error
