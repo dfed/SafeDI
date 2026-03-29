@@ -44,15 +44,15 @@ import SafeDICore
 			assertMacroExpansion(
 				"""
 				@SafeDIConfiguration
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = ["MyModule"]
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = ["MyModule"]
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
 				expandedSource: """
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = ["MyModule"]
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = ["MyModule"]
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
 				macros: safeDIConfigurationTestMacros
@@ -64,15 +64,15 @@ import SafeDICore
 			assertMacroExpansion(
 				"""
 				@SafeDIConfiguration
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = []
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
 				expandedSource: """
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = []
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
 				macros: safeDIConfigurationTestMacros
@@ -84,15 +84,15 @@ import SafeDICore
 			assertMacroExpansion(
 				"""
 				@SafeDIConfiguration
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = ["ModuleA", "ModuleB"]
-				    let additionalDirectoriesToInclude: [StaticString] = ["DirA", "DirB"]
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = ["ModuleA", "ModuleB"]
+				    static let additionalDirectoriesToInclude: [StaticString] = ["DirA", "DirB"]
 				}
 				""",
 				expandedSource: """
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = ["ModuleA", "ModuleB"]
-				    let additionalDirectoriesToInclude: [StaticString] = ["DirA", "DirB"]
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = ["ModuleA", "ModuleB"]
+				    static let additionalDirectoriesToInclude: [StaticString] = ["DirA", "DirB"]
 				}
 				""",
 				macros: safeDIConfigurationTestMacros
@@ -107,19 +107,19 @@ import SafeDICore
 				"""
 				@SafeDIConfiguration
 				class MyConfiguration {
-				    let additionalImportedModules: [StaticString] = []
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
 				expandedSource: """
 				class MyConfiguration {
-				    let additionalImportedModules: [StaticString] = []
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@SafeDIConfiguration must decorate a struct",
+						message: "@SafeDIConfiguration must decorate an enum",
 						line: 1,
 						column: 1
 					),
@@ -129,18 +129,24 @@ import SafeDICore
 		}
 
 		@Test
-		func throwsErrorWhenDecoratingEnum() {
+		func throwsErrorWhenDecoratingStruct() {
 			assertMacroExpansion(
 				"""
 				@SafeDIConfiguration
-				enum MyConfiguration {}
+				struct MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
+				}
 				""",
 				expandedSource: """
-				enum MyConfiguration {}
+				struct MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
+				}
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@SafeDIConfiguration must decorate a struct",
+						message: "@SafeDIConfiguration must decorate an enum",
 						line: 1,
 						column: 1
 					),
@@ -154,15 +160,15 @@ import SafeDICore
 			assertMacroExpansion(
 				"""
 				@SafeDIConfiguration
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = someVariable
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = someVariable
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
 				expandedSource: """
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = someVariable
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = someVariable
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
 				diagnostics: [
@@ -181,15 +187,15 @@ import SafeDICore
 			assertMacroExpansion(
 				"""
 				@SafeDIConfiguration
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = []
-				    let additionalDirectoriesToInclude: [StaticString] = someVariable
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = someVariable
 				}
 				""",
 				expandedSource: """
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = []
-				    let additionalDirectoriesToInclude: [StaticString] = someVariable
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = someVariable
 				}
 				""",
 				diagnostics: [
@@ -208,15 +214,15 @@ import SafeDICore
 			assertMacroExpansion(
 				"""
 				@SafeDIConfiguration
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = ["\\(someVar)"]
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = ["\\(someVar)"]
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
 				expandedSource: """
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = ["\\(someVar)"]
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = ["\\(someVar)"]
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
 				diagnostics: [
@@ -237,36 +243,36 @@ import SafeDICore
 			assertMacroExpansion(
 				"""
 				@SafeDIConfiguration
-				struct MyConfiguration {
+				enum MyConfiguration {
 				}
 				""",
 				expandedSource: """
-				struct MyConfiguration {
+				enum MyConfiguration {
 				}
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@SafeDIConfiguration-decorated type must have a `let additionalImportedModules: [StaticString]` property",
+						message: "@SafeDIConfiguration-decorated type must have a `static let additionalImportedModules: [StaticString]` property",
 						line: 2,
-						column: 24,
+						column: 22,
 						fixIts: [
-							FixItSpec(message: "Add `let additionalImportedModules: [StaticString]` property"),
+							FixItSpec(message: "Add `static let additionalImportedModules: [StaticString]` property"),
 						]
 					),
 				],
 				macros: safeDIConfigurationTestMacros,
 				applyFixIts: [
-					"Add `let additionalImportedModules: [StaticString]` property",
+					"Add `static let additionalImportedModules: [StaticString]` property",
 				],
 				fixedSource: """
 				@SafeDIConfiguration
-				struct MyConfiguration {
+				enum MyConfiguration {
 				/// The names of modules to import in the generated dependency tree.
 				/// This list is in addition to the import statements found in files that declare @Instantiable types.
-				let additionalImportedModules: [StaticString] = []
+				static let additionalImportedModules: [StaticString] = []
 				/// Directories containing Swift files to include, relative to the executing directory.
 				/// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-				let additionalDirectoriesToInclude: [StaticString] = []
+				static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				"""
 			)
@@ -277,36 +283,36 @@ import SafeDICore
 			assertMacroExpansion(
 				"""
 				@SafeDIConfiguration
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = []
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
 				}
 				""",
 				expandedSource: """
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = []
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
 				}
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@SafeDIConfiguration-decorated type must have a `let additionalDirectoriesToInclude: [StaticString]` property",
+						message: "@SafeDIConfiguration-decorated type must have a `static let additionalDirectoriesToInclude: [StaticString]` property",
 						line: 2,
-						column: 24,
+						column: 22,
 						fixIts: [
-							FixItSpec(message: "Add `let additionalDirectoriesToInclude: [StaticString]` property"),
+							FixItSpec(message: "Add `static let additionalDirectoriesToInclude: [StaticString]` property"),
 						]
 					),
 				],
 				macros: safeDIConfigurationTestMacros,
 				applyFixIts: [
-					"Add `let additionalDirectoriesToInclude: [StaticString]` property",
+					"Add `static let additionalDirectoriesToInclude: [StaticString]` property",
 				],
 				fixedSource: """
 				@SafeDIConfiguration
-				struct MyConfiguration {
+				enum MyConfiguration {
 				/// Directories containing Swift files to include, relative to the executing directory.
 				/// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-				let additionalDirectoriesToInclude: [StaticString] = []
-				    let additionalImportedModules: [StaticString] = []
+				static let additionalDirectoriesToInclude: [StaticString] = []
+				    static let additionalImportedModules: [StaticString] = []
 				}
 				"""
 			)
@@ -317,36 +323,36 @@ import SafeDICore
 			assertMacroExpansion(
 				"""
 				@SafeDIConfiguration
-				struct MyConfiguration {
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				enum MyConfiguration {
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
 				expandedSource: """
-				struct MyConfiguration {
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				enum MyConfiguration {
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@SafeDIConfiguration-decorated type must have a `let additionalImportedModules: [StaticString]` property",
+						message: "@SafeDIConfiguration-decorated type must have a `static let additionalImportedModules: [StaticString]` property",
 						line: 2,
-						column: 24,
+						column: 22,
 						fixIts: [
-							FixItSpec(message: "Add `let additionalImportedModules: [StaticString]` property"),
+							FixItSpec(message: "Add `static let additionalImportedModules: [StaticString]` property"),
 						]
 					),
 				],
 				macros: safeDIConfigurationTestMacros,
 				applyFixIts: [
-					"Add `let additionalImportedModules: [StaticString]` property",
+					"Add `static let additionalImportedModules: [StaticString]` property",
 				],
 				fixedSource: """
 				@SafeDIConfiguration
-				struct MyConfiguration {
+				enum MyConfiguration {
 				/// The names of modules to import in the generated dependency tree.
 				/// This list is in addition to the import statements found in files that declare @Instantiable types.
-				let additionalImportedModules: [StaticString] = []
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				"""
 			)

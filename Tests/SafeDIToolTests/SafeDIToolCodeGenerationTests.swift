@@ -5999,9 +5999,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@SafeDIConfiguration
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = ["TestModule"]
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = ["TestModule"]
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
 				"""
@@ -6035,9 +6035,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@SafeDIConfiguration
-				struct MyConfiguration {
-				    let additionalImportedModules: [StaticString] = ["ModA"]
-				    let additionalDirectoriesToInclude: [StaticString] = []
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = ["ModA"]
+				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
 			],

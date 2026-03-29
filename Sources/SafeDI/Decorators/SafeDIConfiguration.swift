@@ -18,10 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// Marks a struct as providing SafeDI configuration.
+/// Marks an enum as providing SafeDI configuration.
 ///
-/// A struct decorated with `@SafeDIConfiguration` provides build-time configuration for SafeDI's code generation plugin.
-/// The decorated struct must declare two properties:
+/// An enum decorated with `@SafeDIConfiguration` provides build-time configuration for SafeDI's code generation plugin.
+/// The decorated enum must declare two static properties:
 ///
 /// - `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types.
 /// - `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
@@ -31,14 +31,14 @@
 /// Example:
 ///
 ///     @SafeDIConfiguration
-///     struct MyConfiguration {
+///     enum MyConfiguration {
 ///         /// The names of modules to import in the generated dependency tree.
 ///         /// This list is in addition to the import statements found in files that declare @Instantiable types.
-///         let additionalImportedModules: [StaticString] = ["MyModule", "OtherModule"]
+///         static let additionalImportedModules: [StaticString] = ["MyModule", "OtherModule"]
 ///
 ///         /// Directories containing Swift files to include, relative to the executing directory.
 ///         /// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-///         let additionalDirectoriesToInclude: [StaticString] = ["Sources/OtherModule"]
+///         static let additionalDirectoriesToInclude: [StaticString] = ["Sources/OtherModule"]
 ///     }
 @attached(peer)
 public macro SafeDIConfiguration() = #externalMacro(module: "SafeDIMacros", type: "SafeDIConfigurationMacro")

@@ -21,12 +21,12 @@
 import SafeDI
 
 @SafeDIConfiguration
-struct ExampleSafeDIConfiguration {
+enum ExampleSafeDIConfiguration {
     /// The names of modules to import in the generated dependency tree.
     /// This list is in addition to the import statements found in files that declare @Instantiable types.
-    let additionalImportedModules: [StaticString] = []
+    static let additionalImportedModules: [StaticString] = []
 
     /// Directories containing Swift files to include, relative to the executing directory.
     /// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-    let additionalDirectoriesToInclude: [StaticString] = ["Subproject"]
+    static let additionalDirectoriesToInclude: [StaticString] = ["Subproject"]
 }

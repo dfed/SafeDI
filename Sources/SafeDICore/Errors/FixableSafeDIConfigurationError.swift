@@ -21,7 +21,7 @@
 import SwiftDiagnostics
 
 public enum FixableSafeDIConfigurationError: DiagnosticError {
-    case decoratingNonStruct
+    case decoratingNonEnum
     case missingAdditionalImportedModulesProperty
     case missingAdditionalDirectoriesToIncludeProperty
     case additionalImportedModulesNotStringLiteralArray
@@ -29,12 +29,12 @@ public enum FixableSafeDIConfigurationError: DiagnosticError {
 
     public var description: String {
         switch self {
-        case .decoratingNonStruct:
-            "@\(SafeDIConfigurationVisitor.macroName) must decorate a struct"
+        case .decoratingNonEnum:
+            "@\(SafeDIConfigurationVisitor.macroName) must decorate an enum"
         case .missingAdditionalImportedModulesProperty:
-            "@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `let additionalImportedModules: [StaticString]` property"
+            "@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `static let additionalImportedModules: [StaticString]` property"
         case .missingAdditionalDirectoriesToIncludeProperty:
-            "@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `let additionalDirectoriesToInclude: [StaticString]` property"
+            "@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `static let additionalDirectoriesToInclude: [StaticString]` property"
         case .additionalImportedModulesNotStringLiteralArray:
             "The `additionalImportedModules` property must be initialized with an array of string literals"
         case .additionalDirectoriesToIncludeNotStringLiteralArray:
@@ -56,7 +56,7 @@ public enum FixableSafeDIConfigurationError: DiagnosticError {
         init(error: FixableSafeDIConfigurationError) {
             diagnosticID = MessageID(domain: "\(Self.self)", id: error.description)
             severity = switch error {
-            case .decoratingNonStruct,
+            case .decoratingNonEnum,
                  .missingAdditionalImportedModulesProperty,
                  .missingAdditionalDirectoriesToIncludeProperty,
                  .additionalImportedModulesNotStringLiteralArray,
@@ -76,12 +76,12 @@ public enum FixableSafeDIConfigurationError: DiagnosticError {
     private struct SafeDIConfigurationFixItMessage: FixItMessage {
         init(error: FixableSafeDIConfigurationError) {
             message = switch error {
-            case .decoratingNonStruct:
-                "Replace with a struct"
+            case .decoratingNonEnum:
+                "Replace with an enum"
             case .missingAdditionalImportedModulesProperty:
-                "Add `let additionalImportedModules: [StaticString]` property"
+                "Add `static let additionalImportedModules: [StaticString]` property"
             case .missingAdditionalDirectoriesToIncludeProperty:
-                "Add `let additionalDirectoriesToInclude: [StaticString]` property"
+                "Add `static let additionalDirectoriesToInclude: [StaticString]` property"
             case .additionalImportedModulesNotStringLiteralArray:
                 "Replace with an array of string literals"
             case .additionalDirectoriesToIncludeNotStringLiteralArray:

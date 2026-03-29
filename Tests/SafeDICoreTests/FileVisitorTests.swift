@@ -307,9 +307,9 @@ struct FileVisitorTests {
 		let fileVisitor = FileVisitor()
 		fileVisitor.walk(Parser.parse(source: """
 		@SafeDIConfiguration
-		struct MyConfiguration {
-		    let additionalImportedModules: [StaticString] = ["ModuleA", "ModuleB"]
-		    let additionalDirectoriesToInclude: [StaticString] = ["DirA"]
+		enum MyConfiguration {
+		    static let additionalImportedModules: [StaticString] = ["ModuleA", "ModuleB"]
+		    static let additionalDirectoriesToInclude: [StaticString] = ["DirA"]
 		}
 		"""))
 		#expect(fileVisitor.configurations == [
@@ -326,9 +326,9 @@ struct FileVisitorTests {
 		let fileVisitor = FileVisitor()
 		fileVisitor.walk(Parser.parse(source: """
 		@SafeDIConfiguration
-		struct MyConfiguration {
-		    let additionalImportedModules: [StaticString] = []
-		    let additionalDirectoriesToInclude: [StaticString] = []
+		enum MyConfiguration {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = []
 		}
 		"""))
 		#expect(fileVisitor.configurations == [
@@ -344,9 +344,9 @@ struct FileVisitorTests {
 		let fileVisitor = FileVisitor()
 		fileVisitor.walk(Parser.parse(source: """
 		@SafeDIConfiguration
-		struct MyConfiguration {
-		    let additionalImportedModules: [StaticString] = ["ModuleA"]
-		    let additionalDirectoriesToInclude: [StaticString] = []
+		enum MyConfiguration {
+		    static let additionalImportedModules: [StaticString] = ["ModuleA"]
+		    static let additionalDirectoriesToInclude: [StaticString] = []
 		}
 
 		@Instantiable

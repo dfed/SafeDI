@@ -72,12 +72,7 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-		if node.attributes.safeDIConfigurationMacro != nil {
-			let configVisitor = SafeDIConfigurationVisitor()
-			configVisitor.walk(node)
-			configurations.append(configVisitor.configuration)
-		}
-		return visitDecl(node)
+		visitDecl(node)
 	}
 
 	public override func visitPost(_: StructDeclSyntax) {
@@ -85,6 +80,11 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+		if node.attributes.safeDIConfigurationMacro != nil {
+			let configVisitor = SafeDIConfigurationVisitor()
+			configVisitor.walk(node)
+			configurations.append(configVisitor.configuration)
+		}
 		// Enums can't be instantiable because they can't have `let` properties.
 		// However, they can have nested types within them that are instantiable.
 		enterTypeNamed(node.name.text)

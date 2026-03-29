@@ -29,12 +29,12 @@ public struct SafeDIConfigurationMacro: PeerMacro {
         providingPeersOf declaration: some DeclSyntaxProtocol,
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
-        guard let structDecl = StructDeclSyntax(declaration) else {
-            throw SafeDIConfigurationError.decoratingNonStruct
+        guard let enumDecl = EnumDeclSyntax(declaration) else {
+            throw SafeDIConfigurationError.decoratingNonEnum
         }
 
         let visitor = SafeDIConfigurationVisitor()
-        visitor.walk(structDecl)
+        visitor.walk(enumDecl)
 
         var hasMissingProperties = false
 
@@ -51,7 +51,7 @@ public struct SafeDIConfigurationMacro: PeerMacro {
         }
 
         if hasMissingProperties {
-            var modifiedDecl = structDecl
+            var modifiedDecl = enumDecl
             var membersToInsert = [MemberBlockItemSyntax]()
             if !visitor.foundAdditionalImportedModules {
                 membersToInsert.append(MemberBlockItemSyntax(
@@ -59,7 +59,7 @@ public struct SafeDIConfigurationMacro: PeerMacro {
                     decl: DeclSyntax("""
                         /// The names of modules to import in the generated dependency tree.
                         /// This list is in addition to the import statements found in files that declare @Instantiable types.
-                        let \(raw: SafeDIConfigurationVisitor.additionalImportedModulesPropertyName): [StaticString] = []
+                        static let \(raw: SafeDIConfigurationVisitor.additionalImportedModulesPropertyName): [StaticString] = []
                         """)
                 ))
             }
@@ -69,7 +69,7 @@ public struct SafeDIConfigurationMacro: PeerMacro {
                     decl: DeclSyntax("""
                         /// Directories containing Swift files to include, relative to the executing directory.
                         /// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-                        let \(raw: SafeDIConfigurationVisitor.additionalDirectoriesToIncludePropertyName): [StaticString] = []
+                        static let \(raw: SafeDIConfigurationVisitor.additionalDirectoriesToIncludePropertyName): [StaticString] = []
                         """)
                 ))
             }
@@ -85,11 +85,11 @@ public struct SafeDIConfigurationMacro: PeerMacro {
                 .missingAdditionalDirectoriesToIncludeProperty
             }
             context.diagnose(Diagnostic(
-                node: Syntax(structDecl.memberBlock),
+                node: Syntax(enumDecl.memberBlock),
                 error: missingPropertyError,
                 changes: [
                     .replace(
-                        oldNode: Syntax(structDecl),
+                        oldNode: Syntax(enumDecl),
                         newNode: Syntax(modifiedDecl)
                     ),
                 ]
@@ -104,14 +104,14 @@ public struct SafeDIConfigurationMacro: PeerMacro {
     // MARK: - SafeDIConfigurationError
 
     private enum SafeDIConfigurationError: Error, CustomStringConvertible {
-        case decoratingNonStruct
+        case decoratingNonEnum
         case additionalImportedModulesNotStringLiteralArray
         case additionalDirectoriesToIncludeNotStringLiteralArray
 
         var description: String {
             switch self {
-            case .decoratingNonStruct:
-                "@\(SafeDIConfigurationVisitor.macroName) must decorate a struct"
+            case .decoratingNonEnum:
+                "@\(SafeDIConfigurationVisitor.macroName) must decorate an enum"
             case .additionalImportedModulesNotStringLiteralArray:
                 "The `\(SafeDIConfigurationVisitor.additionalImportedModulesPropertyName)` property must be initialized with an array of string literals"
             case .additionalDirectoriesToIncludeNotStringLiteralArray:

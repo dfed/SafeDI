@@ -1977,9 +1977,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@SafeDIConfiguration
-					struct MyConfiguration {
-					    let additionalImportedModules: [StaticString] = ["TestModule"]
-					    let additionalDirectoriesToInclude: [StaticString] = []
+					enum MyConfiguration {
+					    static let additionalImportedModules: [StaticString] = ["TestModule"]
+					    static let additionalDirectoriesToInclude: [StaticString] = []
 					}
 					""",
 				],

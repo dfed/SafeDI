@@ -108,14 +108,14 @@ If your Xcode project comprises multiple modules, follow the above steps, and th
 import SafeDI
 
 @SafeDIConfiguration
-struct MySafeDIConfiguration {
+enum MySafeDIConfiguration {
     /// Directories containing Swift files to include, relative to the executing directory.
     /// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-    let additionalDirectoriesToInclude: [StaticString] = ["Subproject"]
+    static let additionalDirectoriesToInclude: [StaticString] = ["Subproject"]
 
     /// The names of modules to import in the generated dependency tree.
     /// This list is in addition to the import statements found in files that declare @Instantiable types.
-    let additionalImportedModules: [StaticString] = []
+    static let additionalImportedModules: [StaticString] = []
 }
 ```
 
@@ -139,9 +139,9 @@ Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift p
 import SafeDI
 
 @SafeDIConfiguration
-struct MySafeDIConfiguration {
-    let additionalImportedModules: [StaticString] = ["MyModule"]
-    let additionalDirectoriesToInclude: [StaticString] = []
+enum MySafeDIConfiguration {
+    static let additionalImportedModules: [StaticString] = ["MyModule"]
+    static let additionalDirectoriesToInclude: [StaticString] = []
 }
 ```
 
