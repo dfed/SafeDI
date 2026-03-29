@@ -105,10 +105,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 				imports: initialModule.imports + additionalModule.imports,
 				instantiables: initialModule.instantiables + additionalModule.instantiables,
 				configurations: initialModule.configurations,
-				filesWithUnexpectedNodes: {
-					let all = (initialModule.filesWithUnexpectedNodes ?? []) + (additionalModule.filesWithUnexpectedNodes ?? [])
-					return all.isEmpty ? nil : all
-				}()
+				filesWithUnexpectedNodes: initialModule.filesWithUnexpectedNodes.map { $0 + (additionalModule.filesWithUnexpectedNodes ?? []) } ?? additionalModule.filesWithUnexpectedNodes
 			)
 		} else {
 			module = initialModule
