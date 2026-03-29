@@ -18,14 +18,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import SwiftCompilerPlugin
-import SwiftSyntaxMacros
+import SafeDI
 
-@main
-struct SafeDIMacroPlugin: CompilerPlugin {
-	let providingMacros: [Macro.Type] = [
-		InstantiableMacro.self,
-		InjectableMacro.self,
-		SafeDIConfigurationMacro.self,
-	]
+@SafeDIConfiguration
+enum ExampleSafeDIConfiguration {
+	/// The names of modules to import in the generated dependency tree.
+	/// This list is in addition to the import statements found in files that declare @Instantiable types.
+	static let additionalImportedModules: [StaticString] = []
+
+	/// Directories containing Swift files to include, relative to the executing directory.
+	/// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
+	static let additionalDirectoriesToInclude: [StaticString] = ["Subproject"]
 }

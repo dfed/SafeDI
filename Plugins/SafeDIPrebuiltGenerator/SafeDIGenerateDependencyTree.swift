@@ -55,6 +55,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 				encoding: .utf8
 			)
 
+		// TODO: Delete CSV support in version 2.0. Use @SafeDIConfiguration instead.
 		let includeCSV = context.safediFolder.appending(components: "configuration", "include.csv")
 		let includeArguments: [String] = if FileManager.default.fileExists(atPath: includeCSV.path(percentEncoded: false)) {
 			[
@@ -64,6 +65,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		} else {
 			[]
 		}
+		// TODO: Delete CSV support in version 2.0. Use @SafeDIConfiguration instead.
 		let additionalImportedModulesCSV = context.safediFolder.appending(components: "configuration", "additionalImportedModules.csv")
 		let additionalImportedModulesArguments: [String] = if FileManager.default.fileExists(atPath: additionalImportedModulesCSV.path(percentEncoded: false)) {
 			[
@@ -159,8 +161,8 @@ extension Target {
 			// to inspect target dependencies. As a result, this Xcode plugin
 			// only works if it is running on a single-module project, or if
 			// all `@Instantiable`-decorated types are in the target module,
-			// or if a .safedi/configuration/include.csv directs the plugin
-			// to search additional modules for Swift files.
+			// or if a @SafeDIConfiguration type's `additionalDirectoriesToInclude`
+			// directs the plugin to search additional modules for Swift files.
 			// https://github.com/apple/swift-package-manager/issues/6003
 			let inputSwiftFiles = target
 				.inputFiles
@@ -182,6 +184,7 @@ extension Target {
 					encoding: .utf8
 				)
 
+			// TODO: Delete CSV support in version 2.0. Use @SafeDIConfiguration instead.
 			let includeCSV = context.safediFolder.appending(components: "configuration", "include.csv")
 			let includeArguments: [String] = if FileManager.default.fileExists(atPath: includeCSV.path(percentEncoded: false)) {
 				[
@@ -191,6 +194,7 @@ extension Target {
 			} else {
 				[]
 			}
+			// TODO: Delete CSV support in version 2.0. Use @SafeDIConfiguration instead.
 			let additionalImportedModulesCSV = context.safediFolder.appending(components: "configuration", "additionalImportedModules.csv")
 			let additionalImportedModulesArguments: [String] = if FileManager.default.fileExists(atPath: additionalImportedModulesCSV.path(percentEncoded: false)) {
 				[
