@@ -99,7 +99,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 		// find and parse swift files in those directories and merge with initial results.
 		let module: ModuleInfo
 		if let sourceConfiguration, !sourceConfiguration.additionalDirectoriesToInclude.isEmpty {
-			let additionalFiles = try await findSwiftFiles(additionalDirectories: sourceConfiguration.additionalDirectoriesToInclude)
+			let additionalFiles = try await Self.findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude)
 			let additionalModule = try await Self.parseSwiftFiles(additionalFiles)
 			module = ModuleInfo(
 				imports: initialModule.imports + additionalModule.imports,
@@ -224,20 +224,22 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 	}
 
 	private func findSwiftFiles(additionalDirectories: [String]) async throws -> Set<String> {
+		var swiftFiles = try await Self.findSwiftFiles(inDirectories: additionalDirectories)
+		if let swiftSourcesFilePath {
+			let sourcesFromFile = try String(contentsOfFile: swiftSourcesFilePath, encoding: .utf8)
+				.components(separatedBy: CharacterSet(arrayLiteral: ","))
+				.removingEmpty()
+			swiftFiles.formUnion(sourcesFromFile)
+		}
+		return swiftFiles
+	}
+
+	private static func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<String> {
 		try await withThrowingTaskGroup(
 			of: [String].self,
 			returning: Set<String>.self
 		) { taskGroup in
-			taskGroup.addTask {
-				if let swiftSourcesFilePath {
-					try String(contentsOfFile: swiftSourcesFilePath, encoding: .utf8)
-						.components(separatedBy: CharacterSet(arrayLiteral: ","))
-						.removingEmpty()
-				} else {
-					[]
-				}
-			}
-			for included in additionalDirectories {
+			for included in directories {
 				taskGroup.addTask {
 					let includedURL = included.asFileURL
 					let includedFileEnumerator = Self.fileFinder
