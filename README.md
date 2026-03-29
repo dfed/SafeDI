@@ -102,7 +102,7 @@ SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin wo
 
 If your first-party code comprises a single module in an `.xcodeproj`, once your Xcode project depends on the SafeDI package you can integrate the Swift Package Plugin simply by going to your target’s `Build Phases`, expanding the `Run Build Tool Plug-ins` drop-down, and adding the `SafeDIGenerator` as a build tool plug-in. You can see this integration in practice in the [ExampleProjectIntegration](Examples/ExampleProjectIntegration) project.
 
-If your Xcode project comprises multiple modules, follow the above steps, and then create a `@SafeDIConfiguration`-decorated struct in your root module to configure SafeDI:
+If your Xcode project comprises multiple modules, follow the above steps, and then create a `@SafeDIConfiguration`-decorated enum in your root module to configure SafeDI:
 
 ```swift
 import SafeDI
@@ -133,7 +133,7 @@ If your first-party code is entirely contained in a Swift Package with one or mo
 
 You can see this integration in practice in the [Example Package Integration](Examples/Example Package Integration) package.
 
-Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may create a `@SafeDIConfiguration`-decorated struct in your root module with the additional module names:
+Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may create a `@SafeDIConfiguration`-decorated enum in your root module with the additional module names:
 
 ```swift
 import SafeDI
