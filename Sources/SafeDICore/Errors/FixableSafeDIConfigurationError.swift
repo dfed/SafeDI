@@ -21,76 +21,76 @@
 import SwiftDiagnostics
 
 public enum FixableSafeDIConfigurationError: DiagnosticError {
-    case decoratingNonEnum
-    case missingAdditionalImportedModulesProperty
-    case missingAdditionalDirectoriesToIncludeProperty
-    case additionalImportedModulesNotStringLiteralArray
-    case additionalDirectoriesToIncludeNotStringLiteralArray
+	case decoratingNonEnum
+	case missingAdditionalImportedModulesProperty
+	case missingAdditionalDirectoriesToIncludeProperty
+	case additionalImportedModulesNotStringLiteralArray
+	case additionalDirectoriesToIncludeNotStringLiteralArray
 
-    public var description: String {
-        switch self {
-        case .decoratingNonEnum:
-            "@\(SafeDIConfigurationVisitor.macroName) must decorate an enum"
-        case .missingAdditionalImportedModulesProperty:
-            "@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `static let additionalImportedModules: [StaticString]` property"
-        case .missingAdditionalDirectoriesToIncludeProperty:
-            "@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `static let additionalDirectoriesToInclude: [StaticString]` property"
-        case .additionalImportedModulesNotStringLiteralArray:
-            "The `additionalImportedModules` property must be initialized with an array of string literals"
-        case .additionalDirectoriesToIncludeNotStringLiteralArray:
-            "The `additionalDirectoriesToInclude` property must be initialized with an array of string literals"
-        }
-    }
+	public var description: String {
+		switch self {
+		case .decoratingNonEnum:
+			"@\(SafeDIConfigurationVisitor.macroName) must decorate an enum"
+		case .missingAdditionalImportedModulesProperty:
+			"@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `static let additionalImportedModules: [StaticString]` property"
+		case .missingAdditionalDirectoriesToIncludeProperty:
+			"@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `static let additionalDirectoriesToInclude: [StaticString]` property"
+		case .additionalImportedModulesNotStringLiteralArray:
+			"The `additionalImportedModules` property must be initialized with an array of string literals"
+		case .additionalDirectoriesToIncludeNotStringLiteralArray:
+			"The `additionalDirectoriesToInclude` property must be initialized with an array of string literals"
+		}
+	}
 
-    public var diagnostic: DiagnosticMessage {
-        SafeDIConfigurationDiagnosticMessage(error: self)
-    }
+	public var diagnostic: DiagnosticMessage {
+		SafeDIConfigurationDiagnosticMessage(error: self)
+	}
 
-    public var fixIt: FixItMessage {
-        SafeDIConfigurationFixItMessage(error: self)
-    }
+	public var fixIt: FixItMessage {
+		SafeDIConfigurationFixItMessage(error: self)
+	}
 
-    // MARK: - SafeDIConfigurationDiagnosticMessage
+	// MARK: - SafeDIConfigurationDiagnosticMessage
 
-    private struct SafeDIConfigurationDiagnosticMessage: DiagnosticMessage {
-        init(error: FixableSafeDIConfigurationError) {
-            diagnosticID = MessageID(domain: "\(Self.self)", id: error.description)
-            severity = switch error {
-            case .decoratingNonEnum,
-                 .missingAdditionalImportedModulesProperty,
-                 .missingAdditionalDirectoriesToIncludeProperty,
-                 .additionalImportedModulesNotStringLiteralArray,
-                 .additionalDirectoriesToIncludeNotStringLiteralArray:
-                .error
-            }
-            message = error.description
-        }
+	private struct SafeDIConfigurationDiagnosticMessage: DiagnosticMessage {
+		init(error: FixableSafeDIConfigurationError) {
+			diagnosticID = MessageID(domain: "\(Self.self)", id: error.description)
+			severity = switch error {
+			case .decoratingNonEnum,
+			     .missingAdditionalImportedModulesProperty,
+			     .missingAdditionalDirectoriesToIncludeProperty,
+			     .additionalImportedModulesNotStringLiteralArray,
+			     .additionalDirectoriesToIncludeNotStringLiteralArray:
+				.error
+			}
+			message = error.description
+		}
 
-        let diagnosticID: MessageID
-        let severity: DiagnosticSeverity
-        let message: String
-    }
+		let diagnosticID: MessageID
+		let severity: DiagnosticSeverity
+		let message: String
+	}
 
-    // MARK: - SafeDIConfigurationFixItMessage
+	// MARK: - SafeDIConfigurationFixItMessage
 
-    private struct SafeDIConfigurationFixItMessage: FixItMessage {
-        init(error: FixableSafeDIConfigurationError) {
-            message = switch error {
-            case .decoratingNonEnum:
-                "Replace with an enum"
-            case .missingAdditionalImportedModulesProperty:
-                "Add `static let additionalImportedModules: [StaticString]` property"
-            case .missingAdditionalDirectoriesToIncludeProperty:
-                "Add `static let additionalDirectoriesToInclude: [StaticString]` property"
-            case .additionalImportedModulesNotStringLiteralArray:
-                "Replace with an array of string literals"
-            case .additionalDirectoriesToIncludeNotStringLiteralArray:
-                "Replace with an array of string literals"
-            }
-            fixItID = MessageID(domain: "\(Self.self)", id: error.description)
-        }
+	private struct SafeDIConfigurationFixItMessage: FixItMessage {
+		init(error: FixableSafeDIConfigurationError) {
+			message = switch error {
+			case .decoratingNonEnum:
+				"Replace with an enum"
+			case .missingAdditionalImportedModulesProperty:
+				"Add `static let additionalImportedModules: [StaticString]` property"
+			case .missingAdditionalDirectoriesToIncludeProperty:
+				"Add `static let additionalDirectoriesToInclude: [StaticString]` property"
+			case .additionalImportedModulesNotStringLiteralArray:
+				"Replace with an array of string literals"
+			case .additionalDirectoriesToIncludeNotStringLiteralArray:
+				"Replace with an array of string literals"
+			}
+			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
+		}
 
-        let message: String
-        let fixItID: MessageID
-    }
+		let message: String
+		let fixItID: MessageID
+	}
 }

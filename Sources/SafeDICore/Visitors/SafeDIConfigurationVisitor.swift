@@ -22,77 +22,77 @@ import SwiftDiagnostics
 import SwiftSyntax
 
 public final class SafeDIConfigurationVisitor: SyntaxVisitor {
-    // MARK: Initialization
+	// MARK: Initialization
 
-    public init() {
-        super.init(viewMode: .sourceAccurate)
-    }
+	public init() {
+		super.init(viewMode: .sourceAccurate)
+	}
 
-    // MARK: SyntaxVisitor
+	// MARK: SyntaxVisitor
 
-    public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
-        for binding in node.bindings {
-            guard let identifierPattern = IdentifierPatternSyntax(binding.pattern) else {
-                continue
-            }
-            let name = identifierPattern.identifier.text
-            if name == Self.additionalImportedModulesPropertyName {
-                foundAdditionalImportedModules = true
-                if let values = extractStringLiterals(from: binding) {
-                    additionalImportedModules = values
-                } else {
-                    additionalImportedModulesIsValid = false
-                }
-            } else if name == Self.additionalDirectoriesToIncludePropertyName {
-                foundAdditionalDirectoriesToInclude = true
-                if let values = extractStringLiterals(from: binding) {
-                    additionalDirectoriesToInclude = values
-                } else {
-                    additionalDirectoriesToIncludeIsValid = false
-                }
-            }
-        }
-        return .skipChildren
-    }
+	public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+		for binding in node.bindings {
+			guard let identifierPattern = IdentifierPatternSyntax(binding.pattern) else {
+				continue
+			}
+			let name = identifierPattern.identifier.text
+			if name == Self.additionalImportedModulesPropertyName {
+				foundAdditionalImportedModules = true
+				if let values = extractStringLiterals(from: binding) {
+					additionalImportedModules = values
+				} else {
+					additionalImportedModulesIsValid = false
+				}
+			} else if name == Self.additionalDirectoriesToIncludePropertyName {
+				foundAdditionalDirectoriesToInclude = true
+				if let values = extractStringLiterals(from: binding) {
+					additionalDirectoriesToInclude = values
+				} else {
+					additionalDirectoriesToIncludeIsValid = false
+				}
+			}
+		}
+		return .skipChildren
+	}
 
-    // MARK: Public
+	// MARK: Public
 
-    public static let macroName = "SafeDIConfiguration"
-    public static let additionalImportedModulesPropertyName = "additionalImportedModules"
-    public static let additionalDirectoriesToIncludePropertyName = "additionalDirectoriesToInclude"
+	public static let macroName = "SafeDIConfiguration"
+	public static let additionalImportedModulesPropertyName = "additionalImportedModules"
+	public static let additionalDirectoriesToIncludePropertyName = "additionalDirectoriesToInclude"
 
-    public private(set) var additionalImportedModules = [String]()
-    public private(set) var additionalDirectoriesToInclude = [String]()
-    public private(set) var foundAdditionalImportedModules = false
-    public private(set) var foundAdditionalDirectoriesToInclude = false
-    public private(set) var additionalImportedModulesIsValid = true
-    public private(set) var additionalDirectoriesToIncludeIsValid = true
+	public private(set) var additionalImportedModules = [String]()
+	public private(set) var additionalDirectoriesToInclude = [String]()
+	public private(set) var foundAdditionalImportedModules = false
+	public private(set) var foundAdditionalDirectoriesToInclude = false
+	public private(set) var additionalImportedModulesIsValid = true
+	public private(set) var additionalDirectoriesToIncludeIsValid = true
 
-    public var configuration: SafeDIConfiguration {
-        SafeDIConfiguration(
-            additionalImportedModules: additionalImportedModules,
-            additionalDirectoriesToInclude: additionalDirectoriesToInclude
-        )
-    }
+	public var configuration: SafeDIConfiguration {
+		SafeDIConfiguration(
+			additionalImportedModules: additionalImportedModules,
+			additionalDirectoriesToInclude: additionalDirectoriesToInclude
+		)
+	}
 
-    // MARK: Private
+	// MARK: Private
 
-    private func extractStringLiterals(from binding: PatternBindingSyntax) -> [String]? {
-        guard let initializer = binding.initializer,
-              let arrayExpr = ArrayExprSyntax(initializer.value)
-        else {
-            return nil
-        }
-        var values = [String]()
-        for element in arrayExpr.elements {
-            guard let stringLiteral = StringLiteralExprSyntax(element.expression),
-                  stringLiteral.segments.count == 1,
-                  case let .stringSegment(segment) = stringLiteral.segments.first
-            else {
-                return nil
-            }
-            values.append(segment.content.text)
-        }
-        return values
-    }
+	private func extractStringLiterals(from binding: PatternBindingSyntax) -> [String]? {
+		guard let initializer = binding.initializer,
+		      let arrayExpr = ArrayExprSyntax(initializer.value)
+		else {
+			return nil
+		}
+		var values = [String]()
+		for element in arrayExpr.elements {
+			guard let stringLiteral = StringLiteralExprSyntax(element.expression),
+			      stringLiteral.segments.count == 1,
+			      case let .stringSegment(segment) = stringLiteral.segments.first
+			else {
+				return nil
+			}
+			values.append(segment.content.text)
+		}
+		return values
+	}
 }

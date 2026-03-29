@@ -19,14 +19,14 @@
 // SOFTWARE.
 
 public struct SafeDIConfiguration: Codable, Equatable, Sendable {
-    public let additionalImportedModules: [String]
-    public let additionalDirectoriesToInclude: [String]
+	public let additionalImportedModules: [String]
+	public let additionalDirectoriesToInclude: [String]
 
-    public init(
-        additionalImportedModules: [String],
-        additionalDirectoriesToInclude: [String]
-    ) {
-        self.additionalImportedModules = additionalImportedModules
-        self.additionalDirectoriesToInclude = additionalDirectoriesToInclude
-    }
+	public init(
+		additionalImportedModules: [String],
+		additionalDirectoriesToInclude: [String]
+	) {
+		self.additionalImportedModules = additionalImportedModules
+		self.additionalDirectoriesToInclude = additionalDirectoriesToInclude
+	}
 }

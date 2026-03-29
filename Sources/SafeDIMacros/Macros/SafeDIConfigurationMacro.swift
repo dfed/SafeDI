@@ -24,99 +24,99 @@ import SwiftSyntax
 import SwiftSyntaxMacros
 
 public struct SafeDIConfigurationMacro: PeerMacro {
-    public static func expansion(
-        of node: AttributeSyntax,
-        providingPeersOf declaration: some DeclSyntaxProtocol,
-        in context: some MacroExpansionContext
-    ) throws -> [DeclSyntax] {
-        guard let enumDecl = EnumDeclSyntax(declaration) else {
-            throw SafeDIConfigurationError.decoratingNonEnum
-        }
+	public static func expansion(
+		of _: AttributeSyntax,
+		providingPeersOf declaration: some DeclSyntaxProtocol,
+		in context: some MacroExpansionContext
+	) throws -> [DeclSyntax] {
+		guard let enumDecl = EnumDeclSyntax(declaration) else {
+			throw SafeDIConfigurationError.decoratingNonEnum
+		}
 
-        let visitor = SafeDIConfigurationVisitor()
-        visitor.walk(enumDecl)
+		let visitor = SafeDIConfigurationVisitor()
+		visitor.walk(enumDecl)
 
-        var hasMissingProperties = false
+		var hasMissingProperties = false
 
-        if !visitor.foundAdditionalImportedModules {
-            hasMissingProperties = true
-        } else if !visitor.additionalImportedModulesIsValid {
-            throw SafeDIConfigurationError.additionalImportedModulesNotStringLiteralArray
-        }
+		if !visitor.foundAdditionalImportedModules {
+			hasMissingProperties = true
+		} else if !visitor.additionalImportedModulesIsValid {
+			throw SafeDIConfigurationError.additionalImportedModulesNotStringLiteralArray
+		}
 
-        if !visitor.foundAdditionalDirectoriesToInclude {
-            hasMissingProperties = true
-        } else if !visitor.additionalDirectoriesToIncludeIsValid {
-            throw SafeDIConfigurationError.additionalDirectoriesToIncludeNotStringLiteralArray
-        }
+		if !visitor.foundAdditionalDirectoriesToInclude {
+			hasMissingProperties = true
+		} else if !visitor.additionalDirectoriesToIncludeIsValid {
+			throw SafeDIConfigurationError.additionalDirectoriesToIncludeNotStringLiteralArray
+		}
 
-        if hasMissingProperties {
-            var modifiedDecl = enumDecl
-            var membersToInsert = [MemberBlockItemSyntax]()
-            if !visitor.foundAdditionalImportedModules {
-                membersToInsert.append(MemberBlockItemSyntax(
-                    leadingTrivia: .newline,
-                    decl: DeclSyntax("""
-                        /// The names of modules to import in the generated dependency tree.
-                        /// This list is in addition to the import statements found in files that declare @Instantiable types.
-                        static let \(raw: SafeDIConfigurationVisitor.additionalImportedModulesPropertyName): [StaticString] = []
-                        """)
-                ))
-            }
-            if !visitor.foundAdditionalDirectoriesToInclude {
-                membersToInsert.append(MemberBlockItemSyntax(
-                    leadingTrivia: .newline,
-                    decl: DeclSyntax("""
-                        /// Directories containing Swift files to include, relative to the executing directory.
-                        /// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-                        static let \(raw: SafeDIConfigurationVisitor.additionalDirectoriesToIncludePropertyName): [StaticString] = []
-                        """)
-                ))
-            }
-            for member in membersToInsert.reversed() {
-                modifiedDecl.memberBlock.members.insert(
-                    member,
-                    at: modifiedDecl.memberBlock.members.startIndex
-                )
-            }
-            let missingPropertyError: FixableSafeDIConfigurationError = if !visitor.foundAdditionalImportedModules {
-                .missingAdditionalImportedModulesProperty
-            } else {
-                .missingAdditionalDirectoriesToIncludeProperty
-            }
-            context.diagnose(Diagnostic(
-                node: Syntax(enumDecl.memberBlock),
-                error: missingPropertyError,
-                changes: [
-                    .replace(
-                        oldNode: Syntax(enumDecl),
-                        newNode: Syntax(modifiedDecl)
-                    ),
-                ]
-            ))
-        }
+		if hasMissingProperties {
+			var modifiedDecl = enumDecl
+			var membersToInsert = [MemberBlockItemSyntax]()
+			if !visitor.foundAdditionalImportedModules {
+				membersToInsert.append(MemberBlockItemSyntax(
+					leadingTrivia: .newline,
+					decl: DeclSyntax("""
+					/// The names of modules to import in the generated dependency tree.
+					/// This list is in addition to the import statements found in files that declare @Instantiable types.
+					static let \(raw: SafeDIConfigurationVisitor.additionalImportedModulesPropertyName): [StaticString] = []
+					""")
+				))
+			}
+			if !visitor.foundAdditionalDirectoriesToInclude {
+				membersToInsert.append(MemberBlockItemSyntax(
+					leadingTrivia: .newline,
+					decl: DeclSyntax("""
+					/// Directories containing Swift files to include, relative to the executing directory.
+					/// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
+					static let \(raw: SafeDIConfigurationVisitor.additionalDirectoriesToIncludePropertyName): [StaticString] = []
+					""")
+				))
+			}
+			for member in membersToInsert.reversed() {
+				modifiedDecl.memberBlock.members.insert(
+					member,
+					at: modifiedDecl.memberBlock.members.startIndex
+				)
+			}
+			let missingPropertyError: FixableSafeDIConfigurationError = if !visitor.foundAdditionalImportedModules {
+				.missingAdditionalImportedModulesProperty
+			} else {
+				.missingAdditionalDirectoriesToIncludeProperty
+			}
+			context.diagnose(Diagnostic(
+				node: Syntax(enumDecl.memberBlock),
+				error: missingPropertyError,
+				changes: [
+					.replace(
+						oldNode: Syntax(enumDecl),
+						newNode: Syntax(modifiedDecl)
+					),
+				]
+			))
+		}
 
-        // This macro purposefully does not expand.
-        // This macro serves as a validator, nothing more.
-        return []
-    }
+		// This macro purposefully does not expand.
+		// This macro serves as a validator, nothing more.
+		return []
+	}
 
-    // MARK: - SafeDIConfigurationError
+	// MARK: - SafeDIConfigurationError
 
-    private enum SafeDIConfigurationError: Error, CustomStringConvertible {
-        case decoratingNonEnum
-        case additionalImportedModulesNotStringLiteralArray
-        case additionalDirectoriesToIncludeNotStringLiteralArray
+	private enum SafeDIConfigurationError: Error, CustomStringConvertible {
+		case decoratingNonEnum
+		case additionalImportedModulesNotStringLiteralArray
+		case additionalDirectoriesToIncludeNotStringLiteralArray
 
-        var description: String {
-            switch self {
-            case .decoratingNonEnum:
-                "@\(SafeDIConfigurationVisitor.macroName) must decorate an enum"
-            case .additionalImportedModulesNotStringLiteralArray:
-                "The `\(SafeDIConfigurationVisitor.additionalImportedModulesPropertyName)` property must be initialized with an array of string literals"
-            case .additionalDirectoriesToIncludeNotStringLiteralArray:
-                "The `\(SafeDIConfigurationVisitor.additionalDirectoriesToIncludePropertyName)` property must be initialized with an array of string literals"
-            }
-        }
-    }
+		var description: String {
+			switch self {
+			case .decoratingNonEnum:
+				"@\(SafeDIConfigurationVisitor.macroName) must decorate an enum"
+			case .additionalImportedModulesNotStringLiteralArray:
+				"The `\(SafeDIConfigurationVisitor.additionalImportedModulesPropertyName)` property must be initialized with an array of string literals"
+			case .additionalDirectoriesToIncludeNotStringLiteralArray:
+				"The `\(SafeDIConfigurationVisitor.additionalDirectoriesToIncludePropertyName)` property must be initialized with an array of string literals"
+			}
+		}
+	}
 }
