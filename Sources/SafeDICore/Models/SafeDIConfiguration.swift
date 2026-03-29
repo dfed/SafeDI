@@ -18,14 +18,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import SwiftCompilerPlugin
-import SwiftSyntaxMacros
+public struct SafeDIConfiguration: Codable, Equatable, Sendable {
+	public let additionalImportedModules: [String]
+	public let additionalDirectoriesToInclude: [String]
 
-@main
-struct SafeDIMacroPlugin: CompilerPlugin {
-	let providingMacros: [Macro.Type] = [
-		InstantiableMacro.self,
-		InjectableMacro.self,
-		SafeDIConfigurationMacro.self,
-	]
+	public init(
+		additionalImportedModules: [String],
+		additionalDirectoriesToInclude: [String]
+	) {
+		self.additionalImportedModules = additionalImportedModules
+		self.additionalDirectoriesToInclude = additionalDirectoriesToInclude
+	}
 }
