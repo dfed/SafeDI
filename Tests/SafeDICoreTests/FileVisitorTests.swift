@@ -303,6 +303,76 @@ struct FileVisitorTests {
 	}
 
 	@Test
+	func walk_findsSafeDIConfiguration() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		@SafeDIConfiguration
+		struct MyConfiguration {
+		    let additionalImportedModules: [StaticString] = ["ModuleA", "ModuleB"]
+		    let additionalDirectoriesToInclude: [StaticString] = ["DirA"]
+		}
+		"""))
+		#expect(fileVisitor.configurations == [
+			SafeDIConfiguration(
+				additionalImportedModules: ["ModuleA", "ModuleB"],
+				additionalDirectoriesToInclude: ["DirA"]
+			),
+		])
+		#expect(fileVisitor.instantiables.isEmpty)
+	}
+
+	@Test
+	func walk_findsSafeDIConfigurationWithEmptyArrays() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		@SafeDIConfiguration
+		struct MyConfiguration {
+		    let additionalImportedModules: [StaticString] = []
+		    let additionalDirectoriesToInclude: [StaticString] = []
+		}
+		"""))
+		#expect(fileVisitor.configurations == [
+			SafeDIConfiguration(
+				additionalImportedModules: [],
+				additionalDirectoriesToInclude: []
+			),
+		])
+	}
+
+	@Test
+	func walk_findsSafeDIConfigurationAlongsideInstantiable() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		@SafeDIConfiguration
+		struct MyConfiguration {
+		    let additionalImportedModules: [StaticString] = ["ModuleA"]
+		    let additionalDirectoriesToInclude: [StaticString] = []
+		}
+
+		@Instantiable
+		public struct SomeService {
+		    public init() {}
+		}
+		"""))
+		#expect(fileVisitor.configurations == [
+			SafeDIConfiguration(
+				additionalImportedModules: ["ModuleA"],
+				additionalDirectoriesToInclude: []
+			),
+		])
+		#expect(fileVisitor.instantiables == [
+			Instantiable(
+				instantiableType: .simple(name: "SomeService"),
+				isRoot: false,
+				initializer: Initializer(arguments: []),
+				additionalInstantiables: nil,
+				dependencies: [],
+				declarationType: .structType
+			),
+		])
+	}
+
+	@Test
 	func walk_findsDeeplyNestedInstantiables() {
 		let fileVisitor = FileVisitor()
 		fileVisitor.walk(Parser.parse(source: """

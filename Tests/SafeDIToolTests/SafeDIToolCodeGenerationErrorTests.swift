@@ -1966,6 +1966,30 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	// MARK: @SafeDIConfiguration Error Tests
+
+	@Test
+	mutating func run_throwsErrorWhenCSVAndSourceConfigurationBothPresent() async {
+		await assertThrowsError(
+			"Found both a @SafeDIConfiguration-decorated type and .safedi/configuration/ CSV files. Remove the CSV files and use @SafeDIConfiguration instead."
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@SafeDIConfiguration
+					struct MyConfiguration {
+					    let additionalImportedModules: [StaticString] = ["TestModule"]
+					    let additionalDirectoriesToInclude: [StaticString] = []
+					}
+					""",
+				],
+				additionalImportedModules: ["ConflictingModule"],
+				buildDependencyTreeOutput: true,
+				filesToDelete: &filesToDelete
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

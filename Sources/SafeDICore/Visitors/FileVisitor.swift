@@ -72,7 +72,13 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitDecl(node)
+		if node.attributes.safeDIConfigurationMacro != nil {
+			let configVisitor = SafeDIConfigurationVisitor()
+			configVisitor.walk(node)
+			configurations.append(configVisitor.configuration)
+			return .skipChildren
+		}
+		return visitDecl(node)
 	}
 
 	public override func visitPost(_: StructDeclSyntax) {
@@ -121,6 +127,7 @@ public final class FileVisitor: SyntaxVisitor {
 
 	public private(set) var imports = [ImportStatement]()
 	public private(set) var instantiables = [Instantiable]()
+	public private(set) var configurations = [SafeDIConfiguration]()
 	public private(set) var encounteredUnexpectedNodesSyntax = false
 
 	// MARK: Private
