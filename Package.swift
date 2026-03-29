@@ -34,6 +34,10 @@ let package = Package(
 			name: "InstallSafeDITool",
 			targets: ["InstallSafeDITool"]
 		),
+		.plugin(
+			name: "SafeDIConfigurationInit",
+			targets: ["SafeDIConfigurationInit"]
+		),
 	],
 	dependencies: [
 		.package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.0"),
@@ -96,6 +100,20 @@ let package = Package(
 				permissions: [
 					.writeToPackageDirectory(reason: "Downloads the SafeDI release build plugin executable into your project directory."),
 					.allowNetworkConnections(scope: .all(ports: []), reason: "Downloads the SafeDI release build plugin executable from GitHub."),
+				]
+			),
+			dependencies: []
+		),
+
+		.plugin(
+			name: "SafeDIConfigurationInit",
+			capability: .command(
+				intent: .custom(
+					verb: "safedi-init",
+					description: "Creates a SafeDIConfiguration.swift file in the specified target."
+				),
+				permissions: [
+					.writeToPackageDirectory(reason: "Creates a SafeDIConfiguration.swift file in the target's source directory."),
 				]
 			),
 			dependencies: []

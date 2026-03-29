@@ -121,6 +121,14 @@ enum MySafeDIConfiguration {
 
 The `additionalDirectoriesToInclude` property specifies folders outside of your root module that SafeDI will scan for Swift source files. Paths must be relative to the project directory. You can see [an example of this configuration](Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) project.
 
+##### Scaffolding a configuration file
+
+To scaffold a `SafeDIConfiguration.swift` file with defaults, run:
+
+```
+swift package --allow-writing-to-package-directory safedi-init --target YourRootTarget
+```
+
 ##### Swift package
 
 If your first-party code is entirely contained in a Swift Package with one or more modules, you can add the following lines to your root target’s definition:
