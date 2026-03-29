@@ -12,6 +12,9 @@
 --storedvarattrs same-line
 --hexgrouping none
 --decimalgrouping 3
+--trailing-commas always
+--test-case-name-format standard-identifiers
+--import-grouping access-control,alpha,testable-last
 
 # rules
 --enable isEmpty
@@ -19,6 +22,8 @@
 --enable wrapMultilineStatementBraces
 --disable consistentSwitchCaseSpacing
 --disable blankLineAfterSwitchCase
+--disable hoistTry
+--disable docComments
 
 # global
---swiftversion 6.0
+--swiftversion 6.3

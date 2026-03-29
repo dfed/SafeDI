@@ -1935,9 +1935,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			tool.swiftSourcesFilePath = nil
 			tool.showVersion = false
 			tool.include = ["Fake"]
-			tool.includeFilePath = nil
 			tool.additionalImportedModules = []
-			tool.additionalImportedModulesFilePath = nil
 			tool.moduleInfoOutput = nil
 			tool.dependentModuleInfoFilePath = nil
 			tool.dependencyTreeOutput = nil
@@ -1954,39 +1952,13 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		tool.swiftSourcesFilePath = nil
 		tool.showVersion = false
 		tool.include = []
-		tool.includeFilePath = nil
 		tool.additionalImportedModules = []
-		tool.additionalImportedModulesFilePath = nil
 		tool.moduleInfoOutput = nil
 		tool.dependentModuleInfoFilePath = nil
 		tool.dependencyTreeOutput = nil
 		tool.dotFileOutput = nil
-		await assertThrowsError("Must provide 'swift-sources-file-path', '--include', or '--include-file-path'.") {
+		await assertThrowsError("Must provide 'swift-sources-file-path' or '--include'.") {
 			try await tool.run()
-		}
-	}
-
-	// MARK: @SafeDIConfiguration Error Tests
-
-	@Test
-	mutating func run_throwsErrorWhenCSVAndSourceConfigurationBothPresent() async {
-		await assertThrowsError(
-			"Found both a @SafeDIConfiguration-decorated type and .safedi/configuration/ CSV files. Remove the CSV files and use @SafeDIConfiguration instead."
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@SafeDIConfiguration
-					enum MyConfiguration {
-					    static let additionalImportedModules: [StaticString] = ["TestModule"]
-					    static let additionalDirectoriesToInclude: [StaticString] = []
-					}
-					""",
-				],
-				additionalImportedModules: ["ConflictingModule"],
-				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
-			)
 		}
 	}
 

@@ -33,11 +33,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 
 	@Option(parsing: .upToNextOption, help: "Directories containing Swift files to include, relative to the executing directory.") var include: [String] = []
 
-	@Option(help: "A path to a CSV file comprising directories containing Swift files to include, relative to the executing directory.") var includeFilePath: String?
-
 	@Option(parsing: .upToNextOption, help: "The names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModules: [String] = []
-
-	@Option(help: "A path to a CSV file comprising the names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModulesFilePath: String?
 
 	@Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project‘s non-root module. Must have a `.safedi` suffix.") var moduleInfoOutput: String?
 
@@ -50,7 +46,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 	// MARK: Internal
 
 	static var currentVersion: String {
-		"1.5.4"
+		"2.0.0"
 	}
 
 	func run() async throws {
@@ -59,8 +55,8 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 			return
 		}
 
-		if swiftSourcesFilePath == nil, include.isEmpty, includeFilePath == nil {
-			throw ValidationError("Must provide 'swift-sources-file-path', '--include', or '--include-file-path'.")
+		if swiftSourcesFilePath == nil, include.isEmpty {
+			throw ValidationError("Must provide 'swift-sources-file-path' or '--include'.")
 		}
 
 		async let existingGeneratedCode: String? = Task.detached {
@@ -83,16 +79,10 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 			dependentModuleInfo.flatMap(\.configurations).first
 		}
 
-		// TODO: Delete CSV support in version 2.0.
-		let hasCSVConfiguration = includeFilePath != nil || additionalImportedModulesFilePath != nil
-		if sourceConfiguration != nil, hasCSVConfiguration {
-			throw ConfigurationError.csvAndSourceConfigurationConflict
-		}
-
 		let resolvedAdditionalImportedModules: [String] = if let sourceConfiguration {
 			additionalImportedModules + sourceConfiguration.additionalImportedModules
 		} else {
-			try allAdditionalImportedModules
+			additionalImportedModules
 		}
 
 		// If the source configuration specifies additional directories to include,
@@ -219,8 +209,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 	// MARK: Private
 
 	private func findSwiftFiles() async throws -> Set<String> {
-		// TODO: Delete CSV support in version 2.0.
-		try await findSwiftFiles(additionalDirectories: allDirectoriesToIncludes)
+		try await findSwiftFiles(additionalDirectories: include)
 	}
 
 	private func findSwiftFiles(additionalDirectories: [String]) async throws -> Set<String> {
@@ -337,30 +326,6 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 		try await Self.parseSwiftFiles(findSwiftFiles())
 	}
 
-	private var allDirectoriesToIncludes: [String] {
-		get throws {
-			if let includeFilePath {
-				try include + String(contentsOfFile: includeFilePath, encoding: .utf8)
-					.components(separatedBy: CharacterSet(arrayLiteral: ","))
-					.removingEmpty()
-			} else {
-				include
-			}
-		}
-	}
-
-	private var allAdditionalImportedModules: [String] {
-		get throws {
-			if let additionalImportedModulesFilePath {
-				try additionalImportedModules + String(contentsOfFile: additionalImportedModulesFilePath, encoding: .utf8)
-					.components(separatedBy: CharacterSet(arrayLiteral: ","))
-					.removingEmpty()
-			} else {
-				additionalImportedModules
-			}
-		}
-	}
-
 	private var moduleInfoURLs: Set<URL> {
 		get throws {
 			if let dependentModuleInfoFilePath {
@@ -423,16 +388,6 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 		}
 	}
 
-	private enum ConfigurationError: Error, CustomStringConvertible {
-		case csvAndSourceConfigurationConflict
-
-		var description: String {
-			switch self {
-			case .csvAndSourceConfigurationConflict:
-				"Found both a @\(SafeDIConfigurationVisitor.macroName)-decorated type and .safedi/configuration/ CSV files. Remove the CSV files and use @\(SafeDIConfigurationVisitor.macroName) instead."
-			}
-		}
-	}
 }
 
 extension Data {

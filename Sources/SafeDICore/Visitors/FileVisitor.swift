@@ -117,6 +117,10 @@ public final class FileVisitor: SyntaxVisitor {
 		parentType = nil
 	}
 
+	// SwiftSyntax 602 and prior could not recover from certain parse errors, causing the remainder
+	// of a file to be unparseable. This led to SafeDI emitting bogus "missing type" errors before
+	// the compiler had a chance to surface the real build error. Detecting unexpected nodes and
+	// bailing out avoids this class of false-positive diagnostics.
 	public override func visit(_: UnexpectedNodesSyntax) -> SyntaxVisitorContinueKind {
 		encounteredUnexpectedNodesSyntax = true
 		return .skipChildren

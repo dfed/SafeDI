@@ -78,9 +78,11 @@ To add the SafeDI framework as a dependency to a package utilizing [Swift Packag
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "1.0.0"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.0.0"),
 ]
 ```
+
+> **Note:** SafeDI 2.x requires Swift 6.3 or later. Projects using an earlier Swift version should use SafeDI 1.x.
 
 To install the SafeDI framework into an Xcode project with Swift Package Manager, follow [Apple’s instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to add `https://github.com/dfed/SafeDI.git` as a dependency.
 
@@ -89,7 +91,7 @@ To install the SafeDI framework into an Xcode project with Swift Package Manager
 To add the SafeDI framework as a dependency to a package utilizing [CocoaPods](https://blog.cocoapods.org/CocoaPods-Specs-Repo), add the following to your `Podfile`:
 
 ```ruby
-pod 'SafeDI', '~> 1.0.0'
+pod ‘SafeDI’, ‘~> 2.0.0’
 ```
 
 ### Generating your dependency tree
@@ -147,7 +149,7 @@ enum MySafeDIConfiguration {
 
 ##### Unlocking faster builds with Swift Package Manager plugins
 
-SafeDI vends a `SafeDIPrebuiltGenerator` plugin for both Xcode and Swift package manager. This plugin utilizes a prebuilt binary for dependency tree generation and does not require compiling `SwiftSyntax`. Integrating this plugin will guide you through the one-step process of downloading the binary to the expected location. Note that avoiding compiling SwiftSyntax requires [some additional configuration](https://forums.swift.org/t/preview-swift-syntax-prebuilts-for-macros/80202) when using a Swift compiler version below 6.2.
+SafeDI vends a `SafeDIPrebuiltGenerator` plugin for both Xcode and Swift package manager. This plugin utilizes a prebuilt binary for dependency tree generation and does not require compiling `SwiftSyntax`. Integrating this plugin will guide you through the one-step process of downloading the binary to the expected location.
 
 #### CocoaPods
 
