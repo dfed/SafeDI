@@ -76,7 +76,6 @@ public final class FileVisitor: SyntaxVisitor {
 			let configVisitor = SafeDIConfigurationVisitor()
 			configVisitor.walk(node)
 			configurations.append(configVisitor.configuration)
-			return .skipChildren
 		}
 		return visitDecl(node)
 	}
