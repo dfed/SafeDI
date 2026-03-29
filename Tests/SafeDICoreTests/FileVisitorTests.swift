@@ -340,6 +340,25 @@ struct FileVisitorTests {
 	}
 
 	@Test
+	func walk_findsSafeDIConfigurationWithTupleBinding() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let (a, b) = (1, 2)
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = []
+		}
+		"""))
+		#expect(fileVisitor.configurations == [
+			SafeDIConfiguration(
+				additionalImportedModules: [],
+				additionalDirectoriesToInclude: []
+			),
+		])
+	}
+
+	@Test
 	func walk_findsSafeDIConfigurationWithInvalidValues() {
 		let fileVisitor = FileVisitor()
 		fileVisitor.walk(Parser.parse(source: """
