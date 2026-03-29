@@ -25,7 +25,7 @@ public struct ImportStatement: Codable, Hashable, Sendable {
 		attribute: String = "",
 		kind: String = "",
 		moduleName: String,
-		type: String = ""
+		type: String = "",
 	) {
 		self.attribute = attribute
 		self.kind = kind

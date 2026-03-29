@@ -16,7 +16,7 @@ let package = Package(
 		// Products define the executables and libraries a package produces, making them visible to other packages.
 		.library(
 			name: "ExamplePackageIntegration",
-			targets: ["RootModule"]
+			targets: ["RootModule"],
 		),
 	],
 	dependencies: [
@@ -39,7 +39,7 @@ let package = Package(
 			],
 			plugins: [
 				.plugin(name: "SafeDIPrebuiltGenerator", package: "SafeDI"),
-			]
+			],
 		),
 		.target(
 			name: "ChildAModule",
@@ -50,7 +50,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.target(
 			name: "ChildBModule",
@@ -61,7 +61,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.target(
 			name: "ChildCModule",
@@ -72,7 +72,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.target(
 			name: "GrandchildrenModule",
@@ -82,14 +82,14 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.target(
 			name: "SharedModule",
 			dependencies: ["SafeDI"],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
-	]
+	],
 )

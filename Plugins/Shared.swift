@@ -40,22 +40,20 @@ import PackagePlugin
 
 		var safediFolder: URL {
 			xcodeProject.directoryURL.appending(
-				component: ".safedi"
+				component: ".safedi",
 			)
 		}
 
 		var expectedToolFolder: URL {
-			let location = safediFolder.appending(
-				component: safeDIVersion
+			safediFolder.appending(
+				component: safeDIVersion,
 			)
-			return location
 		}
 
 		var expectedToolLocation: URL {
-			let location = expectedToolFolder.appending(
-				component: "safeditool"
+			expectedToolFolder.appending(
+				component: "safeditool",
 			)
-			return location
 		}
 
 		var downloadedToolLocation: URL? {
@@ -89,24 +87,22 @@ extension PackagePlugin.PluginContext {
 
 	var safediFolder: URL {
 		package.directoryURL.appending(
-			component: ".safedi"
+			component: ".safedi",
 		)
 	}
 
 	var expectedToolFolder: URL? {
 		guard let safeDIVersion else { return nil }
-		let location = safediFolder.appending(
-			component: safeDIVersion
+		return safediFolder.appending(
+			component: safeDIVersion,
 		)
-		return location
 	}
 
 	var expectedToolLocation: URL? {
 		guard let expectedToolFolder else { return nil }
-		let location = expectedToolFolder.appending(
-			component: "safeditool"
+		return expectedToolFolder.appending(
+			component: "safeditool",
 		)
-		return location
 	}
 
 	var downloadedToolLocation: URL? {

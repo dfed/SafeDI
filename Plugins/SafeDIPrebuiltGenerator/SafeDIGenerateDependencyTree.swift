@@ -25,7 +25,7 @@ import PackagePlugin
 struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 	func createBuildCommands(
 		context: PluginContext,
-		target: Target
+		target: Target,
 	) async throws -> [Command] {
 		guard let sourceTarget = target as? SourceModuleTarget else {
 			return []
@@ -52,7 +52,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			.write(
 				to: inputSourcesFile,
 				atomically: true,
-				encoding: .utf8
+				encoding: .utf8,
 			)
 
 		let arguments = [
@@ -95,7 +95,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 				arguments: arguments,
 				environment: [:],
 				inputFiles: targetSwiftFiles + dependenciesSourceFiles,
-				outputFiles: [outputSwiftFile]
+				outputFiles: [outputSwiftFile],
 			),
 		]
 	}
@@ -134,7 +134,7 @@ extension Target {
 	extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
 		func createBuildCommands(
 			context: XcodeProjectPlugin.XcodePluginContext,
-			target: XcodeProjectPlugin.XcodeTarget
+			target: XcodeProjectPlugin.XcodeTarget,
 		) throws -> [PackagePlugin.Command] {
 			// As of Xcode 15.0.1, Swift Package Plugins in Xcode are unable
 			// to inspect target dependencies. As a result, this Xcode plugin
@@ -160,7 +160,7 @@ extension Target {
 				.write(
 					to: inputSourcesFile,
 					atomically: true,
-					encoding: .utf8
+					encoding: .utf8,
 				)
 
 			let arguments = [
@@ -188,7 +188,7 @@ extension Target {
 					arguments: arguments,
 					environment: [:],
 					inputFiles: inputSwiftFiles,
-					outputFiles: [outputSwiftFile]
+					outputFiles: [outputSwiftFile],
 				),
 			]
 		}

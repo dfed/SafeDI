@@ -26,7 +26,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	public init(
 		declarationType: DeclarationType,
-		parentType: TypeDescription? = nil
+		parentType: TypeDescription? = nil,
 	) {
 		self.declarationType = declarationType
 		self.parentType = parentType
@@ -50,9 +50,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				changes: [
 					.replace(
 						oldNode: Syntax(node.attributes),
-						newNode: Syntax(dependencySources[0].node)
+						newNode: Syntax(dependencySources[0].node),
 					),
-				]
+				],
 			))
 		}
 		guard let dependencySource = dependencySources.first?.source else {
@@ -86,9 +86,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					changes: [
 						.replace(
 							oldNode: Syntax(binding),
-							newNode: Syntax(bindingWithoutInitializer)
+							newNode: Syntax(bindingWithoutInitializer),
 						),
-					]
+					],
 				))
 			}
 
@@ -99,10 +99,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					Dependency(
 						property: Property(
 							label: label,
-							typeDescription: typeDescription
+							typeDescription: typeDescription,
 						),
-						source: dependencySource
-					)
+						source: dependencySource,
+					),
 				)
 			}
 		}
@@ -166,13 +166,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			modifiedSignature.returnClause = ReturnClauseSyntax(
 				arrow: .arrowToken(
 					leadingTrivia: returnClause.arrow.leadingTrivia,
-					trailingTrivia: returnClause.arrow.trailingTrivia
+					trailingTrivia: returnClause.arrow.trailingTrivia,
 				),
 				type: IdentifierTypeSyntax(
 					leadingTrivia: node.signature.leadingTrivia,
 					name: .identifier(instantiableType.strippingGenerics.asSource),
-					trailingTrivia: node.signature.trailingTrivia
-				)
+					trailingTrivia: node.signature.trailingTrivia,
+				),
 			)
 			diagnostics.append(Diagnostic(
 				node: node,
@@ -180,9 +180,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				changes: [
 					.replace(
 						oldNode: Syntax(node.signature),
-						newNode: Syntax(modifiedSignature)
+						newNode: Syntax(modifiedSignature),
 					),
-				]
+				],
 			))
 		}
 
@@ -196,10 +196,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				dependencies: initializer.arguments.map {
 					Dependency(
 						property: $0.asProperty,
-						source: .received(onlyIfAvailable: false)
+						source: .received(onlyIfAvailable: false),
 					)
 				},
-				declarationType: .extensionType
+				declarationType: .extensionType,
 			))
 		}
 
@@ -211,17 +211,17 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					name: TokenSyntax(
 						TokenKind.keyword(.public),
 						leadingTrivia: node.modifiers.first?.leadingTrivia ?? node.funcKeyword.leadingTrivia,
-						presence: .present
-					)
+						presence: .present,
+					),
 				),
 				DeclModifierSyntax(
 					name: TokenSyntax(
 						TokenKind.keyword(.static),
 						leadingTrivia: .space,
 						trailingTrivia: .space,
-						presence: .present
-					)
-				)
+						presence: .present,
+					),
+				),
 			)
 			modifiedNode.funcKeyword.leadingTrivia = []
 			diagnostics.append(Diagnostic(
@@ -230,9 +230,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				changes: [
 					.replace(
 						oldNode: Syntax(node),
-						newNode: Syntax(modifiedNode)
+						newNode: Syntax(modifiedNode),
 					),
-				]
+				],
 			))
 		}
 		if initializer.isAsync || initializer.doesThrow {
@@ -244,9 +244,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				changes: [
 					.replace(
 						oldNode: Syntax(node.signature),
-						newNode: Syntax(modifiedSignature)
+						newNode: Syntax(modifiedSignature),
 					),
-				]
+				],
 			))
 		}
 		if initializer.hasGenericParameter {
@@ -258,9 +258,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				changes: [
 					.replace(
 						oldNode: Syntax(node),
-						newNode: Syntax(modifiedNode)
+						newNode: Syntax(modifiedNode),
 					),
-				]
+				],
 			))
 		}
 		if initializer.hasGenericWhereClause {
@@ -272,9 +272,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				changes: [
 					.replace(
 						oldNode: Syntax(node),
-						newNode: Syntax(modifiedNode)
+						newNode: Syntax(modifiedNode),
 					),
-				]
+				],
 			))
 		}
 
@@ -341,7 +341,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						initializer: initializers.first(where: { $0.isValid(forFulfilling: dependencies) }),
 						additionalInstantiables: additionalInstantiables,
 						dependencies: dependencies,
-						declarationType: instantiableDeclarationType.asDeclarationType
+						declarationType: instantiableDeclarationType.asDeclarationType,
 					),
 				]
 			} else {
@@ -366,7 +366,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		let nodeDeclarationType: TypeDescription = if let parentType {
 			.nested(
 				name: node.name.text,
-				parentType: parentType
+				parentType: parentType,
 			)
 		} else {
 			.simple(name: node.name.text)
@@ -426,15 +426,15 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					TokenKind.keyword(.public),
 					leadingTrivia: node.modifiers.first?.leadingTrivia ?? .newline,
 					trailingTrivia: node.modifiers.first?.trailingTrivia ?? .space,
-					presence: .present
-				)
+					presence: .present,
+				),
 			)
 			var modifiedNode = node
 			if var firstModifier = modifiedNode.modifiers.first {
 				firstModifier.name.leadingTrivia = []
 				modifiedNode.modifiers.replaceSubrange(
 					modifiedNode.modifiers.startIndex..<modifiedNode.attributes.index(after: modifiedNode.attributes.startIndex),
-					with: [publicModifier, firstModifier]
+					with: [publicModifier, firstModifier],
 				)
 				modifiedNode.modifiers = modifiedNode.modifiers.filter {
 					$0.name.text != "internal" && $0.name.text != "fileprivate" && $0.name.text != "private"
@@ -449,9 +449,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				changes: [
 					.replace(
 						oldNode: Syntax(node),
-						newNode: Syntax(modifiedNode)
+						newNode: Syntax(modifiedNode),
 					),
-				]
+				],
 			))
 		}
 	}

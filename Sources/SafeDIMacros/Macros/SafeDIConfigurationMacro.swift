@@ -27,7 +27,7 @@ public struct SafeDIConfigurationMacro: PeerMacro {
 	public static func expansion(
 		of _: AttributeSyntax,
 		providingPeersOf declaration: some DeclSyntaxProtocol,
-		in context: some MacroExpansionContext
+		in context: some MacroExpansionContext,
 	) throws -> [DeclSyntax] {
 		guard let enumDecl = EnumDeclSyntax(declaration) else {
 			throw SafeDIConfigurationError.decoratingNonEnum
@@ -60,7 +60,7 @@ public struct SafeDIConfigurationMacro: PeerMacro {
 					/// The names of modules to import in the generated dependency tree.
 					/// This list is in addition to the import statements found in files that declare @Instantiable types.
 					static let \(raw: SafeDIConfigurationVisitor.additionalImportedModulesPropertyName): [StaticString] = []
-					""")
+					"""),
 				))
 			}
 			if !visitor.foundAdditionalDirectoriesToInclude {
@@ -70,13 +70,13 @@ public struct SafeDIConfigurationMacro: PeerMacro {
 					/// Directories containing Swift files to include, relative to the executing directory.
 					/// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
 					static let \(raw: SafeDIConfigurationVisitor.additionalDirectoriesToIncludePropertyName): [StaticString] = []
-					""")
+					"""),
 				))
 			}
 			for member in membersToInsert.reversed() {
 				modifiedDecl.memberBlock.members.insert(
 					member,
-					at: modifiedDecl.memberBlock.members.startIndex
+					at: modifiedDecl.memberBlock.members.startIndex,
 				)
 			}
 			let missingPropertyError: FixableSafeDIConfigurationError = if !visitor.foundAdditionalImportedModules {
@@ -90,9 +90,9 @@ public struct SafeDIConfigurationMacro: PeerMacro {
 				changes: [
 					.replace(
 						oldNode: Syntax(enumDecl),
-						newNode: Syntax(modifiedDecl)
+						newNode: Syntax(modifiedDecl),
 					),
-				]
+				],
 			))
 		}
 

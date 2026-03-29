@@ -18,11 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import SafeDICore
 import SwiftSyntaxMacros
 import SwiftSyntaxMacrosGenericTestSupport
 import Testing
-
-import SafeDICore
 
 #if canImport(SafeDIMacros)
 	@testable import SafeDIMacros
@@ -55,7 +54,7 @@ import SafeDICore
 				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
-				macros: safeDIConfigurationTestMacros
+				macros: safeDIConfigurationTestMacros,
 			)
 		}
 
@@ -75,7 +74,7 @@ import SafeDICore
 				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
 				""",
-				macros: safeDIConfigurationTestMacros
+				macros: safeDIConfigurationTestMacros,
 			)
 		}
 
@@ -95,7 +94,7 @@ import SafeDICore
 				    static let additionalDirectoriesToInclude: [StaticString] = ["DirA", "DirB"]
 				}
 				""",
-				macros: safeDIConfigurationTestMacros
+				macros: safeDIConfigurationTestMacros,
 			)
 		}
 
@@ -121,10 +120,10 @@ import SafeDICore
 					DiagnosticSpec(
 						message: "@SafeDIConfiguration must decorate an enum",
 						line: 1,
-						column: 1
+						column: 1,
 					),
 				],
-				macros: safeDIConfigurationTestMacros
+				macros: safeDIConfigurationTestMacros,
 			)
 		}
 
@@ -148,10 +147,10 @@ import SafeDICore
 					DiagnosticSpec(
 						message: "@SafeDIConfiguration must decorate an enum",
 						line: 1,
-						column: 1
+						column: 1,
 					),
 				],
-				macros: safeDIConfigurationTestMacros
+				macros: safeDIConfigurationTestMacros,
 			)
 		}
 
@@ -175,10 +174,10 @@ import SafeDICore
 					DiagnosticSpec(
 						message: "The `additionalImportedModules` property must be initialized with an array of string literals",
 						line: 1,
-						column: 1
+						column: 1,
 					),
 				],
-				macros: safeDIConfigurationTestMacros
+				macros: safeDIConfigurationTestMacros,
 			)
 		}
 
@@ -202,10 +201,10 @@ import SafeDICore
 					DiagnosticSpec(
 						message: "The `additionalDirectoriesToInclude` property must be initialized with an array of string literals",
 						line: 1,
-						column: 1
+						column: 1,
 					),
 				],
-				macros: safeDIConfigurationTestMacros
+				macros: safeDIConfigurationTestMacros,
 			)
 		}
 
@@ -229,10 +228,10 @@ import SafeDICore
 					DiagnosticSpec(
 						message: "The `additionalImportedModules` property must be initialized with an array of string literals",
 						line: 1,
-						column: 1
+						column: 1,
 					),
 				],
-				macros: safeDIConfigurationTestMacros
+				macros: safeDIConfigurationTestMacros,
 			)
 		}
 
@@ -257,7 +256,7 @@ import SafeDICore
 						column: 22,
 						fixIts: [
 							FixItSpec(message: "Add `static let additionalImportedModules: [StaticString]` property"),
-						]
+						],
 					),
 				],
 				macros: safeDIConfigurationTestMacros,
@@ -274,7 +273,7 @@ import SafeDICore
 				/// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
 				static let additionalDirectoriesToInclude: [StaticString] = []
 				}
-				"""
+				""",
 			)
 		}
 
@@ -299,7 +298,7 @@ import SafeDICore
 						column: 22,
 						fixIts: [
 							FixItSpec(message: "Add `static let additionalDirectoriesToInclude: [StaticString]` property"),
-						]
+						],
 					),
 				],
 				macros: safeDIConfigurationTestMacros,
@@ -314,7 +313,7 @@ import SafeDICore
 				static let additionalDirectoriesToInclude: [StaticString] = []
 				    static let additionalImportedModules: [StaticString] = []
 				}
-				"""
+				""",
 			)
 		}
 
@@ -339,7 +338,7 @@ import SafeDICore
 						column: 22,
 						fixIts: [
 							FixItSpec(message: "Add `static let additionalImportedModules: [StaticString]` property"),
-						]
+						],
 					),
 				],
 				macros: safeDIConfigurationTestMacros,
@@ -354,7 +353,7 @@ import SafeDICore
 				static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
 				}
-				"""
+				""",
 			)
 		}
 	}

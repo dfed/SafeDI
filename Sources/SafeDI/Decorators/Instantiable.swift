@@ -57,7 +57,7 @@
 public macro Instantiable(
 	isRoot: Bool = false,
 	fulfillingAdditionalTypes additionalTypes: [Any.Type] = [],
-	conformsElsewhere: Bool = false
+	conformsElsewhere: Bool = false,
 ) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")
 
 /// A type that can be instantiated with runtime-injected properties.

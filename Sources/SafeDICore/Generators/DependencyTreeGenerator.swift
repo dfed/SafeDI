@@ -25,7 +25,7 @@ public actor DependencyTreeGenerator {
 
 	public init(
 		importStatements: [ImportStatement],
-		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
+		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
 	) {
 		self.importStatements = importStatements
 		self.typeDescriptionToFulfillingInstantiableMap = typeDescriptionToFulfillingInstantiableMap
@@ -38,7 +38,7 @@ public actor DependencyTreeGenerator {
 
 		let dependencyTree = try await withThrowingTaskGroup(
 			of: String.self,
-			returning: String.self
+			returning: String.self,
 		) { taskGroup in
 			for rootScopeGenerator in rootScopeGenerators {
 				taskGroup.addTask { try await rootScopeGenerator.generateCode() }
@@ -65,7 +65,7 @@ public actor DependencyTreeGenerator {
 
 		let dependencyTree = try await withThrowingTaskGroup(
 			of: String.self,
-			returning: String.self
+			returning: String.self,
 		) { taskGroup in
 			for rootScopeGenerator in rootScopeGenerators {
 				taskGroup.addTask { try await rootScopeGenerator.generateDOT() }
@@ -178,7 +178,7 @@ public actor DependencyTreeGenerator {
 							for: nil,
 							propertyStack: [],
 							receivableProperties: [],
-							erasedToConcreteExistential: false
+							erasedToConcreteExistential: false,
 						)
 					}
 			}()
@@ -219,7 +219,7 @@ public actor DependencyTreeGenerator {
 		typeDescriptionToFulfillingInstantiableMap
 			.values
 			.filter(\.isRoot)
-			.map(\.concreteInstantiable)
+			.map(\.concreteInstantiable),
 	)
 
 	/// A collection of `@Instantiable`-decorated types that are instantiated by at least one other
@@ -284,14 +284,14 @@ public actor DependencyTreeGenerator {
 									.instantiableHasForwardedProperty(
 										property: dependency.property,
 										instantiableWithForwardedProperty: instantiable,
-										parent: scope.instantiable
+										parent: scope.instantiable,
 									)
 							}
 						}
 						scope.propertiesToGenerate.append(.instantiated(
 							dependency.property,
 							instantiatedScope,
-							erasedToConcreteExistential: erasedToConcreteExistential
+							erasedToConcreteExistential: erasedToConcreteExistential,
 						))
 					}
 				case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
@@ -299,7 +299,7 @@ public actor DependencyTreeGenerator {
 						dependency.property,
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,
-						onlyIfAvailable: onlyIfAvailable
+						onlyIfAvailable: onlyIfAvailable,
 					))
 				case .forwarded, .received:
 					continue
@@ -316,19 +316,19 @@ public actor DependencyTreeGenerator {
 			receivableProperties: Set<Property>,
 			property: Property?,
 			propertyStack: OrderedSet<Property>,
-			root: TypeDescription
+			root: TypeDescription,
 		) throws {
 			if let property {
 				func validateNoCycleInReceivedProperties(
 					scope: Scope,
 					receivedPropertyStack: OrderedSet<Property>,
-					instantiationStack: OrderedSet<Property>
+					instantiationStack: OrderedSet<Property>,
 				) throws {
 					for childProperty in scope.requiredReceivedProperties {
 						guard childProperty != property else {
 							throw DependencyTreeGeneratorError.receivedConstantCycleDetected(
 								instantiated: property,
-								receivedPropertyChain: receivedPropertyStack + [childProperty]
+								receivedPropertyChain: receivedPropertyStack + [childProperty],
 							)
 						}
 						guard !receivedPropertyStack.contains(childProperty) else {
@@ -340,7 +340,7 @@ public actor DependencyTreeGenerator {
 							let typesInCycle = (
 								[childProperty]
 									+ receivedPropertyStack.reversed()
-									+ instantiationProperties
+									+ instantiationProperties,
 							).map(\.typeDescription)
 							switch childProperty.propertyType {
 							case .instantiator,
@@ -350,7 +350,7 @@ public actor DependencyTreeGenerator {
 								throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
 									property: childProperty,
 									directParent: scope.instantiable.concreteInstantiable,
-									cycle: typesInCycle
+									cycle: typesInCycle,
 								)
 							case .constant:
 								throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
@@ -361,7 +361,7 @@ public actor DependencyTreeGenerator {
 							try validateNoCycleInReceivedProperties(
 								scope: receivedPropertyScope,
 								receivedPropertyStack: childPropertyStack,
-								instantiationStack: instantiationStack
+								instantiationStack: instantiationStack,
 							)
 						}
 					}
@@ -371,7 +371,7 @@ public actor DependencyTreeGenerator {
 				try validateNoCycleInReceivedProperties(
 					scope: scope,
 					receivedPropertyStack: [],
-					instantiationStack: instantiationStack
+					instantiationStack: instantiationStack,
 				)
 			}
 
@@ -388,7 +388,7 @@ public actor DependencyTreeGenerator {
 							suggestedAlternatives: receivableProperties.filter {
 								receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
 									|| receivedProperty.label == $0.label
-							}.sorted()
+							}.sorted(),
 						))
 					}
 				}
@@ -406,7 +406,7 @@ public actor DependencyTreeGenerator {
 				}
 				let typesInCycle = (
 					[propertyForDependency]
-						+ childPropertyStack.elements[0...cycleIndex]
+						+ childPropertyStack.elements[0...cycleIndex],
 				).map(\.typeDescription)
 				if propertyForDependency.propertyType.isConstant {
 					// We can break a constant dependency cycle if there's lazy instantiation in the tree.
@@ -417,7 +417,7 @@ public actor DependencyTreeGenerator {
 					throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
 						property: propertyForDependency,
 						directParent: scope.instantiable.concreteInstantiable,
-						cycle: typesInCycle
+						cycle: typesInCycle,
 					)
 				}
 			}
@@ -436,7 +436,7 @@ public actor DependencyTreeGenerator {
 							.removing(childProperty),
 						property: childProperty,
 						propertyStack: childPropertyStack,
-						root: root
+						root: root,
 					)
 				case .aliased:
 					break
@@ -450,7 +450,7 @@ public actor DependencyTreeGenerator {
 				receivableProperties: Set(rootScope.properties),
 				property: nil,
 				propertyStack: [],
-				root: rootScope.instantiable.concreteInstantiable
+				root: rootScope.instantiable.concreteInstantiable,
 			)
 		}
 

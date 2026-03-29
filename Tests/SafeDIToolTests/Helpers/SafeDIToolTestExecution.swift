@@ -21,7 +21,6 @@
 import Foundation
 import SafeDICore
 import Testing
-
 @testable import SafeDITool
 
 func executeSafeDIToolTest(
@@ -31,7 +30,7 @@ func executeSafeDIToolTest(
 	buildDependencyTreeOutput: Bool = false,
 	buildDOTFileOutput: Bool = false,
 	filesToDelete: inout [URL],
-	includeFolders: [String] = []
+	includeFolders: [String] = [],
 ) async throws -> TestOutput {
 	let swiftFileCSV = URL.temporaryFile
 	let swiftFiles = try swiftFileContent
@@ -80,7 +79,7 @@ func executeSafeDIToolTest(
 			moduleInfo: JSONDecoder().decode(SafeDITool.ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
 			moduleInfoOutputPath: moduleInfoOutput.relativePath,
 			dependencyTree: buildDependencyTreeOutput ? String(data: Data(contentsOf: dependencyTreeOutput), encoding: .utf8) : nil,
-			dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil
+			dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil,
 		)
 	}
 }
@@ -110,7 +109,7 @@ struct StubFileFinder: FileFinder {
 		at _: URL,
 		includingPropertiesForKeys _: [URLResourceKey]?,
 		options _: FileManager.DirectoryEnumerationOptions,
-		errorHandler _: ((URL, any Error) -> Bool)?
+		errorHandler _: ((URL, any Error) -> Bool)?,
 	) -> FileManager.DirectoryEnumerator? {
 		StubDirectoryEnumerator(files: files)
 	}
@@ -139,7 +138,7 @@ struct StubFileFinder: FileFinder {
 func assertThrowsError(
 	_ errorDescription: String,
 	sourceLocation: SourceLocation = #_sourceLocation,
-	block: () async throws -> some Sendable
+	block: () async throws -> some Sendable,
 ) async {
 	do {
 		_ = try await block()

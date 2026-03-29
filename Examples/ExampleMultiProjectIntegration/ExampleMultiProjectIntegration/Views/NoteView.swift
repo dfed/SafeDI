@@ -59,6 +59,6 @@ public struct NoteView: Instantiable, View {
 	NoteView(
 		userName: "dfed",
 		userService: .init(DefaultUserService(stringStorage: UserDefaults.standard)),
-		stringStorage: UserDefaults.standard
+		stringStorage: UserDefaults.standard,
 	)
 }

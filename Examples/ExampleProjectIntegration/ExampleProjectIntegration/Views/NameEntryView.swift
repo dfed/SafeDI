@@ -33,7 +33,7 @@ public struct NameEntryView: Instantiable, View {
 			TextField(
 				text: $name,
 				prompt: Text("Enter your name"),
-				label: {}
+				label: {},
 			)
 			Button(action: {
 				userService.userName = name

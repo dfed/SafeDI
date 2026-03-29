@@ -21,7 +21,6 @@
 import SwiftParser
 import SwiftSyntax
 import Testing
-
 @testable import SafeDICore
 
 struct FileVisitorTests {
@@ -51,33 +50,33 @@ struct FileVisitorTests {
 						.init(
 							innerLabel: "user",
 							typeDescription: .simple(name: "User"),
-							hasDefaultValue: false
+							hasDefaultValue: false,
 						),
 						.init(
 							innerLabel: "networkService",
 							typeDescription: .simple(name: "NetworkService"),
-							hasDefaultValue: false
+							hasDefaultValue: false,
 						),
-					]
+					],
 				),
 				additionalInstantiables: nil,
 				dependencies: [
 					Dependency(
 						property: Property(
 							label: "user",
-							typeDescription: .simple(name: "User")
+							typeDescription: .simple(name: "User"),
 						),
-						source: .forwarded
+						source: .forwarded,
 					),
 					Dependency(
 						property: Property(
 							label: "networkService",
-							typeDescription: .simple(name: "NetworkService")
+							typeDescription: .simple(name: "NetworkService"),
 						),
-						source: .received(onlyIfAvailable: false)
+						source: .received(onlyIfAvailable: false),
 					),
 				],
-				declarationType: .classType
+				declarationType: .classType,
 			),
 		])
 	}
@@ -111,33 +110,33 @@ struct FileVisitorTests {
 						.init(
 							innerLabel: "user",
 							typeDescription: .simple(name: "User"),
-							hasDefaultValue: false
+							hasDefaultValue: false,
 						),
 						.init(
 							innerLabel: "networkService",
 							typeDescription: .simple(name: "NetworkService"),
-							hasDefaultValue: false
+							hasDefaultValue: false,
 						),
-					]
+					],
 				),
 				additionalInstantiables: nil,
 				dependencies: [
 					Dependency(
 						property: Property(
 							label: "user",
-							typeDescription: .simple(name: "User")
+							typeDescription: .simple(name: "User"),
 						),
-						source: .forwarded
+						source: .forwarded,
 					),
 					Dependency(
 						property: Property(
 							label: "networkService",
-							typeDescription: .simple(name: "NetworkService")
+							typeDescription: .simple(name: "NetworkService"),
 						),
-						source: .received(onlyIfAvailable: false)
+						source: .received(onlyIfAvailable: false),
 					),
 				],
-				declarationType: .classType
+				declarationType: .classType,
 			),
 			Instantiable(
 				instantiableType: .simple(name: "SomeOtherInstantiable"),
@@ -145,7 +144,7 @@ struct FileVisitorTests {
 				initializer: Initializer(arguments: []),
 				additionalInstantiables: nil,
 				dependencies: [],
-				declarationType: .structType
+				declarationType: .structType,
 			),
 		])
 	}
@@ -173,7 +172,7 @@ struct FileVisitorTests {
 					.simple(name: "SomeProtocol"),
 				],
 				dependencies: [],
-				declarationType: .structType
+				declarationType: .structType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
@@ -181,7 +180,7 @@ struct FileVisitorTests {
 				initializer: Initializer(arguments: []),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .structType
+				declarationType: .structType,
 			),
 		])
 	}
@@ -206,7 +205,7 @@ struct FileVisitorTests {
 				initializer: Initializer(arguments: []),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .extensionType
+				declarationType: .extensionType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
@@ -214,7 +213,7 @@ struct FileVisitorTests {
 				initializer: Initializer(arguments: []),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .structType
+				declarationType: .structType,
 			),
 		])
 	}
@@ -250,7 +249,7 @@ struct FileVisitorTests {
 				initializer: Initializer(arguments: []),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .extensionType
+				declarationType: .extensionType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel1", parentType: .simple(name: "OuterLevel")),
@@ -258,7 +257,7 @@ struct FileVisitorTests {
 				initializer: Initializer(arguments: []),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .actorType
+				declarationType: .actorType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel2", parentType: .simple(name: "OuterLevel")),
@@ -266,7 +265,7 @@ struct FileVisitorTests {
 				initializer: Initializer(arguments: []),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .classType
+				declarationType: .classType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel3", parentType: .simple(name: "OuterLevel")),
@@ -274,7 +273,7 @@ struct FileVisitorTests {
 				initializer: Initializer(arguments: []),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .structType
+				declarationType: .structType,
 			),
 		])
 	}
@@ -297,7 +296,7 @@ struct FileVisitorTests {
 				initializer: Initializer(arguments: []),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .structType
+				declarationType: .structType,
 			),
 		])
 	}
@@ -315,7 +314,7 @@ struct FileVisitorTests {
 		#expect(fileVisitor.configurations == [
 			SafeDIConfiguration(
 				additionalImportedModules: ["ModuleA", "ModuleB"],
-				additionalDirectoriesToInclude: ["DirA"]
+				additionalDirectoriesToInclude: ["DirA"],
 			),
 		])
 		#expect(fileVisitor.instantiables.isEmpty)
@@ -334,7 +333,7 @@ struct FileVisitorTests {
 		#expect(fileVisitor.configurations == [
 			SafeDIConfiguration(
 				additionalImportedModules: [],
-				additionalDirectoriesToInclude: []
+				additionalDirectoriesToInclude: [],
 			),
 		])
 	}
@@ -353,7 +352,7 @@ struct FileVisitorTests {
 		#expect(fileVisitor.configurations == [
 			SafeDIConfiguration(
 				additionalImportedModules: [],
-				additionalDirectoriesToInclude: []
+				additionalDirectoriesToInclude: [],
 			),
 		])
 	}
@@ -371,7 +370,7 @@ struct FileVisitorTests {
 		#expect(fileVisitor.configurations == [
 			SafeDIConfiguration(
 				additionalImportedModules: [],
-				additionalDirectoriesToInclude: []
+				additionalDirectoriesToInclude: [],
 			),
 		])
 	}
@@ -394,7 +393,7 @@ struct FileVisitorTests {
 		#expect(fileVisitor.configurations == [
 			SafeDIConfiguration(
 				additionalImportedModules: ["ModuleA"],
-				additionalDirectoriesToInclude: []
+				additionalDirectoriesToInclude: [],
 			),
 		])
 		#expect(fileVisitor.instantiables == [
@@ -404,7 +403,7 @@ struct FileVisitorTests {
 				initializer: Initializer(arguments: []),
 				additionalInstantiables: nil,
 				dependencies: [],
-				declarationType: .structType
+				declarationType: .structType,
 			),
 		])
 	}
@@ -521,11 +520,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .structType
+				declarationType: .structType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))),
@@ -537,11 +536,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .actorType
+				declarationType: .actorType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))),
@@ -553,11 +552,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .classType
+				declarationType: .classType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))),
@@ -569,11 +568,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .actorType
+				declarationType: .actorType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))),
@@ -585,11 +584,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .classType
+				declarationType: .classType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))),
@@ -601,11 +600,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .structType
+				declarationType: .structType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))),
@@ -617,11 +616,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .classType
+				declarationType: .classType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))),
@@ -633,11 +632,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .actorType
+				declarationType: .actorType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))),
@@ -649,11 +648,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .actorType
+				declarationType: .actorType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))),
@@ -665,11 +664,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .structType
+				declarationType: .structType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))),
@@ -681,11 +680,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .structType
+				declarationType: .structType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))),
@@ -697,11 +696,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .classType
+				declarationType: .classType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))),
@@ -713,11 +712,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .classType
+				declarationType: .classType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))),
@@ -729,11 +728,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .classType
+				declarationType: .classType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))),
@@ -745,11 +744,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .classType
+				declarationType: .classType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))))),
@@ -761,11 +760,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .classType
+				declarationType: .classType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))))),
@@ -777,11 +776,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .classType
+				declarationType: .classType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))))))),
@@ -793,11 +792,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .classType
+				declarationType: .classType,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))))))),
@@ -809,11 +808,11 @@ struct FileVisitorTests {
 					doesThrow: false,
 					hasGenericParameter: false,
 					hasGenericWhereClause: false,
-					arguments: []
+					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
-				declarationType: .classType
+				declarationType: .classType,
 			),
 		])
 	}

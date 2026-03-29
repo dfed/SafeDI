@@ -20,7 +20,6 @@
 
 import Foundation
 import Testing
-
 @testable import SafeDICore
 
 struct UnorderedEquatingCollectionTests {
@@ -48,7 +47,7 @@ struct UnorderedEquatingCollectionTests {
 		let originalCollection = UnorderedEquatingCollection([1, 2, 3])
 		let decodedCollection = try JSONDecoder().decode(
 			UnorderedEquatingCollection<Int>.self,
-			from: JSONEncoder().encode(originalCollection)
+			from: JSONEncoder().encode(originalCollection),
 		)
 		#expect(originalCollection == decodedCollection)
 	}

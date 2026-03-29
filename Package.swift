@@ -18,21 +18,21 @@ let package = Package(
 		/// A library containing SafeDI macros, property wrappers, and types.
 		.library(
 			name: "SafeDI",
-			targets: ["SafeDI"]
+			targets: ["SafeDI"],
 		),
 		/// A SafeDI plugin that must be run on the root source module in a project.
 		.plugin(
 			name: "SafeDIGenerator",
-			targets: ["SafeDIGenerator"]
+			targets: ["SafeDIGenerator"],
 		),
 		/// A SafeDI plugin that must be run on the root source module in a project that does not build SwiftSyntax from source.
 		.plugin(
 			name: "SafeDIPrebuiltGenerator",
-			targets: ["SafeDIPrebuiltGenerator"]
+			targets: ["SafeDIPrebuiltGenerator"],
 		),
 		.plugin(
 			name: "InstallSafeDITool",
-			targets: ["InstallSafeDITool"]
+			targets: ["InstallSafeDITool"],
 		),
 	],
 	dependencies: [
@@ -47,7 +47,7 @@ let package = Package(
 			dependencies: ["SafeDIMacros"],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.testTarget(
 			name: "SafeDITests",
@@ -57,7 +57,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.macro(
 			name: "SafeDIMacros",
@@ -71,7 +71,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.testTarget(
 			name: "SafeDIMacrosTests",
@@ -82,7 +82,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 
 		// Plugins
@@ -91,20 +91,20 @@ let package = Package(
 			capability: .command(
 				intent: .custom(
 					verb: "safedi-release-install",
-					description: "Installs a release version of the SafeDITool build plugin executable."
+					description: "Installs a release version of the SafeDITool build plugin executable.",
 				),
 				permissions: [
 					.writeToPackageDirectory(reason: "Downloads the SafeDI release build plugin executable into your project directory."),
 					.allowNetworkConnections(scope: .all(ports: []), reason: "Downloads the SafeDI release build plugin executable from GitHub."),
-				]
+				],
 			),
-			dependencies: []
+			dependencies: [],
 		),
 
 		.plugin(
 			name: "SafeDIGenerator",
 			capability: .buildTool(),
-			dependencies: ["SafeDITool"]
+			dependencies: ["SafeDITool"],
 		),
 		.executableTarget(
 			name: "SafeDITool",
@@ -115,7 +115,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.testTarget(
 			name: "SafeDIToolTests",
@@ -125,13 +125,13 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 
 		.plugin(
 			name: "SafeDIPrebuiltGenerator",
 			capability: .buildTool(),
-			dependencies: []
+			dependencies: [],
 		),
 
 		// Core
@@ -145,14 +145,14 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.testTarget(
 			name: "SafeDICoreTests",
 			dependencies: ["SafeDICore"],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
-	]
+	],
 )

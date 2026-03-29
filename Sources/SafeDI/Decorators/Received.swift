@@ -55,5 +55,5 @@ public macro Received<T>(
 	fulfilledByDependencyNamed: StaticString,
 	ofType concreteType: T.Type,
 	erasedToConcreteExistential: Bool = false,
-	onlyIfAvailable: Bool = false
+	onlyIfAvailable: Bool = false,
 ) = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")

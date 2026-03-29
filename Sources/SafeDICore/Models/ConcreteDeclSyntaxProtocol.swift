@@ -39,7 +39,9 @@ extension ActorDeclSyntax: ConcreteDeclSyntaxProtocol {
 		}
 	}
 
-	public var declType: ConcreteDeclType { .actorType }
+	public var declType: ConcreteDeclType {
+		.actorType
+	}
 }
 
 extension ClassDeclSyntax: ConcreteDeclSyntaxProtocol {
@@ -52,7 +54,9 @@ extension ClassDeclSyntax: ConcreteDeclSyntaxProtocol {
 		}
 	}
 
-	public var declType: ConcreteDeclType { .classType }
+	public var declType: ConcreteDeclType {
+		.classType
+	}
 }
 
 extension StructDeclSyntax: ConcreteDeclSyntaxProtocol {
@@ -65,5 +69,7 @@ extension StructDeclSyntax: ConcreteDeclSyntaxProtocol {
 		}
 	}
 
-	public var declType: ConcreteDeclType { .structType }
+	public var declType: ConcreteDeclType {
+		.structType
+	}
 }

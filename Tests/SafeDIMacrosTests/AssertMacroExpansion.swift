@@ -35,7 +35,7 @@ func assertMacroExpansion(
 	fileID: StaticString = #fileID,
 	filePath: StaticString = #filePath,
 	line: UInt = #line,
-	column: UInt = #column
+	column: UInt = #column,
 ) {
 	let specs = macros.mapValues { MacroSpec(type: $0) }
 	SwiftSyntaxMacrosGenericTestSupport.assertMacroExpansion(
@@ -52,13 +52,13 @@ func assertMacroExpansion(
 					fileID: String(describing: spec.location.fileID),
 					filePath: String(describing: spec.location.filePath),
 					line: Int(spec.location.line),
-					column: Int(spec.location.column)
-				)
+					column: Int(spec.location.column),
+				),
 			)
 		},
 		fileID: fileID,
 		filePath: filePath,
 		line: line,
-		column: column
+		column: column,
 	)
 }

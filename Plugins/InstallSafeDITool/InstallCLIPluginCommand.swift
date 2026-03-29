@@ -28,7 +28,7 @@ import PackagePlugin
 struct InstallSafeDITool: CommandPlugin {
 	func performCommand(
 		context: PackagePlugin.PluginContext,
-		arguments _: [String]
+		arguments _: [String],
 	) async throws {
 		guard let safeDIOrigin = context.package.dependencies.first(where: { $0.package.displayName == "SafeDI" })?.package.origin else {
 			Diagnostics.error("No package origin found for SafeDI package")
@@ -62,10 +62,10 @@ struct InstallSafeDITool: CommandPlugin {
 				components: "releases",
 				"download",
 				version,
-				toolName
+				toolName,
 			)
 			let (downloadedURL, _) = try await URLSession.shared.download(
-				for: URLRequest(url: githubDownloadURL)
+				for: URLRequest(url: githubDownloadURL),
 			)
 			let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path(percentEncoded: false))
 			guard let currentPermissions = downloadedFileAttributes[.posixPermissions] as? NSNumber,
@@ -77,14 +77,14 @@ struct InstallSafeDITool: CommandPlugin {
 			}
 			try FileManager.default.createDirectory(
 				at: expectedToolFolder,
-				withIntermediateDirectories: true
+				withIntermediateDirectories: true,
 			)
 			if FileManager.default.fileExists(atPath: expectedToolLocation.path(percentEncoded: false)) {
 				try FileManager.default.removeItem(at: expectedToolLocation)
 			}
 			try FileManager.default.moveItem(
 				at: downloadedURL,
-				to: expectedToolLocation
+				to: expectedToolLocation,
 			)
 			let gitIgnoreLocation = context.safediFolder.appending(component: ".gitignore")
 			if !FileManager.default.fileExists(atPath: gitIgnoreLocation.path(percentEncoded: false)) {
@@ -93,7 +93,7 @@ struct InstallSafeDITool: CommandPlugin {
 				""".write(
 					to: gitIgnoreLocation,
 					atomically: true,
-					encoding: .utf8
+					encoding: .utf8,
 				)
 			}
 
@@ -113,7 +113,7 @@ struct InstallSafeDITool: CommandPlugin {
 	extension InstallSafeDITool: XcodeCommandPlugin {
 		func performCommand(
 			context: XcodeProjectPlugin.XcodePluginContext,
-			arguments _: [String]
+			arguments _: [String],
 		) throws {
 			let version = context.safeDIVersion
 			let safediFolder = context.safediFolder
@@ -133,7 +133,7 @@ struct InstallSafeDITool: CommandPlugin {
 				components: "releases",
 				"download",
 				version,
-				toolName
+				toolName,
 			)
 
 			let dispatchGroup = DispatchGroup()
@@ -141,7 +141,7 @@ struct InstallSafeDITool: CommandPlugin {
 			Task.detached {
 				defer { dispatchGroup.leave() }
 				let (downloadedURL, _) = try await URLSession.shared.download(
-					for: URLRequest(url: githubDownloadURL)
+					for: URLRequest(url: githubDownloadURL),
 				)
 				let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path(percentEncoded: false))
 				guard let currentPermissions = downloadedFileAttributes[.posixPermissions] as? NSNumber,
@@ -153,14 +153,14 @@ struct InstallSafeDITool: CommandPlugin {
 				}
 				try FileManager.default.createDirectory(
 					at: expectedToolFolder,
-					withIntermediateDirectories: true
+					withIntermediateDirectories: true,
 				)
 				if FileManager.default.fileExists(atPath: expectedToolLocation.path(percentEncoded: false)) {
 					try FileManager.default.removeItem(at: expectedToolLocation)
 				}
 				try FileManager.default.moveItem(
 					at: downloadedURL,
-					to: expectedToolLocation
+					to: expectedToolLocation,
 				)
 				let gitIgnoreLocation = safediFolder.appending(component: ".gitignore")
 				if !FileManager.default.fileExists(atPath: gitIgnoreLocation.path(percentEncoded: false)) {
@@ -169,7 +169,7 @@ struct InstallSafeDITool: CommandPlugin {
 					""".write(
 						to: gitIgnoreLocation,
 						atomically: true,
-						encoding: .utf8
+						encoding: .utf8,
 					)
 				}
 			}

@@ -23,16 +23,6 @@ import SwiftSyntax
 /// A representation of a property.
 /// e.g. `let myProperty: MyProperty`
 public struct Property: Codable, Hashable, Comparable, Sendable {
-	// MARK: Initialization
-
-	init(
-		label: String,
-		typeDescription: TypeDescription
-	) {
-		self.label = label
-		self.typeDescription = typeDescription
-	}
-
 	// MARK: Public
 
 	/// The label by which the property is referenced.
@@ -43,7 +33,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 	public func withUpdatedTypeDescription(_ typeDescription: TypeDescription) -> Self {
 		.init(
 			label: label,
-			typeDescription: typeDescription
+			typeDescription: typeDescription,
 		)
 	}
 
@@ -63,7 +53,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 	public var asFunctionParamter: Property {
 		.init(
 			label: label,
-			typeDescription: typeDescription.asFunctionParameter
+			typeDescription: typeDescription.asFunctionParameter,
 		)
 	}
 
@@ -78,11 +68,11 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 					attributes: AttributeListSyntax {
 						AttributeSyntax(attributeName: IdentifierTypeSyntax(
 							name: "escaping",
-							trailingTrivia: .space
+							trailingTrivia: .space,
 						))
 					},
-					baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
-				)
+					baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource)),
+				),
 			)
 		case let .attributed(typeDescription, _, attributes):
 			FunctionParameterSyntax(
@@ -94,19 +84,19 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 					attributes: AttributeListSyntax {
 						AttributeSyntax(attributeName: IdentifierTypeSyntax(
 							name: "escaping",
-							trailingTrivia: .space
+							trailingTrivia: .space,
 						))
 						if let attributes {
 							for attribute in attributes {
 								AttributeSyntax(
 									attributeName: IdentifierTypeSyntax(name: .identifier(attribute)),
-									trailingTrivia: .space
+									trailingTrivia: .space,
 								)
 							}
 						}
 					},
-					baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
-				)
+					baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource)),
+				),
 			)
 		case .simple,
 		     .nested,
@@ -124,7 +114,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 			FunctionParameterSyntax(
 				firstName: .identifier(label),
 				colon: .colonToken(trailingTrivia: .space),
-				type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
+				type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource)),
 			)
 		}
 	}
@@ -135,17 +125,17 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 				leadingTrivia: .newline,
 				leftOperand: MemberAccessExprSyntax(
 					base: DeclReferenceExprSyntax(baseName: TokenSyntax.keyword(.`self`)),
-					name: TokenSyntax.identifier(label)
+					name: TokenSyntax.identifier(label),
 				),
 				operator: AssignmentExprSyntax(
 					leadingTrivia: .space,
-					trailingTrivia: .space
+					trailingTrivia: .space,
 				),
 				rightOperand: DeclReferenceExprSyntax(
 					baseName: TokenSyntax.identifier(label),
-					trailingTrivia: trailingNewline ? .newline : nil
-				)
-			)))
+					trailingTrivia: trailingNewline ? .newline : nil,
+				),
+			))),
 		)
 	}
 
@@ -155,7 +145,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		TupleTypeElementSyntax(
 			firstName: .identifier(label),
 			colon: .colonToken(),
-			type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource))
+			type: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource)),
 		)
 	}
 

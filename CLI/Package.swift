@@ -12,5 +12,5 @@ let package = Package(
 	dependencies: [
 		.package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.60.1"),
 	],
-	targets: []
+	targets: [],
 )

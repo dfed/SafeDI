@@ -30,7 +30,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		propertiesToGenerate: [ScopeGenerator],
 		unavailableOptionalProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
-		isPropertyCycle: Bool
+		isPropertyCycle: Bool,
 	) {
 		if let property {
 			scopeData = .property(
@@ -40,10 +40,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					instantiable
 						.dependencies
 						.filter { $0.source == .forwarded }
-						.map(\.property)
+						.map(\.property),
 				),
 				erasedToConcreteExistential: erasedToConcreteExistential,
-				isPropertyCycle: isPropertyCycle
+				isPropertyCycle: isPropertyCycle,
 			)
 			description = instantiable.concreteInstantiable.asSource
 		} else {
@@ -62,7 +62,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					.subtracting(propertiesToDeclare)
 					// Minus the properties we forward.
 					.subtracting(scopeData.forwardedProperties)
-			}
+			},
 		)
 		// Unioned with the properties we require to fulfill our own dependencies.
 		.union(
@@ -77,14 +77,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					case let .aliased(fulfillingProperty, _, _):
 						fulfillingProperty
 					}
-				}
+				},
 		)
 		onlyIfAvailableUnwrappedReceivedProperties = Set(
 			propertiesToGenerate.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
 				propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
 					.subtracting(propertiesToDeclare)
 					.subtracting(scopeData.forwardedProperties)
-			}
+			},
 		)
 		.union(
 			instantiable
@@ -106,7 +106,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							nil
 						}
 					}
-				}
+				},
 		)
 	}
 
@@ -115,13 +115,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fulfillingProperty: Property,
 		unavailableOptionalProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
-		onlyIfAvailable: Bool
+		onlyIfAvailable: Bool,
 	) {
 		scopeData = .alias(
 			property: property,
 			fulfillingProperty: fulfillingProperty,
 			erasedToConcreteExistential: erasedToConcreteExistential,
-			onlyIfAvailable: onlyIfAvailable
+			onlyIfAvailable: onlyIfAvailable,
 		)
 		receivedProperties = [fulfillingProperty]
 		onlyIfAvailableUnwrappedReceivedProperties = if onlyIfAvailable {
@@ -144,7 +144,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	func generateCode(
 		propertiesAlreadyGeneratedAtThisScope: Set<Property> = [],
-		leadingWhitespace: String = ""
+		leadingWhitespace: String = "",
 	) async throws -> String {
 		let generatedCode: String
 		let unavailableProperties = unavailableOptionalProperties
@@ -176,10 +176,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					property,
 					forwardedProperties,
 					erasedToConcreteExistential,
-					isPropertyCycle
+					isPropertyCycle,
 				):
 					let argumentList = try instantiable.generateArgumentList(
-						unavailableProperties: unavailableProperties
+						unavailableProperties: unavailableProperties,
 					)
 					let concreteTypeName = instantiable.concreteInstantiable.asSource
 					let instantiationDeclaration = if instantiable.declarationType.isExtension {
@@ -204,7 +204,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					{
 						throw GenerationError.erasedInstantiatorGenericDoesNotMatch(
 							property: property,
-							instantiable: instantiable
+							instantiable: instantiable,
 						)
 					}
 
@@ -364,20 +364,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	// MARK: Private
 
-	private enum ScopeData: Sendable {
+	private enum ScopeData {
 		case root(instantiable: Instantiable)
 		case property(
 			instantiable: Instantiable,
 			property: Property,
 			forwardedProperties: Set<Property>,
 			erasedToConcreteExistential: Bool,
-			isPropertyCycle: Bool
+			isPropertyCycle: Bool,
 		)
 		case alias(
 			property: Property,
 			fulfillingProperty: Property,
 			erasedToConcreteExistential: Bool,
-			onlyIfAvailable: Bool
+			onlyIfAvailable: Bool,
 		)
 
 		var forwardedProperties: Set<Property> {
@@ -436,7 +436,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.keys
 				.intersection(
 					scope.receivedProperties
-						.union(scope.onlyIfAvailableUnwrappedReceivedProperties)
+						.union(scope.onlyIfAvailableUnwrappedReceivedProperties),
 				)
 				.compactMap { propertyToUnfulfilledScopeMap[$0] }
 			// Fulfill the scopes we depend upon.
@@ -460,8 +460,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			try await generatedProperties.append(
 				childGenerator.generateCode(
 					propertiesAlreadyGeneratedAtThisScope: .init(orderedPropertiesToGenerate[0..<index].compactMap(\.property)),
-					leadingWhitespace: leadingMemberWhitespace
-				)
+					leadingWhitespace: leadingMemberWhitespace,
+				),
 			)
 		}
 		return generatedProperties
@@ -491,12 +491,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 extension Instantiable {
 	fileprivate func generateArgumentList(
-		unavailableProperties: Set<Property>? = nil
+		unavailableProperties: Set<Property>? = nil,
 	) throws -> String {
 		try initializer?
 			.createInitializerArgumentList(
 				given: dependencies,
-				unavailableProperties: unavailableProperties
+				unavailableProperties: unavailableProperties,
 			) ?? "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
 	}
 }
