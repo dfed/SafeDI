@@ -118,10 +118,18 @@ func findFilesWithRoots(in swiftFiles: [URL]) -> [URL] {
 	swiftFiles.filter { fileURL in
 		guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { return false }
 		guard content.contains("isRoot") else { return false }
-		// Match @Instantiable(isRoot: true) not preceded by a backtick,
-		// to avoid matching inside doc comment code spans (e.g. `@Instantiable(isRoot: true)`).
-		guard let regex = try? Regex(#"(?<![`])@Instantiable\s*\([^)]*isRoot\s*:\s*true[^)]*\)"#) else { return false }
-		return content.firstMatch(of: regex) != nil
+		guard let regex = try? Regex(#"@Instantiable\s*\([^)]*isRoot\s*:\s*true[^)]*\)"#) else { return false }
+		// Check each match is not inside a comment or backtick-quoted code span.
+		for match in content.matches(of: regex) {
+			let lineStart = content[content.startIndex..<match.range.lowerBound].lastIndex(of: "\n").map { content.index(after: $0) } ?? content.startIndex
+			let linePrefix = content[lineStart..<match.range.lowerBound]
+			// Skip matches inside single-line comments.
+			if linePrefix.contains("//") { continue }
+			// Skip matches inside backtick-quoted code spans.
+			if linePrefix.contains("`") { continue }
+			return true
+		}
+		return false
 	}
 }
 
