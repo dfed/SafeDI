@@ -48,13 +48,13 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			}
 
 		let allSwiftFiles = targetSwiftFiles + dependenciesSourceFiles
-		let rootTypeNames = findRootTypeNames(in: allSwiftFiles)
-		guard !rootTypeNames.isEmpty else {
+		let rootFiles = findFilesWithRoots(in: allSwiftFiles)
+		guard !rootFiles.isEmpty else {
 			return []
 		}
 
-		let outputFiles = outputFileNames(for: rootTypeNames).map {
-			outputDirectory.appending(path: $0)
+		let outputFiles = rootFiles.map {
+			outputDirectory.appending(path: outputFileName(for: $0))
 		}
 
 		let inputSourcesFile = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv")
@@ -67,10 +67,18 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 				encoding: .utf8,
 			)
 
+		let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
+		try writeManifest(
+			dependencyTreeInputFiles: rootFiles,
+			outputDirectory: outputDirectory,
+			to: manifestFile,
+			relativeTo: context.package.directoryURL,
+		)
+
 		let arguments = [
 			inputSourcesFile.path(percentEncoded: false),
-			"--swift-output-directory",
-			outputDirectory.path(percentEncoded: false),
+			"--swift-manifest",
+			manifestFile.path(percentEncoded: false),
 		]
 
 		let downloadedToolLocation = context.downloadedToolLocation
@@ -164,14 +172,14 @@ extension Target {
 				return []
 			}
 
-			let rootTypeNames = findRootTypeNames(in: inputSwiftFiles)
-			guard !rootTypeNames.isEmpty else {
+			let rootFiles = findFilesWithRoots(in: inputSwiftFiles)
+			guard !rootFiles.isEmpty else {
 				return []
 			}
 
 			let outputDirectory = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutput")
-			let outputFiles = outputFileNames(for: rootTypeNames).map {
-				outputDirectory.appending(path: $0)
+			let outputFiles = rootFiles.map {
+				outputDirectory.appending(path: outputFileName(for: $0))
 			}
 
 			let inputSourcesFile = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv")
@@ -184,10 +192,18 @@ extension Target {
 					encoding: .utf8,
 				)
 
+			let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
+			try writeManifest(
+				dependencyTreeInputFiles: rootFiles,
+				outputDirectory: outputDirectory,
+				to: manifestFile,
+				relativeTo: context.pluginWorkDirectoryURL,
+			)
+
 			let arguments = [
 				inputSourcesFile.path(percentEncoded: false),
-				"--swift-output-directory",
-				outputDirectory.path(percentEncoded: false),
+				"--swift-manifest",
+				manifestFile.path(percentEncoded: false),
 			]
 
 			let downloadedToolLocation = context.downloadedToolLocation

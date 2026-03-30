@@ -180,6 +180,28 @@ This plugin will:
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, create a `@SafeDIConfiguration` enum in your root module with the equivalent values and delete the CSV files
 4. If you don't have CSV configuration files, create a `@SafeDIConfiguration`-decorated enum in your root module
 
+### Migrating prebuild scripts or custom build system integrations
+
+If you invoke `SafeDITool` directly (not via the provided SPM plugin), the `--dependency-tree-output` flag has been replaced with `--swift-manifest`. The tool now takes a JSON manifest file that maps input Swift files to output files. See [`SafeDIToolManifest`](Sources/SafeDICore/Models/SafeDIToolManifest.swift) for the expected format.
+
+Before (1.x):
+```bash
+safedi-tool input.csv --dependency-tree-output ./generated/SafeDI.swift
+```
+
+After (2.x):
+```bash
+# Create a manifest mapping root files to outputs
+cat > manifest.json << 'EOF'
+{
+  "dependencyTreeGeneration": {
+    "Sources/App/Root.swift": "generated/Root+SafeDI.swift"
+  }
+}
+EOF
+safedi-tool input.csv --swift-manifest manifest.json
+```
+
 ## Contributing
 
 I’m glad you’re interested in SafeDI, and I’d love to see where you take it. Please review the [contributing guidelines](Contributing.md) prior to submitting a Pull Request.

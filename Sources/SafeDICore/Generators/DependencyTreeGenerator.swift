@@ -35,6 +35,7 @@ public actor DependencyTreeGenerator {
 
 	public struct GeneratedRoot: Sendable {
 		public let typeDescription: TypeDescription
+		public let sourceFilePath: String?
 		public let code: String
 	}
 
@@ -48,12 +49,13 @@ public actor DependencyTreeGenerator {
 			of: GeneratedRoot?.self,
 			returning: [GeneratedRoot].self,
 		) { taskGroup in
-			for (typeDescription, scopeGenerator) in rootScopeGenerators {
+			for rootInfo in rootScopeGenerators {
 				taskGroup.addTask {
-					let code = try await scopeGenerator.generateCode()
+					let code = try await rootInfo.scopeGenerator.generateCode()
 					guard !code.isEmpty else { return nil }
 					return GeneratedRoot(
-						typeDescription: typeDescription,
+						typeDescription: rootInfo.typeDescription,
+						sourceFilePath: rootInfo.sourceFilePath,
 						code: fileHeader + code,
 					)
 				}
@@ -75,8 +77,8 @@ public actor DependencyTreeGenerator {
 			of: String.self,
 			returning: String.self,
 		) { taskGroup in
-			for (_, rootScopeGenerator) in rootScopeGenerators {
-				taskGroup.addTask { try await rootScopeGenerator.generateDOT() }
+			for rootInfo in rootScopeGenerators {
+				taskGroup.addTask { try await rootInfo.scopeGenerator.generateDOT() }
 			}
 			var generatedRoots = [String]()
 			for try await generatedRoot in taskGroup {
@@ -172,9 +174,15 @@ public actor DependencyTreeGenerator {
 
 	private let importStatements: [ImportStatement]
 	private let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
-	private var rootScopeGenerators: [(TypeDescription, ScopeGenerator)] {
+	private struct RootScopeInfo {
+		let typeDescription: TypeDescription
+		let sourceFilePath: String?
+		let scopeGenerator: ScopeGenerator
+	}
+
+	private var rootScopeGenerators: [RootScopeInfo] {
 		get throws {
-			let rootScopeGenerators: [(TypeDescription, ScopeGenerator)] = try {
+			let rootScopeGenerators: [RootScopeInfo] = try {
 				try validateReachableTypeDescriptions()
 
 				let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
@@ -190,7 +198,8 @@ public actor DependencyTreeGenerator {
 						) else {
 							return nil
 						}
-						return (typeDescription, scopeGenerator)
+						let sourceFilePath = typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath
+						return RootScopeInfo(typeDescription: typeDescription, sourceFilePath: sourceFilePath, scopeGenerator: scopeGenerator)
 					}
 			}()
 			return rootScopeGenerators

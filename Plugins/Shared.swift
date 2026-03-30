@@ -113,44 +113,37 @@ extension PackagePlugin.PluginContext {
 	}
 }
 
-/// Find the unqualified type names of all `@Instantiable(isRoot: true)` declarations in the given Swift files.
-func findRootTypeNames(in swiftFiles: [URL]) -> [String] {
-	var rootTypeNames = [String]()
-	for fileURL in swiftFiles {
-		guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
-		guard content.contains("isRoot") else { continue }
-		// Find @Instantiable(...isRoot: true...) occurrences.
-		guard let instantiableRootRegex = try? Regex(#"@Instantiable\s*\([^)]*isRoot\s*:\s*true[^)]*\)"#) else { continue }
-		// Find the type declaration keyword and name following the macro.
-		guard let typeDeclRegex = try? Regex(#"(?:class|struct|actor)\s+(\w+)"#) else { continue }
-		for match in content.matches(of: instantiableRootRegex) {
-			let afterMacro = content[match.range.upperBound...]
-			if let typeMatch = afterMacro.firstMatch(of: typeDeclRegex),
-			   let nameRange = typeMatch.output[1].range
-			{
-				rootTypeNames.append(String(content[nameRange]))
-			}
-		}
+/// Find Swift files that contain `@Instantiable(isRoot: true)` declarations.
+func findFilesWithRoots(in swiftFiles: [URL]) -> [URL] {
+	swiftFiles.filter { fileURL in
+		guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { return false }
+		return content.contains("isRoot")
+			&& content.contains("true")
+			&& (try? Regex(#"@Instantiable\s*\([^)]*isRoot\s*:\s*true[^)]*\)"#))
+			.flatMap { content.firstMatch(of: $0) } != nil
 	}
-	return rootTypeNames
 }
 
-/// Compute output file names for a list of root type names, handling collisions with count suffixes.
-/// Both the plugin and the SafeDITool must use the same convention to agree on output file names.
-func outputFileNames(for rootTypeNames: [String]) -> [String] {
-	let sorted = rootTypeNames.sorted()
-	var nameCount = [String: Int]()
-	for name in sorted {
-		nameCount[name, default: 0] += 1
+/// Derive the output filename for a dependency tree generated from an input Swift file.
+func outputFileName(for inputURL: URL) -> String {
+	let baseName = inputURL.deletingPathExtension().lastPathComponent
+	return "\(baseName)+SafeDI.swift"
+}
+
+/// Write a SafeDIToolManifest JSON file mapping input file paths to output file paths.
+func writeManifest(
+	dependencyTreeInputFiles: [URL],
+	outputDirectory: URL,
+	to manifestURL: URL,
+	relativeTo _: URL,
+) throws {
+	var dependencyTreeGeneration = [String: String]()
+	for inputURL in dependencyTreeInputFiles {
+		let inputPath = inputURL.path(percentEncoded: false)
+		let outputPath = outputDirectory.appending(path: outputFileName(for: inputURL)).path(percentEncoded: false)
+		dependencyTreeGeneration[inputPath] = outputPath
 	}
-	var nameIndex = [String: Int]()
-	return sorted.map { name in
-		let index = nameIndex[name, default: 0]
-		nameIndex[name] = index + 1
-		if index == 0 {
-			return "\(name)+SafeDI.swift"
-		} else {
-			return "\(name)\(index + 1)+SafeDI.swift"
-		}
-	}
+	let manifest = ["dependencyTreeGeneration": dependencyTreeGeneration]
+	let data = try JSONSerialization.data(withJSONObject: manifest, options: [.sortedKeys])
+	try data.write(to: manifestURL)
 }

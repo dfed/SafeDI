@@ -1937,7 +1937,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			tool.additionalImportedModules = []
 			tool.moduleInfoOutput = nil
 			tool.dependentModuleInfoFilePath = nil
-			tool.swiftOutputDirectory = nil
+			tool.swiftManifest = nil
 			tool.dotFileOutput = nil
 			await assertThrowsError("Could not create file enumerator for directory 'Fake'") {
 				try await tool.run()
@@ -1954,7 +1954,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		tool.additionalImportedModules = []
 		tool.moduleInfoOutput = nil
 		tool.dependentModuleInfoFilePath = nil
-		tool.swiftOutputDirectory = nil
+		tool.swiftManifest = nil
 		tool.dotFileOutput = nil
 		await assertThrowsError("Must provide 'swift-sources-file-path' or '--include'.") {
 			try await tool.run()

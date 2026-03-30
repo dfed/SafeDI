@@ -50,10 +50,36 @@ func executeSafeDIToolTest(
 		.write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
 
 	let moduleInfoOutput = URL.temporaryFile.appendingPathExtension("safedi")
-	let swiftOutputDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+	let outputDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+	let manifestFile = URL.temporaryFile.appendingPathExtension("json")
 	let dotTreeOutput = URL.temporaryFile.appendingPathExtension("dot")
 
 	return try await SafeDITool.$fileFinder.withValue(StubFileFinder(files: swiftFiles)) { // Successfully execute the file finder code path.
+		// Build the manifest by scanning for files that contain isRoot: true.
+		var manifestPath: String?
+		if buildSwiftOutputDirectory {
+			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+			var dependencyTreeGeneration = [String: String]()
+			let rootRegex = try Regex(#"@Instantiable\s*\([^)]*isRoot\s*:\s*true[^)]*\)"#)
+			let typeDeclRegex = try Regex(#"(?:class|struct|actor)\s+(\w+)"#)
+			for (content, file) in zip(swiftFileContent, swiftFiles) {
+				if let rootMatch = content.firstMatch(of: rootRegex) {
+					let afterMacro = content[rootMatch.range.upperBound...]
+					if let typeMatch = afterMacro.firstMatch(of: typeDeclRegex),
+					   let nameRange = typeMatch.output[1].range
+					{
+						let typeName = String(content[nameRange])
+						let outputPath = (outputDirectory.relativePath as NSString).appendingPathComponent("\(typeName)+SafeDI.swift")
+						dependencyTreeGeneration[file.relativePath] = outputPath
+					}
+				}
+			}
+			let manifest = SafeDIToolManifest(dependencyTreeGeneration: dependencyTreeGeneration)
+			let manifestData = try JSONEncoder().encode(manifest)
+			try manifestData.write(to: manifestFile)
+			manifestPath = manifestFile.relativePath
+		}
+
 		var tool = SafeDITool()
 		tool.swiftSourcesFilePath = swiftFileCSV.relativePath
 		tool.showVersion = false
@@ -61,7 +87,7 @@ func executeSafeDIToolTest(
 		tool.additionalImportedModules = additionalImportedModules
 		tool.moduleInfoOutput = moduleInfoOutput.relativePath
 		tool.dependentModuleInfoFilePath = dependentModuleInfoPaths.isEmpty ? nil : dependentModuleInfoFileCSV.relativePath
-		tool.swiftOutputDirectory = buildSwiftOutputDirectory ? swiftOutputDirectory.relativePath : nil
+		tool.swiftManifest = manifestPath
 		tool.dotFileOutput = buildDOTFileOutput ? dotTreeOutput.relativePath : nil
 		try await tool.run()
 
@@ -69,7 +95,8 @@ func executeSafeDIToolTest(
 		filesToDelete += swiftFiles
 		filesToDelete.append(moduleInfoOutput)
 		if buildSwiftOutputDirectory {
-			filesToDelete.append(swiftOutputDirectory)
+			filesToDelete.append(outputDirectory)
+			filesToDelete.append(manifestFile)
 		}
 		if buildDOTFileOutput {
 			filesToDelete.append(dotTreeOutput)
@@ -78,10 +105,10 @@ func executeSafeDIToolTest(
 		// Read generated files from the output directory.
 		let generatedFiles: [String: String]? = if buildSwiftOutputDirectory {
 			{
-				guard let fileNames = try? FileManager.default.contentsOfDirectory(atPath: swiftOutputDirectory.relativePath) else { return [:] }
+				guard let fileNames = try? FileManager.default.contentsOfDirectory(atPath: outputDirectory.relativePath) else { return [:] }
 				var result = [String: String]()
 				for fileName in fileNames where fileName.hasSuffix(".swift") {
-					let filePath = (swiftOutputDirectory.relativePath as NSString).appendingPathComponent(fileName)
+					let filePath = (outputDirectory.relativePath as NSString).appendingPathComponent(fileName)
 					result[fileName] = try? String(contentsOfFile: filePath, encoding: .utf8)
 				}
 				return result
