@@ -40,7 +40,7 @@ struct SafeDIToolVersionTests {
 		tool.additionalImportedModules = []
 		tool.moduleInfoOutput = nil
 		tool.dependentModuleInfoFilePath = nil
-		tool.dependencyTreeOutput = nil
+		tool.swiftOutputDirectory = nil
 		tool.dotFileOutput = nil
 
 		let output = try await captureStandardOutput {

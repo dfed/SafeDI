@@ -112,3 +112,45 @@ extension PackagePlugin.PluginContext {
 		return expectedToolLocation
 	}
 }
+
+/// Find the unqualified type names of all `@Instantiable(isRoot: true)` declarations in the given Swift files.
+func findRootTypeNames(in swiftFiles: [URL]) -> [String] {
+	var rootTypeNames = [String]()
+	for fileURL in swiftFiles {
+		guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
+		guard content.contains("isRoot") else { continue }
+		// Find @Instantiable(...isRoot: true...) occurrences.
+		guard let instantiableRootRegex = try? Regex(#"@Instantiable\s*\([^)]*isRoot\s*:\s*true[^)]*\)"#) else { continue }
+		// Find the type declaration keyword and name following the macro.
+		guard let typeDeclRegex = try? Regex(#"(?:class|struct|actor)\s+(\w+)"#) else { continue }
+		for match in content.matches(of: instantiableRootRegex) {
+			let afterMacro = content[match.range.upperBound...]
+			if let typeMatch = afterMacro.firstMatch(of: typeDeclRegex),
+			   let nameRange = typeMatch.output[1].range
+			{
+				rootTypeNames.append(String(content[nameRange]))
+			}
+		}
+	}
+	return rootTypeNames
+}
+
+/// Compute output file names for a list of root type names, handling collisions with count suffixes.
+/// Both the plugin and the SafeDITool must use the same convention to agree on output file names.
+func outputFileNames(for rootTypeNames: [String]) -> [String] {
+	let sorted = rootTypeNames.sorted()
+	var nameCount = [String: Int]()
+	for name in sorted {
+		nameCount[name, default: 0] += 1
+	}
+	var nameIndex = [String: Int]()
+	return sorted.map { name in
+		let index = nameIndex[name, default: 0]
+		nameIndex[name] = index + 1
+		if index == 0 {
+			return "\(name)+SafeDI.swift"
+		} else {
+			return "\(name)\(index + 1)+SafeDI.swift"
+		}
+	}
+}

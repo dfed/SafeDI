@@ -57,7 +57,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -103,7 +103,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -149,7 +149,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -184,7 +184,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -219,7 +219,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -253,7 +253,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -288,7 +288,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -333,7 +333,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -378,7 +378,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -421,7 +421,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -464,7 +464,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -506,7 +506,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -549,7 +549,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -595,7 +595,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -643,7 +643,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -677,7 +677,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -724,7 +724,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public final class Blankie {}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -781,7 +781,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public final class Blankie {}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -839,7 +839,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -897,7 +897,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -951,7 +951,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1005,7 +1005,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1063,7 +1063,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1098,7 +1098,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1126,7 +1126,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public final class RootViewController: UIViewController {}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1154,7 +1154,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public final class RootViewController: UIViewController {}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1186,7 +1186,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1218,7 +1218,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1250,7 +1250,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1286,7 +1286,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1314,7 +1314,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public final class SplashViewController: UIViewController {}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1355,7 +1355,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1394,7 +1394,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1435,7 +1435,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1476,7 +1476,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1517,7 +1517,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1558,7 +1558,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1601,7 +1601,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1645,7 +1645,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1688,7 +1688,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1745,7 +1745,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1826,7 +1826,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1909,7 +1909,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
-				buildDependencyTreeOutput: true,
+				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1937,7 +1937,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			tool.additionalImportedModules = []
 			tool.moduleInfoOutput = nil
 			tool.dependentModuleInfoFilePath = nil
-			tool.dependencyTreeOutput = nil
+			tool.swiftOutputDirectory = nil
 			tool.dotFileOutput = nil
 			await assertThrowsError("Could not create file enumerator for directory 'Fake'") {
 				try await tool.run()
@@ -1954,7 +1954,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		tool.additionalImportedModules = []
 		tool.moduleInfoOutput = nil
 		tool.dependentModuleInfoFilePath = nil
-		tool.dependencyTreeOutput = nil
+		tool.swiftOutputDirectory = nil
 		tool.dotFileOutput = nil
 		await assertThrowsError("Must provide 'swift-sources-file-path' or '--include'.") {
 			try await tool.run()

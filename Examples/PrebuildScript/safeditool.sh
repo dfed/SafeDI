@@ -28,6 +28,6 @@ fi
 
 # Run the tool.
 SOURCE_DIR="$PROJECT_DIR/ExampleCocoaPodsIntegration"
-SAFEDI_OUTPUT="$PROJECT_DIR/SafeDIOutput/SafeDI.swift"
-mkdir -p $PROJECT_DIR/SafeDIOutput
-$SAFEDI_LOCATION --include "$SOURCE_DIR" --dependency-tree-output "$SAFEDI_OUTPUT"
+SAFEDI_OUTPUT_DIR="$PROJECT_DIR/SafeDIOutput"
+mkdir -p "$SAFEDI_OUTPUT_DIR"
+$SAFEDI_LOCATION --include "$SOURCE_DIR" --swift-output-directory "$SAFEDI_OUTPUT_DIR"

@@ -31,7 +31,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			return []
 		}
 
-		let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
+		let outputDirectory = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutput")
 		// Swift Package Plugins did not (as of Swift 5.9) allow for
 		// creating dependencies between plugin output at the time of writing.
 		// Since our current build system did not support depending on the
@@ -46,8 +46,20 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					.sourceFiles(withSuffix: ".swift")
 					.map(\.url)
 			}
+
+		let allSwiftFiles = targetSwiftFiles + dependenciesSourceFiles
+		let rootTypeNames = findRootTypeNames(in: allSwiftFiles)
+		guard !rootTypeNames.isEmpty else {
+			return []
+		}
+
+		let outputFiles = outputFileNames(for: rootTypeNames).map {
+			outputDirectory.appending(path: $0)
+		}
+
 		let inputSourcesFile = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv")
-		try (targetSwiftFiles.map { $0.path(percentEncoded: false) } + dependenciesSourceFiles.map { $0.path(percentEncoded: false) })
+		try allSwiftFiles
+			.map { $0.path(percentEncoded: false) }
 			.joined(separator: ",")
 			.write(
 				to: inputSourcesFile,
@@ -57,8 +69,8 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 
 		let arguments = [
 			inputSourcesFile.path(percentEncoded: false),
-			"--dependency-tree-output",
-			outputSwiftFile.path(percentEncoded: false),
+			"--swift-output-directory",
+			outputDirectory.path(percentEncoded: false),
 		]
 
 		let downloadedToolLocation = context.downloadedToolLocation
@@ -94,8 +106,8 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 				executable: toolLocation,
 				arguments: arguments,
 				environment: [:],
-				inputFiles: targetSwiftFiles + dependenciesSourceFiles,
-				outputFiles: [outputSwiftFile],
+				inputFiles: allSwiftFiles,
+				outputFiles: outputFiles,
 			),
 		]
 	}
@@ -152,7 +164,16 @@ extension Target {
 				return []
 			}
 
-			let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
+			let rootTypeNames = findRootTypeNames(in: inputSwiftFiles)
+			guard !rootTypeNames.isEmpty else {
+				return []
+			}
+
+			let outputDirectory = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutput")
+			let outputFiles = outputFileNames(for: rootTypeNames).map {
+				outputDirectory.appending(path: $0)
+			}
+
 			let inputSourcesFile = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv")
 			try inputSwiftFiles
 				.map { $0.path(percentEncoded: false) }
@@ -165,8 +186,8 @@ extension Target {
 
 			let arguments = [
 				inputSourcesFile.path(percentEncoded: false),
-				"--dependency-tree-output",
-				outputSwiftFile.path(percentEncoded: false),
+				"--swift-output-directory",
+				outputDirectory.path(percentEncoded: false),
 			]
 
 			let downloadedToolLocation = context.downloadedToolLocation
@@ -188,7 +209,7 @@ extension Target {
 					arguments: arguments,
 					environment: [:],
 					inputFiles: inputSwiftFiles,
-					outputFiles: [outputSwiftFile],
+					outputFiles: outputFiles,
 				),
 			]
 		}
