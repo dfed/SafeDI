@@ -39,11 +39,7 @@ echo "  SafeDITool.swift:     $TOOL_VERSION"
 PLUGIN_VERSION=$(extract_version "Plugins/Shared.swift" "var safeDIVersion: String" 4 '"')
 echo "  Plugins/Shared.swift: $PLUGIN_VERSION"
 
-# Extract version from SafeDI.podspec
-PODSPEC_VERSION=$(extract_version "SafeDI.podspec" "s.version" 0 "'")
-echo "  SafeDI.podspec:       $PODSPEC_VERSION"
-
-if [ "$TOOL_VERSION" != "$PLUGIN_VERSION" ] || [ "$TOOL_VERSION" != "$PODSPEC_VERSION" ]; then
+if [ "$TOOL_VERSION" != "$PLUGIN_VERSION" ]; then
     echo "ERROR: Version mismatch detected!"
     exit 1
 fi

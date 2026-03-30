@@ -111,30 +111,6 @@ jobs:
       - name: Build Project Integration
         run: pushd Examples/ExampleMultiProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration; popd
 
-  pod-project-integration:
-    name: Build CocoaPods Integration on Xcode 26
-    runs-on: macos-26
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3.5'
-          bundler-cache: true
-      - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
-      - name: Install Pod
-        run: bundle exec pod install --project-directory=Examples/ExampleCocoaPodsIntegration
-      - name: Download iOS
-        run: |
-          sudo xcodebuild -runFirstLaunch
-          sudo xcrun simctl list
-          sudo xcodebuild -downloadPlatform iOS
-      - name: Build CocoaPods Integration
-        run: xcrun xcodebuild build -scheme ExampleCocoaPodsIntegration -configuration Debug -workspace Examples/ExampleCocoaPodsIntegration/ExampleCocoaPodsIntegration.xcworkspace -destination 'platform=iOS Simulator,OS=26.2,name=iPad (A16)' # Explicitly test the Debug build. Our pod lint jobs are already testing the Release build.
-
   spm:
     name: Build and Test on Xcode 26
     runs-on: macos-26
@@ -159,39 +135,6 @@ jobs:
           fail_ci_if_error: true
           verbose: true
           os: macos
-
-  pod-lint:
-    name: Pod Lint
-    runs-on: macos-26
-    strategy:
-      matrix:
-        platforms: [
-          "ios",
-          "tvos",
-          "watchos",
-          "macos",
-          "visionos",
-        ]
-      fail-fast: false
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3.5'
-          bundler-cache: true
-      - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
-      - name: Download Simulator
-        if: matrix.platforms != 'macos'
-        run: |
-          sudo xcodebuild -runFirstLaunch
-          sudo xcrun simctl list
-          sudo xcodebuild -downloadPlatform ${{ matrix.platforms }}
-      - name: Lint Podspec
-        run: bundle exec pod lib lint --verbose --fail-fast --swift-version=6.3 --platforms=${{ matrix.platforms }}
 
   linux:
     name: Build and Test on Linux
