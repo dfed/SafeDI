@@ -5816,6 +5816,76 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
+	mutating func run_writesErrorToOutputFile_whenUnexpectedSwiftNodesAreEncounteredAndRootExists() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+					public init(b: B) {
+						self.b = b
+					}
+
+					:::brokenSyntax
+
+					@Instantiated private let b: B
+				}
+
+				@Instantiable
+				public final class B: Instantiable {
+					public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let rootFile = try #require(output.generatedFiles?["Root+SafeDI.swift"])
+		#expect(rootFile.contains("#error"))
+		#expect(rootFile.contains("Compiler errors prevented the generation of the dependency tree"))
+	}
+
+	@Test
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenMultipleRootsExistInSameFile() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Dep {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root1 {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Instantiated let dep: Dep
+				}
+				@Instantiable(isRoot: true)
+				public struct Root2 {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Instantiated let dep: Dep
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// Both roots are in the same file, so one output file should contain both extensions.
+		let files = try #require(output.generatedFiles)
+		#expect(files.count == 1)
+		let content = try #require(files.values.first)
+		#expect(content.contains("extension Root1"))
+		#expect(content.contains("extension Root2"))
+	}
+
+	@Test
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenInstantiatorClosureTransitivelyCapturesVariableDeclaredLaterAlphabetically() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
