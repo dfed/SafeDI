@@ -7,11 +7,11 @@ import PackageDescription
 let package = Package(
 	name: "SafeDI",
 	platforms: [
-		.macOS(.v10_15),
-		.iOS(.v13),
-		.tvOS(.v13),
-		.watchOS(.v6),
-		.macCatalyst(.v13),
+		.macOS(.v11),
+		.iOS(.v15),
+		.tvOS(.v15),
+		.watchOS(.v8),
+		.macCatalyst(.v15),
 		.visionOS(.v1),
 	],
 	products: [
