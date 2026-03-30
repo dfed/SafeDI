@@ -169,6 +169,31 @@ SafeDI’s compile-time safety and hierarchical dependency scoping make it simil
 
 Other Swift DI libraries, like [Factory](https://github.com/hmlongco/Factory) and [swift-dependencies](https://github.com/pointfreeco/swift-dependencies) do offer compile-time validation of the dependency tree but do not have hierarchical dependency scoping. This means scoped dependencies—like an authentication token in a network layer—can only be optionally injected when using these libraries. Meanwhile, libraries like [Swinject](https://github.com/Swinject/Swinject) do not offer compile-time safety.
 
+## Migrating from SafeDI 1.x to 2.x
+
+SafeDI 2.x requires Swift 6.3 or later and removes support for CSV-based configuration files (`.safedi/configuration/include.csv` and `.safedi/configuration/additionalImportedModules.csv`). Configuration is now done via the `@SafeDIConfiguration` macro.
+
+### Automated migration
+
+SafeDI provides a command plugin to automate the migration:
+
+```bash
+swift package plugin safedi-v1-to-v2 --target <YourRootTarget>
+```
+
+This plugin will:
+1. Verify your `swift-tools-version` is 6.3 or later
+2. Create a `SafeDIConfiguration.swift` file in your target's source directory
+3. Migrate any existing CSV configuration values into the new `@SafeDIConfiguration` enum
+4. Delete the obsolete CSV files
+
+### Manual migration
+
+1. Update your `swift-tools-version` to 6.3 or later
+2. Update your SafeDI dependency to `from: "2.0.0"`
+3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, create a `@SafeDIConfiguration` enum in your root module with the equivalent values and delete the CSV files
+4. If you don't have CSV configuration files, create a `@SafeDIConfiguration`-decorated enum in your root module
+
 ## Contributing
 
 I’m glad you’re interested in SafeDI, and I’d love to see where you take it. Please review the [contributing guidelines](Contributing.md) prior to submitting a Pull Request.
