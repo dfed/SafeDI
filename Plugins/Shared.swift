@@ -117,10 +117,11 @@ extension PackagePlugin.PluginContext {
 func findFilesWithRoots(in swiftFiles: [URL]) -> [URL] {
 	swiftFiles.filter { fileURL in
 		guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { return false }
-		return content.contains("isRoot")
-			&& content.contains("true")
-			&& (try? Regex(#"@Instantiable\s*\([^)]*isRoot\s*:\s*true[^)]*\)"#))
-			.flatMap { content.firstMatch(of: $0) } != nil
+		guard content.contains("isRoot") else { return false }
+		// Match @Instantiable(isRoot: true) not preceded by a backtick,
+		// to avoid matching inside doc comment code spans (e.g. `@Instantiable(isRoot: true)`).
+		guard let regex = try? Regex(#"(?<![`])@Instantiable\s*\([^)]*isRoot\s*:\s*true[^)]*\)"#) else { return false }
+		return content.firstMatch(of: regex) != nil
 	}
 }
 

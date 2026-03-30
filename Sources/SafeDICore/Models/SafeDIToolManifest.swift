@@ -22,7 +22,7 @@
 /// The manifest maps input Swift file paths to output file paths.
 /// All paths are relative to the working directory where the tool is invoked.
 public struct SafeDIToolManifest: Codable, Sendable {
-	/// Maps input Swift file paths containing `@Instantiable(isRoot: true)` declarations
+	/// Maps input Swift file paths containing root `@Instantiable` declarations
 	/// to output file paths for the generated dependency tree code.
 	public var dependencyTreeGeneration: [String: String]
 
