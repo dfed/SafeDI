@@ -90,20 +90,22 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 				encoding: .utf8,
 			)
 			Diagnostics.remark("Created \(outputURL.path(percentEncoded: false))")
-		}
 
-		// Delete CSV files if they existed.
-		var deletedCSVFiles = [String]()
-		if includeValues != nil {
-			try FileManager.default.removeItem(at: includeCSV)
-			deletedCSVFiles.append(includeCSV.path(percentEncoded: false))
-		}
-		if additionalImportedModulesValues != nil {
-			try FileManager.default.removeItem(at: additionalImportedModulesCSV)
-			deletedCSVFiles.append(additionalImportedModulesCSV.path(percentEncoded: false))
-		}
-		if !deletedCSVFiles.isEmpty {
-			Diagnostics.remark("Deleted CSV configuration files: \(deletedCSVFiles.joined(separator: ", "))")
+			// Only delete CSV files when we successfully created the new configuration file.
+			// If an existing @SafeDIConfiguration was found, the user must manually migrate
+			// and delete the CSV files themselves.
+			var deletedCSVFiles = [String]()
+			if includeValues != nil {
+				try FileManager.default.removeItem(at: includeCSV)
+				deletedCSVFiles.append(includeCSV.path(percentEncoded: false))
+			}
+			if additionalImportedModulesValues != nil {
+				try FileManager.default.removeItem(at: additionalImportedModulesCSV)
+				deletedCSVFiles.append(additionalImportedModulesCSV.path(percentEncoded: false))
+			}
+			if !deletedCSVFiles.isEmpty {
+				Diagnostics.remark("Deleted CSV configuration files: \(deletedCSVFiles.joined(separator: ", "))")
+			}
 		}
 	}
 
