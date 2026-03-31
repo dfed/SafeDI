@@ -179,8 +179,8 @@ extension Target {
 			}
 
 			let outputDirectory = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutput")
-			let outputFiles = rootFiles.map {
-				outputDirectory.appending(path: outputFileName(for: $0))
+			let outputFiles = zip(rootFiles, outputFileNames(for: rootFiles)).map { _, name in
+				outputDirectory.appending(path: name)
 			}
 
 			let projectRoot = context.xcodeProject.directoryURL
