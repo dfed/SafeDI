@@ -36,7 +36,6 @@ struct SafeDIRootScannerCommand {
 			outputDirectory: arguments.outputDirectory,
 		)
 		try result.writeManifest(to: arguments.manifestFile)
-		try result.writeOutputFiles(to: arguments.outputFilesFile)
 	}
 }
 
@@ -62,7 +61,6 @@ struct Arguments {
 	let projectRoot: URL
 	let outputDirectory: URL
 	let manifestFile: URL
-	let outputFilesFile: URL
 
 	init(arguments: [String]) throws {
 		var remainingRequiredFlags: Set = [
@@ -70,7 +68,6 @@ struct Arguments {
 			"--project-root",
 			"--output-directory",
 			"--manifest-file",
-			"--output-files-file",
 		]
 		var values = [String: String]()
 		var iterator = arguments.makeIterator()
@@ -94,6 +91,5 @@ struct Arguments {
 		projectRoot = URL(fileURLWithPath: values["--project-root"]!)
 		outputDirectory = URL(fileURLWithPath: values["--output-directory"]!)
 		manifestFile = URL(fileURLWithPath: values["--manifest-file"]!)
-		outputFilesFile = URL(fileURLWithPath: values["--output-files-file"]!)
 	}
 }

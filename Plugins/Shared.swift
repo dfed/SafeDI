@@ -146,7 +146,6 @@ func runRootScanner(
 	projectRoot: URL,
 	outputDirectory: URL,
 	manifestFile: URL,
-	outputFilesFile: URL,
 ) throws -> [URL] {
 	let inputFilePaths = try RootScanner.inputFilePaths(from: inputSourcesFile)
 	let result = try RootScanner().scan(
@@ -155,6 +154,5 @@ func runRootScanner(
 		outputDirectory: outputDirectory,
 	)
 	try result.writeManifest(to: manifestFile)
-	try result.writeOutputFiles(to: outputFilesFile)
 	return result.outputFiles
 }

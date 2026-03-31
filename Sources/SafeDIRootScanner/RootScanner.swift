@@ -45,17 +45,6 @@ struct RootScanner {
 			encoder.outputFormatting = [.sortedKeys]
 			try encoder.encode(manifest).write(to: manifestURL)
 		}
-
-		func writeOutputFiles(to outputFilesURL: URL) throws {
-			try outputFiles
-				.map(\.path)
-				.joined(separator: "\n")
-				.write(
-					to: outputFilesURL,
-					atomically: true,
-					encoding: .utf8,
-				)
-		}
 	}
 
 	func scan(

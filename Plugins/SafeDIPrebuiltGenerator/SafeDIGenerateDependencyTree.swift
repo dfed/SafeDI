@@ -57,13 +57,11 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		)
 
 		let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
-		let outputFilesFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutputFiles.txt")
 		let outputFiles = try runRootScanner(
 			inputSourcesFile: inputSourcesFile,
 			projectRoot: packageRoot,
 			outputDirectory: outputDirectory,
 			manifestFile: manifestFile,
-			outputFilesFile: outputFilesFile,
 		)
 		guard !outputFiles.isEmpty else {
 			return []
@@ -176,13 +174,11 @@ extension Target {
 			)
 
 			let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
-			let outputFilesFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutputFiles.txt")
 			let outputFiles = try runRootScanner(
 				inputSourcesFile: inputSourcesFile,
 				projectRoot: projectRoot,
 				outputDirectory: outputDirectory,
 				manifestFile: manifestFile,
-				outputFilesFile: outputFilesFile,
 			)
 			guard !outputFiles.isEmpty else {
 				return []

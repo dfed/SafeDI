@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 import Foundation
+import SafeDICore
 import Testing
 @testable import SafeDIRootScanner
 
@@ -87,9 +88,16 @@ struct RootScannerTests {
 		try result.writeManifest(to: manifestURL)
 		#expect(try String(contentsOf: manifestURL, encoding: .utf8) == "{\"dependencyTreeGeneration\":[{\"inputFilePath\":\"Sources\\/FeatureA\\/Root.swift\",\"outputFilePath\":\"\(escapedFeatureAOutputPath)\"},{\"inputFilePath\":\"Sources\\/FeatureB\\/Root.swift\",\"outputFilePath\":\"\(escapedFeatureBOutputPath)\"}]}")
 
-		let outputFilesURL = fixture.rootDirectory.appendingPathComponent("SafeDIOutputFiles.txt")
-		try result.writeOutputFiles(to: outputFilesURL)
-		#expect(try String(contentsOf: outputFilesURL, encoding: .utf8) == "\(featureAOutputPath)\n\(featureBOutputPath)")
+		let manifestData = try JSONEncoder().encode(result.manifest)
+		let decodedManifest = try JSONDecoder().decode(SafeDIToolManifest.self, from: manifestData)
+		#expect(decodedManifest.dependencyTreeGeneration.map(\.inputFilePath) == [
+			"Sources/FeatureA/Root.swift",
+			"Sources/FeatureB/Root.swift",
+		])
+		#expect(decodedManifest.dependencyTreeGeneration.map(\.outputFilePath) == [
+			featureAOutputPath,
+			featureBOutputPath,
+		])
 	}
 
 	@Test
@@ -365,7 +373,7 @@ struct RootScannerTests {
 	}
 
 	@Test
-	func command_run_writesManifestAndOutputFiles_andArgumentsValidateErrors() throws {
+	func command_run_writesManifest_andArgumentsValidateErrors() throws {
 		let fixture = try ScannerFixture()
 		defer { fixture.delete() }
 
@@ -378,33 +386,28 @@ struct RootScannerTests {
 		try "Root.swift".write(to: inputSourcesFile, atomically: true, encoding: .utf8)
 		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
 		let manifestFile = fixture.rootDirectory.appendingPathComponent("SafeDIManifest.json")
-		let outputFilesFile = fixture.rootDirectory.appendingPathComponent("SafeDIOutputFiles.txt")
 
 		try SafeDIRootScannerCommand.run(arguments: [
 			"--input-sources-file", inputSourcesFile.path,
 			"--project-root", fixture.rootDirectory.path,
 			"--output-directory", outputDirectory.path,
 			"--manifest-file", manifestFile.path,
-			"--output-files-file", outputFilesFile.path,
 		])
 
 		#expect(try String(contentsOf: manifestFile, encoding: .utf8) == """
 		{"dependencyTreeGeneration":[{"inputFilePath":"Root.swift","outputFilePath":"\(outputDirectory.appendingPathComponent("Root+SafeDI.swift").path.replacingOccurrences(of: "/", with: #"\/"#))"}]}
 		""")
-		#expect(try String(contentsOf: outputFilesFile, encoding: .utf8) == outputDirectory.appendingPathComponent("Root+SafeDI.swift").path)
 
 		let parsedArguments = try Arguments(arguments: [
 			"--input-sources-file", inputSourcesFile.path,
 			"--project-root", fixture.rootDirectory.path,
 			"--output-directory", outputDirectory.path,
 			"--manifest-file", manifestFile.path,
-			"--output-files-file", outputFilesFile.path,
 		])
 		#expect(parsedArguments.inputSourcesFile == inputSourcesFile)
 		#expect(parsedArguments.projectRoot.standardizedFileURL == fixture.rootDirectory.standardizedFileURL)
 		#expect(parsedArguments.outputDirectory == outputDirectory)
 		#expect(parsedArguments.manifestFile == manifestFile)
-		#expect(parsedArguments.outputFilesFile == outputFilesFile)
 
 		#expect(throws: Arguments.ParseError.unexpectedArgument("Root.swift"), performing: {
 			try Arguments(arguments: ["Root.swift"])
@@ -415,7 +418,6 @@ struct RootScannerTests {
 		#expect(throws: Arguments.ParseError.missingRequiredFlags([
 			"--manifest-file",
 			"--output-directory",
-			"--output-files-file",
 			"--project-root",
 		]), performing: {
 			try Arguments(arguments: ["--input-sources-file", inputSourcesFile.path])
@@ -436,7 +438,6 @@ struct RootScannerTests {
 		try "Root.swift".write(to: inputSourcesFile, atomically: true, encoding: .utf8)
 		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
 		let manifestFile = fixture.rootDirectory.appendingPathComponent("SafeDIManifest.json")
-		let outputFilesFile = fixture.rootDirectory.appendingPathComponent("SafeDIOutputFiles.txt")
 
 		let process = Process()
 		process.executableURL = try builtRootScannerExecutableURL()
@@ -445,7 +446,6 @@ struct RootScannerTests {
 			"--project-root", fixture.rootDirectory.path,
 			"--output-directory", outputDirectory.path,
 			"--manifest-file", manifestFile.path,
-			"--output-files-file", outputFilesFile.path,
 		]
 		let standardError = Pipe()
 		process.standardError = standardError
@@ -461,7 +461,6 @@ struct RootScannerTests {
 		}
 		#expect(process.terminationStatus == 0)
 		#expect(FileManager.default.fileExists(atPath: manifestFile.path))
-		#expect(FileManager.default.fileExists(atPath: outputFilesFile.path))
 	}
 }
 

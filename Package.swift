@@ -135,7 +135,10 @@ let package = Package(
 		),
 		.testTarget(
 			name: "SafeDIRootScannerTests",
-			dependencies: ["SafeDIRootScanner"],
+			dependencies: [
+				"SafeDICore",
+				"SafeDIRootScanner",
+			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
 			],
