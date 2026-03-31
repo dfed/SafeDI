@@ -126,6 +126,10 @@ let package = Package(
 				"SafeDITool",
 			],
 		),
+		// A lightweight executable that performs lexical root discovery without SwiftSyntax.
+		// SPM plugins run this in-process via symlinked sources.
+		// This target exists as a standalone executable for non-SPM build systems (e.g. Buck, Bazel)
+		// that need to invoke root scanning as a separate process.
 		.executableTarget(
 			name: "SafeDIRootScanner",
 			dependencies: [],

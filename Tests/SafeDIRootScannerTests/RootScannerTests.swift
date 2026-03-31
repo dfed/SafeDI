@@ -503,7 +503,7 @@ private struct BuiltRootScannerNotFoundError: Error {}
 
 private final class ScannerFixture {
 	init() throws {
-		rootDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+		rootDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
 		try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
 	}
 

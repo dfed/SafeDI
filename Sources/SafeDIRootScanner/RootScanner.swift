@@ -70,7 +70,7 @@ struct RootScanner {
 		outputDirectory: URL,
 	) throws -> Result {
 		let sortedSwiftFiles = swiftFiles.sorted {
-			Self.relativePath(for: $0, relativeTo: baseURL) < Self.relativePath(for: $1, relativeTo: baseURL)
+			relativePath(for: $0, relativeTo: baseURL) < relativePath(for: $1, relativeTo: baseURL)
 		}
 		let rootFiles = try sortedSwiftFiles.filter(Self.fileContainsRoot(at:))
 		let outputFileNames = Self.outputFileNames(for: rootFiles, relativeTo: baseURL)
@@ -79,7 +79,7 @@ struct RootScanner {
 			manifest: Manifest(
 				dependencyTreeGeneration: zip(rootFiles, outputFileNames).map { inputURL, outputFileName in
 					.init(
-						inputFilePath: Self.relativePath(for: inputURL, relativeTo: baseURL),
+						inputFilePath: relativePath(for: inputURL, relativeTo: baseURL),
 						outputFilePath: outputDirectory
 							.appendingPathComponent(outputFileName)
 							.path,
@@ -147,8 +147,8 @@ struct RootScanner {
 		}
 
 		let fileInfo = inputURLs.map { inputURL in
-			let relativePath = relativePath(for: inputURL, relativeTo: baseURL)
-			let relativeDirectory = (relativePath as NSString).deletingLastPathComponent
+			let relPath = relativePath(for: inputURL, relativeTo: baseURL)
+			let relativeDirectory = (relPath as NSString).deletingLastPathComponent
 			let parentComponents: [String] = if relativeDirectory.isEmpty || relativeDirectory == "." {
 				[]
 			} else {
@@ -157,7 +157,7 @@ struct RootScanner {
 					.map(String.init)
 			}
 			return FileInfo(
-				relativePath: relativePath,
+				relativePath: relPath,
 				baseName: inputURL.deletingPathExtension().lastPathComponent,
 				parentComponents: parentComponents,
 			)
@@ -193,7 +193,8 @@ struct RootScanner {
 			}
 
 			for entry in entries {
-				outputFileNames[entry.offset] = "\(namesByIndex[entry.offset]!)+SafeDI.swift"
+				let name = namesByIndex[entry.offset, default: baseName]
+				outputFileNames[entry.offset] = "\(name)+SafeDI.swift"
 			}
 		}
 
@@ -468,21 +469,5 @@ struct RootScanner {
 
 	private static func isIdentifierContinuation(_ character: Character) -> Bool {
 		character == "_" || character.isLetter || character.isNumber
-	}
-
-	private static func relativePath(
-		for url: URL,
-		relativeTo baseURL: URL,
-	) -> String {
-		let urlPath = url.standardizedFileURL.path
-		let standardizedBasePath = baseURL.standardizedFileURL.path
-		let basePath = standardizedBasePath.hasSuffix("/")
-			? standardizedBasePath
-			: standardizedBasePath + "/"
-
-		if urlPath.hasPrefix(basePath) {
-			return String(urlPath.dropFirst(basePath.count))
-		}
-		return urlPath
 	}
 }
