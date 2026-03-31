@@ -35,9 +35,12 @@ mkdir -p "$SAFEDI_OUTPUT_DIR"
 # See SafeDIToolManifest in SafeDICore for the expected format.
 cat > "$SAFEDI_OUTPUT_DIR/SafeDIManifest.json" << MANIFEST
 {
-  "dependencyTreeGeneration": {
-    "$SOURCE_DIR/Views/ExampleApp.swift": "$SAFEDI_OUTPUT_DIR/ExampleApp+SafeDI.swift"
-  }
+  "dependencyTreeGeneration": [
+    {
+      "inputFilePath": "$SOURCE_DIR/Views/ExampleApp.swift",
+      "outputFilePath": "$SAFEDI_OUTPUT_DIR/ExampleApp+SafeDI.swift"
+    }
+  ]
 }
 MANIFEST
 

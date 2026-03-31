@@ -1976,7 +1976,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		try swiftFile.relativePath.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
 		let outputFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".swift")
-		let manifest = SafeDIToolManifest(dependencyTreeGeneration: [swiftFile.relativePath: outputFile.relativePath])
+		let manifest = SafeDIToolManifest(dependencyTreeGeneration: [.init(inputFilePath: swiftFile.relativePath, outputFilePath: outputFile.relativePath)])
 		try JSONEncoder().encode(manifest).write(to: manifestFile)
 		let moduleInfoOutput = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".safedi")
 
@@ -2015,7 +2015,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
 		try swiftFile.relativePath.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
-		let manifest = SafeDIToolManifest(dependencyTreeGeneration: [:])
+		let manifest = SafeDIToolManifest(dependencyTreeGeneration: [])
 		try JSONEncoder().encode(manifest).write(to: manifestFile)
 		let moduleInfoOutput = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".safedi")
 

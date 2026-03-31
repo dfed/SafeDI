@@ -161,13 +161,14 @@ func writeManifest(
 	to manifestURL: URL,
 	relativeTo base: URL,
 ) throws {
-	var dependencyTreeGeneration = [String: String]()
+	var entries = [[String: String]]()
 	for inputURL in dependencyTreeInputFiles {
-		let inputPath = relativePath(for: inputURL, relativeTo: base)
-		let outputPath = outputDirectory.appending(path: outputFileName(for: inputURL)).path(percentEncoded: false)
-		dependencyTreeGeneration[inputPath] = outputPath
+		entries.append([
+			"inputFilePath": relativePath(for: inputURL, relativeTo: base),
+			"outputFilePath": outputDirectory.appending(path: outputFileName(for: inputURL)).path(percentEncoded: false),
+		])
 	}
-	let manifest = ["dependencyTreeGeneration": dependencyTreeGeneration]
+	let manifest = ["dependencyTreeGeneration": entries]
 	let data = try JSONSerialization.data(withJSONObject: manifest, options: [.sortedKeys])
 	try data.write(to: manifestURL)
 }

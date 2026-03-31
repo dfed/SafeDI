@@ -59,7 +59,7 @@ func executeSafeDIToolTest(
 		var manifestPath: String?
 		if buildSwiftOutputDirectory {
 			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-			var dependencyTreeGeneration = [String: String]()
+			var entries = [SafeDIToolManifest.InputOutputMap]()
 			let rootRegex = try Regex(#"@Instantiable\s*\([^)]*isRoot\s*:\s*true[^)]*\)"#)
 			let typeDeclRegex = try Regex(#"(?:class|struct|actor)\s+(\w+)"#)
 			for (content, file) in zip(swiftFileContent, swiftFiles) {
@@ -70,11 +70,11 @@ func executeSafeDIToolTest(
 					{
 						let typeName = String(content[nameRange])
 						let outputPath = (outputDirectory.relativePath as NSString).appendingPathComponent("\(typeName)+SafeDI.swift")
-						dependencyTreeGeneration[file.relativePath] = outputPath
+						entries.append(.init(inputFilePath: file.relativePath, outputFilePath: outputPath))
 					}
 				}
 			}
-			let manifest = SafeDIToolManifest(dependencyTreeGeneration: dependencyTreeGeneration)
+			let manifest = SafeDIToolManifest(dependencyTreeGeneration: entries)
 			let manifestData = try JSONEncoder().encode(manifest)
 			try manifestData.write(to: manifestFile)
 			manifestPath = manifestFile.relativePath

@@ -174,8 +174,8 @@ struct SafeDITool: AsyncParsableCommand {
 					\(filesWithUnexpectedNodes.joined(separator: "\n\t"))
 				\""")
 				"""
-				for (_, outputPath) in manifest.dependencyTreeGeneration {
-					try errorContent.write(toPath: outputPath)
+				for entry in manifest.dependencyTreeGeneration {
+					try errorContent.write(toPath: entry.outputFilePath)
 				}
 			} else {
 				let generatedRoots = try await generator.generatePerRootCodeTrees()
@@ -197,21 +197,22 @@ struct SafeDITool: AsyncParsableCommand {
 
 				// Validate and write output files.
 				let allRootSourceFiles = Set(normalizedInstantiables.filter(\.isRoot).compactMap(\.sourceFilePath))
-				for (inputPath, outputPath) in manifest.dependencyTreeGeneration {
-					guard allRootSourceFiles.contains(inputPath) else {
-						throw ManifestError.noRootFound(inputPath: inputPath)
+				for entry in manifest.dependencyTreeGeneration {
+					guard allRootSourceFiles.contains(entry.inputFilePath) else {
+						throw ManifestError.noRootFound(inputPath: entry.inputFilePath)
 					}
-					let code = sourceFileToGeneratedCode[inputPath] ?? emptyRootContent
+					let code = sourceFileToGeneratedCode[entry.inputFilePath] ?? emptyRootContent
 					// Only update the file if the content has changed.
-					let existingContent = try? String(contentsOfFile: outputPath, encoding: .utf8)
+					let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
 					if existingContent != code {
-						try code.write(toPath: outputPath)
+						try code.write(toPath: entry.outputFilePath)
 					}
 				}
 
 				// Validate all roots are accounted for in the manifest.
+				let manifestInputPaths = Set(manifest.dependencyTreeGeneration.map(\.inputFilePath))
 				for sourceFile in allRootSourceFiles {
-					if manifest.dependencyTreeGeneration[sourceFile] == nil {
+					if !manifestInputPaths.contains(sourceFile) {
 						throw ManifestError.rootNotInManifest(sourceFilePath: sourceFile)
 					}
 				}

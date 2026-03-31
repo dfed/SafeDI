@@ -194,9 +194,12 @@ After (2.x):
 # Create a manifest mapping root files to outputs
 cat > manifest.json << 'EOF'
 {
-  "dependencyTreeGeneration": {
-    "Sources/App/Root.swift": "generated/Root+SafeDI.swift"
-  }
+  "dependencyTreeGeneration": [
+    {
+      "inputFilePath": "Sources/App/Root.swift",
+      "outputFilePath": "generated/Root+SafeDI.swift"
+    }
+  ]
 }
 EOF
 safedi-tool input.csv --swift-manifest manifest.json

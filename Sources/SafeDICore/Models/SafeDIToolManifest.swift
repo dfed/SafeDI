@@ -19,14 +19,31 @@
 // SOFTWARE.
 
 /// A manifest that describes the desired outputs of the SafeDITool.
-/// The manifest maps input Swift file paths to output file paths.
-/// All paths are relative to the working directory where the tool is invoked.
+/// All input file paths are relative to the working directory where the tool is invoked.
+/// Output file paths may be absolute or relative to the working directory.
 public struct SafeDIToolManifest: Codable, Sendable {
-	/// Maps input Swift file paths containing root `@Instantiable` declarations
-	/// to output file paths for the generated dependency tree code.
-	public var dependencyTreeGeneration: [String: String]
+	/// A mapping from an input Swift file to an output file.
+	public struct InputOutputMap: Codable, Sendable {
+		/// The path to the input Swift file containing one or more root `@Instantiable` declarations.
+		/// This path is relative to the working directory where the tool is invoked.
+		public var inputFilePath: String
 
-	public init(dependencyTreeGeneration: [String: String]) {
+		/// The path where the generated Swift code should be written.
+		/// This path may be absolute or relative to the working directory.
+		public var outputFilePath: String
+
+		public init(inputFilePath: String, outputFilePath: String) {
+			self.inputFilePath = inputFilePath
+			self.outputFilePath = outputFilePath
+		}
+	}
+
+	/// The list of input-to-output file mappings for dependency tree code generation.
+	/// Each entry maps a Swift file containing `@Instantiable(isRoot: true)` to the
+	/// output file where the generated `public init()` extension should be written.
+	public var dependencyTreeGeneration: [InputOutputMap]
+
+	public init(dependencyTreeGeneration: [InputOutputMap]) {
 		self.dependencyTreeGeneration = dependencyTreeGeneration
 	}
 }
