@@ -5890,6 +5890,105 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
+	mutating func run_doesNotRewriteOutputFile_whenContentIsUnchanged() async throws {
+		let swiftFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".swift")
+		try """
+		@Instantiable(isRoot: true)
+		public struct Root {
+		    public init(dep: Dep) {
+		        self.dep = dep
+		    }
+		    @Instantiated let dep: Dep
+		}
+		@Instantiable
+		public struct Dep {
+		    public init() {}
+		}
+		""".write(to: swiftFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try swiftFile.relativePath.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let outputFile = outputDirectory.appendingPathComponent("Root+SafeDI.swift")
+
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifest = SafeDIToolManifest(dependencyTreeGeneration: [
+			.init(inputFilePath: swiftFile.relativePath, outputFilePath: outputFile.relativePath),
+		])
+		try JSONEncoder().encode(manifest).write(to: manifestFile)
+
+		let moduleInfoOutput = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".safedi")
+
+		filesToDelete += [swiftFileCSV, swiftFile, manifestFile, moduleInfoOutput, outputDirectory]
+
+		func runTool() async throws {
+			var tool = SafeDITool()
+			tool.swiftSourcesFilePath = swiftFileCSV.relativePath
+			tool.showVersion = false
+			tool.include = []
+			tool.additionalImportedModules = []
+			tool.moduleInfoOutput = moduleInfoOutput.relativePath
+			tool.dependentModuleInfoFilePath = nil
+			tool.swiftManifest = manifestFile.relativePath
+			tool.dotFileOutput = nil
+			try await tool.run()
+		}
+
+		// First run — generates the file.
+		try await runTool()
+		let firstContent = try String(contentsOf: outputFile, encoding: .utf8)
+		let firstModificationDate = try #require(try FileManager.default.attributesOfItem(atPath: outputFile.relativePath)[.modificationDate] as? Date)
+
+		// Small delay to ensure filesystem timestamp granularity.
+		try await Task.sleep(for: .seconds(1))
+
+		// Second run — same inputs, should skip writing.
+		try await runTool()
+		let secondContent = try String(contentsOf: outputFile, encoding: .utf8)
+		let secondModificationDate = try #require(try FileManager.default.attributesOfItem(atPath: outputFile.relativePath)[.modificationDate] as? Date)
+
+		#expect(firstContent == secondContent)
+		#expect(firstModificationDate == secondModificationDate)
+	}
+
+	@Test
+	mutating func run_generatesManifestOutputAndDOTFileSimultaneously() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+				public final class DefaultNetworkService: NetworkService {
+				    public init() {}
+				}
+				public protocol NetworkService {}
+				""",
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root {
+				    public init(networkService: NetworkService) {
+				        self.networkService = networkService
+				    }
+				    @Instantiated let networkService: NetworkService
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			buildDOTFileOutput: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// Verify dependency tree was generated.
+		let rootFile = try #require(output.generatedFiles?["Root+SafeDI.swift"])
+		#expect(rootFile.contains("extension Root"))
+
+		// Verify DOT file was also generated.
+		let dotTree = try #require(output.dotTree)
+		#expect(dotTree.contains("Root"))
+	}
+
+	@Test
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenInstantiatorClosureTransitivelyCapturesVariableDeclaredLaterAlphabetically() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
