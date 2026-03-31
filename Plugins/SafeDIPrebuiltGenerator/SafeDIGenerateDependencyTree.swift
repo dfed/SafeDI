@@ -72,7 +72,6 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			dependencyTreeInputFiles: rootFiles,
 			outputDirectory: outputDirectory,
 			to: manifestFile,
-			relativeTo: context.package.directoryURL,
 		)
 
 		let arguments = [
@@ -197,7 +196,6 @@ extension Target {
 				dependencyTreeInputFiles: rootFiles,
 				outputDirectory: outputDirectory,
 				to: manifestFile,
-				relativeTo: context.pluginWorkDirectoryURL,
 			)
 
 			let arguments = [

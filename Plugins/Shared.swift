@@ -144,7 +144,6 @@ func writeManifest(
 	dependencyTreeInputFiles: [URL],
 	outputDirectory: URL,
 	to manifestURL: URL,
-	relativeTo _: URL,
 ) throws {
 	var dependencyTreeGeneration = [String: String]()
 	for inputURL in dependencyTreeInputFiles {
