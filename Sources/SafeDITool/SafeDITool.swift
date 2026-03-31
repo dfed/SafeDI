@@ -24,7 +24,7 @@ import SafeDICore
 import SwiftParser
 
 @main
-struct SafeDITool: AsyncParsableCommand, Sendable {
+struct SafeDITool: AsyncParsableCommand {
 	// MARK: Arguments
 
 	@Argument(help: "A path to a CSV file containing paths of Swift files to parse.") var swiftSourcesFilePath: String?
@@ -198,7 +198,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 						throw ManifestError.noRootFound(inputPath: entry.inputFilePath)
 					}
 					let code: String = if let extensions = sourceFileToExtensions[entry.inputFilePath] {
-						fileHeader + extensions.joined(separator: "\n\n")
+						fileHeader + extensions.sorted().joined(separator: "\n\n")
 					} else {
 						emptyRootContent
 					}

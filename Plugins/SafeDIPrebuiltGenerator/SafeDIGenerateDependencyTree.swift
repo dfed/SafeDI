@@ -53,8 +53,8 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			return []
 		}
 
-		let outputFiles = rootFiles.map {
-			outputDirectory.appending(path: outputFileName(for: $0))
+		let outputFiles = zip(rootFiles, outputFileNames(for: rootFiles)).map { _, name in
+			outputDirectory.appending(path: name)
 		}
 
 		let packageRoot = context.package.directoryURL

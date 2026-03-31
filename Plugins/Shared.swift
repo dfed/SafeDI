@@ -133,10 +133,27 @@ func findFilesWithRoots(in swiftFiles: [URL]) -> [URL] {
 	}
 }
 
-/// Derive the output filename for a dependency tree generated from an input Swift file.
-func outputFileName(for inputURL: URL) -> String {
-	let baseName = inputURL.deletingPathExtension().lastPathComponent
-	return "\(baseName)+SafeDI.swift"
+/// Derive unique output filenames for a set of input Swift files.
+/// If two files share the same base name (e.g. `ModuleA/Root.swift` and `ModuleB/Root.swift`),
+/// parent directory components are prepended to disambiguate (e.g. `ModuleA_Root+SafeDI.swift`).
+func outputFileNames(for inputURLs: [URL]) -> [String] {
+	let baseNames = inputURLs.map { $0.deletingPathExtension().lastPathComponent }
+
+	// Count occurrences of each base name.
+	var nameCounts = [String: Int]()
+	for name in baseNames {
+		nameCounts[name, default: 0] += 1
+	}
+
+	return zip(inputURLs, baseNames).map { url, baseName in
+		if nameCounts[baseName, default: 1] > 1 {
+			// Disambiguate by prepending the parent directory name.
+			let parent = url.deletingLastPathComponent().lastPathComponent
+			return "\(parent)_\(baseName)+SafeDI.swift"
+		} else {
+			return "\(baseName)+SafeDI.swift"
+		}
+	}
 }
 
 /// Compute a path string relative to a base directory, for use in the CSV and manifest.
@@ -165,11 +182,12 @@ func writeManifest(
 	to manifestURL: URL,
 	relativeTo base: URL,
 ) throws {
+	let fileNames = outputFileNames(for: dependencyTreeInputFiles)
 	var entries = [[String: String]]()
-	for inputURL in dependencyTreeInputFiles {
+	for (inputURL, fileName) in zip(dependencyTreeInputFiles, fileNames) {
 		entries.append([
 			"inputFilePath": relativePath(for: inputURL, relativeTo: base),
-			"outputFilePath": outputDirectory.appending(path: outputFileName(for: inputURL)).path(percentEncoded: false),
+			"outputFilePath": outputDirectory.appending(path: fileName).path(percentEncoded: false),
 		])
 	}
 	let manifest = ["dependencyTreeGeneration": entries]
