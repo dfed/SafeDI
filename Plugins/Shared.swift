@@ -139,15 +139,31 @@ func outputFileName(for inputURL: URL) -> String {
 	return "\(baseName)+SafeDI.swift"
 }
 
+/// Compute a path string relative to a base directory, for use in the CSV and manifest.
+/// Falls back to the absolute path if the URL is not under the base directory.
+func relativePath(for url: URL, relativeTo base: URL) -> String {
+	let urlPath = url.path(percentEncoded: false)
+	let basePath = base.path(percentEncoded: false).hasSuffix("/")
+		? base.path(percentEncoded: false)
+		: base.path(percentEncoded: false) + "/"
+	if urlPath.hasPrefix(basePath) {
+		return String(urlPath.dropFirst(basePath.count))
+	}
+	return urlPath
+}
+
 /// Write a SafeDIToolManifest JSON file mapping input file paths to output file paths.
+/// Input paths are written relative to `relativeTo` for remote cache compatibility.
+/// Output paths are absolute since they reference the build system's plugin work directory.
 func writeManifest(
 	dependencyTreeInputFiles: [URL],
 	outputDirectory: URL,
 	to manifestURL: URL,
+	relativeTo base: URL,
 ) throws {
 	var dependencyTreeGeneration = [String: String]()
 	for inputURL in dependencyTreeInputFiles {
-		let inputPath = inputURL.path(percentEncoded: false)
+		let inputPath = relativePath(for: inputURL, relativeTo: base)
 		let outputPath = outputDirectory.appending(path: outputFileName(for: inputURL)).path(percentEncoded: false)
 		dependencyTreeGeneration[inputPath] = outputPath
 	}

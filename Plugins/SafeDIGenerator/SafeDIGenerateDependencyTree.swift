@@ -57,9 +57,10 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			outputDirectory.appending(path: outputFileName(for: $0))
 		}
 
+		let packageRoot = context.package.directoryURL
 		let inputSourcesFile = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv")
 		try allSwiftFiles
-			.map { $0.path(percentEncoded: false) }
+			.map { relativePath(for: $0, relativeTo: packageRoot) }
 			.joined(separator: ",")
 			.write(
 				to: inputSourcesFile,
@@ -72,6 +73,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			dependencyTreeInputFiles: rootFiles,
 			outputDirectory: outputDirectory,
 			to: manifestFile,
+			relativeTo: packageRoot,
 		)
 
 		let arguments = [
@@ -171,9 +173,10 @@ extension Target {
 				outputDirectory.appending(path: outputFileName(for: $0))
 			}
 
+			let projectRoot = context.xcodeProject.directoryURL
 			let inputSourcesFile = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv")
 			try inputSwiftFiles
-				.map { $0.path(percentEncoded: false) }
+				.map { relativePath(for: $0, relativeTo: projectRoot) }
 				.joined(separator: ",")
 				.write(
 					to: inputSourcesFile,
@@ -186,6 +189,7 @@ extension Target {
 				dependencyTreeInputFiles: rootFiles,
 				outputDirectory: outputDirectory,
 				to: manifestFile,
+				relativeTo: projectRoot,
 			)
 
 			let arguments = [
