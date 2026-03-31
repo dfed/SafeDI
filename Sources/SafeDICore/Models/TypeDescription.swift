@@ -359,7 +359,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	}
 
 	/// The name of a simple type sans nesting, with associated generics.
-	public var simpleNameAndGenerics: (name: String, generics: [TypeDescription])? {
+	var simpleNameAndGenerics: (name: String, generics: [TypeDescription])? {
 		switch self {
 		case let .simple(name, generics),
 		     let .nested(name, _, generics):
