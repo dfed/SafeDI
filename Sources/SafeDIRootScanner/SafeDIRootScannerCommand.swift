@@ -23,7 +23,11 @@ import Foundation
 @main
 struct SafeDIRootScannerCommand {
 	static func main() throws {
-		let arguments = try Arguments(arguments: Array(CommandLine.arguments.dropFirst()))
+		try run(arguments: Array(CommandLine.arguments.dropFirst()))
+	}
+
+	static func run(arguments: [String]) throws {
+		let arguments = try Arguments(arguments: arguments)
 		let scanner = RootScanner()
 		let inputFilePaths = try RootScanner.inputFilePaths(from: arguments.inputSourcesFile)
 		let result = try scanner.scan(
@@ -36,7 +40,24 @@ struct SafeDIRootScannerCommand {
 	}
 }
 
-private struct Arguments {
+struct Arguments {
+	enum ParseError: Error, Equatable, CustomStringConvertible {
+		case missingValue(flag: String)
+		case unexpectedArgument(String)
+		case missingRequiredFlags(Set<String>)
+
+		var description: String {
+			switch self {
+			case let .missingValue(flag):
+				"Missing value for '\(flag)'."
+			case let .unexpectedArgument(argument):
+				"Unexpected argument '\(argument)'."
+			case let .missingRequiredFlags(flags):
+				"Missing required arguments: \(flags.sorted().joined(separator: ", "))."
+			}
+		}
+	}
+
 	let inputSourcesFile: URL
 	let projectRoot: URL
 	let outputDirectory: URL
@@ -44,23 +65,6 @@ private struct Arguments {
 	let outputFilesFile: URL
 
 	init(arguments: [String]) throws {
-		enum ParseError: Error, CustomStringConvertible {
-			case missingValue(flag: String)
-			case unexpectedArgument(String)
-			case missingRequiredFlags(Set<String>)
-
-			var description: String {
-				switch self {
-				case let .missingValue(flag):
-					"Missing value for '\(flag)'."
-				case let .unexpectedArgument(argument):
-					"Unexpected argument '\(argument)'."
-				case let .missingRequiredFlags(flags):
-					"Missing required arguments: \(flags.sorted().joined(separator: ", "))."
-				}
-			}
-		}
-
 		var remainingRequiredFlags: Set = [
 			"--input-sources-file",
 			"--project-root",

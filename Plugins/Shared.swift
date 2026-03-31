@@ -142,61 +142,19 @@ func writeInputSwiftFilesCSV(
 }
 
 func runRootScanner(
-	executable scannerExecutableURL: URL,
 	inputSourcesFile: URL,
 	projectRoot: URL,
 	outputDirectory: URL,
 	manifestFile: URL,
 	outputFilesFile: URL,
 ) throws -> [URL] {
-	let process = Process()
-	process.currentDirectoryURL = projectRoot
-	process.executableURL = scannerExecutableURL
-	process.arguments = [
-		"--input-sources-file",
-		inputSourcesFile.path(percentEncoded: false),
-		"--project-root",
-		projectRoot.path(percentEncoded: false),
-		"--output-directory",
-		outputDirectory.path(percentEncoded: false),
-		"--manifest-file",
-		manifestFile.path(percentEncoded: false),
-		"--output-files-file",
-		outputFilesFile.path(percentEncoded: false),
-	]
-
-	let standardError = Pipe()
-	process.standardError = standardError
-
-	try process.run()
-	process.waitUntilExit()
-
-	let errorOutput = String(
-		data: standardError.fileHandleForReading.readDataToEndOfFile(),
-		encoding: .utf8,
-	)?.trimmingCharacters(in: .whitespacesAndNewlines)
-
-	guard process.terminationStatus == 0 else {
-		struct RootScannerInvocationError: Error, CustomStringConvertible {
-			let terminationStatus: Int32
-			let errorOutput: String?
-
-			var description: String {
-				if let errorOutput, !errorOutput.isEmpty {
-					"SafeDIRootScanner failed with exit code \(terminationStatus): \(errorOutput)"
-				} else {
-					"SafeDIRootScanner failed with exit code \(terminationStatus)."
-				}
-			}
-		}
-
-		throw RootScannerInvocationError(
-			terminationStatus: process.terminationStatus,
-			errorOutput: errorOutput,
-		)
-	}
-
-	return try String(contentsOf: outputFilesFile, encoding: .utf8)
-		.split(whereSeparator: \.isNewline)
-		.map { URL(fileURLWithPath: String($0)) }
+	let inputFilePaths = try RootScanner.inputFilePaths(from: inputSourcesFile)
+	let result = try RootScanner().scan(
+		inputFilePaths: inputFilePaths,
+		relativeTo: projectRoot,
+		outputDirectory: outputDirectory,
+	)
+	try result.writeManifest(to: manifestFile)
+	try result.writeOutputFiles(to: outputFilesFile)
+	return result.outputFiles
 }

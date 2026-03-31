@@ -123,7 +123,6 @@ let package = Package(
 			name: "SafeDIGenerator",
 			capability: .buildTool(),
 			dependencies: [
-				"SafeDIRootScanner",
 				"SafeDITool",
 			],
 		),
@@ -167,7 +166,7 @@ let package = Package(
 		.plugin(
 			name: "SafeDIPrebuiltGenerator",
 			capability: .buildTool(),
-			dependencies: ["SafeDIRootScanner"],
+			dependencies: [],
 		),
 
 		// Core

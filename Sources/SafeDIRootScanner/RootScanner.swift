@@ -63,9 +63,12 @@ struct RootScanner {
 		relativeTo baseURL: URL,
 		outputDirectory: URL,
 	) throws -> Result {
-		try scan(
+		let directoryBaseURL = baseURL.hasDirectoryPath
+			? baseURL
+			: baseURL.appendingPathComponent("", isDirectory: true)
+		return try scan(
 			swiftFiles: inputFilePaths.map { inputFilePath in
-				URL(fileURLWithPath: inputFilePath, relativeTo: baseURL).standardizedFileURL
+				URL(fileURLWithPath: inputFilePath, relativeTo: directoryBaseURL).standardizedFileURL
 			},
 			relativeTo: baseURL,
 			outputDirectory: outputDirectory,
@@ -157,7 +160,7 @@ struct RootScanner {
 		let fileInfo = inputURLs.map { inputURL in
 			let relativePath = relativePath(for: inputURL, relativeTo: baseURL)
 			let relativeDirectory = (relativePath as NSString).deletingLastPathComponent
-			let parentComponents: [String] = if relativeDirectory == "." || relativeDirectory == relativePath {
+			let parentComponents: [String] = if relativeDirectory.isEmpty || relativeDirectory == "." {
 				[]
 			} else {
 				relativeDirectory
@@ -185,7 +188,10 @@ struct RootScanner {
 				partialResult[entry.offset] = baseName
 			}
 
-			let maxParentDepth = entries.map(\.element.parentComponents.count).max() ?? 0
+			var maxParentDepth = 0
+			for entry in entries {
+				maxParentDepth = max(maxParentDepth, entry.element.parentComponents.count)
+			}
 			if maxParentDepth > 0 {
 				for parentDepth in 1...maxParentDepth where Set(namesByIndex.values).count < entries.count {
 					for entry in entries {
@@ -197,14 +203,8 @@ struct RootScanner {
 				}
 			}
 
-			if Set(namesByIndex.values).count < entries.count {
-				for entry in entries {
-					namesByIndex[entry.offset] = "\(namesByIndex[entry.offset, default: baseName])_\(stableHash(entry.element.relativePath))"
-				}
-			}
-
 			for entry in entries {
-				outputFileNames[entry.offset] = "\(namesByIndex[entry.offset, default: baseName])+SafeDI.swift"
+				outputFileNames[entry.offset] = "\(namesByIndex[entry.offset]!)+SafeDI.swift"
 			}
 		}
 
@@ -495,12 +495,5 @@ struct RootScanner {
 			return String(urlPath.dropFirst(basePath.count))
 		}
 		return urlPath
-	}
-
-	private static func stableHash(_ string: String) -> String {
-		let hash = string.utf8.reduce(UInt64(14_695_981_039_346_656_037)) { partialResult, nextByte in
-			(partialResult ^ UInt64(nextByte)) &* 1_099_511_628_211
-		}
-		return String(format: "%016llx", hash)
 	}
 }

@@ -192,7 +192,315 @@ struct RootScannerTests {
 		])
 		#expect(try RootScanner.fileContainsRoot(at: actualRoot))
 	}
+
+	@Test
+	func scan_usesCSVInputPaths_forProjectRootFilesAndDeepParentQualification() throws {
+		let fixture = try ScannerFixture()
+		defer { fixture.delete() }
+
+		_ = try fixture.writeFile(
+			relativePath: "Root.swift",
+			content: rootSource(typeName: "TopLevelRoot"),
+		)
+		_ = try fixture.writeFile(
+			relativePath: "Features/A/Root.swift",
+			content: rootSource(typeName: "FeatureRoot"),
+		)
+		_ = try fixture.writeFile(
+			relativePath: "Modules/A/Root.swift",
+			content: rootSource(typeName: "ModuleRoot"),
+		)
+
+		let csvURL = fixture.rootDirectory.appendingPathComponent("InputSwiftFiles.csv")
+		try "Modules/A/Root.swift,Root.swift,Features/A/Root.swift".write(
+			to: csvURL,
+			atomically: true,
+			encoding: .utf8,
+		)
+
+		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
+		let inputFilePaths = try RootScanner.inputFilePaths(from: csvURL)
+		let result = try RootScanner().scan(
+			inputFilePaths: inputFilePaths,
+			relativeTo: fixture.rootDirectory,
+			outputDirectory: outputDirectory,
+		)
+
+		#expect(result.manifest == RootScanner.Manifest(dependencyTreeGeneration: [
+			.init(
+				inputFilePath: "Features/A/Root.swift",
+				outputFilePath: outputDirectory.appendingPathComponent("Features_A_Root+SafeDI.swift").path,
+			),
+			.init(
+				inputFilePath: "Modules/A/Root.swift",
+				outputFilePath: outputDirectory.appendingPathComponent("Modules_A_Root+SafeDI.swift").path,
+			),
+			.init(
+				inputFilePath: "Root.swift",
+				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
+			),
+		]))
+	}
+
+	@Test
+	func containsRoot_handlesMalformedAttributesAndNestedArguments() {
+		#expect(!RootScanner.containsRoot(in: """
+		@InstantiableFactory(isRoot: true)
+		struct NotARoot {}
+		"""))
+		#expect(!RootScanner.containsRoot(in: """
+		@Instantiable
+		struct NotARoot {}
+		"""))
+		#expect(!RootScanner.containsRoot(in: """
+		@Instantiable(isRoot true)
+		struct NotARoot {}
+		"""))
+		#expect(!RootScanner.containsRoot(in: """
+		@Instantiable(isRooted: true)
+		struct NotARoot {}
+		"""))
+		#expect(!RootScanner.containsRoot(in: """
+		@Instantiable(isRoot: trueish)
+		struct NotARoot {}
+		"""))
+		#expect(!RootScanner.containsRoot(in: """
+		@Instantiable(isRoot: true
+		struct NotARoot {}
+		"""))
+		#expect(RootScanner.containsRoot(in: """
+		@Instantiable(
+		    makeDependency: { value in Dependency.make(value) },
+		    options: ["primary": { true }],
+		    isRoot: true
+		)
+		struct ActualRoot {}
+		"""))
+		#expect(RootScanner.containsRoot(in: """
+		@Instantiable(
+		    isRoot: true,
+		    scope: .shared
+		)
+		struct EarlyRootClause {}
+		"""))
+	}
+
+	@Test
+	func containsRoot_ignoresNestedCommentsAndEscapedStringDelimiters() {
+		let source = [
+			"/*",
+			"    outer comment",
+			"    /* @Instantiable(isRoot: true) */",
+			"*/",
+			#"let singleLine = "escaped quote: \" @Instantiable(isRoot: true)""#,
+			##"let rawString = #"quoted " @Instantiable(isRoot: true) " still raw"#"##,
+			#"""
+			let multiLine = """
+			escaped triple quote: \"""
+			@Instantiable(isRoot: true)
+			"""
+			"""#,
+			##"""
+			let rawMultiline = #"""
+			"""
+			@Instantiable(isRoot: true)
+			"""#
+			"""##,
+			"@Instantiable(isRoot: true)",
+			"struct ActualRoot {}",
+		].joined(separator: "\n")
+
+		#expect(RootScanner.containsRoot(in: source))
+	}
+
+	@Test
+	func scan_relativeToFilesystemRoot_writesAbsolutePathsWithoutLeadingSlash() throws {
+		let fixture = try ScannerFixture()
+		defer { fixture.delete() }
+
+		let rootFile = try fixture.writeFile(
+			relativePath: "Nested/Root.swift",
+			content: rootSource(typeName: "NestedRoot"),
+		)
+		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
+		let result = try RootScanner().scan(
+			swiftFiles: [rootFile],
+			relativeTo: URL(fileURLWithPath: "/"),
+			outputDirectory: outputDirectory,
+		)
+
+		#expect(result.manifest == RootScanner.Manifest(dependencyTreeGeneration: [
+			.init(
+				inputFilePath: String(rootFile.path.dropFirst()),
+				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
+			),
+		]))
+	}
+
+	@Test
+	func scan_relativeToUnrelatedBase_writesAbsoluteInputPath() throws {
+		let fixture = try ScannerFixture()
+		defer { fixture.delete() }
+
+		let rootFile = try fixture.writeFile(
+			relativePath: "Nested/Root.swift",
+			content: rootSource(typeName: "NestedRoot"),
+		)
+		let unrelatedBase = fixture.rootDirectory
+			.deletingLastPathComponent()
+			.appendingPathComponent("Unrelated")
+		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
+		let result = try RootScanner().scan(
+			swiftFiles: [rootFile],
+			relativeTo: unrelatedBase,
+			outputDirectory: outputDirectory,
+		)
+
+		#expect(result.manifest == RootScanner.Manifest(dependencyTreeGeneration: [
+			.init(
+				inputFilePath: rootFile.path,
+				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
+			),
+		]))
+	}
+
+	@Test
+	func command_run_writesManifestAndOutputFiles_andArgumentsValidateErrors() throws {
+		let fixture = try ScannerFixture()
+		defer { fixture.delete() }
+
+		_ = try fixture.writeFile(
+			relativePath: "Root.swift",
+			content: rootSource(typeName: "CommandRoot"),
+		)
+
+		let inputSourcesFile = fixture.rootDirectory.appendingPathComponent("InputSwiftFiles.csv")
+		try "Root.swift".write(to: inputSourcesFile, atomically: true, encoding: .utf8)
+		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
+		let manifestFile = fixture.rootDirectory.appendingPathComponent("SafeDIManifest.json")
+		let outputFilesFile = fixture.rootDirectory.appendingPathComponent("SafeDIOutputFiles.txt")
+
+		try SafeDIRootScannerCommand.run(arguments: [
+			"--input-sources-file", inputSourcesFile.path,
+			"--project-root", fixture.rootDirectory.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+			"--output-files-file", outputFilesFile.path,
+		])
+
+		#expect(try String(contentsOf: manifestFile, encoding: .utf8) == """
+		{"dependencyTreeGeneration":[{"inputFilePath":"Root.swift","outputFilePath":"\(outputDirectory.appendingPathComponent("Root+SafeDI.swift").path.replacingOccurrences(of: "/", with: #"\/"#))"}]}
+		""")
+		#expect(try String(contentsOf: outputFilesFile, encoding: .utf8) == outputDirectory.appendingPathComponent("Root+SafeDI.swift").path)
+
+		let parsedArguments = try Arguments(arguments: [
+			"--input-sources-file", inputSourcesFile.path,
+			"--project-root", fixture.rootDirectory.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+			"--output-files-file", outputFilesFile.path,
+		])
+		#expect(parsedArguments.inputSourcesFile == inputSourcesFile)
+		#expect(parsedArguments.projectRoot.standardizedFileURL == fixture.rootDirectory.standardizedFileURL)
+		#expect(parsedArguments.outputDirectory == outputDirectory)
+		#expect(parsedArguments.manifestFile == manifestFile)
+		#expect(parsedArguments.outputFilesFile == outputFilesFile)
+
+		#expect(throws: Arguments.ParseError.unexpectedArgument("Root.swift"), performing: {
+			try Arguments(arguments: ["Root.swift"])
+		})
+		#expect(throws: Arguments.ParseError.missingValue(flag: "--project-root"), performing: {
+			try Arguments(arguments: ["--project-root"])
+		})
+		#expect(throws: Arguments.ParseError.missingRequiredFlags([
+			"--manifest-file",
+			"--output-directory",
+			"--output-files-file",
+			"--project-root",
+		]), performing: {
+			try Arguments(arguments: ["--input-sources-file", inputSourcesFile.path])
+		})
+	}
+
+	@Test
+	func command_main_executesBuiltScannerBinary() throws {
+		let fixture = try ScannerFixture()
+		defer { fixture.delete() }
+
+		_ = try fixture.writeFile(
+			relativePath: "Root.swift",
+			content: rootSource(typeName: "ExecutableRoot"),
+		)
+
+		let inputSourcesFile = fixture.rootDirectory.appendingPathComponent("InputSwiftFiles.csv")
+		try "Root.swift".write(to: inputSourcesFile, atomically: true, encoding: .utf8)
+		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
+		let manifestFile = fixture.rootDirectory.appendingPathComponent("SafeDIManifest.json")
+		let outputFilesFile = fixture.rootDirectory.appendingPathComponent("SafeDIOutputFiles.txt")
+
+		let process = Process()
+		process.executableURL = try builtRootScannerExecutableURL()
+		process.arguments = [
+			"--input-sources-file", inputSourcesFile.path,
+			"--project-root", fixture.rootDirectory.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+			"--output-files-file", outputFilesFile.path,
+		]
+		let standardError = Pipe()
+		process.standardError = standardError
+		try process.run()
+		process.waitUntilExit()
+
+		let errorOutput = String(
+			data: standardError.fileHandleForReading.readDataToEndOfFile(),
+			encoding: .utf8,
+		) ?? ""
+		if process.terminationStatus != 0 {
+			Issue.record("Scanner executable failed: \(errorOutput)")
+		}
+		#expect(process.terminationStatus == 0)
+		#expect(FileManager.default.fileExists(atPath: manifestFile.path))
+		#expect(FileManager.default.fileExists(atPath: outputFilesFile.path))
+	}
 }
+
+private func rootSource(typeName: String) -> String {
+	"""
+	@Instantiable(isRoot: true)
+	struct \(typeName) {
+	    init(dep: Dep) {
+	        self.dep = dep
+	    }
+	    @Instantiated let dep: Dep
+	}
+	@Instantiable
+	struct Dep {
+	    init() {}
+	}
+	"""
+}
+
+private func builtRootScannerExecutableURL() throws -> URL {
+	let buildDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(".build")
+	guard let enumerator = FileManager.default.enumerator(
+		at: buildDirectory,
+		includingPropertiesForKeys: [.isExecutableKey],
+	) else {
+		throw BuiltRootScannerNotFoundError()
+	}
+
+	for case let fileURL as URL in enumerator where fileURL.lastPathComponent == "SafeDIRootScanner" {
+		let resourceValues = try fileURL.resourceValues(forKeys: [.isExecutableKey])
+		if resourceValues.isExecutable == true {
+			return fileURL
+		}
+	}
+
+	throw BuiltRootScannerNotFoundError()
+}
+
+private struct BuiltRootScannerNotFoundError: Error {}
 
 private final class ScannerFixture {
 	init() throws {
