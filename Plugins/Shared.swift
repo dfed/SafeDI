@@ -155,6 +155,10 @@ func relativePath(for url: URL, relativeTo base: URL) -> String {
 /// Write a SafeDIToolManifest JSON file mapping input file paths to output file paths.
 /// Input paths are written relative to `relativeTo` for remote cache compatibility.
 /// Output paths are absolute since they reference the build system's plugin work directory.
+///
+/// Note: The JSON keys here must match the property names in `SafeDIToolManifest` and
+/// `SafeDIToolManifest.InputOutputMap` (in SafeDICore). Plugins cannot import SafeDICore,
+/// so these are duplicated as string literals.
 func writeManifest(
 	dependencyTreeInputFiles: [URL],
 	outputDirectory: URL,
