@@ -212,7 +212,7 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
-	public var imports: String {
+	private var imports: String {
 		importStatements
 			.reduce(into: [String: Set<ImportStatement>]()) { partialResult, importStatement in
 				var importsForModuleName = partialResult[importStatement.moduleName, default: []]
