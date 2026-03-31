@@ -48,33 +48,27 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			}
 
 		let allSwiftFiles = targetSwiftFiles + dependenciesSourceFiles
-		let rootFiles = findFilesWithRoots(in: allSwiftFiles)
-		guard !rootFiles.isEmpty else {
-			return []
-		}
-
-		let outputFiles = zip(rootFiles, outputFileNames(for: rootFiles)).map { _, name in
-			outputDirectory.appending(path: name)
-		}
-
 		let packageRoot = context.package.directoryURL
 		let inputSourcesFile = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv")
-		try allSwiftFiles
-			.map { relativePath(for: $0, relativeTo: packageRoot) }
-			.joined(separator: ",")
-			.write(
-				to: inputSourcesFile,
-				atomically: true,
-				encoding: .utf8,
-			)
+		try writeInputSwiftFilesCSV(
+			allSwiftFiles,
+			relativeTo: packageRoot,
+			to: inputSourcesFile,
+		)
 
 		let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
-		try writeManifest(
-			dependencyTreeInputFiles: rootFiles,
+		let outputFilesFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutputFiles.txt")
+		let outputFiles = try runRootScanner(
+			executable: try context.tool(named: "SafeDIRootScanner").url,
+			inputSourcesFile: inputSourcesFile,
+			projectRoot: packageRoot,
 			outputDirectory: outputDirectory,
-			to: manifestFile,
-			relativeTo: packageRoot,
+			manifestFile: manifestFile,
+			outputFilesFile: outputFilesFile,
 		)
+		guard !outputFiles.isEmpty else {
+			return []
+		}
 
 		let arguments = [
 			inputSourcesFile.path(percentEncoded: false),
@@ -163,34 +157,28 @@ extension Target {
 				return []
 			}
 
-			let rootFiles = findFilesWithRoots(in: inputSwiftFiles)
-			guard !rootFiles.isEmpty else {
-				return []
-			}
-
 			let outputDirectory = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutput")
-			let outputFiles = zip(rootFiles, outputFileNames(for: rootFiles)).map { _, name in
-				outputDirectory.appending(path: name)
-			}
-
 			let projectRoot = context.xcodeProject.directoryURL
 			let inputSourcesFile = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv")
-			try inputSwiftFiles
-				.map { relativePath(for: $0, relativeTo: projectRoot) }
-				.joined(separator: ",")
-				.write(
-					to: inputSourcesFile,
-					atomically: true,
-					encoding: .utf8,
-				)
+			try writeInputSwiftFilesCSV(
+				inputSwiftFiles,
+				relativeTo: projectRoot,
+				to: inputSourcesFile,
+			)
 
 			let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
-			try writeManifest(
-				dependencyTreeInputFiles: rootFiles,
+			let outputFilesFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutputFiles.txt")
+			let outputFiles = try runRootScanner(
+				executable: try context.tool(named: "SafeDIRootScanner").url,
+				inputSourcesFile: inputSourcesFile,
+				projectRoot: projectRoot,
 				outputDirectory: outputDirectory,
-				to: manifestFile,
-				relativeTo: projectRoot,
+				manifestFile: manifestFile,
+				outputFilesFile: outputFilesFile,
 			)
+			guard !outputFiles.isEmpty else {
+				return []
+			}
 
 			let arguments = [
 				inputSourcesFile.path(percentEncoded: false),

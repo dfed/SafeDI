@@ -122,7 +122,24 @@ let package = Package(
 		.plugin(
 			name: "SafeDIGenerator",
 			capability: .buildTool(),
-			dependencies: ["SafeDITool"],
+			dependencies: [
+				"SafeDIRootScanner",
+				"SafeDITool",
+			],
+		),
+		.executableTarget(
+			name: "SafeDIRootScanner",
+			dependencies: [],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDIRootScannerTests",
+			dependencies: ["SafeDIRootScanner"],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
 		),
 		.executableTarget(
 			name: "SafeDITool",
@@ -139,6 +156,7 @@ let package = Package(
 			name: "SafeDIToolTests",
 			dependencies: [
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
+				"SafeDIRootScanner",
 				"SafeDITool",
 			],
 			swiftSettings: [
@@ -149,7 +167,7 @@ let package = Package(
 		.plugin(
 			name: "SafeDIPrebuiltGenerator",
 			capability: .buildTool(),
-			dependencies: [],
+			dependencies: ["SafeDIRootScanner"],
 		),
 
 		// Core

@@ -113,49 +113,6 @@ extension PackagePlugin.PluginContext {
 	}
 }
 
-/// Find Swift files that contain `@Instantiable(isRoot: true)` declarations.
-func findFilesWithRoots(in swiftFiles: [URL]) -> [URL] {
-	swiftFiles.filter { fileURL in
-		guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { return false }
-		guard content.contains("isRoot") else { return false }
-		guard let regex = try? Regex(#"@Instantiable\s*\([^)]*isRoot\s*:\s*true[^)]*\)"#) else { return false }
-		// Check each match is not inside a comment or backtick-quoted code span.
-		for match in content.matches(of: regex) {
-			let lineStart = content[content.startIndex..<match.range.lowerBound].lastIndex(of: "\n").map { content.index(after: $0) } ?? content.startIndex
-			let linePrefix = content[lineStart..<match.range.lowerBound]
-			// Skip matches inside single-line comments.
-			if linePrefix.contains("//") { continue }
-			// Skip matches inside backtick-quoted code spans.
-			if linePrefix.contains("`") { continue }
-			return true
-		}
-		return false
-	}
-}
-
-/// Derive unique output filenames for a set of input Swift files.
-/// If two files share the same base name (e.g. `ModuleA/Root.swift` and `ModuleB/Root.swift`),
-/// parent directory components are prepended to disambiguate (e.g. `ModuleA_Root+SafeDI.swift`).
-func outputFileNames(for inputURLs: [URL]) -> [String] {
-	let baseNames = inputURLs.map { $0.deletingPathExtension().lastPathComponent }
-
-	// Count occurrences of each base name.
-	var nameCounts = [String: Int]()
-	for name in baseNames {
-		nameCounts[name, default: 0] += 1
-	}
-
-	return zip(inputURLs, baseNames).map { url, baseName in
-		if nameCounts[baseName, default: 1] > 1 {
-			// Disambiguate by prepending the parent directory name.
-			let parent = url.deletingLastPathComponent().lastPathComponent
-			return "\(parent)_\(baseName)+SafeDI.swift"
-		} else {
-			return "\(baseName)+SafeDI.swift"
-		}
-	}
-}
-
 /// Compute a path string relative to a base directory, for use in the CSV and manifest.
 /// Falls back to the absolute path if the URL is not under the base directory.
 func relativePath(for url: URL, relativeTo base: URL) -> String {
@@ -169,28 +126,77 @@ func relativePath(for url: URL, relativeTo base: URL) -> String {
 	return urlPath
 }
 
-/// Write a SafeDIToolManifest JSON file mapping input file paths to output file paths.
-/// Input paths are written relative to `relativeTo` for remote cache compatibility.
-/// Output paths are absolute since they reference the build system's plugin work directory.
-///
-/// Note: The JSON keys here must match the property names in `SafeDIToolManifest` and
-/// `SafeDIToolManifest.InputOutputMap` (in SafeDICore). Plugins cannot import SafeDICore,
-/// so these are duplicated as string literals.
-func writeManifest(
-	dependencyTreeInputFiles: [URL],
-	outputDirectory: URL,
-	to manifestURL: URL,
+func writeInputSwiftFilesCSV(
+	_ swiftFiles: [URL],
 	relativeTo base: URL,
+	to inputSourcesFile: URL,
 ) throws {
-	let fileNames = outputFileNames(for: dependencyTreeInputFiles)
-	var entries = [[String: String]]()
-	for (inputURL, fileName) in zip(dependencyTreeInputFiles, fileNames) {
-		entries.append([
-			"inputFilePath": relativePath(for: inputURL, relativeTo: base),
-			"outputFilePath": outputDirectory.appending(path: fileName).path(percentEncoded: false),
-		])
+	try swiftFiles
+		.map { relativePath(for: $0, relativeTo: base) }
+		.joined(separator: ",")
+		.write(
+			to: inputSourcesFile,
+			atomically: true,
+			encoding: .utf8,
+		)
+}
+
+func runRootScanner(
+	executable scannerExecutableURL: URL,
+	inputSourcesFile: URL,
+	projectRoot: URL,
+	outputDirectory: URL,
+	manifestFile: URL,
+	outputFilesFile: URL,
+) throws -> [URL] {
+	let process = Process()
+	process.currentDirectoryURL = projectRoot
+	process.executableURL = scannerExecutableURL
+	process.arguments = [
+		"--input-sources-file",
+		inputSourcesFile.path(percentEncoded: false),
+		"--project-root",
+		projectRoot.path(percentEncoded: false),
+		"--output-directory",
+		outputDirectory.path(percentEncoded: false),
+		"--manifest-file",
+		manifestFile.path(percentEncoded: false),
+		"--output-files-file",
+		outputFilesFile.path(percentEncoded: false),
+	]
+
+	let standardError = Pipe()
+	process.standardError = standardError
+
+	try process.run()
+	process.waitUntilExit()
+
+	let errorOutput = String(
+		data: standardError.fileHandleForReading.readDataToEndOfFile(),
+		encoding: .utf8,
+	)?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+	guard process.terminationStatus == 0 else {
+		struct RootScannerInvocationError: Error, CustomStringConvertible {
+			let terminationStatus: Int32
+			let errorOutput: String?
+
+			var description: String {
+				if let errorOutput, !errorOutput.isEmpty {
+					"SafeDIRootScanner failed with exit code \(terminationStatus): \(errorOutput)"
+				} else {
+					"SafeDIRootScanner failed with exit code \(terminationStatus)."
+				}
+			}
+		}
+
+		throw RootScannerInvocationError(
+			terminationStatus: process.terminationStatus,
+			errorOutput: errorOutput,
+		)
 	}
-	let manifest = ["dependencyTreeGeneration": entries]
-	let data = try JSONSerialization.data(withJSONObject: manifest, options: [.sortedKeys])
-	try data.write(to: manifestURL)
+
+	return try String(contentsOf: outputFilesFile, encoding: .utf8)
+		.split(whereSeparator: \.isNewline)
+		.map { URL(fileURLWithPath: String($0)) }
 }
