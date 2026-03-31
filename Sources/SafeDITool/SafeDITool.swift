@@ -24,7 +24,7 @@ import SafeDICore
 import SwiftParser
 
 @main
-struct SafeDITool: AsyncParsableCommand {
+struct SafeDITool: AsyncParsableCommand, Sendable {
 	// MARK: Arguments
 
 	@Argument(help: "A path to a CSV file containing paths of Swift files to parse.") var swiftSourcesFilePath: String?
