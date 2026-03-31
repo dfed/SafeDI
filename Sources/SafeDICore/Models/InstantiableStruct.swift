@@ -36,30 +36,6 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.declarationType = declarationType
 	}
 
-	private enum CodingKeys: String, CodingKey {
-		case instantiableTypes
-		case isRoot
-		case initializer
-		case dependencies
-		case declarationType
-	}
-
-	public static func == (lhs: Instantiable, rhs: Instantiable) -> Bool {
-		lhs.instantiableTypes == rhs.instantiableTypes
-			&& lhs.isRoot == rhs.isRoot
-			&& lhs.initializer == rhs.initializer
-			&& lhs.dependencies == rhs.dependencies
-			&& lhs.declarationType == rhs.declarationType
-	}
-
-	public func hash(into hasher: inout Hasher) {
-		hasher.combine(instantiableTypes)
-		hasher.combine(isRoot)
-		hasher.combine(initializer)
-		hasher.combine(dependencies)
-		hasher.combine(declarationType)
-	}
-
 	// MARK: Public
 
 	/// The types that can be fulfilled with this Instantiable.
@@ -80,7 +56,6 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public let declarationType: DeclarationType
 
 	/// The path to the source file that declared this Instantiable.
-	/// Not included in Codable serialization — only used during the root module’s code generation.
 	public var sourceFilePath: String?
 
 	/// The type of declaration where this Instantiable was defined.
