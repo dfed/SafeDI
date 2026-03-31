@@ -190,16 +190,18 @@ public actor DependencyTreeGenerator {
 				return try rootInstantiables
 					.sorted()
 					.compactMap { typeDescription in
-						guard let scopeGenerator = try typeDescriptionToScopeMap[typeDescription]?.createScopeGenerator(
-							for: nil,
-							propertyStack: [],
-							receivableProperties: [],
-							erasedToConcreteExistential: false,
-						) else {
-							return nil
+						try typeDescriptionToScopeMap[typeDescription].map { scope in
+							try RootScopeInfo(
+								typeDescription: typeDescription,
+								sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
+								scopeGenerator: scope.createScopeGenerator(
+									for: nil,
+									propertyStack: [],
+									receivableProperties: [],
+									erasedToConcreteExistential: false,
+								),
+							)
 						}
-						let sourceFilePath = typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath
-						return RootScopeInfo(typeDescription: typeDescription, sourceFilePath: sourceFilePath, scopeGenerator: scopeGenerator)
 					}
 			}()
 			return rootScopeGenerators
