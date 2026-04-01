@@ -85,22 +85,8 @@ public struct MockGenerator: Sendable {
 			case .received, .aliased:
 				// Check if this type has an erased→concrete relationship.
 				if let concreteType = erasedToConcreteTypeMap[dependency.property.typeDescription] {
-					let concreteTypeName = concreteType.asSource
-					// Add the concrete type entry.
-					if treeInfo.typeEntries[concreteTypeName] == nil {
-						treeInfo.typeEntries[concreteTypeName] = TypeEntry(
-							typeDescription: concreteType,
-							sourceType: concreteType,
-							isForwarded: false,
-							hasKnownMock: typeDescriptionToFulfillingInstantiableMap[concreteType] != nil,
-							erasedToConcreteExistential: false,
-							wrappedConcreteType: nil,
-						)
-						treeInfo.typeEntries[concreteTypeName]!.pathCases.append(
-							PathCase(name: "parent", constructionPath: []),
-						)
-					}
-					// Add the erased type entry.
+					// Only add the erased type entry — the concrete type is an
+					// implementation detail used in the default construction.
 					if treeInfo.typeEntries[depTypeName] == nil {
 						treeInfo.typeEntries[depTypeName] = TypeEntry(
 							typeDescription: depType,
@@ -392,9 +378,15 @@ public struct MockGenerator: Sendable {
 			if entry.hasKnownMock {
 				let defaultExpr: String
 				if entry.erasedToConcreteExistential, let wrappedConcreteType = entry.wrappedConcreteType {
-					// The erased type wraps the already-constructed concrete type.
-					let concreteVarName = parameterLabel(for: wrappedConcreteType)
-					defaultExpr = "\(sourceTypeName)(\(concreteVarName))"
+					// The erased type wraps the concrete type.
+					// If the concrete type is already constructed (e.g., as a separate param at this level),
+					// reference the variable. Otherwise, build the concrete type inline.
+					let concreteExpr = if let existingVar = constructedVars[wrappedConcreteType.asSource] {
+						existingVar
+					} else {
+						buildInlineConstruction(for: wrappedConcreteType, constructedVars: constructedVars)
+					}
+					defaultExpr = "\(sourceTypeName)(\(concreteExpr))"
 				} else {
 					defaultExpr = buildInlineConstruction(
 						for: entry.typeDescription,
