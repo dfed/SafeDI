@@ -432,18 +432,13 @@ public struct MockGenerator: Sendable {
 					?? constructedVars[arg.typeDescription.asSource]
 				if let varName {
 					return "\(arg.label): \(varName)"
-				} else if arg.hasDefaultValue {
-					return nil
 				} else {
-					return "\(arg.label): \(arg.innerLabel)"
+					// Arg has a default value or is not a tracked dependency.
+					return nil
 				}
 			}.joined(separator: ", ")
-			let construction = if instantiable.declarationType.isExtension {
-				"\(instantiable.concreteInstantiable.asSource).instantiate(\(argList))"
-			} else {
-				"\(instantiable.concreteInstantiable.asSource)(\(argList))"
-			}
-			lines.append("\(bodyIndent)return \(construction)")
+			let typeName = instantiable.concreteInstantiable.asSource
+			lines.append("\(bodyIndent)return \(typeName)(\(argList))")
 		}
 
 		return lines
@@ -473,12 +468,8 @@ public struct MockGenerator: Sendable {
 		}
 
 		// Build the type's initializer call inside the closure.
-		guard let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[builtType],
-		      let initializer = builtInstantiable.initializer
-		else {
-			let sendablePrefix = isSendable ? "@Sendable " : ""
-			return "\(propertyType.asSource) {\(sendablePrefix)\(closureParams) \(builtType.asSource)() }"
-		}
+		let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[builtType]
+		let initializer = builtInstantiable?.initializer
 
 		// Build constructor args: forwarded from closure params, received from parent scope.
 		var closureConstructedVars = constructedVars
@@ -486,20 +477,19 @@ public struct MockGenerator: Sendable {
 			closureConstructedVars[fwd.typeDescription.asSource] = fwd.label
 		}
 
-		let args = initializer.arguments.compactMap { arg -> String? in
+		let args = (initializer?.arguments ?? []).compactMap { arg -> String? in
 			let varName = closureConstructedVars[arg.typeDescription.asInstantiatedType.asSource]
 				?? closureConstructedVars[arg.typeDescription.asSource]
 			if let varName {
 				return "\(arg.label): \(varName)"
-			} else if arg.hasDefaultValue {
-				return nil
 			} else {
-				return "\(arg.label): \(arg.innerLabel)"
+				// Arg has a default value or is not a tracked dependency.
+				return nil
 			}
 		}.joined(separator: ", ")
 
-		let typeName = builtInstantiable.concreteInstantiable.asSource
-		let construction = if builtInstantiable.declarationType.isExtension {
+		let typeName = (builtInstantiable?.concreteInstantiable ?? builtType).asSource
+		let construction = if builtInstantiable?.declarationType.isExtension == true {
 			"\(typeName).instantiate(\(args))"
 		} else {
 			"\(typeName)(\(args))"
@@ -538,22 +528,17 @@ public struct MockGenerator: Sendable {
 				}
 				// Instantiator entries depend on all types they capture from parent scope.
 				if entry.isInstantiator {
-					guard let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[entry.typeDescription] else {
-						result.append(entry)
-						resolved.insert(typeName)
-						return false
+					if let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[entry.typeDescription] {
+						let hasUnresolvedDeps = builtInstantiable.dependencies.contains { dep in
+							guard dep.source != .forwarded else { return false }
+							let depTypeName = dep.property.typeDescription.asInstantiatedType.asSource
+							return allTypeNames.contains(depTypeName) && !resolved.contains(depTypeName)
+						}
+						if hasUnresolvedDeps { return true }
 					}
-					let hasUnresolvedDeps = builtInstantiable.dependencies.contains { dep in
-						guard dep.source != .forwarded else { return false }
-						let depTypeName = dep.property.typeDescription.asInstantiatedType.asSource
-						return allTypeNames.contains(depTypeName) && !resolved.contains(depTypeName)
-					}
-					if !hasUnresolvedDeps {
-						result.append(entry)
-						resolved.insert(typeName)
-						return false
-					}
-					return true
+					result.append(entry)
+					resolved.insert(typeName)
+					return false
 				}
 				guard let instantiable = typeDescriptionToFulfillingInstantiableMap[entry.typeDescription] else {
 					// Unknown type — has no dependencies we track.
@@ -585,12 +570,11 @@ public struct MockGenerator: Sendable {
 		for typeDescription: TypeDescription,
 		constructedVars: [String: String],
 	) -> String {
-		guard let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription] else {
-			return "\(typeDescription.asSource)()"
-		}
+		let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription]
+		let typeName = (instantiable?.concreteInstantiable ?? typeDescription).asSource
 
 		// Check if this type has received deps that are already constructed.
-		let hasReceivedDepsInScope = instantiable.dependencies.contains { dep in
+		let hasReceivedDepsInScope = instantiable?.dependencies.contains { dep in
 			switch dep.source {
 			case .received, .aliased:
 				constructedVars[dep.property.typeDescription.asInstantiatedType.asSource] != nil
@@ -598,35 +582,29 @@ public struct MockGenerator: Sendable {
 			case .instantiated, .forwarded:
 				false
 			}
-		}
+		} ?? false
 
 		if !hasReceivedDepsInScope {
 			// No received deps in scope — safe to use mock().
-			if instantiable.declarationType.isExtension {
-				return "\(instantiable.concreteInstantiable.asSource).instantiate()"
+			if instantiable?.declarationType.isExtension == true {
+				return "\(typeName).instantiate()"
 			}
-			return "\(instantiable.concreteInstantiable.asSource).mock()"
+			return "\(typeName).mock()"
 		}
 
 		// Build inline using initializer.
-		guard let initializer = instantiable.initializer else {
-			return "\(instantiable.concreteInstantiable.asSource)()"
-		}
-
-		let typeName = instantiable.concreteInstantiable.asSource
-		let args = initializer.arguments.compactMap { arg -> String? in
+		let args = instantiable?.initializer?.arguments.compactMap { arg -> String? in
 			let varName = constructedVars[arg.typeDescription.asInstantiatedType.asSource]
 				?? constructedVars[arg.typeDescription.asSource]
 			if let varName {
 				return "\(arg.label): \(varName)"
-			} else if arg.hasDefaultValue {
-				return nil
 			} else {
-				return "\(arg.label): \(arg.innerLabel)"
+				// Arg has a default value or is not a tracked dependency.
+				return nil
 			}
-		}.joined(separator: ", ")
+		}.joined(separator: ", ") ?? ""
 
-		if instantiable.declarationType.isExtension {
+		if instantiable?.declarationType.isExtension == true {
 			return "\(typeName).instantiate(\(args))"
 		}
 		return "\(typeName)(\(args))"

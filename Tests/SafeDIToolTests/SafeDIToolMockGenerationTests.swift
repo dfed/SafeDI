@@ -1672,6 +1672,31 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		""")
 	}
 
+	@Test
+	mutating func mock_generatedForLazySelfInstantiationCycle() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(selfBuilder: Instantiator<Root>) {
+				        self.selfBuilder = selfBuilder
+				    }
+				    @Instantiated let selfBuilder: Instantiator<Root>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let rootMock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		// Lazy self-cycle: Root instantiates Instantiator<Root>.
+		// The topo sort cycle breaker should handle this gracefully.
+		#expect(rootMock.contains("public enum SelfBuilder"))
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
