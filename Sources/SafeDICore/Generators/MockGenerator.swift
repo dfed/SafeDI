@@ -550,6 +550,9 @@ public struct MockGenerator: Sendable {
 				?? closureConstructedVars[arg.typeDescription.asSource]
 			{
 				return "\(arg.label): \(constructedVariableName)"
+			} else if arg.typeDescription.isOptional {
+				// Optional arg not in scope — pass nil.
+				return "\(arg.label): nil"
 			} else {
 				// Arg has a default value or is not a tracked dependency.
 				return nil
@@ -739,15 +742,8 @@ public struct MockGenerator: Sendable {
 			}
 		}
 
-		if argumentLabelToConstructedVariableName.isEmpty {
-			// No deps in scope — safe to use mock().
-			if instantiable.declarationType.isExtension {
-				return "\(typeName).instantiate()"
-			}
-			return "\(typeName).mock()"
-		}
-
-		// Build inline using initializer.
+		// Build inline using initializer — always call init, never .mock(),
+		// so that parent-scope dependencies are threaded to the child.
 		let args = initializer.arguments.compactMap { arg -> String? in
 			if let constructedVariableName = argumentLabelToConstructedVariableName[arg.innerLabel] {
 				return "\(arg.label): \(constructedVariableName)"
@@ -755,6 +751,9 @@ public struct MockGenerator: Sendable {
 				?? constructedVars[arg.typeDescription.asSource]
 			{
 				return "\(arg.label): \(constructedVariableName)"
+			} else if arg.typeDescription.isOptional {
+				// Optional arg not in scope — pass nil.
+				return "\(arg.label): nil"
 			} else {
 				// Arg has a default value or is not a tracked dependency.
 				return nil

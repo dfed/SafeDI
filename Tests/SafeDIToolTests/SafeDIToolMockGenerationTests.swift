@@ -172,7 +172,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        dep: ((SafeDIMockPath.Dep) -> Dep)? = nil
 		    ) -> Root {
-		        let dep = dep?(.root) ?? Dep.mock()
+		        let dep = dep?(.root) ?? Dep()
 		        return Root(dep: dep)
 		    }
 		}
@@ -245,7 +245,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        sharedThing: ((SafeDIMockPath.SharedThing) -> SharedThing)? = nil
 		    ) -> Child {
-		        let sharedThing = sharedThing?(.parent) ?? SharedThing.mock()
+		        let sharedThing = sharedThing?(.parent) ?? SharedThing()
 		        return Child(shared: sharedThing)
 		    }
 		}
@@ -268,7 +268,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        child: ((SafeDIMockPath.Child) -> Child)? = nil,
 		        sharedThing: ((SafeDIMockPath.SharedThing) -> SharedThing)? = nil
 		    ) -> Root {
-		        let sharedThing = sharedThing?(.root) ?? SharedThing.mock()
+		        let sharedThing = sharedThing?(.root) ?? SharedThing()
 		        let child = child?(.root) ?? Child(shared: sharedThing)
 		        return Root(child: child, shared: sharedThing)
 		    }
@@ -355,7 +355,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        grandchild: ((SafeDIMockPath.Grandchild) -> Grandchild)? = nil,
 		        sharedThing: ((SafeDIMockPath.SharedThing) -> SharedThing)? = nil
 		    ) -> ChildA {
-		        let sharedThing = sharedThing?(.parent) ?? SharedThing.mock()
+		        let sharedThing = sharedThing?(.parent) ?? SharedThing()
 		        let grandchild = grandchild?(.root) ?? Grandchild(shared: sharedThing)
 		        return ChildA(shared: sharedThing, grandchild: grandchild)
 		    }
@@ -377,7 +377,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        sharedThing: ((SafeDIMockPath.SharedThing) -> SharedThing)? = nil
 		    ) -> Grandchild {
-		        let sharedThing = sharedThing?(.parent) ?? SharedThing.mock()
+		        let sharedThing = sharedThing?(.parent) ?? SharedThing()
 		        return Grandchild(shared: sharedThing)
 		    }
 		}
@@ -402,7 +402,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        grandchild: ((SafeDIMockPath.Grandchild) -> Grandchild)? = nil,
 		        sharedThing: ((SafeDIMockPath.SharedThing) -> SharedThing)? = nil
 		    ) -> Root {
-		        let sharedThing = sharedThing?(.root) ?? SharedThing.mock()
+		        let sharedThing = sharedThing?(.root) ?? SharedThing()
 		        let grandchild = grandchild?(.childA) ?? Grandchild(shared: sharedThing)
 		        let childA = childA?(.root) ?? ChildA(shared: sharedThing, grandchild: grandchild)
 		        return Root(childA: childA, shared: sharedThing)
@@ -565,7 +565,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        dep: ((SafeDIMockPath.Dep) -> Dep)? = nil
 		    ) -> Root {
-		        let dep = dep?(.root) ?? Dep.mock()
+		        let dep = dep?(.root) ?? Dep()
 		        return Root(dep: dep)
 		    }
 		}
@@ -778,7 +778,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        anyService: ((SafeDIMockPath.AnyService) -> AnyService)? = nil
 		    ) -> Child {
-		        let anyService = anyService?(.parent) ?? AnyService(ConcreteService.mock())
+		        let anyService = anyService?(.parent) ?? AnyService(ConcreteService())
 		        return Child(myService: anyService)
 		    }
 		}
@@ -817,7 +817,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        child: ((SafeDIMockPath.Child) -> Child)? = nil,
 		        concreteService: ((SafeDIMockPath.ConcreteService) -> ConcreteService)? = nil
 		    ) -> Root {
-		        let concreteService = concreteService?(.root) ?? ConcreteService.mock()
+		        let concreteService = concreteService?(.root) ?? ConcreteService()
 		        let anyService = anyService?(.root) ?? AnyService(concreteService)
 		        let child = child?(.root) ?? Child(myService: anyService)
 		        return Root(child: child, myService: anyService)
@@ -889,7 +889,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        anyMyService: ((SafeDIMockPath.AnyMyService) -> AnyMyService)? = nil,
 		        defaultMyService: ((SafeDIMockPath.DefaultMyService) -> DefaultMyService)? = nil
 		    ) -> Root {
-		        let defaultMyService = defaultMyService?(.root) ?? DefaultMyService.mock()
+		        let defaultMyService = defaultMyService?(.root) ?? DefaultMyService()
 		        let anyMyService = anyMyService?(.root) ?? AnyMyService(defaultMyService)
 		        return Root(myService: anyMyService)
 		    }
@@ -984,8 +984,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        grandchildAA: ((SafeDIMockPath.GrandchildAA) -> GrandchildAA)? = nil,
 		        grandchildAB: ((SafeDIMockPath.GrandchildAB) -> GrandchildAB)? = nil
 		    ) -> ChildA {
-		        let grandchildAA = grandchildAA?(.root) ?? GrandchildAA.mock()
-		        let grandchildAB = grandchildAB?(.root) ?? GrandchildAB.mock()
+		        let grandchildAA = grandchildAA?(.root) ?? GrandchildAA()
+		        let grandchildAB = grandchildAB?(.root) ?? GrandchildAB()
 		        return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
 		    }
 		}
@@ -1006,7 +1006,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> ChildB {
-		        let shared = shared?(.parent) ?? Shared.mock()
+		        let shared = shared?(.parent) ?? Shared()
 		        return ChildB(shared: shared)
 		    }
 		}
@@ -1027,7 +1027,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> GrandchildAA {
-		        let shared = shared?(.parent) ?? Shared.mock()
+		        let shared = shared?(.parent) ?? Shared()
 		        return GrandchildAA(shared: shared)
 		    }
 		}
@@ -1048,7 +1048,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> GrandchildAB {
-		        let shared = shared?(.parent) ?? Shared.mock()
+		        let shared = shared?(.parent) ?? Shared()
 		        return GrandchildAB(shared: shared)
 		    }
 		}
@@ -1077,7 +1077,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        grandchildAB: ((SafeDIMockPath.GrandchildAB) -> GrandchildAB)? = nil,
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> Root {
-		        let shared = shared?(.root) ?? Shared.mock()
+		        let shared = shared?(.root) ?? Shared()
 		        let childB = childB?(.root) ?? ChildB(shared: shared)
 		        let grandchildAA = grandchildAA?(.childA) ?? GrandchildAA(shared: shared)
 		        let grandchildAB = grandchildAB?(.childA) ?? GrandchildAB(shared: shared)
@@ -1159,7 +1159,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        networkService: ((SafeDIMockPath.NetworkService) -> NetworkService)? = nil
 		    ) -> Root {
-		        let networkService = networkService?(.root) ?? DefaultNetworkService.mock()
+		        let networkService = networkService?(.root) ?? DefaultNetworkService()
 		        return Root(networkService: networkService)
 		    }
 		}
@@ -1217,7 +1217,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        dep: ((SafeDIMockPath.Dep) -> Dep)? = nil
 		    ) -> RootA {
-		        let dep = dep?(.root) ?? Dep.mock()
+		        let dep = dep?(.root) ?? Dep()
 		        return RootA(dep: dep)
 		    }
 		}
@@ -1237,7 +1237,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        dep: ((SafeDIMockPath.Dep) -> Dep)? = nil
 		    ) -> RootB {
-		        let dep = dep?(.root) ?? Dep.mock()
+		        let dep = dep?(.root) ?? Dep()
 		        return RootB(dep: dep)
 		    }
 		}
@@ -1318,7 +1318,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> ChildA {
-		        let shared = shared?(.parent) ?? Shared.mock()
+		        let shared = shared?(.parent) ?? Shared()
 		        return ChildA(shared: shared)
 		    }
 		}
@@ -1357,8 +1357,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        childB: ((SafeDIMockPath.ChildB) -> ChildB)? = nil,
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> Root {
-		        let childB = childB?(.root) ?? ChildB.mock()
-		        let shared = shared?(.root) ?? Shared.mock()
+		        let childB = childB?(.root) ?? ChildB()
+		        let shared = shared?(.root) ?? Shared()
 		        let childA = childA?(.root) ?? ChildA(shared: shared)
 		        return Root(childA: childA, childB: childB, shared: shared)
 		    }
@@ -1458,7 +1458,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        greatGrandchild: ((SafeDIMockPath.GreatGrandchild) -> GreatGrandchild)? = nil,
 		        leaf: ((SafeDIMockPath.Leaf) -> Leaf)? = nil
 		    ) -> Child {
-		        let leaf = leaf?(.parent) ?? Leaf.mock()
+		        let leaf = leaf?(.parent) ?? Leaf()
 		        let greatGrandchild = greatGrandchild?(.grandchild) ?? GreatGrandchild(leaf: leaf)
 		        let grandchild = grandchild?(.root) ?? Grandchild(greatGrandchild: greatGrandchild, leaf: leaf)
 		        return Child(grandchild: grandchild, leaf: leaf)
@@ -1483,7 +1483,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        greatGrandchild: ((SafeDIMockPath.GreatGrandchild) -> GreatGrandchild)? = nil,
 		        leaf: ((SafeDIMockPath.Leaf) -> Leaf)? = nil
 		    ) -> Grandchild {
-		        let leaf = leaf?(.parent) ?? Leaf.mock()
+		        let leaf = leaf?(.parent) ?? Leaf()
 		        let greatGrandchild = greatGrandchild?(.root) ?? GreatGrandchild(leaf: leaf)
 		        return Grandchild(greatGrandchild: greatGrandchild, leaf: leaf)
 		    }
@@ -1505,7 +1505,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        leaf: ((SafeDIMockPath.Leaf) -> Leaf)? = nil
 		    ) -> GreatGrandchild {
-		        let leaf = leaf?(.parent) ?? Leaf.mock()
+		        let leaf = leaf?(.parent) ?? Leaf()
 		        return GreatGrandchild(leaf: leaf)
 		    }
 		}
@@ -1546,7 +1546,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        greatGrandchild: ((SafeDIMockPath.GreatGrandchild) -> GreatGrandchild)? = nil,
 		        leaf: ((SafeDIMockPath.Leaf) -> Leaf)? = nil
 		    ) -> Root {
-		        let leaf = leaf?(.root) ?? Leaf.mock()
+		        let leaf = leaf?(.root) ?? Leaf()
 		        let greatGrandchild = greatGrandchild?(.child_grandchild) ?? GreatGrandchild(leaf: leaf)
 		        let grandchild = grandchild?(.child) ?? Grandchild(greatGrandchild: greatGrandchild, leaf: leaf)
 		        let child = child?(.root) ?? Child(grandchild: grandchild, leaf: leaf)
@@ -1608,7 +1608,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> Child {
-		        let shared = shared?(.parent) ?? Shared.mock()
+		        let shared = shared?(.parent) ?? Shared()
 		        return Child(shared: shared)
 		    }
 		}
@@ -1631,7 +1631,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        child: ((SafeDIMockPath.Child) -> Child)? = nil,
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> Root {
-		        let shared = shared?(.root) ?? Shared.mock()
+		        let shared = shared?(.root) ?? Shared()
 		        let child = child?(.root) ?? Child(shared: shared)
 		        return Root(child: child, shared: shared)
 		    }
@@ -1708,7 +1708,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        name: String,
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> Child {
-		        let shared = shared?(.parent) ?? Shared.mock()
+		        let shared = shared?(.parent) ?? Shared()
 		        return Child(name: name, shared: shared)
 		    }
 		}
@@ -1731,7 +1731,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil,
 		        childBuilder: ((SafeDIMockPath.ChildBuilder) -> Instantiator<Child>)? = nil
 		    ) -> Root {
-		        let shared = shared?(.root) ?? Shared.mock()
+		        let shared = shared?(.root) ?? Shared()
 		        let childBuilder = childBuilder?(.root)
 		            ?? Instantiator<Child> { name in
 		            Child(name: name, shared: shared)
@@ -2043,7 +2043,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        helper: ((SafeDIMockPath.Helper) -> Helper)? = nil,
 		        thirdParty: ((SafeDIMockPath.ThirdParty) -> ThirdParty)? = nil
 		    ) -> Root {
-		        let helper = helper?(.root) ?? Helper.mock()
+		        let helper = helper?(.root) ?? Helper()
 		        let thirdParty = thirdParty?(.root) ?? ThirdParty.instantiate(helper: helper)
 		        return Root(thirdParty: thirdParty, helper: helper)
 		    }
@@ -2065,7 +2065,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        helper: ((SafeDIMockPath.Helper) -> Helper)? = nil
 		    ) -> ThirdParty {
-		        let helper = helper?(.parent) ?? Helper.mock()
+		        let helper = helper?(.parent) ?? Helper()
 		        return ThirdParty(helper: helper)
 		    }
 		}
@@ -2228,7 +2228,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        name: String,
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> Child {
-		        let shared = shared?(.parent) ?? Shared.mock()
+		        let shared = shared?(.parent) ?? Shared()
 		        return Child(name: name, shared: shared)
 		    }
 		}
@@ -2251,7 +2251,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil,
 		        childBuilder: ((SafeDIMockPath.ChildBuilder) -> Instantiator<Child>)? = nil
 		    ) -> Root {
-		        let shared = shared?(.root) ?? Shared.mock()
+		        let shared = shared?(.root) ?? Shared()
 		        let childBuilder = childBuilder?(.root)
 		            ?? Instantiator<Child> { name in
 		            Child(name: name, shared: shared)
@@ -2332,7 +2332,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil,
 		        thirdPartyBuilder: ((SafeDIMockPath.ThirdPartyBuilder) -> Instantiator<ThirdParty>)? = nil
 		    ) -> Root {
-		        let shared = shared?(.root) ?? Shared.mock()
+		        let shared = shared?(.root) ?? Shared()
 		        let thirdPartyBuilder = thirdPartyBuilder?(.root)
 		            ?? Instantiator<ThirdParty> {
 		            ThirdParty.instantiate(shared: shared)
@@ -2371,7 +2371,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> ThirdParty {
-		        let shared = shared?(.parent) ?? Shared.mock()
+		        let shared = shared?(.parent) ?? Shared()
 		        return ThirdParty(shared: shared)
 		    }
 		}
@@ -2493,7 +2493,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        a: ((SafeDIMockPath.A) -> A?)? = nil
 		    ) -> B {
-		        let a = a?(.parent) ?? A.mock()
+		        let a = a?(.parent) ?? A()
 		        return B(a: a)
 		    }
 		}
@@ -2516,7 +2516,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        a: ((SafeDIMockPath.A) -> A)? = nil,
 		        b: ((SafeDIMockPath.B) -> B)? = nil
 		    ) -> Root {
-		        let a = a?(.root) ?? A.mock()
+		        let a = a?(.root) ?? A()
 		        let b = b?(.root) ?? B(a: a)
 		        return Root(a: a, b: b)
 		    }
@@ -2601,7 +2601,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        child: ((SafeDIMockPath.Child) -> Child)? = nil,
 		        user: ((SafeDIMockPath.User) -> User)? = nil
 		    ) -> Root {
-		        let user = user?(.root) ?? User.mock()
+		        let user = user?(.root) ?? User()
 		        let child = child?(.root) ?? Child(userType: user)
 		        return Root(child: child, user: user)
 		    }
@@ -2693,7 +2693,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        a: ((SafeDIMockPath.A) -> A?)? = nil
 		    ) -> B {
-		        let a = a?(.parent) ?? A.mock()
+		        let a = a?(.parent) ?? A()
 		        return B(a: a)
 		    }
 		}
@@ -2716,7 +2716,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        a: ((SafeDIMockPath.A) -> A?)? = nil,
 		        b: ((SafeDIMockPath.B) -> B)? = nil
 		    ) -> Root {
-		        let a = a?(.root) ?? A.mock()
+		        let a = a?(.root) ?? A()
 		        let b = b?(.root) ?? B(a: a)
 		        return Root(a: a, b: b)
 		    }
@@ -2791,8 +2791,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        defaultUserService: ((SafeDIMockPath.DefaultUserService) -> DefaultUserService)? = nil,
 		        userService: ((SafeDIMockPath.UserService) -> any UserService)? = nil
 		    ) -> Root {
-		        let defaultUserService = defaultUserService?(.root) ?? DefaultUserService.mock()
-		        let userService = userService?(.parent) ?? DefaultUserService.mock()
+		        let defaultUserService = defaultUserService?(.root) ?? DefaultUserService()
+		        let userService = userService?(.parent) ?? DefaultUserService()
 		        return Root(defaultUserService: defaultUserService, userService: userService)
 		    }
 		}
@@ -2891,7 +2891,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        networkService: ((SafeDIMockPath.NetworkService) -> NetworkService)? = nil
 		    ) -> DefaultAuthService {
-		        let networkService = networkService?(.parent) ?? DefaultNetworkService.mock()
+		        let networkService = networkService?(.parent) ?? DefaultNetworkService()
 		        return DefaultAuthService(networkService: networkService)
 		    }
 		}
@@ -2935,7 +2935,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        user: User,
 		        networkService: ((SafeDIMockPath.NetworkService) -> NetworkService)? = nil
 		    ) -> LoggedInViewController {
-		        let networkService = networkService?(.parent) ?? DefaultNetworkService.mock()
+		        let networkService = networkService?(.parent) ?? DefaultNetworkService()
 		        return LoggedInViewController(user: user, networkService: networkService)
 		    }
 		}
@@ -2964,7 +2964,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        networkService: ((SafeDIMockPath.NetworkService) -> NetworkService)? = nil,
 		        loggedInViewControllerBuilder: ((SafeDIMockPath.LoggedInViewControllerBuilder) -> ErasedInstantiator<User, UIViewController>)? = nil
 		    ) -> RootViewController {
-		        let networkService = networkService?(.root) ?? DefaultNetworkService.mock()
+		        let networkService = networkService?(.root) ?? DefaultNetworkService()
 		        let authService = authService?(.root) ?? DefaultAuthService(networkService: networkService)
 		        let loggedInViewControllerBuilder = loggedInViewControllerBuilder?(.root)
 		            ?? ErasedInstantiator<User, UIViewController> { user in
@@ -3275,7 +3275,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        networkService: ((SafeDIMockPath.NetworkService) -> NetworkService)? = nil
 		    ) -> DefaultAuthService {
-		        let networkService = networkService?(.parent) ?? DefaultNetworkService.mock()
+		        let networkService = networkService?(.parent) ?? DefaultNetworkService()
 		        return DefaultAuthService(networkService: networkService)
 		    }
 		}
@@ -3314,9 +3314,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        userManager: ((SafeDIMockPath.UserManager) -> UserManager)? = nil,
 		        userVendor: ((SafeDIMockPath.UserVendor) -> UserVendor)? = nil
 		    ) -> EditProfileViewController {
-		        let networkService = networkService?(.parent) ?? DefaultNetworkService.mock()
-		        let userManager = userManager?(.parent) ?? UserManager.mock()
-		        let userVendor = userVendor?(.parent) ?? UserManager.mock()
+		        let networkService = networkService?(.parent) ?? DefaultNetworkService()
+		        let userManager = userManager?(.parent) ?? UserManager()
+		        let userVendor = userVendor?(.parent) ?? UserManager()
 		        return EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: networkService)
 		    }
 		}
@@ -3342,7 +3342,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        editProfileViewControllerBuilder: ((SafeDIMockPath.EditProfileViewControllerBuilder) -> Instantiator<EditProfileViewController>)? = nil,
 		        profileViewControllerBuilder: ((SafeDIMockPath.ProfileViewControllerBuilder) -> Instantiator<ProfileViewController>)? = nil
 		    ) -> LoggedInViewController {
-		        let networkService = networkService?(.parent) ?? DefaultNetworkService.mock()
+		        let networkService = networkService?(.parent) ?? DefaultNetworkService()
 		        let editProfileViewControllerBuilder = editProfileViewControllerBuilder?(.profileViewControllerBuilder)
 		            ?? Instantiator<EditProfileViewController> {
 		            EditProfileViewController(userManager: userManager, userNetworkService: networkService)
@@ -3373,7 +3373,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        userVendor: ((SafeDIMockPath.UserVendor) -> UserVendor)? = nil,
 		        editProfileViewControllerBuilder: ((SafeDIMockPath.EditProfileViewControllerBuilder) -> Instantiator<EditProfileViewController>)? = nil
 		    ) -> ProfileViewController {
-		        let userVendor = userVendor?(.parent) ?? UserManager.mock()
+		        let userVendor = userVendor?(.parent) ?? UserManager()
 		        let editProfileViewControllerBuilder = editProfileViewControllerBuilder?(.root)
 		            ?? Instantiator<EditProfileViewController> {
 		            EditProfileViewController(userVendor: userVendor)
@@ -3406,7 +3406,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        loggedInViewControllerBuilder: ((SafeDIMockPath.LoggedInViewControllerBuilder) -> Instantiator<LoggedInViewController>)? = nil,
 		        profileViewControllerBuilder: ((SafeDIMockPath.ProfileViewControllerBuilder) -> Instantiator<ProfileViewController>)? = nil
 		    ) -> RootViewController {
-		        let networkService = networkService?(.root) ?? DefaultNetworkService.mock()
+		        let networkService = networkService?(.root) ?? DefaultNetworkService()
 		        let authService = authService?(.root) ?? DefaultAuthService(networkService: networkService)
 		        let editProfileViewControllerBuilder = editProfileViewControllerBuilder?(.loggedInViewControllerBuilder_profileViewControllerBuilder)
 		            ?? Instantiator<EditProfileViewController> {
@@ -3642,7 +3642,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        recreated: ((SafeDIMockPath.Recreated) -> Recreated)? = nil
 		    ) -> ChildB {
-		        let recreated = recreated?(.parent) ?? Recreated.mock()
+		        let recreated = recreated?(.parent) ?? Recreated()
 		        return ChildB(recreated: recreated)
 		    }
 		}
@@ -3685,7 +3685,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            ?? SendableErasedInstantiator<Recreated, ChildAProtocol> {@Sendable  recreated in
 		            ChildA(recreated: recreated)
 		        }
-		        let recreated = recreated?(.root) ?? Recreated.mock()
+		        let recreated = recreated?(.root) ?? Recreated()
 		        let childB = childB?(.root) ?? ChildB(recreated: recreated)
 		        return Root(childABuilder: childABuilder, childB: childB, recreated: recreated)
 		    }
@@ -3754,7 +3754,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        networkService: ((SafeDIMockPath.NetworkService) -> NetworkService)? = nil
 		    ) -> DefaultAuthService {
-		        let networkService = networkService?(.root) ?? DefaultNetworkService.mock()
+		        let networkService = networkService?(.root) ?? DefaultNetworkService()
 		        return DefaultAuthService(networkService: networkService, renamedNetworkService: networkService)
 		    }
 		}
@@ -3791,7 +3791,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        authService: ((SafeDIMockPath.AuthService) -> AuthService)? = nil,
 		        networkService: ((SafeDIMockPath.NetworkService) -> NetworkService)? = nil
 		    ) -> RootViewController {
-		        let networkService = networkService?(.authService) ?? DefaultNetworkService.mock()
+		        let networkService = networkService?(.authService) ?? DefaultNetworkService()
 		        let authService = authService?(.root) ?? DefaultAuthService(networkService: networkService, renamedNetworkService: networkService)
 		        return RootViewController(authService: authService)
 		    }
@@ -3919,7 +3919,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        childB_childB: ((SafeDIMockPath.ChildB_ChildB) -> ChildB)? = nil,
 		        childB_instantiator__Other: ((SafeDIMockPath.ChildB_Instantiator__Other) -> Instantiator<Other>)? = nil
 		    ) -> Root {
-		        let childB_childB = childB_childB?(.root) ?? ChildB.mock()
+		        let childB_childB = childB_childB?(.root) ?? ChildB()
 		        let childB_instantiator__Other = childB_instantiator__Other?(.childA)
 		            ?? Instantiator<Other> {
 		            Other()
@@ -4038,6 +4038,82 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension TypeWithInstanceMock {
 		    public static func mock() -> TypeWithInstanceMock {
 		        TypeWithInstanceMock()
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	mutating func mock_inlineConstructsWithNilForMissingOptionalArgs() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Parent: Instantiable {
+				    public init(child: Child, shared: Shared?) {
+				        self.child = child
+				        self.shared = shared
+				    }
+				    @Received let child: Child
+				    @Received(onlyIfAvailable: true) let shared: Shared?
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init(unrelated: Unrelated?, shared: Shared?) {
+				        self.unrelated = unrelated
+				        self.shared = shared
+				    }
+				    @Received(onlyIfAvailable: true) let unrelated: Unrelated?
+				    @Received(onlyIfAvailable: true) let shared: Shared?
+
+				    public static func mock() -> Child {
+				        Child(unrelated: nil, shared: nil)
+				    }
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Shared: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Unrelated: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		// The Parent mock should inline-construct Child, threading `shared`
+		// from parent scope and passing `nil` for the missing Optional `unrelated`.
+		// This preserves the dependency graph (vs calling Child.mock() which would lose context).
+		#expect(output.mockFiles["Parent+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Parent {
+		    public enum SafeDIMockPath {
+		        public enum Child { case parent }
+		        public enum Shared { case parent }
+		    }
+
+		    public static func mock(
+		        child: ((SafeDIMockPath.Child) -> Child)? = nil,
+		        shared: ((SafeDIMockPath.Shared) -> Shared?)? = nil
+		    ) -> Parent {
+		        let shared = shared?(.parent) ?? Shared()
+		        let child = child?(.parent) ?? Child(unrelated: nil, shared: shared)
+		        return Parent(child: child, shared: shared)
 		    }
 		}
 		#endif
