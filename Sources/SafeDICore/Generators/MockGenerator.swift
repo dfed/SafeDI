@@ -636,10 +636,6 @@ public struct MockGenerator: Sendable {
 		guard let first = string.first else { return string }
 		return String(first.lowercased()) + string.dropFirst()
 	}
-
-	private func parameterLabel(for typeDescription: TypeDescription) -> String {
-		lowercaseFirst(typeDescription.asSource)
-	}
 }
 
 // MARK: - Array Extension

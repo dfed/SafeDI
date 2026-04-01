@@ -552,7 +552,7 @@ To generate mocks for non-root modules, add the `SafeDIGenerator` plugin to all 
 
 Each module that generates mocks must have its own `@SafeDIConfiguration` with `generateMocks: true`. When no configuration exists, mock generation is disabled by default.
 
-**Note:** `additionalDirectoriesToInclude` does not support mock generation. Types included via this configuration property are not scanned for mock output. To generate mocks for those types, make them part of a proper module with its own `SafeDIGenerator` plugin.
+**Note:** Mock generation only creates mocks for types defined in the current module. Types from dependent modules or `additionalDirectoriesToInclude` are not mocked — each module must have its own `SafeDIGenerator` plugin to generate mocks for its types.
 
 ## Comparing SafeDI and Manual Injection: Key Differences
 

@@ -1180,6 +1180,42 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	mutating func mock_generatedForInstantiatorWithMultipleForwardedProperties() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(childBuilder: Instantiator<Child>) {
+				        self.childBuilder = childBuilder
+				    }
+				    @Instantiated let childBuilder: Instantiator<Child>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init(name: String, age: Int) {
+				        self.name = name
+				        self.age = age
+				    }
+				    @Forwarded let name: String
+				    @Forwarded let age: Int
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let rootMock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		// Multiple forwarded properties → tuple destructuring in closure.
+		#expect(rootMock.contains("(name, age) in"))
+		#expect(rootMock.contains("Child(name: name, age: age)"))
+	}
+
+	@Test
 	mutating func mock_generatedForTypeWithPublishedReceivedDependency() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
