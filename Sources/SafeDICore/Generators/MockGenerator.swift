@@ -398,7 +398,7 @@ public struct MockGenerator: Sendable {
 		// Compute which Instantiator entries should be constructed inside another
 		// Instantiator's closure (because they depend on that Instantiator's forwarded props).
 		let nestedEntriesByParent = computeNestedEntriesByParent(treeInfo: treeInfo)
-		let allNestedEntryKeys = Set(nestedEntriesByParent.values.flatMap { $0 })
+		let allNestedEntryKeys = Set(nestedEntriesByParent.values.flatMap(\.self))
 
 		// Phase 2: Topologically sort all type entries and construct in order.
 		let sortedEntries = topologicallySortedEntries(treeInfo: treeInfo)
@@ -580,7 +580,7 @@ public struct MockGenerator: Sendable {
 	private func computeNestedEntriesByParent(treeInfo: TreeInfo) -> [String: [String]] {
 		var result = [String: [String]]()
 
-		let instantiatorEntries = treeInfo.typeEntries.filter { $0.value.isInstantiator }
+		let instantiatorEntries = treeInfo.typeEntries.filter(\.value.isInstantiator)
 
 		// Types available at root scope: non-Instantiator entries + root-level forwarded entries.
 		var rootAvailableTypes = Set<String>()
@@ -592,7 +592,7 @@ public struct MockGenerator: Sendable {
 		}
 
 		for (parentKey, parentEntry) in instantiatorEntries where !parentEntry.builtTypeForwardedProperties.isEmpty {
-			let forwardedTypeNames = Set(parentEntry.builtTypeForwardedProperties.map { $0.typeDescription.asSource })
+			let forwardedTypeNames = Set(parentEntry.builtTypeForwardedProperties.map(\.typeDescription.asSource))
 
 			for (childKey, childEntry) in instantiatorEntries where childKey != parentKey {
 				guard let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[childEntry.typeDescription] else {
