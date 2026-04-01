@@ -31,7 +31,8 @@ enum ExampleSafeDIConfiguration {
 	static let additionalDirectoriesToInclude: [StaticString] = ["Subproject"]
 
 	/// Whether to generate `mock()` methods for `@Instantiable` types.
-	/// Disabled because mock generation does not yet support types from additionalDirectoriesToInclude.
+	/// Disabled because types in additionalDirectoriesToInclude are not scanned for mock generation.
+	/// To enable mocks, make each module a proper target with its own SafeDIGenerator plugin.
 	static let generateMocks: Bool = false
 
 	/// The conditional compilation flag to wrap generated mock code in.

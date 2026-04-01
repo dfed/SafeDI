@@ -550,6 +550,10 @@ public final class MyPresenter: Instantiable { ... }
 
 To generate mocks for non-root modules, add the `SafeDIGenerator` plugin to all first-party targets in your `Package.swift`. Each module's mocks are scoped to its own types to avoid duplicates.
 
+Each module that generates mocks must have its own `@SafeDIConfiguration` with `generateMocks: true`. When no configuration exists, mock generation is disabled by default.
+
+**Note:** `additionalDirectoriesToInclude` does not support mock generation. Types included via this configuration property are not scanned for mock output. To generate mocks for those types, make them part of a proper module with its own `SafeDIGenerator` plugin.
+
 ## Comparing SafeDI and Manual Injection: Key Differences
 
 SafeDI is designed to be simple to adopt and minimize architectural changes required to get the benefits of a compile-time safe DI system. Despite this design goal, there are a few key differences between projects that utilize SafeDI and projects that don’t. As the benefits of this system are clearly outlined in the [Features](../README.md#features) section above, this section outlines the pattern changes required to utilize a DI system like SafeDI.
