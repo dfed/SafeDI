@@ -1018,6 +1018,39 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		""")
 	}
 
+	@Test
+	mutating func mock_generatedForTypeWithPublishedReceivedDependency() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				import Combine
+				public protocol StringStorage {}
+				@Instantiable(fulfillingAdditionalTypes: [StringStorage.self])
+				extension UserDefaults: Instantiable, StringStorage {
+				    public static func instantiate() -> UserDefaults { .standard }
+				}
+				""",
+				"""
+				import Combine
+				@Instantiable
+				public final class DefaultUserService: Instantiable {
+				    public init(stringStorage: StringStorage) {
+				        self.stringStorage = stringStorage
+				    }
+				    @Received @Published private var stringStorage: StringStorage
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// DefaultUserService should get a mock even with @Published on the property.
+		let mock = try #require(output.mockFiles["DefaultUserService+SafeDIMock.swift"])
+		#expect(mock.contains("extension DefaultUserService"))
+		#expect(mock.contains("public static func mock"))
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

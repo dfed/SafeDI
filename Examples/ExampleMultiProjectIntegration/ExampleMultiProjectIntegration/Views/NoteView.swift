@@ -55,8 +55,10 @@ public struct NoteView: Instantiable, View {
 	@State private var note: String = ""
 }
 
-#if DEBUG
-	#Preview {
-		NoteView.mock(userName: "dfed")
-	}
-#endif
+#Preview {
+	NoteView(
+		userName: "dfed",
+		userService: .init(DefaultUserService(stringStorage: UserDefaults.standard)),
+		stringStorage: UserDefaults.standard,
+	)
+}

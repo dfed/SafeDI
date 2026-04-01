@@ -50,8 +50,6 @@ public struct NameEntryView: Instantiable, View {
 	@Received private let userService: AnyUserService
 }
 
-#if DEBUG
-	#Preview {
-		NameEntryView.mock()
-	}
-#endif
+#Preview {
+	NameEntryView(userService: .init(DefaultUserService(stringStorage: UserDefaults.standard)))
+}
