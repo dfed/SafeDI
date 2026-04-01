@@ -51,8 +51,6 @@ public struct NameEntryView: Instantiable, View {
 
 #if DEBUG
 #Preview {
-	NameEntryView.mock(
-		anyUserService: { _ in AnyUserService(DefaultUserService.mock()) }
-	)
+	NameEntryView.mock()
 }
 #endif

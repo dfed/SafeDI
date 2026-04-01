@@ -57,9 +57,6 @@ public struct NoteView: Instantiable, View {
 
 #if DEBUG
 #Preview {
-	NoteView.mock(
-		userName: "dfed",
-		anyUserService: { _ in AnyUserService(DefaultUserService.mock()) }
-	)
+	NoteView.mock(userName: "dfed")
 }
 #endif

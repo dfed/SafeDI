@@ -28,6 +28,20 @@ public struct MockGenerator: Sendable {
 	) {
 		self.typeDescriptionToFulfillingInstantiableMap = typeDescriptionToFulfillingInstantiableMap
 		self.mockConditionalCompilation = mockConditionalCompilation
+
+		// Build a map of erased type → concrete type from all erasedToConcreteExistential relationships.
+		var erasureMap = [TypeDescription: TypeDescription]()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
+			for dependency in instantiable.dependencies {
+				if case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential) = dependency.source,
+				   erasedToConcreteExistential,
+				   let concreteType = fulfillingTypeDescription?.asInstantiatedType
+				{
+					erasureMap[dependency.property.typeDescription] = concreteType
+				}
+			}
+		}
+		erasedToConcreteTypeMap = erasureMap
 	}
 
 	// MARK: Public
@@ -69,7 +83,35 @@ public struct MockGenerator: Sendable {
 			let depTypeName = depType.asSource
 			switch dependency.source {
 			case .received, .aliased:
-				if treeInfo.typeEntries[depTypeName] == nil {
+				// Check if this type has an erased→concrete relationship.
+				if let concreteType = erasedToConcreteTypeMap[dependency.property.typeDescription] {
+					let concreteTypeName = concreteType.asSource
+					// Add the concrete type entry.
+					if treeInfo.typeEntries[concreteTypeName] == nil {
+						treeInfo.typeEntries[concreteTypeName] = TypeEntry(
+							typeDescription: concreteType,
+							sourceType: concreteType,
+							isForwarded: false,
+							hasKnownMock: typeDescriptionToFulfillingInstantiableMap[concreteType] != nil,
+							erasedToConcreteExistential: false,
+							wrappedConcreteType: nil,
+						)
+						treeInfo.typeEntries[concreteTypeName]!.pathCases.append(
+							PathCase(name: "parent", constructionPath: []),
+						)
+					}
+					// Add the erased type entry.
+					if treeInfo.typeEntries[depTypeName] == nil {
+						treeInfo.typeEntries[depTypeName] = TypeEntry(
+							typeDescription: depType,
+							sourceType: dependency.property.typeDescription,
+							isForwarded: false,
+							hasKnownMock: true,
+							erasedToConcreteExistential: true,
+							wrappedConcreteType: concreteType,
+						)
+					}
+				} else if treeInfo.typeEntries[depTypeName] == nil {
 					treeInfo.typeEntries[depTypeName] = TypeEntry(
 						typeDescription: depType,
 						sourceType: dependency.property.typeDescription,
@@ -171,6 +213,8 @@ public struct MockGenerator: Sendable {
 
 	private let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
 	private let mockConditionalCompilation: String?
+	/// Maps erased wrapper types to their concrete fulfilling types (from erasedToConcreteExistential relationships).
+	private let erasedToConcreteTypeMap: [TypeDescription: TypeDescription]
 
 	// MARK: Tree Analysis
 
@@ -367,10 +411,9 @@ public struct MockGenerator: Sendable {
 		// Phase 3: Construct the final return value.
 		if let initializer = instantiable.initializer {
 			let argList = initializer.arguments.compactMap { arg -> String? in
-				let depType = arg.typeDescription.asInstantiatedType.asSource
-				if let varName = constructedVars[depType] {
-					return "\(arg.label): \(varName)"
-				} else if let varName = constructedVars[arg.typeDescription.asSource] {
+				let varName = constructedVars[arg.typeDescription.asInstantiatedType.asSource]
+					?? constructedVars[arg.typeDescription.asSource]
+				if let varName {
 					return "\(arg.label): \(varName)"
 				} else if arg.hasDefaultValue {
 					return nil
@@ -456,7 +499,7 @@ public struct MockGenerator: Sendable {
 		constructedVars: [String: String],
 	) -> String {
 		guard let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription] else {
-			// No Instantiable info available. Use type name directly.
+			// Type not in the map — this is a defensive fallback.
 			return "\(typeDescription.asSource)()"
 		}
 
@@ -465,6 +508,7 @@ public struct MockGenerator: Sendable {
 			switch dep.source {
 			case .received, .aliased:
 				constructedVars[dep.property.typeDescription.asInstantiatedType.asSource] != nil
+					|| constructedVars[dep.property.typeDescription.asSource] != nil
 			case .instantiated, .forwarded:
 				false
 			}
@@ -472,6 +516,9 @@ public struct MockGenerator: Sendable {
 
 		if !hasReceivedDepsInScope {
 			// No received deps in scope — safe to use mock().
+			if instantiable.declarationType.isExtension {
+				return "\(instantiable.concreteInstantiable.asSource).instantiate()"
+			}
 			return "\(instantiable.concreteInstantiable.asSource).mock()"
 		}
 
@@ -482,10 +529,9 @@ public struct MockGenerator: Sendable {
 
 		let typeName = instantiable.concreteInstantiable.asSource
 		let args = initializer.arguments.compactMap { arg -> String? in
-			let argDepType = arg.typeDescription.asInstantiatedType.asSource
-			if let varName = constructedVars[argDepType] {
-				return "\(arg.label): \(varName)"
-			} else if let varName = constructedVars[arg.typeDescription.asSource] {
+			let varName = constructedVars[arg.typeDescription.asInstantiatedType.asSource]
+				?? constructedVars[arg.typeDescription.asSource]
+			if let varName {
 				return "\(arg.label): \(varName)"
 			} else if arg.hasDefaultValue {
 				return nil
