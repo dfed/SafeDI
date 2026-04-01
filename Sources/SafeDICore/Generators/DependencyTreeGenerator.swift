@@ -89,6 +89,8 @@ public actor DependencyTreeGenerator {
 			.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
 			.compactMap { instantiable in
 				guard seen.insert(instantiable.concreteInstantiable).inserted else { return nil }
+				// Skip types that already define their own mock() method.
+				guard !instantiable.hasExistingMockMethod else { return nil }
 				return GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,
 					sourceFilePath: instantiable.sourceFilePath,

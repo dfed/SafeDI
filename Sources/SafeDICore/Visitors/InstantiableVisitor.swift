@@ -150,6 +150,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+		// Detect existing static func mock(...) methods.
+		if node.name.text == "mock",
+		   node.modifiers.staticModifier != nil
+		{
+			hasExistingMockMethod = true
+		}
+
 		guard declarationType.isExtension else {
 			return .skipChildren
 		}
@@ -290,6 +297,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var instantiableType: TypeDescription?
 	public private(set) var additionalInstantiables: [TypeDescription]?
 	public private(set) var mockAttributes = ""
+	public private(set) var hasExistingMockMethod = false
 	public private(set) var diagnostics = [Diagnostic]()
 	public private(set) var uninitializedNonOptionalPropertyNames = [String]()
 
@@ -344,6 +352,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						dependencies: dependencies,
 						declarationType: instantiableDeclarationType.asDeclarationType,
 						mockAttributes: mockAttributes,
+						hasExistingMockMethod: hasExistingMockMethod,
 					),
 				]
 			} else {

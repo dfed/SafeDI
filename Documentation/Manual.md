@@ -490,7 +490,7 @@ enum MyConfiguration {
 
 ### Using generated mocks
 
-Each `@Instantiable` type gets a `mock()` static method that builds its full dependency subtree:
+Each `@Instantiable` type gets a `mock()` static method that builds its full dependency subtree. If a type already defines its own `static func mock(...)` method, SafeDI will not generate one — your hand-written mock takes precedence.
 
 ```swift
 #if DEBUG
