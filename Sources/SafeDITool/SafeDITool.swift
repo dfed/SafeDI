@@ -241,11 +241,8 @@ struct SafeDITool: AsyncParsableCommand {
 						}
 
 						for entry in manifest.mockGeneration {
-							let code: String = if let extensions = sourceFileToMockExtensions[entry.inputFilePath] {
-								fileHeader + extensions.sorted().joined(separator: "\n\n")
-							} else {
-								emptyRootContent
-							}
+							let extensions = sourceFileToMockExtensions[entry.inputFilePath]
+							let code = fileHeader + (extensions?.sorted().joined(separator: "\n\n") ?? "")
 							let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
 							if existingContent != code {
 								try code.write(toPath: entry.outputFilePath)
