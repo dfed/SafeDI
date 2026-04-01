@@ -55,7 +55,7 @@ public struct NoteView: Instantiable, View {
 }
 
 #if DEBUG
-#Preview {
-	NoteView.mock(userName: "dfed")
-}
+	#Preview {
+		NoteView.mock(userName: "dfed")
+	}
 #endif

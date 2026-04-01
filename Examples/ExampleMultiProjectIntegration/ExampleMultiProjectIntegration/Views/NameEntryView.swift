@@ -51,7 +51,7 @@ public struct NameEntryView: Instantiable, View {
 }
 
 #if DEBUG
-#Preview {
-	NameEntryView.mock()
-}
+	#Preview {
+		NameEntryView.mock()
+	}
 #endif
