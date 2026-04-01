@@ -99,6 +99,11 @@ struct RootScannerTests {
 			],
 		))
 
+		// Verify outputFiles includes both DI tree and mock outputs.
+		#expect(result.outputFiles.count == 4) // 2 DI tree + 2 mock
+		#expect(result.outputFiles.contains(URL(fileURLWithPath: featureAOutputPath)))
+		#expect(result.outputFiles.contains(URL(fileURLWithPath: featureAMockPath)))
+
 		let manifestData = try JSONEncoder().encode(result.manifest)
 		let decodedManifest = try JSONDecoder().decode(SafeDIToolManifest.self, from: manifestData)
 		#expect(decodedManifest.dependencyTreeGeneration.map(\.inputFilePath) == [

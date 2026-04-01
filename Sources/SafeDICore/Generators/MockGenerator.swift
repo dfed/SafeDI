@@ -189,16 +189,22 @@ public struct MockGenerator: Sendable {
 		lines.append("}")
 
 		let code = lines.joined(separator: "\n")
-		if let mockConditionalCompilation {
-			return "#if \(mockConditionalCompilation)\n\(code)\n#endif"
-		}
-		return code
+		return wrapInConditionalCompilation(code)
 	}
 
 	// MARK: Private
 
 	private let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
 	private let mockConditionalCompilation: String?
+
+	private func wrapInConditionalCompilation(_ code: String) -> String {
+		if let mockConditionalCompilation {
+			"#if \(mockConditionalCompilation)\n\(code)\n#endif"
+		} else {
+			code
+		}
+	}
+
 	/// Maps erased wrapper types to their concrete fulfilling types (from erasedToConcreteExistential relationships).
 	private let erasedToConcreteTypeMap: [TypeDescription: TypeDescription]
 
@@ -326,10 +332,7 @@ public struct MockGenerator: Sendable {
 		    }
 		}
 		"""
-		if let mockConditionalCompilation {
-			return "#if \(mockConditionalCompilation)\n\(code)\n#endif"
-		}
-		return code
+		return wrapInConditionalCompilation(code)
 	}
 
 	private func generateSimpleExtensionMock(
@@ -343,10 +346,7 @@ public struct MockGenerator: Sendable {
 		    }
 		}
 		"""
-		if let mockConditionalCompilation {
-			return "#if \(mockConditionalCompilation)\n\(code)\n#endif"
-		}
-		return code
+		return wrapInConditionalCompilation(code)
 	}
 
 	private func generateMockBody(
@@ -458,19 +458,11 @@ public struct MockGenerator: Sendable {
 					return false
 				}
 				// Check if all received/aliased deps of this type are resolved.
-				let unresolvedDeps = instantiable.dependencies.filter { dep in
-					switch dep.source {
-					case .received, .aliased:
-						let depTypeName = dep.property.typeDescription.asInstantiatedType.asSource
-						return allTypeNames.contains(depTypeName) && !resolved.contains(depTypeName)
-					case .instantiated:
-						let depTypeName = dep.asInstantiatedType.asSource
-						return allTypeNames.contains(depTypeName) && !resolved.contains(depTypeName)
-					case .forwarded:
-						return false
-					}
+				let hasUnresolvedDeps = instantiable.dependencies.contains { dep in
+					let depTypeName = dep.property.typeDescription.asInstantiatedType.asSource
+					return allTypeNames.contains(depTypeName) && !resolved.contains(depTypeName)
 				}
-				if unresolvedDeps.isEmpty {
+				if !hasUnresolvedDeps {
 					result.append(entry)
 					resolved.insert(typeName)
 					return false
@@ -490,10 +482,7 @@ public struct MockGenerator: Sendable {
 		for typeDescription: TypeDescription,
 		constructedVars: [String: String],
 	) -> String {
-		guard let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription] else {
-			// Type not in the map — this is a defensive fallback.
-			return "\(typeDescription.asSource)()"
-		}
+		let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription]!
 
 		// Check if this type has received deps that are already constructed.
 		let hasReceivedDepsInScope = instantiable.dependencies.contains { dep in
@@ -515,9 +504,7 @@ public struct MockGenerator: Sendable {
 		}
 
 		// Build inline using initializer.
-		guard let initializer = instantiable.initializer else {
-			return "\(instantiable.concreteInstantiable.asSource)()"
-		}
+		let initializer = instantiable.initializer!
 
 		let typeName = instantiable.concreteInstantiable.asSource
 		let args = initializer.arguments.compactMap { arg -> String? in

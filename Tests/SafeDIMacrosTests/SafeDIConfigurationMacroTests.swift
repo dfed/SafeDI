@@ -584,5 +584,113 @@ import Testing
 				""",
 			)
 		}
+
+		@Test
+		func fixItAddsOnlyMissingMockConditionalCompilation() {
+			assertMacroExpansion(
+				"""
+				@SafeDIConfiguration
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
+				    static let generateMocks: Bool = true
+				}
+				""",
+				expandedSource: """
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
+				    static let generateMocks: Bool = true
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@SafeDIConfiguration-decorated type must have a `static let mockConditionalCompilation: StaticString?` property",
+						line: 2,
+						column: 22,
+						fixIts: [
+							FixItSpec(message: "Add `static let mockConditionalCompilation: StaticString?` property"),
+						],
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+				applyFixIts: [
+					"Add `static let mockConditionalCompilation: StaticString?` property",
+				],
+				fixedSource: """
+				@SafeDIConfiguration
+				enum MyConfiguration {
+				/// The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`).
+				/// Set to `nil` to generate mocks without conditional compilation.
+				static let mockConditionalCompilation: StaticString? = "DEBUG"
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
+				    static let generateMocks: Bool = true
+				}
+				""",
+			)
+		}
+
+		@Test
+		func throwsErrorWhenMockConditionalCompilationHasNoInitializer() {
+			assertMacroExpansion(
+				"""
+				@SafeDIConfiguration
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
+				    static let generateMocks: Bool = true
+				    static let mockConditionalCompilation: StaticString?
+				}
+				""",
+				expandedSource: """
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
+				    static let generateMocks: Bool = true
+				    static let mockConditionalCompilation: StaticString?
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The `mockConditionalCompilation` property must be initialized with a string literal or `nil`",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func throwsErrorWhenMockConditionalCompilationHasInterpolation() {
+			assertMacroExpansion(
+				"""
+				@SafeDIConfiguration
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
+				    static let generateMocks: Bool = true
+				    static let mockConditionalCompilation: StaticString? = "\\(flag)"
+				}
+				""",
+				expandedSource: """
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
+				    static let generateMocks: Bool = true
+				    static let mockConditionalCompilation: StaticString? = "\\(flag)"
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The `mockConditionalCompilation` property must be initialized with a string literal or `nil`",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
 	}
 #endif

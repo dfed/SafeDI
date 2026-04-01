@@ -1019,6 +1019,47 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	mutating func mock_inlineConstructionSkipsDefaultValuedArguments() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(child: Child, shared: Shared) {
+				        self.child = child
+				        self.shared = shared
+				    }
+				    @Instantiated let child: Child
+				    @Instantiated let shared: Shared
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init(shared: Shared, flag: Bool = false) {
+				        self.shared = shared
+				    }
+				    @Received let shared: Shared
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Shared: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let rootMock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		// Child's inline construction should skip the `flag` default-valued argument.
+		#expect(rootMock.contains("Child(shared: shared)"))
+		#expect(!rootMock.contains("flag"))
+	}
+
+	@Test
 	mutating func mock_generatedForTypeWithPublishedReceivedDependency() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
