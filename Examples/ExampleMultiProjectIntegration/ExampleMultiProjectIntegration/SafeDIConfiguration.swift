@@ -28,7 +28,7 @@ enum ExampleSafeDIConfiguration {
 
 	/// Directories containing Swift files to include, relative to the executing directory.
 	/// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-	/// Still needed for DI tree generation even though Subproject has its own plugin for mock generation.
+	/// Needed for DI tree generation even though Subproject has its own plugin for mock generation.
 	static let additionalDirectoriesToInclude: [StaticString] = ["Subproject"]
 
 	/// Whether to generate `mock()` methods for `@Instantiable` types.
