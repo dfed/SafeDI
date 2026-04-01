@@ -399,12 +399,8 @@ public struct MockGenerator: Sendable {
 					constructedVars: constructedVars,
 					indent: bodyIndent,
 				)
-				if entry.hasKnownMock {
-					lines.append("\(bodyIndent)let \(entry.paramLabel) = \(entry.paramLabel)?(\(dotPathCase))")
-					lines.append("\(bodyIndent)    ?? \(instantiatorDefault)")
-				} else {
-					lines.append("\(bodyIndent)let \(entry.paramLabel) = \(entry.paramLabel)(\(dotPathCase))")
-				}
+				lines.append("\(bodyIndent)let \(entry.paramLabel) = \(entry.paramLabel)?(\(dotPathCase))")
+				lines.append("\(bodyIndent)    ?? \(instantiatorDefault)")
 				constructedVars[sourceTypeName] = entry.paramLabel
 			} else if entry.hasKnownMock {
 				let defaultExpr: String
