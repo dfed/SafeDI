@@ -122,6 +122,9 @@ public struct MockGenerator: Sendable {
 			}
 		}
 
+		// Disambiguate entries with duplicate enumName values.
+		disambiguateEnumNames(&treeInfo)
+
 		// If there are no dependencies at all, generate a simple mock.
 		if treeInfo.typeEntries.isEmpty, treeInfo.forwardedEntries.isEmpty {
 			if instantiable.declarationType.isExtension {
@@ -218,10 +221,10 @@ public struct MockGenerator: Sendable {
 		let erasedToConcreteExistential: Bool
 		/// For erased types, the concrete type that this wraps.
 		let wrappedConcreteType: TypeDescription?
-		/// The enum name for this entry in SafeDIMockPath.
-		let enumName: String
+		/// The enum name for this entry in SafeDIMockPath. May be mutated during disambiguation.
+		var enumName: String
 		/// The parameter label for this entry in mock().
-		let paramLabel: String
+		var paramLabel: String
 		/// Whether this entry represents an Instantiator/ErasedInstantiator property.
 		let isInstantiator: Bool
 		/// Forwarded properties of the built type (for Instantiator closure parameters).
@@ -253,8 +256,8 @@ public struct MockGenerator: Sendable {
 				let isInstantiator = !dependency.property.propertyType.isConstant
 
 				// Determine enum name and param label.
-				let enumName: String
-				let paramLabel: String
+				var enumName: String
+				var paramLabel: String
 				if isInstantiator {
 					// Instantiator types use property label (capitalized) as enum name.
 					let label = dependency.property.label
@@ -617,6 +620,25 @@ public struct MockGenerator: Sendable {
 
 	/// Converts a type name to a valid Swift identifier by replacing special characters.
 	/// e.g. `Container<Bool>` → `Container__Bool`
+	/// Detects duplicate `enumName` values and appends a sanitized type suffix to disambiguate.
+	private func disambiguateEnumNames(_ treeInfo: inout TreeInfo) {
+		// Group entries by enumName.
+		var enumNameToKeys = [String: [String]]()
+		for (key, entry) in treeInfo.typeEntries {
+			enumNameToKeys[entry.enumName, default: []].append(key)
+		}
+		// For each group with duplicates, append the sanitized sourceType to disambiguate.
+		for (_, keys) in enumNameToKeys where keys.count > 1 {
+			for key in keys {
+				guard var entry = treeInfo.typeEntries[key] else { continue }
+				let suffix = sanitizeForIdentifier(entry.sourceType.asSource)
+				entry.enumName = "\(entry.enumName)_\(suffix)"
+				entry.paramLabel = "\(entry.paramLabel)_\(lowercaseFirst(suffix))"
+				treeInfo.typeEntries[key] = entry
+			}
+		}
+	}
+
 	private func sanitizeForIdentifier(_ typeName: String) -> String {
 		typeName
 			.replacingOccurrences(of: "<", with: "__")
