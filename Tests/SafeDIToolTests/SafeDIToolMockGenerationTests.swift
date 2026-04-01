@@ -1060,6 +1060,86 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	mutating func mock_generatedForTypeWithInstantiatorDependency() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(shared: Shared, childBuilder: Instantiator<Child>) {
+				        self.shared = shared
+				        self.childBuilder = childBuilder
+				    }
+				    @Instantiated let shared: Shared
+				    @Instantiated let childBuilder: Instantiator<Child>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init(name: String, shared: Shared) {
+				        self.name = name
+				        self.shared = shared
+				    }
+				    @Forwarded let name: String
+				    @Received let shared: Shared
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Shared: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let rootMock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		// Instantiator uses property label as enum name.
+		#expect(rootMock.contains("public enum ChildBuilder { case root }"))
+		// Parameter type is the full Instantiator<Child>.
+		#expect(rootMock.contains("childBuilder: ((SafeDIMockPath.ChildBuilder) -> Instantiator<Child>)? = nil"))
+		// Default wraps inline tree in Instantiator closure with forwarded prop.
+		#expect(rootMock.contains("Instantiator<Child> {"))
+		#expect(rootMock.contains("name in"))
+		#expect(rootMock.contains("Child(name: name, shared: shared)"))
+	}
+
+	@Test
+	mutating func mock_generatedForTypeWithInstantiatorNoForwardedProperties() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(viewBuilder: Instantiator<SimpleView>) {
+				        self.viewBuilder = viewBuilder
+				    }
+				    @Instantiated let viewBuilder: Instantiator<SimpleView>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct SimpleView: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let rootMock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		#expect(rootMock.contains("public enum ViewBuilder { case root }"))
+		#expect(rootMock.contains("viewBuilder: ((SafeDIMockPath.ViewBuilder) -> Instantiator<SimpleView>)? = nil"))
+		// No forwarded props → empty closure params.
+		#expect(rootMock.contains("Instantiator<SimpleView> {"))
+		#expect(rootMock.contains("SimpleView()"))
+	}
+
+	@Test
 	mutating func mock_generatedForTypeWithPublishedReceivedDependency() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
