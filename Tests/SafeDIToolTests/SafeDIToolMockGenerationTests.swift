@@ -3349,7 +3349,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 		        let profileViewControllerBuilder = profileViewControllerBuilder?(.root)
 		            ?? Instantiator<ProfileViewController> {
-		            ProfileViewController(editProfileViewControllerBuilder: editProfileViewControllerBuilder)
+		            ProfileViewController(userVendor: userManager, editProfileViewControllerBuilder: editProfileViewControllerBuilder)
 		        }
 		        return LoggedInViewController(userManager: userManager, userNetworkService: networkService, profileViewControllerBuilder: profileViewControllerBuilder)
 		    }
@@ -3500,7 +3500,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Child {
 		        let grandchildBuilder = grandchildBuilder?(.root)
 		            ?? Instantiator<Grandchild> {
-		            Grandchild()
+		            Grandchild(anyIterator: iterator)
 		        }
 		        return Child(iterator: iterator, grandchildBuilder: grandchildBuilder)
 		    }

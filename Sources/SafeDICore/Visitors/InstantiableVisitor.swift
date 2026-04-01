@@ -150,9 +150,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-		// Detect existing static func mock(...) methods.
+		// Detect existing static/class func mock(...) methods.
 		if node.name.text == "mock",
-		   node.modifiers.staticModifier != nil
+		   node.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) || $0.name.tokenKind == .keyword(.class) })
 		{
 			hasExistingMockMethod = true
 		}

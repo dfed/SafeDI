@@ -436,10 +436,10 @@ public struct MockGenerator: Sendable {
 		// Phase 3: Construct the final return value.
 		if let initializer = instantiable.initializer {
 			let argList = initializer.arguments.compactMap { arg -> String? in
-				let varName = constructedVars[arg.typeDescription.asInstantiatedType.asSource]
+				let constructedVariableName = constructedVars[arg.typeDescription.asInstantiatedType.asSource]
 					?? constructedVars[arg.typeDescription.asSource]
-				if let varName {
-					return "\(arg.label): \(varName)"
+				if let constructedVariableName {
+					return "\(arg.label): \(constructedVariableName)"
 				} else {
 					// Arg has a default value or is not a tracked dependency.
 					return nil
@@ -485,11 +485,31 @@ public struct MockGenerator: Sendable {
 			closureConstructedVars[fwd.typeDescription.asSource] = fwd.label
 		}
 
+		// Build lookup including aliased deps.
+		var argumentLabelToConstructedVariableName = [String: String]()
+		if let builtInstantiable {
+			for dep in builtInstantiable.dependencies {
+				let declaredType = dep.property.typeDescription.asInstantiatedType.asSource
+				if let constructedVariableName = closureConstructedVars[declaredType] ?? closureConstructedVars[dep.property.typeDescription.asSource] {
+					argumentLabelToConstructedVariableName[dep.property.label] = constructedVariableName
+					continue
+				}
+				if case let .aliased(fulfillingProperty, _, _) = dep.source {
+					let fulfillingType = fulfillingProperty.typeDescription.asInstantiatedType.asSource
+					if let constructedVariableName = closureConstructedVars[fulfillingType] ?? closureConstructedVars[fulfillingProperty.typeDescription.asSource] {
+						argumentLabelToConstructedVariableName[dep.property.label] = constructedVariableName
+					}
+				}
+			}
+		}
+
 		let args = (initializer?.arguments ?? []).compactMap { arg -> String? in
-			let varName = closureConstructedVars[arg.typeDescription.asInstantiatedType.asSource]
+			if let constructedVariableName = argumentLabelToConstructedVariableName[arg.innerLabel] {
+				return "\(arg.label): \(constructedVariableName)"
+			} else if let constructedVariableName = closureConstructedVars[arg.typeDescription.asInstantiatedType.asSource]
 				?? closureConstructedVars[arg.typeDescription.asSource]
-			if let varName {
-				return "\(arg.label): \(varName)"
+			{
+				return "\(arg.label): \(constructedVariableName)"
 			} else {
 				// Arg has a default value or is not a tracked dependency.
 				return nil
@@ -581,35 +601,53 @@ public struct MockGenerator: Sendable {
 		let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription]
 		let typeName = (instantiable?.concreteInstantiable ?? typeDescription).asSource
 
-		// Check if any of this type's deps are already constructed in the parent scope.
-		// If so, we must build inline to thread the parent's values through.
-		let hasDepsInScope = instantiable?.dependencies.contains { dep in
-			guard dep.source != .forwarded else { return false }
-			return constructedVars[dep.property.typeDescription.asInstantiatedType.asSource] != nil
-				|| constructedVars[dep.property.typeDescription.asSource] != nil
-		} ?? false
+		// Build a map from init arg label → constructed var name, checking both
+		// the declared type AND the fulfilling type for aliased dependencies.
+		guard let instantiable, let initializer = instantiable.initializer else {
+			return "\(typeName).mock()"
+		}
 
-		if !hasDepsInScope {
+		// Build lookup: for each dependency, map the init arg label to the constructed var.
+		var argumentLabelToConstructedVariableName = [String: String]()
+		for dep in instantiable.dependencies {
+			// Check the declared property type.
+			let declaredType = dep.property.typeDescription.asInstantiatedType.asSource
+			if let constructedVariableName = constructedVars[declaredType] ?? constructedVars[dep.property.typeDescription.asSource] {
+				argumentLabelToConstructedVariableName[dep.property.label] = constructedVariableName
+				continue
+			}
+			// For aliased deps, check the fulfilling property type.
+			if case let .aliased(fulfillingProperty, _, _) = dep.source {
+				let fulfillingType = fulfillingProperty.typeDescription.asInstantiatedType.asSource
+				if let constructedVariableName = constructedVars[fulfillingType] ?? constructedVars[fulfillingProperty.typeDescription.asSource] {
+					argumentLabelToConstructedVariableName[dep.property.label] = constructedVariableName
+				}
+			}
+		}
+
+		if argumentLabelToConstructedVariableName.isEmpty {
 			// No deps in scope — safe to use mock().
-			if instantiable?.declarationType.isExtension == true {
+			if instantiable.declarationType.isExtension {
 				return "\(typeName).instantiate()"
 			}
 			return "\(typeName).mock()"
 		}
 
 		// Build inline using initializer.
-		let args = instantiable?.initializer?.arguments.compactMap { arg -> String? in
-			let varName = constructedVars[arg.typeDescription.asInstantiatedType.asSource]
+		let args = initializer.arguments.compactMap { arg -> String? in
+			if let constructedVariableName = argumentLabelToConstructedVariableName[arg.innerLabel] {
+				return "\(arg.label): \(constructedVariableName)"
+			} else if let constructedVariableName = constructedVars[arg.typeDescription.asInstantiatedType.asSource]
 				?? constructedVars[arg.typeDescription.asSource]
-			if let varName {
-				return "\(arg.label): \(varName)"
+			{
+				return "\(arg.label): \(constructedVariableName)"
 			} else {
 				// Arg has a default value or is not a tracked dependency.
 				return nil
 			}
-		}.joined(separator: ", ") ?? ""
+		}.joined(separator: ", ")
 
-		if instantiable?.declarationType.isExtension == true {
+		if instantiable.declarationType.isExtension {
 			return "\(typeName).instantiate(\(args))"
 		}
 		return "\(typeName)(\(args))"
