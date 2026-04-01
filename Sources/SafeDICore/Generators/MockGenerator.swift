@@ -589,7 +589,9 @@ public struct MockGenerator: Sendable {
 		for typeDescription: TypeDescription,
 		constructedVars: [String: String],
 	) -> String {
-		let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription]!
+		guard let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription] else {
+			return "\(typeDescription.asSource)()"
+		}
 
 		// Check if this type has received deps that are already constructed.
 		let hasReceivedDepsInScope = instantiable.dependencies.contains { dep in
@@ -611,7 +613,9 @@ public struct MockGenerator: Sendable {
 		}
 
 		// Build inline using initializer.
-		let initializer = instantiable.initializer!
+		guard let initializer = instantiable.initializer else {
+			return "\(instantiable.concreteInstantiable.asSource)()"
+		}
 
 		let typeName = instantiable.concreteInstantiable.asSource
 		let args = initializer.arguments.compactMap { arg -> String? in
