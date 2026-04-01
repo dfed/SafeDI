@@ -3043,7 +3043,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        childBuilder: ((SafeDIMockPath.ChildBuilder) -> SendableInstantiator<Child>)? = nil
 		    ) -> Root {
 		        let childBuilder = childBuilder?(.root)
-		            ?? SendableInstantiator<Child> {@Sendable  name in
+		            ?? SendableInstantiator<Child> { @Sendable name in
 		            Child(name: name)
 		        }
 		        return Root(childBuilder: childBuilder)
@@ -3697,7 +3697,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        childABuilder: ((SafeDIMockPath.ChildABuilder) -> SendableErasedInstantiator<Recreated, ChildAProtocol>)? = nil
 		    ) -> Root {
 		        let childABuilder = childABuilder?(.root)
-		            ?? SendableErasedInstantiator<Recreated, ChildAProtocol> {@Sendable  recreated in
+		            ?? SendableErasedInstantiator<Recreated, ChildAProtocol> { @Sendable recreated in
 		            ChildA(recreated: recreated)
 		        }
 		        let recreated = recreated?(.root) ?? Recreated()

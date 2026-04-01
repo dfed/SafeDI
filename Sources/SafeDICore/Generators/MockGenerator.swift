@@ -623,7 +623,7 @@ public struct MockGenerator: Sendable {
 		closureBodyLines.append("\(closureIndent)\(construction)")
 
 		let closureBody = closureBodyLines.joined(separator: "\n")
-		let sendablePrefix = isSendable ? "@Sendable " : ""
+		let sendablePrefix = isSendable ? " @Sendable" : ""
 		return "\(propertyType.asSource) {\(sendablePrefix)\(closureParams)\n\(closureBody)\n\(indent)}"
 	}
 
@@ -887,7 +887,7 @@ public struct MockGenerator: Sendable {
 			constructedVariables: closureConstructedVariables,
 		)
 
-		let sendablePrefix = isSendable ? "@Sendable " : ""
+		let sendablePrefix = isSendable ? " @Sendable" : ""
 		return "\(propertyType.asSource) {\(sendablePrefix)\(closureParams) \(inlineConstruction) }"
 	}
 
