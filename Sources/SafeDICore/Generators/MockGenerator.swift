@@ -515,50 +515,71 @@ public struct MockGenerator: Sendable {
 		let closureIndent = "\(indent)    "
 		var closureBodyLines = [String]()
 
-		// Construct nested Instantiator entries inside this closure,
-		// ordered so that entries with no deps on other nested entries come first.
+		// Construct nested entries inside this closure (both Instantiator and
+		// constant entries that depend on this closure's forwarded types).
 		if let nestedKeys = nestedEntriesByParent[entry.entryKey] {
 			let nestedEntries = nestedKeys.compactMap { treeInfo.typeEntries[$0] }
 			let nestedTypeNames = Set(nestedEntries.map(\.typeDescription.asSource))
 			let sortedNestedEntries = nestedEntries.sorted { entryA, _ in
-				// entryA comes first if its built type has no deps on other nested types.
-				guard let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[entryA.typeDescription] else {
+				guard let instantiableA = typeDescriptionToFulfillingInstantiableMap[entryA.typeDescription] else {
 					return true
 				}
-				return !builtInstantiable.dependencies.contains { dependency in
-					let depTypeName = dependency.property.typeDescription.asInstantiatedType.asSource
-					return nestedTypeNames.contains(depTypeName)
+				return !instantiableA.dependencies.contains { dependency in
+					let dependencyTypeName = dependency.property.typeDescription.asInstantiatedType.asSource
+					return nestedTypeNames.contains(dependencyTypeName)
 				}
 			}
 			for nestedEntry in sortedNestedEntries {
-				let nestedDefault = buildInstantiatorDefault(
-					for: nestedEntry,
-					nestedEntriesByParent: nestedEntriesByParent,
-					treeInfo: treeInfo,
-					constructedVariables: closureConstructedVariables,
-					indent: closureIndent,
-				)
 				let pathCase = nestedEntry.pathCases.first?.name ?? "root"
 				let dotPathCase = pathCase.contains(".") ? pathCase : ".\(pathCase)"
-				closureBodyLines.append("\(closureIndent)let \(nestedEntry.paramLabel) = \(nestedEntry.paramLabel)?(\(dotPathCase))")
-				closureBodyLines.append("\(closureIndent)    ?? \(nestedDefault)")
-				closureConstructedVariables[nestedEntry.sourceType.asSource] = nestedEntry.paramLabel
+				if nestedEntry.isInstantiator {
+					let nestedDefault = buildInstantiatorDefault(
+						for: nestedEntry,
+						nestedEntriesByParent: nestedEntriesByParent,
+						treeInfo: treeInfo,
+						constructedVariables: closureConstructedVariables,
+						indent: closureIndent,
+					)
+					closureBodyLines.append("\(closureIndent)let \(nestedEntry.paramLabel) = \(nestedEntry.paramLabel)?(\(dotPathCase))")
+					closureBodyLines.append("\(closureIndent)    ?? \(nestedDefault)")
+					closureConstructedVariables[nestedEntry.sourceType.asSource] = nestedEntry.paramLabel
+				} else {
+					// Constant entry nested inside the closure.
+					let defaultExpression = buildInlineConstruction(
+						for: nestedEntry.typeDescription,
+						constructedVariables: closureConstructedVariables,
+					)
+					if nestedEntry.hasKnownMock {
+						closureBodyLines.append("\(closureIndent)let \(nestedEntry.paramLabel) = \(nestedEntry.paramLabel)?(\(dotPathCase)) ?? \(defaultExpression)")
+					} else {
+						closureBodyLines.append("\(closureIndent)let \(nestedEntry.paramLabel) = \(nestedEntry.paramLabel)(\(dotPathCase))")
+					}
+					closureConstructedVariables[nestedEntry.typeDescription.asSource] = nestedEntry.paramLabel
+				}
 			}
 		}
 
-		// Build lookup including aliased deps.
+		// Build lookup including aliased deps and fulfilling types.
 		var argumentLabelToConstructedVariableName = [String: String]()
 		if let builtInstantiable {
-			for dep in builtInstantiable.dependencies {
-				let declaredType = dep.property.typeDescription.asInstantiatedType.asSource
-				if let constructedVariableName = closureConstructedVariables[declaredType] ?? closureConstructedVariables[dep.property.typeDescription.asSource] {
-					argumentLabelToConstructedVariableName[dep.property.label] = constructedVariableName
+			for dependency in builtInstantiable.dependencies {
+				let declaredType = dependency.property.typeDescription.asInstantiatedType.asSource
+				if let constructedVariableName = closureConstructedVariables[declaredType] ?? closureConstructedVariables[dependency.property.typeDescription.asSource] {
+					argumentLabelToConstructedVariableName[dependency.property.label] = constructedVariableName
 					continue
 				}
-				if case let .aliased(fulfillingProperty, _, _) = dep.source {
+				if case let .aliased(fulfillingProperty, _, _) = dependency.source {
 					let fulfillingType = fulfillingProperty.typeDescription.asInstantiatedType.asSource
 					if let constructedVariableName = closureConstructedVariables[fulfillingType] ?? closureConstructedVariables[fulfillingProperty.typeDescription.asSource] {
-						argumentLabelToConstructedVariableName[dep.property.label] = constructedVariableName
+						argumentLabelToConstructedVariableName[dependency.property.label] = constructedVariableName
+						continue
+					}
+				}
+				// Check if the concrete fulfilling type is in scope.
+				if let fulfillingInstantiable = typeDescriptionToFulfillingInstantiableMap[dependency.property.typeDescription.asInstantiatedType] {
+					let concreteTypeName = fulfillingInstantiable.concreteInstantiable.asSource
+					if let constructedVariableName = closureConstructedVariables[concreteTypeName] {
+						argumentLabelToConstructedVariableName[dependency.property.label] = constructedVariableName
 					}
 				}
 			}
@@ -598,9 +619,9 @@ public struct MockGenerator: Sendable {
 		return "\(propertyType.asSource) {\(sendablePrefix)\(closureParams)\n\(closureBody)\n\(indent)}"
 	}
 
-	/// Determines which Instantiator entries should be constructed inside another
-	/// Instantiator's closure because they depend on that Instantiator's forwarded props
-	/// which are not available at root scope and have no known mock.
+	/// Determines which entries should be constructed inside an Instantiator's
+	/// closure because they depend (directly, via alias, or via fulfilling type)
+	/// on that Instantiator's forwarded props which are not available at root scope.
 	/// Returns: parentEntryKey → [nestedEntryKeys]
 	private func computeNestedEntriesByParent(treeInfo: TreeInfo) -> [String: [String]] {
 		var result = [String: [String]]()
@@ -619,23 +640,30 @@ public struct MockGenerator: Sendable {
 		for (parentKey, parentEntry) in instantiatorEntries where !parentEntry.builtTypeForwardedProperties.isEmpty {
 			let forwardedTypeNames = Set(parentEntry.builtTypeForwardedProperties.map(\.typeDescription.asSource))
 
-			for (childKey, childEntry) in instantiatorEntries where childKey != parentKey {
-				guard let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[childEntry.typeDescription] else {
+			// Check ALL entries (not just Instantiators) — constant entries that
+			// receive a forwarded type also need to be nested inside the closure.
+			for (childKey, childEntry) in treeInfo.typeEntries where childKey != parentKey {
+				guard let childInstantiable = typeDescriptionToFulfillingInstantiableMap[childEntry.typeDescription] else {
 					continue
 				}
-				let needsNesting = builtInstantiable.dependencies.contains { dep in
-					guard dep.source != .forwarded else { return false }
-					// Collect all type descriptions this dep resolves to.
-					var depTypes: [(name: String, typeDescription: TypeDescription)] = [
-						(dep.property.typeDescription.asInstantiatedType.asSource, dep.property.typeDescription.asInstantiatedType),
+				let needsNesting = childInstantiable.dependencies.contains { dependency in
+					guard dependency.source != .forwarded else { return false }
+					// Collect all type names this dep resolves to:
+					// declared type, aliased fulfilling type, AND the concrete type
+					// that fulfills this dep's type in the DI graph.
+					var relevantTypeNames = [
+						dependency.property.typeDescription.asInstantiatedType.asSource,
 					]
-					if case let .aliased(fulfillingProperty, _, _) = dep.source {
-						depTypes.append((fulfillingProperty.typeDescription.asInstantiatedType.asSource, fulfillingProperty.typeDescription.asInstantiatedType))
+					if case let .aliased(fulfillingProperty, _, _) = dependency.source {
+						relevantTypeNames.append(fulfillingProperty.typeDescription.asInstantiatedType.asSource)
 					}
-					// Needs nesting if a dep type matches a forwarded type and is not
-					// available at root scope. The child must be constructed inside
-					// the closure to use the specific forwarded instance.
-					return depTypes.contains { name, _ in
+					// Also check the concrete fulfilling type (e.g., UserVendor fulfilled by UserManager).
+					if let fulfillingInstantiable = typeDescriptionToFulfillingInstantiableMap[dependency.property.typeDescription.asInstantiatedType] {
+						relevantTypeNames.append(fulfillingInstantiable.concreteInstantiable.asSource)
+					}
+					// Needs nesting if any relevant type matches a forwarded type
+					// and is not available at root scope.
+					return relevantTypeNames.contains { name in
 						forwardedTypeNames.contains(name)
 							&& !rootAvailableTypes.contains(name)
 					}
@@ -751,18 +779,27 @@ public struct MockGenerator: Sendable {
 
 		// Build lookup: for each dependency, map the init arg label to the constructed var.
 		var argumentLabelToConstructedVariableName = [String: String]()
-		for dep in instantiable.dependencies {
+		for dependency in instantiable.dependencies {
 			// Check the declared property type.
-			let declaredType = dep.property.typeDescription.asInstantiatedType.asSource
-			if let constructedVariableName = constructedVariables[declaredType] ?? constructedVariables[dep.property.typeDescription.asSource] {
-				argumentLabelToConstructedVariableName[dep.property.label] = constructedVariableName
+			let declaredType = dependency.property.typeDescription.asInstantiatedType.asSource
+			if let constructedVariableName = constructedVariables[declaredType] ?? constructedVariables[dependency.property.typeDescription.asSource] {
+				argumentLabelToConstructedVariableName[dependency.property.label] = constructedVariableName
 				continue
 			}
 			// For aliased deps, check the fulfilling property type.
-			if case let .aliased(fulfillingProperty, _, _) = dep.source {
+			if case let .aliased(fulfillingProperty, _, _) = dependency.source {
 				let fulfillingType = fulfillingProperty.typeDescription.asInstantiatedType.asSource
 				if let constructedVariableName = constructedVariables[fulfillingType] ?? constructedVariables[fulfillingProperty.typeDescription.asSource] {
-					argumentLabelToConstructedVariableName[dep.property.label] = constructedVariableName
+					argumentLabelToConstructedVariableName[dependency.property.label] = constructedVariableName
+					continue
+				}
+			}
+			// Check if the concrete type that fulfills this dep (from the DI graph)
+			// is available in scope. E.g., UserVendor fulfilled by UserManager.
+			if let fulfillingInstantiable = typeDescriptionToFulfillingInstantiableMap[dependency.property.typeDescription.asInstantiatedType] {
+				let concreteTypeName = fulfillingInstantiable.concreteInstantiable.asSource
+				if let constructedVariableName = constructedVariables[concreteTypeName] {
+					argumentLabelToConstructedVariableName[dependency.property.label] = constructedVariableName
 				}
 			}
 		}
@@ -843,12 +880,21 @@ public struct MockGenerator: Sendable {
 					guard !typesInTree.contains(dependencyTypeName),
 					      !availableForwardedTypes.contains(dependency.property.typeDescription.asSource)
 					else { continue }
-					// For aliased deps, also skip if the fulfilling type is already resolvable.
+					// For aliased deps, skip if the fulfilling type is already resolvable.
 					if case let .aliased(fulfillingProperty, _, _) = dependency.source {
 						let fulfillingTypeName = fulfillingProperty.typeDescription.asInstantiatedType.asSource
 						if typesInTree.contains(fulfillingTypeName)
 							|| availableForwardedTypes.contains(fulfillingProperty.typeDescription.asSource)
 						{
+							continue
+						}
+					}
+					// Skip if the concrete type that fulfills this dep (from the DI graph)
+					// is available as a forwarded type — it will be resolved inside
+					// the Instantiator closure via nesting, preserving alias identity.
+					if let fulfillingInstantiable = typeDescriptionToFulfillingInstantiableMap[dependencyType] {
+						let concreteTypeName = fulfillingInstantiable.concreteInstantiable.asSource
+						if availableForwardedTypes.contains(concreteTypeName) {
 							continue
 						}
 					}
