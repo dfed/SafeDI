@@ -132,8 +132,11 @@ public struct MockGenerator: Sendable {
 			let paramLabel = parameterLabel(for: entry.typeDescription)
 			let sourceTypeName = entry.sourceType.asSource
 			let enumTypeName = entry.typeDescription.asSource
-			let defaultValue = entry.hasKnownMock ? " = nil" : ""
-			params.append("\(indent)\(indent)\(paramLabel): ((SafeDIMockPath.\(enumTypeName)) -> \(sourceTypeName))?\(defaultValue)")
+			if entry.hasKnownMock {
+				params.append("\(indent)\(indent)\(paramLabel): ((SafeDIMockPath.\(enumTypeName)) -> \(sourceTypeName))? = nil")
+			} else {
+				params.append("\(indent)\(indent)\(paramLabel): @escaping (SafeDIMockPath.\(enumTypeName)) -> \(sourceTypeName)")
+			}
 		}
 		let paramsStr = params.joined(separator: ",\n")
 
@@ -301,11 +304,16 @@ public struct MockGenerator: Sendable {
 
 			// Pick the first path case for this type's closure call.
 			let pathCase = entry.pathCases.first!.name
-			let defaultExpr = buildInlineConstruction(
-				for: entry.typeDescription,
-				constructedVars: constructedVars,
-			)
-			lines.append("\(bodyIndent)let \(varName) = \(varName)?(\(pathCase.contains(".") ? pathCase : ".\(pathCase)")) ?? \(defaultExpr)")
+			let dotPathCase = pathCase.contains(".") ? pathCase : ".\(pathCase)"
+			if entry.hasKnownMock {
+				let defaultExpr = buildInlineConstruction(
+					for: entry.typeDescription,
+					constructedVars: constructedVars,
+				)
+				lines.append("\(bodyIndent)let \(varName) = \(varName)?(\(dotPathCase)) ?? \(defaultExpr)")
+			} else {
+				lines.append("\(bodyIndent)let \(varName) = \(varName)(\(dotPathCase))")
+			}
 			constructedVars[typeName] = varName
 		}
 

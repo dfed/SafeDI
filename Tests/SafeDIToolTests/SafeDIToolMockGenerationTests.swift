@@ -464,9 +464,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        someProtocol: ((SafeDIMockPath.SomeProtocol) -> SomeProtocol)?
+		        someProtocol: @escaping (SafeDIMockPath.SomeProtocol) -> SomeProtocol
 		    ) -> Consumer {
-		        let someProtocol = someProtocol?(.parent) ?? SomeProtocol()
+		        let someProtocol = someProtocol(.parent)
 		        return Consumer(dependency: someProtocol)
 		    }
 		}
