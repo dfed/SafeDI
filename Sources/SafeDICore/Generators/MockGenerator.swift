@@ -585,7 +585,10 @@ public struct MockGenerator: Sendable {
 			}
 		}
 
-		let dependencyLabels = Set(builtInstantiable?.dependencies.map(\.property.label) ?? [])
+		let dependencyByLabel = Dictionary(
+			(builtInstantiable?.dependencies ?? []).map { ($0.property.label, $0) },
+			uniquingKeysWith: { first, _ in first },
+		)
 		let args = (initializer?.arguments ?? []).compactMap { [self] arg -> String? in
 			if let constructedVariableName = argumentLabelToConstructedVariableName[arg.innerLabel] {
 				return "\(arg.label): \(constructedVariableName)"
@@ -596,9 +599,14 @@ public struct MockGenerator: Sendable {
 			} else if arg.typeDescription.isOptional {
 				// Optional arg not in scope — pass nil.
 				return "\(arg.label): nil"
-			} else if dependencyLabels.contains(arg.innerLabel) {
-				// Required dep not in scope — construct recursively.
-				return "\(arg.label): \(buildInlineConstruction(for: arg.typeDescription.asInstantiatedType, constructedVariables: closureConstructedVariables))"
+			} else if let dependency = dependencyByLabel[arg.innerLabel] {
+				if dependency.property.propertyType.isConstant {
+					// Required constant dep not in scope — construct recursively.
+					return "\(arg.label): \(buildInlineConstruction(for: arg.typeDescription.asInstantiatedType, constructedVariables: closureConstructedVariables))"
+				} else {
+					// Instantiator dep not in scope — build closure wrapper.
+					return "\(arg.label): \(buildInlineInstantiatorExpression(for: dependency, constructedVariables: closureConstructedVariables))"
+				}
 			} else {
 				// Arg has a default value.
 				return nil
@@ -806,7 +814,10 @@ public struct MockGenerator: Sendable {
 
 		// Build inline using initializer — always call init, never .mock(),
 		// so that parent-scope dependencies are threaded to the child.
-		let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
+		let dependencyByLabel = Dictionary(
+			instantiable.dependencies.map { ($0.property.label, $0) },
+			uniquingKeysWith: { first, _ in first },
+		)
 		let args = initializer.arguments.compactMap { [self] arg -> String? in
 			if let constructedVariableName = argumentLabelToConstructedVariableName[arg.innerLabel] {
 				return "\(arg.label): \(constructedVariableName)"
@@ -817,9 +828,14 @@ public struct MockGenerator: Sendable {
 			} else if arg.typeDescription.isOptional {
 				// Optional arg not in scope — pass nil.
 				return "\(arg.label): nil"
-			} else if dependencyLabels.contains(arg.innerLabel) {
-				// Required dep not in scope — construct recursively.
-				return "\(arg.label): \(buildInlineConstruction(for: arg.typeDescription.asInstantiatedType, constructedVariables: constructedVariables))"
+			} else if let dependency = dependencyByLabel[arg.innerLabel] {
+				if dependency.property.propertyType.isConstant {
+					// Required constant dep not in scope — construct recursively.
+					return "\(arg.label): \(buildInlineConstruction(for: arg.typeDescription.asInstantiatedType, constructedVariables: constructedVariables))"
+				} else {
+					// Instantiator dep not in scope — build closure wrapper.
+					return "\(arg.label): \(buildInlineInstantiatorExpression(for: dependency, constructedVariables: constructedVariables))"
+				}
 			} else {
 				// Arg has a default value.
 				return nil
@@ -830,6 +846,49 @@ public struct MockGenerator: Sendable {
 			return "\(typeName).instantiate(\(args))"
 		}
 		return "\(typeName)(\(args))"
+	}
+
+	/// Builds an inline Instantiator expression for a dependency that is an
+	/// Instantiator/ErasedInstantiator property not found in constructedVariables.
+	/// Produces e.g. `Instantiator<T> { forwarded in T(forwarded: forwarded, received: var) }`.
+	private func buildInlineInstantiatorExpression(
+		for dependency: Dependency,
+		constructedVariables: [String: String],
+	) -> String {
+		let propertyType = dependency.property.typeDescription
+		let builtType = dependency.property.typeDescription.asInstantiatedType
+		let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[builtType]
+		let isSendable = propertyType.asSource.hasPrefix("Sendable")
+
+		// Get forwarded properties of the built type.
+		let forwardedProperties = builtInstantiable?.dependencies
+			.filter { $0.source == .forwarded }
+			.map { ForwardedEntry(label: $0.property.label, typeDescription: $0.property.typeDescription) }
+			?? []
+
+		// Build closure params from forwarded properties.
+		let closureParams: String
+		if forwardedProperties.isEmpty {
+			closureParams = ""
+		} else if forwardedProperties.count == 1 {
+			closureParams = " \(forwardedProperties[0].label) in"
+		} else {
+			let labels = forwardedProperties.map(\.label).joined(separator: ", ")
+			closureParams = " (\(labels)) in"
+		}
+
+		// Build constructor args inside the closure.
+		var closureConstructedVariables = constructedVariables
+		for forwardedProperty in forwardedProperties {
+			closureConstructedVariables[forwardedProperty.typeDescription.asSource] = forwardedProperty.label
+		}
+		let inlineConstruction = buildInlineConstruction(
+			for: builtType,
+			constructedVariables: closureConstructedVariables,
+		)
+
+		let sendablePrefix = isSendable ? "@Sendable " : ""
+		return "\(propertyType.asSource) {\(sendablePrefix)\(closureParams) \(inlineConstruction) }"
 	}
 
 	/// Scans all types in the tree and adds entries for received deps
