@@ -28,13 +28,12 @@ enum ExampleSafeDIConfiguration {
 
 	/// Directories containing Swift files to include, relative to the executing directory.
 	/// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-	static let additionalDirectoriesToInclude: [StaticString] = ["Subproject"]
+	static let additionalDirectoriesToInclude: [StaticString] = []
 
 	/// Whether to generate `mock()` methods for `@Instantiable` types.
 	/// Disabled for this example because mock generation for Instantiator and erasedToConcreteExistential types is not yet supported.
 	static let generateMocks: Bool = false
 
 	/// The conditional compilation flag to wrap generated mock code in.
-	/// Set to `nil` to generate mocks without conditional compilation.
 	static let mockConditionalCompilation: StaticString? = "DEBUG"
 }
