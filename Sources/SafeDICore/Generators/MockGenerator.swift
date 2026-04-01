@@ -92,7 +92,6 @@ public struct MockGenerator: Sendable {
 			} else {
 				return generateSimpleMock(
 					typeName: typeName,
-					instantiable: instantiable,
 					mockAttributesPrefix: mockAttributesPrefix,
 				)
 			}
@@ -230,18 +229,12 @@ public struct MockGenerator: Sendable {
 
 	private func generateSimpleMock(
 		typeName: String,
-		instantiable: Instantiable,
 		mockAttributesPrefix: String,
 	) -> String {
-		let initCall = if instantiable.declarationType.isExtension {
-			"\(typeName).\(InstantiableVisitor.instantiateMethodName)()"
-		} else {
-			"\(typeName)()"
-		}
 		let code = """
 		extension \(typeName) {
 		    \(mockAttributesPrefix)public static func mock() -> \(typeName) {
-		        \(initCall)
+		        \(typeName)()
 		    }
 		}
 		"""
@@ -424,16 +417,6 @@ public struct MockGenerator: Sendable {
 			return "\(typeName).instantiate(\(args))"
 		}
 		return "\(typeName)(\(args))"
-	}
-
-	private func defaultConstruction(for typeDescription: TypeDescription) -> String {
-		guard let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription] else {
-			return "\(typeDescription.asSource)()"
-		}
-		if instantiable.declarationType.isExtension {
-			return "\(instantiable.concreteInstantiable.asSource).instantiate()"
-		}
-		return "\(instantiable.concreteInstantiable.asSource).mock()"
 	}
 
 	private func parameterLabel(for typeDescription: TypeDescription) -> String {
