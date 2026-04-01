@@ -40,10 +40,18 @@ func runRootScanner(
 	projectRoot: URL,
 	outputDirectory: URL,
 	manifestFile: URL,
+	targetSwiftFiles: [URL]? = nil,
 ) throws -> [URL] {
 	let inputFilePaths = try RootScanner.inputFilePaths(from: inputSourcesFile)
+	let directoryBaseURL = projectRoot.hasDirectoryPath
+		? projectRoot
+		: projectRoot.appendingPathComponent("", isDirectory: true)
+	let allFiles = inputFilePaths.map { inputFilePath in
+		URL(fileURLWithPath: inputFilePath, relativeTo: directoryBaseURL).standardizedFileURL
+	}
 	let result = try RootScanner().scan(
-		inputFilePaths: inputFilePaths,
+		swiftFiles: allFiles,
+		targetSwiftFiles: targetSwiftFiles,
 		relativeTo: projectRoot,
 		outputDirectory: outputDirectory,
 	)

@@ -121,6 +121,14 @@ struct TestOutput {
 	let moduleInfoOutputPath: String
 	let generatedFiles: [String: String]?
 	let dotTree: String?
+
+	var dependencyTreeFiles: [String: String] {
+		generatedFiles?.filter { $0.key.hasSuffix("+SafeDI.swift") } ?? [:]
+	}
+
+	var mockFiles: [String: String] {
+		generatedFiles?.filter { $0.key.hasSuffix("+SafeDIMock.swift") } ?? [:]
+	}
 }
 
 extension URL {

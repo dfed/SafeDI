@@ -74,6 +74,25 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
+	/// Generates mock code for all `@Instantiable` types.
+	public func generateMockCode(
+		mockConditionalCompilation: String?,
+	) -> [GeneratedRoot] {
+		let mockGenerator = MockGenerator(
+			typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
+			mockConditionalCompilation: mockConditionalCompilation,
+		)
+		return typeDescriptionToFulfillingInstantiableMap.values
+			.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
+			.map { instantiable in
+				GeneratedRoot(
+					typeDescription: instantiable.concreteInstantiable,
+					sourceFilePath: instantiable.sourceFilePath,
+					code: mockGenerator.generateMock(for: instantiable),
+				)
+			}
+	}
+
 	public func generateDOTTree() async throws -> String {
 		let rootScopeGenerators = try rootScopeGenerators
 

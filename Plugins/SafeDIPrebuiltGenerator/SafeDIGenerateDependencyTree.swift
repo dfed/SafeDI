@@ -62,6 +62,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			projectRoot: packageRoot,
 			outputDirectory: outputDirectory,
 			manifestFile: manifestFile,
+			targetSwiftFiles: targetSwiftFiles,
 		)
 		guard !outputFiles.isEmpty else {
 			return []

@@ -21,12 +21,18 @@
 public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 	public let additionalImportedModules: [String]
 	public let additionalDirectoriesToInclude: [String]
+	public let generateMocks: Bool
+	public let mockConditionalCompilation: String?
 
 	public init(
 		additionalImportedModules: [String],
 		additionalDirectoriesToInclude: [String],
+		generateMocks: Bool = true,
+		mockConditionalCompilation: String? = "DEBUG",
 	) {
 		self.additionalImportedModules = additionalImportedModules
 		self.additionalDirectoriesToInclude = additionalDirectoriesToInclude
+		self.generateMocks = generateMocks
+		self.mockConditionalCompilation = mockConditionalCompilation
 	}
 }

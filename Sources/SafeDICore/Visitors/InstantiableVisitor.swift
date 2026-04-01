@@ -289,6 +289,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var initializerToInitSyntaxMap: [Initializer: InitializerDeclSyntax] = [:]
 	public private(set) var instantiableType: TypeDescription?
 	public private(set) var additionalInstantiables: [TypeDescription]?
+	public private(set) var mockAttributes = ""
 	public private(set) var diagnostics = [Diagnostic]()
 	public private(set) var uninitializedNonOptionalPropertyNames = [String]()
 
@@ -342,6 +343,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						additionalInstantiables: additionalInstantiables,
 						dependencies: dependencies,
 						declarationType: instantiableDeclarationType.asDeclarationType,
+						mockAttributes: mockAttributes,
 					),
 				]
 			} else {
@@ -414,9 +416,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				.elements
 				.map(\.expression.typeDescription.asInstantiatedType)
 		}
+		func processMockAttributes() {
+			mockAttributes = macro.mockAttributesValue
+		}
 
 		processIsRoot()
 		processFulfillingAdditionalTypesParameter()
+		processMockAttributes()
 	}
 
 	private func processModifiers(_: DeclModifierListSyntax, on node: some ConcreteDeclSyntaxProtocol) {

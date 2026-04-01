@@ -28,12 +28,14 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		additionalInstantiables: [TypeDescription]?,
 		dependencies: [Dependency],
 		declarationType: DeclarationType,
+		mockAttributes: String = "",
 	) {
 		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
 		self.isRoot = isRoot
 		self.initializer = initializer
 		self.dependencies = dependencies
 		self.declarationType = declarationType
+		self.mockAttributes = mockAttributes
 	}
 
 	// MARK: Public
@@ -54,6 +56,8 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public let dependencies: [Dependency]
 	/// The declaration type of the Instantiable’s concrete type.
 	public let declarationType: DeclarationType
+	/// Attributes to add to the generated `mock()` method (e.g. `"@MainActor"`).
+	public let mockAttributes: String
 
 	/// The path to the source file that declared this Instantiable.
 	public var sourceFilePath: String?

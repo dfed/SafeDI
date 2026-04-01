@@ -469,6 +469,87 @@ public struct ParentView: View, Instantiable {
 }
 ```
 
+## Mock generation
+
+SafeDI can automatically generate `mock()` methods for every `@Instantiable` type, drastically simplifying testing and SwiftUI previews. Mock generation is enabled by default and controlled via `@SafeDIConfiguration`.
+
+### Configuration
+
+```swift
+@SafeDIConfiguration
+enum MyConfiguration {
+    static let additionalImportedModules: [StaticString] = []
+    static let additionalDirectoriesToInclude: [StaticString] = []
+    static let generateMocks: Bool = true
+    static let mockConditionalCompilation: StaticString? = "DEBUG"
+}
+```
+
+- `generateMocks`: Set to `false` to disable mock generation entirely.
+- `mockConditionalCompilation`: The `#if` flag wrapping generated mocks. Default is `"DEBUG"`. Set to `nil` to generate mocks without conditional compilation.
+
+### Using generated mocks
+
+Each `@Instantiable` type gets a `mock()` static method that builds its full dependency subtree:
+
+```swift
+#if DEBUG
+#Preview {
+    MyView.mock()
+}
+#endif
+```
+
+Every dependency in the tree can be overridden via optional closure parameters:
+
+```swift
+let view = MyView.mock(
+    sharedThing: { _ in CustomSharedThing() }
+)
+```
+
+### Path enums
+
+Each `@Instantiable` type with dependencies gets a `SafeDIMockPath` enum containing nested enums per dependency type. These describe where in the tree each dependency is created:
+
+- `case parent` — the dependency is received from the parent scope
+- `case root` — the dependency is created at the top level of the mock
+- `case childA` — the dependency is created for the `childA` property
+
+This lets you differentiate when the same type appears at multiple tree locations:
+
+```swift
+let root = Root.mock(
+    cache: { path in
+        switch path {
+        case .childA_cache: return Cache(size: 100)
+        case .childB_cache: return Cache(size: 200)
+        }
+    }
+)
+```
+
+### @Forwarded properties in mocks
+
+`@Forwarded` properties become required parameters on the mock method (no default value), since they represent runtime input:
+
+```swift
+let noteView = NoteView.mock(userName: "Preview User")
+```
+
+### The `mockAttributes` parameter
+
+When a type's initializer is bound to a global actor that the plugin cannot detect (e.g. inherited `@MainActor`), use `mockAttributes` to annotate the generated mock:
+
+```swift
+@Instantiable(mockAttributes: "@MainActor")
+public final class MyPresenter: Instantiable { ... }
+```
+
+### Multi-module mock generation
+
+To generate mocks for non-root modules, add the `SafeDIGenerator` plugin to all first-party targets in your `Package.swift`. Each module's mocks are scoped to its own types to avoid duplicates.
+
 ## Comparing SafeDI and Manual Injection: Key Differences
 
 SafeDI is designed to be simple to adopt and minimize architectural changes required to get the benefits of a compile-time safe DI system. Despite this design goal, there are a few key differences between projects that utilize SafeDI and projects that don’t. As the benefits of this system are clearly outlined in the [Features](../README.md#features) section above, this section outlines the pattern changes required to utilize a DI system like SafeDI.

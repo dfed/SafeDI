@@ -43,7 +43,16 @@ public struct SafeDIToolManifest: Codable, Sendable {
 	/// output file where the generated `public init()` extension should be written.
 	public var dependencyTreeGeneration: [InputOutputMap]
 
-	public init(dependencyTreeGeneration: [InputOutputMap]) {
+	/// The list of input-to-output file mappings for mock code generation.
+	/// Each entry maps a Swift file containing `@Instantiable` to the
+	/// output file where the generated `mock()` extension should be written.
+	public var mockGeneration: [InputOutputMap]
+
+	public init(
+		dependencyTreeGeneration: [InputOutputMap],
+		mockGeneration: [InputOutputMap] = [],
+	) {
 		self.dependencyTreeGeneration = dependencyTreeGeneration
+		self.mockGeneration = mockGeneration
 	}
 }

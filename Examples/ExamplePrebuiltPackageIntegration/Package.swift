@@ -52,6 +52,9 @@ let package = Package(
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
 			],
+			plugins: [
+				.plugin(name: "SafeDIPrebuiltGenerator", package: "SafeDI"),
+			],
 		),
 		.target(
 			name: "ChildBModule",
@@ -62,6 +65,9 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
+			],
+			plugins: [
+				.plugin(name: "SafeDIPrebuiltGenerator", package: "SafeDI"),
 			],
 		),
 		.target(
@@ -74,6 +80,9 @@ let package = Package(
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
 			],
+			plugins: [
+				.plugin(name: "SafeDIPrebuiltGenerator", package: "SafeDI"),
+			],
 		),
 		.target(
 			name: "GrandchildrenModule",
@@ -84,12 +93,18 @@ let package = Package(
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
 			],
+			plugins: [
+				.plugin(name: "SafeDIPrebuiltGenerator", package: "SafeDI"),
+			],
 		),
 		.target(
 			name: "SharedModule",
 			dependencies: ["SafeDI"],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
+			],
+			plugins: [
+				.plugin(name: "SafeDIPrebuiltGenerator", package: "SafeDI"),
 			],
 		),
 	],

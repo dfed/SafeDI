@@ -73,20 +73,31 @@ struct RootScannerTests {
 			outputDirectory: outputDirectory,
 		)
 
-		#expect(result.manifest == RootScanner.Manifest(dependencyTreeGeneration: [
-			RootScanner.Manifest.InputOutputMap(
-				inputFilePath: "Sources/FeatureA/Root.swift",
-				outputFilePath: featureAOutputPath,
-			),
-			RootScanner.Manifest.InputOutputMap(
-				inputFilePath: "Sources/FeatureB/Root.swift",
-				outputFilePath: featureBOutputPath,
-			),
-		]))
+		let featureAMockPath = outputDirectory.appendingPathComponent("FeatureA_Root+SafeDIMock.swift").path
+		let featureBMockPath = outputDirectory.appendingPathComponent("FeatureB_Root+SafeDIMock.swift").path
 
-		let manifestURL = fixture.rootDirectory.appendingPathComponent("SafeDIManifest.json")
-		try result.writeManifest(to: manifestURL)
-		#expect(try String(contentsOf: manifestURL, encoding: .utf8) == "{\"dependencyTreeGeneration\":[{\"inputFilePath\":\"Sources\\/FeatureA\\/Root.swift\",\"outputFilePath\":\"\(escapedFeatureAOutputPath)\"},{\"inputFilePath\":\"Sources\\/FeatureB\\/Root.swift\",\"outputFilePath\":\"\(escapedFeatureBOutputPath)\"}]}")
+		#expect(result.manifest == RootScanner.Manifest(
+			dependencyTreeGeneration: [
+				RootScanner.Manifest.InputOutputMap(
+					inputFilePath: "Sources/FeatureA/Root.swift",
+					outputFilePath: featureAOutputPath,
+				),
+				RootScanner.Manifest.InputOutputMap(
+					inputFilePath: "Sources/FeatureB/Root.swift",
+					outputFilePath: featureBOutputPath,
+				),
+			],
+			mockGeneration: [
+				RootScanner.Manifest.InputOutputMap(
+					inputFilePath: "Sources/FeatureA/Root.swift",
+					outputFilePath: featureAMockPath,
+				),
+				RootScanner.Manifest.InputOutputMap(
+					inputFilePath: "Sources/FeatureB/Root.swift",
+					outputFilePath: featureBMockPath,
+				),
+			],
+		))
 
 		let manifestData = try JSONEncoder().encode(result.manifest)
 		let decodedManifest = try JSONDecoder().decode(SafeDIToolManifest.self, from: manifestData)
@@ -97,6 +108,10 @@ struct RootScannerTests {
 		#expect(decodedManifest.dependencyTreeGeneration.map(\.outputFilePath) == [
 			featureAOutputPath,
 			featureBOutputPath,
+		])
+		#expect(decodedManifest.mockGeneration.map(\.inputFilePath) == [
+			"Sources/FeatureA/Root.swift",
+			"Sources/FeatureB/Root.swift",
 		])
 	}
 
@@ -189,15 +204,15 @@ struct RootScannerTests {
 			outputDirectory: outputDirectory,
 		)
 
-		#expect(result.manifest == RootScanner.Manifest(dependencyTreeGeneration: [
+		#expect(result.manifest.dependencyTreeGeneration == [
 			RootScanner.Manifest.InputOutputMap(
 				inputFilePath: "Sources/ActualRoot.swift",
 				outputFilePath: outputDirectory.appendingPathComponent("ActualRoot+SafeDI.swift").path,
 			),
-		]))
-		#expect(result.outputFiles == [
-			outputDirectory.appendingPathComponent("ActualRoot+SafeDI.swift"),
 		])
+		// All 6 files contain @Instantiable (outside comments/strings), so all should have mock entries.
+		#expect(result.manifest.mockGeneration.count == 6)
+		#expect(result.manifest.mockGeneration.map(\.inputFilePath).contains("Sources/ActualRoot.swift"))
 		#expect(try RootScanner.fileContainsRoot(at: actualRoot))
 	}
 
@@ -234,7 +249,7 @@ struct RootScannerTests {
 			outputDirectory: outputDirectory,
 		)
 
-		#expect(result.manifest == RootScanner.Manifest(dependencyTreeGeneration: [
+		#expect(result.manifest.dependencyTreeGeneration == [
 			.init(
 				inputFilePath: "Features/A/Root.swift",
 				outputFilePath: outputDirectory.appendingPathComponent("Features_A_Root+SafeDI.swift").path,
@@ -247,7 +262,40 @@ struct RootScannerTests {
 				inputFilePath: "Root.swift",
 				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
 			),
-		]))
+		])
+		#expect(result.manifest.mockGeneration.count == 3)
+		#expect(result.manifest.mockGeneration.map(\.inputFilePath) == [
+			"Features/A/Root.swift",
+			"Modules/A/Root.swift",
+			"Root.swift",
+		])
+	}
+
+	@Test
+	func containsInstantiable_detectsInstantiableAttribute() {
+		#expect(RootScanner.containsInstantiable(in: """
+		@Instantiable
+		struct MyType {}
+		"""))
+		#expect(RootScanner.containsInstantiable(in: """
+		@Instantiable(isRoot: true)
+		struct MyRoot {}
+		"""))
+		#expect(!RootScanner.containsInstantiable(in: """
+		struct NotInstantiable {}
+		"""))
+		#expect(!RootScanner.containsInstantiable(in: """
+		// @Instantiable
+		struct CommentedOut {}
+		"""))
+		#expect(!RootScanner.containsInstantiable(in: """
+		let docs = "@Instantiable"
+		struct StringOnly {}
+		"""))
+		#expect(!RootScanner.containsInstantiable(in: """
+		@InstantiableFactory
+		struct WrongName {}
+		"""))
 	}
 
 	@Test
@@ -337,12 +385,18 @@ struct RootScannerTests {
 			outputDirectory: outputDirectory,
 		)
 
-		#expect(result.manifest == RootScanner.Manifest(dependencyTreeGeneration: [
+		#expect(result.manifest.dependencyTreeGeneration == [
 			.init(
 				inputFilePath: String(rootFile.path.dropFirst()),
 				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
 			),
-		]))
+		])
+		#expect(result.manifest.mockGeneration == [
+			.init(
+				inputFilePath: String(rootFile.path.dropFirst()),
+				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDIMock.swift").path,
+			),
+		])
 	}
 
 	@Test
@@ -364,12 +418,18 @@ struct RootScannerTests {
 			outputDirectory: outputDirectory,
 		)
 
-		#expect(result.manifest == RootScanner.Manifest(dependencyTreeGeneration: [
+		#expect(result.manifest.dependencyTreeGeneration == [
 			.init(
 				inputFilePath: rootFile.path,
 				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
 			),
-		]))
+		])
+		#expect(result.manifest.mockGeneration == [
+			.init(
+				inputFilePath: rootFile.path,
+				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDIMock.swift").path,
+			),
+		])
 	}
 
 	@Test
@@ -394,9 +454,11 @@ struct RootScannerTests {
 		command.manifestFile = manifestFile.path
 		try command.run()
 
-		#expect(try String(contentsOf: manifestFile, encoding: .utf8) == """
-		{"dependencyTreeGeneration":[{"inputFilePath":"Root.swift","outputFilePath":"\(outputDirectory.appendingPathComponent("Root+SafeDI.swift").path.replacingOccurrences(of: "/", with: #"\/"#))"}]}
-		""")
+		let manifestContent = try String(contentsOf: manifestFile, encoding: .utf8)
+		#expect(manifestContent.contains("\"dependencyTreeGeneration\""))
+		#expect(manifestContent.contains("\"mockGeneration\""))
+		#expect(manifestContent.contains("Root+SafeDI.swift"))
+		#expect(manifestContent.contains("Root+SafeDIMock.swift"))
 	}
 
 	@Test

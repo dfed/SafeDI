@@ -21,12 +21,14 @@
 /// Marks an enum as providing SafeDI configuration.
 ///
 /// An enum decorated with `@SafeDIConfiguration` provides build-time configuration for SafeDI's code generation plugin.
-/// The decorated enum must declare two static properties:
+/// The decorated enum must declare the following static properties:
 ///
-/// - `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types.
-/// - `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
+/// - `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types. Type: `[StaticString]`.
+/// - `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project. Type: `[StaticString]`.
+/// - `generateMocks`: Whether to generate `mock()` methods for `@Instantiable` types. Type: `Bool`. Default: `true`.
+/// - `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Type: `StaticString?`. Default: `"DEBUG"`.
 ///
-/// Both properties must be of type `[StaticString]` and initialized with array literals containing only string literals.
+/// All properties must be initialized with literal values.
 ///
 /// Example:
 ///
@@ -39,6 +41,13 @@
 ///         /// Directories containing Swift files to include, relative to the executing directory.
 ///         /// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
 ///         static let additionalDirectoriesToInclude: [StaticString] = ["Sources/OtherModule"]
+///
+///         /// Whether to generate `mock()` methods for `@Instantiable` types.
+///         static let generateMocks: Bool = true
+///
+///         /// The conditional compilation flag to wrap generated mock code in.
+///         /// Set to `nil` to generate mocks without conditional compilation.
+///         static let mockConditionalCompilation: StaticString? = "DEBUG"
 ///     }
 @attached(peer)
 public macro SafeDIConfiguration() = #externalMacro(module: "SafeDIMacros", type: "SafeDIConfigurationMacro")

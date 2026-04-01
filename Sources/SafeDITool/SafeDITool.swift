@@ -141,6 +141,7 @@ struct SafeDITool: AsyncParsableCommand {
 				additionalInstantiables: normalizedAdditionalInstantiables,
 				dependencies: normalizedDependencies,
 				declarationType: unnormalizedInstantiable.declarationType,
+				mockAttributes: unnormalizedInstantiable.mockAttributes,
 			)
 			normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath
 			return normalized
@@ -205,7 +206,7 @@ struct SafeDITool: AsyncParsableCommand {
 
 				let emptyRootContent = fileHeader
 
-				// Write output files.
+				// Write dependency tree output files.
 				for entry in manifest.dependencyTreeGeneration {
 					let code: String = if let extensions = sourceFileToExtensions[entry.inputFilePath] {
 						fileHeader + extensions.sorted().joined(separator: "\n\n")
@@ -216,6 +217,48 @@ struct SafeDITool: AsyncParsableCommand {
 					let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
 					if existingContent != code {
 						try code.write(toPath: entry.outputFilePath)
+					}
+				}
+
+				// Generate and write mock output files.
+				let generateMocks = sourceConfiguration?.generateMocks ?? true
+				if !manifest.mockGeneration.isEmpty {
+					if generateMocks {
+						let mockConditionalCompilation: String? = if let sourceConfiguration {
+							sourceConfiguration.mockConditionalCompilation
+						} else {
+							"DEBUG"
+						}
+						let generatedMocks = await generator.generateMockCode(
+							mockConditionalCompilation: mockConditionalCompilation,
+						)
+
+						var sourceFileToMockExtensions = [String: [String]]()
+						for mock in generatedMocks {
+							if let sourceFilePath = mock.sourceFilePath {
+								sourceFileToMockExtensions[sourceFilePath, default: []].append(mock.code)
+							}
+						}
+
+						for entry in manifest.mockGeneration {
+							let code: String = if let extensions = sourceFileToMockExtensions[entry.inputFilePath] {
+								fileHeader + extensions.sorted().joined(separator: "\n\n")
+							} else {
+								emptyRootContent
+							}
+							let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
+							if existingContent != code {
+								try code.write(toPath: entry.outputFilePath)
+							}
+						}
+					} else {
+						// generateMocks is false — write empty files so build system has its expected outputs.
+						for entry in manifest.mockGeneration {
+							let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
+							if existingContent != fileHeader {
+								try fileHeader.write(toPath: entry.outputFilePath)
+							}
+						}
 					}
 				}
 			}

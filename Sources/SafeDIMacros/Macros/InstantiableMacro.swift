@@ -48,6 +48,25 @@ public struct InstantiableMacro: MemberMacro {
 			}
 		}
 
+		if let mockAttributesArgument = declaration
+			.attributes
+			.instantiableMacro?
+			.mockAttributes
+		{
+			if StringLiteralExprSyntax(mockAttributesArgument) == nil {
+				throw InstantiableError.mockAttributesArgumentInvalid
+			}
+		}
+
+		// Check for SafeDIMockPath name collision in the type body.
+		for member in declaration.memberBlock.members {
+			if let enumDecl = EnumDeclSyntax(member.decl),
+			   enumDecl.name.text == "SafeDIMockPath"
+			{
+				throw InstantiableError.safeDIMockPathNameCollision
+			}
+		}
+
 		if let concreteDeclaration: ConcreteDeclSyntaxProtocol
 			= ActorDeclSyntax(declaration)
 			?? ClassDeclSyntax(declaration)
@@ -594,6 +613,8 @@ public struct InstantiableMacro: MemberMacro {
 		case decoratingIncompatibleType
 		case fulfillingAdditionalTypesContainsOptional
 		case fulfillingAdditionalTypesArgumentInvalid
+		case mockAttributesArgumentInvalid
+		case safeDIMockPathNameCollision
 		case tooManyInstantiateMethods(TypeDescription)
 		case cannotBeRoot(TypeDescription, violatingDependencies: [Dependency])
 
@@ -605,6 +626,10 @@ public struct InstantiableMacro: MemberMacro {
 				"The argument `fulfillingAdditionalTypes` must not include optionals"
 			case .fulfillingAdditionalTypesArgumentInvalid:
 				"The argument `fulfillingAdditionalTypes` must be an inlined array"
+			case .mockAttributesArgumentInvalid:
+				"The argument `mockAttributes` must be a string literal"
+			case .safeDIMockPathNameCollision:
+				"@\(InstantiableVisitor.macroName)-decorated type must not contain a nested type named `SafeDIMockPath`. This name is reserved for generated mock path enums."
 			case let .tooManyInstantiateMethods(type):
 				"@\(InstantiableVisitor.macroName)-decorated extension must have a single `\(InstantiableVisitor.instantiateMethodName)(…)` method that returns `\(type.asSource)`"
 			case let .cannotBeRoot(declaredRootType, violatingDependencies):

@@ -29,13 +29,14 @@ struct RootScanner {
 		}
 
 		var dependencyTreeGeneration: [InputOutputMap]
+		var mockGeneration: [InputOutputMap]
 	}
 
 	struct Result: Equatable {
 		let manifest: Manifest
 
 		var outputFiles: [URL] {
-			manifest.dependencyTreeGeneration.map {
+			(manifest.dependencyTreeGeneration + manifest.mockGeneration).map {
 				URL(fileURLWithPath: $0.outputFilePath)
 			}
 		}
@@ -55,17 +56,25 @@ struct RootScanner {
 		let directoryBaseURL = baseURL.hasDirectoryPath
 			? baseURL
 			: baseURL.appendingPathComponent("", isDirectory: true)
+		let allFiles = inputFilePaths.map { inputFilePath in
+			URL(fileURLWithPath: inputFilePath, relativeTo: directoryBaseURL).standardizedFileURL
+		}
 		return try scan(
-			swiftFiles: inputFilePaths.map { inputFilePath in
-				URL(fileURLWithPath: inputFilePath, relativeTo: directoryBaseURL).standardizedFileURL
-			},
+			swiftFiles: allFiles,
+			targetSwiftFiles: allFiles,
 			relativeTo: baseURL,
 			outputDirectory: outputDirectory,
 		)
 	}
 
+	/// - Parameters:
+	///   - swiftFiles: All swift files to scan (target + dependencies) for root detection.
+	///   - targetSwiftFiles: Only the target module's swift files, for mock generation scoping.
+	///   - baseURL: The base URL for computing relative paths.
+	///   - outputDirectory: Where to write output files.
 	func scan(
 		swiftFiles: [URL],
+		targetSwiftFiles: [URL]? = nil,
 		relativeTo baseURL: URL,
 		outputDirectory: URL,
 	) throws -> Result {
@@ -73,11 +82,26 @@ struct RootScanner {
 			relativePath(for: $0, relativeTo: baseURL) < relativePath(for: $1, relativeTo: baseURL)
 		}
 		let rootFiles = try sortedSwiftFiles.filter(Self.fileContainsRoot(at:))
-		let outputFileNames = Self.outputFileNames(for: rootFiles, relativeTo: baseURL)
+		let rootOutputFileNames = Self.outputFileNames(for: rootFiles, relativeTo: baseURL)
+
+		// Mock generation is scoped to target files only (to avoid duplicates in multi-module builds).
+		let filesForMockScan = (targetSwiftFiles ?? swiftFiles).sorted {
+			relativePath(for: $0, relativeTo: baseURL) < relativePath(for: $1, relativeTo: baseURL)
+		}
+		let instantiableFiles = try filesForMockScan.filter(Self.fileContainsInstantiable(at:))
+		let mockOutputFileNames = Self.mockOutputFileNames(for: instantiableFiles, relativeTo: baseURL)
 
 		return Result(
 			manifest: Manifest(
-				dependencyTreeGeneration: zip(rootFiles, outputFileNames).map { inputURL, outputFileName in
+				dependencyTreeGeneration: zip(rootFiles, rootOutputFileNames).map { inputURL, outputFileName in
+					.init(
+						inputFilePath: relativePath(for: inputURL, relativeTo: baseURL),
+						outputFilePath: outputDirectory
+							.appendingPathComponent(outputFileName)
+							.path,
+					)
+				},
+				mockGeneration: zip(instantiableFiles, mockOutputFileNames).map { inputURL, outputFileName in
 					.init(
 						inputFilePath: relativePath(for: inputURL, relativeTo: baseURL),
 						outputFilePath: outputDirectory
@@ -97,6 +121,30 @@ struct RootScanner {
 
 	static func fileContainsRoot(at fileURL: URL) throws -> Bool {
 		containsRoot(in: try String(contentsOf: fileURL, encoding: .utf8))
+	}
+
+	static func fileContainsInstantiable(at fileURL: URL) throws -> Bool {
+		containsInstantiable(in: try String(contentsOf: fileURL, encoding: .utf8))
+	}
+
+	static func containsInstantiable(in source: String) -> Bool {
+		let sanitizedSource = sanitize(source: source)
+		let macroName = "@Instantiable"
+		var searchStart = sanitizedSource.startIndex
+
+		while let macroRange = sanitizedSource[searchStart...].range(of: macroName) {
+			let index = macroRange.upperBound
+			if index < sanitizedSource.endIndex,
+			   isIdentifierContinuation(sanitizedSource[index])
+			{
+				searchStart = index
+				continue
+			}
+			// Found a valid @Instantiable token
+			return true
+		}
+
+		return false
 	}
 
 	static func containsRoot(in source: String) -> Bool {
@@ -136,9 +184,17 @@ struct RootScanner {
 		return false
 	}
 
+	private static func mockOutputFileNames(
+		for inputURLs: [URL],
+		relativeTo baseURL: URL,
+	) -> [String] {
+		outputFileNames(for: inputURLs, relativeTo: baseURL, suffix: "+SafeDIMock.swift")
+	}
+
 	private static func outputFileNames(
 		for inputURLs: [URL],
 		relativeTo baseURL: URL,
+		suffix: String = "+SafeDI.swift",
 	) -> [String] {
 		struct FileInfo {
 			let relativePath: String
@@ -169,7 +225,7 @@ struct RootScanner {
 		for (baseName, entries) in groups {
 			guard entries.count > 1 else {
 				let entry = entries[0]
-				outputFileNames[entry.offset] = "\(baseName)+SafeDI.swift"
+				outputFileNames[entry.offset] = "\(baseName)\(suffix)"
 				continue
 			}
 
@@ -194,7 +250,7 @@ struct RootScanner {
 
 			for entry in entries {
 				let name = namesByIndex[entry.offset, default: baseName]
-				outputFileNames[entry.offset] = "\(name)+SafeDI.swift"
+				outputFileNames[entry.offset] = "\(name)\(suffix)"
 			}
 		}
 
