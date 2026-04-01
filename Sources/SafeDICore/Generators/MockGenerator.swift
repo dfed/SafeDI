@@ -81,6 +81,7 @@ public struct MockGenerator: Sendable {
 					// implementation detail used in the default construction.
 					if treeInfo.typeEntries[depTypeName] == nil {
 						treeInfo.typeEntries[depTypeName] = TypeEntry(
+							entryKey: depTypeName,
 							typeDescription: depType,
 							sourceType: dependency.property.typeDescription,
 							hasKnownMock: true,
@@ -94,6 +95,7 @@ public struct MockGenerator: Sendable {
 					}
 				} else if treeInfo.typeEntries[depTypeName] == nil {
 					treeInfo.typeEntries[depTypeName] = TypeEntry(
+						entryKey: depTypeName,
 						typeDescription: depType,
 						sourceType: dependency.property.typeDescription,
 						hasKnownMock: typeDescriptionToFulfillingInstantiableMap[depType] != nil,
@@ -213,6 +215,8 @@ public struct MockGenerator: Sendable {
 	}
 
 	private struct TypeEntry {
+		/// The key used to store this entry in `TreeInfo.typeEntries`.
+		let entryKey: String
 		let typeDescription: TypeDescription
 		let sourceType: TypeDescription
 		/// Whether this type is in the type map and will have a generated mock().
@@ -285,6 +289,7 @@ public struct MockGenerator: Sendable {
 				let entryKey = isInstantiator ? dependency.property.label : depType.asSource
 				if treeInfo.typeEntries[entryKey] == nil {
 					treeInfo.typeEntries[entryKey] = TypeEntry(
+						entryKey: entryKey,
 						typeDescription: depType,
 						sourceType: isInstantiator ? dependency.property.typeDescription : (erasedToConcreteExistential ? depType : dependency.property.typeDescription),
 						hasKnownMock: typeDescriptionToFulfillingInstantiableMap[depType] != nil,
@@ -306,6 +311,7 @@ public struct MockGenerator: Sendable {
 					let erasedKey = erasedType.asSource
 					if treeInfo.typeEntries[erasedKey] == nil {
 						treeInfo.typeEntries[erasedKey] = TypeEntry(
+							entryKey: erasedKey,
 							typeDescription: erasedType,
 							sourceType: erasedType,
 							hasKnownMock: true,
@@ -389,9 +395,17 @@ public struct MockGenerator: Sendable {
 			constructedVars[entry.typeDescription.asSource] = entry.label
 		}
 
+		// Compute which Instantiator entries should be constructed inside another
+		// Instantiator's closure (because they depend on that Instantiator's forwarded props).
+		let nestedEntriesByParent = computeNestedEntriesByParent(treeInfo: treeInfo)
+		let allNestedEntryKeys = Set(nestedEntriesByParent.values.flatMap { $0 })
+
 		// Phase 2: Topologically sort all type entries and construct in order.
 		let sortedEntries = topologicallySortedEntries(treeInfo: treeInfo)
 		for entry in sortedEntries {
+			// Skip entries that are nested inside another Instantiator's closure.
+			if allNestedEntryKeys.contains(entry.entryKey) { continue }
+
 			let concreteTypeName = entry.typeDescription.asSource
 			let sourceTypeName = entry.sourceType.asSource
 			guard constructedVars[concreteTypeName] == nil, constructedVars[sourceTypeName] == nil else { continue }
@@ -404,6 +418,8 @@ public struct MockGenerator: Sendable {
 				// Instantiator entries: wrap inline tree in Instantiator { forwarded in ... }
 				let instantiatorDefault = buildInstantiatorDefault(
 					for: entry,
+					nestedEntriesByParent: nestedEntriesByParent,
+					treeInfo: treeInfo,
 					constructedVars: constructedVars,
 					indent: bodyIndent,
 				)
@@ -455,6 +471,8 @@ public struct MockGenerator: Sendable {
 	/// Builds the default value for an Instantiator entry: `Instantiator { forwarded in ... }`.
 	private func buildInstantiatorDefault(
 		for entry: TypeEntry,
+		nestedEntriesByParent: [String: [String]],
+		treeInfo: TreeInfo,
 		constructedVars: [String: String],
 		indent: String,
 	) -> String {
@@ -483,6 +501,28 @@ public struct MockGenerator: Sendable {
 		var closureConstructedVars = constructedVars
 		for fwd in forwardedProps {
 			closureConstructedVars[fwd.typeDescription.asSource] = fwd.label
+		}
+
+		let closureIndent = "\(indent)    "
+		var closureBodyLines = [String]()
+
+		// Construct nested Instantiator entries inside this closure.
+		if let nestedKeys = nestedEntriesByParent[entry.entryKey] {
+			for nestedKey in nestedKeys {
+				guard let nestedEntry = treeInfo.typeEntries[nestedKey] else { continue }
+				let nestedDefault = buildInstantiatorDefault(
+					for: nestedEntry,
+					nestedEntriesByParent: nestedEntriesByParent,
+					treeInfo: treeInfo,
+					constructedVars: closureConstructedVars,
+					indent: closureIndent,
+				)
+				let pathCase = nestedEntry.pathCases.first?.name ?? "root"
+				let dotPathCase = pathCase.contains(".") ? pathCase : ".\(pathCase)"
+				closureBodyLines.append("\(closureIndent)let \(nestedEntry.paramLabel) = \(nestedEntry.paramLabel)?(\(dotPathCase))")
+				closureBodyLines.append("\(closureIndent)    ?? \(nestedDefault)")
+				closureConstructedVars[nestedEntry.sourceType.asSource] = nestedEntry.paramLabel
+			}
 		}
 
 		// Build lookup including aliased deps.
@@ -523,8 +563,62 @@ public struct MockGenerator: Sendable {
 			"\(typeName)(\(args))"
 		}
 
+		closureBodyLines.append("\(closureIndent)\(construction)")
+
+		let closureBody = closureBodyLines.joined(separator: "\n")
 		let sendablePrefix = isSendable ? "@Sendable " : ""
-		return "\(propertyType.asSource) {\(sendablePrefix)\(closureParams)\n\(indent)    \(construction)\n\(indent)}"
+		return "\(propertyType.asSource) {\(sendablePrefix)\(closureParams)\n\(closureBody)\n\(indent)}"
+	}
+
+	/// Determines which Instantiator entries should be constructed inside another
+	/// Instantiator's closure because they depend on that Instantiator's forwarded props
+	/// which are not available at root scope and have no known mock.
+	/// Returns: parentEntryKey → [nestedEntryKeys]
+	private func computeNestedEntriesByParent(treeInfo: TreeInfo) -> [String: [String]] {
+		var result = [String: [String]]()
+
+		let instantiatorEntries = treeInfo.typeEntries.filter { $0.value.isInstantiator }
+
+		// Types available at root scope: non-Instantiator entries + root-level forwarded entries.
+		var rootAvailableTypes = Set<String>()
+		for (_, entry) in treeInfo.typeEntries where !entry.isInstantiator {
+			rootAvailableTypes.insert(entry.typeDescription.asSource)
+		}
+		for (_, forwardedEntry) in treeInfo.forwardedEntries {
+			rootAvailableTypes.insert(forwardedEntry.typeDescription.asSource)
+		}
+
+		for (parentKey, parentEntry) in instantiatorEntries where !parentEntry.builtTypeForwardedProperties.isEmpty {
+			let forwardedTypeNames = Set(parentEntry.builtTypeForwardedProperties.map { $0.typeDescription.asSource })
+
+			for (childKey, childEntry) in instantiatorEntries where childKey != parentKey {
+				guard let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[childEntry.typeDescription] else {
+					continue
+				}
+				let needsNesting = builtInstantiable.dependencies.contains { dep in
+					guard dep.source != .forwarded else { return false }
+					// Collect all type descriptions this dep resolves to.
+					var depTypes: [(name: String, typeDescription: TypeDescription)] = [
+						(dep.property.typeDescription.asInstantiatedType.asSource, dep.property.typeDescription.asInstantiatedType),
+					]
+					if case let .aliased(fulfillingProperty, _, _) = dep.source {
+						depTypes.append((fulfillingProperty.typeDescription.asInstantiatedType.asSource, fulfillingProperty.typeDescription.asInstantiatedType))
+					}
+					// Needs nesting if a dep type matches a forwarded type, is not available
+					// at root scope, AND has no known mock (is not an @Instantiable type).
+					return depTypes.contains { name, typeDescription in
+						forwardedTypeNames.contains(name)
+							&& !rootAvailableTypes.contains(name)
+							&& typeDescriptionToFulfillingInstantiableMap[typeDescription] == nil
+					}
+				}
+				if needsNesting {
+					result[parentKey, default: []].append(childKey)
+				}
+			}
+		}
+
+		return result
 	}
 
 	/// Checks if a dependency is unresolved — i.e., its type (or fulfilling type for aliases)

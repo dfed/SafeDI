@@ -3545,12 +3545,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        childBuilder: ((SafeDIMockPath.ChildBuilder) -> Instantiator<Child>)? = nil,
 		        grandchildBuilder: ((SafeDIMockPath.GrandchildBuilder) -> Instantiator<Grandchild>)? = nil
 		    ) -> Root {
-		        let grandchildBuilder = grandchildBuilder?(.childBuilder)
-		            ?? Instantiator<Grandchild> {
-		            Grandchild()
-		        }
 		        let childBuilder = childBuilder?(.root)
 		            ?? Instantiator<Child> { iterator in
+		            let grandchildBuilder = grandchildBuilder?(.childBuilder)
+		                ?? Instantiator<Grandchild> {
+		                Grandchild(anyIterator: iterator)
+		            }
 		            Child(iterator: iterator, grandchildBuilder: grandchildBuilder)
 		        }
 		        return Root(childBuilder: childBuilder)
