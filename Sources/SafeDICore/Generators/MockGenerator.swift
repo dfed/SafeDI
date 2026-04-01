@@ -53,18 +53,7 @@ public struct MockGenerator: Sendable {
 	}
 
 	/// Generates mock code for the given `@Instantiable` type.
-	/// Returns `nil` if the type cannot be mocked (e.g. has Instantiator dependencies).
-	public func generateMock(for instantiable: Instantiable) -> String? {
-		// Skip types with Instantiator/ErasedInstantiator dependencies — these require
-		// closure-wrapping logic that is not yet implemented in the mock generator.
-		let hasUnsupportedDeps = instantiable.dependencies.contains { dep in
-			let propertyType = dep.property.propertyType
-			return !propertyType.isConstant
-		}
-		if hasUnsupportedDeps {
-			return nil
-		}
-
+	public func generateMock(for instantiable: Instantiable) -> String {
 		let typeName = instantiable.concreteInstantiable.asSource
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 
@@ -91,24 +80,30 @@ public struct MockGenerator: Sendable {
 						treeInfo.typeEntries[depTypeName] = TypeEntry(
 							typeDescription: depType,
 							sourceType: dependency.property.typeDescription,
-							isForwarded: false,
 							hasKnownMock: true,
 							erasedToConcreteExistential: true,
 							wrappedConcreteType: concreteType,
+							enumName: depTypeName,
+							paramLabel: lowercaseFirst(depTypeName),
+							isInstantiator: false,
+							builtTypeForwardedProperties: [],
 						)
 					}
 				} else if treeInfo.typeEntries[depTypeName] == nil {
 					treeInfo.typeEntries[depTypeName] = TypeEntry(
 						typeDescription: depType,
 						sourceType: dependency.property.typeDescription,
-						isForwarded: false,
 						hasKnownMock: typeDescriptionToFulfillingInstantiableMap[depType] != nil,
 						erasedToConcreteExistential: false,
 						wrappedConcreteType: nil,
+						enumName: depTypeName,
+						paramLabel: lowercaseFirst(depTypeName),
+						isInstantiator: false,
+						builtTypeForwardedProperties: [],
 					)
 				}
 				treeInfo.typeEntries[depTypeName]!.pathCases.append(
-					PathCase(name: "parent", constructionPath: []),
+					PathCase(name: "parent"),
 				)
 			case .forwarded:
 				let key = dependency.property.label
@@ -146,10 +141,9 @@ public struct MockGenerator: Sendable {
 		var enumLines = [String]()
 		enumLines.append("\(indent)public enum SafeDIMockPath {")
 		for (_, entry) in treeInfo.typeEntries.sorted(by: { $0.key < $1.key }) {
-			let nestedEnumName = entry.displayTypeName
 			let uniqueCases = entry.pathCases.map(\.name).uniqued()
 			let casesStr = uniqueCases.map { "case \($0)" }.joined(separator: "; ")
-			enumLines.append("\(indent)\(indent)public enum \(nestedEnumName) { \(casesStr) }")
+			enumLines.append("\(indent)\(indent)public enum \(entry.enumName) { \(casesStr) }")
 		}
 		enumLines.append("\(indent)}")
 
@@ -159,13 +153,11 @@ public struct MockGenerator: Sendable {
 			params.append("\(indent)\(indent)\(entry.label): \(entry.typeDescription.asSource)")
 		}
 		for (_, entry) in treeInfo.typeEntries.sorted(by: { $0.key < $1.key }) {
-			let paramLabel = parameterLabel(for: entry.displayType)
 			let sourceTypeName = entry.sourceType.asSource
-			let enumTypeName = entry.displayTypeName
 			if entry.hasKnownMock {
-				params.append("\(indent)\(indent)\(paramLabel): ((SafeDIMockPath.\(enumTypeName)) -> \(sourceTypeName))? = nil")
+				params.append("\(indent)\(indent)\(entry.paramLabel): ((SafeDIMockPath.\(entry.enumName)) -> \(sourceTypeName))? = nil")
 			} else {
-				params.append("\(indent)\(indent)\(paramLabel): @escaping (SafeDIMockPath.\(enumTypeName)) -> \(sourceTypeName)")
+				params.append("\(indent)\(indent)\(entry.paramLabel): @escaping (SafeDIMockPath.\(entry.enumName)) -> \(sourceTypeName)")
 			}
 		}
 		let paramsStr = params.joined(separator: ",\n")
@@ -212,32 +204,26 @@ public struct MockGenerator: Sendable {
 
 	private struct PathCase: Equatable {
 		let name: String
-		let constructionPath: [String] // property labels from root to this instantiation
 	}
 
 	private struct TypeEntry {
 		let typeDescription: TypeDescription
 		let sourceType: TypeDescription
-		let isForwarded: Bool
 		/// Whether this type is in the type map and will have a generated mock().
 		let hasKnownMock: Bool
 		/// When true, the sourceType is a type-erased wrapper around a concrete type.
-		/// The default construction should be `SourceType(ConcreteType.mock())`.
 		let erasedToConcreteExistential: Bool
 		/// For erased types, the concrete type that this wraps.
 		let wrappedConcreteType: TypeDescription?
+		/// The enum name for this entry in SafeDIMockPath.
+		let enumName: String
+		/// The parameter label for this entry in mock().
+		let paramLabel: String
+		/// Whether this entry represents an Instantiator/ErasedInstantiator property.
+		let isInstantiator: Bool
+		/// Forwarded properties of the built type (for Instantiator closure parameters).
+		let builtTypeForwardedProperties: [ForwardedEntry]
 		var pathCases = [PathCase]()
-
-		/// The type to use for parameter labels and enum names.
-		/// For erasedToConcreteExistential, this is the sourceType (the erased wrapper).
-		/// Otherwise, it's the typeDescription (the concrete type).
-		var displayType: TypeDescription {
-			erasedToConcreteExistential ? sourceType : typeDescription
-		}
-
-		var displayTypeName: String {
-			displayType.asSource
-		}
 	}
 
 	private struct ForwardedEntry {
@@ -246,7 +232,7 @@ public struct MockGenerator: Sendable {
 	}
 
 	private struct TreeInfo {
-		var typeEntries = [String: TypeEntry]() // keyed by type name
+		var typeEntries = [String: TypeEntry]() // keyed by enumName
 		var forwardedEntries = [String: ForwardedEntry]() // keyed by label
 	}
 
@@ -260,43 +246,75 @@ public struct MockGenerator: Sendable {
 			switch dependency.source {
 			case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
 				let depType = (fulfillingTypeDescription ?? dependency.property.typeDescription).asInstantiatedType
-				let depTypeName = depType.asSource
 				let caseName = path.isEmpty ? "root" : path.joined(separator: "_")
+				let isInstantiator = !dependency.property.propertyType.isConstant
 
-				if treeInfo.typeEntries[depTypeName] == nil {
-					treeInfo.typeEntries[depTypeName] = TypeEntry(
+				// Determine enum name and param label.
+				let enumName: String
+				let paramLabel: String
+				if isInstantiator {
+					// Instantiator types use property label (capitalized) as enum name.
+					let label = dependency.property.label
+					enumName = String(label.prefix(1).uppercased()) + label.dropFirst()
+					paramLabel = label
+				} else if erasedToConcreteExistential {
+					// Erased types: use the concrete type name for the concrete entry.
+					enumName = depType.asSource
+					paramLabel = lowercaseFirst(depType.asSource)
+				} else {
+					enumName = depType.asSource
+					paramLabel = lowercaseFirst(depType.asSource)
+				}
+
+				// Collect forwarded properties of the built type (for Instantiator closures).
+				var forwardedProps = [ForwardedEntry]()
+				if isInstantiator, let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[depType] {
+					forwardedProps = builtInstantiable.dependencies
+						.filter { $0.source == .forwarded }
+						.map { ForwardedEntry(label: $0.property.label, typeDescription: $0.property.typeDescription) }
+				}
+
+				let entryKey = enumName
+				if treeInfo.typeEntries[entryKey] == nil {
+					treeInfo.typeEntries[entryKey] = TypeEntry(
 						typeDescription: depType,
-						sourceType: erasedToConcreteExistential ? depType : dependency.property.typeDescription,
-						isForwarded: false,
+						sourceType: isInstantiator ? dependency.property.typeDescription : (erasedToConcreteExistential ? depType : dependency.property.typeDescription),
 						hasKnownMock: typeDescriptionToFulfillingInstantiableMap[depType] != nil,
 						erasedToConcreteExistential: false,
 						wrappedConcreteType: nil,
+						enumName: enumName,
+						paramLabel: paramLabel,
+						isInstantiator: isInstantiator,
+						builtTypeForwardedProperties: forwardedProps,
 					)
 				}
-
-				// For erasedToConcreteExistential, also add an entry for the erased wrapper type.
-				if erasedToConcreteExistential {
-					let erasedType = dependency.property.typeDescription
-					let erasedTypeName = erasedType.asSource
-					if treeInfo.typeEntries[erasedTypeName] == nil {
-						treeInfo.typeEntries[erasedTypeName] = TypeEntry(
-							typeDescription: erasedType,
-							sourceType: erasedType,
-							isForwarded: false,
-							hasKnownMock: true, // Will default to wrapping the concrete mock
-							erasedToConcreteExistential: true,
-							wrappedConcreteType: depType,
-						)
-					}
-					treeInfo.typeEntries[erasedTypeName]!.pathCases.append(
-						PathCase(name: caseName, constructionPath: path + [dependency.property.label]),
-					)
-				}
-				treeInfo.typeEntries[depTypeName]!.pathCases.append(
-					PathCase(name: caseName, constructionPath: path + [dependency.property.label]),
+				treeInfo.typeEntries[entryKey]!.pathCases.append(
+					PathCase(name: caseName),
 				)
 
-				// Recurse into instantiated dependency's tree.
+				// For erasedToConcreteExistential, also add an entry for the erased wrapper.
+				if erasedToConcreteExistential {
+					let erasedType = dependency.property.typeDescription
+					let erasedKey = erasedType.asSource
+					if treeInfo.typeEntries[erasedKey] == nil {
+						treeInfo.typeEntries[erasedKey] = TypeEntry(
+							typeDescription: erasedType,
+							sourceType: erasedType,
+							hasKnownMock: true,
+							erasedToConcreteExistential: true,
+							wrappedConcreteType: depType,
+							enumName: erasedType.asSource,
+							paramLabel: lowercaseFirst(erasedType.asSource),
+							isInstantiator: false,
+							builtTypeForwardedProperties: [],
+						)
+					}
+					treeInfo.typeEntries[erasedKey]!.pathCases.append(
+						PathCase(name: caseName),
+					)
+				}
+
+				// Recurse into built type's tree (Instantiator is NOT a boundary).
 				guard !visited.contains(depType) else { continue }
 				if let childInstantiable = typeDescriptionToFulfillingInstantiableMap[depType] {
 					var newVisited = visited
@@ -364,10 +382,8 @@ public struct MockGenerator: Sendable {
 		}
 
 		// Phase 2: Topologically sort all type entries and construct in order.
-		// Types with no dependencies (in the constructed set) go first.
 		let sortedEntries = topologicallySortedEntries(treeInfo: treeInfo)
 		for entry in sortedEntries {
-			let varName = parameterLabel(for: entry.displayType)
 			let concreteTypeName = entry.typeDescription.asSource
 			let sourceTypeName = entry.sourceType.asSource
 			guard constructedVars[concreteTypeName] == nil, constructedVars[sourceTypeName] == nil else { continue }
@@ -375,12 +391,24 @@ public struct MockGenerator: Sendable {
 			// Pick the first path case for this type's closure call.
 			let pathCase = entry.pathCases.first!.name
 			let dotPathCase = pathCase.contains(".") ? pathCase : ".\(pathCase)"
-			if entry.hasKnownMock {
+
+			if entry.isInstantiator {
+				// Instantiator entries: wrap inline tree in Instantiator { forwarded in ... }
+				let instantiatorDefault = buildInstantiatorDefault(
+					for: entry,
+					constructedVars: constructedVars,
+					indent: bodyIndent,
+				)
+				if entry.hasKnownMock {
+					lines.append("\(bodyIndent)let \(entry.paramLabel) = \(entry.paramLabel)?(\(dotPathCase))")
+					lines.append("\(bodyIndent)    ?? \(instantiatorDefault)")
+				} else {
+					lines.append("\(bodyIndent)let \(entry.paramLabel) = \(entry.paramLabel)(\(dotPathCase))")
+				}
+				constructedVars[sourceTypeName] = entry.paramLabel
+			} else if entry.hasKnownMock {
 				let defaultExpr: String
 				if entry.erasedToConcreteExistential, let wrappedConcreteType = entry.wrappedConcreteType {
-					// The erased type wraps the concrete type.
-					// If the concrete type is already constructed (e.g., as a separate param at this level),
-					// reference the variable. Otherwise, build the concrete type inline.
 					let concreteExpr = if let existingVar = constructedVars[wrappedConcreteType.asSource] {
 						existingVar
 					} else {
@@ -393,11 +421,12 @@ public struct MockGenerator: Sendable {
 						constructedVars: constructedVars,
 					)
 				}
-				lines.append("\(bodyIndent)let \(varName) = \(varName)?(\(dotPathCase)) ?? \(defaultExpr)")
+				lines.append("\(bodyIndent)let \(entry.paramLabel) = \(entry.paramLabel)?(\(dotPathCase)) ?? \(defaultExpr)")
+				constructedVars[concreteTypeName] = entry.paramLabel
 			} else {
-				lines.append("\(bodyIndent)let \(varName) = \(varName)(\(dotPathCase))")
+				lines.append("\(bodyIndent)let \(entry.paramLabel) = \(entry.paramLabel)(\(dotPathCase))")
+				constructedVars[concreteTypeName] = entry.paramLabel
 			}
-			constructedVars[concreteTypeName] = varName
 		}
 
 		// Phase 3: Construct the final return value.
@@ -424,9 +453,69 @@ public struct MockGenerator: Sendable {
 		return lines
 	}
 
+	/// Builds the default value for an Instantiator entry: `Instantiator { forwarded in ... }`.
+	private func buildInstantiatorDefault(
+		for entry: TypeEntry,
+		constructedVars: [String: String],
+		indent: String,
+	) -> String {
+		let builtType = entry.typeDescription
+		let propertyType = entry.sourceType
+		let forwardedProps = entry.builtTypeForwardedProperties
+		let isSendable = propertyType.asSource.hasPrefix("Sendable")
+
+		// Build the closure parameter list from forwarded properties.
+		let closureParams: String
+		if forwardedProps.isEmpty {
+			closureParams = ""
+		} else if forwardedProps.count == 1 {
+			closureParams = " \(forwardedProps[0].label) in"
+		} else {
+			// Multiple forwarded properties: tuple destructuring.
+			let labels = forwardedProps.map(\.label).joined(separator: ", ")
+			closureParams = " (\(labels)) in"
+		}
+
+		// Build the type's initializer call inside the closure.
+		guard let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[builtType],
+		      let initializer = builtInstantiable.initializer
+		else {
+			let sendablePrefix = isSendable ? "@Sendable " : ""
+			return "\(propertyType.asSource) {\(sendablePrefix)\(closureParams) \(builtType.asSource)() }"
+		}
+
+		// Build constructor args: forwarded from closure params, received from parent scope.
+		var closureConstructedVars = constructedVars
+		for fwd in forwardedProps {
+			closureConstructedVars[fwd.typeDescription.asSource] = fwd.label
+		}
+
+		let args = initializer.arguments.compactMap { arg -> String? in
+			let varName = closureConstructedVars[arg.typeDescription.asInstantiatedType.asSource]
+				?? closureConstructedVars[arg.typeDescription.asSource]
+			if let varName {
+				return "\(arg.label): \(varName)"
+			} else if arg.hasDefaultValue {
+				return nil
+			} else {
+				return "\(arg.label): \(arg.innerLabel)"
+			}
+		}.joined(separator: ", ")
+
+		let typeName = builtInstantiable.concreteInstantiable.asSource
+		let construction = if builtInstantiable.declarationType.isExtension {
+			"\(typeName).instantiate(\(args))"
+		} else {
+			"\(typeName)(\(args))"
+		}
+
+		let sendablePrefix = isSendable ? "@Sendable " : ""
+		return "\(propertyType.asSource) {\(sendablePrefix)\(closureParams)\n\(indent)    \(construction)\n\(indent)}"
+	}
+
 	/// Sorts type entries in dependency order: types with no unresolved deps first.
 	private func topologicallySortedEntries(treeInfo: TreeInfo) -> [TypeEntry] {
-		let entries = treeInfo.typeEntries.values.sorted(by: { $0.typeDescription.asSource < $1.typeDescription.asSource })
+		let entries = treeInfo.typeEntries.values.sorted(by: { $0.enumName < $1.enumName })
 		let allTypeNames = Set(entries.map(\.typeDescription.asSource))
 		var result = [TypeEntry]()
 		var resolved = Set<String>()
@@ -451,13 +540,31 @@ public struct MockGenerator: Sendable {
 					resolved.insert(typeName)
 					return false
 				}
+				// Instantiator entries depend on all types they capture from parent scope.
+				if entry.isInstantiator {
+					guard let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[entry.typeDescription] else {
+						result.append(entry)
+						resolved.insert(typeName)
+						return false
+					}
+					let hasUnresolvedDeps = builtInstantiable.dependencies.contains { dep in
+						guard dep.source != .forwarded else { return false }
+						let depTypeName = dep.property.typeDescription.asInstantiatedType.asSource
+						return allTypeNames.contains(depTypeName) && !resolved.contains(depTypeName)
+					}
+					if !hasUnresolvedDeps {
+						result.append(entry)
+						resolved.insert(typeName)
+						return false
+					}
+					return true
+				}
 				guard let instantiable = typeDescriptionToFulfillingInstantiableMap[entry.typeDescription] else {
 					// Unknown type — has no dependencies we track.
 					result.append(entry)
 					resolved.insert(typeName)
 					return false
 				}
-				// Check if all received/aliased deps of this type are resolved.
 				let hasUnresolvedDeps = instantiable.dependencies.contains { dep in
 					let depTypeName = dep.property.typeDescription.asInstantiatedType.asSource
 					return allTypeNames.contains(depTypeName) && !resolved.contains(depTypeName)
@@ -525,10 +632,13 @@ public struct MockGenerator: Sendable {
 		return "\(typeName)(\(args))"
 	}
 
+	private func lowercaseFirst(_ string: String) -> String {
+		guard let first = string.first else { return string }
+		return String(first.lowercased()) + string.dropFirst()
+	}
+
 	private func parameterLabel(for typeDescription: TypeDescription) -> String {
-		let typeName = typeDescription.asSource
-		guard let first = typeName.first else { return typeName }
-		return String(first.lowercased()) + typeName.dropFirst()
+		lowercaseFirst(typeDescription.asSource)
 	}
 }
 
