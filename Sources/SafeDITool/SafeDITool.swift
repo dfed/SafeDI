@@ -224,11 +224,9 @@ struct SafeDITool: AsyncParsableCommand {
 				let generateMocks = sourceConfiguration?.generateMocks ?? false
 				if !manifest.mockGeneration.isEmpty {
 					if generateMocks {
-						let mockConditionalCompilation: String? = if let sourceConfiguration {
-							sourceConfiguration.mockConditionalCompilation
-						} else {
-							"DEBUG"
-						}
+						// sourceConfiguration is guaranteed non-nil here because
+						// generateMocks defaults to false when no configuration exists.
+						let mockConditionalCompilation = sourceConfiguration.flatMap(\.mockConditionalCompilation)
 						let generatedMocks = await generator.generateMockCode(
 							mockConditionalCompilation: mockConditionalCompilation,
 						)
