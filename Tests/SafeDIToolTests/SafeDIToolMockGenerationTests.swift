@@ -1249,6 +1249,141 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#expect(mock.contains("public static func mock"))
 	}
 
+	// MARK: Tests – Coverage for edge cases
+
+	@Test
+	mutating func mock_generatedForExtensionBasedTypeWithReceivedDeps() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(thirdParty: ThirdParty, helper: Helper) {
+				        self.thirdParty = thirdParty
+				        self.helper = helper
+				    }
+				    @Instantiated let thirdParty: ThirdParty
+				    @Instantiated let helper: Helper
+				}
+				""",
+				"""
+				public class ThirdParty {}
+
+				@Instantiable
+				extension ThirdParty: Instantiable {
+				    public static func instantiate(helper: Helper) -> ThirdParty {
+				        ThirdParty()
+				    }
+				    @Received let helper: Helper
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Helper: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		// Extension-based ThirdParty with received deps should use .instantiate() in inline construction.
+		#expect(mock.contains("ThirdParty.instantiate(helper: helper)"))
+	}
+
+	@Test
+	mutating func mock_generatedForExtensionBasedTypeInInlineConstruction() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public class ThirdPartyDep {}
+
+				@Instantiable
+				extension ThirdPartyDep: Instantiable {
+				    public static func instantiate() -> ThirdPartyDep {
+				        ThirdPartyDep()
+				    }
+				}
+				""",
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(child: Child, dep: ThirdPartyDep) {
+				        self.child = child
+				        self.dep = dep
+				    }
+				    @Instantiated let child: Child
+				    @Instantiated let dep: ThirdPartyDep
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init(dep: ThirdPartyDep) {
+				        self.dep = dep
+				    }
+				    @Received let dep: ThirdPartyDep
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		// ThirdPartyDep is extension-based and received by Child.
+		// Inline construction for Child should thread thirdPartyDep.
+		#expect(mock.contains("Child(dep: thirdPartyDep)"))
+	}
+
+	@Test
+	mutating func mock_generatedForInstantiatorWithDefaultValuedBuiltTypeArg() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(shared: Shared, childBuilder: Instantiator<Child>) {
+				        self.shared = shared
+				        self.childBuilder = childBuilder
+				    }
+				    @Instantiated let shared: Shared
+				    @Instantiated let childBuilder: Instantiator<Child>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init(name: String, shared: Shared, flag: Bool = false) {
+				        self.name = name
+				        self.shared = shared
+				    }
+				    @Forwarded let name: String
+				    @Received let shared: Shared
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Shared: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		// Child has a default-valued `flag` arg — it should be skipped in the Instantiator closure.
+		#expect(mock.contains("Child(name: name, shared: shared)"))
+		#expect(!mock.contains("flag"))
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
