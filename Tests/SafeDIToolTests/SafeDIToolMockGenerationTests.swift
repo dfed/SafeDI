@@ -3804,48 +3804,40 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	mutating func mock_disambiguatesEnumNamesWhenInstantiatorLabelCollidesWithTypeName() async throws {
-		// The Instantiator property label "child" capitalizes to "Child",
-		// which collides with the constant @Instantiated dep of type "Child".
-		// Wait — you can't have two properties named "child". So the collision
-		// is between an Instantiator label and a transitive dep's type name.
-		// Root has @Instantiated let helper: Helper (enum: "Helper")
-		// Root has @Instantiated let helperBuilder: Instantiator<Other> where
-		//   helperBuilder capitalizes to "HelperBuilder" — no collision.
-		// Actually: collision needs same enum name from different sources.
-		// Root has @Instantiated let dep: Helper (type entry key "Helper", enum "Helper")
-		// ChildA (instantiated by Root) also @Instantiated let helper: Helper
-		//   → same type, merges into one entry. No collision.
-		//
-		// True collision: Root has constant dep type "Service" AND
-		// ChildA has @Instantiated that adds entry with enum "Service" from a different type.
-		// This requires two DIFFERENT types with the same asSource name, which can't happen
-		// in Swift (types have unique names).
-		//
-		// The only realistic collision is between Instantiator property labels
-		// and type names across modules. Since we can't construct that in tests,
-		// verify disambiguation runs without error on the non-colliding case.
+		// Root has @Instantiated let childB: ChildB (constant, enum: "ChildB")
+		// Root has @Instantiated let childA: ChildA, which has @Instantiated let childB: Instantiator<Other>
+		// The Instantiator label "childB" capitalizes to "ChildB" — collision with the type name!
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
 				public struct Root: Instantiable {
-				    public init(serviceA: ServiceA, serviceB: ServiceB) {
-				        self.serviceA = serviceA
-				        self.serviceB = serviceB
+				    public init(childA: ChildA, childB: ChildB) {
+				        self.childA = childA
+				        self.childB = childB
 				    }
-				    @Instantiated let serviceA: ServiceA
-				    @Instantiated let serviceB: ServiceB
+				    @Instantiated let childA: ChildA
+				    @Instantiated let childB: ChildB
 				}
 				""",
 				"""
 				@Instantiable
-				public struct ServiceA: Instantiable {
+				public struct ChildA: Instantiable {
+				    public init(childB: Instantiator<Other>) {
+				        self.childB = childB
+				    }
+				    @Instantiated let childB: Instantiator<Other>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable
-				public struct ServiceB: Instantiable {
+				public struct Other: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -3855,11 +3847,15 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			enableMockGeneration: true,
 		)
 
-		// No collision — disambiguation runs but doesn't modify anything.
-		#expect(output.mockFiles.count == 3)
+		#expect(output.mockFiles.count == 4)
 		let rootMock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
-		#expect(rootMock.contains("public enum ServiceA { case root }"))
-		#expect(rootMock.contains("public enum ServiceB { case root }"))
+		// "ChildB" appears from both the type and the Instantiator label.
+		// Both are disambiguated to avoid duplicate enum names in generated code.
+		#expect(rootMock.contains("public enum ChildB_ChildB { case root }"))
+		#expect(rootMock.contains("public enum ChildB_Instantiator__Other { case childA }"))
+		// Parameters are also disambiguated.
+		#expect(rootMock.contains("childB_childB: ((SafeDIMockPath.ChildB_ChildB) -> ChildB)? = nil"))
+		#expect(rootMock.contains("childB_instantiator__Other: ((SafeDIMockPath.ChildB_Instantiator__Other) -> Instantiator<Other>)? = nil"))
 	}
 
 	// MARK: Private

@@ -280,7 +280,9 @@ public struct MockGenerator: Sendable {
 						.map { ForwardedEntry(label: $0.property.label, typeDescription: $0.property.typeDescription) }
 				}
 
-				let entryKey = enumName
+				// Key by type name for constant deps, property label for Instantiator deps.
+				// This ensures different types don't overwrite each other.
+				let entryKey = isInstantiator ? dependency.property.label : depType.asSource
 				if treeInfo.typeEntries[entryKey] == nil {
 					treeInfo.typeEntries[entryKey] = TypeEntry(
 						typeDescription: depType,
