@@ -600,12 +600,11 @@ public struct MockGenerator: Sendable {
 				// Optional arg not in scope — pass nil.
 				return "\(arg.label): nil"
 			} else if let dependency = dependencyByLabel[arg.innerLabel] {
+				let cycleGuard: Set<TypeDescription> = [builtType]
 				if dependency.property.propertyType.isConstant {
-					// Required constant dep not in scope — construct recursively.
-					return "\(arg.label): \(buildInlineConstruction(for: arg.typeDescription.asInstantiatedType, constructedVariables: closureConstructedVariables))"
+					return "\(arg.label): \(buildInlineConstruction(for: arg.typeDescription.asInstantiatedType, constructedVariables: closureConstructedVariables, visitedTypes: cycleGuard))"
 				} else {
-					// Instantiator dep not in scope — build closure wrapper.
-					return "\(arg.label): \(buildInlineInstantiatorExpression(for: dependency, constructedVariables: closureConstructedVariables))"
+					return "\(arg.label): \(buildInlineInstantiatorExpression(for: dependency, constructedVariables: closureConstructedVariables, visitedTypes: cycleGuard))"
 				}
 			} else {
 				// Arg has a default value.
@@ -775,14 +774,20 @@ public struct MockGenerator: Sendable {
 	private func buildInlineConstruction(
 		for typeDescription: TypeDescription,
 		constructedVariables: [String: String],
+		visitedTypes: Set<TypeDescription> = [],
 	) -> String {
 		let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription]
 		let typeName = (instantiable?.concreteInstantiable ?? typeDescription).asSource
 
+		// Break cycles: if we've already visited this type, emit a no-arg call.
+		guard !visitedTypes.contains(typeDescription) else {
+			return "\(typeName)()"
+		}
+
 		// Build a map from init arg label → constructed var name, checking both
 		// the declared type AND the fulfilling type for aliased dependencies.
 		guard let instantiable, let initializer = instantiable.initializer else {
-			return "\(typeName).mock()"
+			return "\(typeName)()"
 		}
 
 		// Build lookup: for each dependency, map the init arg label to the constructed var.
@@ -829,12 +834,14 @@ public struct MockGenerator: Sendable {
 				// Optional arg not in scope — pass nil.
 				return "\(arg.label): nil"
 			} else if let dependency = dependencyByLabel[arg.innerLabel] {
+				var childVisitedTypes = visitedTypes
+				childVisitedTypes.insert(typeDescription)
 				if dependency.property.propertyType.isConstant {
 					// Required constant dep not in scope — construct recursively.
-					return "\(arg.label): \(buildInlineConstruction(for: arg.typeDescription.asInstantiatedType, constructedVariables: constructedVariables))"
+					return "\(arg.label): \(buildInlineConstruction(for: arg.typeDescription.asInstantiatedType, constructedVariables: constructedVariables, visitedTypes: childVisitedTypes))"
 				} else {
 					// Instantiator dep not in scope — build closure wrapper.
-					return "\(arg.label): \(buildInlineInstantiatorExpression(for: dependency, constructedVariables: constructedVariables))"
+					return "\(arg.label): \(buildInlineInstantiatorExpression(for: dependency, constructedVariables: constructedVariables, visitedTypes: childVisitedTypes))"
 				}
 			} else {
 				// Arg has a default value.
@@ -854,6 +861,7 @@ public struct MockGenerator: Sendable {
 	private func buildInlineInstantiatorExpression(
 		for dependency: Dependency,
 		constructedVariables: [String: String],
+		visitedTypes: Set<TypeDescription> = [],
 	) -> String {
 		let propertyType = dependency.property.typeDescription
 		let builtType = dependency.property.typeDescription.asInstantiatedType
@@ -885,6 +893,7 @@ public struct MockGenerator: Sendable {
 		let inlineConstruction = buildInlineConstruction(
 			for: builtType,
 			constructedVariables: closureConstructedVariables,
+			visitedTypes: visitedTypes,
 		)
 
 		let sendablePrefix = isSendable ? " @Sendable" : ""
