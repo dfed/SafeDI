@@ -527,6 +527,29 @@ public struct MockGenerator: Sendable {
 		return "\(propertyType.asSource) {\(sendablePrefix)\(closureParams)\n\(indent)    \(construction)\n\(indent)}"
 	}
 
+	/// Checks if a dependency is unresolved — i.e., its type (or fulfilling type for aliases)
+	/// is in the tree but not yet resolved.
+	private func isDependencyUnresolved(
+		_ dep: Dependency,
+		allTypeNames: Set<String>,
+		resolved: Set<String>,
+	) -> Bool {
+		guard dep.source != .forwarded else { return false }
+		// Check the declared property type.
+		let declaredTypeName = dep.property.typeDescription.asInstantiatedType.asSource
+		if allTypeNames.contains(declaredTypeName), !resolved.contains(declaredTypeName) {
+			return true
+		}
+		// For aliased deps, also check the fulfilling property type.
+		if case let .aliased(fulfillingProperty, _, _) = dep.source {
+			let fulfillingTypeName = fulfillingProperty.typeDescription.asInstantiatedType.asSource
+			if allTypeNames.contains(fulfillingTypeName), !resolved.contains(fulfillingTypeName) {
+				return true
+			}
+		}
+		return false
+	}
+
 	/// Sorts type entries in dependency order: types with no unresolved deps first.
 	private func topologicallySortedEntries(treeInfo: TreeInfo) -> [TypeEntry] {
 		let entries = treeInfo.typeEntries.values.sorted(by: { $0.enumName < $1.enumName })
@@ -557,10 +580,8 @@ public struct MockGenerator: Sendable {
 				// Instantiator entries depend on all types they capture from parent scope.
 				if entry.isInstantiator {
 					if let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[entry.typeDescription] {
-						let hasUnresolvedDeps = builtInstantiable.dependencies.contains { dep in
-							guard dep.source != .forwarded else { return false }
-							let depTypeName = dep.property.typeDescription.asInstantiatedType.asSource
-							return allTypeNames.contains(depTypeName) && !resolved.contains(depTypeName)
+						let hasUnresolvedDeps = builtInstantiable.dependencies.contains {
+							isDependencyUnresolved($0, allTypeNames: allTypeNames, resolved: resolved)
 						}
 						if hasUnresolvedDeps { return true }
 					}
@@ -574,9 +595,8 @@ public struct MockGenerator: Sendable {
 					resolved.insert(typeName)
 					return false
 				}
-				let hasUnresolvedDeps = instantiable.dependencies.contains { dep in
-					let depTypeName = dep.property.typeDescription.asInstantiatedType.asSource
-					return allTypeNames.contains(depTypeName) && !resolved.contains(depTypeName)
+				let hasUnresolvedDeps = instantiable.dependencies.contains {
+					isDependencyUnresolved($0, allTypeNames: allTypeNames, resolved: resolved)
 				}
 				if !hasUnresolvedDeps {
 					result.append(entry)

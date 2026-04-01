@@ -2601,8 +2601,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        child: ((SafeDIMockPath.Child) -> Child)? = nil,
 		        user: ((SafeDIMockPath.User) -> User)? = nil
 		    ) -> Root {
-		        let child = child?(.root) ?? Child.mock()
 		        let user = user?(.root) ?? User.mock()
+		        let child = child?(.root) ?? Child(userType: user)
 		        return Root(child: child, user: user)
 		    }
 		}
