@@ -221,7 +221,7 @@ struct SafeDITool: AsyncParsableCommand {
 				}
 
 				// Generate and write mock output files.
-				let generateMocks = sourceConfiguration?.generateMocks ?? true
+				let generateMocks = sourceConfiguration?.generateMocks ?? false
 				if !manifest.mockGeneration.isEmpty {
 					if generateMocks {
 						let mockConditionalCompilation: String? = if let sourceConfiguration {

@@ -36,6 +36,29 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		}
 	}
 
+	// MARK: Tests – Default behavior
+
+	@Test
+	mutating func mock_notGeneratedWhenNoConfigurationExists() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct SimpleType: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let mockContent = try #require(output.mockFiles["SimpleType+SafeDIMock.swift"])
+		// When no @SafeDIConfiguration exists, generateMocks defaults to false.
+		// The mock file exists (for the build system) but contains only the header.
+		#expect(!mockContent.contains("extension"))
+	}
+
 	// MARK: Tests – Simple types
 
 	@Test
@@ -51,6 +74,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["SimpleType+SafeDIMock.swift"] == """
@@ -85,6 +109,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["SomeThirdPartyType+SafeDIMock.swift"] == """
@@ -126,6 +151,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -197,6 +223,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Child+SafeDIMock.swift"] == """
@@ -265,6 +292,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -468,6 +496,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["ActorBound+SafeDIMock.swift"] == """
@@ -503,6 +532,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Consumer+SafeDIMock.swift"] == """
@@ -606,6 +636,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		// Child receives AnyService, which is erased-to-concrete.
@@ -660,6 +691,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -753,6 +785,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -813,6 +846,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -868,6 +902,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		// Each root gets its own mock. Dep also gets a mock.
@@ -921,6 +956,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		// Shared must be constructed before ChildA (which depends on it via @Received).
@@ -985,6 +1021,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -1051,6 +1088,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		let rootMock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
@@ -1094,6 +1132,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		let rootMock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
@@ -1129,6 +1168,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		let rootMock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
@@ -1164,6 +1204,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
 		)
 
 		// DefaultUserService should get a mock even with @Published on the property.
