@@ -467,7 +467,11 @@ public struct MockGenerator: Sendable {
 				}
 			}.joined(separator: ", ")
 			let typeName = instantiable.concreteInstantiable.asSource
-			lines.append("\(bodyIndent)return \(typeName)(\(argList))")
+			if instantiable.declarationType.isExtension {
+				lines.append("\(bodyIndent)return \(typeName).instantiate(\(argList))")
+			} else {
+				lines.append("\(bodyIndent)return \(typeName)(\(argList))")
+			}
 		}
 
 		return lines
@@ -511,10 +515,22 @@ public struct MockGenerator: Sendable {
 		let closureIndent = "\(indent)    "
 		var closureBodyLines = [String]()
 
-		// Construct nested Instantiator entries inside this closure.
+		// Construct nested Instantiator entries inside this closure,
+		// ordered so that entries with no deps on other nested entries come first.
 		if let nestedKeys = nestedEntriesByParent[entry.entryKey] {
-			for nestedKey in nestedKeys {
-				guard let nestedEntry = treeInfo.typeEntries[nestedKey] else { continue }
+			let nestedEntries = nestedKeys.compactMap { treeInfo.typeEntries[$0] }
+			let nestedTypeNames = Set(nestedEntries.map(\.typeDescription.asSource))
+			let sortedNestedEntries = nestedEntries.sorted { entryA, _ in
+				// entryA comes first if its built type has no deps on other nested types.
+				guard let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[entryA.typeDescription] else {
+					return true
+				}
+				return !builtInstantiable.dependencies.contains { dependency in
+					let depTypeName = dependency.property.typeDescription.asInstantiatedType.asSource
+					return nestedTypeNames.contains(depTypeName)
+				}
+			}
+			for nestedEntry in sortedNestedEntries {
 				let nestedDefault = buildInstantiatorDefault(
 					for: nestedEntry,
 					nestedEntriesByParent: nestedEntriesByParent,
@@ -612,12 +628,12 @@ public struct MockGenerator: Sendable {
 					if case let .aliased(fulfillingProperty, _, _) = dep.source {
 						depTypes.append((fulfillingProperty.typeDescription.asInstantiatedType.asSource, fulfillingProperty.typeDescription.asInstantiatedType))
 					}
-					// Needs nesting if a dep type matches a forwarded type, is not available
-					// at root scope, AND has no known mock (is not an @Instantiable type).
-					return depTypes.contains { name, typeDescription in
+					// Needs nesting if a dep type matches a forwarded type and is not
+					// available at root scope. The child must be constructed inside
+					// the closure to use the specific forwarded instance.
+					return depTypes.contains { name, _ in
 						forwardedTypeNames.contains(name)
 							&& !rootAvailableTypes.contains(name)
-							&& typeDescriptionToFulfillingInstantiableMap[typeDescription] == nil
 					}
 				}
 				if needsNesting {
@@ -873,9 +889,17 @@ public struct MockGenerator: Sendable {
 		typeName
 			.replacingOccurrences(of: "<", with: "__")
 			.replacingOccurrences(of: ">", with: "")
+			.replacingOccurrences(of: "->", with: "_to_")
 			.replacingOccurrences(of: ", ", with: "_")
 			.replacingOccurrences(of: ",", with: "_")
 			.replacingOccurrences(of: ".", with: "_")
+			.replacingOccurrences(of: "[", with: "Array_")
+			.replacingOccurrences(of: "]", with: "")
+			.replacingOccurrences(of: ":", with: "_")
+			.replacingOccurrences(of: "(", with: "")
+			.replacingOccurrences(of: ")", with: "")
+			.replacingOccurrences(of: "&", with: "_and_")
+			.replacingOccurrences(of: "?", with: "_Optional")
 			.replacingOccurrences(of: " ", with: "")
 	}
 }
