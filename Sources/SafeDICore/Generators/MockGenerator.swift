@@ -66,7 +66,7 @@ public struct MockGenerator: Sendable {
 					)
 				}
 				treeInfo.typeEntries[depTypeName]!.pathCases.append(
-					PathCase(name: "parent", constructionPath: [])
+					PathCase(name: "parent", constructionPath: []),
 				)
 			case .forwarded:
 				let key = dependency.property.label
@@ -200,7 +200,7 @@ public struct MockGenerator: Sendable {
 					)
 				}
 				treeInfo.typeEntries[depTypeName]!.pathCases.append(
-					PathCase(name: caseName, constructionPath: path + [dependency.property.label])
+					PathCase(name: caseName, constructionPath: path + [dependency.property.label]),
 				)
 
 				// Recurse into instantiated dependency's tree.
@@ -328,7 +328,7 @@ public struct MockGenerator: Sendable {
 	/// Sorts type entries in dependency order: types with no unresolved deps first.
 	private func topologicallySortedEntries(treeInfo: TreeInfo) -> [TypeEntry] {
 		let entries = treeInfo.typeEntries.values.sorted(by: { $0.typeDescription.asSource < $1.typeDescription.asSource })
-		let allTypeNames = Set(entries.map { $0.typeDescription.asSource })
+		let allTypeNames = Set(entries.map(\.typeDescription.asSource))
 		var result = [TypeEntry]()
 		var resolved = Set<String>()
 		// Also consider forwarded types as resolved.

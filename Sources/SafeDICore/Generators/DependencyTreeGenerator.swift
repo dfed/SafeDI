@@ -82,10 +82,14 @@ public actor DependencyTreeGenerator {
 			typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
 			mockConditionalCompilation: mockConditionalCompilation,
 		)
+		// Deduplicate by concreteInstantiable to avoid generating duplicate mocks
+		// for types with fulfillingAdditionalTypes.
+		var seen = Set<TypeDescription>()
 		return typeDescriptionToFulfillingInstantiableMap.values
 			.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
-			.map { instantiable in
-				GeneratedRoot(
+			.compactMap { instantiable in
+				guard seen.insert(instantiable.concreteInstantiable).inserted else { return nil }
+				return GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,
 					sourceFilePath: instantiable.sourceFilePath,
 					code: mockGenerator.generateMock(for: instantiable),
