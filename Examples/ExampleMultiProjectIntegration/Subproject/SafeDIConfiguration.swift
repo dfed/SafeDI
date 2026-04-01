@@ -19,39 +19,18 @@
 // SOFTWARE.
 
 import SafeDI
-import Subproject
-import SwiftUI
 
-@MainActor
-@Instantiable
-public struct NameEntryView: Instantiable, View {
-	public init(userService: AnyUserService) {
-		self.userService = userService
-	}
+@SafeDIConfiguration
+enum SubprojectSafeDIConfiguration {
+	/// The names of modules to import in the generated dependency tree.
+	static let additionalImportedModules: [StaticString] = []
 
-	public var body: some View {
-		VStack {
-			TextField(
-				text: $name,
-				prompt: Text("Enter your name"),
-				label: {},
-			)
-			Button(action: {
-				userService.userName = name
-			}, label: {
-				Text("Log in")
-			})
-		}
-		.padding()
-	}
+	/// Directories containing Swift files to include, relative to the executing directory.
+	static let additionalDirectoriesToInclude: [StaticString] = []
 
-	@State private var name: String = ""
+	/// Whether to generate `mock()` methods for `@Instantiable` types.
+	static let generateMocks: Bool = true
 
-	@Received private let userService: AnyUserService
+	/// The conditional compilation flag to wrap generated mock code in.
+	static let mockConditionalCompilation: StaticString? = "DEBUG"
 }
-
-#if DEBUG
-	#Preview {
-		NameEntryView.mock()
-	}
-#endif
