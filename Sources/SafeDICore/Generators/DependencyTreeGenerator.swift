@@ -89,10 +89,11 @@ public actor DependencyTreeGenerator {
 			.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
 			.compactMap { instantiable in
 				guard seen.insert(instantiable.concreteInstantiable).inserted else { return nil }
+				guard let code = mockGenerator.generateMock(for: instantiable) else { return nil }
 				return GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,
 					sourceFilePath: instantiable.sourceFilePath,
-					code: mockGenerator.generateMock(for: instantiable),
+					code: code,
 				)
 			}
 	}

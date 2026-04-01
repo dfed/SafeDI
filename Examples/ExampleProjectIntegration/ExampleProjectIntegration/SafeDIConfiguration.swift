@@ -31,8 +31,7 @@ enum ExampleSafeDIConfiguration {
 	static let additionalDirectoriesToInclude: [StaticString] = []
 
 	/// Whether to generate `mock()` methods for `@Instantiable` types.
-	/// Disabled for this example because mock generation for Instantiator and erasedToConcreteExistential types is not yet supported.
-	static let generateMocks: Bool = false
+	static let generateMocks: Bool = true
 
 	/// The conditional compilation flag to wrap generated mock code in.
 	static let mockConditionalCompilation: StaticString? = "DEBUG"

@@ -39,7 +39,18 @@ public struct MockGenerator: Sendable {
 	}
 
 	/// Generates mock code for the given `@Instantiable` type.
-	public func generateMock(for instantiable: Instantiable) -> String {
+	/// Returns `nil` if the type cannot be mocked (e.g. has Instantiator dependencies).
+	public func generateMock(for instantiable: Instantiable) -> String? {
+		// Skip types with Instantiator/ErasedInstantiator dependencies — these require
+		// closure-wrapping logic that is not yet implemented in the mock generator.
+		let hasUnsupportedDeps = instantiable.dependencies.contains { dep in
+			let propertyType = dep.property.propertyType
+			return !propertyType.isConstant
+		}
+		if hasUnsupportedDeps {
+			return nil
+		}
+
 		let typeName = instantiable.concreteInstantiable.asSource
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 
@@ -63,6 +74,7 @@ public struct MockGenerator: Sendable {
 						typeDescription: depType,
 						sourceType: dependency.property.typeDescription,
 						isForwarded: false,
+						hasKnownMock: typeDescriptionToFulfillingInstantiableMap[depType] != nil,
 					)
 				}
 				treeInfo.typeEntries[depTypeName]!.pathCases.append(
@@ -120,7 +132,8 @@ public struct MockGenerator: Sendable {
 			let paramLabel = parameterLabel(for: entry.typeDescription)
 			let sourceTypeName = entry.sourceType.asSource
 			let enumTypeName = entry.typeDescription.asSource
-			params.append("\(indent)\(indent)\(paramLabel): ((SafeDIMockPath.\(enumTypeName)) -> \(sourceTypeName))? = nil")
+			let defaultValue = entry.hasKnownMock ? " = nil" : ""
+			params.append("\(indent)\(indent)\(paramLabel): ((SafeDIMockPath.\(enumTypeName)) -> \(sourceTypeName))?\(defaultValue)")
 		}
 		let paramsStr = params.joined(separator: ",\n")
 
@@ -165,6 +178,8 @@ public struct MockGenerator: Sendable {
 		let typeDescription: TypeDescription
 		let sourceType: TypeDescription
 		let isForwarded: Bool
+		/// Whether this type is in the type map and will have a generated mock().
+		let hasKnownMock: Bool
 		var pathCases = [PathCase]()
 	}
 
@@ -196,6 +211,7 @@ public struct MockGenerator: Sendable {
 						typeDescription: depType,
 						sourceType: dependency.property.typeDescription,
 						isForwarded: false,
+						hasKnownMock: typeDescriptionToFulfillingInstantiableMap[depType] != nil,
 					)
 				}
 				treeInfo.typeEntries[depTypeName]!.pathCases.append(
