@@ -124,6 +124,11 @@ public struct MockGenerator: Sendable {
 			}
 		}
 
+		// Bubble up received deps from children that aren't already in the tree.
+		// If a child receives a type that no one in this subtree instantiates,
+		// it must become a parameter of the mock so the caller can provide it.
+		bubbleUpUnresolvedReceivedDeps(&treeInfo)
+
 		// Disambiguate entries with duplicate enumName values.
 		disambiguateEnumNames(&treeInfo)
 
@@ -764,6 +769,78 @@ public struct MockGenerator: Sendable {
 			return "\(typeName).instantiate(\(args))"
 		}
 		return "\(typeName)(\(args))"
+	}
+
+	/// Scans all types in the tree and adds entries for received deps
+	/// that aren't already accounted for. This ensures that if a child
+	/// receives a type not instantiated in this subtree, it bubbles up
+	/// as a parameter of the mock method.
+	private func bubbleUpUnresolvedReceivedDeps(_ treeInfo: inout TreeInfo) {
+		// Keep iterating until no new entries are added, to handle transitive cases.
+		var didAddEntry = true
+		while didAddEntry {
+			didAddEntry = false
+			let currentEntryKeys = Set(treeInfo.typeEntries.keys)
+			// Collect all types available as forwarded properties (root-level + inside Instantiator closures).
+			var availableForwardedTypes = Set<String>()
+			for (_, forwardedEntry) in treeInfo.forwardedEntries {
+				availableForwardedTypes.insert(forwardedEntry.typeDescription.asSource)
+			}
+			for (_, entry) in treeInfo.typeEntries where entry.isInstantiator {
+				for forwardedProperty in entry.builtTypeForwardedProperties {
+					availableForwardedTypes.insert(forwardedProperty.typeDescription.asSource)
+				}
+			}
+
+			for entry in treeInfo.typeEntries.values {
+				guard let instantiable = typeDescriptionToFulfillingInstantiableMap[entry.typeDescription] else {
+					continue
+				}
+				for dependency in instantiable.dependencies {
+					switch dependency.source {
+					case .received(onlyIfAvailable: false),
+					     .aliased(fulfillingProperty: _, erasedToConcreteExistential: _, onlyIfAvailable: false):
+						break // Process below.
+					case .instantiated, .forwarded,
+					     .received(onlyIfAvailable: true),
+					     .aliased(fulfillingProperty: _, erasedToConcreteExistential: _, onlyIfAvailable: true):
+						continue
+					}
+					let dependencyType = dependency.property.typeDescription.asInstantiatedType
+					let dependencyTypeName = dependencyType.asSource
+					// Skip if already in the tree or available as a forwarded type.
+					guard !currentEntryKeys.contains(dependencyTypeName),
+					      !availableForwardedTypes.contains(dependency.property.typeDescription.asSource)
+					else { continue }
+					// For aliased deps, also skip if the fulfilling type is already resolvable.
+					if case let .aliased(fulfillingProperty, _, _) = dependency.source {
+						let fulfillingTypeName = fulfillingProperty.typeDescription.asInstantiatedType.asSource
+						if currentEntryKeys.contains(fulfillingTypeName)
+							|| availableForwardedTypes.contains(fulfillingProperty.typeDescription.asSource)
+						{
+							continue
+						}
+					}
+					let sanitizedDependencyTypeName = sanitizeForIdentifier(dependencyTypeName)
+					treeInfo.typeEntries[dependencyTypeName] = TypeEntry(
+						entryKey: dependencyTypeName,
+						typeDescription: dependencyType,
+						sourceType: dependency.property.typeDescription,
+						hasKnownMock: typeDescriptionToFulfillingInstantiableMap[dependencyType] != nil,
+						erasedToConcreteExistential: false,
+						wrappedConcreteType: nil,
+						enumName: sanitizedDependencyTypeName,
+						paramLabel: lowercaseFirst(sanitizedDependencyTypeName),
+						isInstantiator: false,
+						builtTypeForwardedProperties: [],
+					)
+					treeInfo.typeEntries[dependencyTypeName]?.pathCases.append(
+						PathCase(name: "parent"),
+					)
+					didAddEntry = true
+				}
+			}
+		}
 	}
 
 	private func lowercaseFirst(_ string: String) -> String {

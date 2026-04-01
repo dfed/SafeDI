@@ -978,14 +978,17 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public enum SafeDIMockPath {
 		        public enum GrandchildAA { case root }
 		        public enum GrandchildAB { case root }
+		        public enum Shared { case parent }
 		    }
 
 		    public static func mock(
 		        grandchildAA: ((SafeDIMockPath.GrandchildAA) -> GrandchildAA)? = nil,
-		        grandchildAB: ((SafeDIMockPath.GrandchildAB) -> GrandchildAB)? = nil
+		        grandchildAB: ((SafeDIMockPath.GrandchildAB) -> GrandchildAB)? = nil,
+		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> ChildA {
-		        let grandchildAA = grandchildAA?(.root) ?? GrandchildAA()
-		        let grandchildAB = grandchildAB?(.root) ?? GrandchildAB()
+		        let shared = shared?(.parent) ?? Shared()
+		        let grandchildAA = grandchildAA?(.root) ?? GrandchildAA(shared: shared)
+		        let grandchildAB = grandchildAB?(.root) ?? GrandchildAB(shared: shared)
 		        return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
 		    }
 		}
@@ -3332,6 +3335,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension LoggedInViewController {
 		    public enum SafeDIMockPath {
 		        public enum NetworkService { case parent }
+		        public enum UserVendor { case parent }
 		        public enum EditProfileViewControllerBuilder { case profileViewControllerBuilder }
 		        public enum ProfileViewControllerBuilder { case root }
 		    }
@@ -3339,17 +3343,19 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        userManager: UserManager,
 		        networkService: ((SafeDIMockPath.NetworkService) -> NetworkService)? = nil,
+		        userVendor: ((SafeDIMockPath.UserVendor) -> UserVendor)? = nil,
 		        editProfileViewControllerBuilder: ((SafeDIMockPath.EditProfileViewControllerBuilder) -> Instantiator<EditProfileViewController>)? = nil,
 		        profileViewControllerBuilder: ((SafeDIMockPath.ProfileViewControllerBuilder) -> Instantiator<ProfileViewController>)? = nil
 		    ) -> LoggedInViewController {
 		        let networkService = networkService?(.parent) ?? DefaultNetworkService()
+		        let userVendor = userVendor?(.parent) ?? UserManager()
 		        let editProfileViewControllerBuilder = editProfileViewControllerBuilder?(.profileViewControllerBuilder)
 		            ?? Instantiator<EditProfileViewController> {
-		            EditProfileViewController(userManager: userManager, userNetworkService: networkService)
+		            EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: networkService)
 		        }
 		        let profileViewControllerBuilder = profileViewControllerBuilder?(.root)
 		            ?? Instantiator<ProfileViewController> {
-		            ProfileViewController(userVendor: userManager, editProfileViewControllerBuilder: editProfileViewControllerBuilder)
+		            ProfileViewController(userVendor: userVendor, editProfileViewControllerBuilder: editProfileViewControllerBuilder)
 		        }
 		        return LoggedInViewController(userManager: userManager, userNetworkService: networkService, profileViewControllerBuilder: profileViewControllerBuilder)
 		    }
@@ -3365,18 +3371,24 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension ProfileViewController {
 		    public enum SafeDIMockPath {
+		        public enum NetworkService { case parent }
+		        public enum UserManager { case parent }
 		        public enum UserVendor { case parent }
 		        public enum EditProfileViewControllerBuilder { case root }
 		    }
 
 		    public static func mock(
+		        networkService: ((SafeDIMockPath.NetworkService) -> NetworkService)? = nil,
+		        userManager: ((SafeDIMockPath.UserManager) -> UserManager)? = nil,
 		        userVendor: ((SafeDIMockPath.UserVendor) -> UserVendor)? = nil,
 		        editProfileViewControllerBuilder: ((SafeDIMockPath.EditProfileViewControllerBuilder) -> Instantiator<EditProfileViewController>)? = nil
 		    ) -> ProfileViewController {
+		        let networkService = networkService?(.parent) ?? DefaultNetworkService()
+		        let userManager = userManager?(.parent) ?? UserManager()
 		        let userVendor = userVendor?(.parent) ?? UserManager()
 		        let editProfileViewControllerBuilder = editProfileViewControllerBuilder?(.root)
 		            ?? Instantiator<EditProfileViewController> {
-		            EditProfileViewController(userVendor: userVendor)
+		            EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: networkService)
 		        }
 		        return ProfileViewController(userVendor: userVendor, editProfileViewControllerBuilder: editProfileViewControllerBuilder)
 		    }
@@ -3394,6 +3406,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public enum SafeDIMockPath {
 		        public enum AuthService { case root }
 		        public enum NetworkService { case root }
+		        public enum UserVendor { case parent }
 		        public enum EditProfileViewControllerBuilder { case loggedInViewControllerBuilder_profileViewControllerBuilder }
 		        public enum LoggedInViewControllerBuilder { case root }
 		        public enum ProfileViewControllerBuilder { case loggedInViewControllerBuilder }
@@ -3402,19 +3415,21 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        authService: ((SafeDIMockPath.AuthService) -> AuthService)? = nil,
 		        networkService: ((SafeDIMockPath.NetworkService) -> NetworkService)? = nil,
+		        userVendor: ((SafeDIMockPath.UserVendor) -> UserVendor)? = nil,
 		        editProfileViewControllerBuilder: ((SafeDIMockPath.EditProfileViewControllerBuilder) -> Instantiator<EditProfileViewController>)? = nil,
 		        loggedInViewControllerBuilder: ((SafeDIMockPath.LoggedInViewControllerBuilder) -> Instantiator<LoggedInViewController>)? = nil,
 		        profileViewControllerBuilder: ((SafeDIMockPath.ProfileViewControllerBuilder) -> Instantiator<ProfileViewController>)? = nil
 		    ) -> RootViewController {
 		        let networkService = networkService?(.root) ?? DefaultNetworkService()
+		        let userVendor = userVendor?(.parent) ?? UserManager()
 		        let authService = authService?(.root) ?? DefaultAuthService(networkService: networkService)
 		        let editProfileViewControllerBuilder = editProfileViewControllerBuilder?(.loggedInViewControllerBuilder_profileViewControllerBuilder)
 		            ?? Instantiator<EditProfileViewController> {
-		            EditProfileViewController(userNetworkService: networkService)
+		            EditProfileViewController(userVendor: userVendor, userNetworkService: networkService)
 		        }
 		        let profileViewControllerBuilder = profileViewControllerBuilder?(.loggedInViewControllerBuilder)
 		            ?? Instantiator<ProfileViewController> {
-		            ProfileViewController(editProfileViewControllerBuilder: editProfileViewControllerBuilder)
+		            ProfileViewController(userVendor: userVendor, editProfileViewControllerBuilder: editProfileViewControllerBuilder)
 		        }
 		        let loggedInViewControllerBuilder = loggedInViewControllerBuilder?(.root)
 		            ?? Instantiator<LoggedInViewController> { userManager in
