@@ -516,7 +516,7 @@ Each `@Instantiable` type with dependencies gets a `SafeDIMockPath` enum contain
 - `case root` — the dependency is created at the top level of the mock
 - `case childA` — the dependency is created for the `childA` property
 
-This lets you differentiate when the same type appears at multiple tree locations:
+This lets you differentiate when the same type is instantiated at multiple tree locations:
 
 ```swift
 let root = Root.mock(
