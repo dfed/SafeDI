@@ -393,11 +393,11 @@ public struct MockGenerator: Sendable {
 	) -> [String] {
 		var lines = [String]()
 		let bodyIndent = "\(indent)\(indent)"
-		var constructedVars = [String: String]() // typeDescription.asSource -> local var name
+		var constructedVariables = [String: String]() // typeDescription.asSource -> local var name
 
 		// Phase 1: Register forwarded properties (they're just parameters, no closures).
 		for (_, entry) in treeInfo.forwardedEntries.sorted(by: { $0.key < $1.key }) {
-			constructedVars[entry.typeDescription.asSource] = entry.label
+			constructedVariables[entry.typeDescription.asSource] = entry.label
 		}
 
 		// Compute which Instantiator entries should be constructed inside another
@@ -413,7 +413,7 @@ public struct MockGenerator: Sendable {
 
 			let concreteTypeName = entry.typeDescription.asSource
 			let sourceTypeName = entry.sourceType.asSource
-			guard constructedVars[concreteTypeName] == nil, constructedVars[sourceTypeName] == nil else { continue }
+			guard constructedVariables[concreteTypeName] == nil, constructedVariables[sourceTypeName] == nil else { continue }
 
 			// Pick the first path case for this type's closure call.
 			guard let pathCase = entry.pathCases.first?.name else { continue }
@@ -425,40 +425,40 @@ public struct MockGenerator: Sendable {
 					for: entry,
 					nestedEntriesByParent: nestedEntriesByParent,
 					treeInfo: treeInfo,
-					constructedVars: constructedVars,
+					constructedVariables: constructedVariables,
 					indent: bodyIndent,
 				)
 				lines.append("\(bodyIndent)let \(entry.paramLabel) = \(entry.paramLabel)?(\(dotPathCase))")
 				lines.append("\(bodyIndent)    ?? \(instantiatorDefault)")
-				constructedVars[sourceTypeName] = entry.paramLabel
+				constructedVariables[sourceTypeName] = entry.paramLabel
 			} else if entry.hasKnownMock {
 				let defaultExpr: String
 				if entry.erasedToConcreteExistential, let wrappedConcreteType = entry.wrappedConcreteType {
-					let concreteExpr = if let existingVar = constructedVars[wrappedConcreteType.asSource] {
+					let concreteExpr = if let existingVar = constructedVariables[wrappedConcreteType.asSource] {
 						existingVar
 					} else {
-						buildInlineConstruction(for: wrappedConcreteType, constructedVars: constructedVars)
+						buildInlineConstruction(for: wrappedConcreteType, constructedVariables: constructedVariables)
 					}
 					defaultExpr = "\(sourceTypeName)(\(concreteExpr))"
 				} else {
 					defaultExpr = buildInlineConstruction(
 						for: entry.typeDescription,
-						constructedVars: constructedVars,
+						constructedVariables: constructedVariables,
 					)
 				}
 				lines.append("\(bodyIndent)let \(entry.paramLabel) = \(entry.paramLabel)?(\(dotPathCase)) ?? \(defaultExpr)")
-				constructedVars[concreteTypeName] = entry.paramLabel
+				constructedVariables[concreteTypeName] = entry.paramLabel
 			} else {
 				lines.append("\(bodyIndent)let \(entry.paramLabel) = \(entry.paramLabel)(\(dotPathCase))")
-				constructedVars[concreteTypeName] = entry.paramLabel
+				constructedVariables[concreteTypeName] = entry.paramLabel
 			}
 		}
 
 		// Phase 3: Construct the final return value.
 		if let initializer = instantiable.initializer {
 			let argList = initializer.arguments.compactMap { arg -> String? in
-				let constructedVariableName = constructedVars[arg.typeDescription.asInstantiatedType.asSource]
-					?? constructedVars[arg.typeDescription.asSource]
+				let constructedVariableName = constructedVariables[arg.typeDescription.asInstantiatedType.asSource]
+					?? constructedVariables[arg.typeDescription.asSource]
 				if let constructedVariableName {
 					return "\(arg.label): \(constructedVariableName)"
 				} else {
@@ -482,7 +482,7 @@ public struct MockGenerator: Sendable {
 		for entry: TypeEntry,
 		nestedEntriesByParent: [String: [String]],
 		treeInfo: TreeInfo,
-		constructedVars: [String: String],
+		constructedVariables: [String: String],
 		indent: String,
 	) -> String {
 		let builtType = entry.typeDescription
@@ -507,9 +507,9 @@ public struct MockGenerator: Sendable {
 		let initializer = builtInstantiable?.initializer
 
 		// Build constructor args: forwarded from closure params, received from parent scope.
-		var closureConstructedVars = constructedVars
+		var closureConstructedVariables = constructedVariables
 		for fwd in forwardedProps {
-			closureConstructedVars[fwd.typeDescription.asSource] = fwd.label
+			closureConstructedVariables[fwd.typeDescription.asSource] = fwd.label
 		}
 
 		let closureIndent = "\(indent)    "
@@ -535,14 +535,14 @@ public struct MockGenerator: Sendable {
 					for: nestedEntry,
 					nestedEntriesByParent: nestedEntriesByParent,
 					treeInfo: treeInfo,
-					constructedVars: closureConstructedVars,
+					constructedVariables: closureConstructedVariables,
 					indent: closureIndent,
 				)
 				let pathCase = nestedEntry.pathCases.first?.name ?? "root"
 				let dotPathCase = pathCase.contains(".") ? pathCase : ".\(pathCase)"
 				closureBodyLines.append("\(closureIndent)let \(nestedEntry.paramLabel) = \(nestedEntry.paramLabel)?(\(dotPathCase))")
 				closureBodyLines.append("\(closureIndent)    ?? \(nestedDefault)")
-				closureConstructedVars[nestedEntry.sourceType.asSource] = nestedEntry.paramLabel
+				closureConstructedVariables[nestedEntry.sourceType.asSource] = nestedEntry.paramLabel
 			}
 		}
 
@@ -551,31 +551,35 @@ public struct MockGenerator: Sendable {
 		if let builtInstantiable {
 			for dep in builtInstantiable.dependencies {
 				let declaredType = dep.property.typeDescription.asInstantiatedType.asSource
-				if let constructedVariableName = closureConstructedVars[declaredType] ?? closureConstructedVars[dep.property.typeDescription.asSource] {
+				if let constructedVariableName = closureConstructedVariables[declaredType] ?? closureConstructedVariables[dep.property.typeDescription.asSource] {
 					argumentLabelToConstructedVariableName[dep.property.label] = constructedVariableName
 					continue
 				}
 				if case let .aliased(fulfillingProperty, _, _) = dep.source {
 					let fulfillingType = fulfillingProperty.typeDescription.asInstantiatedType.asSource
-					if let constructedVariableName = closureConstructedVars[fulfillingType] ?? closureConstructedVars[fulfillingProperty.typeDescription.asSource] {
+					if let constructedVariableName = closureConstructedVariables[fulfillingType] ?? closureConstructedVariables[fulfillingProperty.typeDescription.asSource] {
 						argumentLabelToConstructedVariableName[dep.property.label] = constructedVariableName
 					}
 				}
 			}
 		}
 
-		let args = (initializer?.arguments ?? []).compactMap { arg -> String? in
+		let dependencyLabels = Set(builtInstantiable?.dependencies.map(\.property.label) ?? [])
+		let args = (initializer?.arguments ?? []).compactMap { [self] arg -> String? in
 			if let constructedVariableName = argumentLabelToConstructedVariableName[arg.innerLabel] {
 				return "\(arg.label): \(constructedVariableName)"
-			} else if let constructedVariableName = closureConstructedVars[arg.typeDescription.asInstantiatedType.asSource]
-				?? closureConstructedVars[arg.typeDescription.asSource]
+			} else if let constructedVariableName = closureConstructedVariables[arg.typeDescription.asInstantiatedType.asSource]
+				?? closureConstructedVariables[arg.typeDescription.asSource]
 			{
 				return "\(arg.label): \(constructedVariableName)"
 			} else if arg.typeDescription.isOptional {
 				// Optional arg not in scope — pass nil.
 				return "\(arg.label): nil"
+			} else if dependencyLabels.contains(arg.innerLabel) {
+				// Required dep not in scope — construct recursively.
+				return "\(arg.label): \(buildInlineConstruction(for: arg.typeDescription.asInstantiatedType, constructedVariables: closureConstructedVariables))"
 			} else {
-				// Arg has a default value or is not a tracked dependency.
+				// Arg has a default value.
 				return nil
 			}
 		}.joined(separator: ", ")
@@ -734,7 +738,7 @@ public struct MockGenerator: Sendable {
 
 	private func buildInlineConstruction(
 		for typeDescription: TypeDescription,
-		constructedVars: [String: String],
+		constructedVariables: [String: String],
 	) -> String {
 		let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription]
 		let typeName = (instantiable?.concreteInstantiable ?? typeDescription).asSource
@@ -750,14 +754,14 @@ public struct MockGenerator: Sendable {
 		for dep in instantiable.dependencies {
 			// Check the declared property type.
 			let declaredType = dep.property.typeDescription.asInstantiatedType.asSource
-			if let constructedVariableName = constructedVars[declaredType] ?? constructedVars[dep.property.typeDescription.asSource] {
+			if let constructedVariableName = constructedVariables[declaredType] ?? constructedVariables[dep.property.typeDescription.asSource] {
 				argumentLabelToConstructedVariableName[dep.property.label] = constructedVariableName
 				continue
 			}
 			// For aliased deps, check the fulfilling property type.
 			if case let .aliased(fulfillingProperty, _, _) = dep.source {
 				let fulfillingType = fulfillingProperty.typeDescription.asInstantiatedType.asSource
-				if let constructedVariableName = constructedVars[fulfillingType] ?? constructedVars[fulfillingProperty.typeDescription.asSource] {
+				if let constructedVariableName = constructedVariables[fulfillingType] ?? constructedVariables[fulfillingProperty.typeDescription.asSource] {
 					argumentLabelToConstructedVariableName[dep.property.label] = constructedVariableName
 				}
 			}
@@ -765,18 +769,22 @@ public struct MockGenerator: Sendable {
 
 		// Build inline using initializer — always call init, never .mock(),
 		// so that parent-scope dependencies are threaded to the child.
-		let args = initializer.arguments.compactMap { arg -> String? in
+		let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
+		let args = initializer.arguments.compactMap { [self] arg -> String? in
 			if let constructedVariableName = argumentLabelToConstructedVariableName[arg.innerLabel] {
 				return "\(arg.label): \(constructedVariableName)"
-			} else if let constructedVariableName = constructedVars[arg.typeDescription.asInstantiatedType.asSource]
-				?? constructedVars[arg.typeDescription.asSource]
+			} else if let constructedVariableName = constructedVariables[arg.typeDescription.asInstantiatedType.asSource]
+				?? constructedVariables[arg.typeDescription.asSource]
 			{
 				return "\(arg.label): \(constructedVariableName)"
 			} else if arg.typeDescription.isOptional {
 				// Optional arg not in scope — pass nil.
 				return "\(arg.label): nil"
+			} else if dependencyLabels.contains(arg.innerLabel) {
+				// Required dep not in scope — construct recursively.
+				return "\(arg.label): \(buildInlineConstruction(for: arg.typeDescription.asInstantiatedType, constructedVariables: constructedVariables))"
 			} else {
-				// Arg has a default value or is not a tracked dependency.
+				// Arg has a default value.
 				return nil
 			}
 		}.joined(separator: ", ")
@@ -796,7 +804,14 @@ public struct MockGenerator: Sendable {
 		var didAddEntry = true
 		while didAddEntry {
 			didAddEntry = false
-			let currentEntryKeys = Set(treeInfo.typeEntries.keys)
+			// Collect all type names available in the tree — both the entry keys
+			// (type names for constant entries, labels for Instantiator entries)
+			// and the actual typeDescription names (the built types).
+			var typesInTree = Set(treeInfo.typeEntries.keys)
+			for (_, entry) in treeInfo.typeEntries {
+				typesInTree.insert(entry.typeDescription.asSource)
+				typesInTree.insert(entry.sourceType.asSource)
+			}
 			// Collect all types available as forwarded properties (root-level + inside Instantiator closures).
 			var availableForwardedTypes = Set<String>()
 			for (_, forwardedEntry) in treeInfo.forwardedEntries {
@@ -825,13 +840,13 @@ public struct MockGenerator: Sendable {
 					let dependencyType = dependency.property.typeDescription.asInstantiatedType
 					let dependencyTypeName = dependencyType.asSource
 					// Skip if already in the tree or available as a forwarded type.
-					guard !currentEntryKeys.contains(dependencyTypeName),
+					guard !typesInTree.contains(dependencyTypeName),
 					      !availableForwardedTypes.contains(dependency.property.typeDescription.asSource)
 					else { continue }
 					// For aliased deps, also skip if the fulfilling type is already resolvable.
 					if case let .aliased(fulfillingProperty, _, _) = dependency.source {
 						let fulfillingTypeName = fulfillingProperty.typeDescription.asInstantiatedType.asSource
-						if currentEntryKeys.contains(fulfillingTypeName)
+						if typesInTree.contains(fulfillingTypeName)
 							|| availableForwardedTypes.contains(fulfillingProperty.typeDescription.asSource)
 						{
 							continue

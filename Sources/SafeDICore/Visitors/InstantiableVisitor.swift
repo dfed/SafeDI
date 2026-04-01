@@ -207,6 +207,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					)
 				},
 				declarationType: .extensionType,
+				mockAttributes: mockAttributes,
+				hasExistingMockMethod: hasExistingMockMethod,
 			))
 		}
 
