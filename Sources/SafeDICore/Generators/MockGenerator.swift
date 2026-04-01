@@ -102,7 +102,7 @@ public struct MockGenerator: Sendable {
 						builtTypeForwardedProperties: [],
 					)
 				}
-				treeInfo.typeEntries[depTypeName]!.pathCases.append(
+				treeInfo.typeEntries[depTypeName]?.pathCases.append(
 					PathCase(name: "parent"),
 				)
 			case .forwarded:
@@ -288,7 +288,7 @@ public struct MockGenerator: Sendable {
 						builtTypeForwardedProperties: forwardedProps,
 					)
 				}
-				treeInfo.typeEntries[entryKey]!.pathCases.append(
+				treeInfo.typeEntries[entryKey]?.pathCases.append(
 					PathCase(name: caseName),
 				)
 
@@ -309,7 +309,7 @@ public struct MockGenerator: Sendable {
 							builtTypeForwardedProperties: [],
 						)
 					}
-					treeInfo.typeEntries[erasedKey]!.pathCases.append(
+					treeInfo.typeEntries[erasedKey]?.pathCases.append(
 						PathCase(name: caseName),
 					)
 				}
@@ -389,7 +389,7 @@ public struct MockGenerator: Sendable {
 			guard constructedVars[concreteTypeName] == nil, constructedVars[sourceTypeName] == nil else { continue }
 
 			// Pick the first path case for this type's closure call.
-			let pathCase = entry.pathCases.first!.name
+			guard let pathCase = entry.pathCases.first?.name else { continue }
 			let dotPathCase = pathCase.contains(".") ? pathCase : ".\(pathCase)"
 
 			if entry.isInstantiator {
