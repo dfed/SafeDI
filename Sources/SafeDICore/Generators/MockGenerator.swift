@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
+
 /// Generates mock extensions for `@Instantiable` types.
 public struct MockGenerator: Sendable {
 	// MARK: Initialization
@@ -70,6 +72,7 @@ public struct MockGenerator: Sendable {
 		for dependency in instantiable.dependencies {
 			let depType = dependency.property.typeDescription.asInstantiatedType
 			let depTypeName = depType.asSource
+			let sanitizedDepTypeName = sanitizeForIdentifier(depTypeName)
 			switch dependency.source {
 			case .received, .aliased:
 				// Check if this type has an erased→concrete relationship.
@@ -83,8 +86,8 @@ public struct MockGenerator: Sendable {
 							hasKnownMock: true,
 							erasedToConcreteExistential: true,
 							wrappedConcreteType: concreteType,
-							enumName: depTypeName,
-							paramLabel: lowercaseFirst(depTypeName),
+							enumName: sanitizedDepTypeName,
+							paramLabel: lowercaseFirst(sanitizedDepTypeName),
 							isInstantiator: false,
 							builtTypeForwardedProperties: [],
 						)
@@ -96,8 +99,8 @@ public struct MockGenerator: Sendable {
 						hasKnownMock: typeDescriptionToFulfillingInstantiableMap[depType] != nil,
 						erasedToConcreteExistential: false,
 						wrappedConcreteType: nil,
-						enumName: depTypeName,
-						paramLabel: lowercaseFirst(depTypeName),
+						enumName: sanitizedDepTypeName,
+						paramLabel: lowercaseFirst(sanitizedDepTypeName),
 						isInstantiator: false,
 						builtTypeForwardedProperties: [],
 					)
@@ -259,11 +262,11 @@ public struct MockGenerator: Sendable {
 					paramLabel = label
 				} else if erasedToConcreteExistential {
 					// Erased types: use the concrete type name for the concrete entry.
-					enumName = depType.asSource
-					paramLabel = lowercaseFirst(depType.asSource)
+					enumName = sanitizeForIdentifier(depType.asSource)
+					paramLabel = lowercaseFirst(sanitizeForIdentifier(depType.asSource))
 				} else {
-					enumName = depType.asSource
-					paramLabel = lowercaseFirst(depType.asSource)
+					enumName = sanitizeForIdentifier(depType.asSource)
+					paramLabel = lowercaseFirst(sanitizeForIdentifier(depType.asSource))
 				}
 
 				// Collect forwarded properties of the built type (for Instantiator closures).
@@ -303,8 +306,8 @@ public struct MockGenerator: Sendable {
 							hasKnownMock: true,
 							erasedToConcreteExistential: true,
 							wrappedConcreteType: depType,
-							enumName: erasedType.asSource,
-							paramLabel: lowercaseFirst(erasedType.asSource),
+							enumName: sanitizeForIdentifier(erasedType.asSource),
+							paramLabel: lowercaseFirst(sanitizeForIdentifier(erasedType.asSource)),
 							isInstantiator: false,
 							builtTypeForwardedProperties: [],
 						)
@@ -573,19 +576,16 @@ public struct MockGenerator: Sendable {
 		let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription]
 		let typeName = (instantiable?.concreteInstantiable ?? typeDescription).asSource
 
-		// Check if this type has received deps that are already constructed.
-		let hasReceivedDepsInScope = instantiable?.dependencies.contains { dep in
-			switch dep.source {
-			case .received, .aliased:
-				constructedVars[dep.property.typeDescription.asInstantiatedType.asSource] != nil
-					|| constructedVars[dep.property.typeDescription.asSource] != nil
-			case .instantiated, .forwarded:
-				false
-			}
+		// Check if any of this type's deps are already constructed in the parent scope.
+		// If so, we must build inline to thread the parent's values through.
+		let hasDepsInScope = instantiable?.dependencies.contains { dep in
+			guard dep.source != .forwarded else { return false }
+			return constructedVars[dep.property.typeDescription.asInstantiatedType.asSource] != nil
+				|| constructedVars[dep.property.typeDescription.asSource] != nil
 		} ?? false
 
-		if !hasReceivedDepsInScope {
-			// No received deps in scope — safe to use mock().
+		if !hasDepsInScope {
+			// No deps in scope — safe to use mock().
 			if instantiable?.declarationType.isExtension == true {
 				return "\(typeName).instantiate()"
 			}
@@ -613,6 +613,18 @@ public struct MockGenerator: Sendable {
 	private func lowercaseFirst(_ string: String) -> String {
 		guard let first = string.first else { return string }
 		return String(first.lowercased()) + string.dropFirst()
+	}
+
+	/// Converts a type name to a valid Swift identifier by replacing special characters.
+	/// e.g. `Container<Bool>` → `Container__Bool`
+	private func sanitizeForIdentifier(_ typeName: String) -> String {
+		typeName
+			.replacingOccurrences(of: "<", with: "__")
+			.replacingOccurrences(of: ">", with: "")
+			.replacingOccurrences(of: ", ", with: "_")
+			.replacingOccurrences(of: ",", with: "_")
+			.replacingOccurrences(of: ".", with: "_")
+			.replacingOccurrences(of: " ", with: "")
 	}
 }
 

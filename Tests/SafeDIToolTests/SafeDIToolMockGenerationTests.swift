@@ -1081,7 +1081,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let childB = childB?(.root) ?? ChildB(shared: shared)
 		        let grandchildAA = grandchildAA?(.childA) ?? GrandchildAA(shared: shared)
 		        let grandchildAB = grandchildAB?(.childA) ?? GrandchildAB(shared: shared)
-		        let childA = childA?(.root) ?? ChildA.mock()
+		        let childA = childA?(.root) ?? ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
 		        return Root(childA: childA, childB: childB, shared: shared)
 		    }
 		}
