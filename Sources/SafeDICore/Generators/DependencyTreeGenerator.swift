@@ -77,26 +77,71 @@ public actor DependencyTreeGenerator {
 	/// Generates mock code for all `@Instantiable` types.
 	public func generateMockCode(
 		mockConditionalCompilation: String?,
-	) -> [GeneratedRoot] {
-		let mockGenerator = MockGenerator(
-			typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
-			mockConditionalCompilation: mockConditionalCompilation,
-		)
-		// Deduplicate by concreteInstantiable to avoid generating duplicate mocks
-		// for types with fulfillingAdditionalTypes.
-		var seen = Set<TypeDescription>()
-		return typeDescriptionToFulfillingInstantiableMap.values
-			.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
-			.compactMap { instantiable in
-				guard seen.insert(instantiable.concreteInstantiable).inserted else { return nil }
-				// Skip types that already define their own mock() method.
-				guard !instantiable.hasExistingMockMethod else { return nil }
-				return GeneratedRoot(
-					typeDescription: instantiable.concreteInstantiable,
-					sourceFilePath: instantiable.sourceFilePath,
-					code: mockGenerator.generateMock(for: instantiable),
-				)
+	) async throws -> [GeneratedRoot] {
+		let rootScopeGenerators = try rootScopeGenerators
+
+		// Collect ScopeGenerators from root trees (roots + all descendants).
+		var typeToScopeGenerator = [TypeDescription: ScopeGenerator]()
+		for rootInfo in rootScopeGenerators {
+			if let instantiable = await rootInfo.scopeGenerator.instantiable {
+				typeToScopeGenerator[instantiable.concreteInstantiable] = rootInfo.scopeGenerator
 			}
+			for descendant in await rootInfo.scopeGenerator.collectAllDescendants() {
+				if let instantiable = await descendant.instantiable {
+					// Prefer earlier (closer-to-root) ScopeGenerators since they have more context.
+					if typeToScopeGenerator[instantiable.concreteInstantiable] == nil {
+						typeToScopeGenerator[instantiable.concreteInstantiable] = descendant
+					}
+				}
+			}
+		}
+
+		// For types not found in the root trees, create standalone mock-root ScopeGenerators.
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
+			guard typeToScopeGenerator[instantiable.concreteInstantiable] == nil else { continue }
+			let scopeGenerator = ScopeGenerator(
+				instantiable: instantiable,
+				property: nil,
+				propertiesToGenerate: [],
+				unavailableOptionalProperties: [],
+				erasedToConcreteExistential: false,
+				isPropertyCycle: false,
+			)
+			typeToScopeGenerator[instantiable.concreteInstantiable] = scopeGenerator
+		}
+
+		// Deduplicate by concreteInstantiable and generate mocks concurrently.
+		var seen = Set<TypeDescription>()
+		return try await withThrowingTaskGroup(
+			of: GeneratedRoot?.self,
+			returning: [GeneratedRoot].self,
+		) { taskGroup in
+			for (concreteType, scopeGenerator) in typeToScopeGenerator {
+				guard let instantiable = await scopeGenerator.instantiable,
+				      !instantiable.hasExistingMockMethod,
+				      seen.insert(concreteType).inserted
+				else { continue }
+
+				taskGroup.addTask {
+					let code = try await scopeGenerator.generateMockCodeAsMockRoot(
+						mockConditionalCompilation: mockConditionalCompilation,
+					)
+					guard !code.isEmpty else { return nil }
+					return GeneratedRoot(
+						typeDescription: concreteType,
+						sourceFilePath: instantiable.sourceFilePath,
+						code: code,
+					)
+				}
+			}
+			var generatedRoots = [GeneratedRoot]()
+			for try await generatedRoot in taskGroup {
+				if let generatedRoot {
+					generatedRoots.append(generatedRoot)
+				}
+			}
+			return generatedRoots
+		}
 	}
 
 	public func generateDOTTree() async throws -> String {

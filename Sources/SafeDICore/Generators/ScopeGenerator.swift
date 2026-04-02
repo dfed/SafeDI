@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 import Collections
+import Foundation
 
 /// A model capable of generating code for a scope’s dependency tree.
 actor ScopeGenerator: CustomStringConvertible, Sendable {
@@ -143,6 +144,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// MARK: Internal
 
 	func generateCode(
+		codeGeneration: CodeGeneration = .dependencyTree,
 		propertiesAlreadyGeneratedAtThisScope: Set<Property> = [],
 		leadingWhitespace: String = "",
 	) async throws -> String {
@@ -151,188 +153,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.filter {
 				!(propertiesAlreadyGeneratedAtThisScope.contains($0) || propertiesAlreadyGeneratedAtThisScope.contains($0.asUnwrappedProperty))
 			}
-		if let generateCodeTask = unavailablePropertiesToGenerateCodeTask[unavailableProperties] {
-			generatedCode = try await generateCodeTask.value
-		} else {
-			let generateCodeTask = Task {
-				switch scopeData {
-				case let .root(instantiable):
-					let argumentList = try instantiable.generateArgumentList()
-					if instantiable.dependencies.isEmpty {
-						// Nothing to do here! We already have an empty initializer.
-						return ""
-					} else {
-						return try await """
-						extension \(instantiable.concreteInstantiable.asSource) {
-						    public \(instantiable.declarationType == .classType ? "convenience " : "")init() {
-						\(generateProperties(leadingMemberWhitespace: "        ").joined(separator: "\n"))
-						        self.init(\(argumentList))
-						    }
-						}
-						"""
-					}
-				case let .property(
-					instantiable,
-					property,
-					forwardedProperties,
-					erasedToConcreteExistential,
-					isPropertyCycle,
-				):
-					let argumentList = try instantiable.generateArgumentList(
+		// Mock code is not cached — the context varies per call site.
+		// Dependency tree code is cached by unavailable properties.
+		switch codeGeneration {
+		case .dependencyTree:
+			if let generateCodeTask = unavailablePropertiesToGenerateCodeTask[unavailableProperties] {
+				generatedCode = try await generateCodeTask.value
+			} else {
+				let generateCodeTask = Task {
+					try await generatePropertyCode(
+						codeGeneration: .dependencyTree,
 						unavailableProperties: unavailableProperties,
 					)
-					let concreteTypeName = instantiable.concreteInstantiable.asSource
-					let instantiationDeclaration = if instantiable.declarationType.isExtension {
-						"\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
-					} else {
-						concreteTypeName
-					}
-					let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
-
-					let propertyType = property.propertyType
-					if propertyType.isErasedInstantiator,
-					   let firstForwardedProperty = forwardedProperties.first,
-					   let forwardedArgument = property.generics?.first,
-					   !(
-					   	// The forwarded argument is the same type as our only `@Forwarded` property.
-					   	(forwardedProperties.count == 1 && forwardedArgument == firstForwardedProperty.typeDescription)
-					   		// The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
-					   		|| forwardedArgument == .nested(name: "ForwardedProperties", parentType: instantiable.concreteInstantiable)
-					   		// The forwarded argument is the same as the tuple we generated for `InstantiableName.ForwardedProperties`.
-					   		|| forwardedArgument == forwardedProperties.asTupleTypeDescription
-					   )
-					{
-						throw GenerationError.erasedInstantiatorGenericDoesNotMatch(
-							property: property,
-							instantiable: instantiable,
-						)
-					}
-
-					switch propertyType {
-					case .instantiator,
-					     .erasedInstantiator,
-					     .sendableInstantiator,
-					     .sendableErasedInstantiator:
-						let forwardedProperties = forwardedProperties.sorted()
-						let forwardedPropertiesHaveLabels = forwardedProperties.count > 1
-						let forwardedArguments = forwardedProperties
-							.map {
-								if forwardedPropertiesHaveLabels {
-									"\($0.label): $0.\($0.label)"
-								} else {
-									"\($0.label): $0"
-								}
-							}
-							.joined(separator: ", ")
-						let generatedProperties = try await generateProperties(leadingMemberWhitespace: Self.standardIndent)
-						let functionArguments = if forwardedProperties.isEmpty {
-							""
-						} else {
-							forwardedProperties.initializerFunctionParameters.map(\.description).joined()
-						}
-						let functionName = self.functionName(toBuild: property)
-						let functionDecorator = if propertyType.isSendable {
-							"@Sendable "
-						} else {
-							""
-						}
-						let functionDeclaration = if isPropertyCycle {
-							""
-						} else {
-							"""
-							\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
-							\(generatedProperties.joined(separator: "\n"))
-							\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
-							}
-
-							"""
-						}
-
-						let typeDescription = property.typeDescription.asSource
-						let unwrappedTypeDescription = property
-							.typeDescription
-							.unwrapped
-							.asSource
-						let instantiatedTypeDescription = property
-							.typeDescription
-							.unwrapped
-							.asInstantiatedType
-							.asSource
-						let propertyDeclaration = if !instantiable.declarationType.isExtension, typeDescription == unwrappedTypeDescription {
-							"let \(property.label)"
-						} else {
-							"let \(property.asSource)"
-						}
-						let instantiatorInstantiation = if forwardedArguments.isEmpty, !erasedToConcreteExistential {
-							"\(unwrappedTypeDescription)(\(functionName))"
-						} else if erasedToConcreteExistential {
-							"""
-							\(unwrappedTypeDescription) {
-							\(Self.standardIndent)\(instantiatedTypeDescription)(\(functionName)(\(forwardedArguments)))
-							}
-							"""
-						} else {
-							"""
-							\(unwrappedTypeDescription) {
-							\(Self.standardIndent)\(functionName)(\(forwardedArguments))
-							}
-							"""
-						}
-						return """
-						\(functionDeclaration)\(propertyDeclaration) = \(instantiatorInstantiation)
-						"""
-					case .constant:
-						let generatedProperties = try await generateProperties(leadingMemberWhitespace: Self.standardIndent)
-						let propertyDeclaration = if erasedToConcreteExistential || (
-							concreteTypeName == property.typeDescription.asSource
-								&& generatedProperties.isEmpty
-								&& !instantiable.declarationType.isExtension
-						) {
-							"let \(property.label)"
-						} else {
-							"let \(property.asSource)"
-						}
-
-						// Ideally we would be able to use an anonymous closure rather than a named function here.
-						// Unfortunately, there's a bug in Swift Concurrency that prevents us from doing this: https://github.com/swiftlang/swift/issues/75003
-						let functionName = self.functionName(toBuild: property)
-						let functionDeclaration = if generatedProperties.isEmpty {
-							""
-						} else {
-							"""
-							func \(functionName)() -> \(concreteTypeName) {
-							\(generatedProperties.joined(separator: "\n"))
-							\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
-							}
-
-							"""
-						}
-						let returnLineSansReturn = if erasedToConcreteExistential {
-							"\(property.typeDescription.asSource)(\(returnLineSansReturn))"
-						} else {
-							returnLineSansReturn
-						}
-						let initializer = if generatedProperties.isEmpty {
-							returnLineSansReturn
-						} else {
-							"\(functionName)()"
-						}
-						return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
-					}
-				case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
-					return if onlyIfAvailable, unavailableProperties.contains(fulfillingProperty) {
-						"// Did not create `\(property.asSource)` because `\(fulfillingProperty.asSource)` is unavailable."
-					} else {
-						if erasedToConcreteExistential {
-							"let \(property.label) = \(property.typeDescription.asSource)(\(fulfillingProperty.label))"
-						} else {
-							"let \(property.asSource) = \(fulfillingProperty.label)"
-						}
-					}
 				}
+				unavailablePropertiesToGenerateCodeTask[unavailableProperties] = generateCodeTask
+				generatedCode = try await generateCodeTask.value
 			}
-			unavailablePropertiesToGenerateCodeTask[unavailableProperties] = generateCodeTask
-			generatedCode = try await generateCodeTask.value
+		case .mock:
+			generatedCode = try await generatePropertyCode(
+				codeGeneration: codeGeneration,
+				unavailableProperties: unavailableProperties,
+			)
 		}
 		if leadingWhitespace.isEmpty {
 			return generatedCode
@@ -342,6 +183,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.map { leadingWhitespace + $0 }
 				.joined(separator: "\n")
 		}
+	}
+
+	/// The instantiable associated with this scope, if any (nil for aliases).
+	var instantiable: Instantiable? {
+		scopeData.instantiable
+	}
+
+	/// Creates a mock-root version of this scope generator and generates mock code for it.
+	func generateMockCodeAsMockRoot(
+		mockConditionalCompilation: String?,
+	) async throws -> String {
+		try await asMockRoot.generateCode(
+			codeGeneration: .mock(MockContext(
+				path: [],
+				mockConditionalCompilation: mockConditionalCompilation,
+			)),
+		)
+	}
+
+	/// Collects all descendant ScopeGenerators (non-alias) in the tree.
+	func collectAllDescendants() async -> [ScopeGenerator] {
+		var result = [ScopeGenerator]()
+		for child in propertiesToGenerate {
+			if await child.scopeData.instantiable != nil {
+				result.append(child)
+				result.append(contentsOf: await child.collectAllDescendants())
+			}
+		}
+		return result
 	}
 
 	func generateDOT() async throws -> String {
@@ -380,6 +250,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			onlyIfAvailable: Bool,
 		)
 
+		var instantiable: Instantiable? {
+			switch self {
+			case let .root(instantiable):
+				instantiable
+			case let .property(instantiable, _, _, _, _):
+				instantiable
+			case .alias:
+				nil
+			}
+		}
+
 		var forwardedProperties: Set<Property> {
 			switch self {
 			case let .property(_, _, forwardedProperties, _, _):
@@ -401,6 +282,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// The code generation mode.
+	enum CodeGeneration {
+		case dependencyTree
+		case mock(MockContext)
+	}
+
+	/// Context for mock code generation, threaded through the tree.
+	struct MockContext {
+		/// Accumulated path segments for SafeDIMockPath case names.
+		let path: [String]
+		/// The conditional compilation flag for wrapping mock output (e.g. "DEBUG").
+		let mockConditionalCompilation: String?
+	}
+
 	private let scopeData: ScopeData
 	/// Properties that we require in order to satisfy our (and our children’s) dependencies.
 	private let receivedProperties: Set<Property>
@@ -415,6 +310,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let property: Property?
 
 	private var unavailablePropertiesToGenerateCodeTask = [Set<Property>: Task<String, Error>]()
+
+	/// Creates a mock-root ScopeGenerator that reuses the existing children.
+	/// Mock roots have no received properties — all dependencies become mock parameters.
+	private var asMockRoot: ScopeGenerator {
+		guard let instantiable = scopeData.instantiable else {
+			fatalError("asMockRoot called on .alias ScopeGenerator")
+		}
+		return ScopeGenerator(
+			instantiable: instantiable,
+			property: nil,
+			propertiesToGenerate: propertiesToGenerate,
+			unavailableOptionalProperties: unavailableOptionalProperties,
+			erasedToConcreteExistential: false,
+			isPropertyCycle: false,
+		)
+	}
 
 	private var orderedPropertiesToGenerate: [ScopeGenerator] {
 		var orderedPropertiesToGenerate = [ScopeGenerator]()
@@ -454,11 +365,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return orderedPropertiesToGenerate
 	}
 
-	private func generateProperties(leadingMemberWhitespace: String) async throws -> [String] {
+	private func generateProperties(
+		codeGeneration: CodeGeneration = .dependencyTree,
+		leadingMemberWhitespace: String,
+	) async throws -> [String] {
 		var generatedProperties = [String]()
 		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
+			let childCodeGeneration: CodeGeneration
+			switch codeGeneration {
+			case .dependencyTree:
+				childCodeGeneration = .dependencyTree
+			case let .mock(context):
+				childCodeGeneration = await childMockCodeGeneration(
+					for: childGenerator,
+					parentContext: context,
+				)
+			}
 			try await generatedProperties.append(
 				childGenerator.generateCode(
+					codeGeneration: childCodeGeneration,
 					propertiesAlreadyGeneratedAtThisScope: .init(orderedPropertiesToGenerate[0..<index].compactMap(\.property)),
 					leadingWhitespace: leadingMemberWhitespace,
 				),
@@ -472,6 +397,501 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	private static let standardIndent = "    "
+
+	// MARK: Code Generation
+
+	/// Generates code for this scope — unified for both dependency tree and mock modes.
+	/// In mock mode, the only difference is the `let` binding line wraps with an override closure.
+	private func generatePropertyCode(
+		codeGeneration: CodeGeneration,
+		unavailableProperties: Set<Property>,
+	) async throws -> String {
+		switch scopeData {
+		case let .root(instantiable):
+			switch codeGeneration {
+			case .dependencyTree:
+				let argumentList = try instantiable.generateArgumentList()
+				if instantiable.dependencies.isEmpty {
+					return ""
+				} else {
+					return try await """
+					extension \(instantiable.concreteInstantiable.asSource) {
+					    public \(instantiable.declarationType == .classType ? "convenience " : "")init() {
+					\(generateProperties(leadingMemberWhitespace: "        ").joined(separator: "\n"))
+					        self.init(\(argumentList))
+					    }
+					}
+					"""
+				}
+			case let .mock(context):
+				return try await generateMockRootCode(
+					instantiable: instantiable,
+					context: context,
+				)
+			}
+		case let .property(
+			instantiable,
+			property,
+			forwardedProperties,
+			erasedToConcreteExistential,
+			isPropertyCycle,
+		):
+			let argumentList = try instantiable.generateArgumentList(
+				unavailableProperties: unavailableProperties,
+			)
+			let concreteTypeName = instantiable.concreteInstantiable.asSource
+			let instantiationDeclaration = if instantiable.declarationType.isExtension {
+				"\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
+			} else {
+				concreteTypeName
+			}
+			let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
+
+			let propertyType = property.propertyType
+			if propertyType.isErasedInstantiator,
+			   let firstForwardedProperty = forwardedProperties.first,
+			   let forwardedArgument = property.generics?.first,
+			   !(
+			   	// The forwarded argument is the same type as our only `@Forwarded` property.
+			   	(forwardedProperties.count == 1 && forwardedArgument == firstForwardedProperty.typeDescription)
+			   		// The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
+			   		|| forwardedArgument == .nested(name: "ForwardedProperties", parentType: instantiable.concreteInstantiable)
+			   		// The forwarded argument is the same as the tuple we generated for `InstantiableName.ForwardedProperties`.
+			   		|| forwardedArgument == forwardedProperties.asTupleTypeDescription
+			   )
+			{
+				throw GenerationError.erasedInstantiatorGenericDoesNotMatch(
+					property: property,
+					instantiable: instantiable,
+				)
+			}
+
+			switch propertyType {
+			case .instantiator,
+			     .erasedInstantiator,
+			     .sendableInstantiator,
+			     .sendableErasedInstantiator:
+				let forwardedProperties = forwardedProperties.sorted()
+				let forwardedPropertiesHaveLabels = forwardedProperties.count > 1
+				let forwardedArguments = forwardedProperties
+					.map {
+						if forwardedPropertiesHaveLabels {
+							"\($0.label): $0.\($0.label)"
+						} else {
+							"\($0.label): $0"
+						}
+					}
+					.joined(separator: ", ")
+				let generatedProperties = try await generateProperties(
+					codeGeneration: codeGeneration,
+					leadingMemberWhitespace: Self.standardIndent,
+				)
+				let functionArguments = if forwardedProperties.isEmpty {
+					""
+				} else {
+					forwardedProperties.initializerFunctionParameters.map(\.description).joined()
+				}
+				let functionName = self.functionName(toBuild: property)
+				let functionDecorator = if propertyType.isSendable {
+					"@Sendable "
+				} else {
+					""
+				}
+				let functionDeclaration = if isPropertyCycle {
+					""
+				} else {
+					"""
+					\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
+					\(generatedProperties.joined(separator: "\n"))
+					\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
+					}
+
+					"""
+				}
+
+				let typeDescription = property.typeDescription.asSource
+				let unwrappedTypeDescription = property
+					.typeDescription
+					.unwrapped
+					.asSource
+				let instantiatedTypeDescription = property
+					.typeDescription
+					.unwrapped
+					.asInstantiatedType
+					.asSource
+				let propertyDeclaration = if !instantiable.declarationType.isExtension, typeDescription == unwrappedTypeDescription {
+					"let \(property.label)"
+				} else {
+					"let \(property.asSource)"
+				}
+				let instantiatorInstantiation = if forwardedArguments.isEmpty, !erasedToConcreteExistential {
+					"\(unwrappedTypeDescription)(\(functionName))"
+				} else if erasedToConcreteExistential {
+					"""
+					\(unwrappedTypeDescription) {
+					\(Self.standardIndent)\(instantiatedTypeDescription)(\(functionName)(\(forwardedArguments)))
+					}
+					"""
+				} else {
+					"""
+					\(unwrappedTypeDescription) {
+					\(Self.standardIndent)\(functionName)(\(forwardedArguments))
+					}
+					"""
+				}
+
+				// Mock mode: wrap the binding with an override closure.
+				switch codeGeneration {
+				case .dependencyTree:
+					return """
+					\(functionDeclaration)\(propertyDeclaration) = \(instantiatorInstantiation)
+					"""
+				case let .mock(context):
+					let pathCaseName = context.path.isEmpty ? "root" : context.path.joined(separator: "_")
+					return """
+					\(functionDeclaration)\(propertyDeclaration) = \(property.label)?(.\(pathCaseName)) ?? \(instantiatorInstantiation)
+					"""
+				}
+			case .constant:
+				let generatedProperties = try await generateProperties(
+					codeGeneration: codeGeneration,
+					leadingMemberWhitespace: Self.standardIndent,
+				)
+				let propertyDeclaration = if erasedToConcreteExistential || (
+					concreteTypeName == property.typeDescription.asSource
+						&& generatedProperties.isEmpty
+						&& !instantiable.declarationType.isExtension
+				) {
+					"let \(property.label)"
+				} else {
+					"let \(property.asSource)"
+				}
+
+				// Ideally we would be able to use an anonymous closure rather than a named function here.
+				// Unfortunately, there's a bug in Swift Concurrency that prevents us from doing this: https://github.com/swiftlang/swift/issues/75003
+				let functionName = self.functionName(toBuild: property)
+				let functionDeclaration = if generatedProperties.isEmpty {
+					""
+				} else {
+					"""
+					func \(functionName)() -> \(concreteTypeName) {
+					\(generatedProperties.joined(separator: "\n"))
+					\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
+					}
+
+					"""
+				}
+				let returnLineSansReturn = if erasedToConcreteExistential {
+					"\(property.typeDescription.asSource)(\(returnLineSansReturn))"
+				} else {
+					returnLineSansReturn
+				}
+				let initializer = if generatedProperties.isEmpty {
+					returnLineSansReturn
+				} else {
+					"\(functionName)()"
+				}
+
+				// Mock mode: wrap the binding with an override closure.
+				switch codeGeneration {
+				case .dependencyTree:
+					return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
+				case let .mock(context):
+					let pathCaseName = context.path.isEmpty ? "root" : context.path.joined(separator: "_")
+					return "\(functionDeclaration)\(propertyDeclaration) = \(property.label)?(.\(pathCaseName)) ?? \(initializer)\n"
+				}
+			}
+		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
+			// Aliases are identical in both modes.
+			return if onlyIfAvailable, unavailableProperties.contains(fulfillingProperty) {
+				"// Did not create `\(property.asSource)` because `\(fulfillingProperty.asSource)` is unavailable."
+			} else {
+				if erasedToConcreteExistential {
+					"let \(property.label) = \(property.typeDescription.asSource)(\(fulfillingProperty.label))"
+				} else {
+					"let \(property.asSource) = \(fulfillingProperty.label)"
+				}
+			}
+		}
+	}
+
+	// MARK: Mock Root Code Generation
+
+	/// Generates the full mock extension code for a `.root` node in mock mode.
+	private func generateMockRootCode(
+		instantiable: Instantiable,
+		context: MockContext,
+	) async throws -> String {
+		let typeName = instantiable.concreteInstantiable.asSource
+		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
+
+		// Collect forwarded properties — these become bare (non-closure) parameters.
+		let forwardedDependencies = instantiable.dependencies
+			.filter { $0.source == .forwarded }
+			.sorted { $0.property < $1.property }
+
+		// Collect received dependencies — these become closure-wrapped parameters with path case "parent".
+		let receivedDependencies: [(property: Property, isAliased: Bool)] = instantiable.dependencies
+			.compactMap { dependency in
+				switch dependency.source {
+				case .received(onlyIfAvailable: false):
+					return (property: dependency.property, isAliased: false)
+				case .aliased(fulfillingProperty: _, erasedToConcreteExistential: _, onlyIfAvailable: false):
+					return (property: dependency.property, isAliased: true)
+				case .instantiated, .forwarded,
+				     .received(onlyIfAvailable: true),
+				     .aliased(fulfillingProperty: _, erasedToConcreteExistential: _, onlyIfAvailable: true):
+					return nil
+				}
+			}
+
+		// Collect all declarations from the instantiated dependency tree.
+		var allDeclarations = await collectMockDeclarations(path: [])
+
+		// Add received deps as declarations with path case "parent".
+		for received in receivedDependencies {
+			let depType = received.property.typeDescription.asInstantiatedType
+			let depTypeName = depType.asSource
+			let sanitizedName = Self.sanitizeForIdentifier(depTypeName)
+			allDeclarations.append(MockDeclaration(
+				enumName: sanitizedName,
+				parameterLabel: received.property.label,
+				sourceType: received.property.typeDescription.asSource,
+				hasKnownMock: true,
+				pathCaseName: "parent",
+				isForwarded: false,
+			))
+		}
+
+		// Add forwarded deps as bare parameter declarations.
+		let forwardedDeclarations = forwardedDependencies.map { dependency in
+			MockDeclaration(
+				enumName: dependency.property.label,
+				parameterLabel: dependency.property.label,
+				sourceType: dependency.property.typeDescription.asSource,
+				hasKnownMock: false,
+				pathCaseName: "",
+				isForwarded: true,
+			)
+		}
+
+		// If no declarations at all, generate simple mock.
+		if allDeclarations.isEmpty, forwardedDeclarations.isEmpty {
+			let construction = if instantiable.declarationType.isExtension {
+				"\(typeName).\(InstantiableVisitor.instantiateMethodName)()"
+			} else {
+				"\(typeName)()"
+			}
+			let code = """
+			extension \(typeName) {
+			    \(mockAttributesPrefix)public static func mock() -> \(typeName) {
+			        \(construction)
+			    }
+			}
+			"""
+			return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
+		}
+
+		// Disambiguate duplicate enum names.
+		disambiguateEnumNames(&allDeclarations)
+
+		// Deduplicate by enumName (same type at multiple paths → one enum with multiple cases).
+		var enumNameToDeclarations = OrderedDictionary<String, [MockDeclaration]>()
+		for declaration in allDeclarations where !declaration.isForwarded {
+			enumNameToDeclarations[declaration.enumName, default: []].append(declaration)
+		}
+
+		// Build SafeDIMockPath enum.
+		let indent = Self.standardIndent
+		var enumLines = [String]()
+		enumLines.append("\(indent)public enum SafeDIMockPath {")
+		for (enumName, declarations) in enumNameToDeclarations.sorted(by: { $0.key < $1.key }) {
+			let cases = declarations.map(\.pathCaseName).uniqued()
+			let casesStr = cases.map { "case \($0)" }.joined(separator: "; ")
+			enumLines.append("\(indent)\(indent)public enum \(enumName) { \(casesStr) }")
+		}
+		enumLines.append("\(indent)}")
+
+		// Build mock method parameters.
+		var params = [String]()
+		for declaration in forwardedDeclarations {
+			params.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)")
+		}
+		for (enumName, declarations) in enumNameToDeclarations.sorted(by: { $0.key < $1.key }) {
+			let firstDecl = declarations[0]
+			if firstDecl.hasKnownMock {
+				params.append("\(indent)\(indent)\(firstDecl.parameterLabel): ((SafeDIMockPath.\(enumName)) -> \(firstDecl.sourceType))? = nil")
+			} else {
+				params.append("\(indent)\(indent)\(firstDecl.parameterLabel): @escaping (SafeDIMockPath.\(enumName)) -> \(firstDecl.sourceType)")
+			}
+		}
+		let paramsStr = params.joined(separator: ",\n")
+
+		// Build the mock method body.
+		let bodyIndent = "\(indent)\(indent)"
+
+		// Phase 1: Generate received dep bindings (not in propertiesToGenerate).
+		var receivedBindingLines = [String]()
+		for received in receivedDependencies {
+			let depType = received.property.typeDescription.asInstantiatedType
+			let defaultConstruction = depType.asSource + "()"
+			receivedBindingLines.append("\(bodyIndent)let \(received.property.label) = \(received.property.label)?(.parent) ?? \(defaultConstruction)")
+		}
+
+		// Phase 2: Generate instantiated dep bindings via recursive generateProperties.
+		let propertyLines = try await generateProperties(
+			codeGeneration: .mock(context),
+			leadingMemberWhitespace: bodyIndent,
+		)
+
+		// Build the return statement using the existing argument list (init labels match variable names).
+		let argumentList = try instantiable.generateArgumentList()
+		let construction = if instantiable.declarationType.isExtension {
+			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
+		} else {
+			"\(typeName)(\(argumentList))"
+		}
+
+		var lines = [String]()
+		lines.append("extension \(typeName) {")
+		lines.append(contentsOf: enumLines)
+		lines.append("")
+		lines.append("\(indent)\(mockAttributesPrefix)public static func mock(")
+		lines.append(paramsStr)
+		lines.append("\(indent)) -> \(typeName) {")
+		lines.append(contentsOf: receivedBindingLines)
+		lines.append(contentsOf: propertyLines)
+		lines.append("\(bodyIndent)return \(construction)")
+		lines.append("\(indent)}")
+		lines.append("}")
+
+		let code = lines.joined(separator: "\n")
+		return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
+	}
+
+	/// A mock declaration collected from the tree.
+	private struct MockDeclaration {
+		let enumName: String
+		let parameterLabel: String
+		let sourceType: String
+		let hasKnownMock: Bool
+		let pathCaseName: String
+		let isForwarded: Bool
+	}
+
+	/// Walks the tree and collects all mock declarations for the SafeDIMockPath enum and mock() parameters.
+	private func collectMockDeclarations(
+		path: [String],
+	) async -> [MockDeclaration] {
+		var declarations = [MockDeclaration]()
+
+		for childGenerator in orderedPropertiesToGenerate {
+			let childProperty = await childGenerator.property
+			let childScopeData = await childGenerator.scopeData
+
+			guard let childProperty else { continue }
+			if case .alias = childScopeData { continue }
+
+			let isInstantiator = !childProperty.propertyType.isConstant
+			let pathCaseName = path.isEmpty ? "root" : path.joined(separator: "_")
+
+			let enumName: String
+			if isInstantiator {
+				let label = childProperty.label
+				enumName = String(label.prefix(1).uppercased()) + label.dropFirst()
+			} else if let childInstantiable = childScopeData.instantiable {
+				enumName = Self.sanitizeForIdentifier(childInstantiable.concreteInstantiable.asSource)
+			} else {
+				enumName = Self.sanitizeForIdentifier(childProperty.typeDescription.asInstantiatedType.asSource)
+			}
+
+			let sourceType = isInstantiator
+				? childProperty.typeDescription.asSource
+				: childProperty.typeDescription.asInstantiatedType.asSource
+
+			declarations.append(MockDeclaration(
+				enumName: enumName,
+				parameterLabel: childProperty.label,
+				sourceType: sourceType,
+				hasKnownMock: childScopeData.instantiable != nil,
+				pathCaseName: pathCaseName,
+				isForwarded: false,
+			))
+
+			// Recurse into children.
+			let childPath = path + [childProperty.label]
+			let childDeclarations = await childGenerator.collectMockDeclarations(path: childPath)
+			declarations.append(contentsOf: childDeclarations)
+		}
+
+		return declarations
+	}
+
+	private func disambiguateEnumNames(_ declarations: inout [MockDeclaration]) {
+		var enumNameCounts = [String: Int]()
+		for declaration in declarations where !declaration.isForwarded {
+			enumNameCounts[declaration.enumName, default: 0] += 1
+		}
+		declarations = declarations.map { declaration in
+			guard !declaration.isForwarded,
+			      let count = enumNameCounts[declaration.enumName],
+			      count > 1
+			else { return declaration }
+			let suffix = Self.sanitizeForIdentifier(declaration.sourceType)
+			return MockDeclaration(
+				enumName: "\(declaration.enumName)_\(suffix)",
+				parameterLabel: declaration.parameterLabel,
+				sourceType: declaration.sourceType,
+				hasKnownMock: declaration.hasKnownMock,
+				pathCaseName: declaration.pathCaseName,
+				isForwarded: declaration.isForwarded,
+			)
+		}
+	}
+
+	/// Computes the child's mock path by extending the parent's path.
+	private func childMockCodeGeneration(
+		for childGenerator: ScopeGenerator,
+		parentContext: MockContext,
+	) async -> CodeGeneration {
+		let childProperty = await childGenerator.property
+		guard childProperty != nil else {
+			return .mock(parentContext)
+		}
+		return .mock(MockContext(
+			path: parentContext.path,
+			mockConditionalCompilation: parentContext.mockConditionalCompilation,
+		))
+	}
+
+	private func wrapInConditionalCompilation(
+		_ code: String,
+		mockConditionalCompilation: String?,
+	) -> String {
+		if let mockConditionalCompilation {
+			"#if \(mockConditionalCompilation)\n\(code)\n#endif"
+		} else {
+			code
+		}
+	}
+
+	static func sanitizeForIdentifier(_ typeName: String) -> String {
+		typeName
+			.replacingOccurrences(of: "<", with: "__")
+			.replacingOccurrences(of: ">", with: "")
+			.replacingOccurrences(of: "->", with: "_to_")
+			.replacingOccurrences(of: ", ", with: "_")
+			.replacingOccurrences(of: ",", with: "_")
+			.replacingOccurrences(of: ".", with: "_")
+			.replacingOccurrences(of: "[", with: "Array_")
+			.replacingOccurrences(of: "]", with: "")
+			.replacingOccurrences(of: ":", with: "_")
+			.replacingOccurrences(of: "(", with: "")
+			.replacingOccurrences(of: ")", with: "")
+			.replacingOccurrences(of: "&", with: "_and_")
+			.replacingOccurrences(of: "?", with: "_Optional")
+			.replacingOccurrences(of: " ", with: "")
+	}
 
 	// MARK: GenerationError
 
@@ -498,5 +918,14 @@ extension Instantiable {
 				given: dependencies,
 				unavailableProperties: unavailableProperties,
 			) ?? "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
+	}
+}
+
+// MARK: - Array Extension
+
+extension Array where Element: Hashable {
+	fileprivate func uniqued() -> [Element] {
+		var seen = Set<Element>()
+		return filter { seen.insert($0).inserted }
 	}
 }
