@@ -558,7 +558,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					"""
 					func \(functionName)() -> \(concreteTypeName) {
 					\(generatedProperties.joined(separator: "\n"))
-					\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
+					\(Self.standardIndent)return \(returnLineSansReturn)
 					}
 
 					"""
