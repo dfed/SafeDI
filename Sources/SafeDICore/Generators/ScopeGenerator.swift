@@ -692,11 +692,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 			// Skip optional properties when a non-optional version with the same label exists.
 			// The non-optional version subsumes it — Swift auto-wraps for optional paths.
-			if receivedProperty.typeDescription.isOptional,
-			   receivedLabelsWithNonOptionalVersion.contains(receivedProperty.label)
-			{
-				continue
-			}
+			guard !receivedProperty.typeDescription.isOptional
+				|| !receivedLabelsWithNonOptionalVersion.contains(receivedProperty.label)
+			else { continue }
 
 			// A property is onlyIfAvailable if:
 			// (a) it's Optional and tracked as onlyIfAvailable (standard @Received case), OR
@@ -786,8 +784,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		enumLines.append("\(indent)public enum SafeDIMockPath {")
 		for (enumName, declarations) in enumNameToDeclarations.sorted(by: { $0.key < $1.key }) {
 			let cases = declarations.map(\.pathCaseName).uniqued()
-			let casesStr = cases.map { "case \($0)" }.joined(separator: "; ")
-			enumLines.append("\(indent)\(indent)public enum \(enumName) { \(casesStr) }")
+			let casesString = cases.map { "case \($0)" }.joined(separator: "; ")
+			enumLines.append("\(indent)\(indent)public enum \(enumName) { \(casesString) }")
 		}
 		enumLines.append("\(indent)}")
 
@@ -816,7 +814,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Build the mock method body.
 		let bodyIndent = "\(indent)\(indent)"
 
-		// Generate all dep bindings via recursive generateProperties.
+		// Generate all dependency bindings via recursive generateProperties.
 		// Received dependencies are in the tree (built by createMockRootScopeGenerator).
 		let bodyContext = MockContext(
 			path: context.path,
@@ -889,9 +887,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var declarations = [MockDeclaration]()
 
 		for childGenerator in orderedPropertiesToGenerate {
-			guard let childProperty = childGenerator.property else { continue }
+			guard let childProperty = childGenerator.property,
+			      childGenerator.scopeData.instantiable != nil
+			else { continue }
 			let childScopeData = childGenerator.scopeData
-			if case .alias = childScopeData { continue }
 
 			let isInstantiator = !childProperty.propertyType.isConstant
 			let pathCaseName = path.isEmpty ? "root" : path.joined(separator: "_")
