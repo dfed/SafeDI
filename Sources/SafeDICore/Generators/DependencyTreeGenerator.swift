@@ -76,6 +76,7 @@ public actor DependencyTreeGenerator {
 	/// Generates mock code for all `@Instantiable` types.
 	public func generateMockCode(
 		mockConditionalCompilation: String?,
+		currentModuleSourceFilePaths: Set<String>? = nil,
 	) async throws -> [GeneratedRoot] {
 		// Build a map of erased wrapper types → concrete fulfilling types.
 		// This lets mocks construct types like AnyUserService(DefaultUserService())
@@ -107,10 +108,17 @@ public actor DependencyTreeGenerator {
 			for instantiable in typeDescriptionToFulfillingInstantiableMap.values
 				.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
 			{
+				// Skip types with user-defined mock methods, duplicates, types not in the scope map,
+				// and types from dependent modules (their module generates their own mocks).
 				guard instantiable.mockInitializer == nil,
 				      seen.insert(instantiable.concreteInstantiable).inserted,
 				      let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable]
 				else { continue }
+				if let currentModuleSourceFilePaths {
+					guard let sourceFilePath = instantiable.sourceFilePath,
+					      currentModuleSourceFilePaths.contains(sourceFilePath)
+					else { continue }
+				}
 
 				let mockRoot = try createMockRootScopeGenerator(
 					for: instantiable,
