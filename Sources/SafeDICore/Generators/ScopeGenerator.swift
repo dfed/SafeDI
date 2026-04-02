@@ -234,9 +234,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		var instantiable: Instantiable? {
 			switch self {
-			case let .root(instantiable):
-				instantiable
-			case let .property(instantiable, _, _, _, _):
+			case let .root(instantiable),
+			     let .property(instantiable, _, _, _, _):
 				instantiable
 			case .alias:
 				nil
