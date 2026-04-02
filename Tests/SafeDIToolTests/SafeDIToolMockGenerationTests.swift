@@ -3323,21 +3323,18 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        public enum DefaultNetworkService { case profileViewControllerBuilder_editProfileViewControllerBuilder }
 		        public enum EditProfileViewControllerBuilder { case profileViewControllerBuilder }
 		        public enum ProfileViewControllerBuilder { case root }
-		        public enum UserManager { case profileViewControllerBuilder_editProfileViewControllerBuilder }
 		    }
 
 		    public static func mock(
 		        userManager: UserManager,
 		        userNetworkService: ((SafeDIMockPath.DefaultNetworkService) -> NetworkService)? = nil,
 		        editProfileViewControllerBuilder: ((SafeDIMockPath.EditProfileViewControllerBuilder) -> Instantiator<EditProfileViewController>)? = nil,
-		        profileViewControllerBuilder: ((SafeDIMockPath.ProfileViewControllerBuilder) -> Instantiator<ProfileViewController>)? = nil,
-		        userVendor: ((SafeDIMockPath.UserManager) -> UserVendor)? = nil
+		        profileViewControllerBuilder: ((SafeDIMockPath.ProfileViewControllerBuilder) -> Instantiator<ProfileViewController>)? = nil
 		    ) -> LoggedInViewController {
 		        let userNetworkService: NetworkService = networkService
 		        func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
 		            let userVendor: UserVendor = userManager
 		            func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
-		                let userVendor: UserVendor = userVendor?(.profileViewControllerBuilder_editProfileViewControllerBuilder) ?? UserManager()
 		                let userNetworkService: NetworkService = userNetworkService?(.profileViewControllerBuilder_editProfileViewControllerBuilder) ?? DefaultNetworkService()
 		                return EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: userNetworkService)
 		            }
@@ -3398,7 +3395,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        public enum EditProfileViewControllerBuilder { case loggedInViewControllerBuilder_profileViewControllerBuilder }
 		        public enum LoggedInViewControllerBuilder { case root }
 		        public enum ProfileViewControllerBuilder { case loggedInViewControllerBuilder }
-		        public enum UserManager { case loggedInViewControllerBuilder_profileViewControllerBuilder_editProfileViewControllerBuilder }
 		    }
 
 		    public static func mock(
@@ -3406,8 +3402,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        networkService: ((SafeDIMockPath.DefaultNetworkService) -> NetworkService)? = nil,
 		        editProfileViewControllerBuilder: ((SafeDIMockPath.EditProfileViewControllerBuilder) -> Instantiator<EditProfileViewController>)? = nil,
 		        loggedInViewControllerBuilder: ((SafeDIMockPath.LoggedInViewControllerBuilder) -> Instantiator<LoggedInViewController>)? = nil,
-		        profileViewControllerBuilder: ((SafeDIMockPath.ProfileViewControllerBuilder) -> Instantiator<ProfileViewController>)? = nil,
-		        userVendor: ((SafeDIMockPath.UserManager) -> UserVendor)? = nil
+		        profileViewControllerBuilder: ((SafeDIMockPath.ProfileViewControllerBuilder) -> Instantiator<ProfileViewController>)? = nil
 		    ) -> RootViewController {
 		        let networkService: NetworkService = networkService?(.root) ?? DefaultNetworkService()
 		        let authService: AuthService = authService?(.root) ?? DefaultAuthService(networkService: networkService)
@@ -3416,8 +3411,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
 		                let userVendor: UserVendor = userManager
 		                func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
-		                    let userVendor: UserVendor = userVendor?(.loggedInViewControllerBuilder_profileViewControllerBuilder_editProfileViewControllerBuilder) ?? UserManager()
-		                    return EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: userNetworkService)
+		                    EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: userNetworkService)
 		                }
 		                let editProfileViewControllerBuilder = editProfileViewControllerBuilder?(.loggedInViewControllerBuilder_profileViewControllerBuilder) ?? Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
 		                return ProfileViewController(userVendor: userVendor, editProfileViewControllerBuilder: editProfileViewControllerBuilder)

@@ -335,11 +335,20 @@ public actor DependencyTreeGenerator {
 		visited.insert(instantiable.concreteInstantiable)
 
 		// Collect which types THIS scope constructs (instantiated + forwarded deps).
+		// Include fulfillingAdditionalTypes so received deps for protocols are
+		// resolved when the concrete type is constructed at this scope.
 		var localConstructedTypes = constructedTypes
 		for dependency in instantiable.dependencies {
 			switch dependency.source {
 			case .instantiated, .forwarded:
-				localConstructedTypes.insert(dependency.property.typeDescription.asInstantiatedType)
+				let depType = dependency.property.typeDescription.asInstantiatedType
+				localConstructedTypes.insert(depType)
+				// Also mark all types this concrete type fulfills (protocol conformances).
+				if let depInstantiable = typeDescriptionToFulfillingInstantiableMap[depType] {
+					for additionalType in depInstantiable.instantiableTypes {
+						localConstructedTypes.insert(additionalType)
+					}
+				}
 			case .received, .aliased:
 				break
 			}
