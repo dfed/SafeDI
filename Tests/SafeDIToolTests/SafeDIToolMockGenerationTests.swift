@@ -2512,9 +2512,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        a: ((SafeDIMockPath.A) -> A)? = nil
+		        a: ((SafeDIMockPath.A) -> A?)? = nil
 		    ) -> B {
-		        let a: A? = a?(.root) ?? A()
+		        let a = a?(.root)
 		        return B(a: a)
 		    }
 		}
@@ -2718,9 +2718,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        a: ((SafeDIMockPath.A) -> A)? = nil
+		        a: ((SafeDIMockPath.A) -> A?)? = nil
 		    ) -> B {
-		        let a: A? = a?(.root) ?? A()
+		        let a = a?(.root)
 		        return B(a: a)
 		    }
 		}
@@ -3537,15 +3537,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension Child {
 		    public enum SafeDIMockPath {
 		        public enum GrandchildBuilder { case root }
-		        public enum IndexingIterator__Array__Element { case root }
 		    }
 
 		    public static func mock(
 		        iterator: IndexingIterator<Array<Element>>,
-		        grandchildBuilder: ((SafeDIMockPath.GrandchildBuilder) -> Instantiator<Grandchild>)? = nil,
-		        iterator: @escaping (SafeDIMockPath.IndexingIterator__Array__Element) -> IndexingIterator<Array<Element>>
+		        grandchildBuilder: ((SafeDIMockPath.GrandchildBuilder) -> Instantiator<Grandchild>)? = nil
 		    ) -> Child {
-		        let iterator = iterator(.root)
 		        func __safeDI_grandchildBuilder() -> Grandchild {
 		            let anyIterator = AnyIterator(iterator)
 		            return Grandchild(anyIterator: anyIterator)
@@ -4174,11 +4171,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    public static func mock(
 		        child: ((SafeDIMockPath.Child) -> Child)? = nil,
-		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil,
+		        shared: ((SafeDIMockPath.Shared) -> Shared?)? = nil,
 		        unrelated: ((SafeDIMockPath.Unrelated) -> Unrelated?)? = nil
 		    ) -> Parent {
+		        let shared = shared?(.root)
 		        let unrelated = unrelated?(.root)
-		        let shared: Shared? = shared?(.root) ?? Shared()
 		        let child = child?(.root) ?? Child(unrelated: unrelated, shared: shared)
 		        return Parent(child: child, shared: shared)
 		    }
@@ -5299,16 +5296,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension DeviceService {
 		    public enum SafeDIMockPath {
-		        public enum ConcreteAppClipService { case root }
+		        public enum AppClipService { case root }
 		        public enum String { case root }
 		    }
 
 		    public static func mock(
-		        appClipService: ((SafeDIMockPath.ConcreteAppClipService) -> AppClipService)? = nil,
+		        appClipService: ((SafeDIMockPath.AppClipService) -> AppClipService?)? = nil,
 		        name: @escaping (SafeDIMockPath.String) -> String
 		    ) -> DeviceService {
+		        let appClipService = appClipService?(.root)
 		        let name = name(.root)
-		        let appClipService: AppClipService? = appClipService?(.root) ?? ConcreteAppClipService()
 		        return DeviceService(appClipService: appClipService, name: name)
 		    }
 		}

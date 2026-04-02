@@ -289,7 +289,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	private let scopeData: ScopeData
 	/// Unwrapped versions of received properties from transitive `@Received(onlyIfAvailable: true)` dependencies.
-	private let onlyIfAvailableUnwrappedReceivedProperties: Set<Property>
+	/// Unwrapped versions of received properties from transitive `@Received(onlyIfAvailable: true)` dependencies.
+	/// Used by mock generation to identify dependencies that should not get default constructions.
+	let onlyIfAvailableUnwrappedReceivedProperties: Set<Property>
 	/// Received properties that are optional and not created by a parent.
 	private let unavailableOptionalProperties: Set<Property>
 	/// Properties that will be generated as `let` constants.
@@ -650,9 +652,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// Check transitive received dependencies not satisfied by the tree.
+		// Skip forwarded properties — they're bare mock parameters, not promoted children.
+		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
 		let updatedCoveredLabels = Set(allDeclarations.map(\.propertyLabel))
 		for receivedProperty in receivedProperties.sorted() {
-			guard !updatedCoveredLabels.contains(receivedProperty.label) else { continue }
+			guard !updatedCoveredLabels.contains(receivedProperty.label),
+			      !forwardedPropertySet.contains(receivedProperty)
+			else { continue }
 
 			let isOnlyIfAvailable = onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty)
 				|| unavailableOptionalProperties.contains(receivedProperty)
