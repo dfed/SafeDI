@@ -32,10 +32,38 @@ Issues found during audit that need CODE fixes (not test updates):
    - All three should be optional parameters with defaults
    - Need to verify current expectation matches this
 
-5. **StringStorage protocol resolution** — TEST CORRECTED, CODE FIX NEEDED (mock_transitiveProtocolDependencyFulfilledByExtensionIsOptional)
+5. **Protocol/type resolution in scope map during promotion** — MULTIPLE TESTS AFFECTED
+   - StringStorage (mock_transitiveProtocolDependencyFulfilledByExtensionIsOptional)
+   - TransitiveDep (mock_threadsTransitiveDependenciesNotInParentScope)
+   - Types that ARE @Instantiable and in the scope map are not being found during
+     the promotion loop in createMockRootScopeGenerator
+   - Root cause: `receivedProperty.typeDescription.asInstantiatedType` doesn't match
+     the scope map key for some types. Need to debug TypeDescription matching.
    - Protocol `StringStorage` fulfilled by `SomeExternalType` via `fulfillingAdditionalTypes`
    - Should be optional parameter, currently `@escaping` (required)
    - Root cause: type matching issue in scope map lookup during promotion
+   - TransitiveDep test expectation CORRECTED (was @escaping, should be optional)
+
+6. **Cosmetic: enum name disambiguation produces ugly names** (SharedThing_SharedThing)
+   - Same type at multiple paths triggers disambiguation with `_SourceType` suffix
+   - Not a compilation error, just ugly. Low priority.
+
+## Audit Summary
+
+Tests verified CORRECT (passing, expectations match desired behavior):
+- All simple tests (no deps, single dep, extension-based, config tests)
+- mock_receivedConcreteExistentialWrapperConstructsUnderlyingType — AnyUserService wrapping OK
+- mock_sharedTransitiveReceivedDependencyPromotedAtRootScope — root promotion OK
+- mock_onlyIfAvailableDependencyUsesVariableInReturnStatement — threading OK
+- mock_sendableInstantiatorDependencyClosuresAreMarkedSendable — @Sendable OK
+- mock_disambiguatesParameterLabelsWhenSameInitLabelAppearsTwice — disambiguation OK
+- mock_inlineConstructsWithNilForMissingOptionalArgs — onlyIfAvailable handling OK
+- All @escaping params verified as non-@Instantiable types (correct)
+
+Tests with CORRECTED expectations (now fail, need CODE fixes):
+- mock_generatedForLotsOfInterdependentDependencies — duplicate userManager removed
+- mock_transitiveProtocolDependencyFulfilledByExtensionIsOptional — StringStorage optional
+- mock_threadsTransitiveDependenciesNotInParentScope — TransitiveDep optional
    - The `receivedProperties` contains `stringStorage: StringStorage` (property type)
    - The scope map has `StringStorage` as key → `SomeExternalType` scope
    - `receivedProperty.typeDescription.asInstantiatedType` should give `StringStorage`

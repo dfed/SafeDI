@@ -5079,9 +5079,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    public static func mock(
 		        child: ((SafeDIMockPath.Child) -> Child)? = nil,
-		        transitiveDep: @escaping (SafeDIMockPath.TransitiveDep) -> TransitiveDep
+		        transitiveDep: ((SafeDIMockPath.TransitiveDep) -> TransitiveDep)? = nil
 		    ) -> Parent {
-		        let transitiveDep = transitiveDep(.root)
+		        let transitiveDep = transitiveDep?(.root) ?? TransitiveDep()
 		        let child = child?(.root) ?? Child(transitiveDep: transitiveDep)
 		        return Parent(child: child)
 		    }
