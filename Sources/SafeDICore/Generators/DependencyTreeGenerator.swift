@@ -334,6 +334,9 @@ public actor DependencyTreeGenerator {
 
 		// Iteratively promote unsatisfied received dependencies at root scope.
 		// Each round may reveal new unsatisfied dependencies from promoted children.
+		// This is O(rounds * tree_size) where rounds = max dependency depth (typically 3-5).
+		// A single-pass approach was investigated but would require reimplementing
+		// ScopeGenerator's type resolution (sibling satisfaction, forwarding, etc.).
 		// onlyIfAvailable dependencies are NOT promoted — they become optional
 		// mock parameters with no default.
 		// Filter out forwarded properties — they're bare mock parameters, not promoted children.
