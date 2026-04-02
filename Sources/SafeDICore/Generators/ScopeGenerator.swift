@@ -627,14 +627,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Find received dependencies (including transitive) whose type is NOT @Instantiable.
 		// These weren't added to the tree but need to be mock parameters.
-		// They're required (non-optional) since there's no default to construct.
 		// `receivedProperties` includes all unsatisfied dependencies from the full subtree.
 		let coveredPropertyLabels = Set(allDeclarations.map(\.propertyLabel))
-		var uncoveredReceivedProperties = [Property]()
+		var uncoveredReceivedProperties = [(property: Property, isOnlyIfAvailable: Bool)]()
 		for receivedProperty in receivedProperties.sorted() {
-			guard !coveredPropertyLabels.contains(receivedProperty.label),
-			      !unavailableOptionalProperties.contains(receivedProperty)
-			else { continue }
+			guard !coveredPropertyLabels.contains(receivedProperty.label) else { continue }
+
+			let isOnlyIfAvailable = onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty)
+				|| unavailableOptionalProperties.contains(receivedProperty)
 
 			let depType = receivedProperty.typeDescription.asInstantiatedType
 			let enumName = Self.sanitizeForIdentifier(depType.asSource)
@@ -642,12 +642,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				enumName: enumName,
 				propertyLabel: receivedProperty.label,
 				parameterLabel: receivedProperty.label,
-				sourceType: depType.asSource,
-				hasKnownMock: false,
+				sourceType: receivedProperty.typeDescription.asSource,
+				// onlyIfAvailable dependencies are optional parameters (hasKnownMock = true → `? = nil`).
+				// Required received dependencies are @escaping (hasKnownMock = false).
+				hasKnownMock: isOnlyIfAvailable,
 				pathCaseName: "root",
 				isForwarded: false,
 			))
-			uncoveredReceivedProperties.append(receivedProperty)
+			uncoveredReceivedProperties.append((property: receivedProperty, isOnlyIfAvailable: isOnlyIfAvailable))
 		}
 
 		// Add forwarded dependencies as bare parameter declarations.
@@ -768,9 +770,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(indent)\(mockAttributesPrefix)public static func mock(")
 		lines.append(parametersString)
 		lines.append("\(indent)) -> \(typeName) {")
-		// Bindings for non-@Instantiable received dependencies (required parameters, no default).
-		for receivedProperty in uncoveredReceivedProperties {
-			lines.append("\(bodyIndent)let \(receivedProperty.label) = \(receivedProperty.label)(.root)")
+		// Bindings for non-@Instantiable received dependencies.
+		for uncovered in uncoveredReceivedProperties {
+			if uncovered.isOnlyIfAvailable {
+				// Optional: evaluates to nil if not provided by the user.
+				lines.append("\(bodyIndent)let \(uncovered.property.label) = \(uncovered.property.label)?(.root)")
+			} else {
+				// Required: user must provide the closure.
+				lines.append("\(bodyIndent)let \(uncovered.property.label) = \(uncovered.property.label)(.root)")
+			}
 		}
 		lines.append(contentsOf: propertyLines)
 		lines.append("\(bodyIndent)return \(construction)")

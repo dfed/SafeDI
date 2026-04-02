@@ -391,29 +391,14 @@ public actor DependencyTreeGenerator {
 				visited: visited,
 				constructedTypes: localConstructedTypes,
 			)
-			// Compute unavailable optional properties for this child:
-			// onlyIfAvailable dependencies whose type isn't constructed by any ancestor.
-			let childUnavailable = Set<Property>(
-				depInstantiable.dependencies.compactMap { dependency in
-					switch dependency.source {
-					case let .received(onlyIfAvailable):
-						guard onlyIfAvailable else { return nil }
-						let type = dependency.property.typeDescription.asInstantiatedType
-						return localConstructedTypes.contains(type) ? nil : dependency.property
-					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-						guard onlyIfAvailable else { return nil }
-						let type = fulfillingProperty.typeDescription.asInstantiatedType
-						return localConstructedTypes.contains(type) ? nil : fulfillingProperty
-					case .instantiated, .forwarded:
-						return nil
-					}
-				},
-			)
+			// In mock trees, onlyIfAvailable dependencies are NOT marked unavailable.
+			// They bubble up through receivedProperties to the mock root, which
+			// generates optional parameter bindings. Children reference those bindings.
 			children.append(ScopeGenerator(
 				instantiable: depInstantiable,
 				property: dependency.property,
 				propertiesToGenerate: grandchildren,
-				unavailableOptionalProperties: childUnavailable,
+				unavailableOptionalProperties: [],
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				isPropertyCycle: false,
 			))
