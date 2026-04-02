@@ -317,14 +317,8 @@ public actor DependencyTreeGenerator {
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
 	) throws -> ScopeGenerator {
 		guard let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable] else {
-			return ScopeGenerator(
-				instantiable: instantiable,
-				property: nil,
-				propertiesToGenerate: [],
-				unavailableOptionalProperties: [],
-				erasedToConcreteExistential: false,
-				isPropertyCycle: false,
-			)
+			// Root types must be @Instantiable and therefore always in the scope map.
+			preconditionFailure("Root type \(instantiable.concreteInstantiable.asSource) not found in scope map")
 		}
 
 		// Build 1: Create ScopeGenerator from the unmodified Scope to compute
