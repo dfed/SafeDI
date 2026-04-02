@@ -143,6 +143,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	// MARK: Internal
 
+	/// Properties that we require in order to satisfy our (and our children's) dependencies.
+	/// Used by mock generation to determine which received dependencies need root-level promotion.
+	let receivedProperties: Set<Property>
+
 	func generateCode(
 		codeGeneration: CodeGeneration = .dependencyTree,
 		propertiesAlreadyGeneratedAtThisScope: Set<Property> = [],
@@ -284,8 +288,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	private let scopeData: ScopeData
-	/// Properties that we require in order to satisfy our (and our children’s) dependencies.
-	private let receivedProperties: Set<Property>
 	/// Unwrapped versions of received properties from transitive `@Received(onlyIfAvailable: true)` dependencies.
 	private let onlyIfAvailableUnwrappedReceivedProperties: Set<Property>
 	/// Received properties that are optional and not created by a parent.

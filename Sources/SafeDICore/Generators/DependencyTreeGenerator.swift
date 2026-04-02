@@ -309,8 +309,8 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// Creates a mock-root ScopeGenerator using the production Scope tree.
-	/// Received dependencies that bubble up are promoted as root-level children
-	/// so they're constructed at root scope and visible to all nested functions.
+	/// Unsatisfied received dependencies are promoted as root-level children
+	/// on a NEW Scope (the shared Scope is never mutated).
 	private func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
@@ -327,22 +327,27 @@ public actor DependencyTreeGenerator {
 			)
 		}
 
-		// Collect all transitive received properties from the Scope tree that
-		// aren't already constructed as children. These need to be promoted
-		// as root-level children so they're at root scope.
-		let alreadyDeclared = Set(scope.propertiesToGenerate.compactMap { propertyToGenerate -> Property? in
-			switch propertyToGenerate {
-			case let .instantiated(property, _, _): property
-			case let .aliased(property, _, _, _): property
-			}
-		})
-		let transitiveReceived = collectTransitiveReceivedProperties(
-			scope: scope,
-			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
-			alreadyDeclared: alreadyDeclared,
-			visited: [],
+		// Build initial ScopeGenerator from the UNMODIFIED shared Scope.
+		let initial = try scope.createScopeGenerator(
+			for: nil,
+			propertyStack: [],
+			receivableProperties: [],
+			erasedToConcreteExistential: false,
+			forMockGeneration: true,
 		)
-		for receivedProperty in transitiveReceived {
+
+		// Read receivedProperties — the exact set of unsatisfied dependencies.
+		// This already accounts for siblings, forwarded properties, and aliases.
+		let unsatisfiedProperties = initial.receivedProperties
+		guard !unsatisfiedProperties.isEmpty else {
+			return initial
+		}
+
+		// Create a NEW Scope with original children + promoted received dependencies.
+		// The shared Scope is never mutated.
+		let mockRootScope = Scope(instantiable: instantiable)
+		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate
+		for receivedProperty in unsatisfiedProperties.sorted() {
 			var dependencyType = receivedProperty.typeDescription.asInstantiatedType
 			var erasedToConcreteExistential = false
 			if typeDescriptionToScopeMap[dependencyType] == nil,
@@ -351,64 +356,24 @@ public actor DependencyTreeGenerator {
 				dependencyType = concreteType
 				erasedToConcreteExistential = true
 			}
-			guard let receivedScope = typeDescriptionToScopeMap[dependencyType] else { continue }
-			scope.propertiesToGenerate.append(.instantiated(
+			guard let receivedScope = typeDescriptionToScopeMap[dependencyType] else {
+				continue
+			}
+			mockRootScope.propertiesToGenerate.append(.instantiated(
 				receivedProperty,
 				receivedScope,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 			))
 		}
 
-		return try scope.createScopeGenerator(
+		// Rebuild ScopeGenerator from the new scope with promotions.
+		return try mockRootScope.createScopeGenerator(
 			for: nil,
 			propertyStack: [],
 			receivableProperties: [],
 			erasedToConcreteExistential: false,
 			forMockGeneration: true,
 		)
-	}
-
-	/// Recursively collects received properties from the Scope tree that aren't
-	/// already declared as children at the root level.
-	private func collectTransitiveReceivedProperties(
-		scope: Scope,
-		typeDescriptionToScopeMap: [TypeDescription: Scope],
-		alreadyDeclared: Set<Property>,
-		visited: Set<ObjectIdentifier>,
-	) -> [Property] {
-		let scopeIdentifier = ObjectIdentifier(scope)
-		guard !visited.contains(scopeIdentifier) else { return [] }
-		var visited = visited
-		visited.insert(scopeIdentifier)
-
-		var result = [Property]()
-		// Collect this scope's own received deps.
-		for dependency in scope.instantiable.dependencies {
-			switch dependency.source {
-			case let .received(onlyIfAvailable):
-				guard !onlyIfAvailable else { continue }
-				let property = dependency.property
-				guard !alreadyDeclared.contains(property) else { continue }
-				result.append(property)
-			case .instantiated, .aliased, .forwarded:
-				break
-			}
-		}
-		// Recurse into children.
-		for propertyToGenerate in scope.propertiesToGenerate {
-			switch propertyToGenerate {
-			case let .instantiated(_, childScope, _):
-				result.append(contentsOf: collectTransitiveReceivedProperties(
-					scope: childScope,
-					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
-					alreadyDeclared: alreadyDeclared,
-					visited: visited,
-				))
-			case .aliased:
-				break
-			}
-		}
-		return result
 	}
 
 	/// Builds a scope mapping for mock generation. Similar to `createTypeDescriptionToScopeMapping`
