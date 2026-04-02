@@ -205,14 +205,12 @@ struct SafeDITool: AsyncParsableCommand {
 					}
 				}
 
-				let emptyRootContent = fileHeader
-
 				// Write dependency tree output files.
 				for entry in manifest.dependencyTreeGeneration {
 					let code: String = if let extensions = sourceFileToExtensions[entry.inputFilePath] {
 						fileHeader + extensions.sorted().joined(separator: "\n\n")
 					} else {
-						emptyRootContent
+						fileHeader
 					}
 					// Only update the file if the content has changed.
 					let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
