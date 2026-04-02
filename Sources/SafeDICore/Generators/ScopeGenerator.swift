@@ -761,9 +761,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let argumentList = try instantiable.generateArgumentList(
 				unavailableProperties: unavailableOptionalProperties,
 			)
-			let construction = if instantiable.mockInitializer != nil {
-				"\(typeName).mock(\(argumentList))"
-			} else if instantiable.declarationType.isExtension {
+			// Types with user-defined mock methods are skipped in generateMockCode,
+			// so this path only handles types without mock initializers.
+			let construction = if instantiable.declarationType.isExtension {
 				"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
 			} else {
 				"\(typeName)(\(argumentList))"
@@ -851,11 +851,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let argumentList = try instantiable.generateArgumentList(
 			unavailableProperties: unavailableOptionalProperties,
 		)
-		let construction = if let mockInitializer = instantiable.mockInitializer,
-		                      !mockInitializer.arguments.isEmpty
-		{
-			"\(typeName).mock(\(argumentList))"
-		} else if instantiable.declarationType.isExtension {
+		// Types with user-defined mock methods are skipped in generateMockCode,
+		// so this path only handles types without mock initializers.
+		let construction = if instantiable.declarationType.isExtension {
 			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
 		} else {
 			"\(typeName)(\(argumentList))"
