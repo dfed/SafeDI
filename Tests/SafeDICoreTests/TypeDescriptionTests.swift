@@ -776,6 +776,31 @@ struct TypeDescriptionTests {
 	}
 
 	@Test
+	func strippingEscaping_removesEscapingButPreservesSpecifiers() {
+		let type = TypeDescription.attributed(
+			.closure(
+				arguments: [],
+				isAsync: false,
+				doesThrow: false,
+				returnType: .void(.tuple),
+			),
+			specifiers: ["borrowing"],
+			attributes: ["escaping"],
+		)
+		let stripped = type.strippingEscaping
+		#expect(stripped == .attributed(
+			.closure(
+				arguments: [],
+				isAsync: false,
+				doesThrow: false,
+				returnType: .void(.tuple),
+			),
+			specifiers: ["borrowing"],
+			attributes: nil,
+		))
+	}
+
+	@Test
 	func asFunctionParameter_addsEscapingWhenNoAttributesFound() {
 		#expect(TypeDescription.attributed(
 			.closure(
