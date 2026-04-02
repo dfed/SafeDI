@@ -267,6 +267,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	enum CodeGeneration {
 		case dependencyTree
 		case mock(MockContext)
+
+		var isMock: Bool {
+			switch self {
+			case .dependencyTree:
+				false
+			case .mock:
+				true
+			}
+		}
 	}
 
 	/// Context for mock code generation, threaded through the tree.
@@ -417,6 +426,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		):
 			let argumentList = try instantiable.generateArgumentList(
 				unavailableProperties: unavailableProperties,
+				forMockGeneration: codeGeneration.isMock && property.propertyType.isConstant,
 			)
 			let concreteTypeName = instantiable.concreteInstantiable.asSource
 			let instantiationDeclaration: String = switch codeGeneration {
@@ -553,9 +563,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					codeGeneration: codeGeneration,
 					leadingMemberWhitespace: Self.standardIndent,
 				)
+
+				// In mock mode, generate bindings for default-valued init parameters.
+				// Each binding resolves the override closure or falls back to the default expression.
+				// Wrapping in a function scopes the bindings to avoid name collisions between siblings.
+				let defaultArgBindings: [String] = switch codeGeneration {
+				case .dependencyTree:
+					[]
+				case let .mock(context):
+					Self.defaultValueBindings(
+						for: instantiable,
+						path: context.path + [property.label],
+						propertyToParameterLabel: context.propertyToParameterLabel,
+					)
+				}
+
+				let hasGeneratedContent = !generatedProperties.isEmpty || !defaultArgBindings.isEmpty
 				let propertyDeclaration = if erasedToConcreteExistential || (
 					concreteTypeName == property.typeDescription.asSource
-						&& generatedProperties.isEmpty
+						&& !hasGeneratedContent
 						&& !instantiable.declarationType.isExtension
 				) {
 					"let \(property.label)"
@@ -566,12 +592,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// Ideally we would be able to use an anonymous closure rather than a named function here.
 				// Unfortunately, there's a bug in Swift Concurrency that prevents us from doing this: https://github.com/swiftlang/swift/issues/75003
 				let functionName = functionName(toBuild: property)
-				let functionDeclaration = if generatedProperties.isEmpty {
+				let allFunctionBodyLines = defaultArgBindings.map { "\(Self.standardIndent)\($0)" } + generatedProperties
+				let functionDeclaration = if !hasGeneratedContent {
 					""
 				} else {
 					"""
 					func \(functionName)() -> \(concreteTypeName) {
-					\(generatedProperties.joined(separator: "\n"))
+					\(allFunctionBodyLines.joined(separator: "\n"))
 					\(Self.standardIndent)return \(returnLineSansReturn)
 					}
 
@@ -582,7 +609,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else {
 					returnLineSansReturn
 				}
-				let initializer = if generatedProperties.isEmpty {
+				let initializer = if !hasGeneratedContent {
 					returnLineSansReturn
 				} else {
 					"\(functionName)()"
@@ -673,6 +700,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					pathCaseName: "root",
 					isForwarded: false,
 					requiresSendable: false,
+					defaultValueExpression: nil,
 				))
 				uncoveredProperties.append((property: dependency.property, isOnlyIfAvailable: false))
 			case .received, .aliased, .forwarded:
@@ -737,6 +765,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				pathCaseName: "root",
 				isForwarded: false,
 				requiresSendable: false,
+				defaultValueExpression: nil,
 			))
 			uncoveredProperties.append((property: receivedProperty, isOnlyIfAvailable: isOnlyIfAvailable))
 		}
@@ -753,13 +782,39 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				pathCaseName: "",
 				isForwarded: true,
 				requiresSendable: false,
+				defaultValueExpression: nil,
 			)
+		}
+
+		// Collect the root type's own default-valued init parameters.
+		// These are init arguments that have defaults and don't match any dependency.
+		if let rootInitializer = instantiable.initializer {
+			let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
+			for argument in rootInitializer.arguments {
+				guard argument.hasDefaultValue,
+				      !dependencyLabels.contains(argument.innerLabel),
+				      argument.defaultValueExpression != nil
+				else { continue }
+				let argEnumName = Self.sanitizeForIdentifier(argument.typeDescription.asInstantiatedType.asSource)
+				allDeclarations.append(MockDeclaration(
+					enumName: argEnumName,
+					propertyLabel: argument.innerLabel,
+					parameterLabel: argument.innerLabel,
+					sourceType: argument.typeDescription.asSource,
+					isOptionalParameter: true,
+					pathCaseName: "root",
+					isForwarded: false,
+					requiresSendable: false,
+					defaultValueExpression: argument.defaultValueExpression,
+				))
+			}
 		}
 
 		// If no declarations at all, generate simple mock.
 		if allDeclarations.isEmpty, forwardedDeclarations.isEmpty {
 			let argumentList = try instantiable.generateArgumentList(
 				unavailableProperties: unavailableOptionalProperties,
+				forMockGeneration: true,
 			)
 			// Types with user-defined mock methods are skipped in generateMockCode,
 			// so this path only handles types without mock initializers.
@@ -850,6 +905,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Build the return statement.
 		let argumentList = try instantiable.generateArgumentList(
 			unavailableProperties: unavailableOptionalProperties,
+			forMockGeneration: true,
 		)
 		// Types with user-defined mock methods are skipped in generateMockCode,
 		// so this path only handles types without mock initializers.
@@ -878,6 +934,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				lines.append("\(bodyIndent)let \(uncovered.property.label) = \(parameterName)(.root)")
 			}
 		}
+		// Bindings for root's own default-valued init parameters.
+		for declaration in allDeclarations {
+			guard let defaultExpr = declaration.defaultValueExpression,
+			      declaration.pathCaseName == "root"
+			else { continue }
+			let parameterName = propertyToParameterLabel["root/\(declaration.propertyLabel)"] ?? declaration.parameterLabel
+			lines.append("\(bodyIndent)let \(declaration.propertyLabel) = \(parameterName)?(.root) ?? \(defaultExpr)")
+		}
 		lines.append(contentsOf: propertyLines)
 		lines.append("\(bodyIndent)return \(construction)")
 		lines.append("\(indent)}")
@@ -904,6 +968,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let isForwarded: Bool
 		/// Whether this parameter is captured by a @Sendable function and must be @Sendable.
 		var requiresSendable: Bool
+		/// The default value expression for a default-valued init parameter (e.g., `"nil"`, `".init()"`).
+		/// When set, this declaration represents a bubbled-up default-valued parameter, not a tree child.
+		let defaultValueExpression: String?
 	}
 
 	/// Walks the tree and collects all mock declarations for the SafeDIMockPath enum and mock() parameters.
@@ -945,11 +1012,44 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				pathCaseName: pathCaseName,
 				isForwarded: false,
 				requiresSendable: insideSendableScope,
+				defaultValueExpression: nil,
 			))
+
+			// Collect default-valued init parameters from constant children.
+			// These bubble up to the root mock so users can override them.
+			// Instantiator boundaries stop bubbling — those are user-provided closures.
+			let childPath = path + [childProperty.label]
+			if !isInstantiator, let childInstantiable = childScopeData.instantiable {
+				let constructionInitializer: Initializer? = if let mockInit = childInstantiable.mockInitializer,
+				                                               !mockInit.arguments.isEmpty
+				{
+					mockInit
+				} else {
+					childInstantiable.initializer
+				}
+				if let constructionInitializer {
+					let dependencyLabels = Set(childInstantiable.dependencies.map(\.property.label))
+					let childPathCaseName = childPath.joined(separator: "_")
+					for argument in constructionInitializer.arguments where argument.hasDefaultValue {
+						guard !dependencyLabels.contains(argument.innerLabel) else { continue }
+						let argEnumName = Self.sanitizeForIdentifier(argument.typeDescription.asInstantiatedType.asSource)
+						declarations.append(MockDeclaration(
+							enumName: argEnumName,
+							propertyLabel: argument.innerLabel,
+							parameterLabel: argument.innerLabel,
+							sourceType: argument.typeDescription.asSource,
+							isOptionalParameter: true,
+							pathCaseName: childPathCaseName,
+							isForwarded: false,
+							requiresSendable: insideSendableScope,
+							defaultValueExpression: argument.defaultValueExpression,
+						))
+					}
+				}
+			}
 
 			// Recurse into children. If this child is a Sendable instantiator,
 			// everything inside its scope is captured by a @Sendable function.
-			let childPath = path + [childProperty.label]
 			let childInsideSendable = insideSendableScope || childProperty.propertyType.isSendable
 			let childDeclarations = await childGenerator.collectMockDeclarations(
 				path: childPath,
@@ -981,6 +1081,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				pathCaseName: declaration.pathCaseName,
 				isForwarded: declaration.isForwarded,
 				requiresSendable: declaration.requiresSendable,
+				defaultValueExpression: declaration.defaultValueExpression,
 			)
 		}
 	}
@@ -1004,6 +1105,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				pathCaseName: declaration.pathCaseName,
 				isForwarded: declaration.isForwarded,
 				requiresSendable: declaration.requiresSendable,
+				defaultValueExpression: declaration.defaultValueExpression,
 			)
 		}
 	}
@@ -1033,6 +1135,42 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			overrideParameterLabel: overrideLabel,
 			propertyToParameterLabel: parentContext.propertyToParameterLabel,
 		))
+	}
+
+	/// Generates `let` bindings for default-valued init parameters of an instantiable.
+	/// Each binding resolves the mock override closure or falls back to the original default.
+	/// - Parameters:
+	///   - instantiable: The type whose initializer may have default-valued parameters.
+	///   - path: The mock path for this type in the tree (used to compute pathCaseName).
+	///   - propertyToParameterLabel: Disambiguation map from `generateMockRootCode`.
+	/// - Returns: An array of binding lines (e.g., `"let flag = flag?(.child) ?? false"`).
+	private static func defaultValueBindings(
+		for instantiable: Instantiable,
+		path: [String],
+		propertyToParameterLabel: [String: String],
+	) -> [String] {
+		let constructionInitializer: Initializer? = if let mockInit = instantiable.mockInitializer,
+		                                               !mockInit.arguments.isEmpty
+		{
+			mockInit
+		} else {
+			instantiable.initializer
+		}
+		guard let constructionInitializer else { return [] }
+		let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
+		let pathCaseName = path.joined(separator: "_")
+		guard !pathCaseName.isEmpty else { return [] }
+
+		var bindings = [String]()
+		for argument in constructionInitializer.arguments {
+			guard argument.hasDefaultValue,
+			      !dependencyLabels.contains(argument.innerLabel),
+			      let defaultExpr = argument.defaultValueExpression
+			else { continue }
+			let parameterLabel = propertyToParameterLabel["\(pathCaseName)/\(argument.innerLabel)"] ?? argument.innerLabel
+			bindings.append("let \(argument.innerLabel) = \(parameterLabel)?(.\(pathCaseName)) ?? \(defaultExpr)")
+		}
+		return bindings
 	}
 
 	private func wrapInConditionalCompilation(
@@ -1087,12 +1225,29 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 extension Instantiable {
 	fileprivate func generateArgumentList(
 		unavailableProperties: Set<Property>? = nil,
+		forMockGeneration: Bool = false,
 	) throws -> String {
-		try initializer?
-			.createInitializerArgumentList(
-				given: dependencies,
-				unavailableProperties: unavailableProperties,
-			) ?? "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
+		let initializerToUse: Initializer? = if forMockGeneration,
+		                                        let mockInit = mockInitializer,
+		                                        !mockInit.arguments.isEmpty
+		{
+			mockInit
+		} else {
+			initializer
+		}
+		if forMockGeneration {
+			return try initializerToUse?
+				.createMockInitializerArgumentList(
+					given: dependencies,
+					unavailableProperties: unavailableProperties,
+				) ?? "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
+		} else {
+			return try initializerToUse?
+				.createInitializerArgumentList(
+					given: dependencies,
+					unavailableProperties: unavailableProperties,
+				) ?? "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
+		}
 	}
 }
 

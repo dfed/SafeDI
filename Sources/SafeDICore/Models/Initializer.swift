@@ -237,6 +237,33 @@ public struct Initializer: Codable, Hashable, Sendable {
 			.joined(separator: ", ")
 	}
 
+	/// Creates an argument list that includes ALL arguments — both dependency-matching
+	/// and default-valued non-dependency arguments. Used in mock generation where
+	/// default-valued parameters are bubbled up to the root mock method.
+	func createMockInitializerArgumentList(
+		given dependencies: [Dependency],
+		unavailableProperties: Set<Property>? = nil,
+	) throws(GenerationError) -> String {
+		var parts = [String]()
+		for argument in arguments {
+			if let dependency = dependencies.first(where: {
+				$0.property.label == argument.innerLabel
+					&& $0.property.typeDescription.isEqualToFunctionArgument(argument.typeDescription)
+			}) {
+				if let unavailableProperties, unavailableProperties.contains(dependency.property) {
+					parts.append("\(argument.label): nil")
+				} else {
+					parts.append("\(argument.label): \(argument.innerLabel)")
+				}
+			} else if argument.hasDefaultValue {
+				parts.append("\(argument.label): \(argument.innerLabel)")
+			} else {
+				throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
+			}
+		}
+		return parts.joined(separator: ", ")
+	}
+
 	// MARK: - GenerationError
 
 	public enum GenerationError: Error, Equatable {
