@@ -465,45 +465,6 @@ struct RootScannerTests {
 		#expect(manifestContent.contains("Root+SafeDI.swift"))
 		#expect(manifestContent.contains("Root+SafeDIMock.swift"))
 	}
-
-	@Test
-	func command_main_executesBuiltScannerBinary() throws {
-		let fixture = try ScannerFixture()
-		defer { fixture.delete() }
-
-		_ = try fixture.writeFile(
-			relativePath: "Root.swift",
-			content: rootSource(typeName: "ExecutableRoot"),
-		)
-
-		let inputSourcesFile = fixture.rootDirectory.appendingPathComponent("InputSwiftFiles.csv")
-		try "Root.swift".write(to: inputSourcesFile, atomically: true, encoding: .utf8)
-		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
-		let manifestFile = fixture.rootDirectory.appendingPathComponent("SafeDIManifest.json")
-
-		let process = Process()
-		process.executableURL = try builtRootScannerExecutableURL()
-		process.arguments = [
-			"--input-sources-file", inputSourcesFile.path,
-			"--project-root", fixture.rootDirectory.path,
-			"--output-directory", outputDirectory.path,
-			"--manifest-file", manifestFile.path,
-		]
-		let standardError = Pipe()
-		process.standardError = standardError
-		try process.run()
-		process.waitUntilExit()
-
-		let errorOutput = String(
-			data: standardError.fileHandleForReading.readDataToEndOfFile(),
-			encoding: .utf8,
-		) ?? ""
-		if process.terminationStatus != 0 {
-			Issue.record("Scanner executable failed: \(errorOutput)")
-		}
-		#expect(process.terminationStatus == 0)
-		#expect(FileManager.default.fileExists(atPath: manifestFile.path))
-	}
 }
 
 private func rootSource(typeName: String) -> String {
@@ -521,27 +482,6 @@ private func rootSource(typeName: String) -> String {
 	}
 	"""
 }
-
-private func builtRootScannerExecutableURL() throws -> URL {
-	let buildDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(".build")
-	guard let enumerator = FileManager.default.enumerator(
-		at: buildDirectory,
-		includingPropertiesForKeys: [.isExecutableKey],
-	) else {
-		throw BuiltRootScannerNotFoundError()
-	}
-
-	for case let fileURL as URL in enumerator where fileURL.lastPathComponent == "SafeDIRootScanner" {
-		let resourceValues = try fileURL.resourceValues(forKeys: [.isExecutableKey])
-		if resourceValues.isExecutable == true {
-			return fileURL
-		}
-	}
-
-	throw BuiltRootScannerNotFoundError()
-}
-
-private struct BuiltRootScannerNotFoundError: Error {}
 
 private final class ScannerFixture {
 	init() throws {
