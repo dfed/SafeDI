@@ -78,6 +78,21 @@ public actor DependencyTreeGenerator {
 	public func generateMockCode(
 		mockConditionalCompilation: String?,
 	) async throws -> [GeneratedRoot] {
+		// Build a map of erased wrapper types → concrete fulfilling types.
+		// This lets mocks construct types like AnyUserService(DefaultUserService())
+		// even when the erased type isn't directly @Instantiable.
+		var erasedToConcreteTypeMap = [TypeDescription: TypeDescription]()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
+			for dependency in instantiable.dependencies {
+				if case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential) = dependency.source,
+				   erasedToConcreteExistential,
+				   let concreteType = fulfillingTypeDescription?.asInstantiatedType
+				{
+					erasedToConcreteTypeMap[dependency.property.typeDescription] = concreteType
+				}
+			}
+		}
+
 		// Create mock-root ScopeGenerators for all types, with received dependencies
 		// treated as instantiated so the mock can construct the full subtree.
 		var seen = Set<TypeDescription>()
@@ -92,7 +107,10 @@ public actor DependencyTreeGenerator {
 				      seen.insert(instantiable.concreteInstantiable).inserted
 				else { continue }
 
-				let mockRoot = createMockRootScopeGenerator(for: instantiable)
+				let mockRoot = createMockRootScopeGenerator(
+					for: instantiable,
+					erasedToConcreteTypeMap: erasedToConcreteTypeMap,
+				)
 				taskGroup.addTask {
 					let code = try await mockRoot.generateCode(
 						codeGeneration: .mock(ScopeGenerator.MockContext(
@@ -286,15 +304,16 @@ public actor DependencyTreeGenerator {
 
 	/// Creates a mock-root ScopeGenerator for an Instantiable, treating received dependencies
 	/// as if they were instantiated so the mock can construct the full dependency subtree.
-	/// Types not in `knownInstantiableTypes` are skipped — they become required mock parameters instead.
 	private func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
+		erasedToConcreteTypeMap: [TypeDescription: TypeDescription] = [:],
 		visited: Set<TypeDescription> = [],
 	) -> ScopeGenerator {
 		let children = createMockChildScopeGenerators(
 			for: instantiable,
 			visited: visited,
 			constructedTypes: [],
+			erasedToConcreteTypeMap: erasedToConcreteTypeMap,
 		)
 
 		// In mock trees, onlyIfAvailable dependencies are not marked unavailable.
@@ -317,6 +336,7 @@ public actor DependencyTreeGenerator {
 		for instantiable: Instantiable,
 		visited: Set<TypeDescription>,
 		constructedTypes: Set<TypeDescription>,
+		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
 	) -> [ScopeGenerator] {
 		var visited = visited
 		visited.insert(instantiable.concreteInstantiable)
@@ -343,7 +363,7 @@ public actor DependencyTreeGenerator {
 
 		var children = [ScopeGenerator]()
 		for dependency in instantiable.dependencies {
-			let erasedToConcreteExistential: Bool
+			var erasedToConcreteExistential: Bool
 			switch dependency.source {
 			case let .instantiated(_, erased):
 				erasedToConcreteExistential = erased
@@ -368,7 +388,15 @@ public actor DependencyTreeGenerator {
 			}
 
 			// For instantiated and unfulfilled received dependencies, recursively build the subtree.
-			let depType = dependency.property.typeDescription.asInstantiatedType
+			// If the type isn't directly in the map, check if it's a concrete existential
+			// wrapper whose underlying concrete type IS in the map.
+			var depType = dependency.property.typeDescription.asInstantiatedType
+			if typeDescriptionToFulfillingInstantiableMap[depType] == nil,
+			   let concreteType = erasedToConcreteTypeMap[dependency.property.typeDescription]
+			{
+				depType = concreteType
+				erasedToConcreteExistential = true
+			}
 			guard !visited.contains(depType),
 			      let depInstantiable = typeDescriptionToFulfillingInstantiableMap[depType]
 			else { continue }
@@ -377,6 +405,7 @@ public actor DependencyTreeGenerator {
 				for: depInstantiable,
 				visited: visited,
 				constructedTypes: localConstructedTypes,
+				erasedToConcreteTypeMap: erasedToConcreteTypeMap,
 			)
 			// In mock trees, onlyIfAvailable dependencies are NOT marked unavailable.
 			// They bubble up through receivedProperties to the mock root, which
