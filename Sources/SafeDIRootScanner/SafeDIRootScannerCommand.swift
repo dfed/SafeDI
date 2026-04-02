@@ -23,17 +23,13 @@ import Foundation
 
 @main
 struct SafeDIRootScannerCommand: ParsableCommand {
-	@Option(help: "A path to a CSV file containing paths of Swift files to scan.")
-	var inputSourcesFile: String
+	@Option(help: "A path to a CSV file containing paths of Swift files to scan.") var inputSourcesFile: String
 
-	@Option(help: "The root directory of the project, used to compute relative paths.")
-	var projectRoot: String
+	@Option(help: "The root directory of the project, used to compute relative paths.") var projectRoot: String
 
-	@Option(help: "The directory where generated output files will be written.")
-	var outputDirectory: String
+	@Option(help: "The directory where generated output files will be written.") var outputDirectory: String
 
-	@Option(help: "The path where the manifest JSON file will be written.")
-	var manifestFile: String
+	@Option(help: "The path where the manifest JSON file will be written.") var manifestFile: String
 
 	func run() throws {
 		let scanner = RootScanner()
