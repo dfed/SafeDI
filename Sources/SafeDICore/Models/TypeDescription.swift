@@ -265,6 +265,24 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// Strips the `@escaping` attribute, if present. Returns `self` unchanged for non-attributed types.
+	/// Used when a type will appear in a position where `@escaping` is invalid (e.g., closure return types).
+	public var strippingEscaping: TypeDescription {
+		switch self {
+		case let .attributed(type, specifiers, attributes):
+			let filtered = attributes?.filter { $0 != "escaping" }
+			if let filtered, !filtered.isEmpty {
+				return .attributed(type, specifiers: specifiers, attributes: filtered)
+			} else if let specifiers, !specifiers.isEmpty {
+				return .attributed(type, specifiers: specifiers, attributes: nil)
+			} else {
+				return type
+			}
+		default:
+			return self
+		}
+	}
+
 	public var isOptional: Bool {
 		switch self {
 		case .any,

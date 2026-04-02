@@ -795,12 +795,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				      !dependencyLabels.contains(argument.innerLabel),
 				      argument.defaultValueExpression != nil
 				else { continue }
-				let argEnumName = Self.sanitizeForIdentifier(argument.typeDescription.asInstantiatedType.asSource)
+				let strippedType = argument.typeDescription.strippingEscaping
+				let argEnumName = Self.sanitizeForIdentifier(strippedType.asInstantiatedType.asSource)
 				allDeclarations.append(MockDeclaration(
 					enumName: argEnumName,
 					propertyLabel: argument.innerLabel,
 					parameterLabel: argument.innerLabel,
-					sourceType: argument.typeDescription.asSource,
+					sourceType: strippedType.asSource,
 					isOptionalParameter: true,
 					pathCaseName: "root",
 					isForwarded: false,
@@ -1032,12 +1033,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let childPathCaseName = childPath.joined(separator: "_")
 					for argument in constructionInitializer.arguments where argument.hasDefaultValue {
 						guard !dependencyLabels.contains(argument.innerLabel) else { continue }
-						let argEnumName = Self.sanitizeForIdentifier(argument.typeDescription.asInstantiatedType.asSource)
+						let strippedType = argument.typeDescription.strippingEscaping
+						let argEnumName = Self.sanitizeForIdentifier(strippedType.asInstantiatedType.asSource)
 						declarations.append(MockDeclaration(
 							enumName: argEnumName,
 							propertyLabel: argument.innerLabel,
 							parameterLabel: argument.innerLabel,
-							sourceType: argument.typeDescription.asSource,
+							sourceType: strippedType.asSource,
 							isOptionalParameter: true,
 							pathCaseName: childPathCaseName,
 							isForwarded: false,
