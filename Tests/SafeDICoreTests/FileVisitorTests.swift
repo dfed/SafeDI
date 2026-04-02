@@ -50,12 +50,12 @@ struct FileVisitorTests {
 						.init(
 							innerLabel: "user",
 							typeDescription: .simple(name: "User"),
-							hasDefaultValue: false,
+							defaultValueExpression: nil,
 						),
 						.init(
 							innerLabel: "networkService",
 							typeDescription: .simple(name: "NetworkService"),
-							hasDefaultValue: false,
+							defaultValueExpression: nil,
 						),
 					],
 				),
@@ -110,12 +110,12 @@ struct FileVisitorTests {
 						.init(
 							innerLabel: "user",
 							typeDescription: .simple(name: "User"),
-							hasDefaultValue: false,
+							defaultValueExpression: nil,
 						),
 						.init(
 							innerLabel: "networkService",
 							typeDescription: .simple(name: "NetworkService"),
-							hasDefaultValue: false,
+							defaultValueExpression: nil,
 						),
 					],
 				),

@@ -78,7 +78,7 @@ struct InitializerTests {
 				.init(
 					innerLabel: "variant",
 					typeDescription: .simple(name: "Variant"),
-					hasDefaultValue: false,
+					defaultValueExpression: nil,
 				),
 			],
 		)
@@ -106,7 +106,7 @@ struct InitializerTests {
 				.init(
 					innerLabel: "variant",
 					typeDescription: .simple(name: "Variant"),
-					hasDefaultValue: false,
+					defaultValueExpression: nil,
 				),
 			],
 		)
@@ -133,7 +133,7 @@ struct InitializerTests {
 				.init(
 					innerLabel: "variant",
 					typeDescription: .simple(name: "Variant"),
-					hasDefaultValue: false,
+					defaultValueExpression: nil,
 				),
 			],
 		)
@@ -169,7 +169,7 @@ struct InitializerTests {
 				.init(
 					innerLabel: "someVariant",
 					typeDescription: .simple(name: "Variant"),
-					hasDefaultValue: false,
+					defaultValueExpression: nil,
 				),
 			],
 		)
@@ -196,7 +196,7 @@ struct InitializerTests {
 				.init(
 					innerLabel: "variant",
 					typeDescription: .simple(name: "NotThatVariant"),
-					hasDefaultValue: false,
+					defaultValueExpression: nil,
 				),
 			],
 		)

@@ -262,8 +262,13 @@ public struct Initializer: Codable, Hashable, Sendable {
 		public let innerLabel: String
 		/// The type to which the property conforms.
 		public let typeDescription: TypeDescription
+		/// The source text of the default value expression, if one exists (e.g., `"nil"`, `".init()"`).
+		public let defaultValueExpression: String?
 		/// Whether the argument has a default value.
-		public let hasDefaultValue: Bool
+		public var hasDefaultValue: Bool {
+			defaultValueExpression != nil
+		}
+
 		/// The label by which this argument is referenced at the call site.
 		public var label: String {
 			outerLabel ?? innerLabel
@@ -285,14 +290,14 @@ public struct Initializer: Codable, Hashable, Sendable {
 				innerLabel = node.firstName.text
 			}
 			typeDescription = node.type.typeDescription
-			hasDefaultValue = node.defaultValue != nil
+			defaultValueExpression = node.defaultValue?.value.trimmedDescription
 		}
 
-		init(outerLabel: String? = nil, innerLabel: String, typeDescription: TypeDescription, hasDefaultValue: Bool) {
+		init(outerLabel: String? = nil, innerLabel: String, typeDescription: TypeDescription, defaultValueExpression: String? = nil) {
 			self.outerLabel = outerLabel
 			self.innerLabel = innerLabel
 			self.typeDescription = typeDescription
-			self.hasDefaultValue = hasDefaultValue
+			self.defaultValueExpression = defaultValueExpression
 		}
 
 		public func withUpdatedTypeDescription(_ typeDescription: TypeDescription) -> Self {
@@ -300,7 +305,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 				outerLabel: outerLabel,
 				innerLabel: innerLabel,
 				typeDescription: typeDescription,
-				hasDefaultValue: hasDefaultValue,
+				defaultValueExpression: defaultValueExpression,
 			)
 		}
 
