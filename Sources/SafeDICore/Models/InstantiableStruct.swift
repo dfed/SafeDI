@@ -52,7 +52,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// Whether the instantiable type is a root of a dependency graph.
 	public let isRoot: Bool
 	/// A memberwise initializer for the concrete instantiable type.
-	/// If `nil`, the Instanitable type is incorrectly configured.
+	/// If `nil`, the Instantiable type is incorrectly configured.
 	public let initializer: Initializer?
 	/// The ordered dependencies of this Instantiable.
 	public let dependencies: [Dependency]
