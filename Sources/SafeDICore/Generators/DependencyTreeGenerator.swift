@@ -337,6 +337,13 @@ public actor DependencyTreeGenerator {
 		var queue = Array(allReceived)
 
 		while let property = queue.popLast() {
+			// Don't walk into scopes for onlyIfAvailable dependencies.
+			// They become optional mock parameters with no default construction,
+			// so their transitive dependencies don't need promoting.
+			guard !property.typeDescription.isOptional
+				|| !allOnlyIfAvailable.contains(property.asUnwrappedProperty)
+			else { continue }
+
 			var dependencyType = property.typeDescription.asInstantiatedType
 			if typeDescriptionToScopeMap[dependencyType] == nil,
 			   let concreteType = erasedToConcreteTypeMap[property.typeDescription]
