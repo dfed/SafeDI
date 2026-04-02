@@ -624,14 +624,45 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Received dependencies whose type is @Instantiable are in the tree.
 		var allDeclarations = await collectMockDeclarations(path: [])
 
-		// Find received dependencies not covered by the tree.
-		// These are types not constructible (@Instantiable) in this module — they become
-		// mock parameters so the user can provide them.
+		// Find dependencies not covered by the tree. This includes:
+		// - @Instantiated dependencies whose type is not in the scope map (e.g., defined
+		//   in another module not visible to this module's mock generator)
+		// - Received dependencies (including transitive) whose type is not constructible
+		// These become mock parameters so the user can provide them.
 		let coveredPropertyLabels = Set(allDeclarations.map(\.propertyLabel))
 		var uncoveredProperties = [(property: Property, isOnlyIfAvailable: Bool)]()
 
+		// Check this type's own dependencies for uncovered @Instantiated dependencies.
+		// This handles types that are @Instantiable in another module but not visible here.
+		for dependency in instantiable.dependencies {
+			guard !coveredPropertyLabels.contains(dependency.property.label) else { continue }
+			switch dependency.source {
+			case .instantiated:
+				let dependencyType = dependency.property.typeDescription.asInstantiatedType
+				let enumName = Self.sanitizeForIdentifier(dependencyType.asSource)
+				let sourceType = dependency.property.propertyType.isConstant
+					? dependencyType.asSource
+					: dependency.property.typeDescription.asSource
+				allDeclarations.append(MockDeclaration(
+					enumName: enumName,
+					propertyLabel: dependency.property.label,
+					parameterLabel: dependency.property.label,
+					sourceType: sourceType,
+					hasKnownMock: false,
+					pathCaseName: "root",
+					isForwarded: false,
+					requiresSendable: false,
+				))
+				uncoveredProperties.append((property: dependency.property, isOnlyIfAvailable: false))
+			case .received, .aliased, .forwarded:
+				break
+			}
+		}
+
+		// Check transitive received dependencies not satisfied by the tree.
 		// Skip forwarded properties — they're bare mock parameters, not promoted children.
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
+		let updatedCoveredLabels = Set(allDeclarations.map(\.propertyLabel))
 		// When both `user: User` (required) and `user: User?` (onlyIfAvailable) are received,
 		// only the non-optional version should produce a parameter and binding.
 		// The optional path uses the same value (Swift auto-wraps to Optional).
@@ -641,7 +672,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.map(\.label),
 		)
 		for receivedProperty in receivedProperties.sorted() {
-			guard !coveredPropertyLabels.contains(receivedProperty.label),
+			guard !updatedCoveredLabels.contains(receivedProperty.label),
 			      !forwardedPropertySet.contains(receivedProperty)
 			else { continue }
 
