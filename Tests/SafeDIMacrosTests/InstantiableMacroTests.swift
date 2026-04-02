@@ -4387,12 +4387,177 @@ import Testing
 
 		// MARK: Mock Method Validation Tests
 
-		// Note: Mock method parameter validation (missing dependency arguments, extra default
-		// parameters) requires dependency decorators (@Instantiated, @Received) to be visible
-		// to the @Instantiable visitor. In macro expansion tests, member macros are expanded
-		// before the attached macro runs, stripping the decorators. These validations are
-		// tested end-to-end in SafeDIToolMockGenerationTests instead.
-		// The mockMethodNotPublic test works because it doesn't require dependency detection.
+		@Test
+		func mockMethodMissingDependencyProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Received let dep: Dep
+
+				    public static func mock() -> MyService {
+				        MyService(dep: Dep())
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    let dep: Dep
+
+				    public static func mock() -> MyService {
+				        MyService(dep: Dep())
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						line: 8,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add mock() arguments for dep: Dep"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add mock() arguments for dep: Dep",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Received let dep: Dep
+
+				    public static func mock(dep: Dep) -> MyService {
+				        MyService(dep: Dep())
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func mockMethodMissingMultipleDependenciesProducesDiagnosticWithFixIt() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(depA: DepA, depB: DepB) {
+				        self.depA = depA
+				        self.depB = depB
+				    }
+				    @Received let depA: DepA
+				    @Instantiated let depB: DepB
+
+				    public static func mock() -> MyService {
+				        MyService(depA: DepA(), depB: DepB())
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(depA: DepA, depB: DepB) {
+				        self.depA = depA
+				        self.depB = depB
+				    }
+				    let depA: DepA
+				    let depB: DepB
+
+				    public static func mock() -> MyService {
+				        MyService(depA: DepA(), depB: DepB())
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						line: 10,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add mock() arguments for depA: DepA, depB: DepB"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add mock() arguments for depA: DepA, depB: DepB",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(depA: DepA, depB: DepB) {
+				        self.depA = depA
+				        self.depB = depB
+				    }
+				    @Received let depA: DepA
+				    @Instantiated let depB: DepB
+
+				    public static func mock(
+				depA: DepA, depB: DepB
+				) -> MyService {
+				        MyService(depA: DepA(), depB: DepB())
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func mockMethodWithPartialDepsProducesFixItPreservingExistingParams() {
+			// mock() already has depA but is missing depB.
+			// Fix-it should reorder: depA first, then add depB, preserving existing extra default params.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(depA: DepA, depB: DepB) {
+				        self.depA = depA
+				        self.depB = depB
+				    }
+				    @Received let depA: DepA
+				    @Instantiated let depB: DepB
+
+				    public static func mock(depA: DepA, extra: Bool = false) -> MyService {
+				        MyService(depA: depA, depB: DepB())
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(depA: DepA, depB: DepB) {
+				        self.depA = depA
+				        self.depB = depB
+				    }
+				    let depA: DepA
+				    let depB: DepB
+
+				    public static func mock(depA: DepA, extra: Bool = false) -> MyService {
+				        MyService(depA: depA, depB: DepB())
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						line: 10,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add mock() arguments for depB: DepB"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
 
 		@Test
 		func mockMethodNotPublicProducesDiagnostic() {
