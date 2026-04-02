@@ -61,6 +61,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				propertyToGenerate.receivedProperties
 					// Minus the properties we declare.
 					.subtracting(propertiesToDeclare)
+					// Minus optional properties whose unwrapped form we declare.
+					// This handles the case where a non-optional version is promoted
+					// to satisfy both required and onlyIfAvailable receivers.
+					.filter { property in
+						!property.typeDescription.isOptional
+							|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
+					}
 					// Minus the properties we forward.
 					.subtracting(scopeData.forwardedProperties)
 			},

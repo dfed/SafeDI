@@ -2529,16 +2529,15 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    public enum SafeDIMockPath {
-		        public enum A_A { case root }
+		        public enum A { case root }
 		        public enum B { case root }
 		    }
 
 		    public static func mock(
-		        a_A_A: ((SafeDIMockPath.A_A) -> A)? = nil,
+		        a: ((SafeDIMockPath.A) -> A)? = nil,
 		        b: ((SafeDIMockPath.B) -> B)? = nil
 		    ) -> Root {
-		        let a = a_A_A?(.root) ?? A()
-		        let a: A? = a_A_A?(.root) ?? A()
+		        let a = a?(.root) ?? A()
 		        let b = b?(.root) ?? B(a: a)
 		        return Root(a: a, b: b)
 		    }
