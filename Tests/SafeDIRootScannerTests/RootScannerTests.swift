@@ -373,7 +373,7 @@ struct RootScannerTests {
 	}
 
 	@Test
-	func command_run_writesManifest_andArgumentsValidateErrors() throws {
+	func command_run_writesManifest() throws {
 		let fixture = try ScannerFixture()
 		defer { fixture.delete() }
 
@@ -387,41 +387,16 @@ struct RootScannerTests {
 		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
 		let manifestFile = fixture.rootDirectory.appendingPathComponent("SafeDIManifest.json")
 
-		try SafeDIRootScannerCommand.run(arguments: [
-			"--input-sources-file", inputSourcesFile.path,
-			"--project-root", fixture.rootDirectory.path,
-			"--output-directory", outputDirectory.path,
-			"--manifest-file", manifestFile.path,
-		])
+		var command = SafeDIRootScannerCommand()
+		command.inputSourcesFile = inputSourcesFile.path
+		command.projectRoot = fixture.rootDirectory.path
+		command.outputDirectory = outputDirectory.path
+		command.manifestFile = manifestFile.path
+		try command.run()
 
 		#expect(try String(contentsOf: manifestFile, encoding: .utf8) == """
 		{"dependencyTreeGeneration":[{"inputFilePath":"Root.swift","outputFilePath":"\(outputDirectory.appendingPathComponent("Root+SafeDI.swift").path.replacingOccurrences(of: "/", with: #"\/"#))"}]}
 		""")
-
-		let parsedArguments = try Arguments(arguments: [
-			"--input-sources-file", inputSourcesFile.path,
-			"--project-root", fixture.rootDirectory.path,
-			"--output-directory", outputDirectory.path,
-			"--manifest-file", manifestFile.path,
-		])
-		#expect(parsedArguments.inputSourcesFile == inputSourcesFile)
-		#expect(parsedArguments.projectRoot.standardizedFileURL == fixture.rootDirectory.standardizedFileURL)
-		#expect(parsedArguments.outputDirectory == outputDirectory)
-		#expect(parsedArguments.manifestFile == manifestFile)
-
-		#expect(throws: Arguments.ParseError.unexpectedArgument("Root.swift"), performing: {
-			try Arguments(arguments: ["Root.swift"])
-		})
-		#expect(throws: Arguments.ParseError.missingValue(flag: "--project-root"), performing: {
-			try Arguments(arguments: ["--project-root"])
-		})
-		#expect(throws: Arguments.ParseError.missingRequiredFlags([
-			"--manifest-file",
-			"--output-directory",
-			"--project-root",
-		]), performing: {
-			try Arguments(arguments: ["--input-sources-file", inputSourcesFile.path])
-		})
 	}
 
 	@Test

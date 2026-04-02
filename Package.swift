@@ -132,7 +132,9 @@ let package = Package(
 		// that need to invoke root scanning as a separate process.
 		.executableTarget(
 			name: "SafeDIRootScanner",
-			dependencies: [],
+			dependencies: [
+				.product(name: "ArgumentParser", package: "swift-argument-parser"),
+			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
 			],
@@ -140,6 +142,7 @@ let package = Package(
 		.testTarget(
 			name: "SafeDIRootScannerTests",
 			dependencies: [
+				.product(name: "ArgumentParser", package: "swift-argument-parser"),
 				"SafeDICore",
 				"SafeDIRootScanner",
 			],
