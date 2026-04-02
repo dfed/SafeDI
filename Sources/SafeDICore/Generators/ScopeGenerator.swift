@@ -648,6 +648,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				hasKnownMock: isOnlyIfAvailable,
 				pathCaseName: "root",
 				isForwarded: false,
+				requiresSendable: false,
 			))
 			uncoveredReceivedProperties.append((property: receivedProperty, isOnlyIfAvailable: isOnlyIfAvailable))
 		}
@@ -662,6 +663,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				hasKnownMock: false,
 				pathCaseName: "",
 				isForwarded: true,
+				requiresSendable: false,
 			)
 		}
 
@@ -724,10 +726,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		for (enumName, declarations) in enumNameToDeclarations.sorted(by: { $0.key < $1.key }) {
 			let firstDeclaration = declarations[0]
+			let sendablePrefix = declarations.contains(where: \.requiresSendable) ? "@Sendable " : ""
 			if firstDeclaration.hasKnownMock {
-				parameters.append("\(indent)\(indent)\(firstDeclaration.parameterLabel): ((SafeDIMockPath.\(enumName)) -> \(firstDeclaration.sourceType))? = nil")
+				parameters.append("\(indent)\(indent)\(firstDeclaration.parameterLabel): (\(sendablePrefix)(SafeDIMockPath.\(enumName)) -> \(firstDeclaration.sourceType))? = nil")
 			} else {
-				parameters.append("\(indent)\(indent)\(firstDeclaration.parameterLabel): @escaping (SafeDIMockPath.\(enumName)) -> \(firstDeclaration.sourceType)")
+				parameters.append("\(indent)\(indent)\(firstDeclaration.parameterLabel): \(sendablePrefix)@escaping (SafeDIMockPath.\(enumName)) -> \(firstDeclaration.sourceType)")
 			}
 		}
 		let parametersString = parameters.joined(separator: ",\n")
@@ -800,11 +803,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let hasKnownMock: Bool
 		let pathCaseName: String
 		let isForwarded: Bool
+		/// Whether this parameter is captured by a @Sendable function and must be @Sendable.
+		var requiresSendable: Bool
 	}
 
 	/// Walks the tree and collects all mock declarations for the SafeDIMockPath enum and mock() parameters.
 	private func collectMockDeclarations(
 		path: [String],
+		insideSendableScope: Bool = false,
 	) async -> [MockDeclaration] {
 		var declarations = [MockDeclaration]()
 
@@ -840,11 +846,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				hasKnownMock: childScopeData.instantiable != nil,
 				pathCaseName: pathCaseName,
 				isForwarded: false,
+				requiresSendable: insideSendableScope,
 			))
 
-			// Recurse into children.
+			// Recurse into children. If this child is a Sendable instantiator,
+			// everything inside its scope is captured by a @Sendable function.
 			let childPath = path + [childProperty.label]
-			let childDeclarations = await childGenerator.collectMockDeclarations(path: childPath)
+			let childInsideSendable = insideSendableScope || childProperty.propertyType.isSendable
+			let childDeclarations = await childGenerator.collectMockDeclarations(
+				path: childPath,
+				insideSendableScope: childInsideSendable,
+			)
 			declarations.append(contentsOf: childDeclarations)
 		}
 
@@ -870,6 +882,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				hasKnownMock: declaration.hasKnownMock,
 				pathCaseName: declaration.pathCaseName,
 				isForwarded: declaration.isForwarded,
+				requiresSendable: declaration.requiresSendable,
 			)
 		}
 	}
@@ -892,6 +905,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				hasKnownMock: declaration.hasKnownMock,
 				pathCaseName: declaration.pathCaseName,
 				isForwarded: declaration.isForwarded,
+				requiresSendable: declaration.requiresSendable,
 			)
 		}
 	}
