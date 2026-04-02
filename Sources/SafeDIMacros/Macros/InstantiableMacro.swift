@@ -400,6 +400,103 @@ public struct InstantiableMacro: MemberMacro {
 				}
 				return []
 			}
+			// Validate mock() method if one exists: must be public and have parameters for all dependencies.
+			if let mockInitializer = visitor.mockInitializer,
+			   let mockSyntax = visitor.mockFunctionSyntax
+			{
+				if !mockInitializer.isPublicOrOpen {
+					var fixedMockSyntax = mockSyntax
+					fixedMockSyntax.modifiers.insert(
+						DeclModifierSyntax(
+							leadingTrivia: mockSyntax.modifiers.first?.leadingTrivia ?? mockSyntax.funcKeyword.leadingTrivia,
+							name: .keyword(.public),
+							trailingTrivia: .space,
+						),
+						at: fixedMockSyntax.modifiers.startIndex,
+					)
+					if let firstModifier = mockSyntax.modifiers.first {
+						fixedMockSyntax.modifiers[fixedMockSyntax.modifiers.startIndex].leadingTrivia = firstModifier.leadingTrivia
+					} else {
+						fixedMockSyntax.funcKeyword.leadingTrivia = []
+					}
+					context.diagnose(Diagnostic(
+						node: Syntax(mockSyntax),
+						error: FixableInstantiableError.mockMethodNotPublic,
+						changes: [
+							.replace(
+								oldNode: Syntax(mockSyntax),
+								newNode: Syntax(fixedMockSyntax),
+							),
+						],
+					))
+				}
+				if !visitor.dependencies.isEmpty {
+					do {
+						try mockInitializer.validate(fulfilling: visitor.dependencies)
+					} catch {
+						if let fixableError = error.asFixableError {
+							switch fixableError.asErrorToFix {
+							case let .missingArguments(missingArguments):
+								var fixedSyntax = mockSyntax
+								let properties = visitor.dependencies.map(\.property)
+								let existingArgumentCount = mockSyntax.signature.parameterClause.parameters.count
+								var existingParameters = fixedSyntax.signature.parameterClause.parameters.reduce(into: [Property: FunctionParameterSyntax]()) { partialResult, next in
+									partialResult[Initializer.Argument(next).asProperty] = next
+								}
+								fixedSyntax.signature.parameterClause.parameters = []
+								for property in properties {
+									if let existingParameter = existingParameters.removeValue(forKey: property) {
+										fixedSyntax.signature.parameterClause.parameters.append(existingParameter)
+									} else {
+										fixedSyntax.signature.parameterClause.parameters.append(property.asFunctionParamterSyntax)
+									}
+								}
+								// Append remaining non-dependency parameters (e.g., extra parameters with defaults).
+								for (_, parameter) in existingParameters {
+									fixedSyntax.signature.parameterClause.parameters.append(parameter)
+								}
+								// Fix up trailing commas.
+								for index in fixedSyntax.signature.parameterClause.parameters.indices {
+									if index == fixedSyntax.signature.parameterClause.parameters.index(before: fixedSyntax.signature.parameterClause.parameters.endIndex) {
+										fixedSyntax.signature.parameterClause.parameters[index].trailingComma = nil
+									} else {
+										fixedSyntax.signature.parameterClause.parameters[index].trailingComma = fixedSyntax.signature.parameterClause.parameters[index].trailingComma ?? .commaToken(trailingTrivia: .space)
+									}
+								}
+								// Fix up trivia for multi-parameter layout.
+								if fixedSyntax.signature.parameterClause.parameters.count > 1 {
+									for index in fixedSyntax.signature.parameterClause.parameters.indices {
+										if index == fixedSyntax.signature.parameterClause.parameters.startIndex {
+											fixedSyntax.signature.parameterClause.parameters[index].leadingTrivia = existingArgumentCount > 1
+												? mockSyntax.signature.parameterClause.parameters.first?.leadingTrivia ?? .newline
+												: .newline
+										}
+										if index == fixedSyntax.signature.parameterClause.parameters.index(before: fixedSyntax.signature.parameterClause.parameters.endIndex) {
+											fixedSyntax.signature.parameterClause.parameters[index].trailingTrivia = existingArgumentCount > 1
+												? mockSyntax.signature.parameterClause.parameters.last?.trailingTrivia ?? .newline
+												: .newline
+										}
+									}
+								}
+								context.diagnose(Diagnostic(
+									node: Syntax(mockSyntax),
+									error: FixableInstantiableError.mockMethodMissingArguments(missingArguments),
+									changes: [
+										.replace(
+											oldNode: Syntax(mockSyntax),
+											newNode: Syntax(fixedSyntax),
+										),
+									],
+								))
+							case .inaccessibleInitializer:
+								// Handled by the isPublicOrOpen check above.
+								break
+							}
+						}
+					}
+				}
+			}
+
 			return generateForwardedProperties(from: forwardedProperties)
 
 		} else if let extensionDeclaration = ExtensionDeclSyntax(declaration) {

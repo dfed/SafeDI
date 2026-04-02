@@ -4384,5 +4384,50 @@ import Testing
 				macros: instantiableTestMacros,
 			)
 		}
+
+		// MARK: Mock Method Validation Tests
+
+		// Note: Mock method parameter validation (missing dependency arguments, extra default
+		// parameters) requires dependency decorators (@Instantiated, @Received) to be visible
+		// to the @Instantiable visitor. In macro expansion tests, member macros are expanded
+		// before the attached macro runs, stripping the decorators. These validations are
+		// tested end-to-end in SafeDIToolMockGenerationTests instead.
+		// The mockMethodNotPublic test works because it doesn't require dependency detection.
+
+		@Test
+		func mockMethodNotPublicProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method must be `public` or `open`.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier to mock() method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
 	}
 #endif

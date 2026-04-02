@@ -155,6 +155,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		   node.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) || $0.name.tokenKind == .keyword(.class) })
 		{
 			mockInitializer = Initializer(node)
+			mockFunctionSyntax = node
 		}
 
 		guard declarationType.isExtension else {
@@ -300,6 +301,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var additionalInstantiables: [TypeDescription]?
 	public private(set) var mockAttributes = ""
 	public private(set) var mockInitializer: Initializer?
+	public private(set) var mockFunctionSyntax: FunctionDeclSyntax?
 	public private(set) var diagnostics = [Diagnostic]()
 	public private(set) var uninitializedNonOptionalPropertyNames = [String]()
 
@@ -361,7 +363,26 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				[]
 			}
 		case .extensionDecl:
-			extensionInstantiables
+			// mockInitializer may be set after extensionInstantiables are built
+			// (visit order depends on source order). Patch it in here.
+			extensionInstantiables.map { instantiable in
+				if instantiable.mockInitializer == nil, let mockInitializer {
+					Instantiable(
+						instantiableType: instantiable.concreteInstantiable,
+						isRoot: instantiable.isRoot,
+						initializer: instantiable.initializer,
+						additionalInstantiables: instantiable.instantiableTypes.count > 1
+							? Array(instantiable.instantiableTypes.dropFirst())
+							: nil,
+						dependencies: instantiable.dependencies,
+						declarationType: instantiable.declarationType,
+						mockAttributes: instantiable.mockAttributes,
+						mockInitializer: mockInitializer,
+					)
+				} else {
+					instantiable
+				}
+			}
 		}
 	}
 
