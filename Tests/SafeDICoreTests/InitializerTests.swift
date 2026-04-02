@@ -215,4 +215,100 @@ struct InitializerTests {
 			)
 		})
 	}
+
+	// MARK: createMockInitializerArgumentList
+
+	@Test
+	func createMockInitializerArgumentList_passesNilForUnavailableDependency() throws {
+		let initializer = Initializer(
+			arguments: [
+				.init(
+					innerLabel: "service",
+					typeDescription: .simple(name: "Service"),
+					defaultValueExpression: nil,
+				),
+				.init(
+					innerLabel: "optionalDep",
+					typeDescription: .optional(.simple(name: "OptionalDep")),
+					defaultValueExpression: nil,
+				),
+			],
+		)
+		let dependencies: [Dependency] = [
+			.init(
+				property: .init(label: "service", typeDescription: .simple(name: "Service")),
+				source: .received(onlyIfAvailable: false),
+			),
+			.init(
+				property: .init(label: "optionalDep", typeDescription: .optional(.simple(name: "OptionalDep"))),
+				source: .received(onlyIfAvailable: true),
+			),
+		]
+		let unavailable: Set<Property> = [
+			.init(label: "optionalDep", typeDescription: .optional(.simple(name: "OptionalDep"))),
+		]
+
+		let result = try initializer.createMockInitializerArgumentList(
+			given: dependencies,
+			unavailableProperties: unavailable,
+		)
+
+		#expect(result == "service: service, optionalDep: nil")
+	}
+
+	@Test
+	func createMockInitializerArgumentList_throwsForUnexpectedNonDefaultArgument() {
+		let initializer = Initializer(
+			arguments: [
+				.init(
+					innerLabel: "service",
+					typeDescription: .simple(name: "Service"),
+					defaultValueExpression: nil,
+				),
+				.init(
+					innerLabel: "unknown",
+					typeDescription: .simple(name: "Unknown"),
+					defaultValueExpression: nil,
+				),
+			],
+		)
+		let dependencies: [Dependency] = [
+			.init(
+				property: .init(label: "service", typeDescription: .simple(name: "Service")),
+				source: .received(onlyIfAvailable: false),
+			),
+		]
+
+		#expect(throws: Initializer.GenerationError.unexpectedArgument("unknown: Unknown"), performing: {
+			try initializer.createMockInitializerArgumentList(given: dependencies)
+		})
+	}
+
+	@Test
+	func createMockInitializerArgumentList_includesDefaultValuedArguments() throws {
+		let initializer = Initializer(
+			arguments: [
+				.init(
+					innerLabel: "service",
+					typeDescription: .simple(name: "Service"),
+					defaultValueExpression: nil,
+				),
+				.init(
+					innerLabel: "flag",
+					typeDescription: .simple(name: "Bool"),
+					defaultValueExpression: "false",
+				),
+			],
+		)
+		let dependencies: [Dependency] = [
+			.init(
+				property: .init(label: "service", typeDescription: .simple(name: "Service")),
+				source: .received(onlyIfAvailable: false),
+			),
+		]
+
+		let result = try initializer.createMockInitializerArgumentList(given: dependencies)
+
+		#expect(result == "service: service, flag: flag")
+	}
 }
