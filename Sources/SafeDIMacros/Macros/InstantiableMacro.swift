@@ -406,18 +406,18 @@ public struct InstantiableMacro: MemberMacro {
 			{
 				if !mockInitializer.isPublicOrOpen {
 					var fixedMockSyntax = mockSyntax
+					// Mock detection requires `static` or `class`, so modifiers.first is always non-nil.
+					let firstModifier = mockSyntax.modifiers.first
 					fixedMockSyntax.modifiers.insert(
 						DeclModifierSyntax(
-							leadingTrivia: mockSyntax.modifiers.first?.leadingTrivia ?? mockSyntax.funcKeyword.leadingTrivia,
+							leadingTrivia: firstModifier?.leadingTrivia ?? mockSyntax.funcKeyword.leadingTrivia,
 							name: .keyword(.public),
 							trailingTrivia: .space,
 						),
 						at: fixedMockSyntax.modifiers.startIndex,
 					)
-					if let firstModifier = mockSyntax.modifiers.first {
+					if let firstModifier {
 						fixedMockSyntax.modifiers[fixedMockSyntax.modifiers.startIndex].leadingTrivia = firstModifier.leadingTrivia
-					} else {
-						fixedMockSyntax.funcKeyword.leadingTrivia = []
 					}
 					context.diagnose(Diagnostic(
 						node: Syntax(mockSyntax),
@@ -434,28 +434,24 @@ public struct InstantiableMacro: MemberMacro {
 					do {
 						try mockInitializer.validate(fulfilling: visitor.dependencies)
 					} catch {
-						if let fixableError = error.asFixableError {
-							switch fixableError.asErrorToFix {
-							case let .missingArguments(missingArguments):
-								var fixedSyntax = mockSyntax
-								fixedSyntax.signature.parameterClause = Self.buildFixedParameterClause(
-									from: mockSyntax.signature.parameterClause,
-									requiredProperties: visitor.dependencies.map(\.property),
-								)
-								context.diagnose(Diagnostic(
-									node: Syntax(mockSyntax),
-									error: FixableInstantiableError.mockMethodMissingArguments(missingArguments),
-									changes: [
-										.replace(
-											oldNode: Syntax(mockSyntax),
-											newNode: Syntax(fixedSyntax),
-										),
-									],
-								))
-							case .inaccessibleInitializer:
-								// Handled by the isPublicOrOpen check above.
-								break
-							}
+						if let fixableError = error.asFixableError,
+						   case let .missingArguments(missingArguments) = fixableError.asErrorToFix
+						{
+							var fixedSyntax = mockSyntax
+							fixedSyntax.signature.parameterClause = Self.buildFixedParameterClause(
+								from: mockSyntax.signature.parameterClause,
+								requiredProperties: visitor.dependencies.map(\.property),
+							)
+							context.diagnose(Diagnostic(
+								node: Syntax(mockSyntax),
+								error: FixableInstantiableError.mockMethodMissingArguments(missingArguments),
+								changes: [
+									.replace(
+										oldNode: Syntax(mockSyntax),
+										newNode: Syntax(fixedSyntax),
+									),
+								],
+							))
 						}
 					}
 				}
