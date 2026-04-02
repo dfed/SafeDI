@@ -639,11 +639,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			case .instantiated:
 				let depType = dependency.property.typeDescription.asInstantiatedType
 				let enumName = Self.sanitizeForIdentifier(depType.asSource)
+				// Use the full property type (e.g., SendableInstantiator<X>) not the instantiated type (X).
+				let sourceType = dependency.property.propertyType.isConstant
+					? depType.asSource
+					: dependency.property.typeDescription.asSource
 				allDeclarations.append(MockDeclaration(
 					enumName: enumName,
 					propertyLabel: dependency.property.label,
 					parameterLabel: dependency.property.label,
-					sourceType: depType.asSource,
+					sourceType: sourceType,
 					hasKnownMock: false,
 					pathCaseName: "root",
 					isForwarded: false,
@@ -750,12 +754,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)")
 		}
 		for (enumName, declarations) in enumNameToDeclarations.sorted(by: { $0.key < $1.key }) {
-			let firstDeclaration = declarations[0]
 			let sendablePrefix = declarations.contains(where: \.requiresSendable) ? "@Sendable " : ""
-			if firstDeclaration.hasKnownMock {
-				parameters.append("\(indent)\(indent)\(firstDeclaration.parameterLabel): (\(sendablePrefix)(SafeDIMockPath.\(enumName)) -> \(firstDeclaration.sourceType))? = nil")
-			} else {
-				parameters.append("\(indent)\(indent)\(firstDeclaration.parameterLabel): \(sendablePrefix)@escaping (SafeDIMockPath.\(enumName)) -> \(firstDeclaration.sourceType)")
+			// Multiple declarations may share the same enum type but have different parameter labels
+			// (e.g., installScopedDefaultsService and userScopedDefaultsService both typed UserDefaultsService).
+			// Each unique parameter label gets its own mock parameter.
+			var seenParameterLabels = Set<String>()
+			for declaration in declarations.sorted(by: { $0.parameterLabel < $1.parameterLabel }) {
+				guard seenParameterLabels.insert(declaration.parameterLabel).inserted else { continue }
+				if declaration.hasKnownMock {
+					parameters.append("\(indent)\(indent)\(declaration.parameterLabel): (\(sendablePrefix)(SafeDIMockPath.\(enumName)) -> \(declaration.sourceType))? = nil")
+				} else {
+					parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(sendablePrefix)@escaping (SafeDIMockPath.\(enumName)) -> \(declaration.sourceType)")
+				}
 			}
 		}
 		let parametersString = parameters.joined(separator: ",\n")
