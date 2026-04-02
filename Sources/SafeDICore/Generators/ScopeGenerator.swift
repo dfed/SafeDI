@@ -624,16 +624,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let coveredPropertyLabels = Set(allDeclarations.map(\.propertyLabel))
 		var uncoveredProperties = [(property: Property, isOnlyIfAvailable: Bool)]()
 
-		// Check this type's own dependencies for uncovered @Instantiated deps.
+		// Check this type's own dependencies for uncovered @Instantiated dependencies.
+		// This covers edge cases where the type is in the fulfilling map but not the scope map.
 		for dependency in instantiable.dependencies {
 			guard !coveredPropertyLabels.contains(dependency.property.label) else { continue }
 			switch dependency.source {
 			case .instantiated:
-				let depType = dependency.property.typeDescription.asInstantiatedType
-				let enumName = Self.sanitizeForIdentifier(depType.asSource)
-				// Use the full property type (e.g., SendableInstantiator<X>) not the instantiated type (X).
+				let dependencyType = dependency.property.typeDescription.asInstantiatedType
+				let enumName = Self.sanitizeForIdentifier(dependencyType.asSource)
 				let sourceType = dependency.property.propertyType.isConstant
-					? depType.asSource
+					? dependencyType.asSource
 					: dependency.property.typeDescription.asSource
 				allDeclarations.append(MockDeclaration(
 					enumName: enumName,
