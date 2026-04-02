@@ -490,7 +490,9 @@ enum MyConfiguration {
 
 ### Using generated mocks
 
-Each `@Instantiable` type gets a `mock()` static method that builds its full dependency subtree. If the decorated type declaration already contains a `static func mock(...)` or `class func mock(...)` method, SafeDI will not generate one — your hand-written mock takes precedence. Note that mocks defined in separate extensions are not detected; the method must be in the `@Instantiable`-decorated declaration body.
+Each `@Instantiable` type gets a `mock()` static method that builds its full dependency subtree. If the decorated type declaration already contains a `static func mock(...)` or `class func mock(...)` method, SafeDI will not generate a mock file for that type — your hand-written mock takes precedence. However, parent types that instantiate the child will call `ChildType.mock(...)` instead of `ChildType(...)` when constructing it, threading mock parameters through your custom method. Note that mocks defined in separate extensions are not detected; the method must be in the `@Instantiable`-decorated declaration body.
+
+Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type's `@Instantiated`, `@Received`, and `@Forwarded` dependencies. It may also accept additional parameters with default values. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
 
 ```swift
 #if DEBUG
@@ -535,6 +537,32 @@ let root = Root.mock(
 ```swift
 let noteView = NoteView.mock(userName: "Preview User")
 ```
+
+### Default-valued init parameters in mocks
+
+If an `@Instantiable` type's initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are automatically exposed in the generated `mock()` method. This lets you override values like feature flags or optional view models in tests while keeping the original defaults for production code.
+
+```swift
+@Instantiable
+public struct ProfileView: Instantiable {
+    public init(user: User, showDebugInfo: Bool = false) {
+        self.user = user
+    }
+    @Received let user: User
+}
+```
+
+The generated mock for a parent that instantiates `ProfileView` will include `showDebugInfo` as an optional closure parameter:
+
+```swift
+let root = Root.mock(
+    showDebugInfo: { _ in true }  // Override the default
+)
+```
+
+When no override is provided, the original default expression (`false`) is used.
+
+Default-valued parameters bubble transitively through the dependency tree — a grandchild's default parameter will appear at the root mock level. However, they do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
 
 ### The `mockAttributes` parameter
 
