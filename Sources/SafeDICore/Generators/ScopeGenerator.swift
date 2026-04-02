@@ -662,16 +662,36 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Skip forwarded properties — they're bare mock parameters, not promoted children.
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
 		let updatedCoveredLabels = Set(allDeclarations.map(\.propertyLabel))
+		// When both `user: User` (required) and `user: User?` (onlyIfAvailable) are received,
+		// only the non-optional version should produce a parameter and binding.
+		// The optional path uses the same value (Swift auto-wraps to Optional).
+		let receivedLabelsWithNonOptionalVersion = Set(
+			receivedProperties
+				.filter { !$0.typeDescription.isOptional }
+				.map(\.label),
+		)
 		for receivedProperty in receivedProperties.sorted() {
 			guard !updatedCoveredLabels.contains(receivedProperty.label),
 			      !forwardedPropertySet.contains(receivedProperty)
 			else { continue }
 
-			let isOnlyIfAvailable = onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty)
+			// Skip optional properties when a non-optional version with the same label exists.
+			// The non-optional version subsumes it — Swift auto-wraps for optional paths.
+			if receivedProperty.typeDescription.isOptional,
+			   receivedLabelsWithNonOptionalVersion.contains(receivedProperty.label)
+			{
+				continue
+			}
+
+			// A property is onlyIfAvailable only if its type IS optional AND it's tracked as such.
+			// Non-optional properties are never onlyIfAvailable, even if the same label appears
+			// as onlyIfAvailable from a different path.
+			let isOnlyIfAvailable = (receivedProperty.typeDescription.isOptional
+				&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty))
 				|| unavailableOptionalProperties.contains(receivedProperty)
 
-			let depType = receivedProperty.typeDescription.asInstantiatedType
-			let enumName = Self.sanitizeForIdentifier(depType.asSource)
+			let receivedType = receivedProperty.typeDescription.asInstantiatedType
+			let enumName = Self.sanitizeForIdentifier(receivedType.asSource)
 			allDeclarations.append(MockDeclaration(
 				enumName: enumName,
 				propertyLabel: receivedProperty.label,
