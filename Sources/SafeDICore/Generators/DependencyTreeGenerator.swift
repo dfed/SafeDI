@@ -321,22 +321,43 @@ public actor DependencyTreeGenerator {
 			preconditionFailure("Root type \(instantiable.concreteInstantiable.asSource) not found in scope map")
 		}
 
-		// Build 1: Create ScopeGenerator from the unmodified Scope to compute
-		// receivedProperties — the exact set of unsatisfied dependencies after
-		// accounting for siblings, forwarded properties, and type resolution.
-		let initial = try scope.createScopeGenerator(
-			for: nil,
-			propertyStack: [],
-			receivableProperties: [],
-			erasedToConcreteExistential: false,
-			forMockGeneration: true,
+		// Recursively collect all transitive received properties from the scope tree
+		// and any promoted scopes' subtrees, using memoized Scope walks.
+		// This is O(total_scopes) — each scope is visited at most once.
+		var cache = [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)]()
+		let (initialReceived, initialOnlyIfAvailable) = Self.collectReceivedProperties(
+			from: scope,
+			cache: &cache,
 		)
 
-		// Iteratively promote unsatisfied received dependencies at root scope.
-		// Each round may reveal new unsatisfied dependencies from promoted children.
-		// This is O(rounds * tree_size) where rounds = max dependency depth (typically 3-5).
-		// A single-pass approach was investigated but would require reimplementing
-		// ScopeGenerator's type resolution (sibling satisfaction, forwarding, etc.).
+		// BFS: promoted scopes may introduce additional transitive received properties.
+		var allReceived = initialReceived
+		var allOnlyIfAvailable = initialOnlyIfAvailable
+		var visitedTypes = Set<TypeDescription>()
+		var queue = Array(allReceived)
+
+		while let property = queue.popLast() {
+			var dependencyType = property.typeDescription.asInstantiatedType
+			if typeDescriptionToScopeMap[dependencyType] == nil,
+			   let concreteType = erasedToConcreteTypeMap[property.typeDescription]
+			{
+				dependencyType = concreteType
+			}
+			guard let promotedScope = typeDescriptionToScopeMap[dependencyType],
+			      visitedTypes.insert(dependencyType).inserted
+			else { continue }
+
+			let (scopeReceived, scopeOnlyIfAvailable) = Self.collectReceivedProperties(
+				from: promotedScope,
+				cache: &cache,
+			)
+			for newProperty in scopeReceived where allReceived.insert(newProperty).inserted {
+				queue.append(newProperty)
+			}
+			allOnlyIfAvailable.formUnion(scopeOnlyIfAvailable)
+		}
+
+		// Promote all received properties that have scopes.
 		// onlyIfAvailable dependencies are NOT promoted — they become optional
 		// mock parameters with no default.
 		// Filter out forwarded properties — they're bare mock parameters, not promoted children.
@@ -349,53 +370,139 @@ public actor DependencyTreeGenerator {
 		)
 		let mockRootScope = Scope(instantiable: instantiable)
 		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate
-		var promoted = Set<Property>()
-		var current = initial
 
-		while true {
-			let onlyIfAvailableProperties = current.onlyIfAvailableUnwrappedReceivedProperties
-			var didPromote = false
-			for receivedProperty in current.receivedProperties.sorted() {
-				// Skip onlyIfAvailable dependencies — they become optional mock parameters
-				// with no default. A property is onlyIfAvailable if its TYPE is optional
-				// (since @Received(onlyIfAvailable: true) requires Optional type).
-				// Non-optional properties with the same label are required from a different path.
-				let isOnlyIfAvailable = receivedProperty.typeDescription.isOptional
-					&& onlyIfAvailableProperties.contains(receivedProperty.asUnwrappedProperty)
-				guard !isOnlyIfAvailable,
-				      !forwardedPropertyLabels.contains(receivedProperty),
-				      promoted.insert(receivedProperty).inserted
-				else { continue }
+		for receivedProperty in allReceived.sorted() {
+			let isOnlyIfAvailable = receivedProperty.typeDescription.isOptional
+				&& allOnlyIfAvailable.contains(receivedProperty.asUnwrappedProperty)
+			guard !isOnlyIfAvailable,
+			      !forwardedPropertyLabels.contains(receivedProperty)
+			else { continue }
 
-				var dependencyType = receivedProperty.typeDescription.asInstantiatedType
-				var erasedToConcreteExistential = false
-				if typeDescriptionToScopeMap[dependencyType] == nil,
-				   let concreteType = erasedToConcreteTypeMap[receivedProperty.typeDescription]
-				{
-					dependencyType = concreteType
-					erasedToConcreteExistential = true
-				}
-				guard let receivedScope = typeDescriptionToScopeMap[dependencyType] else {
-					continue
-				}
-				mockRootScope.propertiesToGenerate.append(.instantiated(
-					receivedProperty,
-					receivedScope,
-					erasedToConcreteExistential: erasedToConcreteExistential,
-				))
-				didPromote = true
+			var dependencyType = receivedProperty.typeDescription.asInstantiatedType
+			var erasedToConcreteExistential = false
+			if typeDescriptionToScopeMap[dependencyType] == nil,
+			   let concreteType = erasedToConcreteTypeMap[receivedProperty.typeDescription]
+			{
+				dependencyType = concreteType
+				erasedToConcreteExistential = true
 			}
-			guard didPromote else {
-				return current
+			guard let receivedScope = typeDescriptionToScopeMap[dependencyType] else {
+				continue
 			}
-			current = try mockRootScope.createScopeGenerator(
-				for: nil,
-				propertyStack: [],
-				receivableProperties: [],
-				erasedToConcreteExistential: false,
-				forMockGeneration: true,
-			)
+			mockRootScope.propertiesToGenerate.append(.instantiated(
+				receivedProperty,
+				receivedScope,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+			))
 		}
+
+		// Build the final ScopeGenerator once.
+		return try mockRootScope.createScopeGenerator(
+			for: nil,
+			propertyStack: [],
+			receivableProperties: [],
+			erasedToConcreteExistential: false,
+			forMockGeneration: true,
+		)
+	}
+
+	/// Recursively collects all unsatisfied received properties from a Scope tree.
+	/// Mirrors ScopeGenerator's `receivedProperties` and `onlyIfAvailableUnwrappedReceivedProperties`
+	/// computation but operates on Scope objects directly, with memoization for O(1) revisits.
+	private static func collectReceivedProperties(
+		from scope: Scope,
+		cache: inout [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
+	) -> (received: Set<Property>, onlyIfAvailable: Set<Property>) {
+		let id = ObjectIdentifier(scope)
+		if let cached = cache[id] { return cached }
+		// Cycle sentinel — re-entrant calls return empty (cycles contribute no new received).
+		cache[id] = ([], [])
+
+		// Properties declared at this scope (instantiated/aliased children).
+		let propertiesToDeclare = Set(scope.propertiesToGenerate.compactMap { propertyToGenerate -> Property? in
+			switch propertyToGenerate {
+			case let .instantiated(property, _, _): return property
+			case let .aliased(property, _, _, _): return property
+			}
+		})
+
+		// Forwarded properties at this scope.
+		let forwardedProperties = Set(
+			scope.instantiable.dependencies
+				.filter { $0.source == .forwarded }
+				.map(\.property),
+		)
+
+		var received = Set<Property>()
+		var onlyIfAvailable = Set<Property>()
+
+		// Collect from children — mirrors ScopeGenerator's receivedProperties aggregation.
+		for propertyToGenerate in scope.propertiesToGenerate {
+			switch propertyToGenerate {
+			case let .instantiated(_, childScope, _):
+				let (childReceived, childOnlyIfAvailable) = collectReceivedProperties(
+					from: childScope,
+					cache: &cache,
+				)
+				received.formUnion(
+					childReceived
+						.subtracting(propertiesToDeclare)
+						.filter { property in
+							!property.typeDescription.isOptional
+								|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
+						}
+						.subtracting(forwardedProperties),
+				)
+				onlyIfAvailable.formUnion(
+					childOnlyIfAvailable
+						.subtracting(propertiesToDeclare)
+						.subtracting(forwardedProperties),
+				)
+
+			case let .aliased(_, fulfillingProperty, _, isOnlyIfAvailable):
+				// Alias ScopeGenerator's receivedProperties = [fulfillingProperty].
+				let aliasReceived: Set<Property> = [fulfillingProperty]
+				received.formUnion(
+					aliasReceived
+						.subtracting(propertiesToDeclare)
+						.filter { property in
+							!property.typeDescription.isOptional
+								|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
+						}
+						.subtracting(forwardedProperties),
+				)
+				if isOnlyIfAvailable {
+					let aliasOnlyIfAvailable: Set<Property> = [fulfillingProperty.asUnwrappedProperty]
+					onlyIfAvailable.formUnion(
+						aliasOnlyIfAvailable
+							.subtracting(propertiesToDeclare)
+							.subtracting(forwardedProperties),
+					)
+				}
+			}
+		}
+
+		// This scope's own received/aliased dependencies.
+		for dependency in scope.instantiable.dependencies {
+			switch dependency.source {
+			case let .received(isOnlyIfAvailable):
+				received.insert(dependency.property)
+				if isOnlyIfAvailable {
+					onlyIfAvailable.insert(dependency.property.asUnwrappedProperty)
+				}
+			case let .aliased(fulfillingProperty, _, isOnlyIfAvailable):
+				received.insert(fulfillingProperty)
+				if isOnlyIfAvailable {
+					onlyIfAvailable.insert(fulfillingProperty.asUnwrappedProperty)
+				}
+			case .instantiated, .forwarded:
+				break
+			}
+		}
+
+		let result = (received, onlyIfAvailable)
+		cache[id] = result
+		return result
 	}
 
 	/// Builds a scope mapping for mock generation. Similar to `createTypeDescriptionToScopeMapping`
