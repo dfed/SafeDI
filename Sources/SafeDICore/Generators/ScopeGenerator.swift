@@ -670,12 +670,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Skip forwarded properties — they're bare mock parameters, not promoted children.
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
 		let updatedCoveredLabels = Set(allDeclarations.map(\.propertyLabel))
-		// Labels that have an Optional version in receivedProperties. Used to distinguish
-		// a required non-optional property from an aliased onlyIfAvailable non-optional one.
-		let labelsWithOptionalCounterpart = Set(
+		// Unwrapped forms of Optional received properties. Used to distinguish a required
+		// non-optional property from an aliased onlyIfAvailable non-optional one.
+		// Matching by unwrapped Property (label + type) avoids false collisions when
+		// unrelated types share a label (e.g., `service: ConcreteService` aliased
+		// onlyIfAvailable vs `service: ServiceProtocol?` Optional received).
+		let unwrappedOptionalCounterparts = Set(
 			receivedProperties
 				.filter(\.typeDescription.isOptional)
-				.map(\.label),
+				.map(\.asUnwrappedProperty),
 		)
 		// When both `user: User` (required) and `user: User?` (onlyIfAvailable) are received,
 		// only the non-optional version should produce a parameter and binding.
@@ -698,12 +701,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 			// A property is onlyIfAvailable if:
 			// (a) it's Optional and tracked as onlyIfAvailable (standard @Received case), OR
-			// (b) it's non-optional, has no Optional counterpart with the same label, and is
-			//     tracked as onlyIfAvailable (aliased case where fulfilling type is non-optional)
+			// (b) it's non-optional, has no Optional counterpart with the same unwrapped type,
+			//     and is tracked as onlyIfAvailable (aliased case where fulfilling type is
+			//     non-optional). Matching by unwrapped Property identity (not just label)
+			//     avoids false collisions when unrelated types share a label.
 			let isOnlyIfAvailable = (receivedProperty.typeDescription.isOptional
 				&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty))
 				|| (!receivedProperty.typeDescription.isOptional
-					&& !labelsWithOptionalCounterpart.contains(receivedProperty.label)
+					&& !unwrappedOptionalCounterparts.contains(receivedProperty)
 					&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty))
 				|| unavailableOptionalProperties.contains(receivedProperty)
 
