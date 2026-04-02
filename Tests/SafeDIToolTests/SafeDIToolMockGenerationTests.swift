@@ -514,7 +514,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_typeWithDepsAndNilConditionalCompilation() async throws {
+	mutating func mock_typeWithDependenciesAndNilConditionalCompilation() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2004,7 +2004,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Tests – Coverage for edge cases
 
 	@Test
-	mutating func mock_generatedForExtensionBasedTypeWithReceivedDeps() async throws {
+	mutating func mock_generatedForExtensionBasedTypeWithReceivedDependencies() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2517,7 +2517,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        a: ((SafeDIMockPath.A) -> A?)? = nil
 		    ) -> B {
 		        let a = a?(.root)
-		        return B(a: nil)
+		        return B(a: a)
 		    }
 		}
 		#endif
@@ -2722,7 +2722,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        a: ((SafeDIMockPath.A) -> A?)? = nil
 		    ) -> B {
 		        let a = a?(.root)
-		        return B(a: nil)
+		        return B(a: a)
 		    }
 		}
 		#endif
@@ -4181,7 +4181,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let shared = shared?(.root)
 		        let unrelated = unrelated?(.root)
 		        let child = child?(.root) ?? Child(unrelated: unrelated, shared: shared)
-		        return Parent(child: child, shared: nil)
+		        return Parent(child: child, shared: shared)
 		    }
 		}
 		#endif
@@ -4375,7 +4375,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_inlineConstructionRecursivelyBuildsInstantiatedDeps() async throws {
+	mutating func mock_inlineConstructionRecursivelyBuildsInstantiatedDependencies() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4591,7 +4591,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_inlineConstructionWrapsInstantiatorDepsWithForwardedProperties() async throws {
+	mutating func mock_inlineConstructionWrapsInstantiatorDependenciesWithForwardedProperties() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4826,7 +4826,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_aliasedReceivedDepResolvesToForwardedAncestor() async throws {
+	mutating func mock_aliasedReceivedDependencyResolvesToForwardedAncestor() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4987,7 +4987,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_passesNilForOnlyIfAvailableProtocolDep() async throws {
+	mutating func mock_passesNilForOnlyIfAvailableProtocolDependency() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -5025,11 +5025,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		// IDProvider is a protocol fulfilled by ConcreteIDProvider, but it's
 		// not in Consumer's mock scope. The generated mock should pass nil.
 		let consumerMock = try #require(output.mockFiles["Consumer+SafeDIMock.swift"])
-		#expect(consumerMock.contains("Consumer(idProvider: nil,"))
+		#expect(consumerMock.contains("Consumer(idProvider: idProvider,"))
 	}
 
 	@Test
-	mutating func mock_threadsTransitiveDepsNotInParentScope() async throws {
+	mutating func mock_threadsTransitiveDependenciesNotInParentScope() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -5200,7 +5200,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_onlyIfAvailableTransitiveDepBecomesOptionalParameter() async throws {
+	mutating func mock_onlyIfAvailableTransitiveDependencyBecomesOptionalParameter() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -5257,6 +5257,63 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let idProvider = idProvider?(.root)
 		        let child = child?(.root) ?? Child(idProvider: idProvider)
 		        return Parent(child: child)
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	mutating func mock_onlyIfAvailableDependencyUsesVariableInReturnStatement() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol AppClipService {}
+
+				@Instantiable(fulfillingAdditionalTypes: [AppClipService.self])
+				public struct ConcreteAppClipService: AppClipService, Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct DeviceService: Instantiable {
+				    public init(appClipService: AppClipService?, name: String) {
+				        self.appClipService = appClipService
+				        self.name = name
+				    }
+				    @Received(onlyIfAvailable: true) let appClipService: AppClipService?
+				    @Received let name: String
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		// DeviceService has @Received(onlyIfAvailable: true) appClipService.
+		// The return statement must use the `appClipService` variable (which
+		// may be nil), NOT hardcode `nil` — otherwise the binding is unused.
+		#expect(output.mockFiles["DeviceService+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension DeviceService {
+		    public enum SafeDIMockPath {
+		        public enum AppClipService { case root }
+		        public enum String { case root }
+		    }
+
+		    public static func mock(
+		        appClipService: ((SafeDIMockPath.AppClipService) -> AppClipService?)? = nil,
+		        name: @escaping (SafeDIMockPath.String) -> String
+		    ) -> DeviceService {
+		        let appClipService = appClipService?(.root)
+		        let name = name(.root)
+		        return DeviceService(appClipService: appClipService, name: name)
 		    }
 		}
 		#endif

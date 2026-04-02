@@ -298,26 +298,14 @@ public actor DependencyTreeGenerator {
 			constructedTypes: [],
 		)
 
-		// onlyIfAvailable dependencies that aren't fulfilled become unavailable
-		// so the argument list generates nil for them.
-		let unavailableOptionalProperties = Set<Property>(
-			instantiable.dependencies.compactMap { dependency in
-				switch dependency.source {
-				case let .received(onlyIfAvailable):
-					onlyIfAvailable ? dependency.property : nil
-				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-					onlyIfAvailable ? fulfillingProperty : nil
-				case .instantiated, .forwarded:
-					nil
-				}
-			},
-		)
-
+		// In mock trees, onlyIfAvailable dependencies are not marked unavailable.
+		// They become optional mock parameters with bindings that thread through
+		// to children. The return statement uses the variable (which may be nil).
 		return ScopeGenerator(
 			instantiable: instantiable,
 			property: nil,
 			propertiesToGenerate: children,
-			unavailableOptionalProperties: unavailableOptionalProperties,
+			unavailableOptionalProperties: [],
 			erasedToConcreteExistential: false,
 			isPropertyCycle: false,
 		)
