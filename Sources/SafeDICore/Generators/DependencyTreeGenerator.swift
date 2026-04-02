@@ -78,10 +78,6 @@ public actor DependencyTreeGenerator {
 	public func generateMockCode(
 		mockConditionalCompilation: String?,
 	) async throws -> [GeneratedRoot] {
-		// Types reachable from this module's roots can be constructed here.
-		// Types only in the map from dependent modules cannot — they become required parameters.
-		let knownInstantiableTypes = reachableTypeDescriptions
-
 		// Create mock-root ScopeGenerators for all types, with received dependencies
 		// treated as instantiated so the mock can construct the full subtree.
 		var seen = Set<TypeDescription>()
@@ -96,10 +92,7 @@ public actor DependencyTreeGenerator {
 				      seen.insert(instantiable.concreteInstantiable).inserted
 				else { continue }
 
-				let mockRoot = createMockRootScopeGenerator(
-					for: instantiable,
-					knownInstantiableTypes: knownInstantiableTypes,
-				)
+				let mockRoot = createMockRootScopeGenerator(for: instantiable)
 				taskGroup.addTask {
 					let code = try await mockRoot.generateCode(
 						codeGeneration: .mock(ScopeGenerator.MockContext(
@@ -296,14 +289,12 @@ public actor DependencyTreeGenerator {
 	/// Types not in `knownInstantiableTypes` are skipped — they become required mock parameters instead.
 	private func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
-		knownInstantiableTypes: Set<TypeDescription> = [],
 		visited: Set<TypeDescription> = [],
 	) -> ScopeGenerator {
 		let children = createMockChildScopeGenerators(
 			for: instantiable,
 			visited: visited,
 			constructedTypes: [],
-			knownInstantiableTypes: knownInstantiableTypes,
 		)
 
 		// In mock trees, onlyIfAvailable dependencies are not marked unavailable.
@@ -322,12 +313,10 @@ public actor DependencyTreeGenerator {
 	/// Recursively builds child ScopeGenerators for mock roots.
 	/// Received dependencies are only promoted to children when their type isn't already
 	/// constructed by an ancestor (tracked via `constructedTypes`).
-	/// Types not in `knownInstantiableTypes` are skipped — they can't be constructed in this module.
 	private func createMockChildScopeGenerators(
 		for instantiable: Instantiable,
 		visited: Set<TypeDescription>,
 		constructedTypes: Set<TypeDescription>,
-		knownInstantiableTypes: Set<TypeDescription>,
 	) -> [ScopeGenerator] {
 		var visited = visited
 		visited.insert(instantiable.concreteInstantiable)
@@ -379,10 +368,8 @@ public actor DependencyTreeGenerator {
 			}
 
 			// For instantiated and unfulfilled received dependencies, recursively build the subtree.
-			// Skip types not reachable from this module's roots — they can't be constructed here.
 			let depType = dependency.property.typeDescription.asInstantiatedType
 			guard !visited.contains(depType),
-			      knownInstantiableTypes.contains(depType),
 			      let depInstantiable = typeDescriptionToFulfillingInstantiableMap[depType]
 			else { continue }
 
@@ -390,7 +377,6 @@ public actor DependencyTreeGenerator {
 				for: depInstantiable,
 				visited: visited,
 				constructedTypes: localConstructedTypes,
-				knownInstantiableTypes: knownInstantiableTypes,
 			)
 			// In mock trees, onlyIfAvailable dependencies are NOT marked unavailable.
 			// They bubble up through receivedProperties to the mock root, which

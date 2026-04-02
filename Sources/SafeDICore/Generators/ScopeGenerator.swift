@@ -352,12 +352,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) async throws -> [String] {
 		var generatedProperties = [String]()
 		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
-			let childCodeGeneration: CodeGeneration
-			switch codeGeneration {
+			let childCodeGeneration: CodeGeneration = switch codeGeneration {
 			case .dependencyTree:
-				childCodeGeneration = .dependencyTree
+				.dependencyTree
 			case let .mock(context):
-				childCodeGeneration = await childMockCodeGeneration(
+				await childMockCodeGeneration(
 					for: childGenerator,
 					parentContext: context,
 				)
@@ -472,7 +471,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else {
 					forwardedProperties.initializerFunctionParameters.map(\.description).joined()
 				}
-				let functionName = self.functionName(toBuild: property)
+				let functionName = functionName(toBuild: property)
 				let functionDecorator = if propertyType.isSendable {
 					"@Sendable "
 				} else {
@@ -555,7 +554,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 				// Ideally we would be able to use an anonymous closure rather than a named function here.
 				// Unfortunately, there's a bug in Swift Concurrency that prevents us from doing this: https://github.com/swiftlang/swift/issues/75003
-				let functionName = self.functionName(toBuild: property)
+				let functionName = functionName(toBuild: property)
 				let functionDeclaration = if generatedProperties.isEmpty {
 					""
 				} else {
