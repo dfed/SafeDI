@@ -274,17 +274,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let overrideParameterLabel: String?
 		/// Maps property labels to disambiguated mock parameter labels for all declarations.
 		let propertyToParameterLabel: [String: String]
+		/// Property labels for non-@Instantiable received deps — these are required
+		/// params with no default construction, using `x(.pathCase)` instead of `x?(.pathCase) ?? ...`.
+		let requiredParameterLabels: Set<String>
 
 		init(
 			path: [String],
 			mockConditionalCompilation: String?,
 			overrideParameterLabel: String? = nil,
 			propertyToParameterLabel: [String: String] = [:],
+			requiredParameterLabels: Set<String> = [],
 		) {
 			self.path = path
 			self.mockConditionalCompilation = mockConditionalCompilation
 			self.overrideParameterLabel = overrideParameterLabel
 			self.propertyToParameterLabel = propertyToParameterLabel
+			self.requiredParameterLabels = requiredParameterLabels
 		}
 	}
 
@@ -525,9 +530,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				case let .mock(context):
 					let pathCaseName = context.path.isEmpty ? "root" : context.path.joined(separator: "_")
 					let derivedPropertyLabel = context.overrideParameterLabel ?? property.label
-					return """
-					\(functionDeclaration)\(propertyDeclaration) = \(derivedPropertyLabel)?(.\(pathCaseName)) ?? \(instantiatorInstantiation)
-					"""
+					if context.requiredParameterLabels.contains(property.label) {
+						return "\(propertyDeclaration) = \(derivedPropertyLabel)(.\(pathCaseName))\n"
+					} else {
+						return """
+						\(functionDeclaration)\(propertyDeclaration) = \(derivedPropertyLabel)?(.\(pathCaseName)) ?? \(instantiatorInstantiation)
+						"""
+					}
 				}
 			case .constant:
 				let generatedProperties = try await generateProperties(
@@ -576,7 +585,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				case let .mock(context):
 					let pathCaseName = context.path.isEmpty ? "root" : context.path.joined(separator: "_")
 					let derivedPropertyLabel = context.overrideParameterLabel ?? property.label
-					return "\(functionDeclaration)\(propertyDeclaration) = \(derivedPropertyLabel)?(.\(pathCaseName)) ?? \(initializer)\n"
+					if context.requiredParameterLabels.contains(property.label) {
+						return "\(propertyDeclaration) = \(derivedPropertyLabel)(.\(pathCaseName))\n"
+					} else {
+						return "\(functionDeclaration)\(propertyDeclaration) = \(derivedPropertyLabel)?(.\(pathCaseName)) ?? \(initializer)\n"
+					}
 				}
 			}
 		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
@@ -609,8 +622,33 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.sorted { $0.property < $1.property }
 
 		// Collect all declarations from the dependency tree.
-		// Received deps are already in the tree (built by createMockRootScopeGenerator).
+		// Received deps whose type is @Instantiable are in the tree.
 		var allDeclarations = await collectMockDeclarations(path: [])
+
+		// Find received deps (including transitive) whose type is NOT @Instantiable.
+		// These weren't added to the tree but need to be mock parameters.
+		// They're required (non-optional) since there's no default to construct.
+		// `receivedProperties` includes all unsatisfied deps from the full subtree.
+		let coveredPropertyLabels = Set(allDeclarations.map(\.propertyLabel))
+		var uncoveredReceivedProperties = [Property]()
+		for receivedProperty in receivedProperties.sorted() {
+			guard !coveredPropertyLabels.contains(receivedProperty.label),
+			      !unavailableOptionalProperties.contains(receivedProperty)
+			else { continue }
+
+			let depType = receivedProperty.typeDescription.asInstantiatedType
+			let enumName = Self.sanitizeForIdentifier(depType.asSource)
+			allDeclarations.append(MockDeclaration(
+				enumName: enumName,
+				propertyLabel: receivedProperty.label,
+				parameterLabel: receivedProperty.label,
+				sourceType: depType.asSource,
+				hasKnownMock: false,
+				pathCaseName: "root",
+				isForwarded: false,
+			))
+			uncoveredReceivedProperties.append(receivedProperty)
+		}
 
 		// Add forwarded deps as bare parameter declarations.
 		let forwardedDeclarations = forwardedDependencies.map { dependency in
@@ -697,10 +735,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Generate all dep bindings via recursive generateProperties.
 		// Received deps are in the tree (built by createMockRootScopeGenerator).
+		let requiredParameterLabels = Set(
+			allDeclarations
+				.filter { !$0.hasKnownMock && !$0.isForwarded }
+				.map(\.propertyLabel),
+		)
 		let bodyContext = MockContext(
 			path: context.path,
 			mockConditionalCompilation: context.mockConditionalCompilation,
 			propertyToParameterLabel: propertyToParameterLabel,
+			requiredParameterLabels: requiredParameterLabels,
 		)
 		let propertyLines = try await generateProperties(
 			codeGeneration: .mock(bodyContext),
@@ -724,6 +768,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(indent)\(mockAttributesPrefix)public static func mock(")
 		lines.append(paramsStr)
 		lines.append("\(indent)) -> \(typeName) {")
+		// Bindings for non-@Instantiable received deps (required params, no default).
+		for receivedProperty in uncoveredReceivedProperties {
+			lines.append("\(bodyIndent)let \(receivedProperty.label) = \(receivedProperty.label)(.root)")
+		}
 		lines.append(contentsOf: propertyLines)
 		lines.append("\(bodyIndent)return \(construction)")
 		lines.append("\(indent)}")
@@ -868,6 +916,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			mockConditionalCompilation: parentContext.mockConditionalCompilation,
 			overrideParameterLabel: overrideLabel,
 			propertyToParameterLabel: parentContext.propertyToParameterLabel,
+			requiredParameterLabels: parentContext.requiredParameterLabels,
 		))
 	}
 
