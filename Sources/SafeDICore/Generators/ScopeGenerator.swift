@@ -655,7 +655,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					propertyLabel: dependency.property.label,
 					parameterLabel: dependency.property.label,
 					sourceType: sourceType,
-					hasKnownMock: false,
+					isOptionalParameter: false,
 					pathCaseName: "root",
 					isForwarded: false,
 					requiresSendable: false,
@@ -719,7 +719,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				propertyLabel: receivedProperty.label,
 				parameterLabel: receivedProperty.label,
 				sourceType: receivedProperty.typeDescription.asSource,
-				hasKnownMock: isOnlyIfAvailable,
+				isOptionalParameter: isOnlyIfAvailable,
 				pathCaseName: "root",
 				isForwarded: false,
 				requiresSendable: false,
@@ -735,7 +735,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				propertyLabel: dependency.property.label,
 				parameterLabel: dependency.property.label,
 				sourceType: dependency.property.typeDescription.asFunctionParameter.asSource,
-				hasKnownMock: false,
+				isOptionalParameter: false,
 				pathCaseName: "",
 				isForwarded: true,
 				requiresSendable: false,
@@ -807,7 +807,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			var seenParameterLabels = Set<String>()
 			for declaration in declarations.sorted(by: { $0.parameterLabel < $1.parameterLabel }) {
 				guard seenParameterLabels.insert(declaration.parameterLabel).inserted else { continue }
-				if declaration.hasKnownMock {
+				if declaration.isOptionalParameter {
 					parameters.append("\(indent)\(indent)\(declaration.parameterLabel): (\(sendablePrefix)(SafeDIMockPath.\(enumName)) -> \(declaration.sourceType))? = nil")
 				} else {
 					parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(sendablePrefix)@escaping (SafeDIMockPath.\(enumName)) -> \(declaration.sourceType)")
@@ -877,7 +877,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The parameter label used in the mock() signature (may be disambiguated).
 		var parameterLabel: String
 		let sourceType: String
-		let hasKnownMock: Bool
+		/// Whether this parameter is optional (`= nil`) in the mock signature.
+		/// True when the type has a known default construction or is onlyIfAvailable.
+		/// False when the type is not constructible and must be provided by the caller.
+		let isOptionalParameter: Bool
 		let pathCaseName: String
 		let isForwarded: Bool
 		/// Whether this parameter is captured by a @Sendable function and must be @Sendable.
@@ -919,7 +922,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				propertyLabel: childProperty.label,
 				parameterLabel: childProperty.label,
 				sourceType: sourceType,
-				hasKnownMock: childScopeData.instantiable != nil,
+				isOptionalParameter: childScopeData.instantiable != nil,
 				pathCaseName: pathCaseName,
 				isForwarded: false,
 				requiresSendable: insideSendableScope,
@@ -955,7 +958,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				propertyLabel: declaration.propertyLabel,
 				parameterLabel: declaration.parameterLabel,
 				sourceType: declaration.sourceType,
-				hasKnownMock: declaration.hasKnownMock,
+				isOptionalParameter: declaration.isOptionalParameter,
 				pathCaseName: declaration.pathCaseName,
 				isForwarded: declaration.isForwarded,
 				requiresSendable: declaration.requiresSendable,
@@ -978,7 +981,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				propertyLabel: declaration.propertyLabel,
 				parameterLabel: "\(declaration.parameterLabel)_\(declaration.enumName)",
 				sourceType: declaration.sourceType,
-				hasKnownMock: declaration.hasKnownMock,
+				isOptionalParameter: declaration.isOptionalParameter,
 				pathCaseName: declaration.pathCaseName,
 				isForwarded: declaration.isForwarded,
 				requiresSendable: declaration.requiresSendable,
