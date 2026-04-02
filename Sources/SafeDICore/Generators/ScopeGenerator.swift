@@ -356,8 +356,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			case .dependencyTree:
 				.dependencyTree
 			case let .mock(context):
-				await childMockCodeGeneration(
-					for: childGenerator,
+				childMockCodeGeneration(
+					forChildLabel: childGenerator.property?.label,
 					parentContext: context,
 				)
 			}
@@ -991,13 +991,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Computes the child's mock context by extending the path and looking up disambiguated labels.
 	private func childMockCodeGeneration(
-		for childGenerator: ScopeGenerator,
+		forChildLabel childLabel: String?,
 		parentContext: MockContext,
-	) async -> CodeGeneration {
-		guard let childProperty = childGenerator.property else {
-			return .mock(parentContext)
-		}
-
+	) -> CodeGeneration {
 		// Extend the path: children of this node use a path that includes
 		// this node's property label (so grandchild pathCaseNames reflect their parent).
 		let childPath = if let selfLabel = property?.label {
@@ -1007,9 +1003,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// Look up the disambiguated parameter label for this child.
-		let pathCaseName = childPath.isEmpty ? "root" : childPath.joined(separator: "_")
-		let lookupKey = "\(pathCaseName)/\(childProperty.label)"
-		let overrideLabel = parentContext.propertyToParameterLabel[lookupKey]
+		let overrideLabel: String? = childLabel.flatMap { label in
+			let pathCaseName = childPath.isEmpty ? "root" : childPath.joined(separator: "_")
+			return parentContext.propertyToParameterLabel["\(pathCaseName)/\(label)"]
+		}
 
 		return .mock(MockContext(
 			path: childPath,

@@ -56,7 +56,6 @@ public actor DependencyTreeGenerator {
 			for rootInfo in rootScopeGenerators {
 				taskGroup.addTask {
 					let code = try await rootInfo.scopeGenerator.generateCode()
-					guard !code.isEmpty else { return nil }
 					return GeneratedRoot(
 						typeDescription: rootInfo.typeDescription,
 						sourceFilePath: rootInfo.sourceFilePath,
@@ -109,11 +108,13 @@ public actor DependencyTreeGenerator {
 				.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
 			{
 				guard !instantiable.hasExistingMockMethod,
-				      seen.insert(instantiable.concreteInstantiable).inserted
+				      seen.insert(instantiable.concreteInstantiable).inserted,
+				      let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable]
 				else { continue }
 
 				let mockRoot = try createMockRootScopeGenerator(
 					for: instantiable,
+					scope: scope,
 					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 					erasedToConcreteTypeMap: erasedToConcreteTypeMap,
 				)
@@ -313,14 +314,10 @@ public actor DependencyTreeGenerator {
 	/// on a NEW Scope (the shared Scope is never mutated).
 	private func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
+		scope: Scope,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
 	) throws -> ScopeGenerator {
-		guard let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable] else {
-			// Root types must be @Instantiable and therefore always in the scope map.
-			preconditionFailure("Root type \(instantiable.concreteInstantiable.asSource) not found in scope map")
-		}
-
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
 		// (via ObjectIdentifier) so each scope is visited at most once — O(total_scopes).
