@@ -708,7 +708,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Check transitive received dependencies not satisfied by the tree.
 		// Skip forwarded properties — they're bare mock parameters, not promoted children.
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
-		let updatedCoveredLabels = Set(allDeclarations.map(\.propertyLabel))
+		// Exclude default-valued parameter declarations from coverage — they are child-scoped
+		// bindings that must not suppress root-level received property bindings.
+		let updatedCoveredLabels = Set(allDeclarations.filter { $0.defaultValueExpression == nil }.map(\.propertyLabel))
 		// Unwrapped forms of Optional received properties. Used to distinguish a required
 		// non-optional property from an aliased onlyIfAvailable non-optional one.
 		// Matching by unwrapped Property (label + type) avoids false collisions when
