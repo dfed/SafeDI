@@ -629,13 +629,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		//   in another module not visible to this module's mock generator)
 		// - Received dependencies (including transitive) whose type is not constructible
 		// These become mock parameters so the user can provide them.
-		let coveredPropertyLabels = Set(allDeclarations.map(\.propertyLabel))
+		// Only root-level tree declarations suppress uncovered root dependencies.
+		// Nested declarations (from children) may share a label with a root dependency
+		// but refer to a different type — those must not suppress the root one.
+		let coveredRootPropertyLabels = Set(
+			allDeclarations
+				.filter { $0.pathCaseName == "root" }
+				.map(\.propertyLabel),
+		)
 		var uncoveredProperties = [(property: Property, isOnlyIfAvailable: Bool)]()
 
 		// Check this type's own dependencies for uncovered @Instantiated dependencies.
 		// This handles types that are @Instantiable in another module but not visible here.
 		for dependency in instantiable.dependencies {
-			guard !coveredPropertyLabels.contains(dependency.property.label) else { continue }
+			guard !coveredRootPropertyLabels.contains(dependency.property.label) else { continue }
 			switch dependency.source {
 			case .instantiated:
 				let dependencyType = dependency.property.typeDescription.asInstantiatedType
@@ -826,14 +833,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(indent)\(mockAttributesPrefix)public static func mock(")
 		lines.append(parametersString)
 		lines.append("\(indent)) -> \(typeName) {")
-		// Bindings for non-@Instantiable received dependencies.
+		// Bindings for uncovered dependencies.
+		// Use the disambiguated parameter name when the label was changed by disambiguation.
 		for uncovered in uncoveredProperties {
+			let parameterName = propertyToParameterLabel["root/\(uncovered.property.label)"] ?? uncovered.property.label
 			if uncovered.isOnlyIfAvailable {
 				// Optional: evaluates to nil if not provided by the user.
-				lines.append("\(bodyIndent)let \(uncovered.property.label) = \(uncovered.property.label)?(.root)")
+				lines.append("\(bodyIndent)let \(uncovered.property.label) = \(parameterName)?(.root)")
 			} else {
 				// Required: user must provide the closure.
-				lines.append("\(bodyIndent)let \(uncovered.property.label) = \(uncovered.property.label)(.root)")
+				lines.append("\(bodyIndent)let \(uncovered.property.label) = \(parameterName)(.root)")
 			}
 		}
 		lines.append(contentsOf: propertyLines)
