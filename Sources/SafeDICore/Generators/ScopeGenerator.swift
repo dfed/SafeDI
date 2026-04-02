@@ -725,12 +725,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// Add forwarded dependencies as bare parameter declarations.
+		// Use asFunctionParameter to add @escaping for closure types.
 		let forwardedDeclarations = forwardedDependencies.map { dependency in
 			MockDeclaration(
 				enumName: dependency.property.label,
 				propertyLabel: dependency.property.label,
 				parameterLabel: dependency.property.label,
-				sourceType: dependency.property.typeDescription.asSource,
+				sourceType: dependency.property.typeDescription.asFunctionParameter.asSource,
 				hasKnownMock: false,
 				pathCaseName: "",
 				isForwarded: true,
