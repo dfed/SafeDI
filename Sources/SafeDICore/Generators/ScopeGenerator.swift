@@ -185,11 +185,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// The instantiable associated with this scope, if any (nil for aliases).
-	var instantiable: Instantiable? {
-		scopeData.instantiable
-	}
-
 	func generateDOT() async throws -> String {
 		let orderedPropertiesToGenerate = orderedPropertiesToGenerate
 		let instantiatedProperties = orderedPropertiesToGenerate.map(\.scopeData.asDOTNode)
@@ -274,22 +269,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let overrideParameterLabel: String?
 		/// Maps property labels to disambiguated mock parameter labels for all declarations.
 		let propertyToParameterLabel: [String: String]
-		/// Property labels for non-@Instantiable received dependencies — these are required
-		/// parameters with no default construction, using `x(.pathCase)` instead of `x?(.pathCase) ?? ...`.
-		let requiredParameterLabels: Set<String>
 
 		init(
 			path: [String],
 			mockConditionalCompilation: String?,
 			overrideParameterLabel: String? = nil,
 			propertyToParameterLabel: [String: String] = [:],
-			requiredParameterLabels: Set<String> = [],
 		) {
 			self.path = path
 			self.mockConditionalCompilation = mockConditionalCompilation
 			self.overrideParameterLabel = overrideParameterLabel
 			self.propertyToParameterLabel = propertyToParameterLabel
-			self.requiredParameterLabels = requiredParameterLabels
 		}
 	}
 
@@ -529,13 +519,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				case let .mock(context):
 					let pathCaseName = context.path.isEmpty ? "root" : context.path.joined(separator: "_")
 					let derivedPropertyLabel = context.overrideParameterLabel ?? property.label
-					if context.requiredParameterLabels.contains(property.label) {
-						return "\(propertyDeclaration) = \(derivedPropertyLabel)(.\(pathCaseName))\n"
-					} else {
-						return """
-						\(functionDeclaration)\(propertyDeclaration) = \(derivedPropertyLabel)?(.\(pathCaseName)) ?? \(instantiatorInstantiation)
-						"""
-					}
+					return """
+					\(functionDeclaration)\(propertyDeclaration) = \(derivedPropertyLabel)?(.\(pathCaseName)) ?? \(instantiatorInstantiation)
+					"""
 				}
 			case .constant:
 				let generatedProperties = try await generateProperties(
@@ -584,11 +570,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				case let .mock(context):
 					let pathCaseName = context.path.isEmpty ? "root" : context.path.joined(separator: "_")
 					let derivedPropertyLabel = context.overrideParameterLabel ?? property.label
-					if context.requiredParameterLabels.contains(property.label) {
-						return "\(propertyDeclaration) = \(derivedPropertyLabel)(.\(pathCaseName))\n"
-					} else {
-						return "\(functionDeclaration)\(propertyDeclaration) = \(derivedPropertyLabel)?(.\(pathCaseName)) ?? \(initializer)\n"
-					}
+					return "\(functionDeclaration)\(propertyDeclaration) = \(derivedPropertyLabel)?(.\(pathCaseName)) ?? \(initializer)\n"
 				}
 			}
 		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
@@ -774,16 +756,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Generate all dep bindings via recursive generateProperties.
 		// Received dependencies are in the tree (built by createMockRootScopeGenerator).
-		let requiredParameterLabels = Set(
-			allDeclarations
-				.filter { !$0.hasKnownMock && !$0.isForwarded }
-				.map(\.propertyLabel),
-		)
 		let bodyContext = MockContext(
 			path: context.path,
 			mockConditionalCompilation: context.mockConditionalCompilation,
 			propertyToParameterLabel: propertyToParameterLabel,
-			requiredParameterLabels: requiredParameterLabels,
 		)
 		let propertyLines = try await generateProperties(
 			codeGeneration: .mock(bodyContext),
@@ -972,7 +948,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			mockConditionalCompilation: parentContext.mockConditionalCompilation,
 			overrideParameterLabel: overrideLabel,
 			propertyToParameterLabel: parentContext.propertyToParameterLabel,
-			requiredParameterLabels: parentContext.requiredParameterLabels,
 		))
 	}
 
