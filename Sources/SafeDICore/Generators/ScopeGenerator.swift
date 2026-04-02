@@ -933,14 +933,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		// Bindings for root's own default-valued init parameters.
-		// Explicit type annotation ensures @Sendable/@MainActor attributes are preserved
-		// on the binding, which the compiler cannot always infer from `??` context.
+		// Uses `if let ... else` instead of `??` so that closure literals in the else branch
+		// inherit the correct type context (@MainActor, @Sendable, etc.) from the binding.
 		for declaration in allDeclarations {
 			guard let defaultExpr = declaration.defaultValueExpression,
 			      declaration.pathCaseName == "root"
 			else { continue }
 			let parameterName = propertyToParameterLabel["root/\(declaration.propertyLabel)"] ?? declaration.parameterLabel
-			lines.append("\(bodyIndent)let \(declaration.propertyLabel): \(declaration.sourceType) = \(parameterName)?(.root) ?? \(defaultExpr)")
+			lines.append("\(bodyIndent)let \(declaration.propertyLabel): \(declaration.sourceType) = if let \(declaration.propertyLabel) = \(parameterName)?(.root) { \(declaration.propertyLabel) } else { \(defaultExpr) }")
 		}
 		lines.append(contentsOf: propertyLines)
 		lines.append("\(bodyIndent)return \(construction)")
@@ -1171,7 +1171,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			else { continue }
 			let parameterLabel = propertyToParameterLabel["\(pathCaseName)/\(argument.innerLabel)"] ?? argument.innerLabel
 			let typeAnnotation = argument.typeDescription.strippingEscaping.asSource
-			bindings.append("let \(argument.innerLabel): \(typeAnnotation) = \(parameterLabel)?(.\(pathCaseName)) ?? \(defaultExpr)")
+			bindings.append("let \(argument.innerLabel): \(typeAnnotation) = if let \(argument.innerLabel) = \(parameterLabel)?(.\(pathCaseName)) { \(argument.innerLabel) } else { \(defaultExpr) }")
 		}
 		return bindings
 	}

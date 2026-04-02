@@ -1622,7 +1622,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        flag: ((SafeDIMockPath.Bool) -> Bool)? = nil,
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> Child {
-		        let flag: Bool = flag?(.root) ?? false
+		        let flag: Bool = if let flag = flag?(.root) { flag } else { false }
 		        let shared = shared?(.root) ?? Shared()
 		        return Child(shared: shared, flag: flag)
 		    }
@@ -1650,7 +1650,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let shared = shared?(.root) ?? Shared()
 		        func __safeDI_child() -> Child {
-		            let flag: Bool = flag?(.child) ?? false
+		            let flag: Bool = if let flag = flag?(.child) { flag } else { false }
 		            return Child(shared: shared, flag: flag)
 		        }
 		        let child: Child = child?(.root) ?? __safeDI_child()
@@ -2255,7 +2255,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        flag: ((SafeDIMockPath.Bool) -> Bool)? = nil,
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> Child {
-		        let flag: Bool = flag?(.root) ?? false
+		        let flag: Bool = if let flag = flag?(.root) { flag } else { false }
 		        let shared = shared?(.root) ?? Shared()
 		        return Child(name: name, shared: shared, flag: flag)
 		    }
@@ -7362,7 +7362,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        config: ((SafeDIMockPath.String) -> String)? = nil
 		    ) -> Child {
-		        let config: String = config?(.root) ?? "hello"
+		        let config: String = if let config = config?(.root) { config } else { "hello" }
 		        return Child(config: config)
 		    }
 		}
@@ -7386,7 +7386,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        config: ((SafeDIMockPath.String) -> String)? = nil
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let config: String = config?(.child) ?? "hello"
+		            let config: String = if let config = config?(.child) { config } else { "hello" }
 		            return Child(config: config)
 		        }
 		        let child: Child = child?(.root) ?? __safeDI_child()
@@ -7462,7 +7462,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        name: String,
 		        flag: ((SafeDIMockPath.Bool) -> Bool)? = nil
 		    ) -> Child {
-		        let flag: Bool = flag?(.root) ?? false
+		        let flag: Bool = if let flag = flag?(.root) { flag } else { false }
 		        return Child(name: name, flag: flag)
 		    }
 		}
@@ -7520,7 +7520,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
 		            func __safeDI_grandchild() -> Grandchild {
-		                let viewModel: String = viewModel?(.child_grandchild) ?? "default"
+		                let viewModel: String = if let viewModel = viewModel?(.child_grandchild) { viewModel } else { "default" }
 		                return Grandchild(viewModel: viewModel)
 		            }
 		            let grandchild: Grandchild = grandchild?(.child) ?? __safeDI_grandchild()
@@ -7550,7 +7550,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        viewModel: ((SafeDIMockPath.String) -> String)? = nil
 		    ) -> Child {
 		        func __safeDI_grandchild() -> Grandchild {
-		            let viewModel: String = viewModel?(.grandchild) ?? "default"
+		            let viewModel: String = if let viewModel = viewModel?(.grandchild) { viewModel } else { "default" }
 		            return Grandchild(viewModel: viewModel)
 		        }
 		        let grandchild: Grandchild = grandchild?(.root) ?? __safeDI_grandchild()
@@ -7574,7 +7574,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        viewModel: ((SafeDIMockPath.String) -> String)? = nil
 		    ) -> Grandchild {
-		        let viewModel: String = viewModel?(.root) ?? "default"
+		        let viewModel: String = if let viewModel = viewModel?(.root) { viewModel } else { "default" }
 		        return Grandchild(viewModel: viewModel)
 		    }
 		}
@@ -7623,7 +7623,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        debug: ((SafeDIMockPath.Bool) -> Bool)? = nil,
 		        child: ((SafeDIMockPath.Child) -> Child)? = nil
 		    ) -> Root {
-		        let debug: Bool = debug?(.root) ?? false
+		        let debug: Bool = if let debug = debug?(.root) { debug } else { false }
 		        let child = child?(.root) ?? Child()
 		        return Root(child: child, debug: debug)
 		    }
@@ -7737,12 +7737,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        flagB: ((SafeDIMockPath.Int) -> Int)? = nil
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            let flagA: Bool = flagA?(.childA) ?? true
+		            let flagA: Bool = if let flagA = flagA?(.childA) { flagA } else { true }
 		            return ChildA(flagA: flagA)
 		        }
 		        let childA: ChildA = childA?(.root) ?? __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            let flagB: Int = flagB?(.childB) ?? 42
+		            let flagB: Int = if let flagB = flagB?(.childB) { flagB } else { 42 }
 		            return ChildB(flagB: flagB)
 		        }
 		        let childB: ChildB = childB?(.root) ?? __safeDI_childB()
@@ -7793,7 +7793,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        viewModel: ((SafeDIMockPath.String) -> String?)? = nil
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let viewModel: String? = viewModel?(.child) ?? nil
+		            let viewModel: String? = if let viewModel = viewModel?(.child) { viewModel } else { nil }
 		            return Child(viewModel: viewModel)
 		        }
 		        let child: Child = child?(.root) ?? __safeDI_child()
@@ -7817,7 +7817,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        viewModel: ((SafeDIMockPath.String) -> String?)? = nil
 		    ) -> Child {
-		        let viewModel: String? = viewModel?(.root) ?? nil
+		        let viewModel: String? = if let viewModel = viewModel?(.root) { viewModel } else { nil }
 		        return Child(viewModel: viewModel)
 		    }
 		}
@@ -7880,12 +7880,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        flag_String: ((SafeDIMockPath.String) -> String)? = nil
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            let flag: Bool = flag_Bool?(.childA) ?? true
+		            let flag: Bool = if let flag = flag_Bool?(.childA) { flag } else { true }
 		            return ChildA(flag: flag)
 		        }
 		        let childA: ChildA = childA?(.root) ?? __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            let flag: String = flag_String?(.childB) ?? "on"
+		            let flag: String = if let flag = flag_String?(.childB) { flag } else { "on" }
 		            return ChildB(flag: flag)
 		        }
 		        let childB: ChildB = childB?(.root) ?? __safeDI_childB()
@@ -8049,7 +8049,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        child: ((SafeDIMockPath.Child) -> Child)? = nil
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let values: [Int] = values?(.child) ?? [1, 2, 3]
+		            let values: [Int] = if let values = values?(.child) { values } else { [1, 2, 3] }
 		            return Child(values: values)
 		        }
 		        let child: Child = child?(.root) ?? __safeDI_child()
@@ -8115,7 +8115,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        dep: ((SafeDIMockPath.Dep) -> Dep)? = nil
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let extra: Bool = extra?(.child) ?? false
+		            let extra: Bool = if let extra = extra?(.child) { extra } else { false }
 		            let dep = dep?(.child) ?? Dep()
 		            return Child.mock(dep: dep, extra: extra)
 		        }
@@ -8180,9 +8180,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        viewModel: ((SafeDIMockPath.String_String) -> String)? = nil
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let config: String = config?(.child) ?? "dev"
+		            let config: String = if let config = config?(.child) { config } else { "dev" }
 		            func __safeDI_grandchild() -> Grandchild {
-		                let viewModel: String = viewModel?(.child_grandchild) ?? "default"
+		                let viewModel: String = if let viewModel = viewModel?(.child_grandchild) { viewModel } else { "default" }
 		                return Grandchild(viewModel: viewModel)
 		            }
 		            let grandchild: Grandchild = grandchild?(.child) ?? __safeDI_grandchild()
@@ -8306,7 +8306,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        onDismiss: ((SafeDIMockPath.Void_to_Void) -> () -> Void)? = nil
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let onDismiss: () -> Void = onDismiss?(.child) ?? {}
+		            let onDismiss: () -> Void = if let onDismiss = onDismiss?(.child) { onDismiss } else { {} }
 		            return Child(onDismiss: onDismiss)
 		        }
 		        let child: Child = child?(.root) ?? __safeDI_child()
@@ -8360,8 +8360,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        onCancel: ((SafeDIMockPath.MainActorString_to_Void) -> @MainActor (String) -> Void)? = nil,
 		        onSubmit: ((SafeDIMockPath.MainActorStringthrows_to_Void) -> @MainActor (String) throws -> Void)? = nil
 		    ) -> Child {
-		        let onCancel: @MainActor (String) -> Void = onCancel?(.root) ?? { _ in }
-		        let onSubmit: @MainActor (String) throws -> Void = onSubmit?(.root) ?? { _ in }
+		        let onCancel: @MainActor (String) -> Void = if let onCancel = onCancel?(.root) { onCancel } else { { _ in } }
+		        let onSubmit: @MainActor (String) throws -> Void = if let onSubmit = onSubmit?(.root) { onSubmit } else { { _ in } }
 		        return Child(onCancel: onCancel, onSubmit: onSubmit)
 		    }
 		}
@@ -8410,7 +8410,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        onComplete: ((SafeDIMockPath.SendableVoid_to_Void) -> @Sendable () -> Void)? = nil
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let onComplete: @Sendable () -> Void = onComplete?(.child) ?? {}
+		            let onComplete: @Sendable () -> Void = if let onComplete = onComplete?(.child) { onComplete } else { {} }
 		            return Child(onComplete: onComplete)
 		        }
 		        let child: Child = child?(.root) ?? __safeDI_child()
@@ -8433,7 +8433,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable @MainActor
 				public final class Service: Instantiable {
 				    public init(
 				        onCancel: @escaping @MainActor (String) -> Void = { _ in },
@@ -8442,8 +8442,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				        self.onCancel = onCancel
 				        self.onSubmit = onSubmit
 				    }
-				    public static func mock() -> Service {
-				        Service(onCancel: { _ in }, onSubmit: { _ in })
+				    public static func mock() -> Self {
+				        .init(onCancel: { _ in }, onSubmit: { _ in })
 				    }
 				    private let onCancel: @MainActor (String) -> Void
 				    private let onSubmit: @MainActor (String) throws -> Void
