@@ -107,7 +107,7 @@ public actor DependencyTreeGenerator {
 			for instantiable in typeDescriptionToFulfillingInstantiableMap.values
 				.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
 			{
-				guard !instantiable.hasExistingMockMethod,
+				guard instantiable.mockInitializer == nil,
 				      seen.insert(instantiable.concreteInstantiable).inserted,
 				      let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable]
 				else { continue }

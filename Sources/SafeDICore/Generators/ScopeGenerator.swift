@@ -419,10 +419,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableProperties,
 			)
 			let concreteTypeName = instantiable.concreteInstantiable.asSource
-			let instantiationDeclaration = if instantiable.declarationType.isExtension {
+			let productionInstantiationDeclaration = if instantiable.declarationType.isExtension {
 				"\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
 			} else {
 				concreteTypeName
+			}
+			// In mock mode, types with a user-defined mock() that accepts parameters
+			// use .mock() for construction. No-parameter mock methods can't thread
+			// dependencies, so they fall back to the regular initializer.
+			let mockInstantiationDeclaration = if let mockInitializer = instantiable.mockInitializer,
+			                                      !mockInitializer.arguments.isEmpty
+			{
+				"\(concreteTypeName).mock"
+			} else {
+				productionInstantiationDeclaration
+			}
+			let instantiationDeclaration = switch codeGeneration {
+			case .dependencyTree:
+				productionInstantiationDeclaration
+			case .mock:
+				mockInstantiationDeclaration
 			}
 			let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
 
@@ -745,7 +761,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let argumentList = try instantiable.generateArgumentList(
 				unavailableProperties: unavailableOptionalProperties,
 			)
-			let construction = if instantiable.declarationType.isExtension {
+			let construction = if instantiable.mockInitializer != nil {
+				"\(typeName).mock(\(argumentList))"
+			} else if instantiable.declarationType.isExtension {
 				"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
 			} else {
 				"\(typeName)(\(argumentList))"
@@ -833,7 +851,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let argumentList = try instantiable.generateArgumentList(
 			unavailableProperties: unavailableOptionalProperties,
 		)
-		let construction = if instantiable.declarationType.isExtension {
+		let construction = if let mockInitializer = instantiable.mockInitializer,
+		                      !mockInitializer.arguments.isEmpty
+		{
+			"\(typeName).mock(\(argumentList))"
+		} else if instantiable.declarationType.isExtension {
 			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
 		} else {
 			"\(typeName)(\(argumentList))"

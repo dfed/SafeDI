@@ -29,7 +29,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		dependencies: [Dependency],
 		declarationType: DeclarationType,
 		mockAttributes: String = "",
-		hasExistingMockMethod: Bool = false,
+		mockInitializer: Initializer? = nil,
 	) {
 		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
 		self.isRoot = isRoot
@@ -37,7 +37,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.dependencies = dependencies
 		self.declarationType = declarationType
 		self.mockAttributes = mockAttributes
-		self.hasExistingMockMethod = hasExistingMockMethod
+		self.mockInitializer = mockInitializer
 	}
 
 	// MARK: Public
@@ -60,8 +60,9 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public let declarationType: DeclarationType
 	/// Attributes to add to the generated `mock()` method (e.g. `"@MainActor"`).
 	public let mockAttributes: String
-	/// Whether the type already defines a `static func mock(...)` method.
-	public let hasExistingMockMethod: Bool
+	/// A user-defined `static func mock(...)` method, if one exists.
+	/// When present, generated mocks call `TypeName.mock(...)` instead of `TypeName(...)`.
+	public let mockInitializer: Initializer?
 
 	/// The path to the source file that declared this Instantiable.
 	public var sourceFilePath: String?

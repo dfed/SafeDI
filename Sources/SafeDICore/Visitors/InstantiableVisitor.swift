@@ -154,7 +154,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		if node.name.text == "mock",
 		   node.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) || $0.name.tokenKind == .keyword(.class) })
 		{
-			hasExistingMockMethod = true
+			mockInitializer = Initializer(node)
 		}
 
 		guard declarationType.isExtension else {
@@ -208,7 +208,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				},
 				declarationType: .extensionType,
 				mockAttributes: mockAttributes,
-				hasExistingMockMethod: hasExistingMockMethod,
+				mockInitializer: mockInitializer,
 			))
 		}
 
@@ -299,7 +299,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var instantiableType: TypeDescription?
 	public private(set) var additionalInstantiables: [TypeDescription]?
 	public private(set) var mockAttributes = ""
-	public private(set) var hasExistingMockMethod = false
+	public private(set) var mockInitializer: Initializer?
 	public private(set) var diagnostics = [Diagnostic]()
 	public private(set) var uninitializedNonOptionalPropertyNames = [String]()
 
@@ -354,7 +354,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						dependencies: dependencies,
 						declarationType: instantiableDeclarationType.asDeclarationType,
 						mockAttributes: mockAttributes,
-						hasExistingMockMethod: hasExistingMockMethod,
+						mockInitializer: mockInitializer,
 					),
 				]
 			} else {
