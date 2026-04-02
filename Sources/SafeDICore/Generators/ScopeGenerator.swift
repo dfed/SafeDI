@@ -879,10 +879,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if isInstantiator {
 				let label = childProperty.label
 				enumName = String(label.prefix(1).uppercased()) + label.dropFirst()
-			} else if let childInstantiable = childScopeData.instantiable {
-				enumName = Self.sanitizeForIdentifier(childInstantiable.concreteInstantiable.asSource)
 			} else {
-				enumName = Self.sanitizeForIdentifier(childProperty.typeDescription.asInstantiatedType.asSource)
+				// Aliases are skipped above, and .root/.property always have an instantiable.
+				let childInstantiable = childScopeData.instantiable!
+				enumName = Self.sanitizeForIdentifier(childInstantiable.concreteInstantiable.asSource)
 			}
 
 			let sourceType = isInstantiator
