@@ -884,8 +884,15 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    public static func mock() -> Root {
-		        Root(myService: myService)
+		    public enum SafeDIMockPath {
+		        public enum AnyMyService { case root }
+		    }
+
+		    public static func mock(
+		        myService: @escaping (SafeDIMockPath.AnyMyService) -> AnyMyService
+		    ) -> Root {
+		        let myService = myService(.root)
+		        return Root(myService: myService)
 		    }
 		}
 		#endif
@@ -1969,13 +1976,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension DefaultUserService {
 		    public enum SafeDIMockPath {
-		        public enum UserDefaults { case root }
+		        public enum StringStorage { case root }
 		    }
 
 		    public static func mock(
-		        stringStorage: ((SafeDIMockPath.UserDefaults) -> StringStorage)? = nil
+		        stringStorage: @escaping (SafeDIMockPath.StringStorage) -> StringStorage
 		    ) -> DefaultUserService {
-		        let stringStorage: StringStorage = stringStorage?(.root) ?? UserDefaults.instantiate()
+		        let stringStorage = stringStorage(.root)
 		        return DefaultUserService(stringStorage: stringStorage)
 		    }
 		}
@@ -2441,8 +2448,15 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    public static func mock() -> Root {
-		        Root(selfBuilder: selfBuilder)
+		    public enum SafeDIMockPath {
+		        public enum Root { case root }
+		    }
+
+		    public static func mock(
+		        selfBuilder: @escaping (SafeDIMockPath.Root) -> Root
+		    ) -> Root {
+		        let selfBuilder = selfBuilder(.root)
+		        return Root(selfBuilder: selfBuilder)
 		    }
 		}
 		#endif
@@ -2982,12 +2996,15 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public enum SafeDIMockPath {
 		        public enum DefaultAuthService { case root }
 		        public enum DefaultNetworkService { case root }
+		        public enum UIViewController { case root }
 		    }
 
 		    public static func mock(
 		        authService: ((SafeDIMockPath.DefaultAuthService) -> AuthService)? = nil,
-		        networkService: ((SafeDIMockPath.DefaultNetworkService) -> NetworkService)? = nil
+		        networkService: ((SafeDIMockPath.DefaultNetworkService) -> NetworkService)? = nil,
+		        loggedInViewControllerBuilder: @escaping (SafeDIMockPath.UIViewController) -> UIViewController
 		    ) -> RootViewController {
+		        let loggedInViewControllerBuilder = loggedInViewControllerBuilder(.root)
 		        let networkService: NetworkService = networkService?(.root) ?? DefaultNetworkService()
 		        let authService: AuthService = authService?(.root) ?? DefaultAuthService(networkService: networkService)
 		        return RootViewController(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
@@ -3333,17 +3350,17 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension EditProfileViewController {
 		    public enum SafeDIMockPath {
 		        public enum DefaultNetworkService { case root }
-		        public enum UserManager_UserManager { case root }
-		        public enum UserManager_UserVendor { case root }
+		        public enum UserManager { case root }
+		        public enum UserVendor { case root }
 		    }
 
 		    public static func mock(
 		        userNetworkService: ((SafeDIMockPath.DefaultNetworkService) -> NetworkService)? = nil,
-		        userManager: ((SafeDIMockPath.UserManager_UserManager) -> UserManager)? = nil,
-		        userVendor: ((SafeDIMockPath.UserManager_UserVendor) -> UserVendor)? = nil
+		        userManager: @escaping (SafeDIMockPath.UserManager) -> UserManager,
+		        userVendor: @escaping (SafeDIMockPath.UserVendor) -> UserVendor
 		    ) -> EditProfileViewController {
-		        let userVendor: UserVendor = userVendor?(.root) ?? UserManager()
-		        let userManager = userManager?(.root) ?? UserManager()
+		        let userManager = userManager(.root)
+		        let userVendor = userVendor(.root)
 		        let userNetworkService: NetworkService = userNetworkService?(.root) ?? DefaultNetworkService()
 		        return EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: userNetworkService)
 		    }
@@ -3403,20 +3420,17 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public enum SafeDIMockPath {
 		        public enum DefaultNetworkService { case editProfileViewControllerBuilder }
 		        public enum EditProfileViewControllerBuilder { case root }
-		        public enum UserManager_UserManager { case editProfileViewControllerBuilder }
-		        public enum UserManager_UserVendor { case editProfileViewControllerBuilder }
+		        public enum UserManager { case root }
 		    }
 
 		    public static func mock(
 		        userNetworkService: ((SafeDIMockPath.DefaultNetworkService) -> NetworkService)? = nil,
 		        editProfileViewControllerBuilder: ((SafeDIMockPath.EditProfileViewControllerBuilder) -> Instantiator<EditProfileViewController>)? = nil,
-		        userManager: ((SafeDIMockPath.UserManager_UserManager) -> UserManager)? = nil,
-		        userVendor: ((SafeDIMockPath.UserManager_UserVendor) -> UserVendor)? = nil
+		        userManager: @escaping (SafeDIMockPath.UserManager) -> UserManager
 		    ) -> ProfileViewController {
+		        let userManager = userManager(.root)
 		        let userVendor: UserVendor = userManager
 		        func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
-		            let userVendor: UserVendor = userVendor?(.editProfileViewControllerBuilder) ?? UserManager()
-		            let userManager = userManager?(.editProfileViewControllerBuilder) ?? UserManager()
 		            let userNetworkService: NetworkService = userNetworkService?(.editProfileViewControllerBuilder) ?? DefaultNetworkService()
 		            return EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: userNetworkService)
 		        }
@@ -3726,22 +3740,17 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    public enum SafeDIMockPath {
-		        public enum ChildABuilder { case root }
+		        public enum ChildAProtocol { case root }
 		        public enum ChildB { case root }
 		        public enum Recreated { case root }
 		    }
 
 		    public static func mock(
-		        childABuilder: ((SafeDIMockPath.ChildABuilder) -> SendableErasedInstantiator<Recreated, ChildAProtocol>)? = nil,
+		        childABuilder: @escaping (SafeDIMockPath.ChildAProtocol) -> ChildAProtocol,
 		        childB: ((SafeDIMockPath.ChildB) -> ChildB)? = nil,
 		        recreated: ((SafeDIMockPath.Recreated) -> Recreated)? = nil
 		    ) -> Root {
-		        @Sendable func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
-		            ChildA(recreated: recreated)
-		        }
-		        let childABuilder = childABuilder?(.root) ?? SendableErasedInstantiator<Recreated, ChildAProtocol> {
-		            __safeDI_childABuilder(recreated: $0)
-		        }
+		        let childABuilder = childABuilder(.root)
 		        let recreated = recreated?(.root) ?? Recreated()
 		        let childB = childB?(.root) ?? ChildB(recreated: recreated)
 		        return Root(childABuilder: childABuilder, childB: childB, recreated: recreated)
@@ -4170,17 +4179,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public enum SafeDIMockPath {
 		        public enum Child { case root }
 		        public enum Shared { case root }
-		        public enum Unrelated { case root }
 		    }
 
 		    public static func mock(
-		        child: ((SafeDIMockPath.Child) -> Child)? = nil,
-		        shared: ((SafeDIMockPath.Shared) -> Shared?)? = nil,
-		        unrelated: ((SafeDIMockPath.Unrelated) -> Unrelated?)? = nil
+		        child: @escaping (SafeDIMockPath.Child) -> Child,
+		        shared: ((SafeDIMockPath.Shared) -> Shared?)? = nil
 		    ) -> Parent {
+		        let child = child(.root)
 		        let shared = shared?(.root)
-		        let unrelated = unrelated?(.root)
-		        let child = child?(.root) ?? Child(unrelated: unrelated, shared: shared)
 		        return Parent(child: child, shared: shared)
 		    }
 		}
@@ -5075,18 +5081,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension Parent {
 		    public enum SafeDIMockPath {
 		        public enum Child { case root }
-		        public enum TransitiveDep { case child }
 		    }
 
 		    public static func mock(
-		        child: ((SafeDIMockPath.Child) -> Child)? = nil,
-		        transitiveDep: ((SafeDIMockPath.TransitiveDep) -> TransitiveDep)? = nil
+		        child: @escaping (SafeDIMockPath.Child) -> Child
 		    ) -> Parent {
-		        func __safeDI_child() -> Child {
-		            let transitiveDep = transitiveDep?(.child) ?? TransitiveDep()
-		            return Child(transitiveDep: transitiveDep)
-		        }
-		        let child: Child = child?(.root) ?? __safeDI_child()
+		        let child = child(.root)
 		        return Parent(child: child)
 		    }
 		}
@@ -5183,15 +5183,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension Parent {
 		    public enum SafeDIMockPath {
 		        public enum Child { case root }
-		        public enum ExternalClient { case root }
 		    }
 
 		    public static func mock(
-		        child: ((SafeDIMockPath.Child) -> Child)? = nil,
-		        client: @escaping (SafeDIMockPath.ExternalClient) -> ExternalClient
+		        child: @escaping (SafeDIMockPath.Child) -> Child
 		    ) -> Parent {
-		        let client = client(.root)
-		        let child = child?(.root) ?? Child(client: client)
+		        let child = child(.root)
 		        return Parent(child: child)
 		    }
 		}
@@ -5247,15 +5244,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension Parent {
 		    public enum SafeDIMockPath {
 		        public enum Child { case root }
-		        public enum IDProvider { case root }
 		    }
 
 		    public static func mock(
-		        child: ((SafeDIMockPath.Child) -> Child)? = nil,
-		        idProvider: ((SafeDIMockPath.IDProvider) -> IDProvider?)? = nil
+		        child: @escaping (SafeDIMockPath.Child) -> Child
 		    ) -> Parent {
-		        let idProvider = idProvider?(.root)
-		        let child = child?(.root) ?? Child(idProvider: idProvider)
+		        let child = child(.root)
 		        return Parent(child: child)
 		    }
 		}
@@ -5445,6 +5439,168 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            __safeDI_childBuilder(name: $0)
 		        }
 		        return Root(childBuilder: childBuilder)
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	mutating func mock_instantiatedDependencyFromAnotherModuleBecomesRequiredParameter() async throws {
+		// First module: ExternalEngine is @Instantiable via extension in another module.
+		let externalModuleOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public struct ExternalEngine: Sendable {
+				    public init(handler: @escaping @Sendable () -> Void) {
+				        self.handler = handler
+				    }
+				    private let handler: @Sendable () -> Void
+				}
+				""",
+				"""
+				@Instantiable
+				extension ExternalEngine: Instantiable {
+				    public static func instantiate() -> ExternalEngine {
+				        .init(handler: {})
+				    }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: false,
+			filesToDelete: &filesToDelete,
+		)
+
+		// Second module: Service @Instantiated ExternalEngine, but ExternalEngine's
+		// @Instantiable extension is not visible here.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public struct ExternalEngine: Sendable {
+				    public init(handler: @escaping @Sendable () -> Void) {
+				        self.handler = handler
+				    }
+				    private let handler: @Sendable () -> Void
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Service: Instantiable {
+				    public init(externalEngine: ExternalEngine, name: String) {
+				        self.externalEngine = externalEngine
+				        self.name = name
+				    }
+				    @Instantiated let externalEngine: ExternalEngine
+				    @Received let name: String
+				}
+				""",
+			],
+			dependentModuleInfoPaths: [externalModuleOutput.moduleInfoOutputPath],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		// ExternalEngine's @Instantiable extension is from another module and not
+		// visible here. The mock should make it a required parameter, not try to
+		// call .instantiate() which doesn't exist in this module.
+		#expect(output.mockFiles["Service+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Service {
+		    public enum SafeDIMockPath {
+		        public enum ExternalEngine { case root }
+		        public enum String { case root }
+		    }
+
+		    public static func mock(
+		        externalEngine: @escaping (SafeDIMockPath.ExternalEngine) -> ExternalEngine,
+		        name: @escaping (SafeDIMockPath.String) -> String
+		    ) -> Service {
+		        let externalEngine = externalEngine(.root)
+		        let name = name(.root)
+		        return Service(externalEngine: externalEngine, name: name)
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	mutating func mock_receivedDependencyFromAnotherModuleBecomesRequiredParameter() async throws {
+		// First module: ExternalEngine is @Instantiable via extension in another module.
+		let externalModuleOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public struct ExternalEngine: Sendable {
+				    public init(handler: @escaping @Sendable () -> Void) {
+				        self.handler = handler
+				    }
+				    private let handler: @Sendable () -> Void
+				}
+				""",
+				"""
+				@Instantiable
+				extension ExternalEngine: Instantiable {
+				    public static func instantiate() -> ExternalEngine {
+				        .init(handler: {})
+				    }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: false,
+			filesToDelete: &filesToDelete,
+		)
+
+		// Second module: Service @Received ExternalEngine (not @Instantiated).
+		// ExternalEngine's @Instantiable extension is not visible here.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public struct ExternalEngine: Sendable {
+				    public init(handler: @escaping @Sendable () -> Void) {
+				        self.handler = handler
+				    }
+				    private let handler: @Sendable () -> Void
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Service: Instantiable {
+				    public init(externalEngine: ExternalEngine) {
+				        self.externalEngine = externalEngine
+				    }
+				    @Received let externalEngine: ExternalEngine
+				}
+				""",
+			],
+			dependentModuleInfoPaths: [externalModuleOutput.moduleInfoOutputPath],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		// ExternalEngine is @Received and not constructible in this module.
+		// The mock should make it a required parameter.
+		#expect(output.mockFiles["Service+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Service {
+		    public enum SafeDIMockPath {
+		        public enum ExternalEngine { case root }
+		    }
+
+		    public static func mock(
+		        externalEngine: @escaping (SafeDIMockPath.ExternalEngine) -> ExternalEngine
+		    ) -> Service {
+		        let externalEngine = externalEngine(.root)
+		        return Service(externalEngine: externalEngine)
 		    }
 		}
 		#endif
