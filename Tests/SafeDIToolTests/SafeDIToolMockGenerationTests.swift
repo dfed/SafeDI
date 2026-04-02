@@ -1622,7 +1622,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        flag: ((SafeDIMockPath.Bool) -> Bool)? = nil,
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> Child {
-		        let flag = flag?(.root) ?? false
+		        let flag: Bool = flag?(.root) ?? false
 		        let shared = shared?(.root) ?? Shared()
 		        return Child(shared: shared, flag: flag)
 		    }
@@ -1650,7 +1650,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let shared = shared?(.root) ?? Shared()
 		        func __safeDI_child() -> Child {
-		            let flag = flag?(.child) ?? false
+		            let flag: Bool = flag?(.child) ?? false
 		            return Child(shared: shared, flag: flag)
 		        }
 		        let child: Child = child?(.root) ?? __safeDI_child()
@@ -2255,7 +2255,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        flag: ((SafeDIMockPath.Bool) -> Bool)? = nil,
 		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> Child {
-		        let flag = flag?(.root) ?? false
+		        let flag: Bool = flag?(.root) ?? false
 		        let shared = shared?(.root) ?? Shared()
 		        return Child(name: name, shared: shared, flag: flag)
 		    }
@@ -7362,7 +7362,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        config: ((SafeDIMockPath.String) -> String)? = nil
 		    ) -> Child {
-		        let config = config?(.root) ?? "hello"
+		        let config: String = config?(.root) ?? "hello"
 		        return Child(config: config)
 		    }
 		}
@@ -7386,7 +7386,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        config: ((SafeDIMockPath.String) -> String)? = nil
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let config = config?(.child) ?? "hello"
+		            let config: String = config?(.child) ?? "hello"
 		            return Child(config: config)
 		        }
 		        let child: Child = child?(.root) ?? __safeDI_child()
@@ -7462,7 +7462,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        name: String,
 		        flag: ((SafeDIMockPath.Bool) -> Bool)? = nil
 		    ) -> Child {
-		        let flag = flag?(.root) ?? false
+		        let flag: Bool = flag?(.root) ?? false
 		        return Child(name: name, flag: flag)
 		    }
 		}
@@ -7520,7 +7520,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
 		            func __safeDI_grandchild() -> Grandchild {
-		                let viewModel = viewModel?(.child_grandchild) ?? "default"
+		                let viewModel: String = viewModel?(.child_grandchild) ?? "default"
 		                return Grandchild(viewModel: viewModel)
 		            }
 		            let grandchild: Grandchild = grandchild?(.child) ?? __safeDI_grandchild()
@@ -7550,7 +7550,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        viewModel: ((SafeDIMockPath.String) -> String)? = nil
 		    ) -> Child {
 		        func __safeDI_grandchild() -> Grandchild {
-		            let viewModel = viewModel?(.grandchild) ?? "default"
+		            let viewModel: String = viewModel?(.grandchild) ?? "default"
 		            return Grandchild(viewModel: viewModel)
 		        }
 		        let grandchild: Grandchild = grandchild?(.root) ?? __safeDI_grandchild()
@@ -7574,7 +7574,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        viewModel: ((SafeDIMockPath.String) -> String)? = nil
 		    ) -> Grandchild {
-		        let viewModel = viewModel?(.root) ?? "default"
+		        let viewModel: String = viewModel?(.root) ?? "default"
 		        return Grandchild(viewModel: viewModel)
 		    }
 		}
@@ -7623,7 +7623,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        debug: ((SafeDIMockPath.Bool) -> Bool)? = nil,
 		        child: ((SafeDIMockPath.Child) -> Child)? = nil
 		    ) -> Root {
-		        let debug = debug?(.root) ?? false
+		        let debug: Bool = debug?(.root) ?? false
 		        let child = child?(.root) ?? Child()
 		        return Root(child: child, debug: debug)
 		    }
@@ -7737,12 +7737,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        flagB: ((SafeDIMockPath.Int) -> Int)? = nil
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            let flagA = flagA?(.childA) ?? true
+		            let flagA: Bool = flagA?(.childA) ?? true
 		            return ChildA(flagA: flagA)
 		        }
 		        let childA: ChildA = childA?(.root) ?? __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            let flagB = flagB?(.childB) ?? 42
+		            let flagB: Int = flagB?(.childB) ?? 42
 		            return ChildB(flagB: flagB)
 		        }
 		        let childB: ChildB = childB?(.root) ?? __safeDI_childB()
@@ -7793,7 +7793,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        viewModel: ((SafeDIMockPath.String) -> String?)? = nil
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let viewModel = viewModel?(.child) ?? nil
+		            let viewModel: String? = viewModel?(.child) ?? nil
 		            return Child(viewModel: viewModel)
 		        }
 		        let child: Child = child?(.root) ?? __safeDI_child()
@@ -7817,7 +7817,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        viewModel: ((SafeDIMockPath.String) -> String?)? = nil
 		    ) -> Child {
-		        let viewModel = viewModel?(.root) ?? nil
+		        let viewModel: String? = viewModel?(.root) ?? nil
 		        return Child(viewModel: viewModel)
 		    }
 		}
@@ -7880,12 +7880,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        flag_String: ((SafeDIMockPath.String) -> String)? = nil
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            let flag = flag_Bool?(.childA) ?? true
+		            let flag: Bool = flag_Bool?(.childA) ?? true
 		            return ChildA(flag: flag)
 		        }
 		        let childA: ChildA = childA?(.root) ?? __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            let flag = flag_String?(.childB) ?? "on"
+		            let flag: String = flag_String?(.childB) ?? "on"
 		            return ChildB(flag: flag)
 		        }
 		        let childB: ChildB = childB?(.root) ?? __safeDI_childB()
@@ -8049,7 +8049,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        child: ((SafeDIMockPath.Child) -> Child)? = nil
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let values = values?(.child) ?? [1, 2, 3]
+		            let values: [Int] = values?(.child) ?? [1, 2, 3]
 		            return Child(values: values)
 		        }
 		        let child: Child = child?(.root) ?? __safeDI_child()
@@ -8115,7 +8115,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        dep: ((SafeDIMockPath.Dep) -> Dep)? = nil
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let extra = extra?(.child) ?? false
+		            let extra: Bool = extra?(.child) ?? false
 		            let dep = dep?(.child) ?? Dep()
 		            return Child.mock(dep: dep, extra: extra)
 		        }
@@ -8180,9 +8180,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        viewModel: ((SafeDIMockPath.String_String) -> String)? = nil
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let config = config?(.child) ?? "dev"
+		            let config: String = config?(.child) ?? "dev"
 		            func __safeDI_grandchild() -> Grandchild {
-		                let viewModel = viewModel?(.child_grandchild) ?? "default"
+		                let viewModel: String = viewModel?(.child_grandchild) ?? "default"
 		                return Grandchild(viewModel: viewModel)
 		            }
 		            let grandchild: Grandchild = grandchild?(.child) ?? __safeDI_grandchild()
@@ -8306,8 +8306,112 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        onDismiss: ((SafeDIMockPath.Void_to_Void) -> () -> Void)? = nil
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let onDismiss = onDismiss?(.child) ?? {}
+		            let onDismiss: () -> Void = onDismiss?(.child) ?? {}
 		            return Child(onDismiss: onDismiss)
+		        }
+		        let child: Child = child?(.root) ?? __safeDI_child()
+		        return Root(child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	mutating func mock_defaultValuedMainActorClosurePreservesMainActor() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(child: Child) { self.child = child }
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init(
+				        onCancel: @escaping @MainActor (String) -> Void = { _ in },
+				        onSubmit: @escaping @MainActor (String) throws -> Void = { _ in }
+				    ) {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		#expect(output.mockFiles.count == 2)
+		#expect(output.mockFiles["Child+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Child {
+		    public enum SafeDIMockPath {
+		        public enum MainActorString_to_Void { case root }
+		        public enum MainActorStringthrows_to_Void { case root }
+		    }
+
+		    public static func mock(
+		        onCancel: ((SafeDIMockPath.MainActorString_to_Void) -> @MainActor (String) -> Void)? = nil,
+		        onSubmit: ((SafeDIMockPath.MainActorStringthrows_to_Void) -> @MainActor (String) throws -> Void)? = nil
+		    ) -> Child {
+		        let onCancel: @MainActor (String) -> Void = onCancel?(.root) ?? { _ in }
+		        let onSubmit: @MainActor (String) throws -> Void = onSubmit?(.root) ?? { _ in }
+		        return Child(onCancel: onCancel, onSubmit: onSubmit)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Child+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	mutating func mock_defaultValuedSendableClosurePreservesSendable() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(child: Child) { self.child = child }
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init(onComplete: @escaping @Sendable () -> Void = {}) {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		#expect(output.mockFiles.count == 2)
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    public enum SafeDIMockPath {
+		        public enum Child { case root }
+		        public enum SendableVoid_to_Void { case child }
+		    }
+
+		    public static func mock(
+		        child: ((SafeDIMockPath.Child) -> Child)? = nil,
+		        onComplete: ((SafeDIMockPath.SendableVoid_to_Void) -> @Sendable () -> Void)? = nil
+		    ) -> Root {
+		        func __safeDI_child() -> Child {
+		            let onComplete: @Sendable () -> Void = onComplete?(.child) ?? {}
+		            return Child(onComplete: onComplete)
 		        }
 		        let child: Child = child?(.root) ?? __safeDI_child()
 		        return Root(child: child)

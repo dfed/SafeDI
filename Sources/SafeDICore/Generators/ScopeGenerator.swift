@@ -936,12 +936,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		// Bindings for root's own default-valued init parameters.
+		// Explicit type annotation ensures @Sendable/@MainActor attributes are preserved
+		// on the binding, which the compiler cannot always infer from `??` context.
 		for declaration in allDeclarations {
 			guard let defaultExpr = declaration.defaultValueExpression,
 			      declaration.pathCaseName == "root"
 			else { continue }
 			let parameterName = propertyToParameterLabel["root/\(declaration.propertyLabel)"] ?? declaration.parameterLabel
-			lines.append("\(bodyIndent)let \(declaration.propertyLabel) = \(parameterName)?(.root) ?? \(defaultExpr)")
+			lines.append("\(bodyIndent)let \(declaration.propertyLabel): \(declaration.sourceType) = \(parameterName)?(.root) ?? \(defaultExpr)")
 		}
 		lines.append(contentsOf: propertyLines)
 		lines.append("\(bodyIndent)return \(construction)")
@@ -1170,7 +1172,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			      let defaultExpr = argument.defaultValueExpression
 			else { continue }
 			let parameterLabel = propertyToParameterLabel["\(pathCaseName)/\(argument.innerLabel)"] ?? argument.innerLabel
-			bindings.append("let \(argument.innerLabel) = \(parameterLabel)?(.\(pathCaseName)) ?? \(defaultExpr)")
+			let typeAnnotation = argument.typeDescription.strippingEscaping.asSource
+			bindings.append("let \(argument.innerLabel): \(typeAnnotation) = \(parameterLabel)?(.\(pathCaseName)) ?? \(defaultExpr)")
 		}
 		return bindings
 	}
