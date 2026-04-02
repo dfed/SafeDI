@@ -1022,9 +1022,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	static func sanitizeForIdentifier(_ typeName: String) -> String {
 		typeName
+			.replacingOccurrences(of: "->", with: "_to_")
 			.replacingOccurrences(of: "<", with: "__")
 			.replacingOccurrences(of: ">", with: "")
-			.replacingOccurrences(of: "->", with: "_to_")
 			.replacingOccurrences(of: ", ", with: "_")
 			.replacingOccurrences(of: ",", with: "_")
 			.replacingOccurrences(of: ".", with: "_")
