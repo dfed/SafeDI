@@ -327,13 +327,10 @@ public actor DependencyTreeGenerator {
 			)
 		}
 
-		// Iteratively promote unsatisfied received dependencies at root scope.
-		// Each promotion round may add new children whose own received dependencies
-		// need promotion in the next round (e.g., UserService receives StringStorage).
-		let mockRootScope = Scope(instantiable: instantiable)
-		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate
-		var promoted = Set<Property>()
-		var current = try mockRootScope.createScopeGenerator(
+		// Build 1: Create ScopeGenerator from the unmodified Scope to compute
+		// receivedProperties — the exact set of unsatisfied dependencies after
+		// accounting for siblings, forwarded properties, and type resolution.
+		let initial = try scope.createScopeGenerator(
 			for: nil,
 			propertyStack: [],
 			receivableProperties: [],
@@ -341,39 +338,43 @@ public actor DependencyTreeGenerator {
 			forMockGeneration: true,
 		)
 
-		while true {
-			var didPromote = false
-			for receivedProperty in current.receivedProperties.sorted() {
-				guard promoted.insert(receivedProperty).inserted else { continue }
-				var dependencyType = receivedProperty.typeDescription.asInstantiatedType
-				var erasedToConcreteExistential = false
-				if typeDescriptionToScopeMap[dependencyType] == nil,
-				   let concreteType = erasedToConcreteTypeMap[receivedProperty.typeDescription]
-				{
-					dependencyType = concreteType
-					erasedToConcreteExistential = true
-				}
-				guard let receivedScope = typeDescriptionToScopeMap[dependencyType] else {
-					continue
-				}
-				mockRootScope.propertiesToGenerate.append(.instantiated(
-					receivedProperty,
-					receivedScope,
-					erasedToConcreteExistential: erasedToConcreteExistential,
-				))
-				didPromote = true
-			}
-			guard didPromote else {
-				return current
-			}
-			current = try mockRootScope.createScopeGenerator(
-				for: nil,
-				propertyStack: [],
-				receivableProperties: [],
-				erasedToConcreteExistential: false,
-				forMockGeneration: true,
-			)
+		let unsatisfiedProperties = initial.receivedProperties
+		guard !unsatisfiedProperties.isEmpty else {
+			return initial
 		}
+
+		// Create a NEW Scope with original children + promoted received dependencies.
+		// The shared Scope is never mutated.
+		let mockRootScope = Scope(instantiable: instantiable)
+		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate
+		for receivedProperty in unsatisfiedProperties.sorted() {
+			var dependencyType = receivedProperty.typeDescription.asInstantiatedType
+			var erasedToConcreteExistential = false
+			if typeDescriptionToScopeMap[dependencyType] == nil,
+			   let concreteType = erasedToConcreteTypeMap[receivedProperty.typeDescription]
+			{
+				dependencyType = concreteType
+				erasedToConcreteExistential = true
+			}
+			guard let receivedScope = typeDescriptionToScopeMap[dependencyType] else {
+				continue
+			}
+			mockRootScope.propertiesToGenerate.append(.instantiated(
+				receivedProperty,
+				receivedScope,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+			))
+		}
+
+		// Build 2: Rebuild with promoted dependencies at root scope.
+		// Children's receivableProperties now include the promoted dependencies.
+		return try mockRootScope.createScopeGenerator(
+			for: nil,
+			propertyStack: [],
+			receivableProperties: [],
+			erasedToConcreteExistential: false,
+			forMockGeneration: true,
+		)
 	}
 
 	/// Builds a scope mapping for mock generation. Similar to `createTypeDescriptionToScopeMapping`

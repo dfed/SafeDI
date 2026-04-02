@@ -144,7 +144,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// MARK: Internal
 
 	/// Properties that we require in order to satisfy our (and our children's) dependencies.
-	/// Used by mock generation to determine which received dependencies need root-level promotion.
+	/// Used by mock generation to read unsatisfied dependencies after initial tree build.
 	let receivedProperties: Set<Property>
 
 	func generateCode(
@@ -834,10 +834,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var declarations = [MockDeclaration]()
 
 		for childGenerator in orderedPropertiesToGenerate {
-			let childProperty = await childGenerator.property
-			let childScopeData = await childGenerator.scopeData
-
-			guard let childProperty else { continue }
+			guard let childProperty = childGenerator.property else { continue }
+			let childScopeData = childGenerator.scopeData
 			if case .alias = childScopeData { continue }
 
 			let isInstantiator = !childProperty.propertyType.isConstant
@@ -934,8 +932,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for childGenerator: ScopeGenerator,
 		parentContext: MockContext,
 	) async -> CodeGeneration {
-		let childProperty = await childGenerator.property
-		guard let childProperty else {
+		guard let childProperty = childGenerator.property else {
 			return .mock(parentContext)
 		}
 
