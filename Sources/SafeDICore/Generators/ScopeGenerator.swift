@@ -190,30 +190,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		scopeData.instantiable
 	}
 
-	/// Creates a mock-root version of this scope generator and generates mock code for it.
-	func generateMockCodeAsMockRoot(
-		mockConditionalCompilation: String?,
-	) async throws -> String {
-		try await asMockRoot.generateCode(
-			codeGeneration: .mock(MockContext(
-				path: [],
-				mockConditionalCompilation: mockConditionalCompilation,
-			)),
-		)
-	}
-
-	/// Collects all descendant ScopeGenerators (non-alias) in the tree.
-	func collectAllDescendants() async -> [ScopeGenerator] {
-		var result = [ScopeGenerator]()
-		for child in propertiesToGenerate {
-			if await child.scopeData.instantiable != nil {
-				result.append(child)
-				result.append(contentsOf: await child.collectAllDescendants())
-			}
-		}
-		return result
-	}
-
 	func generateDOT() async throws -> String {
 		let orderedPropertiesToGenerate = orderedPropertiesToGenerate
 		let instantiatedProperties = orderedPropertiesToGenerate.map(\.scopeData.asDOTNode)
@@ -326,22 +302,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let property: Property?
 
 	private var unavailablePropertiesToGenerateCodeTask = [Set<Property>: Task<String, Error>]()
-
-	/// Creates a mock-root ScopeGenerator that reuses the existing children.
-	/// Mock roots have no received properties — all dependencies become mock parameters.
-	private var asMockRoot: ScopeGenerator {
-		guard let instantiable = scopeData.instantiable else {
-			fatalError("asMockRoot called on .alias ScopeGenerator")
-		}
-		return ScopeGenerator(
-			instantiable: instantiable,
-			property: nil,
-			propertiesToGenerate: propertiesToGenerate,
-			unavailableOptionalProperties: unavailableOptionalProperties,
-			erasedToConcreteExistential: false,
-			isPropertyCycle: false,
-		)
-	}
 
 	private var orderedPropertiesToGenerate: [ScopeGenerator] {
 		var orderedPropertiesToGenerate = [ScopeGenerator]()
@@ -648,38 +608,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.filter { $0.source == .forwarded }
 			.sorted { $0.property < $1.property }
 
-		// Collect received dependencies — these become closure-wrapped parameters with path case "parent".
-		// onlyIfAvailable deps are included so users can optionally provide them in mocks.
-		let receivedDependencies: [(property: Property, onlyIfAvailable: Bool)] = instantiable.dependencies
-			.compactMap { dependency in
-				switch dependency.source {
-				case let .received(onlyIfAvailable):
-					return (property: dependency.property, onlyIfAvailable: onlyIfAvailable)
-				case let .aliased(_, _, onlyIfAvailable):
-					return (property: dependency.property, onlyIfAvailable: onlyIfAvailable)
-				case .instantiated, .forwarded:
-					return nil
-				}
-			}
-
-		// Collect all declarations from the instantiated dependency tree.
+		// Collect all declarations from the dependency tree.
+		// Received deps are already in the tree (built by createMockRootScopeGenerator).
 		var allDeclarations = await collectMockDeclarations(path: [])
-
-		// Add received deps as declarations with path case "parent".
-		for received in receivedDependencies {
-			let depType = received.property.typeDescription.asInstantiatedType
-			let depTypeName = depType.asSource
-			let sanitizedName = Self.sanitizeForIdentifier(depTypeName)
-			allDeclarations.append(MockDeclaration(
-				enumName: sanitizedName,
-				propertyLabel: received.property.label,
-				parameterLabel: received.property.label,
-				sourceType: received.property.typeDescription.asSource,
-				hasKnownMock: true,
-				pathCaseName: "parent",
-				isForwarded: false,
-			))
-		}
 
 		// Add forwarded deps as bare parameter declarations.
 		let forwardedDeclarations = forwardedDependencies.map { dependency in
@@ -764,20 +695,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Build the mock method body.
 		let bodyIndent = "\(indent)\(indent)"
 
-		// Phase 1: Generate received dep bindings (not in propertiesToGenerate).
-		var receivedBindingLines = [String]()
-		for received in receivedDependencies {
-			if received.onlyIfAvailable {
-				// onlyIfAvailable: no default construction — nil if not provided.
-				receivedBindingLines.append("\(bodyIndent)let \(received.property.label) = \(received.property.label)?(.parent)")
-			} else {
-				let depType = received.property.typeDescription.asInstantiatedType
-				let defaultConstruction = depType.asSource + "()"
-				receivedBindingLines.append("\(bodyIndent)let \(received.property.label) = \(received.property.label)?(.parent) ?? \(defaultConstruction)")
-			}
-		}
-
-		// Phase 2: Generate instantiated dep bindings via recursive generateProperties.
+		// Generate all dep bindings via recursive generateProperties.
+		// Received deps are in the tree (built by createMockRootScopeGenerator).
 		let bodyContext = MockContext(
 			path: context.path,
 			mockConditionalCompilation: context.mockConditionalCompilation,
@@ -788,12 +707,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			leadingMemberWhitespace: bodyIndent,
 		)
 
-		// Build the return statement. Received deps that we generated bindings for are now
-		// in scope, so remove them from the unavailable set.
-		let receivedPropertySet = Set(receivedDependencies.map(\.property))
-		let returnUnavailableProperties = unavailableOptionalProperties.subtracting(receivedPropertySet)
+		// Build the return statement.
 		let argumentList = try instantiable.generateArgumentList(
-			unavailableProperties: returnUnavailableProperties,
+			unavailableProperties: unavailableOptionalProperties,
 		)
 		let construction = if instantiable.declarationType.isExtension {
 			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
@@ -808,7 +724,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(indent)\(mockAttributesPrefix)public static func mock(")
 		lines.append(paramsStr)
 		lines.append("\(indent)) -> \(typeName) {")
-		lines.append(contentsOf: receivedBindingLines)
 		lines.append(contentsOf: propertyLines)
 		lines.append("\(bodyIndent)return \(construction)")
 		lines.append("\(indent)}")
