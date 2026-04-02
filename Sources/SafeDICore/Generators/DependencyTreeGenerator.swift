@@ -322,21 +322,21 @@ public actor DependencyTreeGenerator {
 		}
 
 		// Recursively collect all transitive received properties from the scope tree
-		// and any promoted scopes' subtrees, using memoized Scope walks.
-		// This is O(total_scopes) — each scope is visited at most once.
+		// and any promoted scopes' subtrees. Results are cached per Scope identity
+		// (via ObjectIdentifier) so each scope is visited at most once — O(total_scopes).
 		var cache = [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)]()
 		let (initialReceived, initialOnlyIfAvailable) = Self.collectReceivedProperties(
 			from: scope,
 			cache: &cache,
 		)
 
-		// BFS: promoted scopes may introduce additional transitive received properties.
+		// Worklist: promoted scopes may introduce additional transitive received properties.
 		var allReceived = initialReceived
 		var allOnlyIfAvailable = initialOnlyIfAvailable
 		var visitedTypes = Set<TypeDescription>()
-		var queue = Array(allReceived)
+		var worklist = Array(allReceived)
 
-		while let property = queue.popLast() {
+		while let property = worklist.popLast() {
 			// Don't walk into scopes for onlyIfAvailable dependencies.
 			// They become optional mock parameters with no default construction,
 			// so their transitive dependencies don't need promoting.
@@ -357,7 +357,7 @@ public actor DependencyTreeGenerator {
 				cache: &cache,
 			)
 			for newProperty in scopeReceived where allReceived.insert(newProperty).inserted {
-				queue.append(newProperty)
+				worklist.append(newProperty)
 			}
 			allOnlyIfAvailable.formUnion(scopeOnlyIfAvailable)
 		}

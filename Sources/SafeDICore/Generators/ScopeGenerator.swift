@@ -296,8 +296,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	private let scopeData: ScopeData
 	/// Unwrapped versions of received properties from transitive `@Received(onlyIfAvailable: true)` dependencies.
-	/// Unwrapped versions of received properties from transitive `@Received(onlyIfAvailable: true)` dependencies.
-	/// Used by mock generation to identify dependencies that should not get default constructions.
+	/// Used by mock generation to identify dependencies that should become optional mock parameters (no guaranteed default).
 	let onlyIfAvailableUnwrappedReceivedProperties: Set<Property>
 	/// Received properties that are optional and not created by a parent.
 	private let unavailableOptionalProperties: Set<Property>
@@ -878,7 +877,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var parameterLabel: String
 		let sourceType: String
 		/// Whether this parameter is optional (`= nil`) in the mock signature.
-		/// True when the type has a known default construction or is onlyIfAvailable.
+		/// True when the dependency is covered by the tree (has a default inline construction)
+		/// or is onlyIfAvailable.
 		/// False when the type is not constructible and must be provided by the caller.
 		let isOptionalParameter: Bool
 		let pathCaseName: String
@@ -908,7 +908,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let label = childProperty.label
 				enumName = String(label.prefix(1).uppercased()) + label.dropFirst()
 			} else {
-				// Aliases are skipped above, and .root/.property always have an instantiable.
+				// The `.instantiable != nil` guard above filters out aliases (which have no instantiable).
 				let childInstantiable = childScopeData.instantiable!
 				enumName = Self.sanitizeForIdentifier(childInstantiable.concreteInstantiable.asSource)
 			}

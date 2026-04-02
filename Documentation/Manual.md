@@ -471,7 +471,7 @@ public struct ParentView: View, Instantiable {
 
 ## Mock generation
 
-SafeDI can automatically generate `mock()` methods for every `@Instantiable` type, drastically simplifying testing and SwiftUI previews. Mock generation is enabled by default and controlled via `@SafeDIConfiguration`.
+SafeDI can automatically generate `mock()` methods for every `@Instantiable` type, drastically simplifying testing and SwiftUI previews. Mock generation requires a `@SafeDIConfiguration` enum to be present. When one exists, mock generation is enabled by default (controlled by the `generateMocks` property).
 
 ### Configuration
 
@@ -510,11 +510,10 @@ let view = MyView.mock(
 
 ### Path enums
 
-Each `@Instantiable` type with dependencies gets a `SafeDIMockPath` enum containing nested enums per dependency type. These describe where in the tree each dependency is created:
+Each `@Instantiable` type with dependencies gets a `SafeDIMockPath` enum containing nested enums per dependency type. The enum is named after the type, and each case describes where in the tree that dependency is created:
 
-- `case parent` — the dependency is received from the parent scope
 - `case root` — the dependency is created at the top level of the mock
-- `case childA` — the dependency is created for the `childA` property
+- `case childA` — the dependency is created inside the `childA` property's scope
 
 This lets you differentiate when the same type is instantiated at multiple tree locations:
 
@@ -522,8 +521,8 @@ This lets you differentiate when the same type is instantiated at multiple tree 
 let root = Root.mock(
     cache: { path in
         switch path {
-        case .childA_cache: return Cache(size: 100)
-        case .childB_cache: return Cache(size: 200)
+        case .root: return Cache(size: 100)
+        case .childA: return Cache(size: 200)
         }
     }
 )
