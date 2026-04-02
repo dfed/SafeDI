@@ -62,7 +62,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public let mockAttributes: String
 	/// A user-defined `static func mock(...)` method, if one exists.
 	/// When present, generated mocks call `TypeName.mock(...)` instead of `TypeName(...)`.
-	public let mockInitializer: Initializer?
+	public var mockInitializer: Initializer?
 
 	/// The path to the source file that declared this Instantiable.
 	public var sourceFilePath: String?

@@ -438,46 +438,10 @@ public struct InstantiableMacro: MemberMacro {
 							switch fixableError.asErrorToFix {
 							case let .missingArguments(missingArguments):
 								var fixedSyntax = mockSyntax
-								let properties = visitor.dependencies.map(\.property)
-								let existingArgumentCount = mockSyntax.signature.parameterClause.parameters.count
-								var existingParameters = fixedSyntax.signature.parameterClause.parameters.reduce(into: [Property: FunctionParameterSyntax]()) { partialResult, next in
-									partialResult[Initializer.Argument(next).asProperty] = next
-								}
-								fixedSyntax.signature.parameterClause.parameters = []
-								for property in properties {
-									if let existingParameter = existingParameters.removeValue(forKey: property) {
-										fixedSyntax.signature.parameterClause.parameters.append(existingParameter)
-									} else {
-										fixedSyntax.signature.parameterClause.parameters.append(property.asFunctionParamterSyntax)
-									}
-								}
-								// Append remaining non-dependency parameters (e.g., extra parameters with defaults).
-								for (_, parameter) in existingParameters {
-									fixedSyntax.signature.parameterClause.parameters.append(parameter)
-								}
-								// Fix up trailing commas.
-								for index in fixedSyntax.signature.parameterClause.parameters.indices {
-									if index == fixedSyntax.signature.parameterClause.parameters.index(before: fixedSyntax.signature.parameterClause.parameters.endIndex) {
-										fixedSyntax.signature.parameterClause.parameters[index].trailingComma = nil
-									} else {
-										fixedSyntax.signature.parameterClause.parameters[index].trailingComma = fixedSyntax.signature.parameterClause.parameters[index].trailingComma ?? .commaToken(trailingTrivia: .space)
-									}
-								}
-								// Fix up trivia for multi-parameter layout.
-								if fixedSyntax.signature.parameterClause.parameters.count > 1 {
-									for index in fixedSyntax.signature.parameterClause.parameters.indices {
-										if index == fixedSyntax.signature.parameterClause.parameters.startIndex {
-											fixedSyntax.signature.parameterClause.parameters[index].leadingTrivia = existingArgumentCount > 1
-												? mockSyntax.signature.parameterClause.parameters.first?.leadingTrivia ?? .newline
-												: .newline
-										}
-										if index == fixedSyntax.signature.parameterClause.parameters.index(before: fixedSyntax.signature.parameterClause.parameters.endIndex) {
-											fixedSyntax.signature.parameterClause.parameters[index].trailingTrivia = existingArgumentCount > 1
-												? mockSyntax.signature.parameterClause.parameters.last?.trailingTrivia ?? .newline
-												: .newline
-										}
-									}
-								}
+								fixedSyntax.signature.parameterClause = Self.buildFixedParameterClause(
+									from: mockSyntax.signature.parameterClause,
+									requiredProperties: visitor.dependencies.map(\.property),
+								)
 								context.diagnose(Diagnostic(
 									node: Syntax(mockSyntax),
 									error: FixableInstantiableError.mockMethodMissingArguments(missingArguments),
@@ -702,6 +666,58 @@ public struct InstantiableMacro: MemberMacro {
 				),
 			]
 		}
+	}
+
+	// MARK: - Parameter Clause Fix-It
+
+	/// Builds a fixed parameter clause that includes all required properties in order,
+	/// preserving existing parameters where possible and appending any remaining
+	/// non-required parameters at the end.
+	private static func buildFixedParameterClause(
+		from original: FunctionParameterClauseSyntax,
+		requiredProperties: [Property],
+	) -> FunctionParameterClauseSyntax {
+		var result = original
+		let existingArgumentCount = original.parameters.count
+		var existingParameters = original.parameters.reduce(into: [Property: FunctionParameterSyntax]()) { partialResult, next in
+			partialResult[Initializer.Argument(next).asProperty] = next
+		}
+		result.parameters = []
+		for property in requiredProperties {
+			if let existingParameter = existingParameters.removeValue(forKey: property) {
+				result.parameters.append(existingParameter)
+			} else {
+				result.parameters.append(property.asFunctionParamterSyntax)
+			}
+		}
+		// Append remaining non-required parameters (e.g., extra parameters with defaults).
+		for (_, parameter) in existingParameters {
+			result.parameters.append(parameter)
+		}
+		// Fix up trailing commas.
+		for index in result.parameters.indices {
+			if index == result.parameters.index(before: result.parameters.endIndex) {
+				result.parameters[index].trailingComma = nil
+			} else {
+				result.parameters[index].trailingComma = result.parameters[index].trailingComma ?? .commaToken(trailingTrivia: .space)
+			}
+		}
+		// Fix up trivia for multi-parameter layout.
+		if result.parameters.count > 1 {
+			for index in result.parameters.indices {
+				if index == result.parameters.startIndex {
+					result.parameters[index].leadingTrivia = existingArgumentCount > 1
+						? original.parameters.first?.leadingTrivia ?? .newline
+						: .newline
+				}
+				if index == result.parameters.index(before: result.parameters.endIndex) {
+					result.parameters[index].trailingTrivia = existingArgumentCount > 1
+						? original.parameters.last?.trailingTrivia ?? .newline
+						: .newline
+				}
+			}
+		}
+		return result
 	}
 
 	// MARK: - InstantiableError

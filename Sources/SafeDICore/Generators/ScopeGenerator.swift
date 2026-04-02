@@ -419,26 +419,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableProperties,
 			)
 			let concreteTypeName = instantiable.concreteInstantiable.asSource
-			let productionInstantiationDeclaration = if instantiable.declarationType.isExtension {
-				"\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
-			} else {
-				concreteTypeName
-			}
-			// In mock mode, types with a user-defined mock() that accepts parameters
-			// use .mock() for construction. No-parameter mock methods can't thread
-			// dependencies, so they fall back to the regular initializer.
-			let mockInstantiationDeclaration = if let mockInitializer = instantiable.mockInitializer,
-			                                      !mockInitializer.arguments.isEmpty
-			{
-				"\(concreteTypeName).mock"
-			} else {
-				productionInstantiationDeclaration
-			}
-			let instantiationDeclaration = switch codeGeneration {
+			let instantiationDeclaration: String = switch codeGeneration {
 			case .dependencyTree:
-				productionInstantiationDeclaration
+				if instantiable.declarationType.isExtension {
+					"\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
+				} else {
+					concreteTypeName
+				}
 			case .mock:
-				mockInstantiationDeclaration
+				// Types with a user-defined mock() that accepts parameters use .mock()
+				// for construction. No-parameter mock methods can't thread dependencies,
+				// so they fall back to the regular initializer.
+				if let mockInitializer = instantiable.mockInitializer,
+				   !mockInitializer.arguments.isEmpty
+				{
+					"\(concreteTypeName).mock"
+				} else if instantiable.declarationType.isExtension {
+					"\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
+				} else {
+					concreteTypeName
+				}
 			}
 			let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
 

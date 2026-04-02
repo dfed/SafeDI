@@ -366,22 +366,12 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			// mockInitializer may be set after extensionInstantiables are built
 			// (visit order depends on source order). Patch it in here.
 			extensionInstantiables.map { instantiable in
-				if instantiable.mockInitializer == nil, let mockInitializer {
-					Instantiable(
-						instantiableType: instantiable.concreteInstantiable,
-						isRoot: instantiable.isRoot,
-						initializer: instantiable.initializer,
-						additionalInstantiables: instantiable.instantiableTypes.count > 1
-							? Array(instantiable.instantiableTypes.dropFirst())
-							: nil,
-						dependencies: instantiable.dependencies,
-						declarationType: instantiable.declarationType,
-						mockAttributes: instantiable.mockAttributes,
-						mockInitializer: mockInitializer,
-					)
-				} else {
-					instantiable
+				guard instantiable.mockInitializer == nil, let mockInitializer else {
+					return instantiable
 				}
+				var patched = instantiable
+				patched.mockInitializer = mockInitializer
+				return patched
 			}
 		}
 	}
