@@ -691,11 +691,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				continue
 			}
 
-			// A property is onlyIfAvailable only if its type IS optional AND it's tracked as such.
-			// Non-optional properties are never onlyIfAvailable, even if the same label appears
-			// as onlyIfAvailable from a different path.
+			// A property is onlyIfAvailable if:
+			// (a) it's Optional and tracked as onlyIfAvailable (standard @Received case), OR
+			// (b) it's non-optional, has no Optional counterpart with the same label, and is
+			//     tracked as onlyIfAvailable (aliased case where fulfilling type is non-optional)
+			let labelsWithOptionalCounterpart = Set(
+				receivedProperties
+					.filter(\.typeDescription.isOptional)
+					.map(\.label),
+			)
 			let isOnlyIfAvailable = (receivedProperty.typeDescription.isOptional
 				&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty))
+				|| (!receivedProperty.typeDescription.isOptional
+					&& !labelsWithOptionalCounterpart.contains(receivedProperty.label)
+					&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty))
 				|| unavailableOptionalProperties.contains(receivedProperty)
 
 			let receivedType = receivedProperty.typeDescription.asInstantiatedType

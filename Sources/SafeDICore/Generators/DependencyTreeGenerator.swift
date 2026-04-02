@@ -340,9 +340,7 @@ public actor DependencyTreeGenerator {
 			// Don't walk into scopes for onlyIfAvailable dependencies.
 			// They become optional mock parameters with no default construction,
 			// so their transitive dependencies don't need promoting.
-			guard !property.typeDescription.isOptional
-				|| !allOnlyIfAvailable.contains(property.asUnwrappedProperty)
-			else { continue }
+			guard !allOnlyIfAvailable.contains(property) else { continue }
 
 			var dependencyType = property.typeDescription.asInstantiatedType
 			if typeDescriptionToScopeMap[dependencyType] == nil,
@@ -379,9 +377,7 @@ public actor DependencyTreeGenerator {
 		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate
 
 		for receivedProperty in allReceived.sorted() {
-			let isOnlyIfAvailable = receivedProperty.typeDescription.isOptional
-				&& allOnlyIfAvailable.contains(receivedProperty.asUnwrappedProperty)
-			guard !isOnlyIfAvailable,
+			guard !allOnlyIfAvailable.contains(receivedProperty),
 			      !forwardedPropertyLabels.contains(receivedProperty)
 			else { continue }
 
@@ -443,64 +439,49 @@ public actor DependencyTreeGenerator {
 		var received = Set<Property>()
 		var onlyIfAvailable = Set<Property>()
 
-		// Collect from children — mirrors ScopeGenerator's receivedProperties aggregation.
-		for propertyToGenerate in scope.propertiesToGenerate {
-			switch propertyToGenerate {
-			case let .instantiated(_, childScope, _):
-				let (childReceived, childOnlyIfAvailable) = collectReceivedProperties(
-					from: childScope,
-					cache: &cache,
-				)
-				received.formUnion(
-					childReceived
-						.subtracting(propertiesToDeclare)
-						.filter { property in
-							!property.typeDescription.isOptional
-								|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
-						}
-						.subtracting(forwardedProperties),
-				)
-				onlyIfAvailable.formUnion(
-					childOnlyIfAvailable
-						.subtracting(propertiesToDeclare)
-						.subtracting(forwardedProperties),
-				)
-
-			case let .aliased(_, fulfillingProperty, _, isOnlyIfAvailable):
-				// Alias ScopeGenerator's receivedProperties = [fulfillingProperty].
-				let aliasReceived: Set<Property> = [fulfillingProperty]
-				received.formUnion(
-					aliasReceived
-						.subtracting(propertiesToDeclare)
-						.filter { property in
-							!property.typeDescription.isOptional
-								|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
-						}
-						.subtracting(forwardedProperties),
-				)
-				if isOnlyIfAvailable {
-					let aliasOnlyIfAvailable: Set<Property> = [fulfillingProperty.asUnwrappedProperty]
-					onlyIfAvailable.formUnion(
-						aliasOnlyIfAvailable
-							.subtracting(propertiesToDeclare)
-							.subtracting(forwardedProperties),
-					)
-				}
-			}
+		// Collect from instantiated children — mirrors ScopeGenerator's receivedProperties aggregation.
+		// Aliases are handled below in the own-dependency loop: alias children's receivedProperties
+		// = [fulfillingProperty], but the own-dependency union unconditionally adds the same
+		// fulfillingProperty, making the child-path subtraction/filter redundant.
+		for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
+			let (childReceived, childOnlyIfAvailable) = collectReceivedProperties(
+				from: childScope,
+				cache: &cache,
+			)
+			received.formUnion(
+				childReceived
+					.subtracting(propertiesToDeclare)
+					.filter { property in
+						!property.typeDescription.isOptional
+							|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
+					}
+					.subtracting(forwardedProperties),
+			)
+			// Subtract by unwrapped form — a declared `x: X` satisfies onlyIfAvailable `x: X?`.
+			onlyIfAvailable.formUnion(
+				childOnlyIfAvailable.filter { property in
+					!propertiesToDeclare.contains(property.asUnwrappedProperty)
+						&& !forwardedProperties.contains(property.asUnwrappedProperty)
+				},
+			)
 		}
 
 		// This scope's own received/aliased dependencies.
+		// Store exact properties (not unwrapped) in onlyIfAvailable. This avoids
+		// collisions between a required `x: X` and an onlyIfAvailable `x: X?` —
+		// they are distinct Properties. The subtraction above uses unwrapped comparison
+		// to correctly subtract when a declared property satisfies an optional one.
 		for dependency in scope.instantiable.dependencies {
 			switch dependency.source {
 			case let .received(isOnlyIfAvailable):
 				received.insert(dependency.property)
 				if isOnlyIfAvailable {
-					onlyIfAvailable.insert(dependency.property.asUnwrappedProperty)
+					onlyIfAvailable.insert(dependency.property)
 				}
 			case let .aliased(fulfillingProperty, _, isOnlyIfAvailable):
 				received.insert(fulfillingProperty)
 				if isOnlyIfAvailable {
-					onlyIfAvailable.insert(fulfillingProperty.asUnwrappedProperty)
+					onlyIfAvailable.insert(fulfillingProperty)
 				}
 			case .instantiated, .forwarded:
 				break
