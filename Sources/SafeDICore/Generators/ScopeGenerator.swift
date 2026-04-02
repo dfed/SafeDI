@@ -437,12 +437,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					concreteTypeName
 				}
 			case .mock:
-				// Types with a user-defined mock() that accepts parameters use .mock()
-				// for construction. No-parameter mock methods can't thread dependencies,
-				// so they fall back to the regular initializer.
-				if let mockInitializer = instantiable.mockInitializer,
-				   !mockInitializer.arguments.isEmpty
-				{
+				// Types with a user-defined mock() use .mock() for construction.
+				// The user's mock method handles all defaults and test configuration.
+				if instantiable.mockInitializer != nil {
 					"\(concreteTypeName).mock"
 				} else if instantiable.declarationType.isExtension {
 					"\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
@@ -1021,12 +1018,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Collect default-valued init parameters from constant children.
 			// These bubble up to the root mock so users can override them.
 			// Instantiator boundaries stop bubbling — those are user-provided closures.
+			// Types with user-defined mock() methods stop bubbling — the mock handles construction.
 			let childPath = path + [childProperty.label]
 			if !isInstantiator, let childInstantiable = childScopeData.instantiable {
-				let constructionInitializer: Initializer? = if let mockInit = childInstantiable.mockInitializer,
-				                                               !mockInit.arguments.isEmpty
-				{
-					mockInit
+				let constructionInitializer: Initializer? = if let mockInit = childInstantiable.mockInitializer {
+					// User-defined mock handles construction — only bubble args from mock method.
+					// No-arg mocks produce nil here, stopping default-valued arg collection.
+					mockInit.arguments.isEmpty ? nil : mockInit
 				} else {
 					childInstantiable.initializer
 				}
@@ -1153,10 +1151,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		path: [String],
 		propertyToParameterLabel: [String: String],
 	) -> [String] {
-		let constructionInitializer: Initializer? = if let mockInit = instantiable.mockInitializer,
-		                                               !mockInit.arguments.isEmpty
-		{
-			mockInit
+		let constructionInitializer: Initializer? = if let mockInit = instantiable.mockInitializer {
+			// User-defined mock handles construction — only bubble args from mock method.
+			// No-arg mocks produce nil here, stopping default-valued arg collection.
+			mockInit.arguments.isEmpty ? nil : mockInit
 		} else {
 			instantiable.initializer
 		}
@@ -1232,10 +1230,9 @@ extension Instantiable {
 		unavailableProperties: Set<Property>? = nil,
 		forMockGeneration: Bool = false,
 	) throws -> String {
-		let initializerToUse: Initializer? = if forMockGeneration,
-		                                        let mockInit = mockInitializer,
-		                                        !mockInit.arguments.isEmpty
-		{
+		let initializerToUse: Initializer? = if forMockGeneration, let mockInit = mockInitializer {
+			// User-defined mock handles construction — use its parameter list
+			// (may be empty for no-arg mock methods).
 			mockInit
 		} else {
 			initializer
