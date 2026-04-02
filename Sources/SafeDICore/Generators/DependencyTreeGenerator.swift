@@ -297,11 +297,27 @@ public actor DependencyTreeGenerator {
 			visited: visited,
 			constructedTypes: [],
 		)
+
+		// onlyIfAvailable deps that aren't fulfilled become unavailable
+		// so the argument list generates nil for them.
+		let unavailableOptionalProperties = Set<Property>(
+			instantiable.dependencies.compactMap { dependency in
+				switch dependency.source {
+				case let .received(onlyIfAvailable):
+					onlyIfAvailable ? dependency.property : nil
+				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+					onlyIfAvailable ? fulfillingProperty : nil
+				case .instantiated, .forwarded:
+					nil
+				}
+			},
+		)
+
 		return ScopeGenerator(
 			instantiable: instantiable,
 			property: nil,
 			propertiesToGenerate: children,
-			unavailableOptionalProperties: [],
+			unavailableOptionalProperties: unavailableOptionalProperties,
 			erasedToConcreteExistential: false,
 			isPropertyCycle: false,
 		)
@@ -335,10 +351,10 @@ public actor DependencyTreeGenerator {
 			switch dependency.source {
 			case let .instantiated(_, erased):
 				erasedToConcreteExistential = erased
-			case .received:
+			case let .received(onlyIfAvailable):
 				// Only promote received deps to children if not already constructed above.
 				let depType = dependency.property.typeDescription.asInstantiatedType
-				if constructedTypes.contains(depType) {
+				if constructedTypes.contains(depType) || onlyIfAvailable {
 					continue
 				}
 				erasedToConcreteExistential = false
@@ -366,11 +382,29 @@ public actor DependencyTreeGenerator {
 				visited: visited,
 				constructedTypes: localConstructedTypes,
 			)
+			// Compute unavailable optional properties for this child:
+			// onlyIfAvailable deps whose type isn't constructed by any ancestor.
+			let childUnavailable = Set<Property>(
+				depInstantiable.dependencies.compactMap { dep in
+					switch dep.source {
+					case let .received(onlyIfAvailable):
+						guard onlyIfAvailable else { return nil }
+						let type = dep.property.typeDescription.asInstantiatedType
+						return localConstructedTypes.contains(type) ? nil : dep.property
+					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+						guard onlyIfAvailable else { return nil }
+						let type = fulfillingProperty.typeDescription.asInstantiatedType
+						return localConstructedTypes.contains(type) ? nil : fulfillingProperty
+					case .instantiated, .forwarded:
+						return nil
+					}
+				},
+			)
 			children.append(ScopeGenerator(
 				instantiable: depInstantiable,
 				property: dependency.property,
 				propertiesToGenerate: grandchildren,
-				unavailableOptionalProperties: [],
+				unavailableOptionalProperties: childUnavailable,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				isPropertyCycle: false,
 			))

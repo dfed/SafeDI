@@ -2492,15 +2492,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		#if DEBUG
 		extension B {
-		    public enum SafeDIMockPath {
-		        public enum A { case root }
-		    }
-
-		    public static func mock(
-		        a: ((SafeDIMockPath.A) -> A)? = nil
-		    ) -> B {
-		        let a: A? = a?(.root) ?? A()
-		        return B(a: a)
+		    public static func mock() -> B {
+		        B(a: nil)
 		    }
 		}
 		#endif
@@ -2689,15 +2682,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		#if DEBUG
 		extension B {
-		    public enum SafeDIMockPath {
-		        public enum A { case root }
-		    }
-
-		    public static func mock(
-		        a: ((SafeDIMockPath.A) -> A)? = nil
-		    ) -> B {
-		        let a: A? = a?(.root) ?? A()
-		        return B(a: a)
+		    public static func mock() -> B {
+		        B(a: nil)
 		    }
 		}
 		#endif
@@ -4133,23 +4119,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension Parent {
 		    public enum SafeDIMockPath {
 		        public enum Child { case root }
-		        public enum Shared_Shared { case root; case child }
-		        public enum Unrelated { case child }
 		    }
 
 		    public static func mock(
-		        child: ((SafeDIMockPath.Child) -> Child)? = nil,
-		        shared_Shared_Shared: ((SafeDIMockPath.Shared_Shared) -> Shared)? = nil,
-		        unrelated: ((SafeDIMockPath.Unrelated) -> Unrelated)? = nil
+		        child: ((SafeDIMockPath.Child) -> Child)? = nil
 		    ) -> Parent {
-		        let shared: Shared? = shared_Shared_Shared?(.root) ?? Shared()
-		        func __safeDI_child() -> Child {
-		            let unrelated: Unrelated? = unrelated?(.child) ?? Unrelated()
-		            let shared: Shared? = shared_Shared_Shared?(.child) ?? Shared()
-		            return Child(unrelated: unrelated, shared: shared)
-		        }
-		        let child: Child = child?(.root) ?? __safeDI_child()
-		        return Parent(child: child, shared: shared)
+		        let child = child?(.root) ?? Child(unrelated: nil, shared: nil)
+		        return Parent(child: child, shared: nil)
 		    }
 		}
 		#endif
@@ -4952,6 +4928,48 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		}
 		#endif
 		""")
+	}
+
+	@Test
+	mutating func mock_passesNilForOnlyIfAvailableProtocolDep() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol IDProvider {}
+
+				@Instantiable(fulfillingAdditionalTypes: [IDProvider.self])
+				public struct ConcreteIDProvider: IDProvider, Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Consumer: Instantiable {
+				    public init(idProvider: IDProvider?, dep: Dep) {
+				        self.idProvider = idProvider
+				        self.dep = dep
+				    }
+				    @Received(onlyIfAvailable: true) let idProvider: IDProvider?
+				    @Received let dep: Dep
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Dep: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		// Consumer has @Received(onlyIfAvailable: true) idProvider: IDProvider?
+		// IDProvider is a protocol fulfilled by ConcreteIDProvider, but it's
+		// not in Consumer's mock scope. The generated mock should pass nil.
+		let consumerMock = try #require(output.mockFiles["Consumer+SafeDIMock.swift"])
+		#expect(consumerMock.contains("Consumer(idProvider: nil,"))
 	}
 
 	@Test
