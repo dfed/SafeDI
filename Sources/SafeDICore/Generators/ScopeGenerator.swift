@@ -1226,6 +1226,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 // MARK: - Instantiable
 
 extension Instantiable {
+	fileprivate static let incorrectlyConfiguredComment = "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
+
 	fileprivate func generateArgumentList(
 		unavailableProperties: Set<Property>? = nil,
 		forMockGeneration: Bool = false,
@@ -1238,17 +1240,26 @@ extension Instantiable {
 			initializer
 		}
 		if forMockGeneration {
-			return try initializerToUse?
+			guard let initializerToUse else {
+				return Self.incorrectlyConfiguredComment
+			}
+			// When using a user-defined mock(), validate it covers all dependencies.
+			// If not, emit a comment that triggers a build error directing the user
+			// to the @Instantiable macro fix-it (same pattern as production code gen).
+			if mockInitializer != nil, !initializerToUse.isValid(forFulfilling: dependencies) {
+				return Self.incorrectlyConfiguredComment
+			}
+			return try initializerToUse
 				.createMockInitializerArgumentList(
 					given: dependencies,
 					unavailableProperties: unavailableProperties,
-				) ?? "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
+				)
 		} else {
 			return try initializerToUse?
 				.createInitializerArgumentList(
 					given: dependencies,
 					unavailableProperties: unavailableProperties,
-				) ?? "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
+				) ?? Self.incorrectlyConfiguredComment
 		}
 	}
 }
