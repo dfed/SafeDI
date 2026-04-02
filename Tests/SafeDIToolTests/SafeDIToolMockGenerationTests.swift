@@ -352,19 +352,15 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension ChildA {
 		    public enum SafeDIMockPath {
 		        public enum Grandchild { case root }
-		        public enum SharedThing_SharedThing { case root; case grandchild }
+		        public enum SharedThing { case root }
 		    }
 
 		    public static func mock(
 		        grandchild: ((SafeDIMockPath.Grandchild) -> Grandchild)? = nil,
-		        shared_SharedThing_SharedThing: ((SafeDIMockPath.SharedThing_SharedThing) -> SharedThing)? = nil
+		        shared: ((SafeDIMockPath.SharedThing) -> SharedThing)? = nil
 		    ) -> ChildA {
-		        let shared = shared_SharedThing_SharedThing?(.root) ?? SharedThing()
-		        func __safeDI_grandchild() -> Grandchild {
-		            let shared = shared_SharedThing_SharedThing?(.grandchild) ?? SharedThing()
-		            return Grandchild(shared: shared)
-		        }
-		        let grandchild: Grandchild = grandchild?(.root) ?? __safeDI_grandchild()
+		        let shared = shared?(.root) ?? SharedThing()
+		        let grandchild = grandchild?(.root) ?? Grandchild(shared: shared)
 		        return ChildA(shared: shared, grandchild: grandchild)
 		    }
 		}
@@ -992,24 +988,17 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public enum SafeDIMockPath {
 		        public enum GrandchildAA { case root }
 		        public enum GrandchildAB { case root }
-		        public enum Shared_Shared { case grandchildAA; case grandchildAB }
+		        public enum Shared { case root }
 		    }
 
 		    public static func mock(
 		        grandchildAA: ((SafeDIMockPath.GrandchildAA) -> GrandchildAA)? = nil,
 		        grandchildAB: ((SafeDIMockPath.GrandchildAB) -> GrandchildAB)? = nil,
-		        shared_Shared_Shared: ((SafeDIMockPath.Shared_Shared) -> Shared)? = nil
+		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil
 		    ) -> ChildA {
-		        func __safeDI_grandchildAA() -> GrandchildAA {
-		            let shared = shared_Shared_Shared?(.grandchildAA) ?? Shared()
-		            return GrandchildAA(shared: shared)
-		        }
-		        let grandchildAA: GrandchildAA = grandchildAA?(.root) ?? __safeDI_grandchildAA()
-		        func __safeDI_grandchildAB() -> GrandchildAB {
-		            let shared = shared_Shared_Shared?(.grandchildAB) ?? Shared()
-		            return GrandchildAB(shared: shared)
-		        }
-		        let grandchildAB: GrandchildAB = grandchildAB?(.root) ?? __safeDI_grandchildAB()
+		        let shared = shared?(.root) ?? Shared()
+		        let grandchildAA = grandchildAA?(.root) ?? GrandchildAA(shared: shared)
+		        let grandchildAB = grandchildAB?(.root) ?? GrandchildAB(shared: shared)
 		        return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
 		    }
 		}
@@ -1091,7 +1080,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        public enum ChildB { case root }
 		        public enum GrandchildAA { case childA }
 		        public enum GrandchildAB { case childA }
-		        public enum Shared_Shared { case root; case childA_grandchildAA; case childA_grandchildAB; case childB }
+		        public enum Shared_Shared { case childA; case childA_grandchildAA; case childA_grandchildAB; case root; case childB }
 		    }
 
 		    public static func mock(
@@ -1101,8 +1090,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        grandchildAB: ((SafeDIMockPath.GrandchildAB) -> GrandchildAB)? = nil,
 		        shared_Shared_Shared: ((SafeDIMockPath.Shared_Shared) -> Shared)? = nil
 		    ) -> Root {
-		        let shared = shared_Shared_Shared?(.root) ?? Shared()
 		        func __safeDI_childA() -> ChildA {
+		            let shared = shared_Shared_Shared?(.childA) ?? Shared()
 		            func __safeDI_grandchildAA() -> GrandchildAA {
 		                let shared = shared_Shared_Shared?(.childA_grandchildAA) ?? Shared()
 		                return GrandchildAA(shared: shared)
@@ -1116,6 +1105,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
 		        }
 		        let childA: ChildA = childA?(.root) ?? __safeDI_childA()
+		        let shared = shared_Shared_Shared?(.root) ?? Shared()
 		        func __safeDI_childB() -> ChildB {
 		            let shared = shared_Shared_Shared?(.childB) ?? Shared()
 		            return ChildB(shared: shared)
@@ -1493,22 +1483,17 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public enum SafeDIMockPath {
 		        public enum Grandchild { case root }
 		        public enum GreatGrandchild { case grandchild }
-		        public enum Leaf_Leaf { case root; case grandchild; case grandchild_greatGrandchild }
+		        public enum Leaf { case root }
 		    }
 
 		    public static func mock(
 		        grandchild: ((SafeDIMockPath.Grandchild) -> Grandchild)? = nil,
 		        greatGrandchild: ((SafeDIMockPath.GreatGrandchild) -> GreatGrandchild)? = nil,
-		        leaf_Leaf_Leaf: ((SafeDIMockPath.Leaf_Leaf) -> Leaf)? = nil
+		        leaf: ((SafeDIMockPath.Leaf) -> Leaf)? = nil
 		    ) -> Child {
-		        let leaf = leaf_Leaf_Leaf?(.root) ?? Leaf()
+		        let leaf = leaf?(.root) ?? Leaf()
 		        func __safeDI_grandchild() -> Grandchild {
-		            let leaf = leaf_Leaf_Leaf?(.grandchild) ?? Leaf()
-		            func __safeDI_greatGrandchild() -> GreatGrandchild {
-		                let leaf = leaf_Leaf_Leaf?(.grandchild_greatGrandchild) ?? Leaf()
-		                return GreatGrandchild(leaf: leaf)
-		            }
-		            let greatGrandchild: GreatGrandchild = greatGrandchild?(.grandchild) ?? __safeDI_greatGrandchild()
+		            let greatGrandchild = greatGrandchild?(.grandchild) ?? GreatGrandchild(leaf: leaf)
 		            return Grandchild(greatGrandchild: greatGrandchild, leaf: leaf)
 		        }
 		        let grandchild: Grandchild = grandchild?(.root) ?? __safeDI_grandchild()
@@ -1527,19 +1512,15 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension Grandchild {
 		    public enum SafeDIMockPath {
 		        public enum GreatGrandchild { case root }
-		        public enum Leaf_Leaf { case root; case greatGrandchild }
+		        public enum Leaf { case root }
 		    }
 
 		    public static func mock(
 		        greatGrandchild: ((SafeDIMockPath.GreatGrandchild) -> GreatGrandchild)? = nil,
-		        leaf_Leaf_Leaf: ((SafeDIMockPath.Leaf_Leaf) -> Leaf)? = nil
+		        leaf: ((SafeDIMockPath.Leaf) -> Leaf)? = nil
 		    ) -> Grandchild {
-		        let leaf = leaf_Leaf_Leaf?(.root) ?? Leaf()
-		        func __safeDI_greatGrandchild() -> GreatGrandchild {
-		            let leaf = leaf_Leaf_Leaf?(.greatGrandchild) ?? Leaf()
-		            return GreatGrandchild(leaf: leaf)
-		        }
-		        let greatGrandchild: GreatGrandchild = greatGrandchild?(.root) ?? __safeDI_greatGrandchild()
+		        let leaf = leaf?(.root) ?? Leaf()
+		        let greatGrandchild = greatGrandchild?(.root) ?? GreatGrandchild(leaf: leaf)
 		        return Grandchild(greatGrandchild: greatGrandchild, leaf: leaf)
 		    }
 		}
@@ -2111,20 +2092,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    public enum SafeDIMockPath {
-		        public enum Helper_Helper { case root; case thirdParty }
+		        public enum Helper { case root }
 		        public enum ThirdParty { case root }
 		    }
 
 		    public static func mock(
-		        helper_Helper_Helper: ((SafeDIMockPath.Helper_Helper) -> Helper)? = nil,
+		        helper: ((SafeDIMockPath.Helper) -> Helper)? = nil,
 		        thirdParty: ((SafeDIMockPath.ThirdParty) -> ThirdParty)? = nil
 		    ) -> Root {
-		        let helper = helper_Helper_Helper?(.root) ?? Helper()
-		        func __safeDI_thirdParty() -> ThirdParty {
-		            let helper = helper_Helper_Helper?(.thirdParty) ?? Helper()
-		            return ThirdParty.instantiate(helper: helper)
-		        }
-		        let thirdParty: ThirdParty = thirdParty?(.root) ?? __safeDI_thirdParty()
+		        let helper = helper?(.root) ?? Helper()
+		        let thirdParty: ThirdParty = thirdParty?(.root) ?? ThirdParty.instantiate(helper: helper)
 		        return Root(thirdParty: thirdParty, helper: helper)
 		    }
 		}
@@ -2411,18 +2388,17 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    public enum SafeDIMockPath {
-		        public enum Shared_Shared { case root; case thirdPartyBuilder }
+		        public enum Shared { case root }
 		        public enum ThirdPartyBuilder { case root }
 		    }
 
 		    public static func mock(
-		        shared_Shared_Shared: ((SafeDIMockPath.Shared_Shared) -> Shared)? = nil,
+		        shared: ((SafeDIMockPath.Shared) -> Shared)? = nil,
 		        thirdPartyBuilder: ((SafeDIMockPath.ThirdPartyBuilder) -> Instantiator<ThirdParty>)? = nil
 		    ) -> Root {
-		        let shared = shared_Shared_Shared?(.root) ?? Shared()
+		        let shared = shared?(.root) ?? Shared()
 		        func __safeDI_thirdPartyBuilder() -> ThirdParty {
-		            let shared = shared_Shared_Shared?(.thirdPartyBuilder) ?? Shared()
-		            return ThirdParty.instantiate(shared: shared)
+		            ThirdParty.instantiate(shared: shared)
 		        }
 		        let thirdPartyBuilder: Instantiator<ThirdParty> = thirdPartyBuilder?(.root) ?? Instantiator<ThirdParty>(__safeDI_thirdPartyBuilder)
 		        return Root(shared: shared, thirdPartyBuilder: thirdPartyBuilder)
@@ -3444,8 +3420,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        public enum EditProfileViewControllerBuilder { case profileViewControllerBuilder }
 		        public enum NetworkService { case root }
 		        public enum ProfileViewControllerBuilder { case root }
-		        public enum UserManager_UserManager { case profileViewControllerBuilder_editProfileViewControllerBuilder }
-		        public enum UserManager_UserVendor { case profileViewControllerBuilder_editProfileViewControllerBuilder }
+		        public enum UserManager_UserManager { case root; case profileViewControllerBuilder_editProfileViewControllerBuilder }
+		        public enum UserManager_UserVendor { case profileViewControllerBuilder_editProfileViewControllerBuilder; case root }
 		    }
 
 		    public static func mock(
@@ -3454,16 +3430,17 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        editProfileViewControllerBuilder: ((SafeDIMockPath.EditProfileViewControllerBuilder) -> Instantiator<EditProfileViewController>)? = nil,
 		        networkService: @escaping (SafeDIMockPath.NetworkService) -> NetworkService,
 		        profileViewControllerBuilder: ((SafeDIMockPath.ProfileViewControllerBuilder) -> Instantiator<ProfileViewController>)? = nil,
-		        userManager: ((SafeDIMockPath.UserManager_UserManager) -> UserManager)? = nil,
-		        userVendor: ((SafeDIMockPath.UserManager_UserVendor) -> UserVendor)? = nil
+		        userManager_UserManager_UserManager: ((SafeDIMockPath.UserManager_UserManager) -> UserManager)? = nil,
+		        userVendor_UserManager_UserVendor: ((SafeDIMockPath.UserManager_UserVendor) -> UserVendor)? = nil
 		    ) -> LoggedInViewController {
 		        let networkService = networkService(.root)
 		        let userNetworkService: NetworkService = networkService
+		        let userManager = userManager_UserManager_UserManager?(.root) ?? UserManager()
 		        func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
 		            let userVendor: UserVendor = userManager
 		            func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
-		                let userVendor: UserVendor = userVendor?(.profileViewControllerBuilder_editProfileViewControllerBuilder) ?? UserManager()
-		                let userManager = userManager?(.profileViewControllerBuilder_editProfileViewControllerBuilder) ?? UserManager()
+		                let userVendor: UserVendor = userVendor_UserManager_UserVendor?(.profileViewControllerBuilder_editProfileViewControllerBuilder) ?? UserManager()
+		                let userManager = userManager_UserManager_UserManager?(.profileViewControllerBuilder_editProfileViewControllerBuilder) ?? UserManager()
 		                let userNetworkService: NetworkService = userNetworkService?(.profileViewControllerBuilder_editProfileViewControllerBuilder) ?? DefaultNetworkService()
 		                return EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: userNetworkService)
 		            }
@@ -3471,6 +3448,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            return ProfileViewController(userVendor: userVendor, editProfileViewControllerBuilder: editProfileViewControllerBuilder)
 		        }
 		        let profileViewControllerBuilder = profileViewControllerBuilder?(.root) ?? Instantiator<ProfileViewController>(__safeDI_profileViewControllerBuilder)
+		        let userVendor: UserVendor = userVendor_UserManager_UserVendor?(.root) ?? UserManager()
 		        return LoggedInViewController(userManager: userManager, userNetworkService: userNetworkService, profileViewControllerBuilder: profileViewControllerBuilder)
 		    }
 		}
@@ -3485,23 +3463,25 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension ProfileViewController {
 		    public enum SafeDIMockPath {
-		        public enum DefaultNetworkService { case editProfileViewControllerBuilder }
+		        public enum DefaultNetworkService_NetworkService { case root; case editProfileViewControllerBuilder }
 		        public enum EditProfileViewControllerBuilder { case root }
-		        public enum UserManager_UserManager { case editProfileViewControllerBuilder }
+		        public enum UserManager_UserManager { case root; case editProfileViewControllerBuilder }
 		        public enum UserManager_UserVendor { case editProfileViewControllerBuilder }
 		    }
 
 		    public static func mock(
-		        userNetworkService: ((SafeDIMockPath.DefaultNetworkService) -> NetworkService)? = nil,
+		        userNetworkService_DefaultNetworkService_NetworkService: ((SafeDIMockPath.DefaultNetworkService_NetworkService) -> NetworkService)? = nil,
 		        editProfileViewControllerBuilder: ((SafeDIMockPath.EditProfileViewControllerBuilder) -> Instantiator<EditProfileViewController>)? = nil,
-		        userManager: ((SafeDIMockPath.UserManager_UserManager) -> UserManager)? = nil,
+		        userManager_UserManager_UserManager: ((SafeDIMockPath.UserManager_UserManager) -> UserManager)? = nil,
 		        userVendor: ((SafeDIMockPath.UserManager_UserVendor) -> UserVendor)? = nil
 		    ) -> ProfileViewController {
+		        let userManager = userManager_UserManager_UserManager?(.root) ?? UserManager()
 		        let userVendor: UserVendor = userManager
+		        let userNetworkService: NetworkService = userNetworkService_DefaultNetworkService_NetworkService?(.root) ?? DefaultNetworkService()
 		        func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
 		            let userVendor: UserVendor = userVendor?(.editProfileViewControllerBuilder) ?? UserManager()
-		            let userManager = userManager?(.editProfileViewControllerBuilder) ?? UserManager()
-		            let userNetworkService: NetworkService = userNetworkService?(.editProfileViewControllerBuilder) ?? DefaultNetworkService()
+		            let userManager = userManager_UserManager_UserManager?(.editProfileViewControllerBuilder) ?? UserManager()
+		            let userNetworkService: NetworkService = userNetworkService_DefaultNetworkService_NetworkService?(.editProfileViewControllerBuilder) ?? DefaultNetworkService()
 		            return EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: userNetworkService)
 		        }
 		        let editProfileViewControllerBuilder = editProfileViewControllerBuilder?(.root) ?? Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
@@ -3520,23 +3500,23 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension RootViewController {
 		    public enum SafeDIMockPath {
 		        public enum DefaultAuthService { case root }
-		        public enum DefaultNetworkService_NetworkService { case root; case authService; case loggedInViewControllerBuilder_profileViewControllerBuilder_editProfileViewControllerBuilder }
+		        public enum DefaultNetworkService_NetworkService { case root; case authService; case loggedInViewControllerBuilder_profileViewControllerBuilder; case loggedInViewControllerBuilder_profileViewControllerBuilder_editProfileViewControllerBuilder }
 		        public enum EditProfileViewControllerBuilder { case loggedInViewControllerBuilder_profileViewControllerBuilder }
 		        public enum LoggedInViewControllerBuilder { case root }
 		        public enum ProfileViewControllerBuilder { case loggedInViewControllerBuilder }
-		        public enum UserManager_UserManager { case loggedInViewControllerBuilder_profileViewControllerBuilder_editProfileViewControllerBuilder }
-		        public enum UserManager_UserVendor { case loggedInViewControllerBuilder_profileViewControllerBuilder_editProfileViewControllerBuilder }
+		        public enum UserManager_UserManager { case loggedInViewControllerBuilder; case loggedInViewControllerBuilder_profileViewControllerBuilder; case loggedInViewControllerBuilder_profileViewControllerBuilder_editProfileViewControllerBuilder; case root }
+		        public enum UserManager_UserVendor { case loggedInViewControllerBuilder_profileViewControllerBuilder_editProfileViewControllerBuilder; case loggedInViewControllerBuilder; case root }
 		    }
 
 		    public static func mock(
 		        authService: ((SafeDIMockPath.DefaultAuthService) -> AuthService)? = nil,
 		        networkService_DefaultNetworkService_NetworkService: ((SafeDIMockPath.DefaultNetworkService_NetworkService) -> NetworkService)? = nil,
-		        userNetworkService: ((SafeDIMockPath.DefaultNetworkService_NetworkService) -> NetworkService)? = nil,
+		        userNetworkService_DefaultNetworkService_NetworkService: ((SafeDIMockPath.DefaultNetworkService_NetworkService) -> NetworkService)? = nil,
 		        editProfileViewControllerBuilder: ((SafeDIMockPath.EditProfileViewControllerBuilder) -> Instantiator<EditProfileViewController>)? = nil,
 		        loggedInViewControllerBuilder: ((SafeDIMockPath.LoggedInViewControllerBuilder) -> Instantiator<LoggedInViewController>)? = nil,
 		        profileViewControllerBuilder: ((SafeDIMockPath.ProfileViewControllerBuilder) -> Instantiator<ProfileViewController>)? = nil,
-		        userManager: ((SafeDIMockPath.UserManager_UserManager) -> UserManager)? = nil,
-		        userVendor: ((SafeDIMockPath.UserManager_UserVendor) -> UserVendor)? = nil
+		        userManager_UserManager_UserManager: ((SafeDIMockPath.UserManager_UserManager) -> UserManager)? = nil,
+		        userVendor_UserManager_UserVendor: ((SafeDIMockPath.UserManager_UserVendor) -> UserVendor)? = nil
 		    ) -> RootViewController {
 		        let networkService: NetworkService = networkService_DefaultNetworkService_NetworkService?(.root) ?? DefaultNetworkService()
 		        func __safeDI_authService() -> DefaultAuthService {
@@ -3546,23 +3526,30 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let authService: AuthService = authService?(.root) ?? __safeDI_authService()
 		        func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
 		            let userNetworkService: NetworkService = networkService
+		            let userManager = userManager_UserManager_UserManager?(.loggedInViewControllerBuilder) ?? UserManager()
 		            func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
+		                let userManager = userManager_UserManager_UserManager?(.loggedInViewControllerBuilder_profileViewControllerBuilder) ?? UserManager()
 		                let userVendor: UserVendor = userManager
+		                let userNetworkService: NetworkService = userNetworkService_DefaultNetworkService_NetworkService?(.loggedInViewControllerBuilder_profileViewControllerBuilder) ?? DefaultNetworkService()
 		                func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
-		                    let userVendor: UserVendor = userVendor?(.loggedInViewControllerBuilder_profileViewControllerBuilder_editProfileViewControllerBuilder) ?? UserManager()
-		                    let userManager = userManager?(.loggedInViewControllerBuilder_profileViewControllerBuilder_editProfileViewControllerBuilder) ?? UserManager()
-		                    let userNetworkService: NetworkService = userNetworkService?(.loggedInViewControllerBuilder_profileViewControllerBuilder_editProfileViewControllerBuilder) ?? DefaultNetworkService()
+		                    let userVendor: UserVendor = userVendor_UserManager_UserVendor?(.loggedInViewControllerBuilder_profileViewControllerBuilder_editProfileViewControllerBuilder) ?? UserManager()
+		                    let userManager = userManager_UserManager_UserManager?(.loggedInViewControllerBuilder_profileViewControllerBuilder_editProfileViewControllerBuilder) ?? UserManager()
+		                    let userNetworkService: NetworkService = userNetworkService_DefaultNetworkService_NetworkService?(.loggedInViewControllerBuilder_profileViewControllerBuilder_editProfileViewControllerBuilder) ?? DefaultNetworkService()
 		                    return EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: userNetworkService)
 		                }
 		                let editProfileViewControllerBuilder = editProfileViewControllerBuilder?(.loggedInViewControllerBuilder_profileViewControllerBuilder) ?? Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
 		                return ProfileViewController(userVendor: userVendor, editProfileViewControllerBuilder: editProfileViewControllerBuilder)
 		            }
 		            let profileViewControllerBuilder = profileViewControllerBuilder?(.loggedInViewControllerBuilder) ?? Instantiator<ProfileViewController>(__safeDI_profileViewControllerBuilder)
+		            let userVendor: UserVendor = userVendor_UserManager_UserVendor?(.loggedInViewControllerBuilder) ?? UserManager()
 		            return LoggedInViewController(userManager: userManager, userNetworkService: userNetworkService, profileViewControllerBuilder: profileViewControllerBuilder)
 		        }
 		        let loggedInViewControllerBuilder = loggedInViewControllerBuilder?(.root) ?? Instantiator<LoggedInViewController> {
 		            __safeDI_loggedInViewControllerBuilder(userManager: $0)
 		        }
+		        let userVendor: UserVendor = userVendor_UserManager_UserVendor?(.root) ?? UserManager()
+		        let userManager = userManager_UserManager_UserManager?(.root) ?? UserManager()
+		        let userNetworkService: NetworkService = userNetworkService_DefaultNetworkService_NetworkService?(.root) ?? DefaultNetworkService()
 		        return RootViewController(authService: authService, networkService: networkService, loggedInViewControllerBuilder: loggedInViewControllerBuilder)
 		    }
 		}
@@ -4414,18 +4401,19 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension Root {
 		    public enum SafeDIMockPath {
 		        public enum ChildBuilder { case parentBuilder }
-		        public enum Config { case parentBuilder_childBuilder }
+		        public enum Config_Config { case parentBuilder; case parentBuilder_childBuilder; case root }
 		        public enum ParentBuilder { case root }
 		    }
 
 		    public static func mock(
 		        childBuilder: ((SafeDIMockPath.ChildBuilder) -> Instantiator<Child>)? = nil,
-		        config: ((SafeDIMockPath.Config) -> Config)? = nil,
+		        config_Config_Config: ((SafeDIMockPath.Config_Config) -> Config)? = nil,
 		        parentBuilder: ((SafeDIMockPath.ParentBuilder) -> Instantiator<Parent>)? = nil
 		    ) -> Root {
 		        func __safeDI_parentBuilder(config: Config) -> Parent {
+		            let config = config_Config_Config?(.parentBuilder) ?? Config()
 		            func __safeDI_childBuilder() -> Child {
-		                let config = config?(.parentBuilder_childBuilder) ?? Config()
+		                let config = config_Config_Config?(.parentBuilder_childBuilder) ?? Config()
 		                return Child(config: config)
 		            }
 		            let childBuilder = childBuilder?(.parentBuilder) ?? Instantiator<Child>(__safeDI_childBuilder)
@@ -4434,6 +4422,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let parentBuilder = parentBuilder?(.root) ?? Instantiator<Parent> {
 		            __safeDI_parentBuilder(config: $0)
 		        }
+		        let config = config_Config_Config?(.root) ?? Config()
 		        return Root(parentBuilder: parentBuilder)
 		    }
 		}
@@ -4532,19 +4521,18 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension Root {
 		    public enum SafeDIMockPath {
 		        public enum Database { case service }
-		        public enum ReceivedValue_ReceivedValue { case root; case service }
+		        public enum ReceivedValue { case root }
 		        public enum Service { case root }
 		    }
 
 		    public static func mock(
 		        database: ((SafeDIMockPath.Database) -> Database)? = nil,
-		        receivedValue_ReceivedValue_ReceivedValue: ((SafeDIMockPath.ReceivedValue_ReceivedValue) -> ReceivedValue)? = nil,
+		        receivedValue: ((SafeDIMockPath.ReceivedValue) -> ReceivedValue)? = nil,
 		        service: ((SafeDIMockPath.Service) -> Service)? = nil
 		    ) -> Root {
-		        let receivedValue = receivedValue_ReceivedValue_ReceivedValue?(.root) ?? ReceivedValue()
+		        let receivedValue = receivedValue?(.root) ?? ReceivedValue()
 		        func __safeDI_service() -> Service {
 		            let database = database?(.service) ?? Database()
-		            let receivedValue = receivedValue_ReceivedValue_ReceivedValue?(.service) ?? ReceivedValue()
 		            return Service(database: database, receivedValue: receivedValue)
 		        }
 		        let service: Service = service?(.root) ?? __safeDI_service()
@@ -4760,7 +4748,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public enum SafeDIMockPath {
 		        public enum ChannelBuilder { case service }
 		        public enum Service { case root }
-		        public enum Shared_Shared { case root; case service; case service_channelBuilder }
+		        public enum Shared_Shared { case root; case service_channelBuilder }
 		    }
 
 		    public static func mock(
@@ -4770,7 +4758,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let shared = shared_Shared_Shared?(.root) ?? Shared()
 		        func __safeDI_service() -> Service {
-		            let shared = shared_Shared_Shared?(.service) ?? Shared()
 		            func __safeDI_channelBuilder(key: String) -> Channel {
 		                let shared = shared_Shared_Shared?(.service_channelBuilder) ?? Shared()
 		                return Channel(key: key, shared: shared)
@@ -5852,6 +5839,91 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> NoteView {
 		        let userService = userService?(.root) ?? AnyUserService(DefaultUserService())
 		        return NoteView(userName: userName, userService: userService)
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	mutating func mock_sharedTransitiveReceivedDependencyPromotedAtRootScope() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Parent: Instantiable {
+				    public init(childA: ChildA, childB: ChildB) {
+				        self.childA = childA
+				        self.childB = childB
+				    }
+				    @Instantiated let childA: ChildA
+				    @Instantiated let childB: ChildB
+				}
+				""",
+				"""
+				@Instantiable
+				public struct SharedThing: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(shared: SharedThing) {
+				        self.shared = shared
+				    }
+				    @Received let shared: SharedThing
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(shared: SharedThing) {
+				        self.shared = shared
+				    }
+				    @Instantiated let shared: SharedThing
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		// Parent does NOT directly @Instantiate SharedThing.
+		// ChildB @Instantiates it, ChildA @Receives it.
+		// The mock promotes SharedThing at root scope so it's visible
+		// to all children. Each child's nested function allows path-specific overrides.
+		#expect(output.mockFiles["Parent+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Parent {
+		    public enum SafeDIMockPath {
+		        public enum ChildA { case root }
+		        public enum ChildB { case root }
+		        public enum SharedThing_SharedThing { case root; case childA; case childB }
+		    }
+
+		    public static func mock(
+		        childA: ((SafeDIMockPath.ChildA) -> ChildA)? = nil,
+		        childB: ((SafeDIMockPath.ChildB) -> ChildB)? = nil,
+		        shared_SharedThing_SharedThing: ((SafeDIMockPath.SharedThing_SharedThing) -> SharedThing)? = nil
+		    ) -> Parent {
+		        let shared = shared_SharedThing_SharedThing?(.root) ?? SharedThing()
+		        func __safeDI_childA() -> ChildA {
+		            let shared = shared_SharedThing_SharedThing?(.childA) ?? SharedThing()
+		            return ChildA(shared: shared)
+		        }
+		        let childA: ChildA = childA?(.root) ?? __safeDI_childA()
+		        func __safeDI_childB() -> ChildB {
+		            let shared = shared_SharedThing_SharedThing?(.childB) ?? SharedThing()
+		            return ChildB(shared: shared)
+		        }
+		        let childB: ChildB = childB?(.root) ?? __safeDI_childB()
+		        return Parent(childA: childA, childB: childB)
 		    }
 		}
 		#endif

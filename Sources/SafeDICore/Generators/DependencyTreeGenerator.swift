@@ -115,6 +115,7 @@ public actor DependencyTreeGenerator {
 				let mockRoot = try createMockRootScopeGenerator(
 					for: instantiable,
 					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+					erasedToConcreteTypeMap: erasedToConcreteTypeMap,
 				)
 				taskGroup.addTask {
 					let code = try await mockRoot.generateCode(
@@ -308,11 +309,12 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// Creates a mock-root ScopeGenerator using the production Scope tree.
-	/// Uses `forMockGeneration: true` so unavailableOptionalProperties is empty
-	/// and eager code generation is skipped.
+	/// Received dependencies that bubble up are promoted as root-level children
+	/// so they're constructed at root scope and visible to all nested functions.
 	private func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
 	) throws -> ScopeGenerator {
 		guard let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable] else {
 			return ScopeGenerator(
@@ -324,6 +326,39 @@ public actor DependencyTreeGenerator {
 				isPropertyCycle: false,
 			)
 		}
+
+		// Collect all transitive received properties from the Scope tree that
+		// aren't already constructed as children. These need to be promoted
+		// as root-level children so they're at root scope.
+		let alreadyDeclared = Set(scope.propertiesToGenerate.compactMap { propertyToGenerate -> Property? in
+			switch propertyToGenerate {
+			case let .instantiated(property, _, _): property
+			case let .aliased(property, _, _, _): property
+			}
+		})
+		let transitiveReceived = collectTransitiveReceivedProperties(
+			scope: scope,
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			alreadyDeclared: alreadyDeclared,
+			visited: [],
+		)
+		for receivedProperty in transitiveReceived {
+			var dependencyType = receivedProperty.typeDescription.asInstantiatedType
+			var erasedToConcreteExistential = false
+			if typeDescriptionToScopeMap[dependencyType] == nil,
+			   let concreteType = erasedToConcreteTypeMap[receivedProperty.typeDescription]
+			{
+				dependencyType = concreteType
+				erasedToConcreteExistential = true
+			}
+			guard let receivedScope = typeDescriptionToScopeMap[dependencyType] else { continue }
+			scope.propertiesToGenerate.append(.instantiated(
+				receivedProperty,
+				receivedScope,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+			))
+		}
+
 		return try scope.createScopeGenerator(
 			for: nil,
 			propertyStack: [],
@@ -333,11 +368,54 @@ public actor DependencyTreeGenerator {
 		)
 	}
 
+	/// Recursively collects received properties from the Scope tree that aren't
+	/// already declared as children at the root level.
+	private func collectTransitiveReceivedProperties(
+		scope: Scope,
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		alreadyDeclared: Set<Property>,
+		visited: Set<ObjectIdentifier>,
+	) -> [Property] {
+		let scopeIdentifier = ObjectIdentifier(scope)
+		guard !visited.contains(scopeIdentifier) else { return [] }
+		var visited = visited
+		visited.insert(scopeIdentifier)
+
+		var result = [Property]()
+		// Collect this scope's own received deps.
+		for dependency in scope.instantiable.dependencies {
+			switch dependency.source {
+			case let .received(onlyIfAvailable):
+				guard !onlyIfAvailable else { continue }
+				let property = dependency.property
+				guard !alreadyDeclared.contains(property) else { continue }
+				result.append(property)
+			case .instantiated, .aliased, .forwarded:
+				break
+			}
+		}
+		// Recurse into children.
+		for propertyToGenerate in scope.propertiesToGenerate {
+			switch propertyToGenerate {
+			case let .instantiated(_, childScope, _):
+				result.append(contentsOf: collectTransitiveReceivedProperties(
+					scope: childScope,
+					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+					alreadyDeclared: alreadyDeclared,
+					visited: visited,
+				))
+			case .aliased:
+				break
+			}
+		}
+		return result
+	}
+
 	/// Builds a scope mapping for mock generation. Similar to `createTypeDescriptionToScopeMapping`
-	/// but includes ALL types (not just reachable from roots) and promotes `@Received` dependencies
-	/// as `.instantiated` entries so the mock can construct the full subtree.
+	/// but includes ALL types (not just reachable from roots). Received dependencies are NOT
+	/// promoted here — they're promoted at the root level in `createMockRootScopeGenerator`.
 	private func createMockTypeDescriptionToScopeMapping(
-		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
+		erasedToConcreteTypeMap _: [TypeDescription: TypeDescription],
 	) -> [TypeDescription: Scope] {
 		// Create scopes for all types.
 		let typeDescriptionToScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
@@ -362,26 +440,11 @@ public actor DependencyTreeGenerator {
 							erasedToConcreteExistential: erasedToConcreteExistential,
 						))
 					}
-				case let .received(onlyIfAvailable):
-					// Skip onlyIfAvailable — they become optional mock parameters.
-					guard !onlyIfAvailable else { continue }
-					// Promote received dependencies as instantiated children so the
-					// mock can construct them. Resolve concrete existential wrappers.
-					var depType = dependency.property.typeDescription.asInstantiatedType
-					var erasedToConcreteExistential = false
-					if typeDescriptionToScopeMap[depType] == nil,
-					   let concreteType = erasedToConcreteTypeMap[dependency.property.typeDescription]
-					{
-						depType = concreteType
-						erasedToConcreteExistential = true
-					}
-					if let receivedScope = typeDescriptionToScopeMap[depType] {
-						scope.propertiesToGenerate.append(.instantiated(
-							dependency.property,
-							receivedScope,
-							erasedToConcreteExistential: erasedToConcreteExistential,
-						))
-					}
+				case .received:
+					// Received dependencies are NOT promoted on individual scopes.
+					// They bubble up through receivedProperties to the mock root,
+					// where they're promoted as root-level children.
+					continue
 				case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
 					scope.propertiesToGenerate.append(.aliased(
 						dependency.property,
