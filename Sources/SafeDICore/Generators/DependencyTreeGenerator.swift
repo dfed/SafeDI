@@ -78,7 +78,7 @@ public actor DependencyTreeGenerator {
 	public func generateMockCode(
 		mockConditionalCompilation: String?,
 	) async throws -> [GeneratedRoot] {
-		// Create mock-root ScopeGenerators for all types, with received deps
+		// Create mock-root ScopeGenerators for all types, with received dependencies
 		// treated as instantiated so the mock can construct the full subtree.
 		var seen = Set<TypeDescription>()
 		return try await withThrowingTaskGroup(
@@ -284,9 +284,9 @@ public actor DependencyTreeGenerator {
 			.joined(separator: "\n")
 	}
 
-	/// Creates a mock-root ScopeGenerator for an Instantiable, treating received deps
+	/// Creates a mock-root ScopeGenerator for an Instantiable, treating received dependencies
 	/// as if they were instantiated so the mock can construct the full dependency subtree.
-	/// Creates a mock-root ScopeGenerator for an Instantiable, treating received deps
+	/// Creates a mock-root ScopeGenerator for an Instantiable, treating received dependencies
 	/// as if they were instantiated so the mock can construct the full dependency subtree.
 	private func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
@@ -298,7 +298,7 @@ public actor DependencyTreeGenerator {
 			constructedTypes: [],
 		)
 
-		// onlyIfAvailable deps that aren't fulfilled become unavailable
+		// onlyIfAvailable dependencies that aren't fulfilled become unavailable
 		// so the argument list generates nil for them.
 		let unavailableOptionalProperties = Set<Property>(
 			instantiable.dependencies.compactMap { dependency in
@@ -324,7 +324,7 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// Recursively builds child ScopeGenerators for mock roots.
-	/// Received deps are only promoted to children when their type isn't already
+	/// Received dependencies are only promoted to children when their type isn't already
 	/// constructed by an ancestor (tracked via `constructedTypes`).
 	private func createMockChildScopeGenerators(
 		for instantiable: Instantiable,
@@ -334,8 +334,8 @@ public actor DependencyTreeGenerator {
 		var visited = visited
 		visited.insert(instantiable.concreteInstantiable)
 
-		// Collect which types THIS scope constructs (instantiated + forwarded deps).
-		// Include fulfillingAdditionalTypes so received deps for protocols are
+		// Collect which types THIS scope constructs (instantiated + forwarded dependencies).
+		// Include fulfillingAdditionalTypes so received dependencies for protocols are
 		// resolved when the concrete type is constructed at this scope.
 		var localConstructedTypes = constructedTypes
 		for dependency in instantiable.dependencies {
@@ -361,7 +361,7 @@ public actor DependencyTreeGenerator {
 			case let .instantiated(_, erased):
 				erasedToConcreteExistential = erased
 			case let .received(onlyIfAvailable):
-				// Only promote received deps to children if not already constructed above.
+				// Only promote received dependencies to children if not already constructed above.
 				let depType = dependency.property.typeDescription.asInstantiatedType
 				if constructedTypes.contains(depType) || onlyIfAvailable {
 					continue
@@ -380,7 +380,7 @@ public actor DependencyTreeGenerator {
 				continue
 			}
 
-			// For instantiated and unfulfilled received deps, recursively build the subtree.
+			// For instantiated and unfulfilled received dependencies, recursively build the subtree.
 			let depType = dependency.property.typeDescription.asInstantiatedType
 			guard !visited.contains(depType),
 			      let depInstantiable = typeDescriptionToFulfillingInstantiableMap[depType]
@@ -392,14 +392,14 @@ public actor DependencyTreeGenerator {
 				constructedTypes: localConstructedTypes,
 			)
 			// Compute unavailable optional properties for this child:
-			// onlyIfAvailable deps whose type isn't constructed by any ancestor.
+			// onlyIfAvailable dependencies whose type isn't constructed by any ancestor.
 			let childUnavailable = Set<Property>(
-				depInstantiable.dependencies.compactMap { dep in
-					switch dep.source {
+				depInstantiable.dependencies.compactMap { dependency in
+					switch dependency.source {
 					case let .received(onlyIfAvailable):
 						guard onlyIfAvailable else { return nil }
-						let type = dep.property.typeDescription.asInstantiatedType
-						return localConstructedTypes.contains(type) ? nil : dep.property
+						let type = dependency.property.typeDescription.asInstantiatedType
+						return localConstructedTypes.contains(type) ? nil : dependency.property
 					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 						guard onlyIfAvailable else { return nil }
 						let type = fulfillingProperty.typeDescription.asInstantiatedType

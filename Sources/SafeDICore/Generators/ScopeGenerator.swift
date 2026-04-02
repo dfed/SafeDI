@@ -274,8 +274,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let overrideParameterLabel: String?
 		/// Maps property labels to disambiguated mock parameter labels for all declarations.
 		let propertyToParameterLabel: [String: String]
-		/// Property labels for non-@Instantiable received deps — these are required
-		/// params with no default construction, using `x(.pathCase)` instead of `x?(.pathCase) ?? ...`.
+		/// Property labels for non-@Instantiable received dependencies — these are required
+		/// parameters with no default construction, using `x(.pathCase)` instead of `x?(.pathCase) ?? ...`.
 		let requiredParameterLabels: Set<String>
 
 		init(
@@ -622,13 +622,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.sorted { $0.property < $1.property }
 
 		// Collect all declarations from the dependency tree.
-		// Received deps whose type is @Instantiable are in the tree.
+		// Received dependencies whose type is @Instantiable are in the tree.
 		var allDeclarations = await collectMockDeclarations(path: [])
 
-		// Find received deps (including transitive) whose type is NOT @Instantiable.
+		// Find received dependencies (including transitive) whose type is NOT @Instantiable.
 		// These weren't added to the tree but need to be mock parameters.
 		// They're required (non-optional) since there's no default to construct.
-		// `receivedProperties` includes all unsatisfied deps from the full subtree.
+		// `receivedProperties` includes all unsatisfied dependencies from the full subtree.
 		let coveredPropertyLabels = Set(allDeclarations.map(\.propertyLabel))
 		var uncoveredReceivedProperties = [Property]()
 		for receivedProperty in receivedProperties.sorted() {
@@ -650,7 +650,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			uncoveredReceivedProperties.append(receivedProperty)
 		}
 
-		// Add forwarded deps as bare parameter declarations.
+		// Add forwarded dependencies as bare parameter declarations.
 		let forwardedDeclarations = forwardedDependencies.map { dependency in
 			MockDeclaration(
 				enumName: dependency.property.label,
@@ -716,25 +716,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		enumLines.append("\(indent)}")
 
 		// Build mock method parameters.
-		var params = [String]()
+		var parameters = [String]()
 		for declaration in forwardedDeclarations {
-			params.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)")
+			parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)")
 		}
 		for (enumName, declarations) in enumNameToDeclarations.sorted(by: { $0.key < $1.key }) {
-			let firstDecl = declarations[0]
-			if firstDecl.hasKnownMock {
-				params.append("\(indent)\(indent)\(firstDecl.parameterLabel): ((SafeDIMockPath.\(enumName)) -> \(firstDecl.sourceType))? = nil")
+			let firstDeclaration = declarations[0]
+			if firstDeclaration.hasKnownMock {
+				parameters.append("\(indent)\(indent)\(firstDeclaration.parameterLabel): ((SafeDIMockPath.\(enumName)) -> \(firstDeclaration.sourceType))? = nil")
 			} else {
-				params.append("\(indent)\(indent)\(firstDecl.parameterLabel): @escaping (SafeDIMockPath.\(enumName)) -> \(firstDecl.sourceType)")
+				parameters.append("\(indent)\(indent)\(firstDeclaration.parameterLabel): @escaping (SafeDIMockPath.\(enumName)) -> \(firstDeclaration.sourceType)")
 			}
 		}
-		let paramsStr = params.joined(separator: ",\n")
+		let parametersString = parameters.joined(separator: ",\n")
 
 		// Build the mock method body.
 		let bodyIndent = "\(indent)\(indent)"
 
 		// Generate all dep bindings via recursive generateProperties.
-		// Received deps are in the tree (built by createMockRootScopeGenerator).
+		// Received dependencies are in the tree (built by createMockRootScopeGenerator).
 		let requiredParameterLabels = Set(
 			allDeclarations
 				.filter { !$0.hasKnownMock && !$0.isForwarded }
@@ -766,9 +766,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append(contentsOf: enumLines)
 		lines.append("")
 		lines.append("\(indent)\(mockAttributesPrefix)public static func mock(")
-		lines.append(paramsStr)
+		lines.append(parametersString)
 		lines.append("\(indent)) -> \(typeName) {")
-		// Bindings for non-@Instantiable received deps (required params, no default).
+		// Bindings for non-@Instantiable received dependencies (required parameters, no default).
 		for receivedProperty in uncoveredReceivedProperties {
 			lines.append("\(bodyIndent)let \(receivedProperty.label) = \(receivedProperty.label)(.root)")
 		}
