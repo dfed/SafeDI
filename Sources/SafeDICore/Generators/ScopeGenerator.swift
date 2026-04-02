@@ -670,6 +670,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Skip forwarded properties — they're bare mock parameters, not promoted children.
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
 		let updatedCoveredLabels = Set(allDeclarations.map(\.propertyLabel))
+		// Labels that have an Optional version in receivedProperties. Used to distinguish
+		// a required non-optional property from an aliased onlyIfAvailable non-optional one.
+		let labelsWithOptionalCounterpart = Set(
+			receivedProperties
+				.filter(\.typeDescription.isOptional)
+				.map(\.label),
+		)
 		// When both `user: User` (required) and `user: User?` (onlyIfAvailable) are received,
 		// only the non-optional version should produce a parameter and binding.
 		// The optional path uses the same value (Swift auto-wraps to Optional).
@@ -695,11 +702,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// (a) it's Optional and tracked as onlyIfAvailable (standard @Received case), OR
 			// (b) it's non-optional, has no Optional counterpart with the same label, and is
 			//     tracked as onlyIfAvailable (aliased case where fulfilling type is non-optional)
-			let labelsWithOptionalCounterpart = Set(
-				receivedProperties
-					.filter(\.typeDescription.isOptional)
-					.map(\.label),
-			)
 			let isOnlyIfAvailable = (receivedProperty.typeDescription.isOptional
 				&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty))
 				|| (!receivedProperty.typeDescription.isOptional
@@ -1022,6 +1024,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	static func sanitizeForIdentifier(_ typeName: String) -> String {
 		typeName
+			// Replace empty argument list before parens are stripped.
+			.replacingOccurrences(of: "()", with: "Void")
+			// Arrow before angle bracket close — `>` in `->` must not be stripped first.
 			.replacingOccurrences(of: "->", with: "_to_")
 			.replacingOccurrences(of: "<", with: "__")
 			.replacingOccurrences(of: ">", with: "")
@@ -1035,6 +1040,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.replacingOccurrences(of: ")", with: "")
 			.replacingOccurrences(of: "&", with: "_and_")
 			.replacingOccurrences(of: "?", with: "_Optional")
+			.replacingOccurrences(of: "@", with: "")
 			.replacingOccurrences(of: " ", with: "")
 	}
 
