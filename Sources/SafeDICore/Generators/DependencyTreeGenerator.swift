@@ -359,7 +359,13 @@ public actor DependencyTreeGenerator {
 			let onlyIfAvailableProperties = current.onlyIfAvailableUnwrappedReceivedProperties
 			var didPromote = false
 			for receivedProperty in current.receivedProperties.sorted() {
-				guard !onlyIfAvailableProperties.contains(receivedProperty.asUnwrappedProperty),
+				// Skip onlyIfAvailable dependencies — they become optional mock parameters
+				// with no default. A property is onlyIfAvailable if its TYPE is optional
+				// (since @Received(onlyIfAvailable: true) requires Optional type).
+				// Non-optional properties with the same label are required from a different path.
+				let isOnlyIfAvailable = receivedProperty.typeDescription.isOptional
+					&& onlyIfAvailableProperties.contains(receivedProperty.asUnwrappedProperty)
+				guard !isOnlyIfAvailable,
 				      !forwardedPropertyLabels.contains(receivedProperty),
 				      promoted.insert(receivedProperty).inserted
 				else { continue }
