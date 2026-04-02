@@ -564,13 +564,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 
 				// Mock mode: wrap the binding with an override closure.
+				// When erasedToConcreteExistential, wrap the default in the erased type
+				// so the ?? operator has matching types on both sides.
 				switch codeGeneration {
 				case .dependencyTree:
 					return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 				case let .mock(context):
 					let pathCaseName = context.path.isEmpty ? "root" : context.path.joined(separator: "_")
 					let derivedPropertyLabel = context.overrideParameterLabel ?? property.label
-					return "\(functionDeclaration)\(propertyDeclaration) = \(derivedPropertyLabel)?(.\(pathCaseName)) ?? \(initializer)\n"
+					let mockInitializer = if erasedToConcreteExistential, !generatedProperties.isEmpty {
+						"\(property.typeDescription.asSource)(\(initializer))"
+					} else {
+						initializer
+					}
+					return "\(functionDeclaration)\(propertyDeclaration) = \(derivedPropertyLabel)?(.\(pathCaseName)) ?? \(mockInitializer)\n"
 				}
 			}
 		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):

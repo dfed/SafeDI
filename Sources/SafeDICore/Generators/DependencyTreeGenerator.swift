@@ -93,8 +93,13 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		// Create mock-root ScopeGenerators for all types, with received dependencies
-		// treated as instantiated so the mock can construct the full subtree.
+		// Build mock scope mapping — like production but includes all types and
+		// promotes received dependencies as instantiated children.
+		let typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping(
+			erasedToConcreteTypeMap: erasedToConcreteTypeMap,
+		)
+
+		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
 		return try await withThrowingTaskGroup(
 			of: GeneratedRoot?.self,
@@ -107,9 +112,9 @@ public actor DependencyTreeGenerator {
 				      seen.insert(instantiable.concreteInstantiable).inserted
 				else { continue }
 
-				let mockRoot = createMockRootScopeGenerator(
+				let mockRoot = try createMockRootScopeGenerator(
 					for: instantiable,
-					erasedToConcreteTypeMap: erasedToConcreteTypeMap,
+					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 				)
 				taskGroup.addTask {
 					let code = try await mockRoot.generateCode(
@@ -302,125 +307,94 @@ public actor DependencyTreeGenerator {
 			.joined(separator: "\n")
 	}
 
-	/// Creates a mock-root ScopeGenerator for an Instantiable, treating received dependencies
-	/// as if they were instantiated so the mock can construct the full dependency subtree.
+	/// Creates a mock-root ScopeGenerator using the production Scope tree.
+	/// Uses `forMockGeneration: true` so unavailableOptionalProperties is empty
+	/// and eager code generation is skipped.
 	private func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
-		erasedToConcreteTypeMap: [TypeDescription: TypeDescription] = [:],
-		visited: Set<TypeDescription> = [],
-	) -> ScopeGenerator {
-		let children = createMockChildScopeGenerators(
-			for: instantiable,
-			visited: visited,
-			constructedTypes: [],
-			erasedToConcreteTypeMap: erasedToConcreteTypeMap,
-		)
-
-		// In mock trees, onlyIfAvailable dependencies are not marked unavailable.
-		// They become optional mock parameters with bindings that thread through
-		// to children. The return statement uses the variable (which may be nil).
-		return ScopeGenerator(
-			instantiable: instantiable,
-			property: nil,
-			propertiesToGenerate: children,
-			unavailableOptionalProperties: [],
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+	) throws -> ScopeGenerator {
+		guard let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable] else {
+			return ScopeGenerator(
+				instantiable: instantiable,
+				property: nil,
+				propertiesToGenerate: [],
+				unavailableOptionalProperties: [],
+				erasedToConcreteExistential: false,
+				isPropertyCycle: false,
+			)
+		}
+		return try scope.createScopeGenerator(
+			for: nil,
+			propertyStack: [],
+			receivableProperties: [],
 			erasedToConcreteExistential: false,
-			isPropertyCycle: false,
+			forMockGeneration: true,
 		)
 	}
 
-	/// Recursively builds child ScopeGenerators for mock roots.
-	/// Received dependencies are only promoted to children when their type isn't already
-	/// constructed by an ancestor (tracked via `constructedTypes`).
-	private func createMockChildScopeGenerators(
-		for instantiable: Instantiable,
-		visited: Set<TypeDescription>,
-		constructedTypes: Set<TypeDescription>,
+	/// Builds a scope mapping for mock generation. Similar to `createTypeDescriptionToScopeMapping`
+	/// but includes ALL types (not just reachable from roots) and promotes `@Received` dependencies
+	/// as `.instantiated` entries so the mock can construct the full subtree.
+	private func createMockTypeDescriptionToScopeMapping(
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
-	) -> [ScopeGenerator] {
-		var visited = visited
-		visited.insert(instantiable.concreteInstantiable)
-
-		// Collect which types THIS scope constructs (instantiated + forwarded dependencies).
-		// Include fulfillingAdditionalTypes so received dependencies for protocols are
-		// resolved when the concrete type is constructed at this scope.
-		var localConstructedTypes = constructedTypes
-		for dependency in instantiable.dependencies {
-			switch dependency.source {
-			case .instantiated, .forwarded:
-				let depType = dependency.property.typeDescription.asInstantiatedType
-				localConstructedTypes.insert(depType)
-				// Also mark all types this concrete type fulfills (protocol conformances).
-				if let depInstantiable = typeDescriptionToFulfillingInstantiableMap[depType] {
-					for additionalType in depInstantiable.instantiableTypes {
-						localConstructedTypes.insert(additionalType)
-					}
+	) -> [TypeDescription: Scope] {
+		// Create scopes for all types.
+		let typeDescriptionToScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
+			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
+				guard partialResult[instantiable.concreteInstantiable] == nil else { return }
+				let scope = Scope(instantiable: instantiable)
+				for instantiableType in instantiable.instantiableTypes {
+					partialResult[instantiableType] = scope
 				}
-			case .received, .aliased:
-				break
 			}
-		}
 
-		var children = [ScopeGenerator]()
-		for dependency in instantiable.dependencies {
-			var erasedToConcreteExistential: Bool
-			switch dependency.source {
-			case let .instantiated(_, erased):
-				erasedToConcreteExistential = erased
-			case let .received(onlyIfAvailable):
-				// Only promote received dependencies to children if not already constructed above.
-				let depType = dependency.property.typeDescription.asInstantiatedType
-				if constructedTypes.contains(depType) || onlyIfAvailable {
+		// Populate propertiesToGenerate on each scope.
+		for scope in Set(typeDescriptionToScopeMap.values) {
+			for dependency in scope.instantiable.dependencies {
+				switch dependency.source {
+				case let .instantiated(_, erasedToConcreteExistential):
+					let instantiatedType = dependency.asInstantiatedType
+					if let instantiatedScope = typeDescriptionToScopeMap[instantiatedType] {
+						scope.propertiesToGenerate.append(.instantiated(
+							dependency.property,
+							instantiatedScope,
+							erasedToConcreteExistential: erasedToConcreteExistential,
+						))
+					}
+				case let .received(onlyIfAvailable):
+					// Skip onlyIfAvailable — they become optional mock parameters.
+					guard !onlyIfAvailable else { continue }
+					// Promote received dependencies as instantiated children so the
+					// mock can construct them. Resolve concrete existential wrappers.
+					var depType = dependency.property.typeDescription.asInstantiatedType
+					var erasedToConcreteExistential = false
+					if typeDescriptionToScopeMap[depType] == nil,
+					   let concreteType = erasedToConcreteTypeMap[dependency.property.typeDescription]
+					{
+						depType = concreteType
+						erasedToConcreteExistential = true
+					}
+					if let receivedScope = typeDescriptionToScopeMap[depType] {
+						scope.propertiesToGenerate.append(.instantiated(
+							dependency.property,
+							receivedScope,
+							erasedToConcreteExistential: erasedToConcreteExistential,
+						))
+					}
+				case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
+					scope.propertiesToGenerate.append(.aliased(
+						dependency.property,
+						fulfilledBy: fulfillingProperty,
+						erasedToConcreteExistential: erasedToConcreteExistential,
+						onlyIfAvailable: onlyIfAvailable,
+					))
+				case .forwarded:
 					continue
 				}
-				erasedToConcreteExistential = false
-			case let .aliased(fulfillingProperty, aliasErasedToConcreteExistential, onlyIfAvailable):
-				children.append(ScopeGenerator(
-					property: dependency.property,
-					fulfillingProperty: fulfillingProperty,
-					unavailableOptionalProperties: [],
-					erasedToConcreteExistential: aliasErasedToConcreteExistential,
-					onlyIfAvailable: onlyIfAvailable,
-				))
-				continue
-			case .forwarded:
-				continue
 			}
-
-			// For instantiated and unfulfilled received dependencies, recursively build the subtree.
-			// If the type isn't directly in the map, check if it's a concrete existential
-			// wrapper whose underlying concrete type IS in the map.
-			var depType = dependency.property.typeDescription.asInstantiatedType
-			if typeDescriptionToFulfillingInstantiableMap[depType] == nil,
-			   let concreteType = erasedToConcreteTypeMap[dependency.property.typeDescription]
-			{
-				depType = concreteType
-				erasedToConcreteExistential = true
-			}
-			guard !visited.contains(depType),
-			      let depInstantiable = typeDescriptionToFulfillingInstantiableMap[depType]
-			else { continue }
-
-			let grandchildren = createMockChildScopeGenerators(
-				for: depInstantiable,
-				visited: visited,
-				constructedTypes: localConstructedTypes,
-				erasedToConcreteTypeMap: erasedToConcreteTypeMap,
-			)
-			// In mock trees, onlyIfAvailable dependencies are NOT marked unavailable.
-			// They bubble up through receivedProperties to the mock root, which
-			// generates optional parameter bindings. Children reference those bindings.
-			children.append(ScopeGenerator(
-				instantiable: depInstantiable,
-				property: dependency.property,
-				propertiesToGenerate: grandchildren,
-				unavailableOptionalProperties: [],
-				erasedToConcreteExistential: erasedToConcreteExistential,
-				isPropertyCycle: false,
-			))
 		}
-
-		return children
+		return typeDescriptionToScopeMap
 	}
 
 	/// A collection of `@Instantiable`-decorated types that are at the roots of their respective dependency trees.
