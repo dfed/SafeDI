@@ -3662,7 +3662,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            return ChildA(childB: childB_Instantiator_Other)
 		        }
 		        let childA: ChildA = childA ?? __safeDI_childA()
-		        let childB = childB_ChildB()
+		        let childB_ChildB = childB_ChildB()
 		        return Root(childA: childA, childB: childB_ChildB)
 		    }
 		}
@@ -4584,12 +4584,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        service_ServiceB: @autoclosure @escaping () -> ServiceB = ServiceB()
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            let service = service_ServiceA()
+		            let service_ServiceA = service_ServiceA()
 		            return ChildA(service: service_ServiceA)
 		        }
 		        let childA: ChildA = childA ?? __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            let service = service_ServiceB()
+		            let service_ServiceB = service_ServiceB()
 		            return ChildB(service: service_ServiceB)
 		        }
 		        let childB: ChildB = childB ?? __safeDI_childB()
@@ -5256,7 +5256,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Parent {
 		        let service_ExternalService = service_ExternalService()
 		        func __safeDI_child() -> Child {
-		            let service = service_InternalService()
+		            let service_InternalService = service_InternalService()
 		            return Child(service: service_InternalService)
 		        }
 		        let child: Child = child ?? __safeDI_child()
@@ -7613,7 +7613,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let service_ExternalService = service_ExternalService()
 		        func __safeDI_childA() -> ChildA {
-		            let service = service_LocalService()
+		            let service_LocalService = service_LocalService()
 		            return ChildA(service: service_LocalService)
 		        }
 		        let childA: ChildA = childA ?? __safeDI_childA()
@@ -9204,7 +9204,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        func __safeDI_child() -> Child {
 		            let service_ExternalService = service_ExternalService()
 		            func __safeDI_grandchild() -> Grandchild {
-		                let service = service_LocalService()
+		                let service_LocalService = service_LocalService()
 		                return Grandchild(service: service_LocalService)
 		            }
 		            let grandchild: Grandchild = grandchild ?? __safeDI_grandchild()

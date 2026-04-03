@@ -694,11 +694,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						propertyLabel: property.label,
 						sourceType: property.typeDescription.asInstantiatedType.asSource,
 					)
-					// If this property was already resolved by an ancestor scope,
-					// use inline construction — the value is available from outer scope.
 					if context.resolvedParameters.contains(identifier) {
+						// Already resolved by ancestor — use inline construction with property label.
 						return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 					} else if let parameterLabel = context.parameterLabelMap[identifier] {
+						// Use disambiguated parameter label as local variable name so init
+						// arguments reference the resolved value, not the raw parameter.
+						let mockPropertyDeclaration = if erasedToConcreteExistential || (
+							concreteTypeName == property.typeDescription.asSource
+								&& !hasGeneratedContent
+								&& !instantiable.declarationType.isExtension
+						) {
+							"let \(parameterLabel)"
+						} else {
+							"let \(parameterLabel): \(property.typeDescription.asSource)"
+						}
 						if context.subtreeParameters.contains(identifier) {
 							// Optional parameter (T? = nil): use ?? inline fallback
 							let mockInitializer = if erasedToConcreteExistential {
@@ -706,10 +716,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							} else {
 								initializer
 							}
-							return "\(functionDeclaration)\(propertyDeclaration) = \(parameterLabel) ?? \(mockInitializer)\n"
+							return "\(functionDeclaration)\(mockPropertyDeclaration) = \(parameterLabel) ?? \(mockInitializer)\n"
 						} else {
 							// Autoclosure parameter: evaluate
-							return "\(propertyDeclaration) = \(parameterLabel)()\n"
+							return "\(mockPropertyDeclaration) = \(parameterLabel)()\n"
 						}
 					} else {
 						// Nested child (no root parameter): inline construction
