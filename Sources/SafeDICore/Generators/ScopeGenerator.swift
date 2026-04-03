@@ -657,7 +657,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let coveredRootLabelsWithTypes = Set(
 			allDeclarations.map { "\($0.propertyLabel):\($0.sourceType)" },
 		)
-		var uncoveredProperties = [(property: Property, isOnlyIfAvailable: Bool)]()
+		// Keys (propertyLabel:sourceType) of declarations needing root-level `let x = x()` bindings.
+		// These are uncovered deps and received deps NOT handled by generatePropertyCode.
+		var rootBindingKeys = Set<String>()
 
 		// Check this type's own dependencies for uncovered @Instantiated dependencies.
 		for dependency in instantiable.dependencies {
@@ -679,7 +681,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					hasSubtree: false,
 					defaultConstruction: nil,
 				))
-				uncoveredProperties.append((property: dependency.property, isOnlyIfAvailable: false))
+				rootBindingKeys.insert(depKey)
 			case .received, .aliased, .forwarded:
 				break
 			}
@@ -735,7 +737,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				hasSubtree: false,
 				defaultConstruction: isOnlyIfAvailable ? "nil" : nil,
 			))
-			uncoveredProperties.append((property: receivedProperty, isOnlyIfAvailable: isOnlyIfAvailable))
+			rootBindingKeys.insert("\(receivedProperty.label):\(receivedSourceType)")
 		}
 
 		// Add forwarded dependencies as bare parameter declarations.
@@ -798,7 +800,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Deduplicate declarations with same (parameterLabel, sourceType).
 		var seenKeys = Set<String>()
 		allDeclarations = allDeclarations.filter { declaration in
-			guard !declaration.isForwarded else { return true }
 			let key = "\(declaration.parameterLabel):\(declaration.sourceType)"
 			return seenKeys.insert(key).inserted
 		}
@@ -808,7 +809,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Build parameterLabelMap for body bindings.
 		var parameterLabelMap = [String: String]()
-		for declaration in allDeclarations where !declaration.isForwarded {
+		for declaration in allDeclarations {
 			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
 			parameterLabelMap[key] = declaration.parameterLabel
 		}
@@ -820,7 +821,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)")
 		}
 		for declaration in allDeclarations.sorted(by: { $0.parameterLabel < $1.parameterLabel }) {
-			guard !declaration.isForwarded else { continue }
 			let sendablePrefix = declaration.requiresSendable ? "@Sendable " : ""
 			if declaration.hasSubtree {
 				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)? = nil")
@@ -861,18 +861,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(indent)\(mockAttributesPrefix)public static func mock(")
 		lines.append(parametersString)
 		lines.append("\(indent)) -> \(typeName) {")
-		// Bindings for uncovered dependencies and root default-valued params.
-		for uncovered in uncoveredProperties {
-			let key = "\(uncovered.property.label):\(uncovered.property.typeDescription.asSource)"
-			let parameterName = parameterLabelMap[key] ?? uncovered.property.label
-			lines.append("\(bodyIndent)let \(uncovered.property.label) = \(parameterName)()")
-		}
+		// Bindings for uncovered deps and received deps (must come before child constructions).
 		for declaration in allDeclarations {
-			guard declaration.defaultValueExpression != nil,
-			      !uncoveredProperties.contains(where: { $0.property.label == declaration.propertyLabel })
-			else { continue }
-			let parameterName = parameterLabelMap["\(declaration.propertyLabel):\(declaration.sourceType)"] ?? declaration.parameterLabel
-			lines.append("\(bodyIndent)let \(declaration.propertyLabel) = \(parameterName)()")
+			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
+			guard rootBindingKeys.contains(key) else { continue }
+			lines.append("\(bodyIndent)let \(declaration.propertyLabel) = \(declaration.parameterLabel)()")
+		}
+		// Bindings for root default-valued init params.
+		for declaration in allDeclarations where declaration.defaultValueExpression != nil {
+			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
+			guard !rootBindingKeys.contains(key) else { continue }
+			lines.append("\(bodyIndent)let \(declaration.propertyLabel) = \(declaration.parameterLabel)()")
 		}
 		lines.append(contentsOf: propertyLines)
 		lines.append("\(bodyIndent)return \(construction)")
