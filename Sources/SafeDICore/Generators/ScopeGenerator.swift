@@ -845,8 +845,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// Disambiguate duplicate enum names and parameter labels.
+		// Forwarded declarations participate in collision detection but aren't renamed.
 		disambiguateEnumNames(&allDeclarations)
-		disambiguateParameterLabels(&allDeclarations)
+		disambiguateParameterLabels(&allDeclarations, forwardedDeclarations: forwardedDeclarations)
 
 		// Build a mapping from (pathCaseName, propertyLabel) → disambiguated parameter label.
 		// Only includes entries where disambiguation changed the label.
@@ -1139,9 +1140,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	private func disambiguateParameterLabels(_ declarations: inout [MockDeclaration]) {
+	private func disambiguateParameterLabels(
+		_ declarations: inout [MockDeclaration],
+		forwardedDeclarations: [MockDeclaration] = [],
+	) {
+		// Count ALL labels (including forwarded) to detect collisions.
+		// Only non-forwarded are renamed — forwarded must match the init signature.
 		var labelCounts = [String: Int]()
-		for declaration in declarations where !declaration.isForwarded {
+		for declaration in declarations {
+			labelCounts[declaration.parameterLabel, default: 0] += 1
+		}
+		for declaration in forwardedDeclarations {
 			labelCounts[declaration.parameterLabel, default: 0] += 1
 		}
 		declarations = declarations.map { declaration in
