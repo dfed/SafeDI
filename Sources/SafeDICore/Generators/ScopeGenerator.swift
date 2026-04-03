@@ -593,14 +593,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						sourceType: property.typeDescription.asSource,
 					)
 					if context.resolvedParameters.contains(identifier) {
+						// Instantiators are never Optional (typeDescription == unwrappedTypeDescription)
+						// and extension-based types delegate Instantiator creation to the parent scope,
+						// so a type annotation is never needed here.
 						let resolvedLabel = context.parameterLabelMap[identifier] ?? property.label
-						let resolvedDeclaration = if !instantiable.declarationType.isExtension, typeDescription == unwrappedTypeDescription {
-							"let \(resolvedLabel)"
-						} else {
-							"let \(resolvedLabel): \(property.typeDescription.asSource)"
-						}
 						return """
-						\(functionDeclaration)\(resolvedDeclaration) = \(instantiatorInstantiation)
+						\(functionDeclaration)let \(resolvedLabel) = \(instantiatorInstantiation)
 						"""
 					} else {
 						// Every Instantiator is collected in parameterLabelMap via
