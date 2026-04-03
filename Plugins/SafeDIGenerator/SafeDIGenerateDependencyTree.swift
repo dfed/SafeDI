@@ -69,6 +69,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			outputDirectory: outputDirectory,
 			manifestFile: manifestFile,
 			additionalSwiftFiles: additionalSwiftFiles,
+			mockScopedSwiftFiles: targetSwiftFiles + additionalSwiftFiles,
 		)
 		guard !scanResult.outputFiles.isEmpty else {
 			return []
