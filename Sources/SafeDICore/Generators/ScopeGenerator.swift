@@ -602,7 +602,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						return """
 						\(functionDeclaration)\(resolvedDeclaration) = \(instantiatorInstantiation)
 						"""
-					} else if let parameterLabel = context.parameterLabelMap[identifier] {
+					} else {
+						// Every Instantiator is collected in parameterLabelMap via
+						// collectMockDeclarations, so this branch always has a label.
+						let parameterLabel = context.parameterLabelMap[identifier] ?? property.label
 						let mockPropertyDeclaration = if !instantiable.declarationType.isExtension, typeDescription == unwrappedTypeDescription {
 							"let \(parameterLabel)"
 						} else {
@@ -610,10 +613,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						}
 						return """
 						\(functionDeclaration)\(mockPropertyDeclaration) = \(parameterLabel) ?? \(instantiatorInstantiation)
-						"""
-					} else {
-						return """
-						\(functionDeclaration)\(propertyDeclaration) = \(instantiatorInstantiation)
 						"""
 					}
 				}
