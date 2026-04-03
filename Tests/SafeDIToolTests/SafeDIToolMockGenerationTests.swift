@@ -8442,6 +8442,207 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	mutating func mock_disambiguatedInstantiatorResolvedBySiblingInNestedBuilder() async throws {
+		// ChildC and ChildD both have a dep named "childBuilder" but with different generic types.
+		// At root, both are promoted → disambiguated. ChildC's builder must reference
+		// childBuilder_Instantiator_ChildA (not childBuilder) since disambiguation occurred.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Root: Instantiable {
+				    public init(childC: ChildC, childD: ChildD) {
+				        self.childC = childC
+				        self.childD = childD
+				    }
+				    @Instantiated let childC: ChildC
+				    @Instantiated let childD: ChildD
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildC: Instantiable {
+				    public init(childBuilder: Instantiator<ChildA>) {
+				        self.childBuilder = childBuilder
+				    }
+				    @Received let childBuilder: Instantiator<ChildA>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildD: Instantiable {
+				    public init(childBuilder: Instantiator<ChildB>) {
+				        self.childBuilder = childBuilder
+				    }
+				    @Received let childBuilder: Instantiator<ChildB>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(name: String) { self.name = name }
+				    @Forwarded let name: String
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(name: String) { self.name = name }
+				    @Forwarded let name: String
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
+		// childBuilder disambiguated: childBuilder_Instantiator_ChildA and childBuilder_Instantiator_ChildB
+		// ChildC(childBuilder: ...) must use the disambiguated name
+		#expect(rootMock.contains("ChildC(childBuilder: childBuilder_Instantiator_ChildA)"), "ChildC must use disambiguated childBuilder. Output:\n\(rootMock)")
+		#expect(rootMock.contains("ChildD(childBuilder: childBuilder_Instantiator_ChildB)"), "ChildD must use disambiguated childBuilder. Output:\n\(rootMock)")
+	}
+
+	@Test
+	mutating func mock_disambiguatedInstantiatorResolvedThroughIntermediateInstantiatorBuilder() async throws {
+		// Root → parentBuilder (Instantiator<Parent>) + childBuilder (Instantiator<ChildA>).
+		// Parent uses childBuilder (Instantiator<ChildA>) + also has otherBuilder (Instantiator<ChildB>)
+		// with same label "childBuilder" — causing disambiguation at root.
+		// Inside parentBuilder's function, Parent is constructed.
+		// Parent's init references childBuilder → must be childBuilder_Instantiator_ChildA.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Root: Instantiable {
+				    public init(parentBuilder: Instantiator<Parent>, childBuilder: Instantiator<ChildA>) {
+				        self.parentBuilder = parentBuilder
+				        self.childBuilder = childBuilder
+				    }
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				    @Instantiated let childBuilder: Instantiator<ChildA>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Parent: Instantiable {
+				    public init(childBuilder: Instantiator<ChildA>, otherBuilder: Instantiator<ChildB>) {
+				        self.childBuilder = childBuilder
+				        self.otherBuilder = otherBuilder
+				    }
+				    @Received let childBuilder: Instantiator<ChildA>
+				    @Instantiated let otherBuilder: Instantiator<ChildB>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(name: String) { self.name = name }
+				    @Forwarded let name: String
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(name: String) { self.name = name }
+				    @Forwarded let name: String
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
+		// childBuilder is disambiguated at root because Parent also has "childBuilder"
+		// (as otherBuilder: Instantiator<ChildB> — wait no, that's a different label).
+		// Actually, Parent @Receives childBuilder: Instantiator<ChildA>. Root @Instantiates it.
+		// The bubbled otherBuilder: Instantiator<ChildB> also has label "otherBuilder" not "childBuilder".
+		// So no disambiguation of childBuilder. But inside parentBuilder's function,
+		// the resolved childBuilder must use the correct local name.
+		// Inside the parentBuilder function: Parent(childBuilder: childBuilder, otherBuilder: otherBuilder)
+		#expect(rootMock.contains("Parent(childBuilder: childBuilder, otherBuilder: otherBuilder)"), "Parent must reference resolved childBuilder. Output:\n\(rootMock)")
+	}
+
+	@Test
+	mutating func mock_disambiguatedInstantiatorInDeepNestedBuilderUsesResolvedName() async throws {
+		// Root has two children that each receive a different-typed builder with same label.
+		// ChildA → receives builder: Instantiator<TypeA>
+		// ChildB → has sub: SubChild which also receives builder: Instantiator<TypeA>
+		// Both "builder" Instantiators get disambiguated at root.
+		// Inside ChildB's SubChild construction, the resolved builder must use
+		// the disambiguated name, not the original label.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Root: Instantiable {
+				    public init(childA: ChildA, childBBuilder: Instantiator<ChildB>) {
+				        self.childA = childA
+				        self.childBBuilder = childBBuilder
+				    }
+				    @Instantiated let childA: ChildA
+				    @Instantiated let childBBuilder: Instantiator<ChildB>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(builder: Instantiator<TypeA>) {
+				        self.builder = builder
+				    }
+				    @Received let builder: Instantiator<TypeA>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(subChild: SubChild) {
+				        self.subChild = subChild
+				    }
+				    @Instantiated let subChild: SubChild
+				}
+				""",
+				"""
+				@Instantiable
+				public struct SubChild: Instantiable {
+				    public init(builder: Instantiator<TypeB>) {
+				        self.builder = builder
+				    }
+				    @Received let builder: Instantiator<TypeB>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct TypeA: Instantiable {
+				    public init(name: String) { self.name = name }
+				    @Forwarded let name: String
+				}
+				""",
+				"""
+				@Instantiable
+				public struct TypeB: Instantiable {
+				    public init(name: String) { self.name = name }
+				    @Forwarded let name: String
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
+		// builder is disambiguated at root: builder_Instantiator_TypeA and builder_Instantiator_TypeB.
+		// Inside childBBuilder's function, SubChild's builder is resolved from root.
+		// SubChild(builder: ...) must use disambiguated name.
+		#expect(rootMock.contains("SubChild(builder: builder_Instantiator_TypeB)"), "SubChild must use disambiguated builder. Output:\n\(rootMock)")
+		#expect(rootMock.contains("ChildA(builder: builder_Instantiator_TypeA)"), "ChildA must use disambiguated builder. Output:\n\(rootMock)")
+	}
+
+	@Test
 	mutating func mock_defaultValuedParametersFromMultipleLevelsAllAppearAtRoot() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [

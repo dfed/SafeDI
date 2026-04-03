@@ -593,8 +593,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						sourceType: property.typeDescription.asSource,
 					)
 					if context.resolvedParameters.contains(identifier) {
+						let resolvedLabel = context.parameterLabelMap[identifier] ?? property.label
+						let resolvedDeclaration = if !instantiable.declarationType.isExtension, typeDescription == unwrappedTypeDescription {
+							"let \(resolvedLabel)"
+						} else {
+							"let \(resolvedLabel): \(property.typeDescription.asSource)"
+						}
 						return """
-						\(functionDeclaration)\(propertyDeclaration) = \(instantiatorInstantiation)
+						\(functionDeclaration)\(resolvedDeclaration) = \(instantiatorInstantiation)
 						"""
 					} else if let parameterLabel = context.parameterLabelMap[identifier] {
 						let mockPropertyDeclaration = if !instantiable.declarationType.isExtension, typeDescription == unwrappedTypeDescription {
