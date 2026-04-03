@@ -241,9 +241,13 @@ public struct Initializer: Codable, Hashable, Sendable {
 	/// and default-valued non-dependency arguments. Used in mock generation where
 	/// default-valued parameters are bubbled up to the root mock method and
 	/// dependency args are fulfilled from the tree.
+	/// When a mock parameter was renamed (e.g., `service` → `service_ExternalService`),
+	/// the argument reference must use the disambiguated name. The `mockContext`
+	/// resolves ambiguity using both the label and type.
 	func createMockInitializerArgumentList(
 		given dependencies: [Dependency],
 		unavailableProperties: Set<Property>? = nil,
+		mockContext: ScopeGenerator.MockContext? = nil,
 	) throws(GenerationError) -> String {
 		var parts = [String]()
 		for argument in arguments {
@@ -253,11 +257,22 @@ public struct Initializer: Codable, Hashable, Sendable {
 			}) {
 				if let unavailableProperties, unavailableProperties.contains(dependency.property) {
 					parts.append("\(argument.label): nil")
-				} else {
+				} else if dependency.source == .forwarded {
+					// Forwarded deps use the bare parameter name — no remapping.
 					parts.append("\(argument.label): \(argument.innerLabel)")
+				} else {
+					let variableName = mockContext?.disambiguatedLabel(
+						forPropertyLabel: argument.innerLabel,
+						typeDescription: argument.typeDescription,
+					) ?? argument.innerLabel
+					parts.append("\(argument.label): \(variableName)")
 				}
 			} else if argument.hasDefaultValue {
-				parts.append("\(argument.label): \(argument.innerLabel)")
+				let variableName = mockContext?.disambiguatedLabel(
+					forPropertyLabel: argument.innerLabel,
+					typeDescription: argument.typeDescription,
+				) ?? argument.innerLabel
+				parts.append("\(argument.label): \(variableName)")
 			} else {
 				throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
 			}

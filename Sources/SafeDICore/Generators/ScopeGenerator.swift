@@ -291,6 +291,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// since the values are captured from the enclosing scope.
 		let resolvedParameters: Set<MockParameterIdentifier>
 
+		/// Maps property labels to their disambiguated parameter names, using
+		/// the type to resolve ambiguity when multiple properties share a label.
+		/// Used by argument list generation to reference the correct variable in scope.
+		func disambiguatedLabel(forPropertyLabel label: String, typeDescription: TypeDescription) -> String {
+			// Try the type as-is first (handles optional types like LocalService?),
+			// then try the instantiated form (handles unwrapped types like LocalService).
+			let asSourceIdentifier = MockParameterIdentifier(propertyLabel: label, sourceType: typeDescription.asSource)
+			if let result = parameterLabelMap[asSourceIdentifier] {
+				return result
+			}
+			let strippedIdentifier = MockParameterIdentifier(propertyLabel: label, sourceType: typeDescription.strippingEscaping.asSource)
+			if let result = parameterLabelMap[strippedIdentifier] {
+				return result
+			}
+			let instantiatedIdentifier = MockParameterIdentifier(propertyLabel: label, sourceType: typeDescription.asInstantiatedType.asSource)
+			return parameterLabelMap[instantiatedIdentifier] ?? label
+		}
+
 		init(
 			mockConditionalCompilation: String?,
 			parameterLabelMap: [MockParameterIdentifier: String] = [:],
@@ -438,9 +456,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			erasedToConcreteExistential,
 			isPropertyCycle,
 		):
+			let mockContext: MockContext? = switch codeGeneration {
+			case .dependencyTree:
+				nil
+			case let .mock(context):
+				context
+			}
 			let argumentList = try instantiable.generateArgumentList(
 				unavailableProperties: unavailableProperties,
 				forMockGeneration: codeGeneration.isMock && property.propertyType.isConstant,
+				mockContext: mockContext,
 			)
 			let concreteTypeName = instantiable.concreteInstantiable.asSource
 			let instantiationDeclaration: String = switch codeGeneration {
@@ -952,6 +977,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let argumentList = try instantiable.generateArgumentList(
 			unavailableProperties: unavailableOptionalProperties,
 			forMockGeneration: true,
+			mockContext: bodyContext,
 		)
 		let construction = if instantiable.declarationType.isExtension {
 			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
@@ -967,7 +993,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Bindings for uncovered and received dependencies (must come before child constructions).
 		for declaration in allDeclarations {
 			guard rootBindingIdentifiers.contains(declaration.identifier) else { continue }
-			lines.append("\(bodyIndent)let \(declaration.propertyLabel) = \(declaration.parameterLabel)()")
+			lines.append("\(bodyIndent)let \(declaration.parameterLabel) = \(declaration.parameterLabel)()")
 		}
 		// Bindings for root default-valued init params.
 		// Skip labels matching forwarded params — forwarded values take precedence.
@@ -977,7 +1003,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			      !forwardedLabels.contains(declaration.propertyLabel),
 			      !declaration.isClosureType
 			else { continue }
-			lines.append("\(bodyIndent)let \(declaration.propertyLabel) = \(declaration.parameterLabel)()")
+			lines.append("\(bodyIndent)let \(declaration.parameterLabel) = \(declaration.parameterLabel)()")
 		}
 		lines.append(contentsOf: propertyLines)
 		lines.append("\(bodyIndent)return \(construction)")
@@ -1306,6 +1332,7 @@ extension Instantiable {
 	fileprivate func generateArgumentList(
 		unavailableProperties: Set<Property>? = nil,
 		forMockGeneration: Bool = false,
+		mockContext: ScopeGenerator.MockContext? = nil,
 	) throws -> String {
 		let initializerToUse: Initializer? = if forMockGeneration, let mockInitializer {
 			// User-defined mock handles construction — use its parameter list
@@ -1328,6 +1355,7 @@ extension Instantiable {
 				.createMockInitializerArgumentList(
 					given: dependencies,
 					unavailableProperties: unavailableProperties,
+					mockContext: mockContext,
 				)
 		} else {
 			return try initializerToUse?
