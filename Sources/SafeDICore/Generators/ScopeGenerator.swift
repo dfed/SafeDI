@@ -567,7 +567,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						for: instantiable,
 						parameterLabelMap: context.parameterLabelMap,
 						rootBoundLabels: context.rootBoundLabels,
-					) + Self.uncoveredDepBindings(
+					) + Self.uncoveredDependencyBindings(
 						for: instantiable,
 						declaredProperties: propertiesToDeclare,
 						parameterLabelMap: context.parameterLabelMap,
@@ -681,8 +681,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let sourceType = dependency.property.propertyType.isConstant
 					? dependencyType.asSource
 					: dependency.property.typeDescription.asSource
-				let depKey = "\(dependency.property.label):\(sourceType)"
-				guard !coveredRootLabelsWithTypes.contains(depKey) else { continue }
+				let dependencyKey = "\(dependency.property.label):\(sourceType)"
+				guard !coveredRootLabelsWithTypes.contains(dependencyKey) else { continue }
 				allDeclarations.append(MockDeclaration(
 					propertyLabel: dependency.property.label,
 					parameterLabel: dependency.property.label,
@@ -694,7 +694,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					defaultConstruction: nil,
 					isClosureType: false,
 				))
-				rootBindingKeys.insert(depKey)
+				rootBindingKeys.insert(dependencyKey)
 			case .received, .aliased, .forwarded:
 				break
 			}
@@ -1005,19 +1005,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			declarations.append(contentsOf: childDefaultParams)
 
 			// Check for @Instantiated dependencies that have no tree child.
-			var childUncoveredDeps = [MockDeclaration]()
+			var childUncoveredDependencies = [MockDeclaration]()
 			if !isInstantiator {
 				let coveredChildLabelsWithTypes = Set(childDeclarations.map {
 					"\($0.propertyLabel):\($0.sourceType)"
 				})
 				for dependency in childInstantiable.dependencies {
-					let depKey = "\(dependency.property.label):\(dependency.property.typeDescription.asInstantiatedType.asSource)"
+					let dependencyKey = "\(dependency.property.label):\(dependency.property.typeDescription.asInstantiatedType.asSource)"
 					guard case .instantiated = dependency.source,
-					      !coveredChildLabelsWithTypes.contains(depKey),
+					      !coveredChildLabelsWithTypes.contains(dependencyKey),
 					      dependency.property.propertyType.isConstant
 					else { continue }
 					let dependencyType = dependency.property.typeDescription.asInstantiatedType
-					childUncoveredDeps.append(MockDeclaration(
+					childUncoveredDependencies.append(MockDeclaration(
 						propertyLabel: dependency.property.label,
 						parameterLabel: dependency.property.label,
 						sourceType: dependencyType.asSource,
@@ -1030,7 +1030,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					))
 				}
 			}
-			declarations.append(contentsOf: childUncoveredDeps)
+			declarations.append(contentsOf: childUncoveredDependencies)
 
 			// Determine if child needs inline construction (subtree pattern: T? = nil)
 			// or can use a simple @autoclosure default.
@@ -1041,7 +1041,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				!childDeclarations.isEmpty
 					|| !childDefaultParams.isEmpty
-					|| !childUncoveredDeps.isEmpty
+					|| !childUncoveredDependencies.isEmpty
 					|| !childInstantiable.dependencies.isEmpty
 			}
 
@@ -1145,7 +1145,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// (e.g., type from a parallel dependency tree not in the scope map).
 	/// These are required mock parameters that need to be evaluated before
 	/// passing to the init or .mock() call.
-	private static func uncoveredDepBindings(
+	private static func uncoveredDependencyBindings(
 		for instantiable: Instantiable,
 		declaredProperties: Set<Property>,
 		parameterLabelMap: [String: String],
