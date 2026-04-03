@@ -186,7 +186,7 @@ struct SafeDITool: AsyncParsableCommand {
 				// Build a map from source file path → extension code(s).
 				var sourceFileToExtensions = [String: [String]]()
 				for root in generatedRoots {
-					if let sourceFilePath = root.sourceFilePath {
+					if let sourceFilePath = root.sourceFilePath, !root.code.isEmpty {
 						sourceFileToExtensions[sourceFilePath, default: []].append(root.code)
 					}
 				}
