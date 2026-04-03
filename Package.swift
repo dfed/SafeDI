@@ -122,7 +122,33 @@ let package = Package(
 		.plugin(
 			name: "SafeDIGenerator",
 			capability: .buildTool(),
-			dependencies: ["SafeDITool"],
+			dependencies: [
+				"SafeDITool",
+			],
+		),
+		// A lightweight executable that performs lexical root discovery without SwiftSyntax.
+		// SPM plugins run this in-process via symlinked sources.
+		// This target exists as a standalone executable for non-SPM build systems (e.g. Buck, Bazel)
+		// that need to invoke root scanning as a separate process.
+		.executableTarget(
+			name: "SafeDIRootScanner",
+			dependencies: [
+				.product(name: "ArgumentParser", package: "swift-argument-parser"),
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDIRootScannerTests",
+			dependencies: [
+				.product(name: "ArgumentParser", package: "swift-argument-parser"),
+				"SafeDICore",
+				"SafeDIRootScanner",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
 		),
 		.executableTarget(
 			name: "SafeDITool",
@@ -139,6 +165,7 @@ let package = Package(
 			name: "SafeDIToolTests",
 			dependencies: [
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
+				"SafeDIRootScanner",
 				"SafeDITool",
 			],
 			swiftSettings: [

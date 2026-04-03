@@ -21,6 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
+@testable import SafeDIRootScanner
 @testable import SafeDITool
 
 func executeSafeDIToolTest(
@@ -33,12 +34,12 @@ func executeSafeDIToolTest(
 	includeFolders: [String] = [],
 ) async throws -> TestOutput {
 	let swiftFileCSV = URL.temporaryFile
-	let swiftFiles = try swiftFileContent
-		.map {
-			let location = URL.temporaryFile.appendingPathExtension("swift")
-			try $0.write(to: location, atomically: true, encoding: .utf8)
-			return location
-		}
+	let swiftFixtureDirectory = URL.temporaryFile
+	try FileManager.default.createDirectory(at: swiftFixtureDirectory, withIntermediateDirectories: true)
+	let swiftFiles = try createSwiftFixtureFiles(
+		from: swiftFileContent,
+		in: swiftFixtureDirectory,
+	)
 	try swiftFiles
 		.map(\.relativePath)
 		.joined(separator: ",")
@@ -59,24 +60,13 @@ func executeSafeDIToolTest(
 		var manifestPath: String?
 		if buildSwiftOutputDirectory {
 			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-			var entries = [SafeDIToolManifest.InputOutputMap]()
-			let rootRegex = try Regex(#"@Instantiable\s*\([^)]*isRoot\s*:\s*true[^)]*\)"#)
-			let typeDeclRegex = try Regex(#"(?:class|struct|actor)\s+(\w+)"#)
-			for (content, file) in zip(swiftFileContent, swiftFiles) {
-				if let rootMatch = content.firstMatch(of: rootRegex) {
-					let afterMacro = content[rootMatch.range.upperBound...]
-					if let typeMatch = afterMacro.firstMatch(of: typeDeclRegex),
-					   let nameRange = typeMatch.output[1].range
-					{
-						let typeName = String(content[nameRange])
-						let outputPath = (outputDirectory.relativePath as NSString).appendingPathComponent("\(typeName)+SafeDI.swift")
-						entries.append(.init(inputFilePath: file.relativePath, outputFilePath: outputPath))
-					}
-				}
-			}
-			let manifest = SafeDIToolManifest(dependencyTreeGeneration: entries)
-			let manifestData = try JSONEncoder().encode(manifest)
-			try manifestData.write(to: manifestFile)
+			let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+			let scanResult = try RootScanner().scan(
+				swiftFiles: swiftFiles,
+				relativeTo: projectRoot,
+				outputDirectory: outputDirectory,
+			)
+			try scanResult.writeManifest(to: manifestFile)
 			manifestPath = manifestFile.relativePath
 		}
 
@@ -92,7 +82,7 @@ func executeSafeDIToolTest(
 		try await tool.run()
 
 		filesToDelete.append(swiftFileCSV)
-		filesToDelete += swiftFiles
+		filesToDelete.append(swiftFixtureDirectory)
 		filesToDelete.append(moduleInfoOutput)
 		if buildSwiftOutputDirectory {
 			filesToDelete.append(outputDirectory)
@@ -187,5 +177,44 @@ func assertThrowsError(
 		Issue.record("Did not throw error!", sourceLocation: sourceLocation)
 	} catch {
 		#expect(errorDescription == "\(error)", sourceLocation: sourceLocation)
+	}
+}
+
+private func createSwiftFixtureFiles(
+	from swiftFileContent: [String],
+	in directory: URL,
+) throws -> [URL] {
+	let instantiableRegex = try Regex(#"@Instantiable(?:\s*\([^)]*\))?"#)
+	let instantiableTypeRegex = try Regex(#"(?:class|struct|actor|enum)\s+(\w+)"#)
+	let firstTypeRegex = try Regex(#"(?:class|struct|actor|enum|protocol)\s+(\w+)"#)
+	var fileNameCounts = [String: Int]()
+
+	return try swiftFileContent.map { content in
+		let baseName: String
+		if let instantiableMatch = content.firstMatch(of: instantiableRegex) {
+			let contentAfterInstantiable = content[instantiableMatch.range.upperBound...]
+			if let typeMatch = contentAfterInstantiable.firstMatch(of: instantiableTypeRegex),
+			   let nameRange = typeMatch.output[1].range
+			{
+				baseName = String(contentAfterInstantiable[nameRange])
+			} else if let match = content.firstMatch(of: firstTypeRegex),
+			          let nameRange = match.output[1].range
+			{
+				baseName = String(content[nameRange])
+			} else {
+				baseName = "File"
+			}
+		} else if let match = content.firstMatch(of: firstTypeRegex),
+		          let nameRange = match.output[1].range
+		{
+			baseName = String(content[nameRange])
+		} else {
+			baseName = "File"
+		}
+		fileNameCounts[baseName, default: 0] += 1
+		let fileNameSuffix = fileNameCounts[baseName, default: 1] == 1 ? "" : "_\(fileNameCounts[baseName, default: 1])"
+		let fileURL = directory.appendingPathComponent("\(baseName)\(fileNameSuffix).swift")
+		try content.write(to: fileURL, atomically: true, encoding: .utf8)
+		return fileURL
 	}
 }

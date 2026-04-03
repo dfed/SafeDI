@@ -1,0 +1,1 @@
+../../Sources/SafeDIRootScanner/RelativePath.swift

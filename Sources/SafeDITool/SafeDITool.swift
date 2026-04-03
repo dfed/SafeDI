@@ -189,14 +189,24 @@ struct SafeDITool: AsyncParsableCommand {
 					}
 				}
 
-				let emptyRootContent = fileHeader
-
-				// Validate and write output files.
+				// Validate manifest and roots are in sync before writing any output.
 				let allRootSourceFiles = Set(normalizedInstantiables.filter(\.isRoot).compactMap(\.sourceFilePath))
+				let manifestInputPaths = Set(manifest.dependencyTreeGeneration.map(\.inputFilePath))
 				for entry in manifest.dependencyTreeGeneration {
 					guard allRootSourceFiles.contains(entry.inputFilePath) else {
 						throw ManifestError.noRootFound(inputPath: entry.inputFilePath)
 					}
+				}
+				for sourceFile in allRootSourceFiles {
+					if !manifestInputPaths.contains(sourceFile) {
+						throw ManifestError.rootNotInManifest(sourceFilePath: sourceFile)
+					}
+				}
+
+				let emptyRootContent = fileHeader
+
+				// Write output files.
+				for entry in manifest.dependencyTreeGeneration {
 					let code: String = if let extensions = sourceFileToExtensions[entry.inputFilePath] {
 						fileHeader + extensions.sorted().joined(separator: "\n\n")
 					} else {
@@ -206,14 +216,6 @@ struct SafeDITool: AsyncParsableCommand {
 					let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
 					if existingContent != code {
 						try code.write(toPath: entry.outputFilePath)
-					}
-				}
-
-				// Validate all roots are accounted for in the manifest.
-				let manifestInputPaths = Set(manifest.dependencyTreeGeneration.map(\.inputFilePath))
-				for sourceFile in allRootSourceFiles {
-					if !manifestInputPaths.contains(sourceFile) {
-						throw ManifestError.rootNotInManifest(sourceFilePath: sourceFile)
 					}
 				}
 			}
