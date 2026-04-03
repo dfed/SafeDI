@@ -461,15 +461,16 @@ struct RootScannerTests {
 	}
 
 	@Test
-	func extractAdditionalDirectoriesToInclude_returnsPartial_whenMalformedStringLiteral() {
-		// Brackets are matched but the last string literal has no closing quote.
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenMalformedStringLiteral() {
+		// The unclosed string literal causes the sanitizer to consume the
+		// closing brace, so the config body can't be delimited.
 		let source = """
 		@SafeDIConfiguration
 		enum MyConfiguration {
 		    static let additionalDirectoriesToInclude: [StaticString] = ["good", "unclosed]
 		}
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["good"])
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
@@ -479,6 +480,41 @@ struct RootScannerTests {
 		@SafeDIConfiguration
 		enum MyConfiguration {
 		    static let additionalDirectoriesToInclude: [StaticString] = [someVariable]
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_ignoresPropertyOnNonConfigType() {
+		// A helper type in the same file has a property named additionalDirectoriesToInclude.
+		// The extractor must only look inside the @SafeDIConfiguration body.
+		let source = """
+		struct Helper {
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Wrong/Path"]
+		}
+
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_ignoresPropertyAfterConfigBody() {
+		// Property with matching name appears AFTER the config body.
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = []
+		}
+
+		struct Unrelated {
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Should/Ignore"]
 		}
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)

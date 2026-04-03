@@ -212,9 +212,17 @@ public struct RootScanner {
 	/// Returns an empty array if the file does not contain a configuration.
 	public static func extractAdditionalDirectoriesToInclude(in source: String) -> [String] {
 		let sanitizedSource = sanitize(source: source)
-		guard sanitizedSource.contains("@SafeDIConfiguration") else { return [] }
+		guard let configRange = sanitizedSource.range(of: "@SafeDIConfiguration") else { return [] }
+
+		// Find the opening brace of the config body, then the matching close.
+		guard let bodyOpen = sanitizedSource[configRange.upperBound...].firstIndex(of: "{"),
+		      let bodyClose = matchingBraceIndex(in: sanitizedSource, openingBraceIndex: bodyOpen)
+		else { return [] }
+		let configBody = sanitizedSource[bodyOpen...bodyClose]
+
+		// Search for the property only within the config body.
 		let propertyName = "additionalDirectoriesToInclude"
-		guard let propRange = sanitizedSource.range(of: propertyName) else { return [] }
+		guard let propRange = configBody.range(of: propertyName) else { return [] }
 
 		// Convert the sanitized-source index to an index in the original source.
 		// The sanitizer preserves character count, so offsets are equivalent.
@@ -416,6 +424,31 @@ public struct RootScanner {
 			case "(":
 				depth += 1
 			case ")":
+				depth -= 1
+				if depth == 0 {
+					return index
+				}
+			default:
+				break
+			}
+			index = source.index(after: index)
+		}
+
+		return nil
+	}
+
+	private static func matchingBraceIndex(
+		in source: String,
+		openingBraceIndex: String.Index,
+	) -> String.Index? {
+		var depth = 0
+		var index = openingBraceIndex
+
+		while index < source.endIndex {
+			switch source[index] {
+			case "{":
+				depth += 1
+			case "}":
 				depth -= 1
 				if depth == 0 {
 					return index
