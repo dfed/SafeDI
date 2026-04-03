@@ -888,6 +888,19 @@ struct TypeDescriptionTests {
 	// MARK: - asIdentifier Tests
 
 	@Test
+	func asIdentifier_forNestedTypeWithoutGenerics_producesValidIdentifier() throws {
+		let content = """
+		var int: Swift.Int = 1
+		"""
+
+		let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.nestedType)
+		#expect(typeDescription.asIdentifier == "Swift_Int")
+	}
+
+	@Test
 	func asIdentifier_forFunctionType_producesValidIdentifier() throws {
 		let content = """
 		var test: (Int, Double) -> String

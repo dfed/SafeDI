@@ -7688,8 +7688,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        service_ExternalService: @autoclosure @escaping () -> ExternalService,
 		        service_LocalService: @autoclosure @escaping () -> LocalService? = nil
 		    ) -> Root {
-		        let service = service_ExternalService()
 		        let service = service_LocalService()
+		        let service = service_ExternalService()
 		        let childA = childA ?? ChildA(service: service)
 		        let childB = childB ?? ChildB(service: service)
 		        return Root(childA: childA, childB: childB)
