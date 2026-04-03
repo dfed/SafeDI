@@ -7577,6 +7577,61 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	mutating func mock_optionalReceivedNotSuppressedByNonOptionalWithSameLabelDifferentType() async throws {
+		// ChildA @Receives `service: ExternalService` (non-optional).
+		// ChildB @Receives(onlyIfAvailable: true) `service: LocalService?` (optional, different type).
+		// The optional LocalService? must NOT be suppressed by the non-optional ExternalService
+		// just because they share the label "service".
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Root: Instantiable {
+				    public init(childA: ChildA, childB: ChildB) {
+				        self.childA = childA
+				        self.childB = childB
+				    }
+				    @Instantiated let childA: ChildA
+				    @Instantiated let childB: ChildB
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(service: ExternalService) {
+				        self.service = service
+				    }
+				    @Received let service: ExternalService
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(service: LocalService?) {
+				        self.service = service
+				    }
+				    @Received(onlyIfAvailable: true) let service: LocalService?
+				}
+				""",
+				"""
+				public struct ExternalService {}
+				""",
+				"""
+				public struct LocalService {}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		// Both must appear as parameters — different types should not suppress each other.
+		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
+		#expect(rootMock.contains("service_ExternalService: @autoclosure @escaping () -> ExternalService"), "ExternalService param missing \(rootMock)")
+		#expect(rootMock.contains("service_LocalService_Optional: @autoclosure @escaping () -> LocalService? = nil"), "LocalService? onlyIfAvailable param missing \(rootMock)")
+	}
+
+	@Test
 	mutating func mock_defaultValuedParametersFromMultipleLevelsAllAppearAtRoot() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [

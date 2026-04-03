@@ -714,10 +714,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.filter(\.typeDescription.isOptional)
 				.map(\.asUnwrappedProperty),
 		)
-		let receivedLabelsWithNonOptionalVersion = Set(
+		let receivedNonOptionalProperties = Set(
 			receivedProperties
-				.filter { !$0.typeDescription.isOptional }
-				.map(\.label),
+				.filter { !$0.typeDescription.isOptional },
 		)
 		for receivedProperty in receivedProperties.sorted() {
 			guard !updatedCoveredIdentifiers.contains(MockParameterIdentifier(propertyLabel: receivedProperty.label, sourceType: receivedProperty.typeDescription.asSource)),
@@ -725,7 +724,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			else { continue }
 
 			guard !receivedProperty.typeDescription.isOptional
-				|| !receivedLabelsWithNonOptionalVersion.contains(receivedProperty.label)
+				|| !receivedNonOptionalProperties.contains(receivedProperty.asUnwrappedProperty)
 			else { continue }
 
 			let isOnlyIfAvailable = (receivedProperty.typeDescription.isOptional
