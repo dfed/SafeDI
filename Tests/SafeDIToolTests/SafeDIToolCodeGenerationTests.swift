@@ -6223,6 +6223,217 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		])
 	}
 
+	// MARK: Additional Directories + Manifest Tests
+
+	@Test
+	mutating func run_generatesOutputForRootInAdditionalDirectory() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@SafeDIConfiguration
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = ["$ADDITIONAL_DIRECTORY"]
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Dep {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(isRoot: true)
+				public struct TargetRoot {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Instantiated let dep: Dep
+				}
+				""",
+			],
+			additionalDirectorySwiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct AdditionalRoot {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Instantiated let dep: Dep
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let generatedFiles = try #require(output.generatedFiles)
+		#expect(generatedFiles["TargetRoot+SafeDI.swift"] != nil)
+		#expect(generatedFiles["AdditionalRoot+SafeDI.swift"] != nil)
+		#expect(generatedFiles["TargetRoot+SafeDI.swift"]?.contains("extension TargetRoot") == true)
+		#expect(generatedFiles["AdditionalRoot+SafeDI.swift"]?.contains("extension AdditionalRoot") == true)
+	}
+
+	@Test
+	mutating func run_generatesOutputForMultipleRootsInAdditionalDirectory() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@SafeDIConfiguration
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = ["$ADDITIONAL_DIRECTORY"]
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Dep {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(isRoot: true)
+				public struct TargetRoot {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Instantiated let dep: Dep
+				}
+				""",
+			],
+			additionalDirectorySwiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct AdditionalRootA {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Instantiated let dep: Dep
+				}
+				""",
+				"""
+				@Instantiable(isRoot: true)
+				public struct AdditionalRootB {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Instantiated let dep: Dep
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let generatedFiles = try #require(output.generatedFiles)
+		#expect(generatedFiles["TargetRoot+SafeDI.swift"] != nil)
+		#expect(generatedFiles["AdditionalRootA+SafeDI.swift"] != nil)
+		#expect(generatedFiles["AdditionalRootB+SafeDI.swift"] != nil)
+		#expect(generatedFiles["TargetRoot+SafeDI.swift"]?.contains("extension TargetRoot") == true)
+		#expect(generatedFiles["AdditionalRootA+SafeDI.swift"]?.contains("extension AdditionalRootA") == true)
+		#expect(generatedFiles["AdditionalRootB+SafeDI.swift"]?.contains("extension AdditionalRootB") == true)
+	}
+
+	@Test
+	mutating func run_generatesOutput_whenOnlyAdditionalDirectoryHasRoots() async throws {
+		// No roots in the target, only in the additional directory.
+		// The pre-scan discovers additional directories via @SafeDIConfiguration
+		// and includes those roots in the manifest.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@SafeDIConfiguration
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = ["$ADDITIONAL_DIRECTORY"]
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Dep {
+				    public init() {}
+				}
+				""",
+			],
+			additionalDirectorySwiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct AdditionalRoot {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Instantiated let dep: Dep
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let generatedFiles = try #require(output.generatedFiles)
+		#expect(generatedFiles["AdditionalRoot+SafeDI.swift"]?.contains("extension AdditionalRoot") == true)
+	}
+
+	@Test
+	mutating func run_generatesCorrectOutput_whenAdditionalDirectoryRootDependsOnTargetRootDependency() async throws {
+		// The additional directory root has a dependency chain that shares
+		// dependencies with the target root. Verifies the full dependency
+		// resolution works across target and additional directory boundaries.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@SafeDIConfiguration
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = ["$ADDITIONAL_DIRECTORY"]
+				}
+				""",
+				"""
+				@Instantiable
+				public struct SharedDep {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct TargetOnlyDep {
+				    public init(shared: SharedDep) {
+				        self.shared = shared
+				    }
+				    @Instantiated let shared: SharedDep
+				}
+				""",
+				"""
+				@Instantiable(isRoot: true)
+				public struct TargetRoot {
+				    public init(dep: TargetOnlyDep) {
+				        self.dep = dep
+				    }
+				    @Instantiated let dep: TargetOnlyDep
+				}
+				""",
+			],
+			additionalDirectorySwiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct AdditionalRoot {
+				    public init(shared: SharedDep) {
+				        self.shared = shared
+				    }
+				    @Instantiated let shared: SharedDep
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let generatedFiles = try #require(output.generatedFiles)
+		#expect(generatedFiles["TargetRoot+SafeDI.swift"]?.contains("extension TargetRoot") == true)
+		#expect(generatedFiles["AdditionalRoot+SafeDI.swift"]?.contains("extension AdditionalRoot") == true)
+		#expect(generatedFiles["AdditionalRoot+SafeDI.swift"]?.contains("SharedDep()") == true)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

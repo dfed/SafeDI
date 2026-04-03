@@ -56,14 +56,21 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			to: inputSourcesFile,
 		)
 
+		// Discover additional directories from the current module's config only.
+		let additionalSwiftFiles = discoverAdditionalDirectorySwiftFiles(
+			in: targetSwiftFiles,
+			relativeTo: packageRoot,
+		)
+
 		let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
-		let outputFiles = try runRootScanner(
+		let scanResult = try runRootScanner(
 			inputSourcesFile: inputSourcesFile,
 			projectRoot: packageRoot,
 			outputDirectory: outputDirectory,
 			manifestFile: manifestFile,
+			additionalSwiftFiles: additionalSwiftFiles,
 		)
-		guard !outputFiles.isEmpty else {
+		guard !scanResult.outputFiles.isEmpty else {
 			return []
 		}
 
@@ -96,8 +103,8 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 				executable: toolLocation,
 				arguments: arguments,
 				environment: [:],
-				inputFiles: allSwiftFiles,
-				outputFiles: outputFiles,
+				inputFiles: allSwiftFiles + scanResult.additionalInputFiles,
+				outputFiles: scanResult.outputFiles,
 			),
 		]
 	}
@@ -163,14 +170,21 @@ extension Target {
 				to: inputSourcesFile,
 			)
 
+			// Discover additional directories from the current target's config only.
+			let additionalSwiftFiles = discoverAdditionalDirectorySwiftFiles(
+				in: inputSwiftFiles,
+				relativeTo: projectRoot,
+			)
+
 			let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
-			let outputFiles = try runRootScanner(
+			let scanResult = try runRootScanner(
 				inputSourcesFile: inputSourcesFile,
 				projectRoot: projectRoot,
 				outputDirectory: outputDirectory,
 				manifestFile: manifestFile,
+				additionalSwiftFiles: additionalSwiftFiles,
 			)
-			guard !outputFiles.isEmpty else {
+			guard !scanResult.outputFiles.isEmpty else {
 				return []
 			}
 
@@ -200,8 +214,8 @@ extension Target {
 					executable: toolLocation,
 					arguments: arguments,
 					environment: [:],
-					inputFiles: inputSwiftFiles,
-					outputFiles: outputFiles,
+					inputFiles: inputSwiftFiles + scanResult.additionalInputFiles,
+					outputFiles: scanResult.outputFiles,
 				),
 			]
 		}
