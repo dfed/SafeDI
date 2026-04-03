@@ -656,7 +656,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					)
 				}
 
-				let hasGeneratedContent = !generatedProperties.isEmpty || !mockExtraBindings.isEmpty
+				let nonEmptyGeneratedProperties = generatedProperties.filter { !$0.isEmpty }
+				let hasGeneratedContent = !nonEmptyGeneratedProperties.isEmpty || !mockExtraBindings.isEmpty
 				let propertyDeclaration = if erasedToConcreteExistential || (
 					concreteTypeName == property.typeDescription.asSource
 						&& !hasGeneratedContent
@@ -670,7 +671,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// Ideally we would be able to use an anonymous closure rather than a named function here.
 				// Unfortunately, there's a bug in Swift Concurrency that prevents us from doing this: https://github.com/swiftlang/swift/issues/75003
 				let functionName = functionName(toBuild: property)
-				let allFunctionBodyLines = mockExtraBindings.map { "\(Self.standardIndent)\($0)" } + generatedProperties
+				let allFunctionBodyLines = mockExtraBindings.map { "\(Self.standardIndent)\($0)" } + nonEmptyGeneratedProperties
 				let functionDeclaration = if !hasGeneratedContent {
 					""
 				} else {
@@ -702,17 +703,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						sourceType: property.typeDescription.asInstantiatedType.asSource,
 					)
 					if context.resolvedParameters.contains(identifier) {
-						let resolvedLabel = context.parameterLabelMap[identifier] ?? property.label
-						let resolvedDeclaration = if erasedToConcreteExistential || (
-							concreteTypeName == property.typeDescription.asSource
-								&& !hasGeneratedContent
-								&& !instantiable.declarationType.isExtension
-						) {
-							"let \(resolvedLabel)"
-						} else {
-							"let \(resolvedLabel): \(property.typeDescription.asSource)"
-						}
-						return "\(functionDeclaration)\(resolvedDeclaration) = \(initializer)\n"
+						// Property already bound in parent scope — no code needed here.
+						// The init argument list will capture the parent-scope variable.
+						return ""
 					} else {
 						// Every constant is collected in parameterLabelMap via
 						// collectMockDeclarations, so this branch always has a label.

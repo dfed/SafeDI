@@ -3533,7 +3533,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> RootViewController {
 		        let networkService: NetworkService = networkService()
 		        func __safeDI_authService() -> DefaultAuthService {
-		            let networkService: NetworkService = DefaultNetworkService()
 		            let renamedNetworkService: NetworkService = networkService
 		            return DefaultAuthService(networkService: networkService, renamedNetworkService: renamedNetworkService)
 		        }
@@ -5457,11 +5456,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Parent {
 		        let shared = shared()
 		        let childA = childA ?? ChildA(shared: shared)
-		        func __safeDI_childB() -> ChildB {
-		            let shared = SharedThing()
-		            return ChildB(shared: shared)
-		        }
-		        let childB: ChildB = childB ?? __safeDI_childB()
+		        let childB = childB ?? ChildB(shared: shared)
 		        return Parent(childA: childA, childB: childB)
 		    }
 		}
@@ -5728,11 +5723,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Container {
 		        let stateService = stateService()
 		        let imageLoader = imageLoader ?? ImageLoader(stateService: stateService)
-		        func __safeDI_engine() -> Engine {
-		            let stateService = StateService()
-		            return Engine(stateService: stateService)
-		        }
-		        let engine: Engine = engine ?? __safeDI_engine()
+		        let engine = engine ?? Engine(stateService: stateService)
 		        return Container(imageLoader: imageLoader, engine: engine)
 		    }
 		}
@@ -10863,11 +10854,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            return ChildA(grandchild: grandchild)
 		        }
 		        let childA: ChildA = childA ?? __safeDI_childA()
-		        func __safeDI_childB() -> ChildB {
-		            let shared = Shared()
-		            return ChildB(shared: shared)
-		        }
-		        let childB: ChildB = childB ?? __safeDI_childB()
+		        let childB = childB ?? ChildB(shared: shared)
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
