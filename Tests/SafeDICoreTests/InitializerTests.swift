@@ -219,7 +219,7 @@ struct InitializerTests {
 	// MARK: createMockInitializerArgumentList
 
 	@Test
-	func createMockInitializerArgumentList_passesNilForUnavailableDependency() throws {
+	func createMockInitializerArgumentList_passesNilForUnavailableDependency() {
 		let initializer = Initializer(
 			arguments: [
 				.init(
