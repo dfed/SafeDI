@@ -285,7 +285,7 @@ struct InitializerTests {
 	}
 
 	@Test
-	func createMockInitializerArgumentList_includesDefaultValuedArguments() throws {
+	func createMockInitializerArgumentList_includesNonDependencyDefaultValuedArguments() throws {
 		let initializer = Initializer(
 			arguments: [
 				.init(
@@ -309,6 +309,46 @@ struct InitializerTests {
 
 		let result = try initializer.createMockInitializerArgumentList(given: dependencies)
 
+		#expect(result == "service: service, flag: flag")
+	}
+
+	@Test
+	func createMockInitializerArgumentList_skipsDependencyWithDefaultValue() throws {
+		let initializer = Initializer(
+			arguments: [
+				.init(
+					innerLabel: "service",
+					typeDescription: .simple(name: "Service"),
+					defaultValueExpression: nil,
+				),
+				.init(
+					innerLabel: "crossModuleDependency",
+					typeDescription: .simple(name: "CrossModuleType"),
+					defaultValueExpression: ".mock()",
+				),
+				.init(
+					innerLabel: "flag",
+					typeDescription: .simple(name: "Bool"),
+					defaultValueExpression: "false",
+				),
+			],
+		)
+		let dependencies: [Dependency] = [
+			.init(
+				property: .init(label: "service", typeDescription: .simple(name: "Service")),
+				source: .received(onlyIfAvailable: false),
+			),
+			.init(
+				property: .init(label: "crossModuleDependency", typeDescription: .simple(name: "CrossModuleType")),
+				source: .instantiated(fulfillingTypeDescription: nil, erasedToConcreteExistential: false),
+			),
+		]
+
+		let result = try initializer.createMockInitializerArgumentList(given: dependencies)
+
+		// crossModuleDependency is a dependency WITH a default — skipped.
+		// service is a dependency WITHOUT a default — included.
+		// flag is NOT a dependency but has a default — included (bubbled).
 		#expect(result == "service: service, flag: flag")
 	}
 }

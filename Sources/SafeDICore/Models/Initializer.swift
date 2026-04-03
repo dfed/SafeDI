@@ -237,9 +237,11 @@ public struct Initializer: Codable, Hashable, Sendable {
 			.joined(separator: ", ")
 	}
 
-	/// Creates an argument list that includes ALL arguments — both dependency-matching
-	/// and default-valued non-dependency arguments. Used in mock generation where
+	/// Creates an argument list that includes dependency-matching arguments and
+	/// default-valued non-dependency arguments. Used in mock generation where
 	/// default-valued parameters are bubbled up to the root mock method.
+	/// Dependency arguments with defaults are skipped — the init/mock handles them,
+	/// and the caller may not have a binding (e.g., cross-module types).
 	func createMockInitializerArgumentList(
 		given dependencies: [Dependency],
 		unavailableProperties: Set<Property>? = nil,
@@ -250,6 +252,12 @@ public struct Initializer: Codable, Hashable, Sendable {
 				$0.property.label == argument.innerLabel
 					&& $0.property.typeDescription.isEqualToFunctionArgument(argument.typeDescription)
 			}) {
+				guard !argument.hasDefaultValue else {
+					// Dependency with a default — skip. The init/mock's default handles it.
+					// This avoids referencing variables that may not have bindings
+					// (e.g., cross-module types not in the scope map).
+					continue
+				}
 				if let unavailableProperties, unavailableProperties.contains(dependency.property) {
 					parts.append("\(argument.label): nil")
 				} else {

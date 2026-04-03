@@ -1023,11 +1023,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Types with user-defined mock() methods stop bubbling — the mock handles construction.
 			let childPath = path + [childProperty.label]
 			if !isInstantiator, let childInstantiable = childScopeData.instantiable {
-				// User-defined mock methods handle their own defaults — don't bubble
-				// default-valued params from mock methods (they may reference types
-				// not importable in the current module).
-				let constructionInitializer: Initializer? = if childInstantiable.mockInitializer != nil {
-					nil
+				// Collect non-dependency default-valued params from the construction initializer.
+				// When a user-defined mock() exists, use its params (nil for no-arg mocks).
+				// When no mock exists, use the regular init.
+				// The dependencyLabels guard below ensures SafeDI dependencies
+				// (even those with defaults) are never bubbled as default params.
+				let constructionInitializer: Initializer? = if let mockInitializer = childInstantiable.mockInitializer {
+					mockInitializer.arguments.isEmpty ? nil : mockInitializer
 				} else {
 					childInstantiable.initializer
 				}
@@ -1154,11 +1156,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		path: [String],
 		propertyToParameterLabel: [String: String],
 	) -> [String] {
-		// User-defined mock methods handle their own defaults — don't bubble
-		// default-valued params from mock methods (they may reference types
-		// not importable in the current module).
-		let constructionInitializer: Initializer? = if instantiable.mockInitializer != nil {
-			nil
+		// Collect non-dependency default-valued params from the construction initializer.
+		// When a user-defined mock() exists, use its params (nil for no-arg mocks).
+		// When no mock exists, use the regular init.
+		// The dependencyLabels guard below ensures SafeDI dependencies
+		// (even those with defaults) are never bubbled as default params.
+		let constructionInitializer: Initializer? = if let mockInitializer = instantiable.mockInitializer {
+			mockInitializer.arguments.isEmpty ? nil : mockInitializer
 		} else {
 			instantiable.initializer
 		}
@@ -1236,10 +1240,10 @@ extension Instantiable {
 		unavailableProperties: Set<Property>? = nil,
 		forMockGeneration: Bool = false,
 	) throws -> String {
-		let initializerToUse: Initializer? = if forMockGeneration, let mockInit = mockInitializer {
+		let initializerToUse: Initializer? = if forMockGeneration, let mockInitializer {
 			// User-defined mock handles construction — use its parameter list
 			// (may be empty for no-arg mock methods).
-			mockInit
+			mockInitializer
 		} else {
 			initializer
 		}
@@ -1253,22 +1257,11 @@ extension Instantiable {
 			if mockInitializer != nil, !initializerToUse.isValid(forFulfilling: dependencies) {
 				return Self.incorrectlyConfiguredComment
 			}
-			if mockInitializer != nil {
-				// User-defined mock — skip default-valued params (the mock handles its own defaults).
-				// Only pass dependency-matching args that we have bindings for.
-				return try initializerToUse
-					.createInitializerArgumentList(
-						given: dependencies,
-						unavailableProperties: unavailableProperties,
-					)
-			} else {
-				// Regular init in mock mode — include non-dependency defaults (bubble up).
-				return try initializerToUse
-					.createMockInitializerArgumentList(
-						given: dependencies,
-						unavailableProperties: unavailableProperties,
-					)
-			}
+			return try initializerToUse
+				.createMockInitializerArgumentList(
+					given: dependencies,
+					unavailableProperties: unavailableProperties,
+				)
 		} else {
 			return try initializerToUse?
 				.createInitializerArgumentList(
