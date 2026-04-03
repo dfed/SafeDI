@@ -1520,11 +1520,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let flag = flag()
 		        let shared = shared()
-		        func __safeDI_child() -> Child {
-		            let flag = flag()
-		            return Child(shared: shared, flag: flag)
-		        }
-		        let child: Child = child ?? __safeDI_child()
+		        let child = child ?? Child(shared: shared, flag: flag)
 		        return Root(child: child, shared: shared)
 		    }
 		}
@@ -6824,11 +6820,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        config: @autoclosure @escaping () -> String = "hello"
 		    ) -> Root {
 		        let config = config()
-		        func __safeDI_child() -> Child {
-		            let config = config()
-		            return Child(config: config)
-		        }
-		        let child: Child = child ?? __safeDI_child()
+		        let child = child ?? Child(config: config)
 		        return Root(child: child)
 		    }
 		}
@@ -6945,11 +6937,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let viewModel = viewModel()
 		        func __safeDI_child() -> Child {
-		            func __safeDI_grandchild() -> Grandchild {
-		                let viewModel = viewModel()
-		                return Grandchild(viewModel: viewModel)
-		            }
-		            let grandchild: Grandchild = grandchild ?? __safeDI_grandchild()
+		            let grandchild = grandchild ?? Grandchild(viewModel: viewModel)
 		            return Child(grandchild: grandchild)
 		        }
 		        let child: Child = child ?? __safeDI_child()
@@ -6971,11 +6959,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        viewModel: @autoclosure @escaping () -> String = "default"
 		    ) -> Child {
 		        let viewModel = viewModel()
-		        func __safeDI_grandchild() -> Grandchild {
-		            let viewModel = viewModel()
-		            return Grandchild(viewModel: viewModel)
-		        }
-		        let grandchild: Grandchild = grandchild ?? __safeDI_grandchild()
+		        let grandchild = grandchild ?? Grandchild(viewModel: viewModel)
 		        return Child(grandchild: grandchild)
 		    }
 		}
@@ -7140,16 +7124,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let flagA = flagA()
 		        let flagB = flagB()
-		        func __safeDI_childA() -> ChildA {
-		            let flagA = flagA()
-		            return ChildA(flagA: flagA)
-		        }
-		        let childA: ChildA = childA ?? __safeDI_childA()
-		        func __safeDI_childB() -> ChildB {
-		            let flagB = flagB()
-		            return ChildB(flagB: flagB)
-		        }
-		        let childB: ChildB = childB ?? __safeDI_childB()
+		        let childA = childA ?? ChildA(flagA: flagA)
+		        let childB = childB ?? ChildB(flagB: flagB)
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -7192,11 +7168,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        viewModel: @autoclosure @escaping () -> String? = nil
 		    ) -> Root {
 		        let viewModel = viewModel()
-		        func __safeDI_child() -> Child {
-		            let viewModel = viewModel()
-		            return Child(viewModel: viewModel)
-		        }
-		        let child: Child = child ?? __safeDI_child()
+		        let child = child ?? Child(viewModel: viewModel)
 		        return Root(child: child)
 		    }
 		}
@@ -7270,16 +7242,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let flag = flag_Bool()
 		        let flag = flag_String()
-		        func __safeDI_childA() -> ChildA {
-		            let flag = flag_Bool()
-		            return ChildA(flag: flag)
-		        }
-		        let childA: ChildA = childA ?? __safeDI_childA()
-		        func __safeDI_childB() -> ChildB {
-		            let flag = flag_String()
-		            return ChildB(flag: flag)
-		        }
-		        let childB: ChildB = childB ?? __safeDI_childB()
+		        let childA = childA ?? ChildA(flag: flag)
+		        let childB = childB ?? ChildB(flag: flag)
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -7427,11 +7391,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        values: @autoclosure @escaping () -> [Int] = [1, 2, 3]
 		    ) -> Root {
 		        let values = values()
-		        func __safeDI_child() -> Child {
-		            let values = values()
-		            return Child(values: values)
-		        }
-		        let child: Child = child ?? __safeDI_child()
+		        let child = child ?? Child(values: values)
 		        return Root(child: child)
 		    }
 		}
@@ -7492,7 +7452,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let extra = extra()
 		        func __safeDI_child() -> Child {
-		            let extra = extra()
 		            let dependency = dependency()
 		            return Child.mock(dependency: dependency, extra: extra)
 		        }
@@ -7502,6 +7461,119 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		}
 		#endif
 		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	mutating func mock_childDefaultParamDoesNotReEvaluateRootBoundLabel() async throws {
+		// Parent @Receives clientId (uncovered, no scope for String).
+		// Child has clientId as a non-dependency default-valued init param.
+		// The root binds `let clientId = clientId()`. The child function
+		// must NOT re-bind it — clientId is already a String, not callable.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Parent: Instantiable {
+				    public init(clientId: String, child: Child) {
+				        self.clientId = clientId
+				        self.child = child
+				    }
+				    @Received let clientId: String
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init(clientId: String = "default") {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		#expect(output.mockFiles["Parent+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Parent {
+		    public static func mock(
+		        child: Child? = nil,
+		        clientId: @autoclosure @escaping () -> String = "default"
+		    ) -> Parent {
+		        let clientId = clientId()
+		        let child = child ?? Child(clientId: clientId)
+		        return Parent(clientId: clientId, child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Parent+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	mutating func mock_receivedDepNotSuppressedByTreeChildWithSameLabelDifferentType() async throws {
+		// ChildA @Instantiates `service: LocalService` (tree child).
+		// ChildB @Receives `service: ExternalService` (different type, same label).
+		// The received ExternalService must still be promoted — LocalService must not suppress it.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Root: Instantiable {
+				    public init(childA: ChildA, childB: ChildB) {
+				        self.childA = childA
+				        self.childB = childB
+				    }
+				    @Instantiated let childA: ChildA
+				    @Instantiated let childB: ChildB
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(service: LocalService) {
+				        self.service = service
+				    }
+				    @Instantiated let service: LocalService
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(service: ExternalService) {
+				        self.service = service
+				    }
+				    @Received let service: ExternalService
+				}
+				""",
+				"""
+				@Instantiable
+				public struct LocalService: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				public struct ExternalService {}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		// ExternalService has no @Instantiable — it must be a required autoclosure parameter.
+		// LocalService IS @Instantiable — it's a leaf with default construction.
+		// Both appear with label "service" but different types → both must exist.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"]?.contains(
+			"service_ExternalService: @autoclosure @escaping () -> ExternalService",
+		) == true, "ExternalService must not be suppressed by LocalService \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+		#expect(output.mockFiles["Root+SafeDIMock.swift"]?.contains(
+			"service_LocalService: @autoclosure @escaping () -> LocalService = LocalService()",
+		) == true, "LocalService should still appear \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
 	}
 
 	@Test
@@ -7553,12 +7625,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let viewModel = viewModel()
 		        let config = config()
 		        func __safeDI_child() -> Child {
-		            let config = config()
-		            func __safeDI_grandchild() -> Grandchild {
-		                let viewModel = viewModel()
-		                return Grandchild(viewModel: viewModel)
-		            }
-		            let grandchild: Grandchild = grandchild ?? __safeDI_grandchild()
+		            let grandchild = grandchild ?? Grandchild(viewModel: viewModel)
 		            return Child(grandchild: grandchild, config: config)
 		        }
 		        let child: Child = child ?? __safeDI_child()

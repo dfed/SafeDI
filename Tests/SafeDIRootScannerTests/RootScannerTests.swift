@@ -65,8 +65,6 @@ struct RootScannerTests {
 		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
 		let featureAOutputPath = outputDirectory.appendingPathComponent("FeatureA_Root+SafeDI.swift").path
 		let featureBOutputPath = outputDirectory.appendingPathComponent("FeatureB_Root+SafeDI.swift").path
-		let escapedFeatureAOutputPath = featureAOutputPath.replacingOccurrences(of: "/", with: #"\/"#)
-		let escapedFeatureBOutputPath = featureBOutputPath.replacingOccurrences(of: "/", with: #"\/"#)
 		let result = try RootScanner().scan(
 			swiftFiles: [rootB, rootA],
 			relativeTo: fixture.rootDirectory,

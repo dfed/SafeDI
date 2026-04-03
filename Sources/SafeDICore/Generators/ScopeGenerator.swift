@@ -287,20 +287,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Keys ("propertyLabel:sourceType") whose mock parameter is optional (`T? = nil`)
 		/// rather than `@autoclosure`. Used by `generatePropertyCode` to pick the binding pattern.
 		let subtreeParameterKeys: Set<String>
-		/// Labels already bound at root scope. Child functions skip bindings for these
+		/// Keys ("propertyLabel:sourceType") already bound at root scope. Child functions skip bindings for these
 		/// since the values are captured from the enclosing scope.
-		let rootBoundLabels: Set<String>
+		let rootBoundKeys: Set<String>
 
 		init(
 			mockConditionalCompilation: String?,
 			parameterLabelMap: [String: String] = [:],
 			subtreeParameterKeys: Set<String> = [],
-			rootBoundLabels: Set<String> = [],
+			rootBoundKeys: Set<String> = [],
 		) {
 			self.mockConditionalCompilation = mockConditionalCompilation
 			self.parameterLabelMap = parameterLabelMap
 			self.subtreeParameterKeys = subtreeParameterKeys
-			self.rootBoundLabels = rootBoundLabels
+			self.rootBoundKeys = rootBoundKeys
 		}
 	}
 
@@ -566,12 +566,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					Self.defaultValueBindings(
 						for: instantiable,
 						parameterLabelMap: context.parameterLabelMap,
-						rootBoundLabels: context.rootBoundLabels,
+						rootBoundKeys: context.rootBoundKeys,
 					) + Self.uncoveredDependencyBindings(
 						for: instantiable,
 						declaredProperties: propertiesToDeclare,
 						parameterLabelMap: context.parameterLabelMap,
-						rootBoundLabels: context.rootBoundLabels,
+						rootBoundKeys: context.rootBoundKeys,
 					)
 				}
 
@@ -702,10 +702,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Check transitive received dependencies not satisfied by the tree.
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
-		let updatedCoveredLabels = Set(
+		let updatedCoveredKeys = Set(
 			allDeclarations
 				.filter { $0.defaultValueExpression == nil }
-				.map(\.propertyLabel),
+				.map { "\($0.propertyLabel):\($0.sourceType)" },
 		)
 		let unwrappedOptionalCounterparts = Set(
 			receivedProperties
@@ -718,7 +718,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.map(\.label),
 		)
 		for receivedProperty in receivedProperties.sorted() {
-			guard !updatedCoveredLabels.contains(receivedProperty.label),
+			guard !updatedCoveredKeys.contains("\(receivedProperty.label):\(receivedProperty.typeDescription.asSource)"),
 			      !forwardedPropertySet.contains(receivedProperty)
 			else { continue }
 
@@ -860,21 +860,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.filter(\.hasSubtree)
 				.map { "\($0.propertyLabel):\($0.sourceType)" },
 		)
-		var rootBoundLabels = Set<String>()
-		for declaration in allDeclarations where declaration.defaultValueExpression == nil {
-			rootBoundLabels.insert(declaration.propertyLabel)
-		}
+		let forwardedLabels = Set(forwardedDeclarations.map(\.propertyLabel))
+		var rootBoundKeys = Set<String>()
 		for declaration in allDeclarations {
 			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
-			if rootBindingKeys.contains(key) {
-				rootBoundLabels.insert(declaration.propertyLabel)
+			if declaration.defaultValueExpression == nil {
+				// Tree children and uncovered dependencies — all get root-level bindings.
+				rootBoundKeys.insert("\(declaration.propertyLabel):\(declaration.sourceType)")
+			} else if rootBindingKeys.contains(key) {
+				rootBoundKeys.insert("\(declaration.propertyLabel):\(declaration.sourceType)")
+			} else if !forwardedLabels.contains(declaration.propertyLabel),
+			          !declaration.isClosureType
+			{
+				// Root default-valued params bound at root scope.
+				rootBoundKeys.insert("\(declaration.propertyLabel):\(declaration.sourceType)")
 			}
 		}
 		let bodyContext = MockContext(
 			mockConditionalCompilation: context.mockConditionalCompilation,
 			parameterLabelMap: parameterLabelMap,
 			subtreeParameterKeys: subtreeParameterKeys,
-			rootBoundLabels: rootBoundLabels,
+			rootBoundKeys: rootBoundKeys,
 		)
 		let propertyLines = try await generateProperties(
 			codeGeneration: .mock(bodyContext),
@@ -905,7 +911,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		// Bindings for root default-valued init params.
 		// Skip labels matching forwarded params — forwarded values take precedence.
-		let forwardedLabels = Set(forwardedDeclarations.map(\.propertyLabel))
 		for declaration in allDeclarations where declaration.defaultValueExpression != nil {
 			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
 			guard !rootBindingKeys.contains(key),
@@ -1110,7 +1115,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func defaultValueBindings(
 		for instantiable: Instantiable,
 		parameterLabelMap: [String: String],
-		rootBoundLabels: Set<String>,
+		rootBoundKeys: Set<String>,
 	) -> [String] {
 		// Collect non-dependency default-valued params from the construction initializer.
 		// When a user-defined mock() exists, use its params (nil for no-arg mocks).
@@ -1130,11 +1135,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			guard argument.hasDefaultValue,
 			      !dependencyLabels.contains(argument.innerLabel),
 			      argument.defaultValueExpression != nil,
-			      !argument.typeDescription.strippingEscaping.isClosure,
-			      !rootBoundLabels.contains(argument.innerLabel)
+			      !argument.typeDescription.strippingEscaping.isClosure
 			else { continue }
 			let strippedType = argument.typeDescription.strippingEscaping
 			let key = "\(argument.innerLabel):\(strippedType.asSource)"
+			guard !rootBoundKeys.contains(key) else { continue }
 			let parameterLabel = parameterLabelMap[key] ?? argument.innerLabel
 			bindings.append("let \(argument.innerLabel) = \(parameterLabel)()")
 		}
@@ -1149,17 +1154,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for instantiable: Instantiable,
 		declaredProperties: Set<Property>,
 		parameterLabelMap: [String: String],
-		rootBoundLabels: Set<String>,
+		rootBoundKeys: Set<String>,
 	) -> [String] {
 		var bindings = [String]()
 		for dependency in instantiable.dependencies {
 			guard case .instantiated = dependency.source,
 			      !declaredProperties.contains(dependency.property),
-			      dependency.property.propertyType.isConstant,
-			      !rootBoundLabels.contains(dependency.property.label)
+			      dependency.property.propertyType.isConstant
 			else { continue }
 			let dependencyType = dependency.property.typeDescription.asInstantiatedType
 			let key = "\(dependency.property.label):\(dependencyType.asSource)"
+			guard !rootBoundKeys.contains(key) else { continue }
 			let parameterLabel = parameterLabelMap[key] ?? dependency.property.label
 			bindings.append("let \(dependency.property.label) = \(parameterLabel)()")
 		}
