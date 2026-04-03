@@ -265,6 +265,30 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// Whether this type is a closure (function) type, possibly wrapped in attributes.
+	public var isClosure: Bool {
+		switch self {
+		case .closure:
+			true
+		case let .attributed(type, _, _):
+			type.isClosure
+		case .any,
+		     .array,
+		     .composition,
+		     .dictionary,
+		     .implicitlyUnwrappedOptional,
+		     .metatype,
+		     .nested,
+		     .optional,
+		     .simple,
+		     .some,
+		     .tuple,
+		     .unknown,
+		     .void:
+			false
+		}
+	}
+
 	/// Strips the `@escaping` attribute, if present. Returns `self` unchanged for non-attributed types.
 	/// Used when a type will appear in a position where `@escaping` is invalid (e.g., closure return types).
 	public var strippingEscaping: TypeDescription {

@@ -284,13 +284,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let mockConditionalCompilation: String?
 		/// Maps "propertyLabel:sourceType" to disambiguated parameter labels.
 		let parameterLabelMap: [String: String]
+		/// Keys ("propertyLabel:sourceType") whose mock parameter is optional (`T? = nil`)
+		/// rather than `@autoclosure`. Used by `generatePropertyCode` to pick the binding pattern.
+		let subtreeParameterKeys: Set<String>
+		/// Labels already bound at root scope. Child functions skip bindings for these
+		/// since the values are captured from the enclosing scope.
+		let rootBoundLabels: Set<String>
 
 		init(
 			mockConditionalCompilation: String?,
 			parameterLabelMap: [String: String] = [:],
+			subtreeParameterKeys: Set<String> = [],
+			rootBoundLabels: Set<String> = [],
 		) {
 			self.mockConditionalCompilation = mockConditionalCompilation
 			self.parameterLabelMap = parameterLabelMap
+			self.subtreeParameterKeys = subtreeParameterKeys
+			self.rootBoundLabels = rootBoundLabels
 		}
 	}
 
@@ -556,10 +566,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					Self.defaultValueBindings(
 						for: instantiable,
 						parameterLabelMap: context.parameterLabelMap,
+						rootBoundLabels: context.rootBoundLabels,
 					) + Self.uncoveredDepBindings(
 						for: instantiable,
 						declaredProperties: propertiesToDeclare,
 						parameterLabelMap: context.parameterLabelMap,
+						rootBoundLabels: context.rootBoundLabels,
 					)
 				}
 
@@ -607,8 +619,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let sourceType = property.typeDescription.asInstantiatedType.asSource
 					let key = "\(property.label):\(sourceType)"
 					let parameterLabel = context.parameterLabelMap[key] ?? property.label
-					if hasGeneratedContent {
-						// Subtree: use optional ?? inline fallback
+					if context.subtreeParameterKeys.contains(key) {
+						// Optional parameter (T? = nil): use ?? inline fallback
 						let mockInitializer = if erasedToConcreteExistential {
 							"\(property.typeDescription.asSource)(\(initializer))"
 						} else {
@@ -616,7 +628,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						}
 						return "\(functionDeclaration)\(propertyDeclaration) = \(parameterLabel) ?? \(mockInitializer)\n"
 					} else {
-						// Leaf: evaluate @autoclosure parameter
+						// Autoclosure parameter: evaluate
 						return "\(propertyDeclaration) = \(parameterLabel)()\n"
 					}
 				}
@@ -680,6 +692,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					defaultValueExpression: nil,
 					hasSubtree: false,
 					defaultConstruction: nil,
+					isClosureType: false,
 				))
 				rootBindingKeys.insert(depKey)
 			case .received, .aliased, .forwarded:
@@ -736,6 +749,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				defaultValueExpression: nil,
 				hasSubtree: false,
 				defaultConstruction: isOnlyIfAvailable ? "nil" : nil,
+				isClosureType: false,
 			))
 			rootBindingKeys.insert("\(receivedProperty.label):\(receivedSourceType)")
 		}
@@ -751,6 +765,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				defaultValueExpression: nil,
 				hasSubtree: false,
 				defaultConstruction: nil,
+				isClosureType: false,
 			)
 		}
 
@@ -772,6 +787,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					defaultValueExpression: defaultExpr,
 					hasSubtree: false,
 					defaultConstruction: defaultExpr,
+					isClosureType: argument.typeDescription.strippingEscaping.isClosure,
 				))
 			}
 		}
@@ -824,6 +840,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let sendablePrefix = declaration.requiresSendable ? "@Sendable " : ""
 			if declaration.hasSubtree {
 				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)? = nil")
+			} else if declaration.isClosureType, let defaultExpr = declaration.defaultConstruction {
+				// Closure-typed default: @escaping directly (no @autoclosure).
+				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(sendablePrefix)@escaping \(declaration.sourceType) = \(defaultExpr)")
 			} else if let defaultExpr = declaration.defaultConstruction {
 				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(sendablePrefix)@autoclosure @escaping () -> \(declaration.sourceType) = \(defaultExpr)")
 			} else {
@@ -836,9 +855,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Build the mock method body.
 		let bodyIndent = "\(indent)\(indent)"
 
+		let subtreeParameterKeys = Set(
+			allDeclarations
+				.filter(\.hasSubtree)
+				.map { "\($0.propertyLabel):\($0.sourceType)" },
+		)
+		var rootBoundLabels = Set<String>()
+		for declaration in allDeclarations where declaration.defaultValueExpression == nil {
+			rootBoundLabels.insert(declaration.propertyLabel)
+		}
+		for declaration in allDeclarations {
+			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
+			if rootBindingKeys.contains(key) {
+				rootBoundLabels.insert(declaration.propertyLabel)
+			}
+		}
 		let bodyContext = MockContext(
 			mockConditionalCompilation: context.mockConditionalCompilation,
 			parameterLabelMap: parameterLabelMap,
+			subtreeParameterKeys: subtreeParameterKeys,
+			rootBoundLabels: rootBoundLabels,
 		)
 		let propertyLines = try await generateProperties(
 			codeGeneration: .mock(bodyContext),
@@ -868,9 +904,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.append("\(bodyIndent)let \(declaration.propertyLabel) = \(declaration.parameterLabel)()")
 		}
 		// Bindings for root default-valued init params.
+		// Skip labels matching forwarded params — forwarded values take precedence.
+		let forwardedLabels = Set(forwardedDeclarations.map(\.propertyLabel))
 		for declaration in allDeclarations where declaration.defaultValueExpression != nil {
 			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
-			guard !rootBindingKeys.contains(key) else { continue }
+			guard !rootBindingKeys.contains(key),
+			      !forwardedLabels.contains(declaration.propertyLabel),
+			      !declaration.isClosureType
+			else { continue }
 			lines.append("\(bodyIndent)let \(declaration.propertyLabel) = \(declaration.parameterLabel)()")
 		}
 		lines.append(contentsOf: propertyLines)
@@ -901,6 +942,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The default construction expression for `@autoclosure` parameters (e.g., `"T()"`, `"T.mock()"`).
 		/// nil for subtree children (which use `T? = nil` instead) and forwarded params.
 		let defaultConstruction: String?
+		/// Whether the source type is a closure/function type. Closure-typed defaults use
+		/// `@escaping T = default` instead of `@autoclosure @escaping () -> T = default`.
+		let isClosureType: Bool
 	}
 
 	/// Walks the tree and collects all mock declarations for the mock() parameters.
@@ -953,6 +997,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							defaultValueExpression: argument.defaultValueExpression,
 							hasSubtree: false,
 							defaultConstruction: argument.defaultValueExpression,
+							isClosureType: argument.typeDescription.strippingEscaping.isClosure,
 						))
 					}
 				}
@@ -981,6 +1026,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						defaultValueExpression: nil,
 						hasSubtree: false,
 						defaultConstruction: nil,
+						isClosureType: false,
 					))
 				}
 			}
@@ -996,6 +1042,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				!childDeclarations.isEmpty
 					|| !childDefaultParams.isEmpty
 					|| !childUncoveredDeps.isEmpty
+					|| !childInstantiable.dependencies.isEmpty
 			}
 
 			// Compute the default construction expression for leaf types.
@@ -1018,6 +1065,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				defaultValueExpression: nil,
 				hasSubtree: needsInlineConstruction,
 				defaultConstruction: defaultConstruction,
+				isClosureType: false,
 			))
 		}
 
@@ -1052,6 +1100,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				defaultValueExpression: declaration.defaultValueExpression,
 				hasSubtree: declaration.hasSubtree,
 				defaultConstruction: declaration.defaultConstruction,
+				isClosureType: false,
 			)
 		}
 	}
@@ -1061,6 +1110,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func defaultValueBindings(
 		for instantiable: Instantiable,
 		parameterLabelMap: [String: String],
+		rootBoundLabels: Set<String>,
 	) -> [String] {
 		// Collect non-dependency default-valued params from the construction initializer.
 		// When a user-defined mock() exists, use its params (nil for no-arg mocks).
@@ -1079,7 +1129,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for argument in constructionInitializer.arguments {
 			guard argument.hasDefaultValue,
 			      !dependencyLabels.contains(argument.innerLabel),
-			      argument.defaultValueExpression != nil
+			      argument.defaultValueExpression != nil,
+			      !argument.typeDescription.strippingEscaping.isClosure,
+			      !rootBoundLabels.contains(argument.innerLabel)
 			else { continue }
 			let strippedType = argument.typeDescription.strippingEscaping
 			let key = "\(argument.innerLabel):\(strippedType.asSource)"
@@ -1097,12 +1149,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for instantiable: Instantiable,
 		declaredProperties: Set<Property>,
 		parameterLabelMap: [String: String],
+		rootBoundLabels: Set<String>,
 	) -> [String] {
 		var bindings = [String]()
 		for dependency in instantiable.dependencies {
 			guard case .instantiated = dependency.source,
 			      !declaredProperties.contains(dependency.property),
-			      dependency.property.propertyType.isConstant
+			      dependency.property.propertyType.isConstant,
+			      !rootBoundLabels.contains(dependency.property.label)
 			else { continue }
 			let dependencyType = dependency.property.typeDescription.asInstantiatedType
 			let key = "\(dependency.property.label):\(dependencyType.asSource)"
