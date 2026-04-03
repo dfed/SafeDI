@@ -361,14 +361,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		leadingMemberWhitespace: String,
 	) async throws -> [String] {
 		var generatedProperties = [String]()
+		// In mock mode, accumulate resolved identifiers across siblings so later
+		// siblings' descendants know earlier siblings' bindings are already in scope.
+		var currentCodeGeneration = codeGeneration
 		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
 			try await generatedProperties.append(
 				childGenerator.generateCode(
-					codeGeneration: codeGeneration,
+					codeGeneration: currentCodeGeneration,
 					propertiesAlreadyGeneratedAtThisScope: .init(orderedPropertiesToGenerate[0..<index].compactMap(\.property)),
 					leadingWhitespace: leadingMemberWhitespace,
 				),
 			)
+			if case let .mock(context) = currentCodeGeneration,
+			   let childProperty = childGenerator.property,
+			   childProperty.propertyType.isConstant
+			{
+				let identifier = MockParameterIdentifier(
+					propertyLabel: childProperty.label,
+					sourceType: childProperty.typeDescription.asInstantiatedType.asSource,
+				)
+				currentCodeGeneration = .mock(MockContext(
+					mockConditionalCompilation: context.mockConditionalCompilation,
+					parameterLabelMap: context.parameterLabelMap,
+					subtreeParameters: context.subtreeParameters,
+					resolvedParameters: context.resolvedParameters.union([identifier]),
+				))
+			}
 		}
 		return generatedProperties
 	}
