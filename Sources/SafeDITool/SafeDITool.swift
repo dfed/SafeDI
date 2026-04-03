@@ -64,12 +64,9 @@ struct SafeDITool: AsyncParsableCommand {
 			parsedModule(),
 		)
 
-		// Prefer the root module's configuration. If none, fall back to dependent modules' configurations.
-		let sourceConfiguration: SafeDIConfiguration? = if !initialModule.configurations.isEmpty {
-			initialModule.configurations.first
-		} else {
-			dependentModuleInfo.flatMap(\.configurations).first
-		}
+		// Only use this module's own configuration. Dependent modules' configs must not
+		// affect the current module's mock generation or conditional compilation settings.
+		let sourceConfiguration: SafeDIConfiguration? = initialModule.configurations.first
 
 		let resolvedAdditionalImportedModules: [String] = if let sourceConfiguration {
 			additionalImportedModules + sourceConfiguration.additionalImportedModules

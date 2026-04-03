@@ -1252,7 +1252,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				hasSubtree: declaration.hasSubtree,
 				defaultConstruction: declaration.defaultConstruction,
 				sourceTypeDescription: declaration.sourceTypeDescription,
-				isClosureType: false,
+				isClosureType: declaration.isClosureType,
 			)
 		}
 	}

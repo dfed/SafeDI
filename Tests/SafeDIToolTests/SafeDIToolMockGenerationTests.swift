@@ -10073,8 +10073,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        childA: ChildA? = nil,
 		        childB: ChildB? = nil,
-		        onAction_String_to_Void: @autoclosure @escaping () -> (String) -> Void = { _ in },
-		        onAction_Void_to_Void: @autoclosure @escaping () -> () -> Void = {}
+		        onAction_String_to_Void: @escaping (String) -> Void = { _ in },
+		        onAction_Void_to_Void: @escaping () -> Void = {}
 		    ) -> Root {
 		        let childA = childA ?? ChildA(onAction: onAction_Void_to_Void)
 		        let childB = childB ?? ChildB(onAction: onAction_String_to_Void)
