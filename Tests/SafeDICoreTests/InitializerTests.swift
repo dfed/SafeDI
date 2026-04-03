@@ -248,7 +248,7 @@ struct InitializerTests {
 			.init(label: "optionalDep", typeDescription: .optional(.simple(name: "OptionalDep"))),
 		]
 
-		let result = try initializer.createMockInitializerArgumentList(
+		let result = initializer.createMockInitializerArgumentList(
 			given: dependencies,
 			unavailableProperties: unavailable,
 		)
@@ -257,35 +257,7 @@ struct InitializerTests {
 	}
 
 	@Test
-	func createMockInitializerArgumentList_throwsForUnexpectedNonDefaultArgument() {
-		let initializer = Initializer(
-			arguments: [
-				.init(
-					innerLabel: "service",
-					typeDescription: .simple(name: "Service"),
-					defaultValueExpression: nil,
-				),
-				.init(
-					innerLabel: "unknown",
-					typeDescription: .simple(name: "Unknown"),
-					defaultValueExpression: nil,
-				),
-			],
-		)
-		let dependencies: [Dependency] = [
-			.init(
-				property: .init(label: "service", typeDescription: .simple(name: "Service")),
-				source: .received(onlyIfAvailable: false),
-			),
-		]
-
-		#expect(throws: Initializer.GenerationError.unexpectedArgument("unknown: Unknown"), performing: {
-			try initializer.createMockInitializerArgumentList(given: dependencies)
-		})
-	}
-
-	@Test
-	func createMockInitializerArgumentList_includesNonDependencyDefaultValuedArguments() throws {
+	func createMockInitializerArgumentList_includesNonDependencyDefaultValuedArguments() {
 		let initializer = Initializer(
 			arguments: [
 				.init(
@@ -307,13 +279,13 @@ struct InitializerTests {
 			),
 		]
 
-		let result = try initializer.createMockInitializerArgumentList(given: dependencies)
+		let result = initializer.createMockInitializerArgumentList(given: dependencies)
 
 		#expect(result == "service: service, flag: flag")
 	}
 
 	@Test
-	func createMockInitializerArgumentList_includesDependencyWithDefaultValue() throws {
+	func createMockInitializerArgumentList_includesDependencyWithDefaultValue() {
 		let initializer = Initializer(
 			arguments: [
 				.init(
@@ -344,7 +316,7 @@ struct InitializerTests {
 			),
 		]
 
-		let result = try initializer.createMockInitializerArgumentList(given: dependencies)
+		let result = initializer.createMockInitializerArgumentList(given: dependencies)
 
 		// All args included: deps (with or without defaults) + non-dep defaults.
 		#expect(result == "service: service, crossModuleDependency: crossModuleDependency, flag: flag")

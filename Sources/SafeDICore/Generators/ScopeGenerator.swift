@@ -1379,7 +1379,7 @@ extension Instantiable {
 			if mockInitializer != nil, !initializerToUse.isValid(forFulfilling: dependencies) {
 				return Self.incorrectlyConfiguredComment
 			}
-			return try initializerToUse
+			return initializerToUse
 				.createMockInitializerArgumentList(
 					given: dependencies,
 					unavailableProperties: unavailableProperties,

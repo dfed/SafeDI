@@ -255,7 +255,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 		given dependencies: [Dependency],
 		unavailableProperties: Set<Property>? = nil,
 		mockContext: ScopeGenerator.MockContext? = nil,
-	) throws(GenerationError) -> String {
+	) -> String {
 		var parts = [String]()
 		for argument in arguments {
 			if let dependency = dependencies.first(where: {
@@ -280,9 +280,9 @@ public struct Initializer: Codable, Hashable, Sendable {
 					typeDescription: argument.typeDescription,
 				) ?? argument.innerLabel
 				parts.append("\(argument.label): \(variableName)")
-			} else {
-				throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
 			}
+			// Arguments that don't match a dependency and have no default are
+			// caught by validate(fulfilling:) before mock code gen runs.
 		}
 		return parts.joined(separator: ", ")
 	}
