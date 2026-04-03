@@ -22,7 +22,7 @@ import Foundation
 
 /// Compute a path string relative to a base directory, for use in the CSV and manifest.
 /// Falls back to the absolute path if the URL is not under the base directory.
-func relativePath(for url: URL, relativeTo base: URL) -> String {
+public func relativePath(for url: URL, relativeTo base: URL) -> String {
 	let urlPath = url.standardizedFileURL.path
 	let standardizedBasePath = base.standardizedFileURL.path
 	let basePath = standardizedBasePath.hasSuffix("/")

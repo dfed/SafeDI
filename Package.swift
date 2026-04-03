@@ -126,6 +126,14 @@ let package = Package(
 				"SafeDITool",
 			],
 		),
+		// A lightweight library containing root scanning and output file naming logic.
+		// Used by SafeDIRootScanner (executable), SafeDITool, and plugins (via symlinks).
+		.target(
+			name: "SafeDIRootScannerCore",
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
 		// A lightweight executable that performs lexical root discovery without SwiftSyntax.
 		// SPM plugins run this in-process via symlinked sources.
 		// This target exists as a standalone executable for non-SPM build systems (e.g. Buck, Bazel)
@@ -134,6 +142,7 @@ let package = Package(
 			name: "SafeDIRootScanner",
 			dependencies: [
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
+				"SafeDIRootScannerCore",
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
@@ -142,9 +151,9 @@ let package = Package(
 		.testTarget(
 			name: "SafeDIRootScannerTests",
 			dependencies: [
-				.product(name: "ArgumentParser", package: "swift-argument-parser"),
 				"SafeDICore",
 				"SafeDIRootScanner",
+				"SafeDIRootScannerCore",
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
@@ -165,7 +174,7 @@ let package = Package(
 			name: "SafeDIToolTests",
 			dependencies: [
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
-				"SafeDIRootScanner",
+				"SafeDIRootScannerCore",
 				"SafeDITool",
 			],
 			swiftSettings: [

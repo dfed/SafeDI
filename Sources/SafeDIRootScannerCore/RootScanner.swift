@@ -20,35 +20,51 @@
 
 import Foundation
 
-struct RootScanner {
-	struct Manifest: Codable, Equatable {
-		struct InputOutputMap: Codable, Equatable {
+public struct RootScanner {
+	public struct Manifest: Codable, Equatable {
+		public struct InputOutputMap: Codable, Equatable {
 			// These field names must stay in sync with SafeDIToolManifest.InputOutputMap.
-			var inputFilePath: String
-			var outputFilePath: String
+			public var inputFilePath: String
+			public var outputFilePath: String
+
+			public init(inputFilePath: String, outputFilePath: String) {
+				self.inputFilePath = inputFilePath
+				self.outputFilePath = outputFilePath
+			}
 		}
 
-		var dependencyTreeGeneration: [InputOutputMap]
-		var mockGeneration: [InputOutputMap]
+		public var dependencyTreeGeneration: [InputOutputMap]
+		public var mockGeneration: [InputOutputMap]
+
+		public init(dependencyTreeGeneration: [InputOutputMap], mockGeneration: [InputOutputMap]) {
+			self.dependencyTreeGeneration = dependencyTreeGeneration
+			self.mockGeneration = mockGeneration
+		}
 	}
 
-	struct Result: Equatable {
-		let manifest: Manifest
+	public struct Result: Equatable {
+		public init(manifest: Manifest) {
+			self.manifest = manifest
+		}
 
-		var outputFiles: [URL] {
+		public let manifest: Manifest
+
+		public var outputFiles: [URL] {
 			(manifest.dependencyTreeGeneration + manifest.mockGeneration).map {
 				URL(fileURLWithPath: $0.outputFilePath)
 			}
 		}
 
-		func writeManifest(to manifestURL: URL) throws {
+		public func writeManifest(to manifestURL: URL) throws {
 			let encoder = JSONEncoder()
 			encoder.outputFormatting = [.sortedKeys]
 			try encoder.encode(manifest).write(to: manifestURL)
 		}
 	}
 
-	func scan(
+	public init() {}
+
+	public func scan(
 		inputFilePaths: [String],
 		relativeTo baseURL: URL,
 		outputDirectory: URL,
@@ -72,7 +88,7 @@ struct RootScanner {
 	///   - targetSwiftFiles: Only the target module's swift files, for mock generation scoping.
 	///   - baseURL: The base URL for computing relative paths.
 	///   - outputDirectory: Where to write output files.
-	func scan(
+	public func scan(
 		swiftFiles: [URL],
 		targetSwiftFiles: [URL]? = nil,
 		relativeTo baseURL: URL,
@@ -113,21 +129,21 @@ struct RootScanner {
 		)
 	}
 
-	static func inputFilePaths(from csvURL: URL) throws -> [String] {
+	public static func inputFilePaths(from csvURL: URL) throws -> [String] {
 		try String(contentsOf: csvURL, encoding: .utf8)
 			.components(separatedBy: CharacterSet(arrayLiteral: ","))
 			.filter { !$0.isEmpty }
 	}
 
-	static func fileContainsRoot(at fileURL: URL) throws -> Bool {
+	public static func fileContainsRoot(at fileURL: URL) throws -> Bool {
 		containsRoot(in: try String(contentsOf: fileURL, encoding: .utf8))
 	}
 
-	static func fileContainsInstantiable(at fileURL: URL) throws -> Bool {
+	public static func fileContainsInstantiable(at fileURL: URL) throws -> Bool {
 		containsInstantiable(in: try String(contentsOf: fileURL, encoding: .utf8))
 	}
 
-	static func containsInstantiable(in source: String) -> Bool {
+	public static func containsInstantiable(in source: String) -> Bool {
 		let sanitizedSource = sanitize(source: source)
 		let macroName = "@Instantiable"
 		var searchStart = sanitizedSource.startIndex
@@ -147,7 +163,7 @@ struct RootScanner {
 		return false
 	}
 
-	static func containsRoot(in source: String) -> Bool {
+	public static func containsRoot(in source: String) -> Bool {
 		let sanitizedSource = sanitize(source: source)
 		let macroName = "@Instantiable"
 		var searchStart = sanitizedSource.startIndex
@@ -189,6 +205,69 @@ struct RootScanner {
 		relativeTo baseURL: URL,
 	) -> [String] {
 		outputFileNames(for: inputURLs, relativeTo: baseURL, suffix: "+SafeDIMock.swift")
+	}
+
+	/// Extracts `additionalDirectoriesToInclude` paths from a source file
+	/// containing `@SafeDIConfiguration`. Uses text-based scanning (no SwiftSyntax).
+	/// Returns an empty array if the file does not contain a configuration.
+	public static func extractAdditionalDirectoriesToInclude(in source: String) -> [String] {
+		let sanitizedSource = sanitize(source: source)
+		guard sanitizedSource.contains("@SafeDIConfiguration") else { return [] }
+		let propertyName = "additionalDirectoriesToInclude"
+		guard let propRange = sanitizedSource.range(of: propertyName) else { return [] }
+
+		// Convert the sanitized-source index to an index in the original source.
+		// The sanitizer preserves character count, so offsets are equivalent.
+		let offset = sanitizedSource.distance(from: sanitizedSource.startIndex, to: propRange.upperBound)
+		var index = source.index(source.startIndex, offsetBy: offset)
+
+		// Skip past the type annotation (e.g., `: [StaticString]`) to the `=` sign.
+		while index < source.endIndex, source[index] != "=" {
+			index = source.index(after: index)
+		}
+		guard index < source.endIndex else { return [] }
+		index = source.index(after: index) // skip '='
+
+		// Find the opening bracket of the array literal.
+		while index < source.endIndex, source[index] != "[" {
+			index = source.index(after: index)
+		}
+		guard index < source.endIndex else { return [] }
+
+		// Find the matching closing bracket.
+		var depth = 0
+		var closingIndex = index
+		while closingIndex < source.endIndex {
+			switch source[closingIndex] {
+			case "[": depth += 1
+			case "]":
+				depth -= 1
+				if depth == 0 {
+					// Extract string literals from the array content.
+					let arrayContent = source[source.index(after: index)..<closingIndex]
+					return extractStringLiterals(from: arrayContent)
+				}
+			default: break
+			}
+			closingIndex = source.index(after: closingIndex)
+		}
+		return []
+	}
+
+	/// Extracts quoted string literal values from the interior of an array expression.
+	private static func extractStringLiterals(from arrayContent: some StringProtocol) -> [String] {
+		var results = [String]()
+		var searchIndex = arrayContent.startIndex
+		while searchIndex < arrayContent.endIndex {
+			guard let openQuote = arrayContent[searchIndex...].firstIndex(of: "\"") else { break }
+			let contentStart = arrayContent.index(after: openQuote)
+			guard contentStart < arrayContent.endIndex,
+			      let closeQuote = arrayContent[contentStart...].firstIndex(of: "\"")
+			else { break }
+			results.append(String(arrayContent[contentStart..<closeQuote]))
+			searchIndex = arrayContent.index(after: closeQuote)
+		}
+		return results
 	}
 
 	private static func outputFileNames(
