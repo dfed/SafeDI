@@ -3658,7 +3658,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            func __safeDI_childB() -> Other {
 		                Other()
 		            }
-		            let childB = childB_Instantiator_Other ?? Instantiator<Other>(__safeDI_childB)
+		            let childB_Instantiator_Other = childB_Instantiator_Other ?? Instantiator<Other>(__safeDI_childB)
 		            return ChildA(childB: childB_Instantiator_Other)
 		        }
 		        let childA: ChildA = childA ?? __safeDI_childA()
