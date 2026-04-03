@@ -699,8 +699,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						sourceType: property.typeDescription.asInstantiatedType.asSource,
 					)
 					if context.resolvedParameters.contains(identifier) {
-						// Already resolved by ancestor — use inline construction with property label.
-						return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
+						let resolvedLabel = context.parameterLabelMap[identifier] ?? property.label
+						let resolvedDeclaration = if erasedToConcreteExistential || (
+							concreteTypeName == property.typeDescription.asSource
+								&& !hasGeneratedContent
+								&& !instantiable.declarationType.isExtension
+						) {
+							"let \(resolvedLabel)"
+						} else {
+							"let \(resolvedLabel): \(property.typeDescription.asSource)"
+						}
+						return "\(functionDeclaration)\(resolvedDeclaration) = \(initializer)\n"
 					} else if let parameterLabel = context.parameterLabelMap[identifier] {
 						// Use disambiguated parameter label as local variable name so init
 						// arguments reference the resolved value, not the raw parameter.

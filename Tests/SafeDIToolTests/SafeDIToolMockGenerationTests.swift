@@ -8330,6 +8330,118 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	mutating func mock_disambiguatedParamUsedInInstantiatorBuilderFunction() async throws {
+		// ChildA is built via Instantiator and @Receives presenter: PresenterA.
+		// ChildB @Receives presenter: PresenterB (same label, different type).
+		// Both "presenter" params get disambiguated. The Instantiator builder for ChildA
+		// must pass presenter_PresenterA (not raw "presenter") to the init.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Root: Instantiable {
+				    public init(childABuilder: Instantiator<ChildA>, childB: ChildB) {
+				        self.childABuilder = childABuilder
+				        self.childB = childB
+				    }
+				    @Instantiated let childABuilder: Instantiator<ChildA>
+				    @Instantiated let childB: ChildB
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(name: String, presenter: PresenterA) {
+				        self.name = name
+				        self.presenter = presenter
+				    }
+				    @Forwarded let name: String
+				    @Received let presenter: PresenterA
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(presenter: PresenterB) {
+				        self.presenter = presenter
+				    }
+				    @Received let presenter: PresenterB
+				}
+				""",
+				"""
+				public struct PresenterA {}
+				""",
+				"""
+				public struct PresenterB {}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
+		// ChildA Instantiator builder must reference presenter_PresenterA
+		#expect(rootMock.contains("ChildA(name: name, presenter: presenter_PresenterA)"), "Instantiator builder must use disambiguated presenter. Output:\n\(rootMock)")
+	}
+
+	@Test
+	mutating func mock_disambiguatedInstantiatorBindingUsesDisambiguatedLocalName() async throws {
+		// Two Instantiator children share label "childBuilder" but different types.
+		// After disambiguation, the ?? binding local must use the disambiguated name.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Root: Instantiable {
+				    public init(parent: Parent, childBuilder: Instantiator<ChildA>) {
+				        self.parent = parent
+				        self.childBuilder = childBuilder
+				    }
+				    @Instantiated let parent: Parent
+				    @Instantiated let childBuilder: Instantiator<ChildA>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Parent: Instantiable {
+				    public init(childBuilder: Instantiator<ChildB>) {
+				        self.childBuilder = childBuilder
+				    }
+				    @Instantiated let childBuilder: Instantiator<ChildB>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(name: String) { self.name = name }
+				    @Forwarded let name: String
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(name: String) { self.name = name }
+				    @Forwarded let name: String
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
+		// The ?? binding must use the disambiguated name as the local variable.
+		// NOT: let childBuilder = childBuilder_Instantiator_ChildA ?? ...
+		// YES: let childBuilder_Instantiator_ChildA = childBuilder_Instantiator_ChildA ?? ...
+		#expect(rootMock.contains("let childBuilder_Instantiator_ChildA = childBuilder_Instantiator_ChildA ??"), "Instantiator binding must use disambiguated local name. Output:\n\(rootMock)")
+		#expect(rootMock.contains("let childBuilder_Instantiator_ChildB = childBuilder_Instantiator_ChildB ??"), "Instantiator binding must use disambiguated local name. Output:\n\(rootMock)")
+		// The return statement must reference disambiguated names
+		#expect(rootMock.contains("childBuilder: childBuilder_Instantiator_ChildA"), "Return must use disambiguated name. Output:\n\(rootMock)")
+	}
+
+	@Test
 	mutating func mock_defaultValuedParametersFromMultipleLevelsAllAppearAtRoot() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
