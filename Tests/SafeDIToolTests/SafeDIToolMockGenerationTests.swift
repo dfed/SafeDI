@@ -3548,10 +3548,10 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Tests – Disambiguation
 
 	@Test
-	mutating func mock_disambiguatesEnumNamesWhenInstantiatorLabelCollidesWithTypeName() async throws {
-		// Root has @Instantiated let childB: ChildB (constant, enum: "ChildB")
-		// Root has @Instantiated let childA: ChildA, which has @Instantiated let childB: Instantiator<Other>
-		// The Instantiator label "childB" capitalizes to "ChildB" — collision with the type name!
+	mutating func mock_disambiguatesParameters_whenInstantiatorLabelCollidesWithTypeName() async throws {
+		// Root has @Instantiated let childB: ChildB (constant).
+		// Root has @Instantiated let childA: ChildA, which has @Instantiated let childB: Instantiator<Other>.
+		// The label "childB" collides between the constant and the Instantiator.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -6159,10 +6159,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_voidClosureDependencyProducesValidEnumName() async throws {
+	mutating func mock_closureDependencyProducesValidIdentifier() async throws {
 		// A type with a closure dependency returning Void should produce a valid
-		// Swift enum name, not `-Void` (which happened when `>` in `->` was
-		// stripped before `->` was replaced).
+		// identifier suffix (not `-Void` or other invalid characters).
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -6214,9 +6213,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_sanitizeForIdentifierStripsAtSymbol() async throws {
-		// Verify that sanitizeForIdentifier handles @ in type names (e.g., @Sendable closures).
-		// This is a unit-level check via the generated output.
+	mutating func mock_sendableClosureDependencyProducesValidIdentifier() async throws {
+		// Verify that @Sendable closure types produce valid identifier suffixes
+		// (@ symbols must not appear in generated parameter names).
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -10164,7 +10163,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_threeWayLabelCollision() async throws {
+	mutating func mock_disambiguatesAllParameters_whenThreeChildrenShareSameLabel() async throws {
 		// Three children each receive "service" with a different type.
 		// All three get disambiguated: service_ServiceA, service_ServiceB, service_ServiceC.
 		let output = try await executeSafeDIToolTest(

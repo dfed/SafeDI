@@ -351,15 +351,14 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		case let .metatype(type, isType):
 			return "\(type.asIdentifier)_\(isType ? "Type" : "Protocol")"
 		case let .attributed(type, specifiers, attributes):
+			// .attributed always has at least one non-nil specifier or attribute
+			// (the parser sets nil-if-empty, and all programmatic constructors
+			// ensure at least one is present).
 			let prefix = [
 				specifiers?.joined(separator: "_"),
 				attributes?.joined(separator: "_"),
 			].compactMap(\.self).joined(separator: "_")
-			return if prefix.isEmpty {
-				type.asIdentifier
-			} else {
-				"\(prefix)_\(type.asIdentifier)"
-			}
+			return "\(prefix)_\(type.asIdentifier)"
 		case let .array(element):
 			return "Array_\(element.asIdentifier)"
 		case let .dictionary(key, value):
