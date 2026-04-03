@@ -20,34 +20,49 @@
 
 import Foundation
 
-struct RootScanner {
-	struct Manifest: Codable, Equatable {
-		struct InputOutputMap: Codable, Equatable {
+public struct RootScanner {
+	public struct Manifest: Codable, Equatable {
+		public struct InputOutputMap: Codable, Equatable {
 			// These field names must stay in sync with SafeDIToolManifest.InputOutputMap.
-			var inputFilePath: String
-			var outputFilePath: String
+			public var inputFilePath: String
+			public var outputFilePath: String
+
+			public init(inputFilePath: String, outputFilePath: String) {
+				self.inputFilePath = inputFilePath
+				self.outputFilePath = outputFilePath
+			}
 		}
 
-		var dependencyTreeGeneration: [InputOutputMap]
+		public var dependencyTreeGeneration: [InputOutputMap]
+
+		public init(dependencyTreeGeneration: [InputOutputMap]) {
+			self.dependencyTreeGeneration = dependencyTreeGeneration
+		}
 	}
 
-	struct Result: Equatable {
-		let manifest: Manifest
+	public struct Result: Equatable {
+		public init(manifest: Manifest) {
+			self.manifest = manifest
+		}
 
-		var outputFiles: [URL] {
+		public let manifest: Manifest
+
+		public var outputFiles: [URL] {
 			manifest.dependencyTreeGeneration.map {
 				URL(fileURLWithPath: $0.outputFilePath)
 			}
 		}
 
-		func writeManifest(to manifestURL: URL) throws {
+		public func writeManifest(to manifestURL: URL) throws {
 			let encoder = JSONEncoder()
 			encoder.outputFormatting = [.sortedKeys]
 			try encoder.encode(manifest).write(to: manifestURL)
 		}
 	}
 
-	func scan(
+	public init() {}
+
+	public func scan(
 		inputFilePaths: [String],
 		relativeTo baseURL: URL,
 		outputDirectory: URL,
@@ -64,7 +79,7 @@ struct RootScanner {
 		)
 	}
 
-	func scan(
+	public func scan(
 		swiftFiles: [URL],
 		relativeTo baseURL: URL,
 		outputDirectory: URL,
@@ -89,17 +104,17 @@ struct RootScanner {
 		)
 	}
 
-	static func inputFilePaths(from csvURL: URL) throws -> [String] {
+	public static func inputFilePaths(from csvURL: URL) throws -> [String] {
 		try String(contentsOf: csvURL, encoding: .utf8)
 			.components(separatedBy: CharacterSet(arrayLiteral: ","))
 			.filter { !$0.isEmpty }
 	}
 
-	static func fileContainsRoot(at fileURL: URL) throws -> Bool {
+	public static func fileContainsRoot(at fileURL: URL) throws -> Bool {
 		containsRoot(in: try String(contentsOf: fileURL, encoding: .utf8))
 	}
 
-	static func containsRoot(in source: String) -> Bool {
+	public static func containsRoot(in source: String) -> Bool {
 		let sanitizedSource = sanitize(source: source)
 		let macroName = "@Instantiable"
 		var searchStart = sanitizedSource.startIndex

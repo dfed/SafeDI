@@ -20,6 +20,7 @@
 
 import ArgumentParser
 import Foundation
+import SafeDIRootScannerCore
 
 @main
 struct SafeDIRootScannerCommand: ParsableCommand {

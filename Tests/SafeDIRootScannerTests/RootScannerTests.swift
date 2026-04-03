@@ -21,6 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
+import SafeDIRootScannerCore
 @testable import SafeDIRootScanner
 
 struct RootScannerTests {

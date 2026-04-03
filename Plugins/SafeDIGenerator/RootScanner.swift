@@ -1,1 +1,1 @@
-../../Sources/SafeDIRootScanner/RootScanner.swift
+../../Sources/SafeDIRootScannerCore/RootScanner.swift

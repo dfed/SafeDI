@@ -21,11 +21,12 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDIRootScanner
+import SafeDIRootScannerCore
 @testable import SafeDITool
 
 func executeSafeDIToolTest(
 	swiftFileContent: [String],
+	additionalDirectorySwiftFileContent: [String] = [],
 	dependentModuleInfoPaths: [String] = [],
 	additionalImportedModules: [String] = [],
 	buildSwiftOutputDirectory: Bool = false,
@@ -33,11 +34,40 @@ func executeSafeDIToolTest(
 	filesToDelete: inout [URL],
 	includeFolders: [String] = [],
 ) async throws -> TestOutput {
+	// Create additional directory first so its path can be substituted into target file content.
+	var additionalDirectoryFiles = [URL]()
+	var additionalFixtureDirectory: URL?
+	if !additionalDirectorySwiftFileContent.isEmpty {
+		let additionalDirectory = URL.temporaryFile
+		try FileManager.default.createDirectory(at: additionalDirectory, withIntermediateDirectories: true)
+		additionalFixtureDirectory = additionalDirectory
+		additionalDirectoryFiles = try createSwiftFixtureFiles(
+			from: additionalDirectorySwiftFileContent,
+			in: additionalDirectory,
+		)
+	}
+
 	let swiftFileCSV = URL.temporaryFile
 	let swiftFixtureDirectory = URL.temporaryFile
 	try FileManager.default.createDirectory(at: swiftFixtureDirectory, withIntermediateDirectories: true)
+
+	// Replace directory placeholders in target file content with real paths.
+	let resolvedSwiftFileContent = swiftFileContent.map { content in
+		var resolved = content.replacingOccurrences(
+			of: "$TARGET_DIRECTORY",
+			with: swiftFixtureDirectory.path,
+		)
+		if let additionalFixtureDirectory {
+			resolved = resolved.replacingOccurrences(
+				of: "$ADDITIONAL_DIRECTORY",
+				with: additionalFixtureDirectory.path,
+			)
+		}
+		return resolved
+	}
+
 	let swiftFiles = try createSwiftFixtureFiles(
-		from: swiftFileContent,
+		from: resolvedSwiftFileContent,
 		in: swiftFixtureDirectory,
 	)
 	try swiftFiles
@@ -55,8 +85,21 @@ func executeSafeDIToolTest(
 	let manifestFile = URL.temporaryFile.appendingPathExtension("json")
 	let dotTreeOutput = URL.temporaryFile.appendingPathExtension("dot")
 
-	return try await SafeDITool.$fileFinder.withValue(StubFileFinder(files: swiftFiles)) { // Successfully execute the file finder code path.
+	// Build the StubFileFinder. When additional directory files exist, make it
+	// directory-aware so it returns only files under the enumerated root.
+	let fileFinder: StubFileFinder = if !additionalDirectoryFiles.isEmpty {
+		StubFileFinder(filesByDirectory: [
+			swiftFixtureDirectory: swiftFiles,
+			additionalFixtureDirectory!: additionalDirectoryFiles,
+		])
+	} else {
+		StubFileFinder(files: swiftFiles)
+	}
+
+	return try await SafeDITool.$fileFinder.withValue(fileFinder) {
 		// Build the manifest by scanning for files that contain isRoot: true.
+		// Only target files are scanned — not additional directory files — matching
+		// real Xcode plugin behavior where the manifest is built before SafeDITool runs.
 		var manifestPath: String?
 		if buildSwiftOutputDirectory {
 			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
@@ -84,6 +127,9 @@ func executeSafeDIToolTest(
 		filesToDelete.append(swiftFileCSV)
 		filesToDelete.append(swiftFixtureDirectory)
 		filesToDelete.append(moduleInfoOutput)
+		if let additionalFixtureDirectory {
+			filesToDelete.append(additionalFixtureDirectory)
+		}
 		if buildSwiftOutputDirectory {
 			filesToDelete.append(outputDirectory)
 			filesToDelete.append(manifestFile)
@@ -137,13 +183,34 @@ extension URL {
 }
 
 struct StubFileFinder: FileFinder {
+	/// Creates a file finder that returns the same files regardless of which directory is enumerated.
+	init(files: [URL]) {
+		self.filesByDirectory = nil
+		self.fallbackFiles = files
+	}
+
+	/// Creates a directory-aware file finder that returns only files under the enumerated root.
+	init(filesByDirectory: [URL: [URL]]) {
+		self.filesByDirectory = filesByDirectory
+		self.fallbackFiles = []
+	}
+
 	func enumerator(
-		at _: URL,
+		at url: URL,
 		includingPropertiesForKeys _: [URLResourceKey]?,
 		options _: FileManager.DirectoryEnumerationOptions,
 		errorHandler _: ((URL, any Error) -> Bool)?,
 	) -> FileManager.DirectoryEnumerator? {
-		StubDirectoryEnumerator(files: files)
+		let matchedFiles: [URL]
+		if let filesByDirectory {
+			let standardizedPath = url.standardizedFileURL.path
+			matchedFiles = filesByDirectory.first(where: { directory, _ in
+				directory.standardizedFileURL.path == standardizedPath
+			})?.value ?? []
+		} else {
+			matchedFiles = fallbackFiles
+		}
+		return StubDirectoryEnumerator(files: matchedFiles)
 	}
 
 	final class StubDirectoryEnumerator: FileManager.DirectoryEnumerator {
@@ -164,7 +231,8 @@ struct StubFileFinder: FileFinder {
 		var files: [URL]
 	}
 
-	let files: [URL]
+	private let filesByDirectory: [URL: [URL]]?
+	private let fallbackFiles: [URL]
 }
 
 func assertThrowsError(

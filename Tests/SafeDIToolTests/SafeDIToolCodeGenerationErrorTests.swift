@@ -2022,7 +2022,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		filesToDelete += [swiftFileCSV, swiftFile, manifestFile, moduleInfoOutput]
 
 		await assertThrowsError(
-			"Found @Instantiable(isRoot: true) in '\(swiftFile.relativePath)', but this file is not listed in the manifest's dependencyTreeGeneration. Add it to the manifest or remove the isRoot annotation.",
+			"Found root @Instantiable types from additional directories, but the manifest has no existing entries to derive an output directory from.",
 		) {
 			var tool = SafeDITool()
 			tool.swiftSourcesFilePath = swiftFileCSV.relativePath
