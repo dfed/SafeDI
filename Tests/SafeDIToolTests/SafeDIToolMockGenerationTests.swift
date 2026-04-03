@@ -1518,9 +1518,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        flag: @autoclosure @escaping () -> Bool = false,
 		        shared: @autoclosure @escaping () -> Shared = Shared()
 		    ) -> Root {
-		        let flag = flag()
 		        let shared = shared()
-		        let child = child ?? Child(shared: shared, flag: flag)
+		        func __safeDI_child() -> Child {
+		            let flag = flag()
+		            return Child(shared: shared, flag: flag)
+		        }
+		        let child: Child = child ?? __safeDI_child()
 		        return Root(child: child, shared: shared)
 		    }
 		}
@@ -6819,8 +6822,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        child: Child? = nil,
 		        config: @autoclosure @escaping () -> String = "hello"
 		    ) -> Root {
-		        let config = config()
-		        let child = child ?? Child(config: config)
+		        func __safeDI_child() -> Child {
+		            let config = config()
+		            return Child(config: config)
+		        }
+		        let child: Child = child ?? __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -6935,9 +6941,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        grandchild: Grandchild? = nil,
 		        viewModel: @autoclosure @escaping () -> String = "default"
 		    ) -> Root {
-		        let viewModel = viewModel()
 		        func __safeDI_child() -> Child {
-		            let grandchild = grandchild ?? Grandchild(viewModel: viewModel)
+		            func __safeDI_grandchild() -> Grandchild {
+		                let viewModel = viewModel()
+		                return Grandchild(viewModel: viewModel)
+		            }
+		            let grandchild: Grandchild = grandchild ?? __safeDI_grandchild()
 		            return Child(grandchild: grandchild)
 		        }
 		        let child: Child = child ?? __safeDI_child()
@@ -6958,8 +6967,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        grandchild: Grandchild? = nil,
 		        viewModel: @autoclosure @escaping () -> String = "default"
 		    ) -> Child {
-		        let viewModel = viewModel()
-		        let grandchild = grandchild ?? Grandchild(viewModel: viewModel)
+		        func __safeDI_grandchild() -> Grandchild {
+		            let viewModel = viewModel()
+		            return Grandchild(viewModel: viewModel)
+		        }
+		        let grandchild: Grandchild = grandchild ?? __safeDI_grandchild()
 		        return Child(grandchild: grandchild)
 		    }
 		}
@@ -7122,10 +7134,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        flagA: @autoclosure @escaping () -> Bool = true,
 		        flagB: @autoclosure @escaping () -> Int = 42
 		    ) -> Root {
-		        let flagA = flagA()
-		        let flagB = flagB()
-		        let childA = childA ?? ChildA(flagA: flagA)
-		        let childB = childB ?? ChildB(flagB: flagB)
+		        func __safeDI_childA() -> ChildA {
+		            let flagA = flagA()
+		            return ChildA(flagA: flagA)
+		        }
+		        let childA: ChildA = childA ?? __safeDI_childA()
+		        func __safeDI_childB() -> ChildB {
+		            let flagB = flagB()
+		            return ChildB(flagB: flagB)
+		        }
+		        let childB: ChildB = childB ?? __safeDI_childB()
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -7167,8 +7185,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        child: Child? = nil,
 		        viewModel: @autoclosure @escaping () -> String? = nil
 		    ) -> Root {
-		        let viewModel = viewModel()
-		        let child = child ?? Child(viewModel: viewModel)
+		        func __safeDI_child() -> Child {
+		            let viewModel = viewModel()
+		            return Child(viewModel: viewModel)
+		        }
+		        let child: Child = child ?? __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -7240,10 +7261,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        flag_Bool: @autoclosure @escaping () -> Bool = true,
 		        flag_String: @autoclosure @escaping () -> String = "on"
 		    ) -> Root {
-		        let flag = flag_Bool()
-		        let flag = flag_String()
-		        let childA = childA ?? ChildA(flag: flag)
-		        let childB = childB ?? ChildB(flag: flag)
+		        func __safeDI_childA() -> ChildA {
+		            let flag = flag_Bool()
+		            return ChildA(flag: flag)
+		        }
+		        let childA: ChildA = childA ?? __safeDI_childA()
+		        func __safeDI_childB() -> ChildB {
+		            let flag = flag_String()
+		            return ChildB(flag: flag)
+		        }
+		        let childB: ChildB = childB ?? __safeDI_childB()
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -7390,8 +7417,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        child: Child? = nil,
 		        values: @autoclosure @escaping () -> [Int] = [1, 2, 3]
 		    ) -> Root {
-		        let values = values()
-		        let child = child ?? Child(values: values)
+		        func __safeDI_child() -> Child {
+		            let values = values()
+		            return Child(values: values)
+		        }
+		        let child: Child = child ?? __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -7450,8 +7480,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        dependency: @autoclosure @escaping () -> Dependency = Dependency(),
 		        extra: @autoclosure @escaping () -> Bool = false
 		    ) -> Root {
-		        let extra = extra()
 		        func __safeDI_child() -> Child {
+		            let extra = extra()
 		            let dependency = dependency()
 		            return Child.mock(dependency: dependency, extra: extra)
 		        }
@@ -7632,6 +7662,62 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	mutating func mock_disambiguatedDefaultParamsFromDifferentChildrenDoNotCollideAtRoot() async throws {
+		// ChildA has `viewModel: ViewModelA = ViewModelA()` and ChildB has `viewModel: ViewModelB = ViewModelB()`.
+		// Both bubble to root as disambiguated autoclosure params. They must NOT both produce
+		// `let viewModel = ...` at root scope — each should bind inside its own child function.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Root: Instantiable {
+				    public init(childA: ChildA, childB: ChildB) {
+				        self.childA = childA
+				        self.childB = childB
+				    }
+				    @Instantiated let childA: ChildA
+				    @Instantiated let childB: ChildB
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(viewModel: ViewModelA = ViewModelA()) {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(viewModel: ViewModelB = ViewModelB()) {}
+				}
+				""",
+				"""
+				public struct ViewModelA {}
+				""",
+				"""
+				public struct ViewModelB {}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
+		// Each viewModel binding must be INSIDE its child function, not at root scope.
+		// Root scope should NOT have `let viewModel = ...` at all.
+		#expect(rootMock.contains("func __safeDI_childA()"), "childA function expected \(rootMock)")
+		#expect(rootMock.contains("func __safeDI_childB()"), "childB function expected \(rootMock)")
+		// No root-level viewModel binding (would cause redeclaration)
+		let rootBodyLines = rootMock.components(separatedBy: "\n")
+			.drop(while: { !$0.contains(") -> Root {") })
+			.dropFirst()
+			.prefix(while: { !$0.contains("func __safeDI_") })
+		let rootLevelViewModelBindings = rootBodyLines.filter { $0.contains("let viewModel") }
+		#expect(rootLevelViewModelBindings.isEmpty, "viewModel should not be bound at root scope: \(rootLevelViewModelBindings)")
+	}
+
+	@Test
 	mutating func mock_defaultValuedParametersFromMultipleLevelsAllAppearAtRoot() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -7677,10 +7763,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        grandchild: Grandchild? = nil,
 		        viewModel: @autoclosure @escaping () -> String = "default"
 		    ) -> Root {
-		        let viewModel = viewModel()
-		        let config = config()
 		        func __safeDI_child() -> Child {
-		            let grandchild = grandchild ?? Grandchild(viewModel: viewModel)
+		            let config = config()
+		            func __safeDI_grandchild() -> Grandchild {
+		                let viewModel = viewModel()
+		                return Grandchild(viewModel: viewModel)
+		            }
+		            let grandchild: Grandchild = grandchild ?? __safeDI_grandchild()
 		            return Child(grandchild: grandchild, config: config)
 		        }
 		        let child: Child = child ?? __safeDI_child()

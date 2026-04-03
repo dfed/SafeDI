@@ -771,6 +771,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// Collect the root type's own default-valued init parameters.
+		var rootDefaultIdentifiers = Set<MockParameterIdentifier>()
 		if let rootInitializer = instantiable.initializer {
 			let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
 			for argument in rootInitializer.arguments {
@@ -790,6 +791,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					defaultConstruction: defaultExpr,
 					isClosureType: argument.typeDescription.strippingEscaping.isClosure,
 				))
+				rootDefaultIdentifiers.insert(allDeclarations[allDeclarations.count - 1].identifier)
 			}
 		}
 
@@ -868,7 +870,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				rootBoundParameters.insert(declaration.identifier)
 			} else if rootBindingIdentifiers.contains(declaration.identifier) {
 				rootBoundParameters.insert(declaration.identifier)
-			} else if !forwardedLabels.contains(declaration.propertyLabel),
+			} else if rootDefaultIdentifiers.contains(declaration.identifier),
+			          !forwardedLabels.contains(declaration.propertyLabel),
 			          !declaration.isClosureType
 			{
 				// Root default-valued params bound at root scope.
@@ -910,7 +913,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Bindings for root default-valued init params.
 		// Skip labels matching forwarded params — forwarded values take precedence.
 		for declaration in allDeclarations where declaration.defaultValueExpression != nil {
-			guard !rootBindingIdentifiers.contains(declaration.identifier),
+			guard rootDefaultIdentifiers.contains(declaration.identifier),
+			      !rootBindingIdentifiers.contains(declaration.identifier),
 			      !forwardedLabels.contains(declaration.propertyLabel),
 			      !declaration.isClosureType
 			else { continue }
