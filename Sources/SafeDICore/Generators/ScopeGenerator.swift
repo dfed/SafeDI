@@ -1081,11 +1081,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// user can provide them — same pattern as the root-level
 			// uncovered dep check in generateMockRootCode.
 			if !isInstantiator, let childInstantiable = childScopeData.instantiable {
-				let coveredChildLabels = Set(childDeclarations.map(\.propertyLabel))
+				// Compare by label + type, not just label.
+				// A grandchild's `service: LocalService` must not suppress
+				// a child's uncovered `service: ExternalService`.
+				let coveredChildLabelsWithTypes = Set(childDeclarations.map {
+					"\($0.propertyLabel):\($0.sourceType)"
+				})
 				let childPathCaseName = childPath.joined(separator: "_")
 				for dependency in childInstantiable.dependencies {
+					let depKey = "\(dependency.property.label):\(dependency.property.typeDescription.asInstantiatedType.asSource)"
 					guard case .instantiated = dependency.source,
-					      !coveredChildLabels.contains(dependency.property.label),
+					      !coveredChildLabelsWithTypes.contains(depKey),
 					      dependency.property.propertyType.isConstant
 					else { continue }
 					let dependencyType = dependency.property.typeDescription.asInstantiatedType
