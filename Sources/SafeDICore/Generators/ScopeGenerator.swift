@@ -713,7 +713,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							"let \(resolvedLabel): \(property.typeDescription.asSource)"
 						}
 						return "\(functionDeclaration)\(resolvedDeclaration) = \(initializer)\n"
-					} else if let parameterLabel = context.parameterLabelMap[identifier] {
+					} else {
+						// Every constant is collected in parameterLabelMap via
+						// collectMockDeclarations, so this branch always has a label.
+						let parameterLabel = context.parameterLabelMap[identifier] ?? property.label
 						// Use disambiguated parameter label as local variable name so init
 						// arguments reference the resolved value, not the raw parameter.
 						let mockPropertyDeclaration = if erasedToConcreteExistential || (
@@ -737,9 +740,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							// Autoclosure parameter: evaluate
 							return "\(mockPropertyDeclaration) = \(parameterLabel)()\n"
 						}
-					} else {
-						// Nested child (no root parameter): inline construction
-						return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 					}
 				}
 			}
