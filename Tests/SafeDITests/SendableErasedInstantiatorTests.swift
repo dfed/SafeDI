@@ -20,7 +20,6 @@
 
 import Foundation
 import Testing
-
 @testable import SafeDI
 
 struct SendableErasedInstantiatorTests {

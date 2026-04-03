@@ -25,7 +25,7 @@ import PackagePlugin
 struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 	func createBuildCommands(
 		context: PluginContext,
-		target: Target
+		target: Target,
 	) async throws -> [Command] {
 		guard let sourceTarget = target as? SourceModuleTarget else {
 			return []
@@ -52,35 +52,14 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			.write(
 				to: inputSourcesFile,
 				atomically: true,
-				encoding: .utf8
+				encoding: .utf8,
 			)
-
-		// TODO: Delete CSV support in version 2.0. Use @SafeDIConfiguration instead.
-		let includeCSV = context.safediFolder.appending(components: "configuration", "include.csv")
-		let includeArguments: [String] = if FileManager.default.fileExists(atPath: includeCSV.path(percentEncoded: false)) {
-			[
-				"--include-file-path",
-				includeCSV.path(percentEncoded: false),
-			]
-		} else {
-			[]
-		}
-		// TODO: Delete CSV support in version 2.0. Use @SafeDIConfiguration instead.
-		let additionalImportedModulesCSV = context.safediFolder.appending(components: "configuration", "additionalImportedModules.csv")
-		let additionalImportedModulesArguments: [String] = if FileManager.default.fileExists(atPath: additionalImportedModulesCSV.path(percentEncoded: false)) {
-			[
-				"--additional-imported-modules-file-path",
-				additionalImportedModulesCSV.path(percentEncoded: false),
-			]
-		} else {
-			[]
-		}
 
 		let arguments = [
 			inputSourcesFile.path(percentEncoded: false),
 			"--dependency-tree-output",
 			outputSwiftFile.path(percentEncoded: false),
-		] + includeArguments + additionalImportedModulesArguments
+		]
 
 		let downloadedToolLocation = context.downloadedToolLocation
 		let safeDIVersion = context.safeDIVersion
@@ -106,7 +85,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 				arguments: arguments,
 				environment: [:],
 				inputFiles: targetSwiftFiles + dependenciesSourceFiles,
-				outputFiles: [outputSwiftFile]
+				outputFiles: [outputSwiftFile],
 			),
 		]
 	}
@@ -145,7 +124,7 @@ extension Target {
 	extension SafeDIGenerateDependencyTree: XcodeBuildToolPlugin {
 		func createBuildCommands(
 			context: XcodeProjectPlugin.XcodePluginContext,
-			target: XcodeProjectPlugin.XcodeTarget
+			target: XcodeProjectPlugin.XcodeTarget,
 		) throws -> [PackagePlugin.Command] {
 			// As of Xcode 15.0.1, Swift Package Plugins in Xcode are unable
 			// to inspect target dependencies. As a result, this Xcode plugin
@@ -171,35 +150,14 @@ extension Target {
 				.write(
 					to: inputSourcesFile,
 					atomically: true,
-					encoding: .utf8
+					encoding: .utf8,
 				)
-
-			// TODO: Delete CSV support in version 2.0. Use @SafeDIConfiguration instead.
-			let includeCSV = context.safediFolder.appending(components: "configuration", "include.csv")
-			let includeArguments: [String] = if FileManager.default.fileExists(atPath: includeCSV.path(percentEncoded: false)) {
-				[
-					"--include-file-path",
-					includeCSV.path(percentEncoded: false),
-				]
-			} else {
-				[]
-			}
-			// TODO: Delete CSV support in version 2.0. Use @SafeDIConfiguration instead.
-			let additionalImportedModulesCSV = context.safediFolder.appending(components: "configuration", "additionalImportedModules.csv")
-			let additionalImportedModulesArguments: [String] = if FileManager.default.fileExists(atPath: additionalImportedModulesCSV.path(percentEncoded: false)) {
-				[
-					"--additional-imported-modules-file-path",
-					additionalImportedModulesCSV.path(percentEncoded: false),
-				]
-			} else {
-				[]
-			}
 
 			let arguments = [
 				inputSourcesFile.path(percentEncoded: false),
 				"--dependency-tree-output",
 				outputSwiftFile.path(percentEncoded: false),
-			] + includeArguments + additionalImportedModulesArguments
+			]
 
 			let downloadedToolLocation = context.downloadedToolLocation
 			if downloadedToolLocation == nil {
@@ -222,7 +180,7 @@ extension Target {
 					arguments: arguments,
 					environment: [:],
 					inputFiles: inputSwiftFiles,
-					outputFiles: [outputSwiftFile]
+					outputFiles: [outputSwiftFile],
 				),
 			]
 		}

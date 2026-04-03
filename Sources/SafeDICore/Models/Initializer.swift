@@ -60,7 +60,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 		doesThrow: Bool = false,
 		hasGenericParameter: Bool = false,
 		hasGenericWhereClause: Bool = false,
-		arguments: [Initializer.Argument]
+		arguments: [Initializer.Argument],
 	) {
 		self.isPublicOrOpen = isPublicOrOpen
 		self.isOptional = isOptional
@@ -144,14 +144,14 @@ public struct Initializer: Codable, Hashable, Sendable {
 			doesThrow: doesThrow,
 			hasGenericParameter: hasGenericParameter,
 			hasGenericWhereClause: hasGenericWhereClause,
-			arguments: arguments.map(transform)
+			arguments: arguments.map(transform),
 		)
 	}
 
 	public static func generateRequiredInitializer(
 		for dependencies: [Dependency],
 		declarationType: ConcreteDeclType,
-		andAdditionalPropertiesWithLabels additionalPropertyLabels: [String] = []
+		andAdditionalPropertiesWithLabels additionalPropertyLabels: [String] = [],
 	) -> InitializerDeclSyntax {
 		InitializerDeclSyntax(
 			modifiers: declarationType.initializerModifiers,
@@ -170,9 +170,9 @@ public struct Initializer: Codable, Hashable, Sendable {
 						}) {
 							functionParameter
 						}
-					})
+					}),
 				),
-				trailingTrivia: .space
+				trailingTrivia: .space,
 			),
 			bodyBuilder: {
 				for dependency in dependencies {
@@ -186,19 +186,19 @@ public struct Initializer: Codable, Hashable, Sendable {
 									+ (index == 0 ? [
 										.lineComment("// The following properties are not decorated with the @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue) macros, do not have default values, and are not computed properties."),
 										TriviaPiece.newlines(1),
-									] : [])
+									] : []),
 							),
 							leftOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier(additionalPropertyLabel)),
 							operator: AssignmentExprSyntax(
 								leadingTrivia: .space,
-								trailingTrivia: .space
+								trailingTrivia: .space,
 							),
 							rightOperand: DeclReferenceExprSyntax(baseName: TokenSyntax.identifier("<#T##assign_\(additionalPropertyLabel)#>")),
-							trailingTrivia: additionalPropertyLabel == additionalPropertyLabels.last ? .newline : nil
-						)))
+							trailingTrivia: additionalPropertyLabel == additionalPropertyLabels.last ? .newline : nil,
+						))),
 					)
 				}
-			}
+			},
 		)
 	}
 
@@ -224,7 +224,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 
 	func createInitializerArgumentList(
 		given dependencies: [Dependency],
-		unavailableProperties: Set<Property>? = nil
+		unavailableProperties: Set<Property>? = nil,
 	) throws(GenerationError) -> String {
 		try createDependencyAndArgumentBinding(given: dependencies)
 			.map {
@@ -272,7 +272,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 		public var asProperty: Property {
 			Property(
 				label: innerLabel,
-				typeDescription: typeDescription
+				typeDescription: typeDescription,
 			)
 		}
 
@@ -300,7 +300,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 				outerLabel: outerLabel,
 				innerLabel: innerLabel,
 				typeDescription: typeDescription,
-				hasDefaultValue: hasDefaultValue
+				hasDefaultValue: hasDefaultValue,
 			)
 		}
 
@@ -316,10 +316,10 @@ extension ConcreteDeclType {
 			arrayLiteral: DeclModifierSyntax(
 				name: TokenSyntax(
 					TokenKind.keyword(.public),
-					presence: .present
+					presence: .present,
 				),
-				trailingTrivia: .space
-			)
+				trailingTrivia: .space,
+			),
 		)
 	}
 }

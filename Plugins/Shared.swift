@@ -29,7 +29,7 @@ import PackagePlugin
 			// As of Xcode 15.0, Xcode command plugins have no way to read the package manifest, therefore we must hardcode the version number.
 			// It is okay for this number to be behind the most current release if the inputs and outputs to SafeDITool have not changed.
 			// Unlike SPM plugins, Xcode plugins can not determine the current version number, so we must hardcode it.
-			"1.5.4"
+			"2.0.0"
 		}
 
 		var safeDIOrigin: URL {
@@ -40,22 +40,20 @@ import PackagePlugin
 
 		var safediFolder: URL {
 			xcodeProject.directoryURL.appending(
-				component: ".safedi"
+				component: ".safedi",
 			)
 		}
 
 		var expectedToolFolder: URL {
-			let location = safediFolder.appending(
-				component: safeDIVersion
+			safediFolder.appending(
+				component: safeDIVersion,
 			)
-			return location
 		}
 
 		var expectedToolLocation: URL {
-			let location = expectedToolFolder.appending(
-				component: "safeditool"
+			expectedToolFolder.appending(
+				component: "safeditool",
 			)
-			return location
 		}
 
 		var downloadedToolLocation: URL? {
@@ -89,24 +87,22 @@ extension PackagePlugin.PluginContext {
 
 	var safediFolder: URL {
 		package.directoryURL.appending(
-			component: ".safedi"
+			component: ".safedi",
 		)
 	}
 
 	var expectedToolFolder: URL? {
 		guard let safeDIVersion else { return nil }
-		let location = safediFolder.appending(
-			component: safeDIVersion
+		return safediFolder.appending(
+			component: safeDIVersion,
 		)
-		return location
 	}
 
 	var expectedToolLocation: URL? {
 		guard let expectedToolFolder else { return nil }
-		let location = expectedToolFolder.appending(
-			component: "safeditool"
+		return expectedToolFolder.appending(
+			component: "safeditool",
 		)
-		return location
 	}
 
 	var downloadedToolLocation: URL? {

@@ -21,7 +21,6 @@
 import Foundation
 import SafeDICore
 import Testing
-
 @testable import SafeDITool
 
 struct SafeDIToolDOTGenerationTests: ~Copyable {
@@ -44,16 +43,15 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
+		graph SafeDI {
+		    ranksep=2
 
-			}
-			"""
-		)
+		}
+		""")
 	}
 
 	@Test
@@ -78,16 +76,15 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    RootViewController -- "networkService: NetworkService"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    RootViewController -- "networkService: NetworkService"
+		}
+		""")
 	}
 
 	@Test
@@ -118,18 +115,17 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root1 -- "networkService: NetworkService"
+		graph SafeDI {
+		    ranksep=2
+		    Root1 -- "networkService: NetworkService"
 
-			    Root2 -- "networkService: NetworkService"
-			}
-			"""
-		)
+		    Root2 -- "networkService: NetworkService"
+		}
+		""")
 	}
 
 	@Test
@@ -201,19 +197,18 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    RootViewController -- "networkService: NetworkService"
-			    RootViewController -- "authService: AuthService"
-			    RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>"
-			    "loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>" -- "user: User"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    RootViewController -- "networkService: NetworkService"
+		    RootViewController -- "authService: AuthService"
+		    RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>"
+		    "loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>" -- "user: User"
+		}
+		""")
 	}
 
 	@Test
@@ -293,20 +288,19 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    RootViewController -- "networkService: NetworkService"
-			    RootViewController -- "authService: AuthService"
-			    RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>"
-			    "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "userService: UserService"
-			    "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "user: User"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    RootViewController -- "networkService: NetworkService"
+		    RootViewController -- "authService: AuthService"
+		    RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>"
+		    "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "userService: UserService"
+		    "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "user: User"
+		}
+		""")
 	}
 
 	@Test
@@ -393,21 +387,20 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    RootViewController -- "networkService: NetworkService"
-			    RootViewController -- "authService: AuthService"
-			    RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>"
-			    "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>" -- "userService: UserService"
-			    "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>" -- "userID: String"
-			    "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>" -- "userName: String"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    RootViewController -- "networkService: NetworkService"
+		    RootViewController -- "authService: AuthService"
+		    RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>"
+		    "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>" -- "userService: UserService"
+		    "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>" -- "userID: String"
+		    "loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>" -- "userName: String"
+		}
+		""")
 	}
 
 	@Test
@@ -494,21 +487,20 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    RootViewController -- "networkService: NetworkService"
-			    RootViewController -- "authService: AuthService"
-			    RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>"
-			    "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>" -- "userService: UserService"
-			    "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>" -- "userID: String"
-			    "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>" -- "userName: String"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    RootViewController -- "networkService: NetworkService"
+		    RootViewController -- "authService: AuthService"
+		    RootViewController -- "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>"
+		    "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>" -- "userService: UserService"
+		    "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>" -- "userID: String"
+		    "loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>" -- "userName: String"
+		}
+		""")
 	}
 
 	@Test
@@ -589,20 +581,19 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    RootViewController -- "networkService: NetworkService"
-			    RootViewController -- "authService: AuthService"
-			    RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>"
-			    "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "userService: UserService"
-			    "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "user: User"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    RootViewController -- "networkService: NetworkService"
+		    RootViewController -- "authService: AuthService"
+		    RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>"
+		    "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "userService: UserService"
+		    "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "user: User"
+		}
+		""")
 	}
 
 	@Test
@@ -683,20 +674,19 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    RootViewController -- "networkService: NetworkService"
-			    RootViewController -- "authService: AuthService"
-			    RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>"
-			    "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "userServiceInstantiator: Instantiator<UserService>"
-			    "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "user: User"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    RootViewController -- "networkService: NetworkService"
+		    RootViewController -- "authService: AuthService"
+		    RootViewController -- "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>"
+		    "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "userServiceInstantiator: Instantiator<UserService>"
+		    "loggedInViewControllerBuilder: Instantiator<LoggedInViewController>" -- "user: User"
+		}
+		""")
 	}
 
 	@Test
@@ -756,22 +746,21 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root -- "greatGrandchild: GreatGrandchild"
-			    Root -- "childA: ChildA"
-			    Root -- "childB: ChildB"
-			    "childA: ChildA" -- "grandchildAA: GrandchildAA"
-			    "childA: ChildA" -- "grandchildAB: GrandchildAB"
-			    "childB: ChildB" -- "grandchildBA: GrandchildBA"
-			    "childB: ChildB" -- "grandchildBB: GrandchildBB"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "greatGrandchild: GreatGrandchild"
+		    Root -- "childA: ChildA"
+		    Root -- "childB: ChildB"
+		    "childA: ChildA" -- "grandchildAA: GrandchildAA"
+		    "childA: ChildA" -- "grandchildAB: GrandchildAB"
+		    "childB: ChildB" -- "grandchildBA: GrandchildBA"
+		    "childB: ChildB" -- "grandchildBB: GrandchildBB"
+		}
+		""")
 	}
 
 	@Test
@@ -832,23 +821,22 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root -- "childA: ChildA"
-			    Root -- "childB: ChildB"
-			    "childA: ChildA" -- "greatGrandchild: GreatGrandchild"
-			    "childA: ChildA" -- "grandchildAA: GrandchildAA"
-			    "childA: ChildA" -- "grandchildAB: GrandchildAB"
-			    "childB: ChildB" -- "greatGrandchild: GreatGrandchild"
-			    "childB: ChildB" -- "grandchildBA: GrandchildBA"
-			    "childB: ChildB" -- "grandchildBB: GrandchildBB"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "childA: ChildA"
+		    Root -- "childB: ChildB"
+		    "childA: ChildA" -- "greatGrandchild: GreatGrandchild"
+		    "childA: ChildA" -- "grandchildAA: GrandchildAA"
+		    "childA: ChildA" -- "grandchildAB: GrandchildAB"
+		    "childB: ChildB" -- "greatGrandchild: GreatGrandchild"
+		    "childB: ChildB" -- "grandchildBA: GrandchildBA"
+		    "childB: ChildB" -- "grandchildBB: GrandchildBB"
+		}
+		""")
 	}
 
 	@Test
@@ -888,20 +876,19 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root -- "child: Child"
-			    "child: Child" -- "grandchild: Grandchild"
-			    "child: Child" -- "recreated: Recreated"
-			    "grandchild: Grandchild" -- "recreated: Recreated"
-			    "grandchild: Grandchild" -- "greatGrandchild: GreatGrandchild"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "child: Child"
+		    "child: Child" -- "grandchild: Grandchild"
+		    "child: Child" -- "recreated: Recreated"
+		    "grandchild: Grandchild" -- "recreated: Recreated"
+		    "grandchild: Grandchild" -- "greatGrandchild: GreatGrandchild"
+		}
+		""")
 	}
 
 	@Test
@@ -960,25 +947,24 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root -- "childA: ChildA"
-			    Root -- "childB: ChildB"
-			    "childA: ChildA" -- "grandchildAA: GrandchildAA"
-			    "childA: ChildA" -- "grandchildAB: GrandchildAB"
-			    "grandchildAA: GrandchildAA" -- "greatGrandchild: GreatGrandchild"
-			    "grandchildAB: GrandchildAB" -- "greatGrandchild: GreatGrandchild"
-			    "childB: ChildB" -- "grandchildBA: GrandchildBA"
-			    "childB: ChildB" -- "grandchildBB: GrandchildBB"
-			    "grandchildBA: GrandchildBA" -- "greatGrandchild: GreatGrandchild"
-			    "grandchildBB: GrandchildBB" -- "greatGrandchild: GreatGrandchild"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "childA: ChildA"
+		    Root -- "childB: ChildB"
+		    "childA: ChildA" -- "grandchildAA: GrandchildAA"
+		    "childA: ChildA" -- "grandchildAB: GrandchildAB"
+		    "grandchildAA: GrandchildAA" -- "greatGrandchild: GreatGrandchild"
+		    "grandchildAB: GrandchildAB" -- "greatGrandchild: GreatGrandchild"
+		    "childB: ChildB" -- "grandchildBA: GrandchildBA"
+		    "childB: ChildB" -- "grandchildBB: GrandchildBB"
+		    "grandchildBA: GrandchildBA" -- "greatGrandchild: GreatGrandchild"
+		    "grandchildBB: GrandchildBB" -- "greatGrandchild: GreatGrandchild"
+		}
+		""")
 	}
 
 	@Test
@@ -991,7 +977,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: false,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		let grandchildModuleOutput = try await executeSafeDIToolTest(
@@ -1031,7 +1017,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			],
 			dependentModuleInfoPaths: [greatGrandchildModuleOutput.moduleInfoOutputPath],
 			buildDOTFileOutput: false,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		let childModuleOutput = try await executeSafeDIToolTest(
@@ -1062,7 +1048,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				grandchildModuleOutput.moduleInfoOutputPath,
 			],
 			buildDOTFileOutput: false,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		let topLevelModuleOutput = try await executeSafeDIToolTest(
@@ -1084,25 +1070,24 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				childModuleOutput.moduleInfoOutputPath,
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(topLevelModuleOutput.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root -- "childA: ChildA"
-			    Root -- "childB: ChildB"
-			    "childA: ChildA" -- "grandchildAA: GrandchildAA"
-			    "childA: ChildA" -- "grandchildAB: GrandchildAB"
-			    "grandchildAA: GrandchildAA" -- "greatGrandchild: GreatGrandchild"
-			    "grandchildAB: GrandchildAB" -- "greatGrandchild: GreatGrandchild"
-			    "childB: ChildB" -- "grandchildBA: GrandchildBA"
-			    "childB: ChildB" -- "grandchildBB: GrandchildBB"
-			    "grandchildBA: GrandchildBA" -- "greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>"
-			    "grandchildBB: GrandchildBB" -- "greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "childA: ChildA"
+		    Root -- "childB: ChildB"
+		    "childA: ChildA" -- "grandchildAA: GrandchildAA"
+		    "childA: ChildA" -- "grandchildAB: GrandchildAB"
+		    "grandchildAA: GrandchildAA" -- "greatGrandchild: GreatGrandchild"
+		    "grandchildAB: GrandchildAB" -- "greatGrandchild: GreatGrandchild"
+		    "childB: ChildB" -- "grandchildBA: GrandchildBA"
+		    "childB: ChildB" -- "grandchildBB: GrandchildBB"
+		    "grandchildBA: GrandchildBA" -- "greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>"
+		    "grandchildBB: GrandchildBB" -- "greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>"
+		}
+		""")
 	}
 
 	@Test
@@ -1133,17 +1118,16 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root -- "defaultUserService: DefaultUserService"
-			    Root -- "userService: any UserService <- defaultUserService: DefaultUserService"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "defaultUserService: DefaultUserService"
+		    Root -- "userService: any UserService <- defaultUserService: DefaultUserService"
+		}
+		""")
 	}
 
 	@Test
@@ -1199,19 +1183,18 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    RootViewController -- "networkService: NetworkService"
-			    RootViewController -- "authService: AuthService"
-			    "authService: AuthService" -- "renamedNetworkService: NetworkService <- networkService: NetworkService"
-			    "authService: AuthService" -- "renamedAgainNetworkService: NetworkService <- renamedNetworkService: NetworkService"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    RootViewController -- "networkService: NetworkService"
+		    RootViewController -- "authService: AuthService"
+		    "authService: AuthService" -- "renamedNetworkService: NetworkService <- networkService: NetworkService"
+		    "authService: AuthService" -- "renamedAgainNetworkService: NetworkService <- renamedNetworkService: NetworkService"
+		}
+		""")
 	}
 
 	@Test
@@ -1247,19 +1230,18 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root -- "child: Child"
-			    "child: Child" -- "greatGrandchild: GreatGrandchild"
-			    "child: Child" -- "grandchild: Grandchild"
-			    "child: Child" -- "unrelated: Unrelated"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "child: Child"
+		    "child: Child" -- "greatGrandchild: GreatGrandchild"
+		    "child: Child" -- "grandchild: Grandchild"
+		    "child: Child" -- "unrelated: Unrelated"
+		}
+		""")
 	}
 
 	@Test
@@ -1499,41 +1481,40 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root -- "x: X"
-			    Root -- "a: A"
-			    Root -- "g: G"
-			    Root -- "e: E"
-			    Root -- "m: M"
-			    Root -- "o: O"
-			    Root -- "d: D"
-			    Root -- "f: F"
-			    Root -- "i: I"
-			    Root -- "p: P"
-			    Root -- "n: N"
-			    Root -- "r: R"
-			    Root -- "t: T"
-			    Root -- "s: S"
-			    Root -- "w: W"
-			    Root -- "u: U"
-			    Root -- "y: Y"
-			    Root -- "b: B"
-			    Root -- "c: C"
-			    Root -- "h: H"
-			    Root -- "j: J"
-			    Root -- "k: K"
-			    Root -- "v: V"
-			    Root -- "l: L"
-			    Root -- "q: Q"
-			    Root -- "z: Z"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "x: X"
+		    Root -- "a: A"
+		    Root -- "g: G"
+		    Root -- "e: E"
+		    Root -- "m: M"
+		    Root -- "o: O"
+		    Root -- "d: D"
+		    Root -- "f: F"
+		    Root -- "i: I"
+		    Root -- "p: P"
+		    Root -- "n: N"
+		    Root -- "r: R"
+		    Root -- "t: T"
+		    Root -- "s: S"
+		    Root -- "w: W"
+		    Root -- "u: U"
+		    Root -- "y: Y"
+		    Root -- "b: B"
+		    Root -- "c: C"
+		    Root -- "h: H"
+		    Root -- "j: J"
+		    Root -- "k: K"
+		    Root -- "v: V"
+		    Root -- "l: L"
+		    Root -- "q: Q"
+		    Root -- "z: Z"
+		}
+		""")
 	}
 
 	@Test
@@ -1566,19 +1547,18 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root -- "aBuilder: Instantiator<A>"
-			    "aBuilder: Instantiator<A>" -- "bBuilder: Instantiator<B>"
-			    "bBuilder: Instantiator<B>" -- "cBuilder: Instantiator<C>"
-			    "cBuilder: Instantiator<C>" -- "aBuilder: Instantiator<A>"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "aBuilder: Instantiator<A>"
+		    "aBuilder: Instantiator<A>" -- "bBuilder: Instantiator<B>"
+		    "bBuilder: Instantiator<B>" -- "cBuilder: Instantiator<C>"
+		    "cBuilder: Instantiator<C>" -- "aBuilder: Instantiator<A>"
+		}
+		""")
 	}
 
 	@Test
@@ -1611,19 +1591,18 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root -- "a: A"
-			    "a: A" -- "b: B"
-			    "b: B" -- "cBuilder: Instantiator<C>"
-			    "cBuilder: Instantiator<C>" -- "a: A"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "a: A"
+		    "a: A" -- "b: B"
+		    "b: B" -- "cBuilder: Instantiator<C>"
+		    "cBuilder: Instantiator<C>" -- "a: A"
+		}
+		""")
 	}
 
 	@Test
@@ -1644,18 +1623,17 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root -- "a: A"
-			    "a: A" -- "aBuilder: Instantiator<A>"
-			    "aBuilder: Instantiator<A>" -- "aBuilder: Instantiator<A>"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "a: A"
+		    "a: A" -- "aBuilder: Instantiator<A>"
+		    "aBuilder: Instantiator<A>" -- "aBuilder: Instantiator<A>"
+		}
+		""")
 	}
 
 	@Test
@@ -1677,19 +1655,18 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root -- "aBuilder: Instantiator<A>"
-			    "aBuilder: Instantiator<A>" -- "aBuilder: Instantiator<A>"
-			    "aBuilder: Instantiator<A>" -- "context: String"
-			    "aBuilder: Instantiator<A>" -- "context: String"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "aBuilder: Instantiator<A>"
+		    "aBuilder: Instantiator<A>" -- "aBuilder: Instantiator<A>"
+		    "aBuilder: Instantiator<A>" -- "context: String"
+		    "aBuilder: Instantiator<A>" -- "context: String"
+		}
+		""")
 	}
 
 	@Test
@@ -1727,19 +1704,18 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root -- "stringContainer: Container<String>"
-			    Root -- "intContainer: Container<Int>"
-			    Root -- "floatContainer: Container<Float>"
-			    Root -- "voidContainer: Container<Void>"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "stringContainer: Container<String>"
+		    Root -- "intContainer: Container<Int>"
+		    Root -- "floatContainer: Container<Float>"
+		    Root -- "voidContainer: Container<Void>"
+		}
+		""")
 	}
 
 	@Test
@@ -1777,19 +1753,18 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete
+			filesToDelete: &filesToDelete,
 		)
 
 		#expect(try #require(output.dotTree) == """
-			graph SafeDI {
-			    ranksep=2
-			    Root -- "stringContainer: MyModule.Container<String>"
-			    Root -- "intContainer: MyModule.Container<Int>"
-			    Root -- "floatContainer: MyModule.Container<Float>"
-			    Root -- "voidContainer: MyModule.Container<Void>"
-			}
-			"""
-		)
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "stringContainer: MyModule.Container<String>"
+		    Root -- "intContainer: MyModule.Container<Int>"
+		    Root -- "floatContainer: MyModule.Container<Float>"
+		    Root -- "voidContainer: MyModule.Container<Void>"
+		}
+		""")
 	}
 
 	// MARK: Private

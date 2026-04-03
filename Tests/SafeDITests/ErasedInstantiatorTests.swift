@@ -20,12 +20,11 @@
 
 import Foundation
 import Testing
-
 @testable import SafeDI
 
 struct ErasedInstantiatorTests {
 	@Test @MainActor
-	func instantiate_returnsNewObjectEachTime() async {
+	func instantiate_returnsNewObjectEachTime() {
 		let systemUnderTest = ErasedInstantiator<Void, BuiltProduct>() { BuiltProduct() }
 		let firstBuiltProduct = systemUnderTest.instantiate()
 		let secondBuiltProduct = systemUnderTest.instantiate()
@@ -33,7 +32,7 @@ struct ErasedInstantiatorTests {
 	}
 
 	@Test @MainActor
-	func instantiate_withForwardedArgument_returnsNewObjectEachTime() async {
+	func instantiate_withForwardedArgument_returnsNewObjectEachTime() {
 		let systemUnderTest = ErasedInstantiator { id in BuiltProductWithForwardedArgument(id: id) }
 		let id = UUID().uuidString
 		let firstBuiltProduct = systemUnderTest.instantiate(id)

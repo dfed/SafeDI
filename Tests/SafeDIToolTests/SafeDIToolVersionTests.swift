@@ -37,9 +37,7 @@ struct SafeDIToolVersionTests {
 		tool.swiftSourcesFilePath = nil
 		tool.showVersion = true
 		tool.include = []
-		tool.includeFilePath = nil
 		tool.additionalImportedModules = []
-		tool.additionalImportedModulesFilePath = nil
 		tool.moduleInfoOutput = nil
 		tool.dependentModuleInfoFilePath = nil
 		tool.dependencyTreeOutput = nil

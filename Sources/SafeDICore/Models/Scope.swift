@@ -74,7 +74,7 @@ final class Scope: Hashable {
 					false
 				}
 			}
-			.map(\.property)
+			.map(\.property),
 	)
 
 	var requiredReceivedProperties: [Property] {
@@ -105,7 +105,7 @@ final class Scope: Hashable {
 		for property: Property?,
 		propertyStack: OrderedSet<Property>,
 		receivableProperties: Set<Property>,
-		erasedToConcreteExistential: Bool
+		erasedToConcreteExistential: Bool,
 	) throws -> ScopeGenerator {
 		var childPropertyStack = propertyStack
 		let isPropertyCycle: Bool
@@ -149,7 +149,7 @@ final class Scope: Hashable {
 						for: property,
 						propertyStack: childPropertyStack,
 						receivableProperties: receivableProperties,
-						erasedToConcreteExistential: erasedToConcreteExistential
+						erasedToConcreteExistential: erasedToConcreteExistential,
 					)
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
 					ScopeGenerator(
@@ -157,13 +157,13 @@ final class Scope: Hashable {
 						fulfillingProperty: fulfillingProperty,
 						unavailableOptionalProperties: unavailableOptionalProperties,
 						erasedToConcreteExistential: erasedToConcreteExistential,
-						onlyIfAvailable: onlyIfAvailable
+						onlyIfAvailable: onlyIfAvailable,
 					)
 				}
 			},
 			unavailableOptionalProperties: unavailableOptionalProperties,
 			erasedToConcreteExistential: erasedToConcreteExistential,
-			isPropertyCycle: isPropertyCycle
+			isPropertyCycle: isPropertyCycle,
 		)
 		Task.detached {
 			// Kick off code generation.

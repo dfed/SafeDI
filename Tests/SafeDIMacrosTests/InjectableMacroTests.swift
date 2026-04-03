@@ -18,11 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import SafeDICore
 import SwiftSyntaxMacros
 import SwiftSyntaxMacrosGenericTestSupport
 import Testing
-
-import SafeDICore
 
 #if canImport(SafeDIMacros)
 	@testable import SafeDIMacros
@@ -54,7 +53,7 @@ import SafeDICore
 				    let something: Something
 				}
 				""",
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -79,7 +78,7 @@ import SafeDICore
 				    let instantiatedA: InstantiatedA
 				}
 				""",
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -98,7 +97,7 @@ import SafeDICore
 					let receivedA: AnyReceivedA?
 				}
 				""",
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -117,7 +116,7 @@ import SafeDICore
 					let receivedA: AnyReceivedA??
 				}
 				""",
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -150,7 +149,7 @@ import SafeDICore
 						line: 6,
 						column: 19,
 						severity: .error,
-						fixIts: [FixItSpec(message: "Replace `var` with `let`")]
+						fixIts: [FixItSpec(message: "Replace `var` with `let`")],
 					),
 				],
 				macros: injectableTestMacros,
@@ -163,7 +162,7 @@ import SafeDICore
 
 				    @Instantiated  let instantiatedA: InstantiatedA
 				}
-				"""
+				""",
 			)
 		}
 
@@ -202,7 +201,7 @@ import SafeDICore
 				    }
 				}
 				"""#,
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -226,10 +225,10 @@ import SafeDICore
 						message: "The argument `fulfilledByType` can not be used on an `Instantiator` or `SendableInstantiator`. Use an `ErasedInstantiator` or `SendableErasedInstantiator` instead",
 						line: 2,
 						column: 5,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -251,10 +250,10 @@ import SafeDICore
 						message: "`ErasedInstantiator` and `SendableErasedInstantiator` require use of the argument `fulfilledByType`",
 						line: 2,
 						column: 5,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -284,10 +283,10 @@ import SafeDICore
 						message: "This macro can not decorate `static` variables",
 						line: 6,
 						column: 5,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -306,10 +305,10 @@ import SafeDICore
 						message: "This macro must decorate a instance variable",
 						line: 1,
 						column: 1,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -341,10 +340,10 @@ import SafeDICore
 						message: "The argument `fulfilledByType` must be a string literal",
 						line: 7,
 						column: 5,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -376,10 +375,10 @@ import SafeDICore
 						message: "The argument `fulfilledByType` must be a string literal",
 						line: 7,
 						column: 5,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -409,10 +408,10 @@ import SafeDICore
 						message: "The argument `fulfilledByType` must refer to a simple type",
 						line: 6,
 						column: 5,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -442,10 +441,10 @@ import SafeDICore
 						message: "The argument `fulfilledByType` must refer to a simple type",
 						line: 6,
 						column: 5,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -471,10 +470,10 @@ import SafeDICore
 						message: "The argument `fulfilledByDependencyNamed` must be a string literal",
 						line: 4,
 						column: 5,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -498,10 +497,10 @@ import SafeDICore
 						message: "The argument `ofType` must be a type literal",
 						line: 3,
 						column: 5,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -527,10 +526,10 @@ import SafeDICore
 						message: "The argument `erasedToConcreteExistential` must be a bool literal",
 						line: 4,
 						column: 5,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -556,10 +555,10 @@ import SafeDICore
 						message: "The argument `onlyIfAvailable` must be a type literal",
 						line: 4,
 						column: 2,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: injectableTestMacros
+				macros: injectableTestMacros,
 			)
 		}
 
@@ -584,7 +583,7 @@ import SafeDICore
 						line: 3,
 						column: 39,
 						severity: .error,
-						fixIts: [FixItSpec(message: "Mark the type as optional using `?`")]
+						fixIts: [FixItSpec(message: "Mark the type as optional using `?`")],
 					),
 				],
 				macros: injectableTestMacros,
@@ -594,7 +593,7 @@ import SafeDICore
 				public struct ExampleService {
 					@Received(onlyIfAvailable: true) let receivedA: AnyReceivedA?
 				}
-				"""
+				""",
 			)
 		}
 	}

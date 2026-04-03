@@ -27,7 +27,7 @@ public struct Dependency: Codable, Hashable, Sendable {
 
 	public init(
 		property: Property,
-		source: Dependency.Source
+		source: Dependency.Source,
 	) {
 		self.property = property
 		self.source = source
@@ -60,7 +60,7 @@ public struct Dependency: Codable, Hashable, Sendable {
 			if let instantiatedMacro = node.instantiatedMacro {
 				self = .instantiated(
 					fulfillingTypeDescription: instantiatedMacro.fulfillingTypeDescription,
-					erasedToConcreteExistential: instantiatedMacro.erasedToConcreteExistentialValue
+					erasedToConcreteExistential: instantiatedMacro.erasedToConcreteExistentialValue,
 				)
 			} else if let receivedMacro = node.receivedMacro {
 				if let fulfillingPropertyName = receivedMacro.fulfillingPropertyName,
@@ -69,10 +69,10 @@ public struct Dependency: Codable, Hashable, Sendable {
 					self = .aliased(
 						fulfillingProperty: Property(
 							label: fulfillingPropertyName,
-							typeDescription: fulfillingTypeDescription
+							typeDescription: fulfillingTypeDescription,
 						),
 						erasedToConcreteExistential: receivedMacro.erasedToConcreteExistentialValue,
-						onlyIfAvailable: receivedMacro.onlyIfAvailableValue
+						onlyIfAvailable: receivedMacro.onlyIfAvailableValue,
 					)
 				} else {
 					self = .received(onlyIfAvailable: receivedMacro.onlyIfAvailableValue)

@@ -31,7 +31,7 @@ extension ImportDeclSyntax {
 			type: path
 				.map(\.name.text)
 				.dropFirst()
-				.joined(separator: ".")
+				.joined(separator: "."),
 		)
 	}
 

@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.3
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -6,17 +6,18 @@ import PackageDescription
 let package = Package(
 	name: "ExamplePackageIntegration",
 	platforms: [
-		.macOS(.v10_15),
-		.iOS(.v13),
-		.tvOS(.v13),
-		.watchOS(.v6),
-		.macCatalyst(.v13),
+		.macOS(.v11),
+		.iOS(.v15),
+		.tvOS(.v15),
+		.watchOS(.v8),
+		.macCatalyst(.v15),
+		.visionOS(.v1),
 	],
 	products: [
 		// Products define the executables and libraries a package produces, making them visible to other packages.
 		.library(
 			name: "ExamplePackageIntegration",
-			targets: ["RootModule"]
+			targets: ["RootModule"],
 		),
 	],
 	dependencies: [
@@ -39,7 +40,7 @@ let package = Package(
 			],
 			plugins: [
 				.plugin(name: "SafeDIGenerator", package: "SafeDI"),
-			]
+			],
 		),
 		.target(
 			name: "ChildAModule",
@@ -50,7 +51,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.target(
 			name: "ChildBModule",
@@ -61,7 +62,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.target(
 			name: "ChildCModule",
@@ -72,7 +73,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.target(
 			name: "GrandchildrenModule",
@@ -82,14 +83,14 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.target(
 			name: "SharedModule",
 			dependencies: ["SafeDI"],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
-	]
+	],
 )

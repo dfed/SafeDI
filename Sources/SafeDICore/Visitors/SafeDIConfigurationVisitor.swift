@@ -71,7 +71,7 @@ public final class SafeDIConfigurationVisitor: SyntaxVisitor {
 	public var configuration: SafeDIConfiguration {
 		SafeDIConfiguration(
 			additionalImportedModules: additionalImportedModules,
-			additionalDirectoriesToInclude: additionalDirectoriesToInclude
+			additionalDirectoriesToInclude: additionalDirectoriesToInclude,
 		)
 	}
 

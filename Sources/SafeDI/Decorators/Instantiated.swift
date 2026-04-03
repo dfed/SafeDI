@@ -46,5 +46,5 @@ public macro Instantiated() = #externalMacro(module: "SafeDIMacros", type: "Inje
 @attached(peer)
 public macro Instantiated(
 	fulfilledByType concreteTypeName: StaticString,
-	erasedToConcreteExistential: Bool = false
+	erasedToConcreteExistential: Bool = false,
 ) = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")

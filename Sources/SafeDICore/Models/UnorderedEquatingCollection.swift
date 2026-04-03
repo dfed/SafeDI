@@ -40,9 +40,18 @@ public struct UnorderedEquatingCollection<Element: Hashable>: Hashable, Collecti
 
 	// MARK: Collection
 
-	public func makeIterator() -> IndexingIterator<[Element]> { array.makeIterator() }
-	public var startIndex: Int { array.startIndex }
-	public var endIndex: Int { array.endIndex }
+	public func makeIterator() -> IndexingIterator<[Element]> {
+		array.makeIterator()
+	}
+
+	public var startIndex: Int {
+		array.startIndex
+	}
+
+	public var endIndex: Int {
+		array.endIndex
+	}
+
 	public func index(after i: Int) -> Int {
 		array.index(after: i)
 	}

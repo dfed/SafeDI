@@ -27,7 +27,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		initializer: Initializer?,
 		additionalInstantiables: [TypeDescription]?,
 		dependencies: [Dependency],
-		declarationType: DeclarationType
+		declarationType: DeclarationType,
 	) {
 		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
 		self.isRoot = isRoot

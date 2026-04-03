@@ -22,7 +22,6 @@ import Foundation
 import SwiftParser
 import SwiftSyntax
 import Testing
-
 @testable import SafeDICore
 
 struct TypeDescriptionTests {
@@ -737,19 +736,19 @@ struct TypeDescriptionTests {
 				arguments: [.void(.tuple)],
 				isAsync: false,
 				doesThrow: false,
-				returnType: .void(.identifier)
+				returnType: .void(.identifier),
 			),
 			specifiers: nil,
-			attributes: ["autoclosure", "escaping"]
+			attributes: ["autoclosure", "escaping"],
 		).asFunctionParameter == TypeDescription.attributed(
 			.closure(
 				arguments: [.void(.tuple)],
 				isAsync: false,
 				doesThrow: false,
-				returnType: .void(.identifier)
+				returnType: .void(.identifier),
 			),
 			specifiers: nil,
-			attributes: ["autoclosure", "escaping"]
+			attributes: ["autoclosure", "escaping"],
 		))
 	}
 
@@ -760,19 +759,19 @@ struct TypeDescriptionTests {
 				arguments: [.void(.tuple)],
 				isAsync: false,
 				doesThrow: false,
-				returnType: .void(.identifier)
+				returnType: .void(.identifier),
 			),
 			specifiers: nil,
-			attributes: ["escaping", "autoclosure"]
+			attributes: ["escaping", "autoclosure"],
 		).asFunctionParameter == TypeDescription.attributed(
 			.closure(
 				arguments: [.void(.tuple)],
 				isAsync: false,
 				doesThrow: false,
-				returnType: .void(.identifier)
+				returnType: .void(.identifier),
 			),
 			specifiers: nil,
-			attributes: ["escaping", "autoclosure"]
+			attributes: ["escaping", "autoclosure"],
 		))
 	}
 
@@ -783,19 +782,19 @@ struct TypeDescriptionTests {
 				arguments: [.void(.tuple)],
 				isAsync: false,
 				doesThrow: false,
-				returnType: .void(.identifier)
+				returnType: .void(.identifier),
 			),
 			specifiers: nil,
-			attributes: nil
+			attributes: nil,
 		).asFunctionParameter == TypeDescription.attributed(
 			.closure(
 				arguments: [.void(.tuple)],
 				isAsync: false,
 				doesThrow: false,
-				returnType: .void(.identifier)
+				returnType: .void(.identifier),
 			),
 			specifiers: nil,
-			attributes: ["escaping"]
+			attributes: ["escaping"],
 		))
 	}
 

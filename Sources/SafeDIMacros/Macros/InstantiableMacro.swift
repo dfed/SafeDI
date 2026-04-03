@@ -29,7 +29,7 @@ public struct InstantiableMacro: MemberMacro {
 		of node: AttributeSyntax,
 		providingMembersOf declaration: some DeclGroupSyntax,
 		conformingTo _: [TypeSyntax],
-		in context: some MacroExpansionContext
+		in context: some MacroExpansionContext,
 	) throws -> [DeclSyntax] {
 		if let fulfillingAdditionalTypesArgument = declaration
 			.attributes
@@ -65,7 +65,7 @@ public struct InstantiableMacro: MemberMacro {
 			if mustExtendInstantiable, !extendsInstantiable {
 				var modifiedDeclaration = concreteDeclaration
 				var inheritedType = InheritedTypeSyntax(
-					type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
+					type: IdentifierTypeSyntax(name: .identifier("Instantiable")),
 				)
 				if let existingInheritanceClause = modifiedDeclaration.inheritanceClause {
 					inheritedType.trailingTrivia = .space
@@ -82,9 +82,9 @@ public struct InstantiableMacro: MemberMacro {
 					modifiedDeclaration.inheritanceClause = InheritanceClauseSyntax(
 						colon: .colonToken(trailingTrivia: .space),
 						inheritedTypes: InheritedTypeListSyntax(arrayLiteral: InheritedTypeSyntax(
-							type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
+							type: IdentifierTypeSyntax(name: .identifier("Instantiable")),
 						)),
-						trailingTrivia: .space
+						trailingTrivia: .space,
 					)
 				}
 				context.diagnose(Diagnostic(
@@ -93,9 +93,9 @@ public struct InstantiableMacro: MemberMacro {
 					changes: [
 						.replace(
 							oldNode: Syntax(concreteDeclaration),
-							newNode: Syntax(modifiedDeclaration)
+							newNode: Syntax(modifiedDeclaration),
 						),
-					]
+					],
 				))
 			}
 
@@ -120,7 +120,7 @@ public struct InstantiableMacro: MemberMacro {
 				guard inheritedDependencies.isEmpty else {
 					throw InstantiableError.cannotBeRoot(
 						instantiableType,
-						violatingDependencies: inheritedDependencies
+						violatingDependencies: inheritedDependencies,
 					)
 				}
 			}
@@ -201,11 +201,11 @@ public struct InstantiableMacro: MemberMacro {
 							let functionParameterProperty = property.asFunctionParamter
 							if let existingParameter = existingParameters[functionParameterProperty] {
 								fixedSyntax.signature.parameterClause.parameters.append(
-									normalizeFunctionParameter(existingParameter, for: functionParameterProperty)
+									normalizeFunctionParameter(existingParameter, for: functionParameterProperty),
 								)
 							} else {
 								fixedSyntax.signature.parameterClause.parameters.append(
-									normalizeFunctionParameter(property.asFunctionParamterSyntax, for: functionParameterProperty)
+									normalizeFunctionParameter(property.asFunctionParamterSyntax, for: functionParameterProperty),
 								)
 							}
 							existingParameters[functionParameterProperty] = nil
@@ -217,8 +217,8 @@ public struct InstantiableMacro: MemberMacro {
 									existingParameter,
 									at: fixedSyntax.signature.parameterClause.parameters.index(
 										priorIndex,
-										offsetBy: priorIndex == syntaxToFix.signature.parameterClause.parameters.startIndex ? 0 : missingArguments.count
-									)
+										offsetBy: priorIndex == syntaxToFix.signature.parameterClause.parameters.startIndex ? 0 : missingArguments.count,
+									),
 								)
 							}
 						}
@@ -290,9 +290,9 @@ public struct InstantiableMacro: MemberMacro {
 							changes: [
 								.replace(
 									oldNode: Syntax(syntaxToFix),
-									newNode: Syntax(fixedSyntax)
+									newNode: Syntax(fixedSyntax),
 								),
-							]
+							],
 						))
 
 					case .inaccessibleInitializer:
@@ -309,9 +309,9 @@ public struct InstantiableMacro: MemberMacro {
 									leadingTrivia: $0.leadingTrivia,
 									name: TokenSyntax(
 										TokenKind.keyword(.public),
-										presence: .present
+										presence: .present,
 									),
-									trailingTrivia: $0.trailingTrivia
+									trailingTrivia: $0.trailingTrivia,
 								)
 							} else {
 								$0
@@ -325,9 +325,9 @@ public struct InstantiableMacro: MemberMacro {
 								leadingTrivia: fixedSyntax.modifiers.isEmpty ? .newline : [],
 								name: TokenSyntax(
 									TokenKind.keyword(.public),
-									presence: .present
+									presence: .present,
 								),
-								trailingTrivia: .space
+								trailingTrivia: .space,
 							), at: fixedSyntax.modifiers.startIndex)
 						}
 						if let firstModifier = syntaxToFix.modifiers.first {
@@ -342,9 +342,9 @@ public struct InstantiableMacro: MemberMacro {
 							changes: [
 								.replace(
 									oldNode: Syntax(syntaxToFix),
-									newNode: Syntax(fixedSyntax)
+									newNode: Syntax(fixedSyntax),
 								),
-							]
+							],
 						))
 					}
 				} else {
@@ -355,11 +355,11 @@ public struct InstantiableMacro: MemberMacro {
 							decl: Initializer.generateRequiredInitializer(
 								for: visitor.dependencies,
 								declarationType: concreteDeclaration.declType,
-								andAdditionalPropertiesWithLabels: visitor.uninitializedNonOptionalPropertyNames
+								andAdditionalPropertiesWithLabels: visitor.uninitializedNonOptionalPropertyNames,
 							),
-							trailingTrivia: .newline
+							trailingTrivia: .newline,
 						),
-						at: declarationWithInitializer.memberBlock.members.startIndex
+						at: declarationWithInitializer.memberBlock.members.startIndex,
 					)
 					let errorType: FixableInstantiableError.MissingInitializer = if visitor.uninitializedNonOptionalPropertyNames.isEmpty {
 						.hasOnlyInjectableProperties
@@ -374,9 +374,9 @@ public struct InstantiableMacro: MemberMacro {
 						changes: [
 							.replace(
 								oldNode: Syntax(declaration),
-								newNode: Syntax(declarationWithInitializer)
+								newNode: Syntax(declarationWithInitializer),
 							),
-						]
+						],
 					))
 				}
 				return []
@@ -396,7 +396,7 @@ public struct InstantiableMacro: MemberMacro {
 			if mustExtendInstantiable, !extendsInstantiable {
 				var modifiedDeclaration = extensionDeclaration
 				var inheritedType = InheritedTypeSyntax(
-					type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
+					type: IdentifierTypeSyntax(name: .identifier("Instantiable")),
 				)
 				if let existingInheritanceClause = modifiedDeclaration.inheritanceClause {
 					inheritedType.trailingTrivia = .space
@@ -413,9 +413,9 @@ public struct InstantiableMacro: MemberMacro {
 					modifiedDeclaration.inheritanceClause = InheritanceClauseSyntax(
 						colon: .colonToken(trailingTrivia: .space),
 						inheritedTypes: InheritedTypeListSyntax(arrayLiteral: InheritedTypeSyntax(
-							type: IdentifierTypeSyntax(name: .identifier("Instantiable"))
+							type: IdentifierTypeSyntax(name: .identifier("Instantiable")),
 						)),
-						trailingTrivia: .space
+						trailingTrivia: .space,
 					)
 				}
 				context.diagnose(Diagnostic(
@@ -424,9 +424,9 @@ public struct InstantiableMacro: MemberMacro {
 					changes: [
 						.replace(
 							oldNode: Syntax(extensionDeclaration),
-							newNode: Syntax(modifiedDeclaration)
+							newNode: Syntax(modifiedDeclaration),
 						),
-					]
+					],
 				))
 			}
 			if extensionDeclaration.genericWhereClause != nil {
@@ -438,9 +438,9 @@ public struct InstantiableMacro: MemberMacro {
 					changes: [
 						.replace(
 							oldNode: Syntax(extensionDeclaration),
-							newNode: Syntax(modifiedDeclaration)
+							newNode: Syntax(modifiedDeclaration),
 						),
-					]
+					],
 				))
 			}
 
@@ -454,7 +454,7 @@ public struct InstantiableMacro: MemberMacro {
 				guard visitor.instantiables.flatMap(\.dependencies).isEmpty else {
 					throw InstantiableError.cannotBeRoot(
 						instantiableType,
-						violatingDependencies: visitor.instantiables.flatMap(\.dependencies)
+						violatingDependencies: visitor.instantiables.flatMap(\.dependencies),
 					)
 				}
 			}
@@ -480,58 +480,58 @@ public struct InstantiableMacro: MemberMacro {
 								arrayLiteral: DeclModifierSyntax(
 									name: TokenSyntax(
 										TokenKind.keyword(.public),
-										presence: .present
+										presence: .present,
 									),
-									trailingTrivia: .space
+									trailingTrivia: .space,
 								),
 								DeclModifierSyntax(
 									name: TokenSyntax(
 										TokenKind.keyword(.static),
-										presence: .present
+										presence: .present,
 									),
-									trailingTrivia: .space
-								)
+									trailingTrivia: .space,
+								),
 							),
 							name: TokenSyntax(
 								TokenKind.identifier(InstantiableVisitor.instantiateMethodName),
 								leadingTrivia: .space,
-								presence: .present
+								presence: .present,
 							),
 							signature: FunctionSignatureSyntax(
 								parameterClause: FunctionParameterClauseSyntax(
-									parameters: FunctionParameterListSyntax([])
+									parameters: FunctionParameterListSyntax([]),
 								),
 								returnClause: ReturnClauseSyntax(
 									arrow: .arrowToken(
 										leadingTrivia: .space,
-										trailingTrivia: .space
+										trailingTrivia: .space,
 									),
 									type: IdentifierTypeSyntax(
-										name: .identifier(extendedTypeName)
-									)
-								)
+										name: .identifier(extendedTypeName),
+									),
+								),
 							),
 							body: CodeBlockSyntax(
 								leadingTrivia: .newline,
 								statements: CodeBlockItemListSyntax([]),
-								trailingTrivia: .newline
-							)
+								trailingTrivia: .newline,
+							),
 						),
-						trailingTrivia: .newline
+						trailingTrivia: .newline,
 					),
-					at: membersWithInitializer.startIndex
+					at: membersWithInitializer.startIndex,
 				)
 				context.diagnose(Diagnostic(
 					node: Syntax(extensionDeclaration.memberBlock.members),
 					error: FixableInstantiableError.missingRequiredInstantiateMethod(
-						typeName: extendedTypeName
+						typeName: extendedTypeName,
 					),
 					changes: [
 						.replace(
 							oldNode: Syntax(declaration.memberBlock.members),
-							newNode: Syntax(membersWithInitializer)
+							newNode: Syntax(membersWithInitializer),
 						),
-					]
+					],
 				))
 			}
 			return []
@@ -541,7 +541,7 @@ public struct InstantiableMacro: MemberMacro {
 	}
 
 	private static func generateForwardedProperties(
-		from forwardedProperties: [Property]
+		from forwardedProperties: [Property],
 	) -> [DeclSyntax] {
 		if forwardedProperties.isEmpty {
 			[]
@@ -553,18 +553,18 @@ public struct InstantiableMacro: MemberMacro {
 							arrayLiteral: DeclModifierSyntax(
 								name: TokenSyntax(
 									TokenKind.keyword(.public),
-									presence: .present
+									presence: .present,
 								),
-								trailingTrivia: .space
-							)
+								trailingTrivia: .space,
+							),
 						),
 						name: .identifier("ForwardedProperties"),
 						initializer: TypeInitializerClauseSyntax(
 							value: IdentifierTypeSyntax(
-								name: .identifier(forwardedProperty.typeDescription.asSource)
-							)
-						)
-					)
+								name: .identifier(forwardedProperty.typeDescription.asSource),
+							),
+						),
+					),
 				),
 			]
 		} else {
@@ -575,14 +575,14 @@ public struct InstantiableMacro: MemberMacro {
 							arrayLiteral: DeclModifierSyntax(
 								name: TokenSyntax(
 									TokenKind.keyword(.public),
-									presence: .present
+									presence: .present,
 								),
-								trailingTrivia: .space
-							)
+								trailingTrivia: .space,
+							),
 						),
 						name: .identifier("ForwardedProperties"),
-						initializer: TypeInitializerClauseSyntax(value: forwardedProperties.asTuple)
-					)
+						initializer: TypeInitializerClauseSyntax(value: forwardedProperties.asTuple),
+					),
 				),
 			]
 		}
@@ -626,20 +626,20 @@ extension TypeDescription {
 		self == .simple(name: "Instantiable")
 			|| self == .nested(
 				name: "Instantiable",
-				parentType: .simple(name: "SafeDI")
+				parentType: .simple(name: "SafeDI"),
 			)
 			|| self == .attributed(
 				.simple(name: "Instantiable"),
 				specifiers: nil,
-				attributes: ["retroactive"]
+				attributes: ["retroactive"],
 			)
 			|| self == .nested(
 				name: "Instantiable",
 				parentType: .attributed(
 					.simple(name: "SafeDI"),
 					specifiers: nil,
-					attributes: ["retroactive"]
-				)
+					attributes: ["retroactive"],
+				),
 			)
 	}
 }
@@ -647,7 +647,7 @@ extension TypeDescription {
 // MARK: Initializer
 
 extension Initializer {
-	fileprivate enum FixableError: Comparable, Hashable, Sendable {
+	fileprivate enum FixableError: Comparable, Hashable {
 		case inaccessibleInitializer
 		case missingArguments([Property])
 		indirect case multiple([FixableError])

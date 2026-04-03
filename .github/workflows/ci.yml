@@ -22,8 +22,8 @@ jobs:
         run: ./Scripts/check-version-consistency.sh
 
   xcodebuild:
-    name: Build with xcodebuild on Xcode 16
-    runs-on: macos-15
+    name: Build with xcodebuild on Xcode 26
+    runs-on: macos-26
     strategy:
       matrix:
         platforms: [
@@ -40,54 +40,55 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
-      - name: Download visionOS
-        if: matrix.platforms == 'generic/platform=visionos'
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+      - name: Download Platform
+        if: matrix.platforms != 'platform=macOS'
         run: |
           sudo xcodebuild -runFirstLaunch
           sudo xcrun simctl list
-          sudo xcodebuild -downloadPlatform visionOS
+          PLATFORM=$(echo "${{ matrix.platforms }}" | sed 's|generic/platform=||')
+          sudo xcodebuild -downloadPlatform "$PLATFORM"
       - name: Build Framework
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
 
   spm-package-integration:
-    name: Build Package Integration on Xcode 16
-    runs-on: macos-15
+    name: Build Package Integration on Xcode 26
+    runs-on: macos-26
     permissions:
       contents: read
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Build Package Integration
         run: xcrun swift build --package-path "Examples/Example Package Integration"
 
   spm-prebuilt-package-integration:
-    name: Build Prebuilt Package Integration on Xcode 16
-    runs-on: macos-15
+    name: Build Prebuilt Package Integration on Xcode 26
+    runs-on: macos-26
     permissions:
       contents: read
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Build Package Integration
         run: |
           xcrun swift package --package-path Examples/ExamplePrebuiltPackageIntegration --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
           xcrun swift build --package-path Examples/ExamplePrebuiltPackageIntegration
 
   spm-project-integration:
-    name: Build Project Integration on Xcode 16
-    runs-on: macos-15
+    name: Build Project Integration on Xcode 26
+    runs-on: macos-26
     permissions:
       contents: read
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Replace 'main' branch with the current branch
         if: github.event.pull_request.head.repo.full_name == github.repository # Only do this if the branch is from our repo.
         run: sed -i '' "s#branch = main;#branch = ${{ github.head_ref || github.ref_name }};#" "Examples/ExampleProjectIntegration/ExampleProjectIntegration.xcodeproj/project.pbxproj"
@@ -95,55 +96,31 @@ jobs:
         run: pushd Examples/ExampleProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration; popd
 
   spm-multi-project-integration:
-    name: Build Multi Project Integration on Xcode 16
-    runs-on: macos-15
+    name: Build Multi Project Integration on Xcode 26
+    runs-on: macos-26
     permissions:
       contents: read
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_16.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Replace 'main' branch with the current branch
         if: github.event.pull_request.head.repo.full_name == github.repository # Only do this if the branch is from our repo.
         run: sed -i '' "s#branch = main;#branch = ${{ github.head_ref || github.ref_name }};#" "Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration.xcodeproj/project.pbxproj"
       - name: Build Project Integration
         run: pushd Examples/ExampleMultiProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration; popd
 
-  pod-project-integration:
-    name: Build CocoaPods Integration on Xcode 16
-    runs-on: macos-15
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3.5'
-          bundler-cache: true
-      - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_16.4.0.app/Contents/Developer
-      - name: Install Pod
-        run: bundle exec pod install --project-directory=Examples/ExampleCocoaPodsIntegration
-      - name: Download iOS
-        run: |
-          sudo xcodebuild -runFirstLaunch
-          sudo xcrun simctl list
-          sudo xcodebuild -downloadPlatform iOS -buildVersion 22F77
-      - name: Build CocoaPods Integration
-        run: xcrun xcodebuild build -scheme ExampleCocoaPodsIntegration -configuration Debug -workspace Examples/ExampleCocoaPodsIntegration/ExampleCocoaPodsIntegration.xcworkspace -destination 'platform=iOS Simulator,OS=18.5,name=iPad (10th generation)' # Explicitly test the Debug build. Our pod lint jobs are already testing the Release build.
-
   spm:
-    name: Build and Test on Xcode 16
-    runs-on: macos-15
+    name: Build and Test on Xcode 26
+    runs-on: macos-26
     permissions:
       contents: read
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_16.3.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Build and Test Framework
         run: |
           for i in {1..5}; do # Run tests a few times to ensure code-gen is stable.
@@ -159,43 +136,10 @@ jobs:
           verbose: true
           os: macos
 
-  pod-lint:
-    name: Pod Lint
-    runs-on: macos-15
-    strategy:
-      matrix:
-        platforms: [
-          "ios",
-          "tvos",
-          "watchos",
-          "macos",
-          "visionos",
-        ]
-      fail-fast: false
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3.5'
-          bundler-cache: true
-      - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
-      - name: Download Simulator
-        if: matrix.platforms != 'macos'
-        run: |
-          sudo xcodebuild -runFirstLaunch
-          sudo xcrun simctl list
-          sudo xcodebuild -downloadPlatform ${{ matrix.platforms }}
-      - name: Lint Podspec
-        run: bundle exec pod lib lint --verbose --fail-fast --swift-version=6.0 --platforms=${{ matrix.platforms }}
-
   linux:
     name: Build and Test on Linux
     runs-on: ubuntu-latest
-    container: swift:6.1
+    container: swift:6.3
     permissions:
       contents: read
     steps:
@@ -232,7 +176,7 @@ jobs:
   lint-swift:
     name: Lint Swift
     runs-on: ubuntu-latest
-    container: swift:6.1
+    container: swift:6.3
     permissions:
       contents: read
     steps:

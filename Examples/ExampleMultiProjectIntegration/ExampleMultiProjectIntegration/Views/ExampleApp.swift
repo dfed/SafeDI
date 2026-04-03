@@ -46,7 +46,7 @@ public struct NotesApp: Instantiable, App {
 		userService: AnyUserService,
 		stringStorage: StringStorage,
 		nameEntryViewBuilder: Instantiator<NameEntryView>,
-		noteViewBuilder: Instantiator<NoteView>
+		noteViewBuilder: Instantiator<NoteView>,
 	) {
 		self.userService = userService
 		self.stringStorage = stringStorage

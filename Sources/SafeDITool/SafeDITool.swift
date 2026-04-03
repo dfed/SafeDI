@@ -24,7 +24,7 @@ import SafeDICore
 import SwiftParser
 
 @main
-struct SafeDITool: AsyncParsableCommand, Sendable {
+struct SafeDITool: AsyncParsableCommand {
 	// MARK: Arguments
 
 	@Argument(help: "A path to a CSV file containing paths of Swift files to parse.") var swiftSourcesFilePath: String?
@@ -33,11 +33,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 
 	@Option(parsing: .upToNextOption, help: "Directories containing Swift files to include, relative to the executing directory.") var include: [String] = []
 
-	@Option(help: "A path to a CSV file comprising directories containing Swift files to include, relative to the executing directory.") var includeFilePath: String?
-
 	@Option(parsing: .upToNextOption, help: "The names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModules: [String] = []
-
-	@Option(help: "A path to a CSV file comprising the names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModulesFilePath: String?
 
 	@Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project‘s non-root module. Must have a `.safedi` suffix.") var moduleInfoOutput: String?
 
@@ -50,7 +46,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 	// MARK: Internal
 
 	static var currentVersion: String {
-		"1.5.4"
+		"2.0.0"
 	}
 
 	func run() async throws {
@@ -59,8 +55,8 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 			return
 		}
 
-		if swiftSourcesFilePath == nil, include.isEmpty, includeFilePath == nil {
-			throw ValidationError("Must provide 'swift-sources-file-path', '--include', or '--include-file-path'.")
+		if swiftSourcesFilePath == nil, include.isEmpty {
+			throw ValidationError("Must provide 'swift-sources-file-path' or '--include'.")
 		}
 
 		async let existingGeneratedCode: String? = Task.detached {
@@ -73,7 +69,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 
 		let (dependentModuleInfo, initialModule) = try await (
 			loadSafeDIModuleInfo(),
-			parsedModule()
+			parsedModule(),
 		)
 
 		// Prefer the root module's configuration. If none, fall back to dependent modules' configurations.
@@ -83,16 +79,10 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 			dependentModuleInfo.flatMap(\.configurations).first
 		}
 
-		// TODO: Delete CSV support in version 2.0.
-		let hasCSVConfiguration = includeFilePath != nil || additionalImportedModulesFilePath != nil
-		if sourceConfiguration != nil, hasCSVConfiguration {
-			throw ConfigurationError.csvAndSourceConfigurationConflict
-		}
-
 		let resolvedAdditionalImportedModules: [String] = if let sourceConfiguration {
 			additionalImportedModules + sourceConfiguration.additionalImportedModules
 		} else {
-			try allAdditionalImportedModules
+			additionalImportedModules
 		}
 
 		// If the source configuration specifies additional directories to include,
@@ -105,7 +95,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 				imports: initialModule.imports + additionalModule.imports,
 				instantiables: initialModule.instantiables + additionalModule.instantiables,
 				configurations: initialModule.configurations,
-				filesWithUnexpectedNodes: initialModule.filesWithUnexpectedNodes.map { $0 + (additionalModule.filesWithUnexpectedNodes ?? []) } ?? additionalModule.filesWithUnexpectedNodes
+				filesWithUnexpectedNodes: initialModule.filesWithUnexpectedNodes.map { $0 + (additionalModule.filesWithUnexpectedNodes ?? []) } ?? additionalModule.filesWithUnexpectedNodes,
 			)
 		} else {
 			module = initialModule
@@ -115,11 +105,11 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 		let instantiableTypes = Set(unnormalizedInstantiables.flatMap(\.instantiableTypes))
 		let normalizedInstantiables = unnormalizedInstantiables.map { unnormalizedInstantiable in
 			let unnormalizedToNormalizedTypeMap = unnormalizedInstantiable.dependencies.reduce(
-				into: [TypeDescription: TypeDescription]()
+				into: [TypeDescription: TypeDescription](),
 			) { partialResult, nextDependency in
 				if let bestTypeDescription = TypeDescription.nestedOptions(
 					referencedType: nextDependency.property.typeDescription,
-					within: unnormalizedInstantiable.concreteInstantiable
+					within: unnormalizedInstantiable.concreteInstantiable,
 				).first(where: { instantiableTypes.contains($0) }) {
 					partialResult[nextDependency.property.typeDescription] = bestTypeDescription
 				}
@@ -129,7 +119,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 				if let bestTypeDescription = unnormalizedToNormalizedTypeMap[$0.property.typeDescription] {
 					Dependency(
 						property: $0.property.withUpdatedTypeDescription(bestTypeDescription),
-						source: $0.source
+						source: $0.source,
 					)
 				} else {
 					// Default to what was in the code – we'll probably error later
@@ -143,7 +133,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 				if let enclosingType = unnormalizedInstantiable.concreteInstantiable.popNested,
 				   let bestTypeDescription = TypeDescription.nestedOptions(
 				   	referencedType: $0,
-				   	within: enclosingType
+				   	within: enclosingType,
 				   ).first(where: { instantiableTypes.contains($0) })
 				{
 					bestTypeDescription
@@ -158,14 +148,14 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 				initializer: normalizedInitializer,
 				additionalInstantiables: normalizedAdditionalInstantiables,
 				dependencies: normalizedDependencies,
-				declarationType: unnormalizedInstantiable.declarationType
+				declarationType: unnormalizedInstantiable.declarationType,
 			)
 		}
 		let generator = try DependencyTreeGenerator(
 			importStatements: dependentModuleInfo.flatMap(\.imports) + resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
 			typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
-				instantiables: normalizedInstantiables
-			)
+				instantiables: normalizedInstantiables,
+			),
 		)
 		async let generatedCode: String? = try dependencyTreeOutput != nil
 			? generator.generateCodeTree()
@@ -207,7 +197,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 		}
 	}
 
-	struct ModuleInfo: Codable, Sendable {
+	struct ModuleInfo: Codable {
 		let imports: [ImportStatement]
 		let instantiables: [Instantiable]
 		let configurations: [SafeDIConfiguration]
@@ -219,8 +209,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 	// MARK: Private
 
 	private func findSwiftFiles() async throws -> Set<String> {
-		// TODO: Delete CSV support in version 2.0.
-		try await findSwiftFiles(additionalDirectories: allDirectoriesToIncludes)
+		try await findSwiftFiles(additionalDirectories: include)
 	}
 
 	private func findSwiftFiles(additionalDirectories: [String]) async throws -> Set<String> {
@@ -237,7 +226,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 	private static func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<String> {
 		try await withThrowingTaskGroup(
 			of: [String].self,
-			returning: Set<String>.self
+			returning: Set<String>.self,
 		) { taskGroup in
 			for included in directories {
 				taskGroup.addTask {
@@ -247,7 +236,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 							at: includedURL,
 							includingPropertiesForKeys: nil,
 							options: [.skipsHiddenFiles],
-							errorHandler: nil
+							errorHandler: nil,
 						)
 					guard let files = includedFileEnumerator?.compactMap({ $0 as? URL }) else {
 						struct CouldNotEnumerateDirectoryError: Error, CustomStringConvertible {
@@ -284,9 +273,9 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 				imports: [ImportStatement],
 				instantiables: [Instantiable],
 				configurations: [SafeDIConfiguration],
-				encounteredUnexpectedNodeInFile: String?
+				encounteredUnexpectedNodeInFile: String?,
 			)?.self,
-			returning: ModuleInfo.self
+			returning: ModuleInfo.self,
 		) { taskGroup in
 			var imports = [ImportStatement]()
 			var instantiables = [Instantiable]()
@@ -308,7 +297,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 						imports: fileVisitor.imports,
 						instantiables: fileVisitor.instantiables,
 						configurations: fileVisitor.configurations,
-						encounteredUnexpectedNodeInFile: fileVisitor.encounteredUnexpectedNodesSyntax ? filePath : nil
+						encounteredUnexpectedNodeInFile: fileVisitor.encounteredUnexpectedNodesSyntax ? filePath : nil,
 					)
 				}
 			}
@@ -328,37 +317,13 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 				imports: imports,
 				instantiables: instantiables,
 				configurations: configurations,
-				filesWithUnexpectedNodes: filesWithUnexpectedNodes.isEmpty ? nil : filesWithUnexpectedNodes
+				filesWithUnexpectedNodes: filesWithUnexpectedNodes.isEmpty ? nil : filesWithUnexpectedNodes,
 			)
 		}
 	}
 
 	private func parsedModule() async throws -> ModuleInfo {
 		try await Self.parseSwiftFiles(findSwiftFiles())
-	}
-
-	private var allDirectoriesToIncludes: [String] {
-		get throws {
-			if let includeFilePath {
-				try include + String(contentsOfFile: includeFilePath, encoding: .utf8)
-					.components(separatedBy: CharacterSet(arrayLiteral: ","))
-					.removingEmpty()
-			} else {
-				include
-			}
-		}
-	}
-
-	private var allAdditionalImportedModules: [String] {
-		get throws {
-			if let additionalImportedModulesFilePath {
-				try additionalImportedModules + String(contentsOfFile: additionalImportedModulesFilePath, encoding: .utf8)
-					.components(separatedBy: CharacterSet(arrayLiteral: ","))
-					.removingEmpty()
-			} else {
-				additionalImportedModules
-			}
-		}
 	}
 
 	private var moduleInfoURLs: Set<URL> {
@@ -368,7 +333,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 					String(contentsOfFile: dependentModuleInfoFilePath, encoding: .utf8)
 						.components(separatedBy: CharacterSet(arrayLiteral: ","))
 						.removingEmpty()
-						.map(\.asFileURL)
+						.map(\.asFileURL),
 				)
 			} else {
 				[]
@@ -379,7 +344,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 	private func loadSafeDIModuleInfo() async throws -> [ModuleInfo] {
 		try await withThrowingTaskGroup(
 			of: ModuleInfo.self,
-			returning: [ModuleInfo].self
+			returning: [ModuleInfo].self,
 		) { taskGroup in
 			let moduleInfoURLs = try moduleInfoURLs
 			guard !moduleInfoURLs.isEmpty else { return [] }
@@ -387,7 +352,7 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 				taskGroup.addTask {
 					try JSONDecoder().decode(
 						ModuleInfo.self,
-						from: Data(contentsOf: moduleInfoURL)
+						from: Data(contentsOf: moduleInfoURL),
 					)
 				}
 			}
@@ -422,17 +387,6 @@ struct SafeDITool: AsyncParsableCommand, Sendable {
 			}
 		}
 	}
-
-	private enum ConfigurationError: Error, CustomStringConvertible {
-		case csvAndSourceConfigurationConflict
-
-		var description: String {
-			switch self {
-			case .csvAndSourceConfigurationConflict:
-				"Found both a @\(SafeDIConfigurationVisitor.macroName)-decorated type and .safedi/configuration/ CSV files. Remove the CSV files and use @\(SafeDIConfigurationVisitor.macroName) instead."
-			}
-		}
-	}
 }
 
 extension Data {
@@ -463,7 +417,7 @@ protocol FileFinder: Sendable {
 		at url: URL,
 		includingPropertiesForKeys keys: [URLResourceKey]?,
 		options mask: FileManager.DirectoryEnumerationOptions,
-		errorHandler handler: ((URL, any Error) -> Bool)?
+		errorHandler handler: ((URL, any Error) -> Bool)?,
 	) -> FileManager.DirectoryEnumerator?
 }
 

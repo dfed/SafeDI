@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.3
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import CompilerPluginSupport
@@ -7,38 +7,42 @@ import PackageDescription
 let package = Package(
 	name: "SafeDI",
 	platforms: [
-		.macOS(.v10_15),
-		.iOS(.v13),
-		.tvOS(.v13),
-		.watchOS(.v6),
-		.macCatalyst(.v13),
+		.macOS(.v11),
+		.iOS(.v15),
+		.tvOS(.v15),
+		.watchOS(.v8),
+		.macCatalyst(.v15),
 		.visionOS(.v1),
 	],
 	products: [
 		/// A library containing SafeDI macros, property wrappers, and types.
 		.library(
 			name: "SafeDI",
-			targets: ["SafeDI"]
+			targets: ["SafeDI"],
 		),
 		/// A SafeDI plugin that must be run on the root source module in a project.
 		.plugin(
 			name: "SafeDIGenerator",
-			targets: ["SafeDIGenerator"]
+			targets: ["SafeDIGenerator"],
 		),
 		/// A SafeDI plugin that must be run on the root source module in a project that does not build SwiftSyntax from source.
 		.plugin(
 			name: "SafeDIPrebuiltGenerator",
-			targets: ["SafeDIPrebuiltGenerator"]
+			targets: ["SafeDIPrebuiltGenerator"],
 		),
 		.plugin(
 			name: "InstallSafeDITool",
-			targets: ["InstallSafeDITool"]
+			targets: ["InstallSafeDITool"],
+		),
+		.plugin(
+			name: "MigrateSafeDIFromVersionOne",
+			targets: ["MigrateSafeDIFromVersionOne"],
 		),
 	],
 	dependencies: [
 		.package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.0"),
 		.package(url: "https://github.com/apple/swift-collections.git", from: "1.0.0"),
-		.package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"604.0.0"),
+		.package(url: "https://github.com/swiftlang/swift-syntax.git", "603.0.0"..<"605.0.0"),
 	],
 	targets: [
 		// Macros
@@ -47,7 +51,7 @@ let package = Package(
 			dependencies: ["SafeDIMacros"],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.testTarget(
 			name: "SafeDITests",
@@ -57,7 +61,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.macro(
 			name: "SafeDIMacros",
@@ -71,7 +75,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.testTarget(
 			name: "SafeDIMacrosTests",
@@ -82,7 +86,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 
 		// Plugins
@@ -91,20 +95,34 @@ let package = Package(
 			capability: .command(
 				intent: .custom(
 					verb: "safedi-release-install",
-					description: "Installs a release version of the SafeDITool build plugin executable."
+					description: "Installs a release version of the SafeDITool build plugin executable.",
 				),
 				permissions: [
 					.writeToPackageDirectory(reason: "Downloads the SafeDI release build plugin executable into your project directory."),
 					.allowNetworkConnections(scope: .all(ports: []), reason: "Downloads the SafeDI release build plugin executable from GitHub."),
-				]
+				],
 			),
-			dependencies: []
+			dependencies: [],
+		),
+
+		.plugin(
+			name: "MigrateSafeDIFromVersionOne",
+			capability: .command(
+				intent: .custom(
+					verb: "safedi-v1-to-v2",
+					description: "Migrates a project from SafeDI 1.x to 2.x.",
+				),
+				permissions: [
+					.writeToPackageDirectory(reason: "Creates a SafeDIConfiguration.swift file and removes obsolete CSV configuration files."),
+				],
+			),
+			dependencies: [],
 		),
 
 		.plugin(
 			name: "SafeDIGenerator",
 			capability: .buildTool(),
-			dependencies: ["SafeDITool"]
+			dependencies: ["SafeDITool"],
 		),
 		.executableTarget(
 			name: "SafeDITool",
@@ -115,7 +133,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.testTarget(
 			name: "SafeDIToolTests",
@@ -125,13 +143,13 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 
 		.plugin(
 			name: "SafeDIPrebuiltGenerator",
 			capability: .buildTool(),
-			dependencies: []
+			dependencies: [],
 		),
 
 		// Core
@@ -145,14 +163,14 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
 		.testTarget(
 			name: "SafeDICoreTests",
 			dependencies: ["SafeDICore"],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-			]
+			],
 		),
-	]
+	],
 )

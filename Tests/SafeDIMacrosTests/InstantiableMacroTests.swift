@@ -18,11 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import SafeDICore
 import SwiftSyntaxMacros
 import SwiftSyntaxMacrosGenericTestSupport
 import Testing
-
-import SafeDICore
 
 #if canImport(SafeDIMacros)
 	@testable import SafeDIMacros
@@ -56,7 +55,7 @@ import SafeDICore
 				    public init() {}
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -78,7 +77,7 @@ import SafeDICore
 				    public var description: String { "ExampleService" }
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -99,10 +98,10 @@ import SafeDICore
 						message: "@Instantiable must decorate an extension on a type or a class, struct, or actor declaration",
 						line: 1,
 						column: 1,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -121,10 +120,10 @@ import SafeDICore
 						message: "@Instantiable must decorate an extension on a type or a class, struct, or actor declaration",
 						line: 1,
 						column: 1,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -143,10 +142,10 @@ import SafeDICore
 						message: "The argument `fulfillingAdditionalTypes` must not include optionals",
 						line: 1,
 						column: 1,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -167,10 +166,10 @@ import SafeDICore
 						message: "The argument `fulfillingAdditionalTypes` must be an inlined array",
 						line: 2,
 						column: 1,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -189,10 +188,10 @@ import SafeDICore
 						message: "The argument `fulfillingAdditionalTypes` must be an inlined array",
 						line: 1,
 						column: 1,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -222,7 +221,7 @@ import SafeDICore
 				    private let renamed2Dependency: Dependency
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -258,10 +257,10 @@ import SafeDICore
 						""",
 						line: 1,
 						column: 1,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -297,10 +296,10 @@ import SafeDICore
 						""",
 						line: 1,
 						column: 1,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -325,10 +324,10 @@ import SafeDICore
 						message: "The argument `fulfillingAdditionalTypes` must be an inlined array",
 						line: 2,
 						column: 1,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -351,10 +350,10 @@ import SafeDICore
 						message: "The argument `fulfillingAdditionalTypes` must be an inlined array",
 						line: 1,
 						column: 1,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -379,10 +378,10 @@ import SafeDICore
 						message: "@Instantiable-decorated extension must have a single `instantiate(…)` method that returns `ExampleService`",
 						line: 1,
 						column: 1,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -400,7 +399,7 @@ import SafeDICore
 				    public static func instantiate() -> Foo { fatalError() }
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -428,10 +427,10 @@ import SafeDICore
 						""",
 						line: 1,
 						column: 1,
-						severity: .error
+						severity: .error,
 					),
 				],
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -457,7 +456,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -470,7 +469,7 @@ import SafeDICore
 				public init() {}
 
 				}
-				"""
+				""",
 			)
 		}
 
@@ -494,7 +493,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -507,7 +506,7 @@ import SafeDICore
 				public init() {}
 
 				}
-				"""
+				""",
 			)
 		}
 
@@ -531,7 +530,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -544,7 +543,7 @@ import SafeDICore
 				public init() {}
 
 				}
-				"""
+				""",
 			)
 		}
 
@@ -562,7 +561,7 @@ import SafeDICore
 				    public init() {}
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -588,7 +587,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -602,7 +601,7 @@ import SafeDICore
 
 				    var initializedVariable = "test"
 				}
-				"""
+				""",
 			)
 		}
 
@@ -628,7 +627,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -642,7 +641,7 @@ import SafeDICore
 
 				    var initializedVariable { "test" }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -668,7 +667,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -684,7 +683,7 @@ import SafeDICore
 
 				    @Instantiated @Unknown let instantiatedA: InstantiatedA
 				}
-				"""
+				""",
 			)
 		}
 
@@ -717,7 +716,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -737,7 +736,7 @@ import SafeDICore
 				    #endif
 				    let instantiatedA: InstantiatedA
 				}
-				"""
+				""",
 			)
 		}
 
@@ -763,7 +762,7 @@ import SafeDICore
 				    }
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -789,7 +788,7 @@ import SafeDICore
 				    public typealias ForwardedProperties = () -> Void
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -815,7 +814,7 @@ import SafeDICore
 				    public typealias ForwardedProperties = @Sendable () -> Void
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -841,7 +840,7 @@ import SafeDICore
 				    public typealias ForwardedProperties = @Sendable () -> Void
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -871,7 +870,7 @@ import SafeDICore
 				    public typealias ForwardedProperties = (userID: String, userName: String)
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -897,7 +896,7 @@ import SafeDICore
 				    }
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -929,7 +928,7 @@ import SafeDICore
 				    }
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -955,7 +954,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -971,7 +970,7 @@ import SafeDICore
 
 				    @Instantiated let instantiatedA: InstantiatedA
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1025,7 +1024,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1055,7 +1054,7 @@ import SafeDICore
 				        let uninitializedProperty: Any
 				    }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1085,7 +1084,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1103,7 +1102,7 @@ import SafeDICore
 
 				    let initializedProperty = 5
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1133,7 +1132,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1151,7 +1150,7 @@ import SafeDICore
 
 				    let initializedProperty: Int = 5
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1181,7 +1180,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1199,7 +1198,7 @@ import SafeDICore
 
 				    var optionalProperty: Int?
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1231,7 +1230,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1250,7 +1249,7 @@ import SafeDICore
 				    // This won't compile but we should still generate an initializer.
 				    public static let staticProperty: Int
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1284,7 +1283,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add arguments for receivedA: ReceivedA"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1301,7 +1300,7 @@ import SafeDICore
 
 					@Received let receivedA: ReceivedA
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1339,7 +1338,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add arguments for receivedB: ReceivedB"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1361,7 +1360,7 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1403,7 +1402,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add arguments for receivedB: ReceivedB"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1425,7 +1424,7 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1465,7 +1464,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add arguments for forwardedA: ForwardedA"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1485,7 +1484,7 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1525,7 +1524,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add arguments for receivedA: ReceivedA"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1545,7 +1544,7 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1587,7 +1586,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add arguments for receivedA: ReceivedA"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1607,7 +1606,7 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1653,7 +1652,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add arguments for receivedB: ReceivedB"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1677,7 +1676,7 @@ import SafeDICore
 				    @Received let receivedA: ReceivedA
 				    @Received let receivedB: ReceivedB
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1717,7 +1716,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add arguments for forwardedA: ForwardedA"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1737,7 +1736,7 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1785,7 +1784,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add arguments for receivedA: ReceivedA"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1810,7 +1809,7 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1850,7 +1849,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add arguments for receivedB: ReceivedB"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1870,7 +1869,7 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1914,7 +1913,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add arguments for receivedB: ReceivedB"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1936,7 +1935,7 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
+				""",
 			)
 		}
 
@@ -1972,7 +1971,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add arguments for received: Received, instantiated: Instantiated, forwarded: Forwarded"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -1996,7 +1995,7 @@ import SafeDICore
 					@Instantiated let instantiated: Instantiated
 					@Forwarded let forwarded: Forwarded
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2076,7 +2075,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -2115,7 +2114,7 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2185,7 +2184,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add arguments for forwardedA: ForwardedA"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -2220,7 +2219,7 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2260,7 +2259,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add arguments for forwardedA: ForwardedA"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -2280,7 +2279,7 @@ import SafeDICore
 					@Received let receivedA: ReceivedA
 					@Received let receivedB: ReceivedB
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2310,7 +2309,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -2332,7 +2331,7 @@ import SafeDICore
 
 				    @Forwarded let userName: String
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2358,7 +2357,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -2374,7 +2373,7 @@ import SafeDICore
 
 				    @Forwarded let closure: () -> Void
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2400,7 +2399,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -2416,7 +2415,7 @@ import SafeDICore
 
 				    @Forwarded let closure: @Sendable () -> Void
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2442,7 +2441,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -2458,7 +2457,7 @@ import SafeDICore
 
 				    @Instantiated private let instantiatableAInstantiator: Instantiator<ReceivedA>
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2500,7 +2499,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -2520,7 +2519,7 @@ import SafeDICore
 					@Instantiated let b: B
 					@Forwarded let c: C
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2562,7 +2561,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -2582,7 +2581,7 @@ import SafeDICore
 					@Instantiated let b: B
 					@Forwarded let c: C
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2624,7 +2623,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -2644,7 +2643,7 @@ import SafeDICore
 					@Instantiated let b: B
 					@Forwarded let c: C
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2686,7 +2685,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -2706,7 +2705,7 @@ import SafeDICore
 					@Instantiated let b: B
 					@Forwarded let c: C
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2748,7 +2747,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -2768,7 +2767,7 @@ import SafeDICore
 					@Instantiated let b: B
 					@Forwarded let c: C
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2822,7 +2821,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -2848,7 +2847,7 @@ import SafeDICore
 					@Instantiated let b: B
 					@Forwarded let c: C
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2904,7 +2903,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -2931,7 +2930,7 @@ import SafeDICore
 					@Instantiated let b: B
 					@Forwarded let c: C
 				}
-				"""
+				""",
 			)
 		}
 
@@ -2959,7 +2958,7 @@ import SafeDICore
 				    }
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -2981,7 +2980,7 @@ import SafeDICore
 				    }
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -3007,7 +3006,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Declare conformance to `Instantiable`"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3019,7 +3018,7 @@ import SafeDICore
 				public final class ExampleService: Instantiable {
 				    public init() {}
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3047,7 +3046,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Declare conformance to `Instantiable`"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3060,7 +3059,7 @@ import SafeDICore
 				    public init() {}
 				    public var description: String { "ExampleService" }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3088,7 +3087,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Declare conformance to `Instantiable`"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3101,7 +3100,7 @@ import SafeDICore
 				    public init() {}
 				    public var description: String { "ExampleService" }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3121,7 +3120,7 @@ import SafeDICore
 				    public var description: String { "ExampleService" }
 				}
 				""",
-				macros: instantiableTestMacros
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -3155,7 +3154,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Remove excessive attached macros"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3171,7 +3170,7 @@ import SafeDICore
 
 				    @Received let receivedA: ReceivedA
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3205,7 +3204,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Remove initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3221,7 +3220,7 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA 
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3255,7 +3254,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3271,7 +3270,7 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3305,7 +3304,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3321,7 +3320,7 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3355,7 +3354,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3371,7 +3370,7 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3405,7 +3404,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3421,7 +3420,7 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3455,7 +3454,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3471,7 +3470,7 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3505,7 +3504,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3521,7 +3520,7 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3555,7 +3554,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public` modifier"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3571,7 +3570,7 @@ import SafeDICore
 
 				    @Instantiated let receivedA: ReceivedA
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3597,7 +3596,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3614,7 +3613,7 @@ import SafeDICore
 
 				    let uninitializedProperty: Int
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3644,7 +3643,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3665,7 +3664,7 @@ import SafeDICore
 
 				    let uninitializedProperty: Int
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3699,7 +3698,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add required initializer"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3725,7 +3724,7 @@ import SafeDICore
 				    let uninitializedProperty2: Int, uninitializedProperty3: Int, initializedProperty = "init"
 				    let (uninitializedProperty4, uninitializedProperty5): (Int, Int)
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3751,7 +3750,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Declare conformance to `Instantiable`"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3763,7 +3762,7 @@ import SafeDICore
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3793,7 +3792,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Declare conformance to `Instantiable`"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3807,7 +3806,7 @@ import SafeDICore
 
 				    public var description: String { "ExampleService" }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3837,7 +3836,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Declare conformance to `Instantiable`"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3851,7 +3850,7 @@ import SafeDICore
 
 				    public var description: String { "ExampleService" }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3875,7 +3874,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Add `public static func instantiate() -> ExampleService` method"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3890,7 +3889,7 @@ import SafeDICore
 
 
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3916,7 +3915,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Set `public static` modifiers"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3928,7 +3927,7 @@ import SafeDICore
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3954,7 +3953,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Set `public static` modifiers"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -3966,7 +3965,7 @@ import SafeDICore
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -3992,7 +3991,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Set `public static` modifiers"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -4004,7 +4003,7 @@ import SafeDICore
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -4030,7 +4029,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Make `instantiate()`’s return type the same base type as the extended type"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -4042,7 +4041,7 @@ import SafeDICore
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -4068,7 +4067,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Make `instantiate()`’s return type the same base type as the extended type"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -4080,7 +4079,7 @@ import SafeDICore
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -4106,7 +4105,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Remove effect specifiers"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -4118,7 +4117,7 @@ import SafeDICore
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -4144,7 +4143,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Remove effect specifiers"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -4156,7 +4155,7 @@ import SafeDICore
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -4182,7 +4181,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Remove effect specifiers"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -4194,7 +4193,7 @@ import SafeDICore
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -4220,7 +4219,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Remove generic parameter"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -4232,7 +4231,7 @@ import SafeDICore
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -4258,7 +4257,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Remove generic `where` clause"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -4270,7 +4269,7 @@ import SafeDICore
 				extension Array: Instantiable {
 				    public static func instantiate() -> Array { fatalError() }
 				}
-				"""
+				""",
 			)
 		}
 
@@ -4296,7 +4295,7 @@ import SafeDICore
 						severity: .error,
 						fixIts: [
 							FixItSpec(message: "Remove generic `where` clause"),
-						]
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -4308,7 +4307,7 @@ import SafeDICore
 				extension Array: Instantiable {
 				    public static func instantiate() -> Array { fatalError() }
 				}
-				"""
+				""",
 			)
 		}
 	}

@@ -11,7 +11,7 @@ on:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    runs-on: macOS-15
+    runs-on: macos-26
     permissions:
       security-events: write
       packages: read
@@ -40,7 +40,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v6
     - name: Select Xcode Version
-      run: sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
+      run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
@@ -57,7 +57,7 @@ jobs:
 
     - if: matrix.language == 'swift'
       run: |
-        sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
+        sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
         xcrun swift build -c release
 
     - name: Perform CodeQL Analysis

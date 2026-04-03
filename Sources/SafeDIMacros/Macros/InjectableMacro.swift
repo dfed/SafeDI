@@ -27,7 +27,7 @@ public struct InjectableMacro: PeerMacro {
 	public static func expansion(
 		of _: AttributeSyntax,
 		providingPeersOf declaration: some DeclSyntaxProtocol,
-		in context: some MacroExpansionContext
+		in context: some MacroExpansionContext,
 	)
 		throws -> [DeclSyntax]
 	{
@@ -109,14 +109,14 @@ public struct InjectableMacro: PeerMacro {
 										$0.with(\.type, {
 											TypeSyntax(OptionalTypeSyntax(
 												wrappedType: $0.type,
-												questionMark: .postfixQuestionMarkToken()
+												questionMark: .postfixQuestionMarkToken(),
 											))
 										}($0))
 									})
 								}
-							}))
+							})),
 						),
-					]
+					],
 				))
 			}
 		}
@@ -134,10 +134,10 @@ public struct InjectableMacro: PeerMacro {
 						newNode: Syntax(TokenSyntax.keyword(
 							.let,
 							leadingTrivia: .space,
-							trailingTrivia: .space
-						))
+							trailingTrivia: .space,
+						)),
 					),
-				]
+				],
 			))
 		}
 

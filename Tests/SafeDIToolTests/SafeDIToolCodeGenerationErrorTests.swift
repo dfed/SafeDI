@@ -21,7 +21,6 @@
 import Foundation
 import SafeDICore
 import Testing
-
 @testable import SafeDITool
 
 struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
@@ -44,7 +43,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"""
 			No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `DoesNotExist`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -59,7 +58,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -73,7 +72,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 			Did you mean one of the following available properties?
 			\t`value: Grandchild.NestedType`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -105,7 +104,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -119,7 +118,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 			Did you mean one of the following available properties?
 			\t`value: NestedType`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -151,7 +150,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -161,7 +160,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `Container<Int>`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -186,7 +185,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -196,7 +195,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `Container<Int>`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -221,7 +220,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -231,7 +230,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"""
 			No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `URLSession`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -255,7 +254,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -266,7 +265,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			"""
 			@Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain:
 			\tRootViewController -> DefaultNetworkService
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -290,7 +289,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -304,7 +303,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 			Did you mean one of the following available properties?
 			\t`erasedType: ErasedType`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -335,7 +334,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -349,7 +348,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 			Did you mean one of the following available properties?
 			\t`erasedType: any ErasedType`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -380,7 +379,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -394,7 +393,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 			Did you mean one of the following available properties?
 			\t`thing: Thing`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -423,7 +422,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -437,7 +436,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 			Did you mean one of the following available properties?
 			\t`thing: Thing!`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -466,7 +465,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -479,7 +478,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			\tRoot -> Child
 
 			The non-optional `thing: Thing` is available in chain. Did you mean to decorate this property with `@Received(onlyIfAvailable: true)`?
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -508,7 +507,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -522,7 +521,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 			Did you mean one of the following available properties?
 			\t`thing: Thing?`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -551,7 +550,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -565,7 +564,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 			Did you mean one of the following available properties?
 			\t`thing: Thing`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -597,7 +596,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -612,7 +611,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			Did you mean one of the following available properties?
 			\t`otherThing: OtherThing`
 			\t`thing: Thing`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -645,7 +644,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -655,7 +654,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"""
 			Property `networkService: NetworkService` on RootViewController has at least one @Forwarded property. Property should instead be of type `Instantiator<DefaultNetworkService>`.
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -679,7 +678,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -690,7 +689,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			"""
 			@Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain:
 			\tRoot -> ChildB -> Grandchild
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -726,7 +725,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -746,7 +745,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 			@Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain:
 			\tRoot -> ChildB -> Grandchild
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -783,18 +782,18 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
 
 	@Test
-	mutating func run_onCodeWithInstantiatedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
+	mutating func run_onCodeWithInstantiatedPropertyThatRefersToCurrentInstantiable_throwsError() async {
 		await assertThrowsError(
 			"""
 			Dependency cycle detected:
 			\tAuthService -> AuthService
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -841,18 +840,18 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
 
 	@Test
-	mutating func run_onCodeWithReceivedPropertyThatRefersToCurrentInstantiable_throwsError() async throws {
+	mutating func run_onCodeWithReceivedPropertyThatRefersToCurrentInstantiable_throwsError() async {
 		await assertThrowsError(
 			"""
 			Dependency received in same chain it is instantiated:
 			\t@Instantiated authService: AuthService -> @Received authService: AuthService
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -899,7 +898,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -913,7 +912,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 			Did you mean one of the following available properties?
 			\t`networkService: NetworkService`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -953,7 +952,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -967,7 +966,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 			Did you mean one of the following available properties?
 			\t`networkService: NetworkService`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1007,18 +1006,18 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
 
 	@Test
-	mutating func run_onCodeWhereAliasedReceivedPropertyRefersToCurrentInstantiable_throwsError() async throws {
+	mutating func run_onCodeWhereAliasedReceivedPropertyRefersToCurrentInstantiable_throwsError() async {
 		await assertThrowsError(
 			"""
 			Dependency received in same chain it is instantiated:
 			\t@Instantiated authService: AuthService -> @Received authService: AuthService
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1065,7 +1064,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1076,7 +1075,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			"""
 			@Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain:
 			\tRootViewController -> URLSessionWrapper
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1100,7 +1099,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1110,7 +1109,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1128,7 +1127,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1138,7 +1137,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1156,7 +1155,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1166,7 +1165,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1188,7 +1187,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1198,7 +1197,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1220,7 +1219,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1230,7 +1229,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1252,7 +1251,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1262,7 +1261,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `UserDefaults`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1288,7 +1287,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1298,7 +1297,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"""
 			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `UIViewController`
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1316,7 +1315,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1327,7 +1326,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			"""
 			Dependency cycle detected:
 			\tA -> B -> C -> A
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1357,18 +1356,18 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
 
 	@Test
-	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithMixOfReceivedAndInstantiated_throwsError() async throws {
+	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithMixOfReceivedAndInstantiated_throwsError() async {
 		await assertThrowsError(
 			"""
 			Dependency cycle detected:
 			\tA -> C -> B -> A
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1396,7 +1395,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1407,7 +1406,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			"""
 			Dependency cycle detected:
 			\tA -> B -> C -> A
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1437,18 +1436,18 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
 
 	@Test
-	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndReceived_throwsError() async throws {
+	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndReceived_throwsError() async {
 		await assertThrowsError(
 			"""
 			Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `C` as @Instantiated to fix. Full cycle:
 			\tInstantiator<A> -> Instantiator<B> -> Instantiator<C> -> Instantiator<A>
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1478,18 +1477,18 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
 
 	@Test
-	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndOnlyIfAvailableReceived_throwsError() async throws {
+	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndOnlyIfAvailableReceived_throwsError() async {
 		await assertThrowsError(
 			"""
 			Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>?` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>?`. Declare @Received `aBuilder: Instantiator<A>?` on `C` as @Instantiated to fix. Full cycle:
 			\tInstantiator<A>? -> Instantiator<B> -> Instantiator<C> -> Instantiator<A>?
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1519,7 +1518,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1530,7 +1529,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			"""
 			Dependency cycle detected:
 			\tB -> C -> A -> B
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1560,7 +1559,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1571,7 +1570,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			"""
 			Dependency received in same chain it is instantiated:
 			\t@Instantiated a: A -> @Received b: B -> @Received c: C -> @Received a: A
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1603,7 +1602,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1614,7 +1613,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			"""
 			Dependency received in same chain it is instantiated:
 			\t@Instantiated a: A -> @Received renamedB: B -> @Received c: C -> @Received a: A
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1647,7 +1646,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1658,7 +1657,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			"""
 			Dependency received in same chain it is instantiated:
 			\t@Instantiated c: C -> @Received renamedB: B -> @Received c: C
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1690,18 +1689,18 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
 
 	@Test
-	mutating func run_OnCodeWithOptionalPropertyAliasAndMarkedOnlyIfAvailableAndItIsOnlyAvialableViaCircularDependency_throws_error() async throws {
+	mutating func run_OnCodeWithOptionalPropertyAliasAndMarkedOnlyIfAvailableAndItIsOnlyAvialableViaCircularDependency_throws_error() async {
 		await assertThrowsError(
 			"""
 			Dependency cycle detected:
 				C -> B -> C
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1747,17 +1746,17 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
 
 	@Test
-	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasSingleForwardedProperty_throwsError() async throws {
+	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasSingleForwardedProperty_throwsError() async {
 		await assertThrowsError(
 			"""
 			Property `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>`.
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1828,17 +1827,17 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
 
 	@Test
-	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasMultipleForwardedProperty_throwsError() async throws {
+	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasMultipleForwardedProperty_throwsError() async {
 		await assertThrowsError(
 			"""
 			Property `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>`.
-			"""
+			""",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1911,7 +1910,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 				],
 				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
+				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -1925,7 +1924,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				at _: URL,
 				includingPropertiesForKeys _: [URLResourceKey]?,
 				options _: FileManager.DirectoryEnumerationOptions,
-				errorHandler _: ((URL, any Error) -> Bool)?
+				errorHandler _: ((URL, any Error) -> Bool)?,
 			) -> FileManager.DirectoryEnumerator? {
 				nil
 			}
@@ -1935,9 +1934,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			tool.swiftSourcesFilePath = nil
 			tool.showVersion = false
 			tool.include = ["Fake"]
-			tool.includeFilePath = nil
 			tool.additionalImportedModules = []
-			tool.additionalImportedModulesFilePath = nil
 			tool.moduleInfoOutput = nil
 			tool.dependentModuleInfoFilePath = nil
 			tool.dependencyTreeOutput = nil
@@ -1954,39 +1951,13 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		tool.swiftSourcesFilePath = nil
 		tool.showVersion = false
 		tool.include = []
-		tool.includeFilePath = nil
 		tool.additionalImportedModules = []
-		tool.additionalImportedModulesFilePath = nil
 		tool.moduleInfoOutput = nil
 		tool.dependentModuleInfoFilePath = nil
 		tool.dependencyTreeOutput = nil
 		tool.dotFileOutput = nil
-		await assertThrowsError("Must provide 'swift-sources-file-path', '--include', or '--include-file-path'.") {
+		await assertThrowsError("Must provide 'swift-sources-file-path' or '--include'.") {
 			try await tool.run()
-		}
-	}
-
-	// MARK: @SafeDIConfiguration Error Tests
-
-	@Test
-	mutating func run_throwsErrorWhenCSVAndSourceConfigurationBothPresent() async {
-		await assertThrowsError(
-			"Found both a @SafeDIConfiguration-decorated type and .safedi/configuration/ CSV files. Remove the CSV files and use @SafeDIConfiguration instead."
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@SafeDIConfiguration
-					enum MyConfiguration {
-					    static let additionalImportedModules: [StaticString] = ["TestModule"]
-					    static let additionalDirectoriesToInclude: [StaticString] = []
-					}
-					""",
-				],
-				additionalImportedModules: ["ConflictingModule"],
-				buildDependencyTreeOutput: true,
-				filesToDelete: &filesToDelete
-			)
 		}
 	}
 

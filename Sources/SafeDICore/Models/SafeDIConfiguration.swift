@@ -24,7 +24,7 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 
 	public init(
 		additionalImportedModules: [String],
-		additionalDirectoriesToInclude: [String]
+		additionalDirectoriesToInclude: [String],
 	) {
 		self.additionalImportedModules = additionalImportedModules
 		self.additionalDirectoriesToInclude = additionalDirectoriesToInclude

@@ -78,19 +78,13 @@ To add the SafeDI framework as a dependency to a package utilizing [Swift Packag
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "1.0.0"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.0.0"),
 ]
 ```
 
+> **Note:** SafeDI 2.x requires Swift 6.3 or later. Projects using an earlier Swift version should use SafeDI 1.x.
+
 To install the SafeDI framework into an Xcode project with Swift Package Manager, follow [Apple’s instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to add `https://github.com/dfed/SafeDI.git` as a dependency.
-
-#### CocoaPods
-
-To add the SafeDI framework as a dependency to a package utilizing [CocoaPods](https://blog.cocoapods.org/CocoaPods-Specs-Repo), add the following to your `Podfile`:
-
-```ruby
-pod 'SafeDI', '~> 1.0.0'
-```
 
 ### Generating your dependency tree
 
@@ -147,17 +141,11 @@ enum MySafeDIConfiguration {
 
 ##### Unlocking faster builds with Swift Package Manager plugins
 
-SafeDI vends a `SafeDIPrebuiltGenerator` plugin for both Xcode and Swift package manager. This plugin utilizes a prebuilt binary for dependency tree generation and does not require compiling `SwiftSyntax`. Integrating this plugin will guide you through the one-step process of downloading the binary to the expected location. Note that avoiding compiling SwiftSyntax requires [some additional configuration](https://forums.swift.org/t/preview-swift-syntax-prebuilts-for-macros/80202) when using a Swift compiler version below 6.2.
-
-#### CocoaPods
-
-Use a pre-build script to download the `SafeDITool` binary and generate your SafeDI dependency tree ([example](Examples/ExampleCocoaPodsIntegration/safeditool.sh)). Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
-
-You can see this integration in practice in the [ExampleCocoaPodsIntegration](Examples/ExampleCocoaPodsIntegration) package. Run `bundle exec pod install --project-directory=Examples/ExampleCocoaPodsIntegration` to create the `ExampleCocoaPodsIntegration.xcworkspace`.
+SafeDI vends a `SafeDIPrebuiltGenerator` plugin for both Xcode and Swift package manager. This plugin utilizes a prebuilt binary for dependency tree generation and does not require compiling `SwiftSyntax`. Integrating this plugin will guide you through the one-step process of downloading the binary to the expected location.
 
 #### Additional configurations
 
-`SafeDITool` is designed to integrate into projects of any size or shape. Our [Releases](https://github.com/dfed/SafeDI/releases) page has prebuilt, codesigned release binaries of the `SafeDITool`  that can be downloaded and utilizied directly in a pre-build script, similar to the CocoaPods integration linked above.
+`SafeDITool` is designed to integrate into projects of any size or shape. Our [Releases](https://github.com/dfed/SafeDI/releases) page has prebuilt, codesigned release binaries of the `SafeDITool`  that can be downloaded and utilizied directly in a pre-build script ([example](Examples/PrebuildScript/safeditool.sh)). Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
 
 `SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run `swift run SafeDITool --help` to see documentation of the tool’s supported arguments.
 
@@ -166,6 +154,31 @@ You can see this integration in practice in the [ExampleCocoaPodsIntegration](Ex
 SafeDI’s compile-time safety and hierarchical dependency scoping make it similar to [Needle](https://github.com/uber/needle) and [Weaver](https://github.com/scribd/Weaver). Unlike Needle, SafeDI does not require defining dependency protocols for each type that can be instantiated within the DI tree. Unlike Weaver, SafeDI does not require defining and maintaining containers that live alongside your regular Swift code.
 
 Other Swift DI libraries, like [Factory](https://github.com/hmlongco/Factory) and [swift-dependencies](https://github.com/pointfreeco/swift-dependencies) do offer compile-time validation of the dependency tree but do not have hierarchical dependency scoping. This means scoped dependencies—like an authentication token in a network layer—can only be optionally injected when using these libraries. Meanwhile, libraries like [Swinject](https://github.com/Swinject/Swinject) do not offer compile-time safety.
+
+## Migrating from SafeDI 1.x to 2.x
+
+SafeDI 2.x requires Swift 6.3 or later and removes support for CSV-based configuration files (`.safedi/configuration/include.csv` and `.safedi/configuration/additionalImportedModules.csv`). Configuration is now done via the `@SafeDIConfiguration` macro.
+
+### Automated migration
+
+SafeDI provides a command plugin to automate the migration:
+
+```bash
+swift package plugin safedi-v1-to-v2 --target <YourRootTarget>
+```
+
+This plugin will:
+1. Verify your `swift-tools-version` is 6.3 or later
+2. Create a `SafeDIConfiguration.swift` file in your target's source directory
+3. Migrate any existing CSV configuration values into the new `@SafeDIConfiguration` enum
+4. Delete the obsolete CSV files
+
+### Manual migration
+
+1. Update your `swift-tools-version` to 6.3 or later
+2. Update your SafeDI dependency to `from: "2.0.0"`
+3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, create a `@SafeDIConfiguration` enum in your root module with the equivalent values and delete the CSV files
+4. If you don't have CSV configuration files, create a `@SafeDIConfiguration`-decorated enum in your root module
 
 ## Contributing
 

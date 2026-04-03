@@ -71,13 +71,13 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 					.nested(
 						name: simpleNameAndGenerics.name,
 						parentType: zip(outer: outer, inner: innerParent),
-						generics: simpleNameAndGenerics.generics
+						generics: simpleNameAndGenerics.generics,
 					)
 				} else {
 					.nested(
 						name: simpleNameAndGenerics.name,
 						parentType: outer,
-						generics: simpleNameAndGenerics.generics
+						generics: simpleNameAndGenerics.generics,
 					)
 				}
 			} else {
@@ -397,7 +397,7 @@ extension TypeSyntax {
 			} else {
 				return .simple(
 					name: typeIdentifier.name.text,
-					generics: genericTypeVisitor.genericArguments
+					generics: genericTypeVisitor.genericArguments,
 				)
 			}
 
@@ -409,7 +409,7 @@ extension TypeSyntax {
 			return .nested(
 				name: typeIdentifier.name.text,
 				parentType: typeIdentifier.baseType.typeDescription,
-				generics: genericTypeVisitor.genericArguments
+				generics: genericTypeVisitor.genericArguments,
 			)
 
 		} else if let typeIdentifiers = CompositionTypeSyntax(self) {
@@ -431,7 +431,7 @@ extension TypeSyntax {
 		} else if let typeIdentifier = MetatypeTypeSyntax(self) {
 			return .metatype(
 				typeIdentifier.baseType.typeDescription,
-				isType: typeIdentifier.metatypeSpecifier.text == "Type"
+				isType: typeIdentifier.metatypeSpecifier.text == "Type",
 			)
 
 		} else if let typeIdentifier = AttributedTypeSyntax(self) {
@@ -441,7 +441,7 @@ extension TypeSyntax {
 			return .attributed(
 				typeIdentifier.baseType.typeDescription,
 				specifiers: typeIdentifier.specifiers.textRepresentation,
-				attributes: attributes.isEmpty ? nil : attributes
+				attributes: attributes.isEmpty ? nil : attributes,
 			)
 
 		} else if let typeIdentifier = ArrayTypeSyntax(self) {
@@ -450,14 +450,14 @@ extension TypeSyntax {
 		} else if let typeIdentifier = DictionaryTypeSyntax(self) {
 			return .dictionary(
 				key: typeIdentifier.key.typeDescription,
-				value: typeIdentifier.value.typeDescription
+				value: typeIdentifier.value.typeDescription,
 			)
 
 		} else if let typeIdentifier = TupleTypeSyntax(self) {
 			let elements = typeIdentifier.elements.map {
 				TypeDescription.TupleElement(
 					label: $0.secondName?.text ?? $0.firstName?.text,
-					$0.type.typeDescription
+					$0.type.typeDescription,
 				)
 			}
 			if elements.isEmpty {
@@ -480,7 +480,7 @@ extension TypeSyntax {
 				arguments: typeIdentifier.parameters.map(\.type.typeDescription),
 				isAsync: typeIdentifier.effectSpecifiers?.asyncSpecifier != nil,
 				doesThrow: typeIdentifier.effectSpecifiers?.throwsClause?.throwsSpecifier != nil,
-				returnType: typeIdentifier.returnClause.type.typeDescription
+				returnType: typeIdentifier.returnClause.type.typeDescription,
 			)
 
 		} else {
@@ -500,8 +500,8 @@ extension ExprSyntax {
 			return TypeSyntax(
 				IdentifierTypeSyntax(
 					name: declReferenceExpr.baseName,
-					genericArgumentClause: nil
-				)
+					genericArgumentClause: nil,
+				),
 			).typeDescription
 		} else if let memberAccessExpr = MemberAccessExprSyntax(self), let base = memberAccessExpr.base {
 			let declName = memberAccessExpr.declName.baseName.text
@@ -515,7 +515,7 @@ extension ExprSyntax {
 				.nested(
 					name: declName,
 					parentType: base.typeDescription,
-					generics: []
+					generics: [],
 				)
 			}
 		} else if let genericExpr = GenericSpecializationExprSyntax(self) {
@@ -525,12 +525,12 @@ extension ExprSyntax {
 			case let .simple(name, _):
 				.simple(
 					name: name,
-					generics: genericTypeVisitor.genericArguments
+					generics: genericTypeVisitor.genericArguments,
 				)
 			case let .nested(name, parentType, _):
 				.nested(
 					name: name,
-					parentType: parentType, generics: genericTypeVisitor.genericArguments
+					parentType: parentType, generics: genericTypeVisitor.genericArguments,
 				)
 			case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
 				.unknown(text: trimmedDescription)
@@ -549,7 +549,7 @@ extension ExprSyntax {
 				.tuple(tupleElements.map {
 					TypeDescription.TupleElement(
 						label: $0.label?.text,
-						$0.expression.typeDescription
+						$0.expression.typeDescription,
 					)
 				})
 			}
@@ -559,12 +559,12 @@ extension ExprSyntax {
 					sequenceExpr
 						.elements
 						.filter { BinaryOperatorExprSyntax($0) == nil }
-						.map(\.typeDescription)
+						.map(\.typeDescription),
 				))
 			} else if sequenceExpr.elements.count == 3,
 			          let arguments = TupleExprSyntax(sequenceExpr.elements.first),
 			          let arrow = ArrowExprSyntax(sequenceExpr.elements[
-			          	sequenceExpr.elements.index(after: sequenceExpr.elements.startIndex)
+			          	sequenceExpr.elements.index(after: sequenceExpr.elements.startIndex),
 			          ]),
 			          let returnType = sequenceExpr.elements.last
 			{
@@ -572,7 +572,7 @@ extension ExprSyntax {
 					arguments: arguments.elements.map(\.expression.typeDescription),
 					isAsync: arrow.effectSpecifiers?.asyncSpecifier != nil,
 					doesThrow: arrow.effectSpecifiers?.throwsClause?.throwsSpecifier != nil,
-					returnType: returnType.typeDescription
+					returnType: returnType.typeDescription,
 				)
 			}
 		} else if let optionalChainingExpr = OptionalChainingExprSyntax(self) {
@@ -589,7 +589,7 @@ extension ExprSyntax {
 		{
 			return .dictionary(
 				key: onlyElement.key.typeDescription,
-				value: onlyElement.value.typeDescription
+				value: onlyElement.value.typeDescription,
 			)
 		}
 		return .unknown(text: trimmedDescription)

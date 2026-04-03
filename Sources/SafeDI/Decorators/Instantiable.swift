@@ -57,25 +57,12 @@
 public macro Instantiable(
 	isRoot: Bool = false,
 	fulfillingAdditionalTypes additionalTypes: [Any.Type] = [],
-	conformsElsewhere: Bool = false
+	conformsElsewhere: Bool = false,
 ) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")
 
-#if swift(>=6.2)
-
-	/// A type that can be instantiated with runtime-injected properties.
-	public protocol Instantiable: SendableMetatype {
-		/// The forwarded properties required to instantiate the type.
-		/// Defaults to `Void`.
-		associatedtype ForwardedProperties = Void
-	}
-
-#else
-
-	/// A type that can be instantiated with runtime-injected properties.
-	public protocol Instantiable {
-		/// The forwarded properties required to instantiate the type.
-		/// Defaults to `Void`.
-		associatedtype ForwardedProperties = Void
-	}
-
-#endif
+/// A type that can be instantiated with runtime-injected properties.
+public protocol Instantiable: SendableMetatype {
+	/// The forwarded properties required to instantiate the type.
+	/// Defaults to `Void`.
+	associatedtype ForwardedProperties = Void
+}

@@ -21,7 +21,6 @@
 import Foundation
 import SafeDICore
 import Testing
-
 @testable import SafeDITool
 
 func executeSafeDIToolTest(
@@ -31,7 +30,7 @@ func executeSafeDIToolTest(
 	buildDependencyTreeOutput: Bool = false,
 	buildDOTFileOutput: Bool = false,
 	filesToDelete: inout [URL],
-	includeFolders: [String] = []
+	includeFolders: [String] = [],
 ) async throws -> TestOutput {
 	let swiftFileCSV = URL.temporaryFile
 	let swiftFiles = try swiftFileContent
@@ -54,19 +53,12 @@ func executeSafeDIToolTest(
 	let dependencyTreeOutput = URL.temporaryFile.appendingPathExtension("swift")
 	let dotTreeOutput = URL.temporaryFile.appendingPathExtension("dot")
 
-	let includeFile = URL.temporaryFile.appendingPathExtension("include.csv")
-	try includeFolders.joined(separator: ",").write(to: includeFile, atomically: true, encoding: .utf8)
-	let additionalImportedModulesFile = URL.temporaryFile.appendingPathExtension("additionalImportedModules.csv")
-	try additionalImportedModules.joined(separator: ",").write(to: additionalImportedModulesFile, atomically: true, encoding: .utf8)
-
 	return try await SafeDITool.$fileFinder.withValue(StubFileFinder(files: swiftFiles)) { // Successfully execute the file finder code path.
 		var tool = SafeDITool()
 		tool.swiftSourcesFilePath = swiftFileCSV.relativePath
 		tool.showVersion = false
-		tool.include = []
-		tool.includeFilePath = !includeFolders.isEmpty ? includeFile.relativePath : nil
-		tool.additionalImportedModules = []
-		tool.additionalImportedModulesFilePath = !additionalImportedModules.isEmpty ? additionalImportedModulesFile.relativePath : nil
+		tool.include = includeFolders
+		tool.additionalImportedModules = additionalImportedModules
 		tool.moduleInfoOutput = moduleInfoOutput.relativePath
 		tool.dependentModuleInfoFilePath = dependentModuleInfoPaths.isEmpty ? nil : dependentModuleInfoFileCSV.relativePath
 		tool.dependencyTreeOutput = buildDependencyTreeOutput ? dependencyTreeOutput.relativePath : nil
@@ -87,7 +79,7 @@ func executeSafeDIToolTest(
 			moduleInfo: JSONDecoder().decode(SafeDITool.ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
 			moduleInfoOutputPath: moduleInfoOutput.relativePath,
 			dependencyTree: buildDependencyTreeOutput ? String(data: Data(contentsOf: dependencyTreeOutput), encoding: .utf8) : nil,
-			dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil
+			dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil,
 		)
 	}
 }
@@ -117,7 +109,7 @@ struct StubFileFinder: FileFinder {
 		at _: URL,
 		includingPropertiesForKeys _: [URLResourceKey]?,
 		options _: FileManager.DirectoryEnumerationOptions,
-		errorHandler _: ((URL, any Error) -> Bool)?
+		errorHandler _: ((URL, any Error) -> Bool)?,
 	) -> FileManager.DirectoryEnumerator? {
 		StubDirectoryEnumerator(files: files)
 	}
@@ -146,7 +138,7 @@ struct StubFileFinder: FileFinder {
 func assertThrowsError(
 	_ errorDescription: String,
 	sourceLocation: SourceLocation = #_sourceLocation,
-	block: () async throws -> some Sendable
+	block: () async throws -> some Sendable,
 ) async {
 	do {
 		_ = try await block()
