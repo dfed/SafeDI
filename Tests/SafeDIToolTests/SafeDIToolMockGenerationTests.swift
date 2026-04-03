@@ -7718,6 +7718,55 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	mutating func mock_uncoveredDepEvaluatedBeforePassingToUserMock() async throws {
+		// Root @Instantiates AdService which has a user-defined mock(engine:).
+		// engine comes from a parallel module (uncovered dep).
+		// The autoclosure must be evaluated before passing to .mock().
+		let crossModuleOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Engine: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Root: Instantiable {
+				    public init(adService: AdService) { self.adService = adService }
+				    @Instantiated let adService: AdService
+				}
+				""",
+				"""
+				@Instantiable
+				public struct AdService: Instantiable {
+				    public init(engine: Engine) { self.engine = engine }
+				    @Instantiated let engine: Engine
+				    public static func mock(engine: Engine) -> AdService {
+				        AdService(engine: engine)
+				    }
+				}
+				""",
+			],
+			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
+		// engine must be evaluated before passing to .mock()
+		#expect(rootMock.contains("let engine = engine()"), "engine autoclosure must be evaluated before .mock() call \(rootMock)")
+		#expect(rootMock.contains("AdService.mock(engine: engine)"), "evaluated engine must be passed to .mock() \(rootMock)")
+	}
+
+	@Test
 	mutating func mock_defaultValuedParametersFromMultipleLevelsAllAppearAtRoot() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
