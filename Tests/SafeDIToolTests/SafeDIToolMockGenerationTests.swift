@@ -8651,7 +8651,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_crossModuleDepWithSafediIsOptionalParameter() async throws {
+	mutating func mock_crossModuleDependencyWithModuleInfoIsOptionalParameter() async throws {
 		// CrossModuleService is provided via .safedi — constructible, optional parameter.
 		let crossModuleOutput = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -8827,7 +8827,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_userMockDepIsFulfillable_optionalParameterWithTreeDefault() async throws {
+	mutating func mock_userMockDependencyIsOptionalParameterWhenFulfillableFromTree() async throws {
 		// Child has a user-defined mock() with a dep that IS constructible.
 		// The dep should be an optional parameter with tree construction as default.
 		let output = try await executeSafeDIToolTest(
@@ -8890,7 +8890,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_userMockDepIsNotFulfillable_requiredParameter() async throws {
+	mutating func mock_userMockDependencyBecomesRequiredParameterWhenNotFulfillable() async throws {
 		// Child has a user-defined mock() with a dep from a dependent module.
 		// The dep is constructible (via .safedi) but from another module.
 		// It should be an optional parameter (constructible from .safedi).
@@ -8961,7 +8961,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_userMockOnlyIfAvailableDepNotFulfillable_optionalParameterWithNilDefault() async throws {
+	mutating func mock_userMockOnlyIfAvailableDependencyUsesNilDefaultWhenNotFulfillable() async throws {
 		// Child has @Received(onlyIfAvailable: true) dep. The mock() has it as optional.
 		// At the root, it should be an optional parameter with nil default.
 		let output = try await executeSafeDIToolTest(
@@ -9198,7 +9198,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: - Scope and ordering tests
 
 	@Test
-	mutating func mock_receivedDepGetRootBindingWhenCreatedBySiblingInstantiator() async throws {
+	mutating func mock_receivedDependencyGetsRootBindingWhenCreatedBySiblingInstantiator() async throws {
 		// ChildA @Instantiates shared in its subtree. ChildB @Receives it.
 		// shared is promoted to root. Root binding must exist so ChildB's
 		// sibling function can capture it — even though ChildA also creates
