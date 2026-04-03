@@ -865,8 +865,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var rootBoundParameters = Set<MockParameterIdentifier>()
 		for declaration in allDeclarations {
 			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
-			if declaration.defaultValueExpression == nil {
-				// Tree children and uncovered dependencies — all get root-level bindings.
+			if declaration.defaultValueExpression == nil,
+			   declaration.hasSubtree || declaration.defaultConstruction != nil
+			{
+				// Tree children — get root-level bindings via generatePropertyCode.
 				rootBoundParameters.insert(declaration.identifier)
 			} else if rootBindingIdentifiers.contains(declaration.identifier) {
 				rootBoundParameters.insert(declaration.identifier)

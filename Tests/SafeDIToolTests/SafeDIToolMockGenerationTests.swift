@@ -8334,7 +8334,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        adService: AdService? = nil,
 		        parallelModuleType: @autoclosure @escaping () -> ParallelModuleType
 		    ) -> Root {
-		        let adService = adService ?? AdService(parallelModuleType: parallelModuleType)
+		        func __safeDI_adService() -> AdService {
+		            let parallelModuleType = parallelModuleType()
+		            return AdService(parallelModuleType: parallelModuleType)
+		        }
+		        let adService: AdService = adService ?? __safeDI_adService()
 		        return Root(adService: adService)
 		    }
 		}
@@ -8586,6 +8590,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        service_LocalService: @autoclosure @escaping () -> LocalService = LocalService()
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
+		            let service = service_ExternalService()
 		            func __safeDI_grandchild() -> Grandchild {
 		                let service = service_LocalService()
 		                return Grandchild(service: service)
