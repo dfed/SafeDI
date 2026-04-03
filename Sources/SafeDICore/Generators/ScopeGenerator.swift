@@ -749,6 +749,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					defaultValueExpression: nil,
 					hasSubtree: false,
 					defaultConstruction: nil,
+					sourceTypeDescription: dependency.property.propertyType.isConstant
+						? dependency.property.typeDescription.asInstantiatedType
+						: dependency.property.typeDescription,
 					isClosureType: false,
 				))
 				rootBindingIdentifiers.insert(dependencyIdentifier)
@@ -805,6 +808,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				defaultValueExpression: nil,
 				hasSubtree: false,
 				defaultConstruction: isOnlyIfAvailable ? "nil" : nil,
+				sourceTypeDescription: isOnlyIfAvailable && !receivedProperty.typeDescription.isOptional
+					? .optional(receivedProperty.typeDescription)
+					: receivedProperty.typeDescription,
 				isClosureType: false,
 			))
 			rootBindingIdentifiers.insert(MockParameterIdentifier(propertyLabel: receivedProperty.label, sourceType: receivedSourceType))
@@ -821,6 +827,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				defaultValueExpression: nil,
 				hasSubtree: false,
 				defaultConstruction: nil,
+				sourceTypeDescription: dependency.property.typeDescription.asFunctionParameter,
 				isClosureType: false,
 			)
 		}
@@ -844,6 +851,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					defaultValueExpression: defaultExpr,
 					hasSubtree: false,
 					defaultConstruction: defaultExpr,
+					sourceTypeDescription: argument.typeDescription.strippingEscaping,
 					isClosureType: argument.typeDescription.strippingEscaping.isClosure,
 				))
 				rootDefaultIdentifiers.insert(allDeclarations[allDeclarations.count - 1].identifier)
@@ -1015,6 +1023,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			MockParameterIdentifier(propertyLabel: propertyLabel, sourceType: sourceType)
 		}
 
+		/// The structured type description, used for generating disambiguation suffixes.
+		let sourceTypeDescription: TypeDescription
 		/// Whether the source type is a closure/function type. Closure-typed defaults use
 		/// `@escaping T = default` instead of `@autoclosure @escaping () -> T = default`.
 		let isClosureType: Bool
@@ -1070,6 +1080,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							defaultValueExpression: argument.defaultValueExpression,
 							hasSubtree: false,
 							defaultConstruction: argument.defaultValueExpression,
+							sourceTypeDescription: argument.typeDescription.strippingEscaping,
 							isClosureType: argument.typeDescription.strippingEscaping.isClosure,
 						))
 					}
@@ -1100,6 +1111,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						defaultValueExpression: nil,
 						hasSubtree: false,
 						defaultConstruction: nil,
+						sourceTypeDescription: dependency.property.typeDescription.asInstantiatedType,
 						isClosureType: false,
 					))
 				}
@@ -1139,6 +1151,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				defaultValueExpression: nil,
 				hasSubtree: needsInlineConstruction,
 				defaultConstruction: defaultConstruction,
+				sourceTypeDescription: isInstantiator
+					? childProperty.typeDescription
+					: childProperty.typeDescription.asInstantiatedType,
 				isClosureType: false,
 			))
 		}
@@ -1164,7 +1179,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			      let count = labelCounts[declaration.parameterLabel],
 			      count > 1
 			else { return declaration }
-			let suffix = Self.sanitizeForIdentifier(declaration.sourceType)
+			let suffix = declaration.sourceTypeDescription.asIdentifier
 			return MockDeclaration(
 				propertyLabel: declaration.propertyLabel,
 				parameterLabel: "\(declaration.parameterLabel)_\(suffix)",
@@ -1174,6 +1189,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				defaultValueExpression: declaration.defaultValueExpression,
 				hasSubtree: declaration.hasSubtree,
 				defaultConstruction: declaration.defaultConstruction,
+				sourceTypeDescription: declaration.sourceTypeDescription,
 				isClosureType: false,
 			)
 		}
@@ -1249,28 +1265,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		} else {
 			code
 		}
-	}
-
-	static func sanitizeForIdentifier(_ typeName: String) -> String {
-		typeName
-			// Replace empty argument list before parens are stripped.
-			.replacingOccurrences(of: "()", with: "Void")
-			// Arrow before angle bracket close — `>` in `->` must not be stripped first.
-			.replacingOccurrences(of: "->", with: "_to_")
-			.replacingOccurrences(of: "<", with: "__")
-			.replacingOccurrences(of: ">", with: "")
-			.replacingOccurrences(of: ", ", with: "_")
-			.replacingOccurrences(of: ",", with: "_")
-			.replacingOccurrences(of: ".", with: "_")
-			.replacingOccurrences(of: "[", with: "Array_")
-			.replacingOccurrences(of: "]", with: "")
-			.replacingOccurrences(of: ":", with: "_")
-			.replacingOccurrences(of: "(", with: "")
-			.replacingOccurrences(of: ")", with: "")
-			.replacingOccurrences(of: "&", with: "_and_")
-			.replacingOccurrences(of: "?", with: "_Optional")
-			.replacingOccurrences(of: "@", with: "")
-			.replacingOccurrences(of: " ", with: "")
 	}
 
 	// MARK: GenerationError

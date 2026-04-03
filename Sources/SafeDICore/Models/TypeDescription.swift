@@ -289,6 +289,62 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// A valid Swift identifier fragment derived from this type's structure.
+	/// Used as a disambiguation suffix in generated mock parameter names.
+	public var asIdentifier: String {
+		switch self {
+		case .void:
+			return "Void"
+		case let .simple(name, generics):
+			return if generics.isEmpty {
+				name
+			} else {
+				"\(name)_\(generics.map(\.asIdentifier).joined(separator: "_"))"
+			}
+		case let .nested(name, parentType, generics):
+			return if generics.isEmpty {
+				"\(parentType.asIdentifier)_\(name)"
+			} else {
+				"\(parentType.asIdentifier)_\(name)_\(generics.map(\.asIdentifier).joined(separator: "_"))"
+			}
+		case let .composition(types):
+			return types.map(\.asIdentifier).joined(separator: "_and_")
+		case let .optional(type):
+			return "\(type.asIdentifier)_Optional"
+		case let .implicitlyUnwrappedOptional(type):
+			return "\(type.asIdentifier)_Optional"
+		case let .some(type):
+			return "some_\(type.asIdentifier)"
+		case let .any(type):
+			return "any_\(type.asIdentifier)"
+		case let .metatype(type, isType):
+			return "\(type.asIdentifier)_\(isType ? "Type" : "Protocol")"
+		case let .attributed(type, specifiers, attributes):
+			let prefix = [
+				specifiers?.joined(separator: "_"),
+				attributes?.joined(separator: "_"),
+			].compactMap(\.self).joined(separator: "_")
+			return if prefix.isEmpty {
+				type.asIdentifier
+			} else {
+				"\(prefix)_\(type.asIdentifier)"
+			}
+		case let .array(element):
+			return "Array_\(element.asIdentifier)"
+		case let .dictionary(key, value):
+			return "Dictionary_\(key.asIdentifier)_\(value.asIdentifier)"
+		case let .tuple(elements):
+			return elements.map(\.typeDescription.asIdentifier).joined(separator: "_")
+		case let .closure(arguments, isAsync, doesThrow, returnType):
+			let args = arguments.isEmpty ? "Void" : arguments.map(\.asIdentifier).joined(separator: "_")
+			let modifiers = [isAsync ? "async" : nil, doesThrow ? "throws" : nil].compactMap(\.self)
+			let parts = [args] + modifiers + ["to", returnType.asIdentifier]
+			return parts.joined(separator: "_")
+		case let .unknown(text):
+			return text.filter(\.isLetter)
+		}
+	}
+
 	/// Strips the `@escaping` attribute, if present. Returns `self` unchanged for non-attributed types.
 	/// Used when a type will appear in a position where `@escaping` is invalid (e.g., closure return types).
 	public var strippingEscaping: TypeDescription {

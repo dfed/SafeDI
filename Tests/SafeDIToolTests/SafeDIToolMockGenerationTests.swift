@@ -3652,13 +3652,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        childA: ChildA? = nil,
 		        childB_ChildB: @autoclosure @escaping () -> ChildB = ChildB(),
-		        childB_Instantiator__Other: Instantiator<Other>? = nil
+		        childB_Instantiator_Other: Instantiator<Other>? = nil
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
 		            func __safeDI_childB() -> Other {
 		                Other()
 		            }
-		            let childB = childB_Instantiator__Other ?? Instantiator<Other>(__safeDI_childB)
+		            let childB = childB_Instantiator_Other ?? Instantiator<Other>(__safeDI_childB)
 		            return ChildA(childB: childB)
 		        }
 		        let childA: ChildA = childA ?? __safeDI_childA()
