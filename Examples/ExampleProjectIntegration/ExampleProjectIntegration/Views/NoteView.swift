@@ -63,7 +63,7 @@ public struct NoteView: Instantiable, View {
 	#Preview {
 		NoteView.mock(
 			userName: "dfed",
-			defaultNote: { _ in "dfed says hello" },
+			defaultNote: "dfed says hello",
 		)
 	}
 #endif

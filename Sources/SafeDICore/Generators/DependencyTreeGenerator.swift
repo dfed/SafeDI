@@ -129,7 +129,6 @@ public actor DependencyTreeGenerator {
 				taskGroup.addTask {
 					let code = try await mockRoot.generateCode(
 						codeGeneration: .mock(ScopeGenerator.MockContext(
-							path: [],
 							mockConditionalCompilation: mockConditionalCompilation,
 						)),
 					)

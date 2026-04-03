@@ -502,31 +502,27 @@ Your user-defined `mock()` method must be `public` (or `open`) and must accept p
 #endif
 ```
 
-Every dependency in the tree can be overridden via optional closure parameters:
+Every dependency in the tree can be overridden via parameters:
 
 ```swift
 let view = MyView.mock(
-    sharedThing: { _ in CustomSharedThing() }
+    sharedThing: CustomSharedThing()
 )
 ```
 
-### Path enums
-
-Each `@Instantiable` type with dependencies gets a `SafeDIMockPath` enum containing nested enums per dependency type. The enum is named after the type, and each case describes where in the tree that dependency is created:
-
-- `case root` — the dependency is created at the top level of the mock
-- `case childA` — the dependency is created inside the `childA` property's scope
-
-This lets you differentiate when the same type is instantiated at multiple tree locations:
+Dependencies that require inline construction (e.g., types with their own subtrees) use optional parameters:
 
 ```swift
 let root = Root.mock(
-    cache: { path in
-        switch path {
-        case .root: return Cache(size: 100)
-        case .childA: return Cache(size: 200)
-        }
-    }
+    child: CustomChild()  // Override entire child with a pre-built instance
+)
+```
+
+Leaf dependencies use `@autoclosure` parameters with a default construction:
+
+```swift
+let root = Root.mock(
+    cache: Cache(size: 200)  // Override the default Cache()
 )
 ```
 
@@ -552,11 +548,11 @@ public struct ProfileView: Instantiable {
 }
 ```
 
-The generated mock for a parent that instantiates `ProfileView` will include `showDebugInfo` as an optional closure parameter:
+The generated mock for a parent that instantiates `ProfileView` will include `showDebugInfo` as an `@autoclosure` parameter with the original default:
 
 ```swift
 let root = Root.mock(
-    showDebugInfo: { _ in true }  // Override the default
+    showDebugInfo: true  // Override the default
 )
 ```
 

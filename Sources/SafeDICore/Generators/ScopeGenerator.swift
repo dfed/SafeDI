@@ -280,25 +280,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Context for mock code generation, threaded through the tree.
 	struct MockContext {
-		/// Accumulated path segments for SafeDIMockPath case names.
-		let path: [String]
 		/// The conditional compilation flag for wrapping mock output (e.g. "DEBUG").
 		let mockConditionalCompilation: String?
-		/// Override parameter label when disambiguated (differs from property.label).
-		let overrideParameterLabel: String?
-		/// Maps property labels to disambiguated mock parameter labels for all declarations.
-		let propertyToParameterLabel: [String: String]
+		/// Maps "propertyLabel:sourceType" to disambiguated parameter labels.
+		let parameterLabelMap: [String: String]
 
 		init(
-			path: [String],
 			mockConditionalCompilation: String?,
-			overrideParameterLabel: String? = nil,
-			propertyToParameterLabel: [String: String] = [:],
+			parameterLabelMap: [String: String] = [:],
 		) {
-			self.path = path
 			self.mockConditionalCompilation = mockConditionalCompilation
-			self.overrideParameterLabel = overrideParameterLabel
-			self.propertyToParameterLabel = propertyToParameterLabel
+			self.parameterLabelMap = parameterLabelMap
 		}
 	}
 
@@ -360,18 +352,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) async throws -> [String] {
 		var generatedProperties = [String]()
 		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
-			let childCodeGeneration: CodeGeneration = switch codeGeneration {
-			case .dependencyTree:
-				.dependencyTree
-			case let .mock(context):
-				childMockCodeGeneration(
-					forChildLabel: childGenerator.property?.label,
-					parentContext: context,
-				)
-			}
 			try await generatedProperties.append(
 				childGenerator.generateCode(
-					codeGeneration: childCodeGeneration,
+					codeGeneration: codeGeneration,
 					propertiesAlreadyGeneratedAtThisScope: .init(orderedPropertiesToGenerate[0..<index].compactMap(\.property)),
 					leadingWhitespace: leadingMemberWhitespace,
 				),
@@ -549,10 +532,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					\(functionDeclaration)\(propertyDeclaration) = \(instantiatorInstantiation)
 					"""
 				case let .mock(context):
-					let pathCaseName = context.path.isEmpty ? "root" : context.path.joined(separator: "_")
-					let derivedPropertyLabel = context.overrideParameterLabel ?? property.label
+					let sourceType = property.typeDescription.asSource
+					let key = "\(property.label):\(sourceType)"
+					let parameterLabel = context.parameterLabelMap[key] ?? property.label
 					return """
-					\(functionDeclaration)\(propertyDeclaration) = \(derivedPropertyLabel)?(.\(pathCaseName)) ?? \(instantiatorInstantiation)
+					\(functionDeclaration)\(propertyDeclaration) = \(parameterLabel) ?? \(instantiatorInstantiation)
 					"""
 				}
 			case .constant:
@@ -562,8 +546,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 
 				// In mock mode, generate bindings for:
-				// 1. Default-valued init parameters (resolves override closure or falls back to default)
-				// 2. Uncovered @Instantiated deps (evaluates the required closure parameter)
+				// 1. Default-valued init parameters (evaluates @autoclosure parameter)
+				// 2. Uncovered @Instantiated deps (evaluates required @autoclosure parameter)
 				// Wrapping in a function scopes the bindings to avoid name collisions between siblings.
 				let mockExtraBindings: [String] = switch codeGeneration {
 				case .dependencyTree:
@@ -571,13 +555,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				case let .mock(context):
 					Self.defaultValueBindings(
 						for: instantiable,
-						path: context.path + [property.label],
-						propertyToParameterLabel: context.propertyToParameterLabel,
+						parameterLabelMap: context.parameterLabelMap,
 					) + Self.uncoveredDepBindings(
 						for: instantiable,
 						declaredProperties: propertiesToDeclare,
-						path: context.path + [property.label],
-						propertyToParameterLabel: context.propertyToParameterLabel,
+						parameterLabelMap: context.parameterLabelMap,
 					)
 				}
 
@@ -618,21 +600,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					"\(functionName)()"
 				}
 
-				// Mock mode: wrap the binding with an override closure.
-				// When erasedToConcreteExistential, wrap the default in the erased type
-				// so the ?? operator has matching types on both sides.
 				switch codeGeneration {
 				case .dependencyTree:
 					return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 				case let .mock(context):
-					let pathCaseName = context.path.isEmpty ? "root" : context.path.joined(separator: "_")
-					let derivedPropertyLabel = context.overrideParameterLabel ?? property.label
-					let mockInitializer = if erasedToConcreteExistential, !generatedProperties.isEmpty {
-						"\(property.typeDescription.asSource)(\(initializer))"
+					let sourceType = property.typeDescription.asInstantiatedType.asSource
+					let key = "\(property.label):\(sourceType)"
+					let parameterLabel = context.parameterLabelMap[key] ?? property.label
+					if hasGeneratedContent {
+						// Subtree: use optional ?? inline fallback
+						let mockInitializer = if erasedToConcreteExistential {
+							"\(property.typeDescription.asSource)(\(initializer))"
+						} else {
+							initializer
+						}
+						return "\(functionDeclaration)\(propertyDeclaration) = \(parameterLabel) ?? \(mockInitializer)\n"
 					} else {
-						initializer
+						// Leaf: evaluate @autoclosure parameter
+						return "\(propertyDeclaration) = \(parameterLabel)()\n"
 					}
-					return "\(functionDeclaration)\(propertyDeclaration) = \(derivedPropertyLabel)?(.\(pathCaseName)) ?? \(mockInitializer)\n"
 				}
 			}
 		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
@@ -665,45 +651,33 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.sorted { $0.property < $1.property }
 
 		// Collect all declarations from the dependency tree.
-		// Received dependencies whose type is @Instantiable are in the tree.
-		var allDeclarations = await collectMockDeclarations(path: [])
+		var allDeclarations = await collectMockDeclarations()
 
-		// Find dependencies not covered by the tree. This includes:
-		// - @Instantiated dependencies whose type is not in the scope map (e.g., defined
-		//   in another module not visible to this module's mock generator)
-		// - Received dependencies (including transitive) whose type is not constructible
-		// These become mock parameters so the user can provide them.
-		// Only root-level tree declarations suppress uncovered root dependencies.
-		// Nested declarations (from children) may share a label with a root dependency
-		// but refer to a different type — those must not suppress the root one.
-		let coveredRootPropertyLabels = Set(
-			allDeclarations
-				.filter { $0.pathCaseName == "root" }
-				.map(\.propertyLabel),
+		// Find dependencies not covered by the tree.
+		let coveredRootLabelsWithTypes = Set(
+			allDeclarations.map { "\($0.propertyLabel):\($0.sourceType)" },
 		)
 		var uncoveredProperties = [(property: Property, isOnlyIfAvailable: Bool)]()
 
 		// Check this type's own dependencies for uncovered @Instantiated dependencies.
-		// This handles types that are @Instantiable in another module but not visible here.
 		for dependency in instantiable.dependencies {
-			guard !coveredRootPropertyLabels.contains(dependency.property.label) else { continue }
 			switch dependency.source {
 			case .instantiated:
 				let dependencyType = dependency.property.typeDescription.asInstantiatedType
-				let enumName = Self.sanitizeForIdentifier(dependencyType.asSource)
 				let sourceType = dependency.property.propertyType.isConstant
 					? dependencyType.asSource
 					: dependency.property.typeDescription.asSource
+				let depKey = "\(dependency.property.label):\(sourceType)"
+				guard !coveredRootLabelsWithTypes.contains(depKey) else { continue }
 				allDeclarations.append(MockDeclaration(
-					enumName: enumName,
 					propertyLabel: dependency.property.label,
 					parameterLabel: dependency.property.label,
 					sourceType: sourceType,
-					isOptionalParameter: false,
-					pathCaseName: "root",
 					isForwarded: false,
 					requiresSendable: false,
 					defaultValueExpression: nil,
+					hasSubtree: false,
+					defaultConstruction: nil,
 				))
 				uncoveredProperties.append((property: dependency.property, isOnlyIfAvailable: false))
 			case .received, .aliased, .forwarded:
@@ -712,29 +686,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// Check transitive received dependencies not satisfied by the tree.
-		// Skip forwarded properties — they're bare mock parameters, not promoted children.
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
-		// Only root-level declarations suppress received property bindings.
-		// Nested declarations (pathCaseName != "root") live inside function scopes
-		// and can't satisfy root-level consumers — they shadow, not replace.
-		let updatedCoveredLabels = coveredRootPropertyLabels.union(
+		let updatedCoveredLabels = Set(
 			allDeclarations
-				.filter { $0.pathCaseName == "root" && $0.defaultValueExpression == nil }
+				.filter { $0.defaultValueExpression == nil }
 				.map(\.propertyLabel),
 		)
-		// Unwrapped forms of Optional received properties. Used to distinguish a required
-		// non-optional property from an aliased onlyIfAvailable non-optional one.
-		// Matching by unwrapped Property (label + type) avoids false collisions when
-		// unrelated types share a label (e.g., `service: ConcreteService` aliased
-		// onlyIfAvailable vs `service: ServiceProtocol?` Optional received).
 		let unwrappedOptionalCounterparts = Set(
 			receivedProperties
 				.filter(\.typeDescription.isOptional)
 				.map(\.asUnwrappedProperty),
 		)
-		// When both `user: User` (required) and `user: User?` (onlyIfAvailable) are received,
-		// only the non-optional version should produce a parameter and binding.
-		// The optional path uses the same value (Swift auto-wraps to Optional).
 		let receivedLabelsWithNonOptionalVersion = Set(
 			receivedProperties
 				.filter { !$0.typeDescription.isOptional }
@@ -745,18 +707,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			      !forwardedPropertySet.contains(receivedProperty)
 			else { continue }
 
-			// Skip optional properties when a non-optional version with the same label exists.
-			// The non-optional version subsumes it — Swift auto-wraps for optional paths.
 			guard !receivedProperty.typeDescription.isOptional
 				|| !receivedLabelsWithNonOptionalVersion.contains(receivedProperty.label)
 			else { continue }
 
-			// A property is onlyIfAvailable if:
-			// (a) it's Optional and tracked as onlyIfAvailable (standard @Received case), OR
-			// (b) it's non-optional, has no Optional counterpart with the same unwrapped type,
-			//     and is tracked as onlyIfAvailable (aliased case where fulfilling type is
-			//     non-optional). Matching by unwrapped Property identity (not just label)
-			//     avoids false collisions when unrelated types share a label.
 			let isOnlyIfAvailable = (receivedProperty.typeDescription.isOptional
 				&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty))
 				|| (!receivedProperty.typeDescription.isOptional
@@ -764,59 +718,58 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty))
 				|| unavailableOptionalProperties.contains(receivedProperty)
 
-			let receivedType = receivedProperty.typeDescription.asInstantiatedType
-			let enumName = Self.sanitizeForIdentifier(receivedType.asSource)
+			// For onlyIfAvailable, ensure sourceType is Optional so the autoclosure returns T?.
+			let receivedSourceType: String = if isOnlyIfAvailable, !receivedProperty.typeDescription.isOptional {
+				"\(receivedProperty.typeDescription.asSource)?"
+			} else {
+				receivedProperty.typeDescription.asSource
+			}
+
 			allDeclarations.append(MockDeclaration(
-				enumName: enumName,
 				propertyLabel: receivedProperty.label,
 				parameterLabel: receivedProperty.label,
-				sourceType: receivedProperty.typeDescription.asSource,
-				isOptionalParameter: isOnlyIfAvailable,
-				pathCaseName: "root",
+				sourceType: receivedSourceType,
 				isForwarded: false,
 				requiresSendable: false,
 				defaultValueExpression: nil,
+				hasSubtree: false,
+				defaultConstruction: isOnlyIfAvailable ? "nil" : nil,
 			))
 			uncoveredProperties.append((property: receivedProperty, isOnlyIfAvailable: isOnlyIfAvailable))
 		}
 
 		// Add forwarded dependencies as bare parameter declarations.
-		// Use asFunctionParameter to add @escaping for closure types.
 		let forwardedDeclarations = forwardedDependencies.map { dependency in
 			MockDeclaration(
-				enumName: dependency.property.label,
 				propertyLabel: dependency.property.label,
 				parameterLabel: dependency.property.label,
 				sourceType: dependency.property.typeDescription.asFunctionParameter.asSource,
-				isOptionalParameter: false,
-				pathCaseName: "",
 				isForwarded: true,
 				requiresSendable: false,
 				defaultValueExpression: nil,
+				hasSubtree: false,
+				defaultConstruction: nil,
 			)
 		}
 
 		// Collect the root type's own default-valued init parameters.
-		// These are init arguments that have defaults and don't match any dependency.
 		if let rootInitializer = instantiable.initializer {
 			let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
 			for argument in rootInitializer.arguments {
 				guard argument.hasDefaultValue,
 				      !dependencyLabels.contains(argument.innerLabel),
-				      argument.defaultValueExpression != nil
+				      let defaultExpr = argument.defaultValueExpression
 				else { continue }
 				let strippedType = argument.typeDescription.strippingEscaping
-				let argEnumName = Self.sanitizeForIdentifier(strippedType.asInstantiatedType.asSource)
 				allDeclarations.append(MockDeclaration(
-					enumName: argEnumName,
 					propertyLabel: argument.innerLabel,
 					parameterLabel: argument.innerLabel,
 					sourceType: strippedType.asSource,
-					isOptionalParameter: true,
-					pathCaseName: "root",
 					isForwarded: false,
 					requiresSendable: false,
-					defaultValueExpression: argument.defaultValueExpression,
+					defaultValueExpression: defaultExpr,
+					hasSubtree: false,
+					defaultConstruction: defaultExpr,
 				))
 			}
 		}
@@ -827,8 +780,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableOptionalProperties,
 				forMockGeneration: true,
 			)
-			// Types with user-defined mock methods are skipped in generateMockCode,
-			// so this path only handles types without mock initializers.
 			let construction = if instantiable.declarationType.isExtension {
 				"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
 			} else {
@@ -844,57 +795,40 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
 		}
 
-		// Disambiguate duplicate enum names and parameter labels.
-		// Forwarded declarations participate in collision detection but aren't renamed.
-		disambiguateEnumNames(&allDeclarations)
+		// Deduplicate declarations with same (parameterLabel, sourceType).
+		var seenKeys = Set<String>()
+		allDeclarations = allDeclarations.filter { declaration in
+			guard !declaration.isForwarded else { return true }
+			let key = "\(declaration.parameterLabel):\(declaration.sourceType)"
+			return seenKeys.insert(key).inserted
+		}
+
+		// Disambiguate duplicate parameter labels.
 		disambiguateParameterLabels(&allDeclarations, forwardedDeclarations: forwardedDeclarations)
 
-		// Build a mapping from (pathCaseName, propertyLabel) → disambiguated parameter label.
-		// Only includes entries where disambiguation changed the label.
-		// Keyed by "pathCaseName/propertyLabel" to handle same propertyLabel at different paths.
-		var propertyToParameterLabel = [String: String]()
+		// Build parameterLabelMap for body bindings.
+		var parameterLabelMap = [String: String]()
 		for declaration in allDeclarations where !declaration.isForwarded {
-			if declaration.parameterLabel != declaration.propertyLabel {
-				let key = "\(declaration.pathCaseName)/\(declaration.propertyLabel)"
-				propertyToParameterLabel[key] = declaration.parameterLabel
-			}
+			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
+			parameterLabelMap[key] = declaration.parameterLabel
 		}
-
-		// Deduplicate by enumName (same type at multiple paths → one enum with multiple cases).
-		var enumNameToDeclarations = OrderedDictionary<String, [MockDeclaration]>()
-		for declaration in allDeclarations where !declaration.isForwarded {
-			enumNameToDeclarations[declaration.enumName, default: []].append(declaration)
-		}
-
-		// Build SafeDIMockPath enum.
-		let indent = Self.standardIndent
-		var enumLines = [String]()
-		enumLines.append("\(indent)public enum SafeDIMockPath {")
-		for (enumName, declarations) in enumNameToDeclarations.sorted(by: { $0.key < $1.key }) {
-			let cases = declarations.map(\.pathCaseName).uniqued()
-			let casesString = cases.map { "case \($0)" }.joined(separator: "; ")
-			enumLines.append("\(indent)\(indent)public enum \(enumName) { \(casesString) }")
-		}
-		enumLines.append("\(indent)}")
 
 		// Build mock method parameters.
+		let indent = Self.standardIndent
 		var parameters = [String]()
 		for declaration in forwardedDeclarations {
 			parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)")
 		}
-		for (enumName, declarations) in enumNameToDeclarations.sorted(by: { $0.key < $1.key }) {
-			let sendablePrefix = declarations.contains(where: \.requiresSendable) ? "@Sendable " : ""
-			// Multiple declarations may share the same enum type but have different parameter labels
-			// (e.g., installScopedDefaultsService and userScopedDefaultsService both typed UserDefaultsService).
-			// Each unique parameter label gets its own mock parameter.
-			var seenParameterLabels = Set<String>()
-			for declaration in declarations.sorted(by: { $0.parameterLabel < $1.parameterLabel }) {
-				guard seenParameterLabels.insert(declaration.parameterLabel).inserted else { continue }
-				if declaration.isOptionalParameter {
-					parameters.append("\(indent)\(indent)\(declaration.parameterLabel): (\(sendablePrefix)(SafeDIMockPath.\(enumName)) -> \(declaration.sourceType))? = nil")
-				} else {
-					parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(sendablePrefix)@escaping (SafeDIMockPath.\(enumName)) -> \(declaration.sourceType)")
-				}
+		for declaration in allDeclarations.sorted(by: { $0.parameterLabel < $1.parameterLabel }) {
+			guard !declaration.isForwarded else { continue }
+			let sendablePrefix = declaration.requiresSendable ? "@Sendable " : ""
+			if declaration.hasSubtree {
+				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)? = nil")
+			} else if let defaultExpr = declaration.defaultConstruction {
+				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(sendablePrefix)@autoclosure @escaping () -> \(declaration.sourceType) = \(defaultExpr)")
+			} else {
+				// Required autoclosure (uncovered dep).
+				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(sendablePrefix)@autoclosure @escaping () -> \(declaration.sourceType)")
 			}
 		}
 		let parametersString = parameters.joined(separator: ",\n")
@@ -902,12 +836,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Build the mock method body.
 		let bodyIndent = "\(indent)\(indent)"
 
-		// Generate all dependency bindings via recursive generateProperties.
-		// Received dependencies are in the tree (built by createMockRootScopeGenerator).
 		let bodyContext = MockContext(
-			path: context.path,
 			mockConditionalCompilation: context.mockConditionalCompilation,
-			propertyToParameterLabel: propertyToParameterLabel,
+			parameterLabelMap: parameterLabelMap,
 		)
 		let propertyLines = try await generateProperties(
 			codeGeneration: .mock(bodyContext),
@@ -919,8 +850,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			unavailableProperties: unavailableOptionalProperties,
 			forMockGeneration: true,
 		)
-		// Types with user-defined mock methods are skipped in generateMockCode,
-		// so this path only handles types without mock initializers.
 		let construction = if instantiable.declarationType.isExtension {
 			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
 		} else {
@@ -929,32 +858,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		var lines = [String]()
 		lines.append("extension \(typeName) {")
-		lines.append(contentsOf: enumLines)
-		lines.append("")
 		lines.append("\(indent)\(mockAttributesPrefix)public static func mock(")
 		lines.append(parametersString)
 		lines.append("\(indent)) -> \(typeName) {")
-		// Bindings for uncovered dependencies.
-		// Use the disambiguated parameter name when the label was changed by disambiguation.
+		// Bindings for uncovered dependencies and root default-valued params.
 		for uncovered in uncoveredProperties {
-			let parameterName = propertyToParameterLabel["root/\(uncovered.property.label)"] ?? uncovered.property.label
-			if uncovered.isOnlyIfAvailable {
-				// Optional: evaluates to nil if not provided by the user.
-				lines.append("\(bodyIndent)let \(uncovered.property.label) = \(parameterName)?(.root)")
-			} else {
-				// Required: user must provide the closure.
-				lines.append("\(bodyIndent)let \(uncovered.property.label) = \(parameterName)(.root)")
-			}
+			let key = "\(uncovered.property.label):\(uncovered.property.typeDescription.asSource)"
+			let parameterName = parameterLabelMap[key] ?? uncovered.property.label
+			lines.append("\(bodyIndent)let \(uncovered.property.label) = \(parameterName)()")
 		}
-		// Bindings for root's own default-valued init parameters.
-		// Uses `if let ... else` instead of `??` so that closure literals in the else branch
-		// inherit the correct type context (@MainActor, @Sendable, etc.) from the binding.
 		for declaration in allDeclarations {
-			guard let defaultExpr = declaration.defaultValueExpression,
-			      declaration.pathCaseName == "root"
+			guard declaration.defaultValueExpression != nil,
+			      !uncoveredProperties.contains(where: { $0.property.label == declaration.propertyLabel })
 			else { continue }
-			let parameterName = propertyToParameterLabel["root/\(declaration.propertyLabel)"] ?? declaration.parameterLabel
-			lines.append("\(bodyIndent)let \(declaration.propertyLabel): \(declaration.sourceType) = if let \(declaration.propertyLabel) = \(parameterName)?(.root) { \(declaration.propertyLabel) } else { \(defaultExpr) }")
+			let parameterName = parameterLabelMap["\(declaration.propertyLabel):\(declaration.sourceType)"] ?? declaration.parameterLabel
+			lines.append("\(bodyIndent)let \(declaration.propertyLabel) = \(parameterName)()")
 		}
 		lines.append(contentsOf: propertyLines)
 		lines.append("\(bodyIndent)return \(construction)")
@@ -967,79 +885,54 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// A mock declaration collected from the tree.
 	private struct MockDeclaration {
-		let enumName: String
 		/// The original property label from the init (before disambiguation).
 		let propertyLabel: String
 		/// The parameter label used in the mock() signature (may be disambiguated).
 		var parameterLabel: String
 		let sourceType: String
-		/// Whether this parameter is optional (`= nil`) in the mock signature.
-		/// True when the dependency is covered by the tree (has a default inline construction)
-		/// or is onlyIfAvailable.
-		/// False when the type is not constructible and must be provided by the caller.
-		let isOptionalParameter: Bool
-		let pathCaseName: String
 		let isForwarded: Bool
 		/// Whether this parameter is captured by a @Sendable function and must be @Sendable.
 		var requiresSendable: Bool
 		/// The default value expression for a default-valued init parameter (e.g., `"nil"`, `".init()"`).
 		/// When set, this declaration represents a bubbled-up default-valued parameter, not a tree child.
 		let defaultValueExpression: String?
+		/// Whether this declaration represents a tree child that needs inline construction
+		/// (has subtree, uncovered deps, or default-valued params). Uses `T? = nil` parameter style.
+		let hasSubtree: Bool
+		/// The default construction expression for `@autoclosure` parameters (e.g., `"T()"`, `"T.mock()"`).
+		/// nil for subtree children (which use `T? = nil` instead) and forwarded params.
+		let defaultConstruction: String?
 	}
 
-	/// Walks the tree and collects all mock declarations for the SafeDIMockPath enum and mock() parameters.
+	/// Walks the tree and collects all mock declarations for the mock() parameters.
 	private func collectMockDeclarations(
-		path: [String],
 		insideSendableScope: Bool = false,
 	) async -> [MockDeclaration] {
 		var declarations = [MockDeclaration]()
 
 		for childGenerator in orderedPropertiesToGenerate {
 			guard let childProperty = childGenerator.property,
-			      childGenerator.scopeData.instantiable != nil
+			      let childInstantiable = childGenerator.scopeData.instantiable
 			else { continue }
-			let childScopeData = childGenerator.scopeData
 
 			let isInstantiator = !childProperty.propertyType.isConstant
-			let pathCaseName = path.isEmpty ? "root" : path.joined(separator: "_")
+			let childInsideSendable = insideSendableScope || childProperty.propertyType.isSendable
 
-			let enumName: String
-			if isInstantiator {
-				let label = childProperty.label
-				enumName = String(label.prefix(1).uppercased()) + label.dropFirst()
-			} else {
-				// The `.instantiable != nil` guard above filters out aliases (which have no instantiable).
-				let childInstantiable = childScopeData.instantiable!
-				enumName = Self.sanitizeForIdentifier(childInstantiable.concreteInstantiable.asSource)
-			}
+			// Recurse into children first to determine subtree status.
+			let childDeclarations = await childGenerator.collectMockDeclarations(
+				insideSendableScope: childInsideSendable,
+			)
+			declarations.append(contentsOf: childDeclarations)
 
 			let sourceType = isInstantiator
 				? childProperty.typeDescription.asSource
 				: childProperty.typeDescription.asInstantiatedType.asSource
 
-			declarations.append(MockDeclaration(
-				enumName: enumName,
-				propertyLabel: childProperty.label,
-				parameterLabel: childProperty.label,
-				sourceType: sourceType,
-				isOptionalParameter: childScopeData.instantiable != nil,
-				pathCaseName: pathCaseName,
-				isForwarded: false,
-				requiresSendable: insideSendableScope,
-				defaultValueExpression: nil,
-			))
-
 			// Collect default-valued init parameters from constant children.
 			// These bubble up to the root mock so users can override them.
 			// Instantiator boundaries stop bubbling — those are user-provided closures.
-			// Types with user-defined mock() methods stop bubbling — the mock handles construction.
-			let childPath = path + [childProperty.label]
-			if !isInstantiator, let childInstantiable = childScopeData.instantiable {
-				// Collect non-dependency default-valued params from the construction initializer.
-				// When a user-defined mock() exists, use its params (nil for no-arg mocks).
-				// When no mock exists, use the regular init.
-				// The dependencyLabels guard below ensures SafeDI dependencies
-				// (even those with defaults) are never bubbled as default params.
+			var childDefaultParams = [MockDeclaration]()
+			if !isInstantiator {
 				let constructionInitializer: Initializer? = if let mockInitializer = childInstantiable.mockInitializer {
 					mockInitializer.arguments.isEmpty ? nil : mockInitializer
 				} else {
@@ -1047,48 +940,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				if let constructionInitializer {
 					let dependencyLabels = Set(childInstantiable.dependencies.map(\.property.label))
-					let childPathCaseName = childPath.joined(separator: "_")
 					for argument in constructionInitializer.arguments where argument.hasDefaultValue {
-						guard !dependencyLabels.contains(argument.innerLabel) else { continue }
+						guard !dependencyLabels.contains(argument.innerLabel),
+						      argument.defaultValueExpression != nil
+						else { continue }
 						let strippedType = argument.typeDescription.strippingEscaping
-						let argEnumName = Self.sanitizeForIdentifier(strippedType.asInstantiatedType.asSource)
-						declarations.append(MockDeclaration(
-							enumName: argEnumName,
+						childDefaultParams.append(MockDeclaration(
 							propertyLabel: argument.innerLabel,
 							parameterLabel: argument.innerLabel,
 							sourceType: strippedType.asSource,
-							isOptionalParameter: true,
-							pathCaseName: childPathCaseName,
 							isForwarded: false,
 							requiresSendable: insideSendableScope,
 							defaultValueExpression: argument.defaultValueExpression,
+							hasSubtree: false,
+							defaultConstruction: argument.defaultValueExpression,
 						))
 					}
 				}
 			}
+			declarations.append(contentsOf: childDefaultParams)
 
-			// Recurse into children. If this child is a Sendable instantiator,
-			// everything inside its scope is captured by a @Sendable function.
-			let childInsideSendable = insideSendableScope || childProperty.propertyType.isSendable
-			let childDeclarations = await childGenerator.collectMockDeclarations(
-				path: childPath,
-				insideSendableScope: childInsideSendable,
-			)
-			declarations.append(contentsOf: childDeclarations)
-
-			// Check for @Instantiated dependencies that have no tree child
-			// (e.g., type not in scope map due to normalization mismatch or
-			// cross-module visibility). These need mock parameters so the
-			// user can provide them — same pattern as the root-level
-			// uncovered dep check in generateMockRootCode.
-			if !isInstantiator, let childInstantiable = childScopeData.instantiable {
-				// Compare by label + type, not just label.
-				// A grandchild's `service: LocalService` must not suppress
-				// a child's uncovered `service: ExternalService`.
+			// Check for @Instantiated dependencies that have no tree child.
+			var childUncoveredDeps = [MockDeclaration]()
+			if !isInstantiator {
 				let coveredChildLabelsWithTypes = Set(childDeclarations.map {
 					"\($0.propertyLabel):\($0.sourceType)"
 				})
-				let childPathCaseName = childPath.joined(separator: "_")
 				for dependency in childInstantiable.dependencies {
 					let depKey = "\(dependency.property.label):\(dependency.property.typeDescription.asInstantiatedType.asSource)"
 					guard case .instantiated = dependency.source,
@@ -1096,48 +973,56 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					      dependency.property.propertyType.isConstant
 					else { continue }
 					let dependencyType = dependency.property.typeDescription.asInstantiatedType
-					let enumName = Self.sanitizeForIdentifier(dependencyType.asSource)
-					declarations.append(MockDeclaration(
-						enumName: enumName,
+					childUncoveredDeps.append(MockDeclaration(
 						propertyLabel: dependency.property.label,
 						parameterLabel: dependency.property.label,
 						sourceType: dependencyType.asSource,
-						isOptionalParameter: false,
-						pathCaseName: childPathCaseName,
 						isForwarded: false,
 						requiresSendable: childInsideSendable,
 						defaultValueExpression: nil,
+						hasSubtree: false,
+						defaultConstruction: nil,
 					))
 				}
 			}
+			declarations.append(contentsOf: childUncoveredDeps)
+
+			// Determine if child needs inline construction (subtree pattern: T? = nil)
+			// or can use a simple @autoclosure default.
+			let needsInlineConstruction: Bool = if isInstantiator {
+				true
+			} else if let mockInitializer = childInstantiable.mockInitializer, !mockInitializer.arguments.isEmpty {
+				true
+			} else {
+				!childDeclarations.isEmpty
+					|| !childDefaultParams.isEmpty
+					|| !childUncoveredDeps.isEmpty
+			}
+
+			// Compute the default construction expression for leaf types.
+			let defaultConstruction: String? = if needsInlineConstruction {
+				nil
+			} else if let mockInitializer = childInstantiable.mockInitializer, mockInitializer.arguments.isEmpty {
+				"\(childInstantiable.concreteInstantiable.asSource).mock()"
+			} else if childInstantiable.declarationType.isExtension {
+				"\(childInstantiable.concreteInstantiable.asSource).\(InstantiableVisitor.instantiateMethodName)()"
+			} else {
+				"\(childInstantiable.concreteInstantiable.asSource)()"
+			}
+
+			declarations.append(MockDeclaration(
+				propertyLabel: childProperty.label,
+				parameterLabel: childProperty.label,
+				sourceType: sourceType,
+				isForwarded: false,
+				requiresSendable: insideSendableScope,
+				defaultValueExpression: nil,
+				hasSubtree: needsInlineConstruction,
+				defaultConstruction: defaultConstruction,
+			))
 		}
 
 		return declarations
-	}
-
-	private func disambiguateEnumNames(_ declarations: inout [MockDeclaration]) {
-		var enumNameCounts = [String: Int]()
-		for declaration in declarations where !declaration.isForwarded {
-			enumNameCounts[declaration.enumName, default: 0] += 1
-		}
-		declarations = declarations.map { declaration in
-			guard !declaration.isForwarded,
-			      let count = enumNameCounts[declaration.enumName],
-			      count > 1
-			else { return declaration }
-			let suffix = Self.sanitizeForIdentifier(declaration.sourceType)
-			return MockDeclaration(
-				enumName: "\(declaration.enumName)_\(suffix)",
-				propertyLabel: declaration.propertyLabel,
-				parameterLabel: declaration.parameterLabel,
-				sourceType: declaration.sourceType,
-				isOptionalParameter: declaration.isOptionalParameter,
-				pathCaseName: declaration.pathCaseName,
-				isForwarded: declaration.isForwarded,
-				requiresSendable: declaration.requiresSendable,
-				defaultValueExpression: declaration.defaultValueExpression,
-			)
-		}
 	}
 
 	private func disambiguateParameterLabels(
@@ -1158,58 +1043,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			      let count = labelCounts[declaration.parameterLabel],
 			      count > 1
 			else { return declaration }
+			let suffix = Self.sanitizeForIdentifier(declaration.sourceType)
 			return MockDeclaration(
-				enumName: declaration.enumName,
 				propertyLabel: declaration.propertyLabel,
-				parameterLabel: "\(declaration.parameterLabel)_\(declaration.enumName)",
+				parameterLabel: "\(declaration.parameterLabel)_\(suffix)",
 				sourceType: declaration.sourceType,
-				isOptionalParameter: declaration.isOptionalParameter,
-				pathCaseName: declaration.pathCaseName,
 				isForwarded: declaration.isForwarded,
 				requiresSendable: declaration.requiresSendable,
 				defaultValueExpression: declaration.defaultValueExpression,
+				hasSubtree: declaration.hasSubtree,
+				defaultConstruction: declaration.defaultConstruction,
 			)
 		}
 	}
 
-	/// Computes the child's mock context by extending the path and looking up disambiguated labels.
-	private func childMockCodeGeneration(
-		forChildLabel childLabel: String?,
-		parentContext: MockContext,
-	) -> CodeGeneration {
-		// Extend the path: children of this node use a path that includes
-		// this node's property label (so grandchild pathCaseNames reflect their parent).
-		let childPath = if let selfLabel = property?.label {
-			parentContext.path + [selfLabel]
-		} else {
-			parentContext.path
-		}
-
-		// Look up the disambiguated parameter label for this child.
-		let overrideLabel: String? = childLabel.flatMap { label in
-			let pathCaseName = childPath.isEmpty ? "root" : childPath.joined(separator: "_")
-			return parentContext.propertyToParameterLabel["\(pathCaseName)/\(label)"]
-		}
-
-		return .mock(MockContext(
-			path: childPath,
-			mockConditionalCompilation: parentContext.mockConditionalCompilation,
-			overrideParameterLabel: overrideLabel,
-			propertyToParameterLabel: parentContext.propertyToParameterLabel,
-		))
-	}
-
 	/// Generates `let` bindings for default-valued init parameters of an instantiable.
-	/// Each binding resolves the mock override closure or falls back to the original default.
-	/// - Parameters:
-	///   - instantiable: The type whose initializer may have default-valued parameters.
-	///   - path: The mock path for this type in the tree (used to compute pathCaseName).
-	///   - propertyToParameterLabel: Disambiguation map from `generateMockRootCode`.
-	/// - Returns: An array of binding lines (e.g., `"let flag = flag?(.child) ?? false"`).
+	/// Each binding evaluates the corresponding `@autoclosure` parameter.
 	private static func defaultValueBindings(
 		for instantiable: Instantiable,
-		path: [String],
-		propertyToParameterLabel: [String: String],
+		parameterLabelMap: [String: String],
 	) -> [String] {
 		// Collect non-dependency default-valued params from the construction initializer.
 		// When a user-defined mock() exists, use its params (nil for no-arg mocks).
@@ -1223,18 +1075,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		guard let constructionInitializer else { return [] }
 		let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
-		let pathCaseName = path.joined(separator: "_")
-		guard !pathCaseName.isEmpty else { return [] }
 
 		var bindings = [String]()
 		for argument in constructionInitializer.arguments {
 			guard argument.hasDefaultValue,
 			      !dependencyLabels.contains(argument.innerLabel),
-			      let defaultExpr = argument.defaultValueExpression
+			      argument.defaultValueExpression != nil
 			else { continue }
-			let parameterLabel = propertyToParameterLabel["\(pathCaseName)/\(argument.innerLabel)"] ?? argument.innerLabel
-			let typeAnnotation = argument.typeDescription.strippingEscaping.asSource
-			bindings.append("let \(argument.innerLabel): \(typeAnnotation) = if let \(argument.innerLabel) = \(parameterLabel)?(.\(pathCaseName)) { \(argument.innerLabel) } else { \(defaultExpr) }")
+			let strippedType = argument.typeDescription.strippingEscaping
+			let key = "\(argument.innerLabel):\(strippedType.asSource)"
+			let parameterLabel = parameterLabelMap[key] ?? argument.innerLabel
+			bindings.append("let \(argument.innerLabel) = \(parameterLabel)()")
 		}
 		return bindings
 	}
@@ -1246,20 +1097,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func uncoveredDepBindings(
 		for instantiable: Instantiable,
 		declaredProperties: Set<Property>,
-		path: [String],
-		propertyToParameterLabel: [String: String],
+		parameterLabelMap: [String: String],
 	) -> [String] {
-		let pathCaseName = path.joined(separator: "_")
-		guard !pathCaseName.isEmpty else { return [] }
-
 		var bindings = [String]()
 		for dependency in instantiable.dependencies {
 			guard case .instantiated = dependency.source,
 			      !declaredProperties.contains(dependency.property),
 			      dependency.property.propertyType.isConstant
 			else { continue }
-			let parameterLabel = propertyToParameterLabel["\(pathCaseName)/\(dependency.property.label)"] ?? dependency.property.label
-			bindings.append("let \(dependency.property.label) = \(parameterLabel)(.\(pathCaseName))")
+			let dependencyType = dependency.property.typeDescription.asInstantiatedType
+			let key = "\(dependency.property.label):\(dependencyType.asSource)"
+			let parameterLabel = parameterLabelMap[key] ?? dependency.property.label
+			bindings.append("let \(dependency.property.label) = \(parameterLabel)()")
 		}
 		return bindings
 	}
@@ -1349,14 +1198,5 @@ extension Instantiable {
 					unavailableProperties: unavailableProperties,
 				) ?? Self.incorrectlyConfiguredComment
 		}
-	}
-}
-
-// MARK: - Array Extension
-
-extension Array where Element: Hashable {
-	fileprivate func uniqued() -> [Element] {
-		var seen = Set<Element>()
-		return filter { seen.insert($0).inserted }
 	}
 }
