@@ -56,12 +56,18 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			to: inputSourcesFile,
 		)
 
+		let additionalSwiftFiles = discoverAdditionalDirectorySwiftFiles(
+			in: targetSwiftFiles,
+			relativeTo: packageRoot,
+		)
+
 		let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
 		let scanResult = try runRootScanner(
 			inputSourcesFile: inputSourcesFile,
 			projectRoot: packageRoot,
 			outputDirectory: outputDirectory,
 			manifestFile: manifestFile,
+			additionalSwiftFiles: additionalSwiftFiles,
 		)
 		guard !scanResult.outputFiles.isEmpty else {
 			return []
@@ -173,14 +179,20 @@ extension Target {
 				to: inputSourcesFile,
 			)
 
+			let additionalSwiftFiles = discoverAdditionalDirectorySwiftFiles(
+				in: inputSwiftFiles,
+				relativeTo: projectRoot,
+			)
+
 			let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
-			let outputFiles = try runRootScanner(
+			let scanResult = try runRootScanner(
 				inputSourcesFile: inputSourcesFile,
 				projectRoot: projectRoot,
 				outputDirectory: outputDirectory,
 				manifestFile: manifestFile,
+				additionalSwiftFiles: additionalSwiftFiles,
 			)
-			guard !outputFiles.isEmpty else {
+			guard !scanResult.outputFiles.isEmpty else {
 				return []
 			}
 
@@ -208,8 +220,8 @@ extension Target {
 					executable: toolLocation,
 					arguments: arguments,
 					environment: [:],
-					inputFiles: inputSwiftFiles,
-					outputFiles: outputFiles,
+					inputFiles: inputSwiftFiles + scanResult.additionalInputFiles,
+					outputFiles: scanResult.outputFiles,
 				),
 			]
 		}

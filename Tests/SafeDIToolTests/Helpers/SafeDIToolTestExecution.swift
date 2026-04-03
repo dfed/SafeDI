@@ -97,29 +97,34 @@ func executeSafeDIToolTest(
 	}
 
 	return try await SafeDITool.$fileFinder.withValue(fileFinder) {
-		// Build the manifest by scanning for roots, including files from
-		// additionalDirectoriesToInclude discovered via @SafeDIConfiguration.
-		// This matches real plugin behavior where runRootScanner() now scans
-		// additional directories before SafeDITool runs.
+		// Build the manifest by scanning for roots. Discover additional
+		// directory files from the target module's own @SafeDIConfiguration
+		// only, matching real plugin behavior (discoverAdditionalDirectorySwiftFiles
+		// scans only the current module's files, not dependencies).
 		var manifestPath: String?
 		if buildSwiftOutputDirectory {
 			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 			let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 
-			// Discover additional directory files from @SafeDIConfiguration,
-			// matching what runRootScanner() does in the real plugin.
-			let additionalScanFiles = swiftFiles.flatMap { swiftFile -> [URL] in
-				guard let content = try? String(contentsOf: swiftFile, encoding: .utf8) else { return [] }
-				return RootScanner.extractAdditionalDirectoriesToInclude(in: content).flatMap { directory -> [URL] in
-					let directoryURL = URL(fileURLWithPath: directory)
-					guard let enumerator = FileManager.default.enumerator(
-						at: directoryURL,
-						includingPropertiesForKeys: nil,
-						options: [.skipsHiddenFiles],
-					) else { return [] }
-					return enumerator.compactMap { ($0 as? URL).flatMap { $0.pathExtension == "swift" ? $0 : nil } }
+			// Only scan target files (swiftFiles) for config — not dependency files.
+			// Stop after the first config found, matching configurations.first.
+			let additionalScanFiles: [URL] = {
+				for swiftFile in swiftFiles {
+					guard let content = try? String(contentsOf: swiftFile, encoding: .utf8) else { continue }
+					let directories = RootScanner.extractAdditionalDirectoriesToInclude(in: content)
+					guard !directories.isEmpty else { continue }
+					return directories.flatMap { directory -> [URL] in
+						let directoryURL = URL(fileURLWithPath: directory)
+						guard let enumerator = FileManager.default.enumerator(
+							at: directoryURL,
+							includingPropertiesForKeys: nil,
+							options: [.skipsHiddenFiles],
+						) else { return [] }
+						return enumerator.compactMap { ($0 as? URL).flatMap { $0.pathExtension == "swift" ? $0 : nil } }
+					}
 				}
-			}
+				return []
+			}()
 			let allSwiftFilesForScan = swiftFiles + additionalScanFiles
 
 			let scanResult = try RootScanner().scan(

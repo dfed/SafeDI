@@ -43,23 +43,24 @@ struct RootScannerResult {
 	var additionalInputFiles: [URL]
 }
 
-func runRootScanner(
-	inputSourcesFile: URL,
-	projectRoot: URL,
-	outputDirectory: URL,
-	manifestFile: URL,
-) throws -> RootScannerResult {
-	let inputFilePaths = try RootScanner.inputFilePaths(from: inputSourcesFile)
-
-	// Check target files for @SafeDIConfiguration to discover additional directories.
-	let directoryBaseURL = projectRoot.hasDirectoryPath
-		? projectRoot
-		: projectRoot.appendingPathComponent("", isDirectory: true)
-	var additionalSwiftFiles = [URL]()
-	for inputFilePath in inputFilePaths {
-		let fileURL = URL(fileURLWithPath: inputFilePath, relativeTo: directoryBaseURL).standardizedFileURL
-		guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
+/// Discovers `additionalDirectoriesToInclude` from the first `@SafeDIConfiguration`
+/// found in the given Swift files. Only the current module's own files should be passed
+/// here — not dependency source files — to match `SafeDITool`'s `configurations.first`
+/// behavior.
+func discoverAdditionalDirectorySwiftFiles(
+	in moduleSwiftFiles: [URL],
+	relativeTo projectRoot: URL,
+) -> [URL] {
+	for swiftFile in moduleSwiftFiles {
+		guard let content = try? String(contentsOf: swiftFile, encoding: .utf8) else { continue }
 		let directories = RootScanner.extractAdditionalDirectoriesToInclude(in: content)
+		guard !directories.isEmpty else { continue }
+
+		// Use only the first configuration found, matching SafeDITool's behavior.
+		var additionalSwiftFiles = [URL]()
+		let directoryBaseURL = projectRoot.hasDirectoryPath
+			? projectRoot
+			: projectRoot.appendingPathComponent("", isDirectory: true)
 		for directory in directories {
 			let directoryURL = URL(fileURLWithPath: directory, relativeTo: directoryBaseURL)
 			guard let enumerator = FileManager.default.enumerator(
@@ -71,9 +72,23 @@ func runRootScanner(
 				additionalSwiftFiles.append(fileURL)
 			}
 		}
+		return additionalSwiftFiles
 	}
+	return []
+}
 
-	// Scan target files + additional directory files together for roots.
+func runRootScanner(
+	inputSourcesFile: URL,
+	projectRoot: URL,
+	outputDirectory: URL,
+	manifestFile: URL,
+	additionalSwiftFiles: [URL] = [],
+) throws -> RootScannerResult {
+	let inputFilePaths = try RootScanner.inputFilePaths(from: inputSourcesFile)
+
+	let directoryBaseURL = projectRoot.hasDirectoryPath
+		? projectRoot
+		: projectRoot.appendingPathComponent("", isDirectory: true)
 	let targetSwiftFiles = inputFilePaths.map {
 		URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL
 	}
