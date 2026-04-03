@@ -334,7 +334,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		case let .dictionary(key, value):
 			return "Dictionary_\(key.asIdentifier)_\(value.asIdentifier)"
 		case let .tuple(elements):
-			return elements.map(\.typeDescription.asIdentifier).joined(separator: "_")
+			return elements.isEmpty ? "Void" : elements.map(\.typeDescription.asIdentifier).joined(separator: "_")
 		case let .closure(arguments, isAsync, doesThrow, returnType):
 			let args = arguments.isEmpty ? "Void" : arguments.map(\.asIdentifier).joined(separator: "_")
 			let modifiers = [isAsync ? "async" : nil, doesThrow ? "throws" : nil].compactMap(\.self)

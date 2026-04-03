@@ -37,6 +37,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.typeIdentifier)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "Void")
+		#expect(typeDescription.asIdentifier == "Void")
 	}
 
 	@Test
@@ -51,6 +52,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.typeIdentifier)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "Int")
+		#expect(typeDescription.asIdentifier == "Int")
 	}
 
 	@Test
@@ -65,6 +67,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.nestedType)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "Swift.Int")
+		#expect(typeDescription.asIdentifier == "Swift_Int")
 	}
 
 	@Test
@@ -79,6 +82,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.nestedType)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "Swift.Array<Int>")
+		#expect(typeDescription.asIdentifier == "Swift_Array_Int")
 	}
 
 	@Test
@@ -93,6 +97,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.nestedType)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "OuterGenericType<Int>.InnerType")
+		#expect(typeDescription.asIdentifier == "OuterGenericType_Int_InnerType")
 	}
 
 	@Test
@@ -107,6 +112,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.nestedType)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "OuterGenericType<Int>.InnerGenericType<String>")
+		#expect(typeDescription.asIdentifier == "OuterGenericType_Int_InnerGenericType_String")
 	}
 
 	@Test
@@ -121,6 +127,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.composedTypeIdentifier)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "Foo & Bar")
+		#expect(typeDescription.asIdentifier == "Foo_and_Bar")
 	}
 
 	@Test
@@ -135,6 +142,7 @@ struct TypeDescriptionTests {
 		let optionalTypeIdentifier = try #require(visitor.optionalTypeIdentifier)
 		#expect(!optionalTypeIdentifier.isUnknown, "Type description is not of known type!")
 		#expect(optionalTypeIdentifier.asSource == "AnyObject?")
+		#expect(optionalTypeIdentifier.asIdentifier == "AnyObject_Optional")
 	}
 
 	@Test
@@ -149,6 +157,7 @@ struct TypeDescriptionTests {
 		let optionalTypeIdentifier = try #require(visitor.optionalTypeIdentifier)
 		#expect(!optionalTypeIdentifier.isUnknown, "Type description is not of known type!")
 		#expect(optionalTypeIdentifier.asSource == "(() -> Void)?")
+		#expect(optionalTypeIdentifier.asIdentifier == "Void_to_Void_Optional")
 	}
 
 	@Test
@@ -163,6 +172,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.implictlyUnwrappedOptionalTypeIdentifier)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "Int!")
+		#expect(typeDescription.asIdentifier == "Int_Optional")
 	}
 
 	@Test
@@ -191,6 +201,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.metatypeTypeIdentifier)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "Equatable.Protocol")
+		#expect(typeDescription.asIdentifier == "Equatable_Protocol")
 	}
 
 	@Test
@@ -205,6 +216,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.someOrAnyTypeIdentifier)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "some Equatable")
+		#expect(typeDescription.asIdentifier == "some_Equatable")
 	}
 
 	@Test
@@ -219,6 +231,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.someOrAnyTypeIdentifier)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "any Equatable")
+		#expect(typeDescription.asIdentifier == "any_Equatable")
 	}
 
 	@Test
@@ -233,6 +246,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.attributedTypeIdentifier)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "inout Int")
+		#expect(typeDescription.asIdentifier == "inout_Int")
 	}
 
 	@Test
@@ -247,6 +261,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.attributedTypeIdentifier)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "@autoclosure () -> Void")
+		#expect(typeDescription.asIdentifier == "autoclosure_Void_to_Void")
 	}
 
 	@Test
@@ -457,6 +472,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.functionIdentifier)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "(Int, Double) -> String")
+		#expect(typeDescription.asIdentifier == "Int_Double_to_String")
 	}
 
 	@Test
@@ -470,6 +486,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.functionIdentifier)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "(Int, Double) throws -> String")
+		#expect(typeDescription.asIdentifier == "Int_Double_throws_to_String")
 	}
 
 	@Test
@@ -653,6 +670,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.typeDescription)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "() -> ()")
+		#expect(typeDescription.asIdentifier == "Void_to_Void")
 	}
 
 	@Test
@@ -665,6 +683,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.typeDescription)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "() throws -> ()")
+		#expect(typeDescription.asIdentifier == "Void_throws_to_Void")
 	}
 
 	@Test
@@ -677,6 +696,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.typeDescription)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "() async -> ()")
+		#expect(typeDescription.asIdentifier == "Void_async_to_Void")
 	}
 
 	@Test
@@ -689,6 +709,7 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.typeDescription)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "() async throws -> ()")
+		#expect(typeDescription.asIdentifier == "Void_async_throws_to_Void")
 	}
 
 	@Test
