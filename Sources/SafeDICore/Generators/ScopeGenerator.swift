@@ -557,7 +557,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 				// In mock mode, generate bindings for:
 				// 1. Default-valued init parameters (evaluates @autoclosure parameter)
-				// 2. Uncovered @Instantiated deps (evaluates required @autoclosure parameter)
+				// 2. Uncovered @Instantiated dependencies (evaluates required @autoclosure parameter)
 				// Wrapping in a function scopes the bindings to avoid name collisions between siblings.
 				let mockExtraBindings: [String] = switch codeGeneration {
 				case .dependencyTree:
@@ -670,7 +670,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			allDeclarations.map { "\($0.propertyLabel):\($0.sourceType)" },
 		)
 		// Keys (propertyLabel:sourceType) of declarations needing root-level `let x = x()` bindings.
-		// These are uncovered deps and received deps NOT handled by generatePropertyCode.
+		// These are uncovered and received dependencies NOT handled by generatePropertyCode.
 		var rootBindingKeys = Set<String>()
 
 		// Check this type's own dependencies for uncovered @Instantiated dependencies.
@@ -846,7 +846,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else if let defaultExpr = declaration.defaultConstruction {
 				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(sendablePrefix)@autoclosure @escaping () -> \(declaration.sourceType) = \(defaultExpr)")
 			} else {
-				// Required autoclosure (uncovered dep).
+				// Required autoclosure (uncovered dependency).
 				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(sendablePrefix)@autoclosure @escaping () -> \(declaration.sourceType)")
 			}
 		}
@@ -897,7 +897,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(indent)\(mockAttributesPrefix)public static func mock(")
 		lines.append(parametersString)
 		lines.append("\(indent)) -> \(typeName) {")
-		// Bindings for uncovered deps and received deps (must come before child constructions).
+		// Bindings for uncovered and received dependencies (must come before child constructions).
 		for declaration in allDeclarations {
 			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
 			guard rootBindingKeys.contains(key) else { continue }
@@ -937,7 +937,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// When set, this declaration represents a bubbled-up default-valued parameter, not a tree child.
 		let defaultValueExpression: String?
 		/// Whether this declaration represents a tree child that needs inline construction
-		/// (has subtree, uncovered deps, or default-valued params). Uses `T? = nil` parameter style.
+		/// (has subtree, uncovered dependencies, or default-valued params). Uses `T? = nil` parameter style.
 		let hasSubtree: Bool
 		/// The default construction expression for `@autoclosure` parameters (e.g., `"T()"`, `"T.mock()"`).
 		/// nil for subtree children (which use `T? = nil` instead) and forwarded params.
@@ -1141,7 +1141,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return bindings
 	}
 
-	/// Generates `let` bindings for @Instantiated deps that have no tree child
+	/// Generates `let` bindings for @Instantiated dependencies that have no tree child
 	/// (e.g., type from a parallel dependency tree not in the scope map).
 	/// These are required mock parameters that need to be evaluated before
 	/// passing to the init or .mock() call.
