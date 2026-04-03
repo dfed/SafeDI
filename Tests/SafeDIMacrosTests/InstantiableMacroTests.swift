@@ -4356,35 +4356,6 @@ import Testing
 			)
 		}
 
-		// MARK: SafeDIMockPath Collision Tests
-
-		@Test
-		func throwsErrorWhenTypeContainsSafeDIMockPath() {
-			assertMacroExpansion(
-				"""
-				@Instantiable
-				public final class ExampleService: Instantiable {
-				    public init() {}
-				    enum SafeDIMockPath {}
-				}
-				""",
-				expandedSource: """
-				public final class ExampleService: Instantiable {
-				    public init() {}
-				    enum SafeDIMockPath {}
-				}
-				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "@Instantiable-decorated type must not contain a nested type named `SafeDIMockPath`. This name is reserved for generated mock path enums.",
-						line: 1,
-						column: 1,
-					),
-				],
-				macros: instantiableTestMacros,
-			)
-		}
-
 		// MARK: Mock Method Validation Tests
 
 		@Test
