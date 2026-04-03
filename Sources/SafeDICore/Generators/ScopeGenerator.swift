@@ -1174,12 +1174,29 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for declaration in forwardedDeclarations {
 			labelCounts[declaration.parameterLabel, default: 0] += 1
 		}
+
+		// First pass: try simplified suffixes (strips optionality, attributes, etc.).
+		// If simplified suffixes collide within a label group, fall back to full suffixes.
+		var simplifiedSuffixCounts = [String: Int]()
+		for declaration in declarations where !declaration.isForwarded {
+			guard let count = labelCounts[declaration.parameterLabel], count > 1 else { continue }
+			let simplifiedSuffix = "\(declaration.parameterLabel)_\(declaration.sourceTypeDescription.simplified.asIdentifier)"
+			simplifiedSuffixCounts[simplifiedSuffix, default: 0] += 1
+		}
+
 		declarations = declarations.map { declaration in
 			guard !declaration.isForwarded,
 			      let count = labelCounts[declaration.parameterLabel],
 			      count > 1
 			else { return declaration }
-			let suffix = declaration.sourceTypeDescription.asIdentifier
+			let simplifiedSuffix = declaration.sourceTypeDescription.simplified.asIdentifier
+			let candidateLabel = "\(declaration.parameterLabel)_\(simplifiedSuffix)"
+			// Use simplified suffix if it's unique; otherwise fall back to full suffix.
+			let suffix = if simplifiedSuffixCounts[candidateLabel, default: 0] <= 1 {
+				simplifiedSuffix
+			} else {
+				declaration.sourceTypeDescription.asIdentifier
+			}
 			return MockDeclaration(
 				propertyLabel: declaration.propertyLabel,
 				parameterLabel: "\(declaration.parameterLabel)_\(suffix)",

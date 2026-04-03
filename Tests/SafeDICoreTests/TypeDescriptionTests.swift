@@ -823,6 +823,68 @@ struct TypeDescriptionTests {
 		))
 	}
 
+	// MARK: - simplified Tests
+
+	@Test
+	func simplified_stripsOptional() {
+		let type = TypeDescription.optional(.simple(name: "Service"))
+		#expect(type.simplified == .simple(name: "Service"))
+	}
+
+	@Test
+	func simplified_stripsImplicitlyUnwrappedOptional() {
+		let type = TypeDescription.implicitlyUnwrappedOptional(.simple(name: "Service"))
+		#expect(type.simplified == .simple(name: "Service"))
+	}
+
+	@Test
+	func simplified_stripsSome() {
+		let type = TypeDescription.some(.simple(name: "Equatable"))
+		#expect(type.simplified == .simple(name: "Equatable"))
+	}
+
+	@Test
+	func simplified_stripsAny() {
+		let type = TypeDescription.any(.simple(name: "Collection"))
+		#expect(type.simplified == .simple(name: "Collection"))
+	}
+
+	@Test
+	func simplified_stripsMetatype() {
+		let type = TypeDescription.metatype(.simple(name: "Int"), isType: true)
+		#expect(type.simplified == .simple(name: "Int"))
+	}
+
+	@Test
+	func simplified_stripsAttributes() {
+		let type = TypeDescription.attributed(.simple(name: "Int"), specifiers: ["inout"], attributes: nil)
+		#expect(type.simplified == .simple(name: "Int"))
+	}
+
+	@Test
+	func simplified_stripsNestedWrappers() {
+		let type = TypeDescription.optional(.attributed(.some(.simple(name: "Service")), specifiers: nil, attributes: ["Sendable"]))
+		#expect(type.simplified == .simple(name: "Service"))
+	}
+
+	@Test
+	func simplified_preservesSimpleType() {
+		let type = TypeDescription.simple(name: "String")
+		#expect(type.simplified == .simple(name: "String"))
+	}
+
+	@Test
+	func simplified_preservesClosure() {
+		let type = TypeDescription.closure(arguments: [], isAsync: false, doesThrow: false, returnType: .void(.identifier))
+		#expect(type.simplified == type)
+	}
+
+	@Test
+	func simplified_preservesArray() {
+		let type = TypeDescription.array(element: .simple(name: "Int"))
+		#expect(type.simplified == type)
+	}
+
 	// MARK: - asIdentifier Tests
 
 	@Test

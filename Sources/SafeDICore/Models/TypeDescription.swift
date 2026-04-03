@@ -289,6 +289,37 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// Recursively strips wrappers that are irrelevant for disambiguation:
+	/// attributes (`@Sendable`, `@escaping`), optionality (`?`, `!`),
+	/// existential wrappers (`some`, `any`), and metatype (`.Type`, `.Protocol`).
+	/// The result is the core type that a human would use to distinguish parameters.
+	public var simplified: TypeDescription {
+		switch self {
+		case .void,
+		     .simple,
+		     .nested,
+		     .composition,
+		     .array,
+		     .dictionary,
+		     .tuple,
+		     .closure,
+		     .unknown:
+			self
+		case let .optional(type):
+			type.simplified
+		case let .implicitlyUnwrappedOptional(type):
+			type.simplified
+		case let .some(type):
+			type.simplified
+		case let .any(type):
+			type.simplified
+		case let .metatype(type, _):
+			type.simplified
+		case let .attributed(type, _, _):
+			type.simplified
+		}
+	}
+
 	/// A valid Swift identifier fragment derived from this type's structure.
 	/// Used as a disambiguation suffix in generated mock parameter names.
 	public var asIdentifier: String {
