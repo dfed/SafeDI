@@ -35,12 +35,20 @@ func writeInputSwiftFilesCSV(
 		)
 }
 
+struct RootScannerResult {
+	/// Output files that the build command will generate.
+	var outputFiles: [URL]
+	/// Swift files discovered from additionalDirectoriesToInclude that should
+	/// be declared as build inputs so edits there trigger rebuilds.
+	var additionalInputFiles: [URL]
+}
+
 func runRootScanner(
 	inputSourcesFile: URL,
 	projectRoot: URL,
 	outputDirectory: URL,
 	manifestFile: URL,
-) throws -> [URL] {
+) throws -> RootScannerResult {
 	let inputFilePaths = try RootScanner.inputFilePaths(from: inputSourcesFile)
 
 	// Check target files for @SafeDIConfiguration to discover additional directories.
@@ -76,5 +84,8 @@ func runRootScanner(
 		outputDirectory: outputDirectory,
 	)
 	try result.writeManifest(to: manifestFile)
-	return result.outputFiles
+	return RootScannerResult(
+		outputFiles: result.outputFiles,
+		additionalInputFiles: additionalSwiftFiles,
+	)
 }
