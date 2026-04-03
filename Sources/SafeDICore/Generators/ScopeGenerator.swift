@@ -289,18 +289,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let subtreeParameters: Set<MockParameterIdentifier>
 		/// Parameters already bound at root scope. Child functions skip bindings for these
 		/// since the values are captured from the enclosing scope.
-		let rootBoundParameters: Set<MockParameterIdentifier>
+		let resolvedParameters: Set<MockParameterIdentifier>
 
 		init(
 			mockConditionalCompilation: String?,
 			parameterLabelMap: [MockParameterIdentifier: String] = [:],
 			subtreeParameters: Set<MockParameterIdentifier> = [],
-			rootBoundParameters: Set<MockParameterIdentifier> = [],
+			resolvedParameters: Set<MockParameterIdentifier> = [],
 		) {
 			self.mockConditionalCompilation = mockConditionalCompilation
 			self.parameterLabelMap = parameterLabelMap
 			self.subtreeParameters = subtreeParameters
-			self.rootBoundParameters = rootBoundParameters
+			self.resolvedParameters = resolvedParameters
 		}
 	}
 
@@ -557,8 +557,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				}
 			case .constant:
+				// In mock mode, mark this property as resolved so descendant scopes
+				// don't re-generate ?? or () bindings for it.
+				let childCodeGeneration: CodeGeneration = switch codeGeneration {
+				case .dependencyTree:
+					.dependencyTree
+				case let .mock(context):
+					.mock(MockContext(
+						mockConditionalCompilation: context.mockConditionalCompilation,
+						parameterLabelMap: context.parameterLabelMap,
+						subtreeParameters: context.subtreeParameters,
+						resolvedParameters: context.resolvedParameters.union([MockParameterIdentifier(
+							propertyLabel: property.label,
+							sourceType: property.typeDescription.asInstantiatedType.asSource,
+						)]),
+					))
+				}
 				let generatedProperties = try await generateProperties(
-					codeGeneration: codeGeneration,
+					codeGeneration: childCodeGeneration,
 					leadingMemberWhitespace: Self.standardIndent,
 				)
 
@@ -573,12 +589,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					Self.defaultValueBindings(
 						for: instantiable,
 						parameterLabelMap: context.parameterLabelMap,
-						rootBoundParameters: context.rootBoundParameters,
+						resolvedParameters: context.resolvedParameters,
 					) + Self.uncoveredDependencyBindings(
 						for: instantiable,
 						declaredProperties: propertiesToDeclare,
 						parameterLabelMap: context.parameterLabelMap,
-						rootBoundParameters: context.rootBoundParameters,
+						resolvedParameters: context.resolvedParameters,
 					)
 				}
 
@@ -627,9 +643,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						propertyLabel: property.label,
 						sourceType: property.typeDescription.asInstantiatedType.asSource,
 					)
-					// Only root-level children have entries in parameterLabelMap.
-					// Nested children (inside __safeDI_* functions) use inline construction.
-					if let parameterLabel = context.parameterLabelMap[identifier] {
+					// If this property was already resolved by an ancestor scope,
+					// use inline construction — the value is available from outer scope.
+					if context.resolvedParameters.contains(identifier) {
+						return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
+					} else if let parameterLabel = context.parameterLabelMap[identifier] {
 						if context.subtreeParameters.contains(identifier) {
 							// Optional parameter (T? = nil): use ?? inline fallback
 							let mockInitializer = if erasedToConcreteExistential {
@@ -873,29 +891,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.map(\.identifier),
 		)
 		let forwardedLabels = Set(forwardedDeclarations.map(\.propertyLabel))
-		var rootBoundParameters = Set<MockParameterIdentifier>()
+		var resolvedParameters = Set<MockParameterIdentifier>()
 		for declaration in allDeclarations {
-			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
-			if declaration.defaultValueExpression == nil,
-			   declaration.hasSubtree || declaration.defaultConstruction != nil
-			{
-				// Tree children — get root-level bindings via generatePropertyCode.
-				rootBoundParameters.insert(declaration.identifier)
-			} else if rootBindingIdentifiers.contains(declaration.identifier) {
-				rootBoundParameters.insert(declaration.identifier)
+			if rootBindingIdentifiers.contains(declaration.identifier) {
+				resolvedParameters.insert(declaration.identifier)
 			} else if rootDefaultIdentifiers.contains(declaration.identifier),
 			          !forwardedLabels.contains(declaration.propertyLabel),
 			          !declaration.isClosureType
 			{
 				// Root default-valued params bound at root scope.
-				rootBoundParameters.insert(declaration.identifier)
+				resolvedParameters.insert(declaration.identifier)
 			}
 		}
 		let bodyContext = MockContext(
 			mockConditionalCompilation: context.mockConditionalCompilation,
 			parameterLabelMap: parameterLabelMap,
 			subtreeParameters: subtreeParameters,
-			rootBoundParameters: rootBoundParameters,
+			resolvedParameters: resolvedParameters,
 		)
 		let propertyLines = try await generateProperties(
 			codeGeneration: .mock(bodyContext),
@@ -1146,7 +1158,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func defaultValueBindings(
 		for instantiable: Instantiable,
 		parameterLabelMap: [MockParameterIdentifier: String],
-		rootBoundParameters: Set<MockParameterIdentifier>,
+		resolvedParameters: Set<MockParameterIdentifier>,
 	) -> [String] {
 		// Collect non-dependency default-valued params from the construction initializer.
 		// When a user-defined mock() exists, use its params (nil for no-arg mocks).
@@ -1170,7 +1182,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			else { continue }
 			let strippedType = argument.typeDescription.strippingEscaping
 			let identifier = MockParameterIdentifier(propertyLabel: argument.innerLabel, sourceType: strippedType.asSource)
-			guard !rootBoundParameters.contains(identifier) else { continue }
+			guard !resolvedParameters.contains(identifier) else { continue }
 			let parameterLabel = parameterLabelMap[identifier] ?? argument.innerLabel
 			bindings.append("let \(argument.innerLabel) = \(parameterLabel)()")
 		}
@@ -1185,7 +1197,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for instantiable: Instantiable,
 		declaredProperties: Set<Property>,
 		parameterLabelMap: [MockParameterIdentifier: String],
-		rootBoundParameters: Set<MockParameterIdentifier>,
+		resolvedParameters: Set<MockParameterIdentifier>,
 	) -> [String] {
 		var bindings = [String]()
 		for dependency in instantiable.dependencies {
@@ -1195,7 +1207,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			else { continue }
 			let dependencyType = dependency.property.typeDescription.asInstantiatedType
 			let identifier = MockParameterIdentifier(propertyLabel: dependency.property.label, sourceType: dependencyType.asSource)
-			guard !rootBoundParameters.contains(identifier) else { continue }
+			guard !resolvedParameters.contains(identifier) else { continue }
 			let parameterLabel = parameterLabelMap[identifier] ?? dependency.property.label
 			bindings.append("let \(dependency.property.label) = \(parameterLabel)()")
 		}

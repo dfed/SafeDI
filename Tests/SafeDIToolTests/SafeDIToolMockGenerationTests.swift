@@ -7835,6 +7835,61 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	mutating func mock_samePropertyAtMultipleLevelsDoesNotProduceRedeclaration() async throws {
+		// Root → ChildA (has widgetService) → ChildB (also has widgetService).
+		// widgetService is a root parameter (T? = nil). ChildA resolves it via ??.
+		// ChildB should use the already-resolved value — no second ?? binding.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Root: Instantiable {
+				    public init(childA: ChildA) { self.childA = childA }
+				    @Instantiated let childA: ChildA
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(widgetService: WidgetService, childB: ChildB) {
+				        self.widgetService = widgetService
+				        self.childB = childB
+				    }
+				    @Instantiated let widgetService: WidgetService
+				    @Instantiated let childB: ChildB
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(widgetService: WidgetService) {
+				        self.widgetService = widgetService
+				    }
+				    @Received let widgetService: WidgetService
+				}
+				""",
+				"""
+				@Instantiable
+				public struct WidgetService: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
+		// widgetService ?? should appear exactly once (at the ChildA level).
+		// ChildB should reference the already-resolved widgetService, not re-bind it.
+		let occurrences = rootMock.components(separatedBy: "widgetService ??").count - 1
+		#expect(occurrences == 0, "widgetService ?? should not appear in root mock (widgetService is a leaf) \(rootMock)")
+		// widgetService should be an autoclosure leaf (no deps)
+		#expect(rootMock.contains("widgetService: @autoclosure @escaping () -> WidgetService = WidgetService()"), "widgetService should be autoclosure leaf \(rootMock)")
+	}
+
+	@Test
 	mutating func mock_defaultValuedParametersFromMultipleLevelsAllAppearAtRoot() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
