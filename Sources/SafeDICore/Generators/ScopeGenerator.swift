@@ -373,12 +373,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				),
 			)
 			if case let .mock(context) = currentCodeGeneration,
-			   let childProperty = childGenerator.property,
-			   childProperty.propertyType.isConstant
+			   let childProperty = childGenerator.property
 			{
+				// Use the same sourceType that generatePropertyCode uses for each property type.
+				let sourceType = childProperty.propertyType.isConstant
+					? childProperty.typeDescription.asInstantiatedType.asSource
+					: childProperty.typeDescription.asSource
 				let identifier = MockParameterIdentifier(
 					propertyLabel: childProperty.label,
-					sourceType: childProperty.typeDescription.asInstantiatedType.asSource,
+					sourceType: sourceType,
 				)
 				currentCodeGeneration = .mock(MockContext(
 					mockConditionalCompilation: context.mockConditionalCompilation,
@@ -564,7 +567,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						propertyLabel: property.label,
 						sourceType: property.typeDescription.asSource,
 					)
-					if let parameterLabel = context.parameterLabelMap[identifier] {
+					if context.resolvedParameters.contains(identifier) {
+						// Already resolved by an ancestor scope — use inline construction.
+						return """
+						\(functionDeclaration)\(propertyDeclaration) = \(instantiatorInstantiation)
+						"""
+					} else if let parameterLabel = context.parameterLabelMap[identifier] {
 						return """
 						\(functionDeclaration)\(propertyDeclaration) = \(parameterLabel) ?? \(instantiatorInstantiation)
 						"""
@@ -690,7 +698,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				"// Did not create `\(property.asSource)` because `\(fulfillingProperty.asSource)` is unavailable."
 			} else {
 				if erasedToConcreteExistential {
-					"let \(property.label) = \(property.typeDescription.asSource)(\(fulfillingProperty.label))"
+					"let \(property.label): \(property.typeDescription.asSource) = \(fulfillingProperty.label)"
 				} else {
 					"let \(property.asSource) = \(fulfillingProperty.label)"
 				}

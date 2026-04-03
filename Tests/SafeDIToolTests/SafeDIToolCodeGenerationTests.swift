@@ -3133,7 +3133,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_childBuilder(iterator: IndexingIterator<Array<Element>>) -> Child {
 		            func __safeDI_grandchildBuilder() -> Grandchild {
-		                let anyIterator = AnyIterator(iterator)
+		                let anyIterator: AnyIterator = iterator
 		                return Grandchild(anyIterator: anyIterator)
 		            }
 		            let grandchildBuilder = Instantiator<Grandchild>(__safeDI_grandchildBuilder)
