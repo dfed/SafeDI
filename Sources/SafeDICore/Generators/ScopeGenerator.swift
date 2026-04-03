@@ -282,25 +282,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	struct MockContext {
 		/// The conditional compilation flag for wrapping mock output (e.g. "DEBUG").
 		let mockConditionalCompilation: String?
-		/// Maps "propertyLabel:sourceType" to disambiguated parameter labels.
-		let parameterLabelMap: [String: String]
-		/// Keys ("propertyLabel:sourceType") whose mock parameter is optional (`T? = nil`)
-		/// rather than `@autoclosure`. Used by `generatePropertyCode` to pick the binding pattern.
-		let subtreeParameterKeys: Set<String>
-		/// Keys ("propertyLabel:sourceType") already bound at root scope. Child functions skip bindings for these
+		/// Maps mock parameter identifiers to their disambiguated parameter labels.
+		let parameterLabelMap: [MockParameterIdentifier: String]
+		/// Mock parameters declared as optional (`T? = nil`) rather than `@autoclosure`.
+		/// Used by `generatePropertyCode` to pick the binding pattern.
+		let subtreeParameters: Set<MockParameterIdentifier>
+		/// Parameters already bound at root scope. Child functions skip bindings for these
 		/// since the values are captured from the enclosing scope.
-		let rootBoundKeys: Set<String>
+		let rootBoundParameters: Set<MockParameterIdentifier>
 
 		init(
 			mockConditionalCompilation: String?,
-			parameterLabelMap: [String: String] = [:],
-			subtreeParameterKeys: Set<String> = [],
-			rootBoundKeys: Set<String> = [],
+			parameterLabelMap: [MockParameterIdentifier: String] = [:],
+			subtreeParameters: Set<MockParameterIdentifier> = [],
+			rootBoundParameters: Set<MockParameterIdentifier> = [],
 		) {
 			self.mockConditionalCompilation = mockConditionalCompilation
 			self.parameterLabelMap = parameterLabelMap
-			self.subtreeParameterKeys = subtreeParameterKeys
-			self.rootBoundKeys = rootBoundKeys
+			self.subtreeParameters = subtreeParameters
+			self.rootBoundParameters = rootBoundParameters
 		}
 	}
 
@@ -542,9 +542,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					\(functionDeclaration)\(propertyDeclaration) = \(instantiatorInstantiation)
 					"""
 				case let .mock(context):
-					let sourceType = property.typeDescription.asSource
-					let key = "\(property.label):\(sourceType)"
-					let parameterLabel = context.parameterLabelMap[key] ?? property.label
+					let identifier = MockParameterIdentifier(
+						propertyLabel: property.label,
+						sourceType: property.typeDescription.asSource,
+					)
+					let parameterLabel = context.parameterLabelMap[identifier] ?? property.label
 					return """
 					\(functionDeclaration)\(propertyDeclaration) = \(parameterLabel) ?? \(instantiatorInstantiation)
 					"""
@@ -566,12 +568,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					Self.defaultValueBindings(
 						for: instantiable,
 						parameterLabelMap: context.parameterLabelMap,
-						rootBoundKeys: context.rootBoundKeys,
+						rootBoundParameters: context.rootBoundParameters,
 					) + Self.uncoveredDependencyBindings(
 						for: instantiable,
 						declaredProperties: propertiesToDeclare,
 						parameterLabelMap: context.parameterLabelMap,
-						rootBoundKeys: context.rootBoundKeys,
+						rootBoundParameters: context.rootBoundParameters,
 					)
 				}
 
@@ -616,10 +618,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				case .dependencyTree:
 					return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 				case let .mock(context):
-					let sourceType = property.typeDescription.asInstantiatedType.asSource
-					let key = "\(property.label):\(sourceType)"
-					let parameterLabel = context.parameterLabelMap[key] ?? property.label
-					if context.subtreeParameterKeys.contains(key) {
+					let identifier = MockParameterIdentifier(
+						propertyLabel: property.label,
+						sourceType: property.typeDescription.asInstantiatedType.asSource,
+					)
+					let parameterLabel = context.parameterLabelMap[identifier] ?? property.label
+					if context.subtreeParameters.contains(identifier) {
 						// Optional parameter (T? = nil): use ?? inline fallback
 						let mockInitializer = if erasedToConcreteExistential {
 							"\(property.typeDescription.asSource)(\(initializer))"
@@ -666,12 +670,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var allDeclarations = await collectMockDeclarations()
 
 		// Find dependencies not covered by the tree.
-		let coveredRootLabelsWithTypes = Set(
-			allDeclarations.map { "\($0.propertyLabel):\($0.sourceType)" },
-		)
-		// Keys (propertyLabel:sourceType) of declarations needing root-level `let x = x()` bindings.
+		let coveredRootIdentifiers = Set(allDeclarations.map(\.identifier))
+		// Identifiers of declarations needing root-level `let x = x()` bindings.
 		// These are uncovered and received dependencies NOT handled by generatePropertyCode.
-		var rootBindingKeys = Set<String>()
+		var rootBindingIdentifiers = Set<MockParameterIdentifier>()
 
 		// Check this type's own dependencies for uncovered @Instantiated dependencies.
 		for dependency in instantiable.dependencies {
@@ -681,8 +683,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let sourceType = dependency.property.propertyType.isConstant
 					? dependencyType.asSource
 					: dependency.property.typeDescription.asSource
-				let dependencyKey = "\(dependency.property.label):\(sourceType)"
-				guard !coveredRootLabelsWithTypes.contains(dependencyKey) else { continue }
+				let dependencyIdentifier = MockParameterIdentifier(propertyLabel: dependency.property.label, sourceType: sourceType)
+				guard !coveredRootIdentifiers.contains(dependencyIdentifier) else { continue }
 				allDeclarations.append(MockDeclaration(
 					propertyLabel: dependency.property.label,
 					parameterLabel: dependency.property.label,
@@ -694,7 +696,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					defaultConstruction: nil,
 					isClosureType: false,
 				))
-				rootBindingKeys.insert(dependencyKey)
+				rootBindingIdentifiers.insert(dependencyIdentifier)
 			case .received, .aliased, .forwarded:
 				break
 			}
@@ -702,10 +704,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Check transitive received dependencies not satisfied by the tree.
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
-		let updatedCoveredKeys = Set(
+		let updatedCoveredIdentifiers = Set(
 			allDeclarations
 				.filter { $0.defaultValueExpression == nil }
-				.map { "\($0.propertyLabel):\($0.sourceType)" },
+				.map(\.identifier),
 		)
 		let unwrappedOptionalCounterparts = Set(
 			receivedProperties
@@ -718,7 +720,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.map(\.label),
 		)
 		for receivedProperty in receivedProperties.sorted() {
-			guard !updatedCoveredKeys.contains("\(receivedProperty.label):\(receivedProperty.typeDescription.asSource)"),
+			guard !updatedCoveredIdentifiers.contains(MockParameterIdentifier(propertyLabel: receivedProperty.label, sourceType: receivedProperty.typeDescription.asSource)),
 			      !forwardedPropertySet.contains(receivedProperty)
 			else { continue }
 
@@ -751,7 +753,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				defaultConstruction: isOnlyIfAvailable ? "nil" : nil,
 				isClosureType: false,
 			))
-			rootBindingKeys.insert("\(receivedProperty.label):\(receivedSourceType)")
+			rootBindingIdentifiers.insert(MockParameterIdentifier(propertyLabel: receivedProperty.label, sourceType: receivedSourceType))
 		}
 
 		// Add forwarded dependencies as bare parameter declarations.
@@ -814,20 +816,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// Deduplicate declarations with same (parameterLabel, sourceType).
-		var seenKeys = Set<String>()
+		var seenIdentifiers = Set<MockParameterIdentifier>()
 		allDeclarations = allDeclarations.filter { declaration in
-			let key = "\(declaration.parameterLabel):\(declaration.sourceType)"
-			return seenKeys.insert(key).inserted
+			seenIdentifiers.insert(declaration.identifier).inserted
 		}
 
 		// Disambiguate duplicate parameter labels.
 		disambiguateParameterLabels(&allDeclarations, forwardedDeclarations: forwardedDeclarations)
 
 		// Build parameterLabelMap for body bindings.
-		var parameterLabelMap = [String: String]()
+		var parameterLabelMap = [MockParameterIdentifier: String]()
 		for declaration in allDeclarations {
-			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
-			parameterLabelMap[key] = declaration.parameterLabel
+			parameterLabelMap[declaration.identifier] = declaration.parameterLabel
 		}
 
 		// Build mock method parameters.
@@ -855,32 +855,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Build the mock method body.
 		let bodyIndent = "\(indent)\(indent)"
 
-		let subtreeParameterKeys = Set(
+		let subtreeParameters = Set(
 			allDeclarations
 				.filter(\.hasSubtree)
-				.map { "\($0.propertyLabel):\($0.sourceType)" },
+				.map(\.identifier),
 		)
 		let forwardedLabels = Set(forwardedDeclarations.map(\.propertyLabel))
-		var rootBoundKeys = Set<String>()
+		var rootBoundParameters = Set<MockParameterIdentifier>()
 		for declaration in allDeclarations {
 			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
 			if declaration.defaultValueExpression == nil {
 				// Tree children and uncovered dependencies — all get root-level bindings.
-				rootBoundKeys.insert("\(declaration.propertyLabel):\(declaration.sourceType)")
-			} else if rootBindingKeys.contains(key) {
-				rootBoundKeys.insert("\(declaration.propertyLabel):\(declaration.sourceType)")
+				rootBoundParameters.insert(declaration.identifier)
+			} else if rootBindingIdentifiers.contains(declaration.identifier) {
+				rootBoundParameters.insert(declaration.identifier)
 			} else if !forwardedLabels.contains(declaration.propertyLabel),
 			          !declaration.isClosureType
 			{
 				// Root default-valued params bound at root scope.
-				rootBoundKeys.insert("\(declaration.propertyLabel):\(declaration.sourceType)")
+				rootBoundParameters.insert(declaration.identifier)
 			}
 		}
 		let bodyContext = MockContext(
 			mockConditionalCompilation: context.mockConditionalCompilation,
 			parameterLabelMap: parameterLabelMap,
-			subtreeParameterKeys: subtreeParameterKeys,
-			rootBoundKeys: rootBoundKeys,
+			subtreeParameters: subtreeParameters,
+			rootBoundParameters: rootBoundParameters,
 		)
 		let propertyLines = try await generateProperties(
 			codeGeneration: .mock(bodyContext),
@@ -905,15 +905,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(indent)) -> \(typeName) {")
 		// Bindings for uncovered and received dependencies (must come before child constructions).
 		for declaration in allDeclarations {
-			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
-			guard rootBindingKeys.contains(key) else { continue }
+			guard rootBindingIdentifiers.contains(declaration.identifier) else { continue }
 			lines.append("\(bodyIndent)let \(declaration.propertyLabel) = \(declaration.parameterLabel)()")
 		}
 		// Bindings for root default-valued init params.
 		// Skip labels matching forwarded params — forwarded values take precedence.
 		for declaration in allDeclarations where declaration.defaultValueExpression != nil {
-			let key = "\(declaration.propertyLabel):\(declaration.sourceType)"
-			guard !rootBindingKeys.contains(key),
+			guard !rootBindingIdentifiers.contains(declaration.identifier),
 			      !forwardedLabels.contains(declaration.propertyLabel),
 			      !declaration.isClosureType
 			else { continue }
@@ -926,6 +924,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		let code = lines.joined(separator: "\n")
 		return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
+	}
+
+	/// Identifies a mock parameter by its property label and source type.
+	/// Used to track disambiguation, subtree status, and root-bound state
+	/// across different phases of mock code generation.
+	struct MockParameterIdentifier: Hashable {
+		/// The property label from the initializer (e.g., "service").
+		let propertyLabel: String
+		/// The mock parameter's type as it appears in the signature (e.g., "ExternalService").
+		/// Two parameters with the same label but different source types are distinct.
+		let sourceType: String
 	}
 
 	/// A mock declaration collected from the tree.
@@ -947,6 +956,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The default construction expression for `@autoclosure` parameters (e.g., `"T()"`, `"T.mock()"`).
 		/// nil for subtree children (which use `T? = nil` instead) and forwarded params.
 		let defaultConstruction: String?
+		/// The identifier for this declaration, combining label and type.
+		var identifier: MockParameterIdentifier {
+			MockParameterIdentifier(propertyLabel: propertyLabel, sourceType: sourceType)
+		}
+
 		/// Whether the source type is a closure/function type. Closure-typed defaults use
 		/// `@escaping T = default` instead of `@autoclosure @escaping () -> T = default`.
 		let isClosureType: Bool
@@ -1012,13 +1026,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Check for @Instantiated dependencies that have no tree child.
 			var childUncoveredDependencies = [MockDeclaration]()
 			if !isInstantiator {
-				let coveredChildLabelsWithTypes = Set(childDeclarations.map {
-					"\($0.propertyLabel):\($0.sourceType)"
-				})
+				let coveredChildIdentifiers = Set(childDeclarations.map(\.identifier))
 				for dependency in childInstantiable.dependencies {
-					let dependencyKey = "\(dependency.property.label):\(dependency.property.typeDescription.asInstantiatedType.asSource)"
+					let dependencyIdentifier = MockParameterIdentifier(
+						propertyLabel: dependency.property.label,
+						sourceType: dependency.property.typeDescription.asInstantiatedType.asSource,
+					)
 					guard case .instantiated = dependency.source,
-					      !coveredChildLabelsWithTypes.contains(dependencyKey),
+					      !coveredChildIdentifiers.contains(dependencyIdentifier),
 					      dependency.property.propertyType.isConstant
 					else { continue }
 					let dependencyType = dependency.property.typeDescription.asInstantiatedType
@@ -1114,8 +1129,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Each binding evaluates the corresponding `@autoclosure` parameter.
 	private static func defaultValueBindings(
 		for instantiable: Instantiable,
-		parameterLabelMap: [String: String],
-		rootBoundKeys: Set<String>,
+		parameterLabelMap: [MockParameterIdentifier: String],
+		rootBoundParameters: Set<MockParameterIdentifier>,
 	) -> [String] {
 		// Collect non-dependency default-valued params from the construction initializer.
 		// When a user-defined mock() exists, use its params (nil for no-arg mocks).
@@ -1138,9 +1153,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			      !argument.typeDescription.strippingEscaping.isClosure
 			else { continue }
 			let strippedType = argument.typeDescription.strippingEscaping
-			let key = "\(argument.innerLabel):\(strippedType.asSource)"
-			guard !rootBoundKeys.contains(key) else { continue }
-			let parameterLabel = parameterLabelMap[key] ?? argument.innerLabel
+			let identifier = MockParameterIdentifier(propertyLabel: argument.innerLabel, sourceType: strippedType.asSource)
+			guard !rootBoundParameters.contains(identifier) else { continue }
+			let parameterLabel = parameterLabelMap[identifier] ?? argument.innerLabel
 			bindings.append("let \(argument.innerLabel) = \(parameterLabel)()")
 		}
 		return bindings
@@ -1153,8 +1168,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func uncoveredDependencyBindings(
 		for instantiable: Instantiable,
 		declaredProperties: Set<Property>,
-		parameterLabelMap: [String: String],
-		rootBoundKeys: Set<String>,
+		parameterLabelMap: [MockParameterIdentifier: String],
+		rootBoundParameters: Set<MockParameterIdentifier>,
 	) -> [String] {
 		var bindings = [String]()
 		for dependency in instantiable.dependencies {
@@ -1163,9 +1178,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			      dependency.property.propertyType.isConstant
 			else { continue }
 			let dependencyType = dependency.property.typeDescription.asInstantiatedType
-			let key = "\(dependency.property.label):\(dependencyType.asSource)"
-			guard !rootBoundKeys.contains(key) else { continue }
-			let parameterLabel = parameterLabelMap[key] ?? dependency.property.label
+			let identifier = MockParameterIdentifier(propertyLabel: dependency.property.label, sourceType: dependencyType.asSource)
+			guard !rootBoundParameters.contains(identifier) else { continue }
+			let parameterLabel = parameterLabelMap[identifier] ?? dependency.property.label
 			bindings.append("let \(dependency.property.label) = \(parameterLabel)()")
 		}
 		return bindings
