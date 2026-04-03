@@ -313,7 +313,7 @@ struct InitializerTests {
 	}
 
 	@Test
-	func createMockInitializerArgumentList_skipsDependencyWithDefaultValue() throws {
+	func createMockInitializerArgumentList_includesDependencyWithDefaultValue() throws {
 		let initializer = Initializer(
 			arguments: [
 				.init(
@@ -346,9 +346,7 @@ struct InitializerTests {
 
 		let result = try initializer.createMockInitializerArgumentList(given: dependencies)
 
-		// crossModuleDependency is a dependency WITH a default — skipped.
-		// service is a dependency WITHOUT a default — included.
-		// flag is NOT a dependency but has a default — included (bubbled).
-		#expect(result == "service: service, flag: flag")
+		// All args included: deps (with or without defaults) + non-dep defaults.
+		#expect(result == "service: service, crossModuleDependency: crossModuleDependency, flag: flag")
 	}
 }
