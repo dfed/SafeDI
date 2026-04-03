@@ -9020,6 +9020,319 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
 	}
 
+	// MARK: - Promoted property ordering tests
+
+	@Test
+	mutating func mock_ordering_constantDepBeforeInstantiatorGrandchild() async throws {
+		// Root has @Instantiated shared + child with Instantiator grandchild that receives shared.
+		// shared must be defined before the grandchild's Instantiator function.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(shared: Shared, child: Child) {
+				        self.shared = shared
+				        self.child = child
+				    }
+				    @Instantiated let shared: Shared
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init(grandchildBuilder: Instantiator<Grandchild>) {
+				        self.grandchildBuilder = grandchildBuilder
+				    }
+				    @Instantiated let grandchildBuilder: Instantiator<Grandchild>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Grandchild: Instantiable {
+				    public init(shared: Shared, name: String) {
+				        self.shared = shared
+				        self.name = name
+				    }
+				    @Received let shared: Shared
+				    @Forwarded let name: String
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Shared: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		// shared must appear before the child construction that uses it
+		let sharedIndex = try #require(mock.range(of: "let shared = shared?(.root)")?.lowerBound)
+		let childIndex = try #require(mock.range(of: "let child")?.lowerBound)
+		#expect(sharedIndex < childIndex, "shared must be ordered before child. Output:\n\(mock)")
+	}
+
+	@Test
+	mutating func mock_ordering_promotedDepBeforeSiblingInstantiator() async throws {
+		// Two Instantiator siblings. ChildA @Instantiates shared, ChildB @Receives it.
+		// shared is promoted to root. Must be ordered before builderB's function.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(builderA: Instantiator<ChildA>, builderB: Instantiator<ChildB>) {
+				        self.builderA = builderA
+				        self.builderB = builderB
+				    }
+				    @Instantiated let builderA: Instantiator<ChildA>
+				    @Instantiated let builderB: Instantiator<ChildB>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(shared: Shared, name: String) {
+				        self.shared = shared
+				        self.name = name
+				    }
+				    @Instantiated let shared: Shared
+				    @Forwarded let name: String
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(shared: Shared, name: String) {
+				        self.shared = shared
+				        self.name = name
+				    }
+				    @Received let shared: Shared
+				    @Forwarded let name: String
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Shared: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		// shared must be defined at root level, before both builder functions
+		let sharedIndex = try #require(mock.range(of: "let shared = shared?(.root)")?.lowerBound)
+		let builderBIndex = try #require(mock.range(of: "let builderB")?.lowerBound)
+		#expect(sharedIndex < builderBIndex, "shared must be ordered before builderB. Output:\n\(mock)")
+	}
+
+	@Test
+	mutating func mock_ordering_promotedDepBeforeGrandchildInSiblingBranch() async throws {
+		// ChildA creates shared in its subtree. ChildB's grandchild receives it.
+		// shared promoted to root. Must be ordered before childB.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(childA: ChildA, childB: ChildB) {
+				        self.childA = childA
+				        self.childB = childB
+				    }
+				    @Instantiated let childA: ChildA
+				    @Instantiated let childB: ChildB
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(shared: Shared) { self.shared = shared }
+				    @Instantiated let shared: Shared
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(grandchildBuilder: Instantiator<Grandchild>) {
+				        self.grandchildBuilder = grandchildBuilder
+				    }
+				    @Instantiated let grandchildBuilder: Instantiator<Grandchild>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Grandchild: Instantiable {
+				    public init(shared: Shared, name: String) {
+				        self.shared = shared
+				        self.name = name
+				    }
+				    @Received let shared: Shared
+				    @Forwarded let name: String
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Shared: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		// shared must be at root scope before childB (which contains grandchild that needs it)
+		let sharedIndex = try #require(mock.range(of: "let shared = shared?(.root)")?.lowerBound)
+		let childBIndex = try #require(mock.range(of: "let childB")?.lowerBound)
+		#expect(sharedIndex < childBIndex, "shared must be ordered before childB. Output:\n\(mock)")
+	}
+
+	@Test
+	mutating func mock_ordering_chainedPromotedDepsBeforeGrandchild() async throws {
+		// Grandchild receives serviceA and serviceB. ServiceA depends on serviceB.
+		// Both promoted. serviceB must be ordered before serviceA, both before grandchild.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(child: Child) { self.child = child }
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init(grandchildBuilder: Instantiator<Grandchild>) {
+				        self.grandchildBuilder = grandchildBuilder
+				    }
+				    @Instantiated let grandchildBuilder: Instantiator<Grandchild>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Grandchild: Instantiable {
+				    public init(serviceA: ServiceA, serviceB: ServiceB, name: String) {
+				        self.serviceA = serviceA
+				        self.serviceB = serviceB
+				        self.name = name
+				    }
+				    @Received let serviceA: ServiceA
+				    @Received let serviceB: ServiceB
+				    @Forwarded let name: String
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ServiceA: Instantiable {
+				    public init(serviceB: ServiceB) { self.serviceB = serviceB }
+				    @Instantiated let serviceB: ServiceB
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ServiceB: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		// serviceB before serviceA (chain dependency), both before child
+		let serviceBIndex = try #require(mock.range(of: "let serviceB = serviceB?(.root)")?.lowerBound)
+		let serviceAIndex = try #require(mock.range(of: "let serviceA = serviceA?(.root)")?.lowerBound)
+		let childIndex = try #require(mock.range(of: "let child")?.lowerBound)
+		#expect(serviceBIndex < serviceAIndex, "serviceB must be ordered before serviceA. Output:\n\(mock)")
+		#expect(serviceAIndex < childIndex, "serviceA must be ordered before child. Output:\n\(mock)")
+	}
+
+	@Test
+	mutating func mock_ordering_deepNesting_greatGrandchildReceivesFromSiblingBranch() async throws {
+		// ChildB @Instantiates shared. ChildA's great-grandchild (via Instantiator) receives it.
+		// shared must be at root before childA.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(childA: ChildA, childB: ChildB) {
+				        self.childA = childA
+				        self.childB = childB
+				    }
+				    @Instantiated let childA: ChildA
+				    @Instantiated let childB: ChildB
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(grandchild: Grandchild) { self.grandchild = grandchild }
+				    @Instantiated let grandchild: Grandchild
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Grandchild: Instantiable {
+				    public init(greatGrandchildBuilder: Instantiator<GreatGrandchild>) {
+				        self.greatGrandchildBuilder = greatGrandchildBuilder
+				    }
+				    @Instantiated let greatGrandchildBuilder: Instantiator<GreatGrandchild>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct GreatGrandchild: Instantiable {
+				    public init(shared: Shared, name: String) {
+				        self.shared = shared
+				        self.name = name
+				    }
+				    @Received let shared: Shared
+				    @Forwarded let name: String
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(shared: Shared) { self.shared = shared }
+				    @Instantiated let shared: Shared
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Shared: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		// shared promoted to root. childB creates it but childA's great-grandchild needs it.
+		// shared must be before childA (which transitively captures it).
+		let sharedIndex = try #require(mock.range(of: "let shared = shared?(.root)")?.lowerBound)
+		let childAIndex = try #require(mock.range(of: "let childA")?.lowerBound)
+		#expect(sharedIndex < childAIndex, "shared must be ordered before childA. Output:\n\(mock)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
