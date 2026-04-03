@@ -1376,6 +1376,7 @@ extension Instantiable {
 				.createInitializerArgumentList(
 					given: dependencies,
 					unavailableProperties: unavailableProperties,
+					mockContext: mockContext,
 				) ?? Self.incorrectlyConfiguredComment
 		}
 	}

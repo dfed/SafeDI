@@ -225,13 +225,20 @@ public struct Initializer: Codable, Hashable, Sendable {
 	func createInitializerArgumentList(
 		given dependencies: [Dependency],
 		unavailableProperties: Set<Property>? = nil,
+		mockContext: ScopeGenerator.MockContext? = nil,
 	) throws(GenerationError) -> String {
 		try createDependencyAndArgumentBinding(given: dependencies)
 			.map {
 				if let unavailableProperties, unavailableProperties.contains($0.dependency.property) {
-					"\($0.argument.label): nil"
+					return "\($0.argument.label): nil"
+				} else if $0.dependency.source == .forwarded {
+					return "\($0.argument.label): \($0.argument.innerLabel)"
 				} else {
-					"\($0.argument.label): \($0.argument.innerLabel)"
+					let variableName = mockContext?.disambiguatedLabel(
+						forPropertyLabel: $0.argument.innerLabel,
+						typeDescription: $0.argument.typeDescription,
+					) ?? $0.argument.innerLabel
+					return "\($0.argument.label): \(variableName)"
 				}
 			}
 			.joined(separator: ", ")
