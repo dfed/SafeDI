@@ -452,7 +452,7 @@ struct RootScannerTests {
 
 		// Construct a URL that is NOT marked as a directory (using string init,
 		// not fileURLWithPath which auto-detects directories on disk).
-		let nonDirectoryBaseURL = URL(string: "file://\(fixture.rootDirectory.path)")!
+		let nonDirectoryBaseURL = try #require(URL(string: "file://\(fixture.rootDirectory.path)"))
 		#expect(!nonDirectoryBaseURL.hasDirectoryPath)
 		let result = try RootScanner().scan(
 			inputFilePaths: ["Root.swift"],
