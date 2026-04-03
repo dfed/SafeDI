@@ -81,9 +81,13 @@ struct SafeDITool: AsyncParsableCommand {
 		// If the source configuration specifies additional directories to include,
 		// find and parse swift files in those directories and merge with initial results.
 		let module: ModuleInfo
+		let additionalDirectoryRootSourceFiles: Set<String>
 		if let sourceConfiguration, !sourceConfiguration.additionalDirectoriesToInclude.isEmpty {
 			let additionalFiles = try await Self.findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude)
 			let additionalModule = try await Self.parseSwiftFiles(additionalFiles)
+			additionalDirectoryRootSourceFiles = Set(
+				additionalModule.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath)
+			)
 			module = ModuleInfo(
 				imports: initialModule.imports + additionalModule.imports,
 				instantiables: initialModule.instantiables + additionalModule.instantiables,
@@ -91,6 +95,7 @@ struct SafeDITool: AsyncParsableCommand {
 				filesWithUnexpectedNodes: initialModule.filesWithUnexpectedNodes.map { $0 + (additionalModule.filesWithUnexpectedNodes ?? []) } ?? additionalModule.filesWithUnexpectedNodes,
 			)
 		} else {
+			additionalDirectoryRootSourceFiles = []
 			module = initialModule
 		}
 
@@ -190,7 +195,7 @@ struct SafeDITool: AsyncParsableCommand {
 					}
 				}
 
-				// Validate manifest entries point to actual roots.
+				// Validate manifest and roots are in sync before writing any output.
 				let allRootSourceFiles = Set(normalizedInstantiables.filter(\.isRoot).compactMap(\.sourceFilePath))
 				let manifestInputPaths = Set(manifest.dependencyTreeGeneration.map(\.inputFilePath))
 				for entry in manifest.dependencyTreeGeneration {
@@ -199,12 +204,21 @@ struct SafeDITool: AsyncParsableCommand {
 					}
 				}
 
-				// Auto-extend the manifest for roots not yet listed (e.g. roots
-				// discovered from additionalDirectoriesToInclude, which the plugin
-				// cannot know about at manifest-building time).
+				// Roots from additionalDirectoriesToInclude are not in the manifest
+				// because the plugin builds the manifest before SafeDITool discovers
+				// them. Auto-extend the manifest for those roots only.
+				// Any other unmapped root (e.g. from the target CSV or dependent
+				// modules) is a real manifest-drift error.
+				let unmappedAdditionalRoots = additionalDirectoryRootSourceFiles.subtracting(manifestInputPaths)
+				let unmappedNonAdditionalRoots = allRootSourceFiles
+					.subtracting(manifestInputPaths)
+					.subtracting(additionalDirectoryRootSourceFiles)
+				for sourceFile in unmappedNonAdditionalRoots {
+					throw ManifestError.rootNotInManifest(sourceFilePath: sourceFile)
+				}
+
 				var extendedManifest = manifest
-				let unmappedRootSourceFiles = allRootSourceFiles.subtracting(manifestInputPaths)
-				if !unmappedRootSourceFiles.isEmpty {
+				if !unmappedAdditionalRoots.isEmpty {
 					let existingOutputPaths = manifest.dependencyTreeGeneration.map(\.outputFilePath)
 					guard let firstOutputPath = existingOutputPaths.first else {
 						throw ManifestError.noOutputDirectoryForAdditionalRoots
@@ -232,9 +246,9 @@ struct SafeDITool: AsyncParsableCommand {
 						outputDirectory: outputDirectory,
 					)
 
-					// Add entries only for unmapped roots.
+					// Add entries only for unmapped additional-directory roots.
 					for scannerEntry in scanResult.manifest.dependencyTreeGeneration
-						where unmappedRootSourceFiles.contains(scannerEntry.inputFilePath)
+						where unmappedAdditionalRoots.contains(scannerEntry.inputFilePath)
 					{
 						extendedManifest.dependencyTreeGeneration.append(
 							SafeDIToolManifest.InputOutputMap(
@@ -276,12 +290,15 @@ struct SafeDITool: AsyncParsableCommand {
 
 	private enum ManifestError: Error, CustomStringConvertible {
 		case noRootFound(inputPath: String)
+		case rootNotInManifest(sourceFilePath: String)
 		case noOutputDirectoryForAdditionalRoots
 
 		var description: String {
 			switch self {
 			case let .noRootFound(inputPath):
 				"Manifest lists '\(inputPath)' as containing a dependency tree root, but no @\(InstantiableVisitor.macroName)(isRoot: true) was found in that file."
+			case let .rootNotInManifest(sourceFilePath):
+				"Found @\(InstantiableVisitor.macroName)(isRoot: true) in '\(sourceFilePath)', but this file is not listed in the manifest's dependencyTreeGeneration. Add it to the manifest or remove the isRoot annotation."
 			case .noOutputDirectoryForAdditionalRoots:
 				"Found root @Instantiable types from additional directories, but the manifest has no existing entries to derive an output directory from."
 			}
