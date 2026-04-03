@@ -546,10 +546,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						propertyLabel: property.label,
 						sourceType: property.typeDescription.asSource,
 					)
-					let parameterLabel = context.parameterLabelMap[identifier] ?? property.label
-					return """
-					\(functionDeclaration)\(propertyDeclaration) = \(parameterLabel) ?? \(instantiatorInstantiation)
-					"""
+					if let parameterLabel = context.parameterLabelMap[identifier] {
+						return """
+						\(functionDeclaration)\(propertyDeclaration) = \(parameterLabel) ?? \(instantiatorInstantiation)
+						"""
+					} else {
+						return """
+						\(functionDeclaration)\(propertyDeclaration) = \(instantiatorInstantiation)
+						"""
+					}
 				}
 			case .constant:
 				let generatedProperties = try await generateProperties(
@@ -622,18 +627,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						propertyLabel: property.label,
 						sourceType: property.typeDescription.asInstantiatedType.asSource,
 					)
-					let parameterLabel = context.parameterLabelMap[identifier] ?? property.label
-					if context.subtreeParameters.contains(identifier) {
-						// Optional parameter (T? = nil): use ?? inline fallback
-						let mockInitializer = if erasedToConcreteExistential {
-							"\(property.typeDescription.asSource)(\(initializer))"
+					// Only root-level children have entries in parameterLabelMap.
+					// Nested children (inside __safeDI_* functions) use inline construction.
+					if let parameterLabel = context.parameterLabelMap[identifier] {
+						if context.subtreeParameters.contains(identifier) {
+							// Optional parameter (T? = nil): use ?? inline fallback
+							let mockInitializer = if erasedToConcreteExistential {
+								"\(property.typeDescription.asSource)(\(initializer))"
+							} else {
+								initializer
+							}
+							return "\(functionDeclaration)\(propertyDeclaration) = \(parameterLabel) ?? \(mockInitializer)\n"
 						} else {
-							initializer
+							// Autoclosure parameter: evaluate
+							return "\(propertyDeclaration) = \(parameterLabel)()\n"
 						}
-						return "\(functionDeclaration)\(propertyDeclaration) = \(parameterLabel) ?? \(mockInitializer)\n"
 					} else {
-						// Autoclosure parameter: evaluate
-						return "\(propertyDeclaration) = \(parameterLabel)()\n"
+						// Nested child (no root parameter): inline construction
+						return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 					}
 				}
 			}
