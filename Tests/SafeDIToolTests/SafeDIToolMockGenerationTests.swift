@@ -9109,6 +9109,34 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	mutating func mock_parseErrorWritesErrorStubToMockOutputs() async throws {
+		// When source has parse errors, mock outputs should get the error stub too
+		// (not be left stale or missing).
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init() {}
+
+				    :::brokenSyntax
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		// Both dependency tree AND mock outputs should have the error.
+		let rootDep = try #require(output.dependencyTreeFiles["Root+SafeDI.swift"])
+		#expect(rootDep.contains("#error"), "Dependency tree output should have #error. Output:\n\(rootDep)")
+
+		let rootMock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		#expect(rootMock.contains("#error"), "Mock output should have #error. Output:\n\(rootMock)")
+	}
+
+	@Test
 	mutating func mock_forwardedParamDoesNotCollideWithBubbledDefault() async throws {
 		// Root @Forwards `name: String`. Child has default-valued `name: String = "default"`.
 		// Both produce mock params with label "name". Disambiguation must handle forwarded too.

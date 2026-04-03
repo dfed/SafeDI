@@ -5813,10 +5813,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		// No roots are declared in this test, so no output files are generated.
-		// The unexpected nodes are reported via moduleInfo.
-		#expect(output.generatedFiles == [:])
+		// No roots are declared, so no dependency tree files. But mock files get the error stub.
+		#expect(output.dependencyTreeFiles == [:])
 		#expect(output.moduleInfo.filesWithUnexpectedNodes != nil)
+		// Mock outputs get the error stub so the build system has its expected outputs.
+		for (_, content) in output.mockFiles {
+			#expect(content.contains("#error"), "Mock outputs should contain #error stub")
+		}
 	}
 
 	@Test
