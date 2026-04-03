@@ -27,7 +27,7 @@ func executeSafeDIToolTest(
 	swiftFileContent: [String],
 	dependentModuleInfoPaths: [String] = [],
 	additionalImportedModules: [String] = [],
-	buildDependencyTreeOutput: Bool = false,
+	buildSwiftOutputDirectory: Bool = false,
 	buildDOTFileOutput: Bool = false,
 	filesToDelete: inout [URL],
 	includeFolders: [String] = [],
@@ -50,10 +50,36 @@ func executeSafeDIToolTest(
 		.write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
 
 	let moduleInfoOutput = URL.temporaryFile.appendingPathExtension("safedi")
-	let dependencyTreeOutput = URL.temporaryFile.appendingPathExtension("swift")
+	let outputDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+	let manifestFile = URL.temporaryFile.appendingPathExtension("json")
 	let dotTreeOutput = URL.temporaryFile.appendingPathExtension("dot")
 
 	return try await SafeDITool.$fileFinder.withValue(StubFileFinder(files: swiftFiles)) { // Successfully execute the file finder code path.
+		// Build the manifest by scanning for files that contain isRoot: true.
+		var manifestPath: String?
+		if buildSwiftOutputDirectory {
+			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+			var entries = [SafeDIToolManifest.InputOutputMap]()
+			let rootRegex = try Regex(#"@Instantiable\s*\([^)]*isRoot\s*:\s*true[^)]*\)"#)
+			let typeDeclRegex = try Regex(#"(?:class|struct|actor)\s+(\w+)"#)
+			for (content, file) in zip(swiftFileContent, swiftFiles) {
+				if let rootMatch = content.firstMatch(of: rootRegex) {
+					let afterMacro = content[rootMatch.range.upperBound...]
+					if let typeMatch = afterMacro.firstMatch(of: typeDeclRegex),
+					   let nameRange = typeMatch.output[1].range
+					{
+						let typeName = String(content[nameRange])
+						let outputPath = (outputDirectory.relativePath as NSString).appendingPathComponent("\(typeName)+SafeDI.swift")
+						entries.append(.init(inputFilePath: file.relativePath, outputFilePath: outputPath))
+					}
+				}
+			}
+			let manifest = SafeDIToolManifest(dependencyTreeGeneration: entries)
+			let manifestData = try JSONEncoder().encode(manifest)
+			try manifestData.write(to: manifestFile)
+			manifestPath = manifestFile.relativePath
+		}
+
 		var tool = SafeDITool()
 		tool.swiftSourcesFilePath = swiftFileCSV.relativePath
 		tool.showVersion = false
@@ -61,24 +87,40 @@ func executeSafeDIToolTest(
 		tool.additionalImportedModules = additionalImportedModules
 		tool.moduleInfoOutput = moduleInfoOutput.relativePath
 		tool.dependentModuleInfoFilePath = dependentModuleInfoPaths.isEmpty ? nil : dependentModuleInfoFileCSV.relativePath
-		tool.dependencyTreeOutput = buildDependencyTreeOutput ? dependencyTreeOutput.relativePath : nil
+		tool.swiftManifest = manifestPath
 		tool.dotFileOutput = buildDOTFileOutput ? dotTreeOutput.relativePath : nil
 		try await tool.run()
 
 		filesToDelete.append(swiftFileCSV)
 		filesToDelete += swiftFiles
 		filesToDelete.append(moduleInfoOutput)
-		if buildDependencyTreeOutput {
-			filesToDelete.append(dependencyTreeOutput)
+		if buildSwiftOutputDirectory {
+			filesToDelete.append(outputDirectory)
+			filesToDelete.append(manifestFile)
 		}
 		if buildDOTFileOutput {
 			filesToDelete.append(dotTreeOutput)
 		}
 
+		// Read generated files from the output directory.
+		let generatedFiles: [String: String]? = if buildSwiftOutputDirectory {
+			{
+				guard let fileNames = try? FileManager.default.contentsOfDirectory(atPath: outputDirectory.relativePath) else { return [:] }
+				var result = [String: String]()
+				for fileName in fileNames where fileName.hasSuffix(".swift") {
+					let filePath = (outputDirectory.relativePath as NSString).appendingPathComponent(fileName)
+					result[fileName] = try? String(contentsOfFile: filePath, encoding: .utf8)
+				}
+				return result
+			}()
+		} else {
+			nil
+		}
+
 		return try TestOutput(
 			moduleInfo: JSONDecoder().decode(SafeDITool.ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
 			moduleInfoOutputPath: moduleInfoOutput.relativePath,
-			dependencyTree: buildDependencyTreeOutput ? String(data: Data(contentsOf: dependencyTreeOutput), encoding: .utf8) : nil,
+			generatedFiles: generatedFiles,
 			dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil,
 		)
 	}
@@ -87,7 +129,7 @@ func executeSafeDIToolTest(
 struct TestOutput {
 	let moduleInfo: SafeDITool.ModuleInfo
 	let moduleInfoOutputPath: String
-	let dependencyTree: String?
+	let generatedFiles: [String: String]?
 	let dotTree: String?
 }
 

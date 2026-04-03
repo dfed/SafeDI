@@ -31,7 +31,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			return []
 		}
 
-		let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
+		let outputDirectory = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutput")
 		// Swift Package Plugins did not (as of Swift 5.9) allow for
 		// creating dependencies between plugin output at the time of writing.
 		// Since our current build system did not support depending on the
@@ -46,8 +46,21 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					.sourceFiles(withSuffix: ".swift")
 					.map(\.url)
 			}
+
+		let allSwiftFiles = targetSwiftFiles + dependenciesSourceFiles
+		let rootFiles = findFilesWithRoots(in: allSwiftFiles)
+		guard !rootFiles.isEmpty else {
+			return []
+		}
+
+		let outputFiles = zip(rootFiles, outputFileNames(for: rootFiles)).map { _, name in
+			outputDirectory.appending(path: name)
+		}
+
+		let packageRoot = context.package.directoryURL
 		let inputSourcesFile = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv")
-		try (targetSwiftFiles.map { $0.path(percentEncoded: false) } + dependenciesSourceFiles.map { $0.path(percentEncoded: false) })
+		try allSwiftFiles
+			.map { relativePath(for: $0, relativeTo: packageRoot) }
 			.joined(separator: ",")
 			.write(
 				to: inputSourcesFile,
@@ -55,10 +68,18 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 				encoding: .utf8,
 			)
 
+		let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
+		try writeManifest(
+			dependencyTreeInputFiles: rootFiles,
+			outputDirectory: outputDirectory,
+			to: manifestFile,
+			relativeTo: packageRoot,
+		)
+
 		let arguments = [
 			inputSourcesFile.path(percentEncoded: false),
-			"--dependency-tree-output",
-			outputSwiftFile.path(percentEncoded: false),
+			"--swift-manifest",
+			manifestFile.path(percentEncoded: false),
 		]
 
 		let downloadedToolLocation = context.downloadedToolLocation
@@ -84,8 +105,8 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 				executable: toolLocation,
 				arguments: arguments,
 				environment: [:],
-				inputFiles: targetSwiftFiles + dependenciesSourceFiles,
-				outputFiles: [outputSwiftFile],
+				inputFiles: allSwiftFiles,
+				outputFiles: outputFiles,
 			),
 		]
 	}
@@ -142,10 +163,20 @@ extension Target {
 				return []
 			}
 
-			let outputSwiftFile = context.pluginWorkDirectoryURL.appending(path: "SafeDI.swift")
+			let rootFiles = findFilesWithRoots(in: inputSwiftFiles)
+			guard !rootFiles.isEmpty else {
+				return []
+			}
+
+			let outputDirectory = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutput")
+			let outputFiles = zip(rootFiles, outputFileNames(for: rootFiles)).map { _, name in
+				outputDirectory.appending(path: name)
+			}
+
+			let projectRoot = context.xcodeProject.directoryURL
 			let inputSourcesFile = context.pluginWorkDirectoryURL.appending(path: "InputSwiftFiles.csv")
 			try inputSwiftFiles
-				.map { $0.path(percentEncoded: false) }
+				.map { relativePath(for: $0, relativeTo: projectRoot) }
 				.joined(separator: ",")
 				.write(
 					to: inputSourcesFile,
@@ -153,10 +184,18 @@ extension Target {
 					encoding: .utf8,
 				)
 
+			let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
+			try writeManifest(
+				dependencyTreeInputFiles: rootFiles,
+				outputDirectory: outputDirectory,
+				to: manifestFile,
+				relativeTo: projectRoot,
+			)
+
 			let arguments = [
 				inputSourcesFile.path(percentEncoded: false),
-				"--dependency-tree-output",
-				outputSwiftFile.path(percentEncoded: false),
+				"--swift-manifest",
+				manifestFile.path(percentEncoded: false),
 			]
 
 			let downloadedToolLocation = context.downloadedToolLocation
@@ -173,14 +212,14 @@ extension Target {
 				try context.tool(named: "SafeDITool").url
 			}
 
-			return try [
+			return [
 				.buildCommand(
 					displayName: "SafeDIGenerateDependencyTree",
 					executable: toolLocation,
 					arguments: arguments,
 					environment: [:],
 					inputFiles: inputSwiftFiles,
-					outputFiles: [outputSwiftFile],
+					outputFiles: outputFiles,
 				),
 			]
 		}

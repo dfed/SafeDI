@@ -55,6 +55,9 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// The declaration type of the Instantiable’s concrete type.
 	public let declarationType: DeclarationType
 
+	/// The path to the source file that declared this Instantiable.
+	public var sourceFilePath: String?
+
 	/// The type of declaration where this Instantiable was defined.
 	public enum DeclarationType: Codable, Hashable, Sendable {
 		case classType

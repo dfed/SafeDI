@@ -28,6 +28,20 @@ fi
 
 # Run the tool.
 SOURCE_DIR="$PROJECT_DIR/ExampleCocoaPodsIntegration"
-SAFEDI_OUTPUT="$PROJECT_DIR/SafeDIOutput/SafeDI.swift"
-mkdir -p $PROJECT_DIR/SafeDIOutput
-$SAFEDI_LOCATION --include "$SOURCE_DIR" --dependency-tree-output "$SAFEDI_OUTPUT"
+SAFEDI_OUTPUT_DIR="$PROJECT_DIR/SafeDIOutput"
+mkdir -p "$SAFEDI_OUTPUT_DIR"
+
+# Create the manifest JSON mapping input files to output files.
+# See SafeDIToolManifest in SafeDICore for the expected format.
+cat > "$SAFEDI_OUTPUT_DIR/SafeDIManifest.json" << MANIFEST
+{
+  "dependencyTreeGeneration": [
+    {
+      "inputFilePath": "$SOURCE_DIR/Views/ExampleApp.swift",
+      "outputFilePath": "$SAFEDI_OUTPUT_DIR/ExampleApp+SafeDI.swift"
+    }
+  ]
+}
+MANIFEST
+
+$SAFEDI_LOCATION --include "$SOURCE_DIR" --swift-manifest "$SAFEDI_OUTPUT_DIR/SafeDIManifest.json"
