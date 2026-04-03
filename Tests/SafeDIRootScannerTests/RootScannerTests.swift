@@ -20,8 +20,8 @@
 
 import Foundation
 import SafeDICore
-import Testing
 import SafeDIRootScannerCore
+import Testing
 @testable import SafeDIRootScanner
 
 struct RootScannerTests {
@@ -366,6 +366,100 @@ struct RootScannerTests {
 		// }
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenConfigHasNoDirectoriesProperty() {
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let additionalImportedModules: [StaticString] = ["SomeModule"]
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenTruncatedBeforeEquals() {
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let additionalDirectoriesToInclude
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenTruncatedBeforeBracket() {
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let additionalDirectoriesToInclude: [StaticString] =
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenUnmatchedBracket() {
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let additionalDirectoriesToInclude: [StaticString] = ["unclosed
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_returnsPartial_whenMalformedStringLiteral() {
+		// Brackets are matched but the last string literal has no closing quote.
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let additionalDirectoriesToInclude: [StaticString] = ["good", "unclosed]
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["good"])
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenArrayHasNoStringLiterals() {
+		// Brackets matched but content has no quotes at all.
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let additionalDirectoriesToInclude: [StaticString] = [someVariable]
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
+	func containsRoot_returnsFalse_whenParenIsUnmatched() {
+		#expect(!RootScanner.containsRoot(in: "@Instantiable(isRoot: true"))
+	}
+
+	@Test
+	func scan_inputFilePaths_appliesDirectoryBaseURL_whenBaseURLIsNotDirectory() throws {
+		let fixture = try ScannerFixture()
+		defer { fixture.delete() }
+
+		_ = try fixture.writeFile(
+			relativePath: "Root.swift",
+			content: rootSource(typeName: "BaseURLRoot"),
+		)
+
+		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
+
+		// Construct a URL that is NOT marked as a directory (using string init,
+		// not fileURLWithPath which auto-detects directories on disk).
+		let nonDirectoryBaseURL = URL(string: "file://\(fixture.rootDirectory.path)")!
+		#expect(!nonDirectoryBaseURL.hasDirectoryPath)
+		let result = try RootScanner().scan(
+			inputFilePaths: ["Root.swift"],
+			relativeTo: nonDirectoryBaseURL,
+			outputDirectory: outputDirectory,
+		)
+		#expect(!result.manifest.dependencyTreeGeneration.isEmpty)
 	}
 
 	@Test

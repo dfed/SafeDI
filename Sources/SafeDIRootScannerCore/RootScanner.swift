@@ -199,7 +199,7 @@ public struct RootScanner {
 	}
 
 	/// Extracts quoted string literal values from the interior of an array expression.
-	private static func extractStringLiterals<S: StringProtocol>(from arrayContent: S) -> [String] {
+	private static func extractStringLiterals(from arrayContent: some StringProtocol) -> [String] {
 		var results = [String]()
 		var searchIndex = arrayContent.startIndex
 		while searchIndex < arrayContent.endIndex {

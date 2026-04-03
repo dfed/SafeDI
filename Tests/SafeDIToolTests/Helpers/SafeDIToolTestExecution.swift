@@ -20,8 +20,8 @@
 
 import Foundation
 import SafeDICore
-import Testing
 import SafeDIRootScannerCore
+import Testing
 @testable import SafeDITool
 
 func executeSafeDIToolTest(
@@ -87,7 +87,7 @@ func executeSafeDIToolTest(
 
 	// Build the StubFileFinder. When additional directory files exist, make it
 	// directory-aware so it returns only files under the enumerated root.
-	let fileFinder: StubFileFinder = if !additionalDirectoryFiles.isEmpty {
+	let fileFinder = if !additionalDirectoryFiles.isEmpty {
 		StubFileFinder(filesByDirectory: [
 			swiftFixtureDirectory: swiftFiles,
 			additionalFixtureDirectory!: additionalDirectoryFiles,
@@ -208,14 +208,14 @@ extension URL {
 struct StubFileFinder: FileFinder {
 	/// Creates a file finder that returns the same files regardless of which directory is enumerated.
 	init(files: [URL]) {
-		self.filesByDirectory = nil
-		self.fallbackFiles = files
+		filesByDirectory = nil
+		fallbackFiles = files
 	}
 
 	/// Creates a directory-aware file finder that returns only files under the enumerated root.
 	init(filesByDirectory: [URL: [URL]]) {
 		self.filesByDirectory = filesByDirectory
-		self.fallbackFiles = []
+		fallbackFiles = []
 	}
 
 	func enumerator(

@@ -193,7 +193,7 @@ struct SafeDITool: AsyncParsableCommand {
 				// Only check current-module roots (not dependent-module roots, which
 				// don't belong in this target's manifest).
 				let currentModuleRootSourceFiles = Set(
-					module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath)
+					module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath),
 				)
 				let manifestInputPaths = Set(manifest.dependencyTreeGeneration.map(\.inputFilePath))
 				for entry in manifest.dependencyTreeGeneration {
