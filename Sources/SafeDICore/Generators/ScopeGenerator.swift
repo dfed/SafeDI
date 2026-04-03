@@ -561,10 +561,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					leadingMemberWhitespace: Self.standardIndent,
 				)
 
-				// In mock mode, generate bindings for default-valued init parameters.
-				// Each binding resolves the override closure or falls back to the default expression.
+				// In mock mode, generate bindings for:
+				// 1. Default-valued init parameters (resolves override closure or falls back to default)
+				// 2. Uncovered @Instantiated deps (evaluates the required closure parameter)
 				// Wrapping in a function scopes the bindings to avoid name collisions between siblings.
-				let defaultArgBindings: [String] = switch codeGeneration {
+				let mockExtraBindings: [String] = switch codeGeneration {
 				case .dependencyTree:
 					[]
 				case let .mock(context):
@@ -572,10 +573,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						for: instantiable,
 						path: context.path + [property.label],
 						propertyToParameterLabel: context.propertyToParameterLabel,
+					) + Self.uncoveredDepBindings(
+						for: instantiable,
+						declaredProperties: propertiesToDeclare,
+						path: context.path + [property.label],
+						propertyToParameterLabel: context.propertyToParameterLabel,
 					)
 				}
 
-				let hasGeneratedContent = !generatedProperties.isEmpty || !defaultArgBindings.isEmpty
+				let hasGeneratedContent = !generatedProperties.isEmpty || !mockExtraBindings.isEmpty
 				let propertyDeclaration = if erasedToConcreteExistential || (
 					concreteTypeName == property.typeDescription.asSource
 						&& !hasGeneratedContent
@@ -589,7 +595,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// Ideally we would be able to use an anonymous closure rather than a named function here.
 				// Unfortunately, there's a bug in Swift Concurrency that prevents us from doing this: https://github.com/swiftlang/swift/issues/75003
 				let functionName = functionName(toBuild: property)
-				let allFunctionBodyLines = defaultArgBindings.map { "\(Self.standardIndent)\($0)" } + generatedProperties
+				let allFunctionBodyLines = mockExtraBindings.map { "\(Self.standardIndent)\($0)" } + generatedProperties
 				let functionDeclaration = if !hasGeneratedContent {
 					""
 				} else {
@@ -1209,6 +1215,31 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let parameterLabel = propertyToParameterLabel["\(pathCaseName)/\(argument.innerLabel)"] ?? argument.innerLabel
 			let typeAnnotation = argument.typeDescription.strippingEscaping.asSource
 			bindings.append("let \(argument.innerLabel): \(typeAnnotation) = if let \(argument.innerLabel) = \(parameterLabel)?(.\(pathCaseName)) { \(argument.innerLabel) } else { \(defaultExpr) }")
+		}
+		return bindings
+	}
+
+	/// Generates `let` bindings for @Instantiated deps that have no tree child
+	/// (e.g., type from a parallel dependency tree not in the scope map).
+	/// These are required mock parameters that need to be evaluated before
+	/// passing to the init or .mock() call.
+	private static func uncoveredDepBindings(
+		for instantiable: Instantiable,
+		declaredProperties: Set<Property>,
+		path: [String],
+		propertyToParameterLabel: [String: String],
+	) -> [String] {
+		let pathCaseName = path.joined(separator: "_")
+		guard !pathCaseName.isEmpty else { return [] }
+
+		var bindings = [String]()
+		for dependency in instantiable.dependencies {
+			guard case .instantiated = dependency.source,
+			      !declaredProperties.contains(dependency.property),
+			      dependency.property.propertyType.isConstant
+			else { continue }
+			let parameterLabel = propertyToParameterLabel["\(pathCaseName)/\(dependency.property.label)"] ?? dependency.property.label
+			bindings.append("let \(dependency.property.label) = \(parameterLabel)(.\(pathCaseName))")
 		}
 		return bindings
 	}
