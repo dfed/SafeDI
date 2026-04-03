@@ -42,8 +42,36 @@ func runRootScanner(
 	manifestFile: URL,
 ) throws -> [URL] {
 	let inputFilePaths = try RootScanner.inputFilePaths(from: inputSourcesFile)
+
+	// Check target files for @SafeDIConfiguration to discover additional directories.
+	let directoryBaseURL = projectRoot.hasDirectoryPath
+		? projectRoot
+		: projectRoot.appendingPathComponent("", isDirectory: true)
+	var additionalSwiftFiles = [URL]()
+	for inputFilePath in inputFilePaths {
+		let fileURL = URL(fileURLWithPath: inputFilePath, relativeTo: directoryBaseURL).standardizedFileURL
+		guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
+		let directories = RootScanner.extractAdditionalDirectoriesToInclude(in: content)
+		for directory in directories {
+			let directoryURL = URL(fileURLWithPath: directory, relativeTo: directoryBaseURL)
+			guard let enumerator = FileManager.default.enumerator(
+				at: directoryURL,
+				includingPropertiesForKeys: nil,
+				options: [.skipsHiddenFiles],
+			) else { continue }
+			for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
+				additionalSwiftFiles.append(fileURL)
+			}
+		}
+	}
+
+	// Scan target files + additional directory files together for roots.
+	let targetSwiftFiles = inputFilePaths.map {
+		URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL
+	}
+	let allSwiftFiles = targetSwiftFiles + additionalSwiftFiles
 	let result = try RootScanner().scan(
-		inputFilePaths: inputFilePaths,
+		swiftFiles: allSwiftFiles,
 		relativeTo: projectRoot,
 		outputDirectory: outputDirectory,
 	)

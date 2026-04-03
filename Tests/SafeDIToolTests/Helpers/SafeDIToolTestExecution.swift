@@ -97,15 +97,33 @@ func executeSafeDIToolTest(
 	}
 
 	return try await SafeDITool.$fileFinder.withValue(fileFinder) {
-		// Build the manifest by scanning for files that contain isRoot: true.
-		// Only target files are scanned — not additional directory files — matching
-		// real Xcode plugin behavior where the manifest is built before SafeDITool runs.
+		// Build the manifest by scanning for roots, including files from
+		// additionalDirectoriesToInclude discovered via @SafeDIConfiguration.
+		// This matches real plugin behavior where runRootScanner() now scans
+		// additional directories before SafeDITool runs.
 		var manifestPath: String?
 		if buildSwiftOutputDirectory {
 			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 			let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+
+			// Discover additional directory files from @SafeDIConfiguration,
+			// matching what runRootScanner() does in the real plugin.
+			let additionalScanFiles = swiftFiles.flatMap { swiftFile -> [URL] in
+				guard let content = try? String(contentsOf: swiftFile, encoding: .utf8) else { return [] }
+				return RootScanner.extractAdditionalDirectoriesToInclude(in: content).flatMap { directory -> [URL] in
+					let directoryURL = URL(fileURLWithPath: directory)
+					guard let enumerator = FileManager.default.enumerator(
+						at: directoryURL,
+						includingPropertiesForKeys: nil,
+						options: [.skipsHiddenFiles],
+					) else { return [] }
+					return enumerator.compactMap { ($0 as? URL).flatMap { $0.pathExtension == "swift" ? $0 : nil } }
+				}
+			}
+			let allSwiftFilesForScan = swiftFiles + additionalScanFiles
+
 			let scanResult = try RootScanner().scan(
-				swiftFiles: swiftFiles,
+				swiftFiles: allSwiftFilesForScan,
 				relativeTo: projectRoot,
 				outputDirectory: outputDirectory,
 			)

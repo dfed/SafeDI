@@ -323,6 +323,52 @@ struct RootScannerTests {
 	}
 
 	@Test
+	func extractAdditionalDirectoriesToInclude_extractsDirectoryPaths() {
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../OtherModule/Sources", "/absolute/path"]
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../OtherModule/Sources", "/absolute/path"])
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenNoConfiguration() {
+		let source = """
+		@Instantiable(isRoot: true)
+		struct Root {
+		    init() {}
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenEmptyArray() {
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = []
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_ignoresCommentedOutConfig() {
+		let source = """
+		// @SafeDIConfiguration
+		// enum MyConfiguration {
+		//     static let additionalDirectoriesToInclude: [StaticString] = ["should/not/match"]
+		// }
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
 	func scan_relativeToFilesystemRoot_writesAbsolutePathsWithoutLeadingSlash() throws {
 		let fixture = try ScannerFixture()
 		defer { fixture.delete() }

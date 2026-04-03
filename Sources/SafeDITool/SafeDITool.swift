@@ -21,7 +21,6 @@
 import ArgumentParser
 import Foundation
 import SafeDICore
-import SafeDIRootScannerCore
 import SwiftParser
 
 @main
@@ -81,13 +80,9 @@ struct SafeDITool: AsyncParsableCommand {
 		// If the source configuration specifies additional directories to include,
 		// find and parse swift files in those directories and merge with initial results.
 		let module: ModuleInfo
-		let additionalDirectoryRootSourceFiles: Set<String>
 		if let sourceConfiguration, !sourceConfiguration.additionalDirectoriesToInclude.isEmpty {
 			let additionalFiles = try await Self.findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude)
 			let additionalModule = try await Self.parseSwiftFiles(additionalFiles)
-			additionalDirectoryRootSourceFiles = Set(
-				additionalModule.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath)
-			)
 			module = ModuleInfo(
 				imports: initialModule.imports + additionalModule.imports,
 				instantiables: initialModule.instantiables + additionalModule.instantiables,
@@ -95,7 +90,6 @@ struct SafeDITool: AsyncParsableCommand {
 				filesWithUnexpectedNodes: initialModule.filesWithUnexpectedNodes.map { $0 + (additionalModule.filesWithUnexpectedNodes ?? []) } ?? additionalModule.filesWithUnexpectedNodes,
 			)
 		} else {
-			additionalDirectoryRootSourceFiles = []
 			module = initialModule
 		}
 
@@ -196,73 +190,27 @@ struct SafeDITool: AsyncParsableCommand {
 				}
 
 				// Validate manifest and roots are in sync before writing any output.
-				let allRootSourceFiles = Set(normalizedInstantiables.filter(\.isRoot).compactMap(\.sourceFilePath))
+				// Only check current-module roots (not dependent-module roots, which
+				// don't belong in this target's manifest).
+				let currentModuleRootSourceFiles = Set(
+					module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath)
+				)
 				let manifestInputPaths = Set(manifest.dependencyTreeGeneration.map(\.inputFilePath))
 				for entry in manifest.dependencyTreeGeneration {
-					guard allRootSourceFiles.contains(entry.inputFilePath) else {
+					guard currentModuleRootSourceFiles.contains(entry.inputFilePath) else {
 						throw ManifestError.noRootFound(inputPath: entry.inputFilePath)
 					}
 				}
-
-				// Roots from additionalDirectoriesToInclude are not in the manifest
-				// because the plugin builds the manifest before SafeDITool discovers
-				// them. Auto-extend the manifest for those roots only.
-				// Any other unmapped root (e.g. from the target CSV or dependent
-				// modules) is a real manifest-drift error.
-				let unmappedAdditionalRoots = additionalDirectoryRootSourceFiles.subtracting(manifestInputPaths)
-				let unmappedNonAdditionalRoots = allRootSourceFiles
-					.subtracting(manifestInputPaths)
-					.subtracting(additionalDirectoryRootSourceFiles)
-				for sourceFile in unmappedNonAdditionalRoots {
-					throw ManifestError.rootNotInManifest(sourceFilePath: sourceFile)
-				}
-
-				var extendedManifest = manifest
-				if !unmappedAdditionalRoots.isEmpty {
-					let existingOutputPaths = manifest.dependencyTreeGeneration.map(\.outputFilePath)
-					guard let firstOutputPath = existingOutputPaths.first else {
-						throw ManifestError.noOutputDirectoryForAdditionalRoots
-					}
-					let outputDirectory = URL(fileURLWithPath: (firstOutputPath as NSString).deletingLastPathComponent)
-
-					// Assert all existing entries share the same output directory.
-					let expectedOutputDirectory = (firstOutputPath as NSString).deletingLastPathComponent
-					for outputPath in existingOutputPaths {
-						assert(
-							(outputPath as NSString).deletingLastPathComponent == expectedOutputDirectory,
-							"All manifest entries are expected to share the same output directory."
-						)
-					}
-
-					// Use RootScanner to compute collision-safe output file names
-					// across ALL root files (target + additional).
-					let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-					let allRootURLs = allRootSourceFiles.map {
-						URL(fileURLWithPath: $0, relativeTo: projectRoot).standardizedFileURL
-					}
-					let scanResult = try RootScanner().scan(
-						swiftFiles: allRootURLs,
-						relativeTo: projectRoot,
-						outputDirectory: outputDirectory,
-					)
-
-					// Add entries only for unmapped additional-directory roots.
-					for scannerEntry in scanResult.manifest.dependencyTreeGeneration
-						where unmappedAdditionalRoots.contains(scannerEntry.inputFilePath)
-					{
-						extendedManifest.dependencyTreeGeneration.append(
-							SafeDIToolManifest.InputOutputMap(
-								inputFilePath: scannerEntry.inputFilePath,
-								outputFilePath: scannerEntry.outputFilePath,
-							)
-						)
+				for sourceFile in currentModuleRootSourceFiles {
+					if !manifestInputPaths.contains(sourceFile) {
+						throw ManifestError.rootNotInManifest(sourceFilePath: sourceFile)
 					}
 				}
 
 				let emptyRootContent = fileHeader
 
 				// Write output files.
-				for entry in extendedManifest.dependencyTreeGeneration {
+				for entry in manifest.dependencyTreeGeneration {
 					let code: String = if let extensions = sourceFileToExtensions[entry.inputFilePath] {
 						fileHeader + extensions.sorted().joined(separator: "\n\n")
 					} else {
@@ -291,7 +239,6 @@ struct SafeDITool: AsyncParsableCommand {
 	private enum ManifestError: Error, CustomStringConvertible {
 		case noRootFound(inputPath: String)
 		case rootNotInManifest(sourceFilePath: String)
-		case noOutputDirectoryForAdditionalRoots
 
 		var description: String {
 			switch self {
@@ -299,8 +246,6 @@ struct SafeDITool: AsyncParsableCommand {
 				"Manifest lists '\(inputPath)' as containing a dependency tree root, but no @\(InstantiableVisitor.macroName)(isRoot: true) was found in that file."
 			case let .rootNotInManifest(sourceFilePath):
 				"Found @\(InstantiableVisitor.macroName)(isRoot: true) in '\(sourceFilePath)', but this file is not listed in the manifest's dependencyTreeGeneration. Add it to the manifest or remove the isRoot annotation."
-			case .noOutputDirectoryForAdditionalRoots:
-				"Found root @Instantiable types from additional directories, but the manifest has no existing entries to derive an output directory from."
 			}
 		}
 	}

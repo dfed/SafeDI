@@ -151,6 +151,69 @@ public struct RootScanner {
 		return false
 	}
 
+	/// Extracts `additionalDirectoriesToInclude` paths from a source file
+	/// containing `@SafeDIConfiguration`. Uses text-based scanning (no SwiftSyntax).
+	/// Returns an empty array if the file does not contain a configuration.
+	public static func extractAdditionalDirectoriesToInclude(in source: String) -> [String] {
+		let sanitizedSource = sanitize(source: source)
+		guard sanitizedSource.contains("@SafeDIConfiguration") else { return [] }
+		let propertyName = "additionalDirectoriesToInclude"
+		guard let propRange = sanitizedSource.range(of: propertyName) else { return [] }
+
+		// Convert the sanitized-source index to an index in the original source.
+		// The sanitizer preserves character count, so offsets are equivalent.
+		let offset = sanitizedSource.distance(from: sanitizedSource.startIndex, to: propRange.upperBound)
+		var index = source.index(source.startIndex, offsetBy: offset)
+
+		// Skip past the type annotation (e.g., `: [StaticString]`) to the `=` sign.
+		while index < source.endIndex, source[index] != "=" {
+			index = source.index(after: index)
+		}
+		guard index < source.endIndex else { return [] }
+		index = source.index(after: index) // skip '='
+
+		// Find the opening bracket of the array literal.
+		while index < source.endIndex, source[index] != "[" {
+			index = source.index(after: index)
+		}
+		guard index < source.endIndex else { return [] }
+
+		// Find the matching closing bracket.
+		var depth = 0
+		var closingIndex = index
+		while closingIndex < source.endIndex {
+			switch source[closingIndex] {
+			case "[": depth += 1
+			case "]":
+				depth -= 1
+				if depth == 0 {
+					// Extract string literals from the array content.
+					let arrayContent = source[source.index(after: index)..<closingIndex]
+					return extractStringLiterals(from: arrayContent)
+				}
+			default: break
+			}
+			closingIndex = source.index(after: closingIndex)
+		}
+		return []
+	}
+
+	/// Extracts quoted string literal values from the interior of an array expression.
+	private static func extractStringLiterals<S: StringProtocol>(from arrayContent: S) -> [String] {
+		var results = [String]()
+		var searchIndex = arrayContent.startIndex
+		while searchIndex < arrayContent.endIndex {
+			guard let openQuote = arrayContent[searchIndex...].firstIndex(of: "\"") else { break }
+			let contentStart = arrayContent.index(after: openQuote)
+			guard contentStart < arrayContent.endIndex,
+			      let closeQuote = arrayContent[contentStart...].firstIndex(of: "\"")
+			else { break }
+			results.append(String(arrayContent[contentStart..<closeQuote]))
+			searchIndex = arrayContent.index(after: closeQuote)
+		}
+		return results
+	}
+
 	private static func outputFileNames(
 		for inputURLs: [URL],
 		relativeTo baseURL: URL,

@@ -165,7 +165,6 @@ let package = Package(
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
 				.product(name: "SwiftParser", package: "swift-syntax"),
 				"SafeDICore",
-				"SafeDIRootScannerCore",
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
