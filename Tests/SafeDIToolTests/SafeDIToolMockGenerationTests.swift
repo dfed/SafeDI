@@ -7262,12 +7262,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        flag_String: @autoclosure @escaping () -> String = "on"
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            let flag = flag_Bool()
+		            let flag_Bool = flag_Bool()
 		            return ChildA(flag: flag_Bool)
 		        }
 		        let childA: ChildA = childA ?? __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            let flag = flag_String()
+		            let flag_String = flag_String()
 		            return ChildB(flag: flag_String)
 		        }
 		        let childB: ChildB = childB ?? __safeDI_childB()
@@ -7859,12 +7859,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        viewModel_ViewModelB: @autoclosure @escaping () -> ViewModelB = ViewModelB()
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            let viewModel = viewModel_ViewModelA()
+		            let viewModel_ViewModelA = viewModel_ViewModelA()
 		            return ChildA(viewModel: viewModel_ViewModelA)
 		        }
 		        let childA: ChildA = childA ?? __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            let viewModel = viewModel_ViewModelB()
+		            let viewModel_ViewModelB = viewModel_ViewModelB()
 		            return ChildB(viewModel: viewModel_ViewModelB)
 		        }
 		        let childB: ChildB = childB ?? __safeDI_childB()
@@ -9202,7 +9202,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        service_LocalService: @autoclosure @escaping () -> LocalService = LocalService()
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let service = service_ExternalService()
+		            let service_ExternalService = service_ExternalService()
 		            func __safeDI_grandchild() -> Grandchild {
 		                let service = service_LocalService()
 		                return Grandchild(service: service_LocalService)
@@ -9289,7 +9289,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        name_String: @autoclosure @escaping () -> String = "default"
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let name = name_String()
+		            let name_String = name_String()
 		            return Child(name: name_String)
 		        }
 		        let child: Child = child ?? __safeDI_child()

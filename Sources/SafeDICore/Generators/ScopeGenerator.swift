@@ -1269,7 +1269,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let identifier = MockParameterIdentifier(propertyLabel: argument.innerLabel, sourceType: strippedType.asSource)
 			guard !resolvedParameters.contains(identifier) else { continue }
 			let parameterLabel = parameterLabelMap[identifier] ?? argument.innerLabel
-			bindings.append("let \(argument.innerLabel) = \(parameterLabel)()")
+			bindings.append("let \(parameterLabel) = \(parameterLabel)()")
 		}
 		return bindings
 	}
@@ -1294,7 +1294,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let identifier = MockParameterIdentifier(propertyLabel: dependency.property.label, sourceType: dependencyType.asSource)
 			guard !resolvedParameters.contains(identifier) else { continue }
 			let parameterLabel = parameterLabelMap[identifier] ?? dependency.property.label
-			bindings.append("let \(dependency.property.label) = \(parameterLabel)()")
+			bindings.append("let \(parameterLabel) = \(parameterLabel)()")
 		}
 		return bindings
 	}
