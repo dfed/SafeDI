@@ -1063,6 +1063,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				insideSendableScope: childInsideSendable,
 			)
 			declarations.append(contentsOf: childDeclarations)
+
+			// Check for @Instantiated dependencies that have no tree child
+			// (e.g., type not in scope map due to normalization mismatch or
+			// cross-module visibility). These need mock parameters so the
+			// user can provide them — same pattern as the root-level
+			// uncovered dep check in generateMockRootCode.
+			if !isInstantiator, let childInstantiable = childScopeData.instantiable {
+				let coveredChildLabels = Set(childDeclarations.map(\.propertyLabel))
+				let childPathCaseName = childPath.joined(separator: "_")
+				for dependency in childInstantiable.dependencies {
+					guard case .instantiated = dependency.source,
+					      !coveredChildLabels.contains(dependency.property.label),
+					      dependency.property.propertyType.isConstant
+					else { continue }
+					let dependencyType = dependency.property.typeDescription.asInstantiatedType
+					let enumName = Self.sanitizeForIdentifier(dependencyType.asSource)
+					declarations.append(MockDeclaration(
+						enumName: enumName,
+						propertyLabel: dependency.property.label,
+						parameterLabel: dependency.property.label,
+						sourceType: dependencyType.asSource,
+						isOptionalParameter: false,
+						pathCaseName: childPathCaseName,
+						isForwarded: false,
+						requiresSendable: childInsideSendable,
+						defaultValueExpression: nil,
+					))
+				}
+			}
 		}
 
 		return declarations
