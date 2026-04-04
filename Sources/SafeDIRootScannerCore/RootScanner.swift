@@ -152,7 +152,7 @@ public struct RootScanner {
 	}
 
 	public static func fileContainsConfiguration(at fileURL: URL) throws -> Bool {
-		try String(contentsOf: fileURL, encoding: .utf8).contains("@SafeDIConfiguration")
+		sanitize(source: try String(contentsOf: fileURL, encoding: .utf8)).contains("@SafeDIConfiguration")
 	}
 
 	public static func containsInstantiable(in source: String) -> Bool {
@@ -288,7 +288,14 @@ public struct RootScanner {
 				depth -= 1
 			}
 			// Only match at depth 1 (inside the config enum, outside nested types).
-			if depth == 1, body[searchStart...].hasPrefix(propertyName) {
+			// Check identifier boundary to avoid prefix-matching longer names.
+			if depth == 1,
+			   body[searchStart...].hasPrefix(propertyName),
+			   {
+			   	let end = body.index(searchStart, offsetBy: propertyName.count)
+			   	return end >= body.endIndex || !isIdentifierContinuation(body[end])
+			   }()
+			{
 				let end = body.index(searchStart, offsetBy: propertyName.count)
 				return searchStart..<end
 			} else {

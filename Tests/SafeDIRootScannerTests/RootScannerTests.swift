@@ -538,6 +538,36 @@ struct RootScannerTests {
 	}
 
 	@Test
+	func extractAdditionalDirectoriesToInclude_doesNotMatchPropertyNamePrefix() {
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfig {
+		    static let additionalDirectoriesToIncludeHelper: [StaticString] = ["../Wrong/Path"]
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
+		    static let generateMocks: Bool = true
+		    static let mockConditionalCompilation: StaticString? = "DEBUG"
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
+	}
+
+	@Test
+	func fileContainsConfiguration_returnsFalse_whenConfigIsOnlyInComment() throws {
+		let fixture = try ScannerFixture()
+		defer { fixture.delete() }
+		let file = try fixture.writeFile(
+			relativePath: "CommentOnly.swift",
+			content: """
+			// @SafeDIConfiguration
+			// This file references the config but doesn't declare one.
+			struct NotAConfig {}
+			""",
+		)
+		#expect(try !RootScanner.fileContainsConfiguration(at: file))
+	}
+
+	@Test
 	func containsRoot_returnsFalse_whenParenIsUnmatched() {
 		#expect(!RootScanner.containsRoot(in: "@Instantiable(isRoot: true"))
 	}
