@@ -532,10 +532,13 @@ public struct InstantiableMacro: MemberMacro {
 			}
 
 			if visitor.isRoot, let instantiableType = visitor.instantiableType {
-				guard visitor.instantiables.flatMap(\.dependencies).isEmpty else {
+				let rootDependencies = visitor.instantiables
+					.first(where: { $0.concreteInstantiable == instantiableType })?
+					.dependencies ?? []
+				guard rootDependencies.isEmpty else {
 					throw InstantiableError.cannotBeRoot(
 						instantiableType,
-						violatingDependencies: visitor.instantiables.flatMap(\.dependencies),
+						violatingDependencies: rootDependencies,
 					)
 				}
 			}

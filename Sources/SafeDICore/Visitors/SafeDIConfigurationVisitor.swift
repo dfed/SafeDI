@@ -30,7 +30,44 @@ public final class SafeDIConfigurationVisitor: SyntaxVisitor {
 
 	// MARK: SyntaxVisitor
 
+	public override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
+		nestingDepth += 1
+		return .visitChildren
+	}
+
+	public override func visitPost(_ node: StructDeclSyntax) {
+		nestingDepth -= 1
+	}
+
+	public override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
+		nestingDepth += 1
+		return .visitChildren
+	}
+
+	public override func visitPost(_ node: ClassDeclSyntax) {
+		nestingDepth -= 1
+	}
+
+	public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+		nestingDepth += 1
+		return .visitChildren
+	}
+
+	public override func visitPost(_ node: EnumDeclSyntax) {
+		nestingDepth -= 1
+	}
+
+	public override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
+		nestingDepth += 1
+		return .visitChildren
+	}
+
+	public override func visitPost(_ node: ActorDeclSyntax) {
+		nestingDepth -= 1
+	}
+
 	public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+		guard nestingDepth <= 1 else { return .skipChildren }
 		for binding in node.bindings {
 			guard let identifierPattern = IdentifierPatternSyntax(binding.pattern) else {
 				continue
@@ -100,6 +137,10 @@ public final class SafeDIConfigurationVisitor: SyntaxVisitor {
 	}
 
 	// MARK: Private
+
+	/// Tracks nesting depth to ignore variables declared inside nested types.
+	/// Starts at 0; the config enum itself bumps it to 1; nested types bump it further.
+	private var nestingDepth = 0
 
 	private func extractStringLiterals(from binding: PatternBindingSyntax) -> [String]? {
 		guard let initializer = binding.initializer,

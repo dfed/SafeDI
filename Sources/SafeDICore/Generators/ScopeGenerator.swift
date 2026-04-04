@@ -737,15 +737,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
-			// Aliases are identical in both modes.
+			// In mock mode, the fulfilling property may have been disambiguated.
+			// Use the resolved label from MockContext if available.
+			let fulfillingLabel: String = switch codeGeneration {
+			case .dependencyTree:
+				fulfillingProperty.label
+			case let .mock(context):
+				context.disambiguatedLabel(
+					forPropertyLabel: fulfillingProperty.label,
+					typeDescription: fulfillingProperty.typeDescription,
+				)
+			}
 			return if onlyIfAvailable, unavailableProperties.contains(fulfillingProperty) {
 				"// Did not create `\(property.asSource)` because `\(fulfillingProperty.asSource)` is unavailable."
+			} else if erasedToConcreteExistential {
+				"let \(property.label): \(property.typeDescription.asSource) = \(fulfillingLabel)"
 			} else {
-				if erasedToConcreteExistential {
-					"let \(property.label): \(property.typeDescription.asSource) = \(fulfillingProperty.label)"
-				} else {
-					"let \(property.asSource) = \(fulfillingProperty.label)"
-				}
+				"let \(property.asSource) = \(fulfillingLabel)"
 			}
 		}
 	}

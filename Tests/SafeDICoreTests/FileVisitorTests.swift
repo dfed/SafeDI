@@ -23,6 +23,27 @@ import SwiftSyntax
 import Testing
 @testable import SafeDICore
 
+struct SafeDIConfigurationVisitorTests {
+	@Test
+	func nestedTypeWithMatchingPropertyNameDoesNotOverrideOuterConfig() {
+		let visitor = SafeDIConfigurationVisitor()
+		visitor.walk(Parser.parse(source: """
+		enum MyConfig {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = []
+		    static let generateMocks: Bool = true
+		    static let mockConditionalCompilation: StaticString? = "DEBUG"
+
+		    struct Helper {
+		        static let generateMocks: Bool = false
+		    }
+		}
+		"""))
+
+		#expect(visitor.generateMocks == true)
+	}
+}
+
 struct FileVisitorTests {
 	@Test
 	func walk_findsInstantiable() {

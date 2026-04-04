@@ -434,6 +434,38 @@ import Testing
 			)
 		}
 
+			@Test
+		func extension_rootWithNestedInstantiableHavingDependenciesDoesNotThrow() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true)
+				extension Foo: Instantiable {
+				    public static func instantiate() -> Foo { fatalError() }
+
+				    @Instantiable
+				    public struct Helper: Instantiable {
+				        public init(bar: Bar) {
+				            self.bar = bar
+				        }
+				        @Received let bar: Bar
+				    }
+				}
+				""",
+				expandedSource: """
+				extension Foo: Instantiable {
+				    public static func instantiate() -> Foo { fatalError() }
+				    public struct Helper: Instantiable {
+				        public init(bar: Bar) {
+				            self.bar = bar
+				        }
+				        let bar: Bar
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
 		// MARK: FixIt tests
 
 		@Test
