@@ -560,6 +560,8 @@ When no override is provided, the original default expression (`false`) is used.
 
 Default-valued parameters bubble transitively through the dependency tree — a grandchild's default parameter will appear at the root mock level. However, they do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
 
+Parameters whose call-site label is `_` (e.g., `_ flag: Bool = false` or `_: Bool = false`) are not exposed in the generated mock, since `_` cannot be used as a parameter name. The init's default value is used silently for these parameters.
+
 ### The `mockAttributes` parameter
 
 When a type's initializer is bound to a global actor that the plugin cannot detect (e.g. inherited `@MainActor`), use `mockAttributes` to annotate the generated mock:

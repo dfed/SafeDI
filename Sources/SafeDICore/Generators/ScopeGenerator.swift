@@ -891,12 +891,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for argument in rootInitializer.arguments {
 				guard argument.hasDefaultValue,
 				      !dependencyLabels.contains(argument.innerLabel),
+				      argument.label != "_",
 				      let defaultExpr = argument.defaultValueExpression
 				else { continue }
 				let strippedType = argument.typeDescription.strippingEscaping
 				allDeclarations.append(MockDeclaration(
-					propertyLabel: argument.mockPropertyLabel,
-					parameterLabel: argument.mockPropertyLabel,
+					propertyLabel: argument.label,
+					parameterLabel: argument.label,
 					sourceType: strippedType.asSource,
 					isForwarded: false,
 					requiresSendable: false,
@@ -1121,12 +1122,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let dependencyLabels = Set(childInstantiable.dependencies.map(\.property.label))
 					for argument in constructionInitializer.arguments where argument.hasDefaultValue {
 						guard !dependencyLabels.contains(argument.innerLabel),
+						      argument.label != "_",
 						      argument.defaultValueExpression != nil
 						else { continue }
 						let strippedType = argument.typeDescription.strippingEscaping
 						childDefaultParams.append(MockDeclaration(
-							propertyLabel: argument.mockPropertyLabel,
-							parameterLabel: argument.mockPropertyLabel,
+							propertyLabel: argument.label,
+							parameterLabel: argument.label,
 							sourceType: strippedType.asSource,
 							isForwarded: false,
 							requiresSendable: childInsideSendable,
@@ -1320,12 +1322,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for argument in constructionInitializer.arguments {
 			guard argument.hasDefaultValue,
 			      !dependencyLabels.contains(argument.innerLabel),
+			      argument.label != "_",
 			      !argument.typeDescription.strippingEscaping.isClosure
 			else { continue }
 			let strippedType = argument.typeDescription.strippingEscaping
-			let identifier = MockParameterIdentifier(propertyLabel: argument.mockPropertyLabel, sourceType: strippedType.asSource)
+			let identifier = MockParameterIdentifier(propertyLabel: argument.label, sourceType: strippedType.asSource)
 			guard !resolvedParameters.contains(identifier) else { continue }
-			let parameterLabel = parameterLabelMap[identifier] ?? argument.mockPropertyLabel
+			let parameterLabel = parameterLabelMap[identifier] ?? argument.label
 			bindings.append("let \(parameterLabel) = \(parameterLabel)()")
 		}
 		return bindings
