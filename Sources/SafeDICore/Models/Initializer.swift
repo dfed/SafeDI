@@ -328,9 +328,10 @@ public struct Initializer: Codable, Hashable, Sendable {
 		/// When `innerLabel` is `_` (not usable as a variable name), falls back to `outerLabel`.
 		public var mockPropertyLabel: String {
 			if innerLabel == "_", let outerLabel, outerLabel != "_" {
-				return outerLabel
+				outerLabel
+			} else {
+				innerLabel
 			}
-			return innerLabel
 		}
 
 		public var asProperty: Property {
