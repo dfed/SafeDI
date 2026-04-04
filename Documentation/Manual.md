@@ -493,7 +493,7 @@ enum MyConfiguration {
 
 Each `@Instantiable` type gets a `mock()` static method that builds its full dependency subtree. If the decorated type declaration already contains a `static func mock(...)` or `class func mock(...)` method, SafeDI will not generate a mock file for that type — your hand-written mock takes precedence. However, parent types that instantiate the child will call `ChildType.mock(...)` instead of `ChildType(...)` when constructing it, threading mock parameters through your custom method. Note that mocks defined in separate extensions are not detected; the method must be in the `@Instantiable`-decorated declaration body.
 
-Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type's `@Instantiated`, `@Received`, and `@Forwarded` dependencies. It may also accept additional parameters with default values. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
+Your user-defined `mock()` method must be `public` (or `open`), must return `Self` or the declaring type name, and must accept parameters for each of the type's `@Instantiated`, `@Received`, and `@Forwarded` dependencies. It may also accept additional parameters with default values. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
 
 ```swift
 #if DEBUG
