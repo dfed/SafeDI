@@ -21,7 +21,7 @@
 import Foundation
 import SafeDI
 
-@Instantiable
+@Instantiable(generateMock: true)
 extension UserDefaults: SafeDI.Instantiable {
 	public static func instantiate() -> UserDefaults {
 		.standard
