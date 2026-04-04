@@ -4953,7 +4953,7 @@ import Testing
 		}
 
 		@Test
-		func extension_mockMethodReturningSelfProducesNoDiagnostic() {
+		func extension_mockMethodReturningSelfProducesDiagnostic() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -4974,7 +4974,30 @@ import Testing
 				    }
 				}
 				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `ExampleService`.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Change mock() return type to `ExampleService`"),
+						],
+					),
+				],
 				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Change mock() return type to `ExampleService`",
+				],
+				fixedSource: """
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
 			)
 		}
 
@@ -5170,42 +5193,6 @@ import Testing
 		}
 
 		@Test
-		func extension_mockMethodReturningSelfMissingDependencyProducesDiagnostic() {
-			assertMacroExpansion(
-				"""
-				@Instantiable
-				extension ExampleService: Instantiable {
-				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
-
-				    public static func mock() -> Self {
-				        ExampleService()
-				    }
-				}
-				""",
-				expandedSource: """
-				extension ExampleService: Instantiable {
-				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
-
-				    public static func mock() -> Self {
-				        ExampleService()
-				    }
-				}
-				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
-						line: 5,
-						column: 5,
-						fixIts: [
-							FixItSpec(message: "Add mock() arguments for dependency: Dependency"),
-						],
-					),
-				],
-				macros: instantiableTestMacros,
-			)
-		}
-
-		@Test
 		func extension_mockMethodReturningGenericSpecializationProducesNoDiagnostic() {
 			assertMacroExpansion(
 				"""
@@ -5285,7 +5272,7 @@ import Testing
 		}
 
 		@Test
-		func extension_mockMethodsReturningSelfAndTypeNameAreDuplicates() {
+		func extension_mockMethodReturningSelfGetsDiagnosticWhileTypeNameMockIsValid() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -5316,11 +5303,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have at most one `mock()` method. Remove this duplicate.",
-						line: 9,
+						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `ExampleService`.",
+						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Remove duplicate mock() method"),
+							FixItSpec(message: "Change mock() return type to `ExampleService`"),
 						],
 					),
 				],

@@ -599,9 +599,7 @@ public struct InstantiableMacro: MemberMacro {
 			var seenMockReturnTypes = [TypeDescription: FunctionDeclSyntax]()
 			for mockFunction in allMockFunctions {
 				let mockReturnType = mockFunction.signature.returnClause?.type.typeDescription
-				let isSelfReturnType = mockReturnType == .simple(name: "Self", generics: [])
-				let returnTypeMatchesExtendedType = isSelfReturnType
-					|| mockReturnType?.strippingGenerics == extendedTypeStrippingGenerics
+				let returnTypeMatchesExtendedType = mockReturnType?.strippingGenerics == extendedTypeStrippingGenerics
 				if !returnTypeMatchesExtendedType {
 					var fixedMockFunction = mockFunction
 					if let existingReturnClause = mockFunction.signature.returnClause {
@@ -667,15 +665,9 @@ public struct InstantiableMacro: MemberMacro {
 						],
 					))
 				}
-				// Duplicate detection: one mock per return type. Canonicalize Self to the extended type so
-				// `-> Self` and `-> ExtendedType` are treated as the same return type.
-				let canonicalReturnType: TypeDescription? = if isSelfReturnType {
-					extendedTypeStrippingGenerics
-				} else {
-					mockReturnType
-				}
-				if let canonicalReturnType {
-					if seenMockReturnTypes[canonicalReturnType] != nil {
+				// Duplicate detection: one mock per return type.
+				if let mockReturnType {
+					if seenMockReturnTypes[mockReturnType] != nil {
 						context.diagnose(Diagnostic(
 							node: Syntax(mockFunction),
 							error: FixableInstantiableError.duplicateMockMethod,
@@ -687,21 +679,12 @@ public struct InstantiableMacro: MemberMacro {
 							],
 						))
 					} else {
-						seenMockReturnTypes[canonicalReturnType] = mockFunction
+						seenMockReturnTypes[mockReturnType] = mockFunction
 					}
 				}
 				// Argument validation: mock must have parameters matching the instantiate() method's dependencies.
-				// Use the canonicalized return type so `-> Self` matches the same instantiable as `-> TypeName`.
-				// For Self on a generic extension with multiple specializations, strippingGenerics may match
-				// multiple instantiables — we validate against the first match (all share the same base type).
-				let matchingInstantiable: Instantiable? = if isSelfReturnType {
-					visitor.instantiables.first(where: { $0.concreteInstantiable.strippingGenerics == extendedTypeStrippingGenerics })
-				} else if let mockReturnType {
-					visitor.instantiables.first(where: { $0.concreteInstantiable == mockReturnType })
-				} else {
-					nil
-				}
-				if let matchingInstantiable,
+				if let mockReturnType,
+				   let matchingInstantiable = visitor.instantiables.first(where: { $0.concreteInstantiable == mockReturnType }),
 				   !matchingInstantiable.dependencies.isEmpty
 				{
 					let mockInitializer = Initializer(mockFunction)
