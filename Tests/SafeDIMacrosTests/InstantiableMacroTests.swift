@@ -5032,6 +5032,81 @@ import Testing
 		}
 
 		@Test
+		func extension_mockMethodMissingDependencyProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add mock() arguments for dependency: Dependency"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add mock() arguments for dependency: Dependency",
+				],
+				fixedSource: """
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
+
+				    public static func mock(dependency: Dependency) -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_mockMethodWithMatchingDependencyProducesNoDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
+
+				    public static func mock(dependency: Dependency) -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
+
+				    public static func mock(dependency: Dependency) -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func extension_mockMethodReturningGenericSpecializationProducesNoDiagnostic() {
 			assertMacroExpansion(
 				"""

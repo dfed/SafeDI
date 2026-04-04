@@ -39,7 +39,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 			.map(Argument.init)
 	}
 
-	init(_ node: FunctionDeclSyntax) {
+	public init(_ node: FunctionDeclSyntax) {
 		isPublicOrOpen = node.modifiers.containsPublicOrOpen
 		isOptional = false
 		isAsync = node.signature.effectSpecifiers?.asyncSpecifier != nil

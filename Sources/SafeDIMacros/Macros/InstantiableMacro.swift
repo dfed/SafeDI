@@ -684,6 +684,36 @@ public struct InstantiableMacro: MemberMacro {
 						seenMockReturnTypes[mockReturnType] = mockFunction
 					}
 				}
+				// Argument validation: mock must have parameters matching the instantiate() method's dependencies.
+				if let mockReturnType,
+				   let matchingInstantiable = visitor.instantiables.first(where: { $0.concreteInstantiable == mockReturnType }),
+				   !matchingInstantiable.dependencies.isEmpty
+				{
+					let mockInitializer = Initializer(mockFunction)
+					do {
+						try mockInitializer.validate(fulfilling: matchingInstantiable.dependencies)
+					} catch {
+						if let fixableError = error.asFixableError,
+						   case let .missingArguments(missingArguments) = fixableError.asErrorToFix
+						{
+							var fixedSyntax = mockFunction
+							fixedSyntax.signature.parameterClause = Self.buildFixedParameterClause(
+								from: mockFunction.signature.parameterClause,
+								requiredProperties: matchingInstantiable.dependencies.map(\.property),
+							)
+							context.diagnose(Diagnostic(
+								node: Syntax(mockFunction),
+								error: FixableInstantiableError.mockMethodMissingArguments(missingArguments),
+								changes: [
+									.replace(
+										oldNode: Syntax(mockFunction),
+										newNode: Syntax(fixedSyntax),
+									),
+								],
+							))
+						}
+					}
+				}
 			}
 
 			if visitor.isRoot, let instantiableType = visitor.instantiableType {
