@@ -67,6 +67,23 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// The path to the source file that declared this Instantiable.
 	public var sourceFilePath: String?
 
+	/// The import statements from the source file that declared this Instantiable.
+	/// Not included in Codable serialization — only populated for current-module types.
+	public var imports: [ImportStatement] = []
+
+	// MARK: Codable
+
+	private enum CodingKeys: String, CodingKey {
+		case instantiableTypes
+		case isRoot
+		case initializer
+		case dependencies
+		case declarationType
+		case mockAttributes
+		case mockInitializer
+		case sourceFilePath
+	}
+
 	/// The type of declaration where this Instantiable was defined.
 	public enum DeclarationType: Codable, Hashable, Sendable {
 		case classType

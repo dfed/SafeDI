@@ -161,6 +161,7 @@ struct SafeDITool: AsyncParsableCommand {
 				mockInitializer: unnormalizedInstantiable.mockInitializer,
 			)
 			normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath
+			normalized.imports = unnormalizedInstantiable.imports
 			return normalized
 		}
 		let generator = try DependencyTreeGenerator(
@@ -255,16 +256,20 @@ struct SafeDITool: AsyncParsableCommand {
 							currentModuleSourceFilePaths: currentModuleSourceFilePaths,
 						)
 
-						var sourceFileToMockExtensions = [String: [String]]()
+						var sourceFileToMockInfo = [String: (imports: Set<ImportStatement>, extensions: [String])]()
 						for mock in generatedMocks {
 							if let sourceFilePath = mock.sourceFilePath {
-								sourceFileToMockExtensions[sourceFilePath, default: []].append(mock.code)
+								var info = sourceFileToMockInfo[sourceFilePath, default: (imports: [], extensions: [])]
+								info.imports.formUnion(mock.imports)
+								info.extensions.append(mock.code)
+								sourceFileToMockInfo[sourceFilePath] = info
 							}
 						}
 
 						for entry in manifest.mockGeneration {
-							let extensions = sourceFileToMockExtensions[entry.inputFilePath]
-							let code = fileHeader + (extensions?.sorted().joined(separator: "\n\n") ?? "")
+							let info = sourceFileToMockInfo[entry.inputFilePath]
+							let mockHeader = await generator.mockFileHeader(perTypeImports: info?.imports ?? [])
+							let code = mockHeader + (info?.extensions.sorted().joined(separator: "\n\n") ?? "")
 							let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
 							if existingContent != code {
 								try code.write(toPath: entry.outputFilePath)
@@ -272,10 +277,11 @@ struct SafeDITool: AsyncParsableCommand {
 						}
 					} else {
 						// generateMocks is false — write empty files so build system has its expected outputs.
+						let emptyMockHeader = await generator.mockFileHeader(perTypeImports: [])
 						for entry in manifest.mockGeneration {
 							let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
-							if existingContent != fileHeader {
-								try fileHeader.write(toPath: entry.outputFilePath)
+							if existingContent != emptyMockHeader {
+								try emptyMockHeader.write(toPath: entry.outputFilePath)
 							}
 						}
 					}
@@ -407,6 +413,7 @@ struct SafeDITool: AsyncParsableCommand {
 					let instantiables = fileVisitor.instantiables.map {
 						var instantiable = $0
 						instantiable.sourceFilePath = filePath
+						instantiable.imports = fileVisitor.imports
 						return instantiable
 					}
 					let configurations = fileVisitor.configurations.map {
