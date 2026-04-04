@@ -22,7 +22,7 @@ import GrandchildrenModule
 import SafeDI
 import SharedModule
 
-@Instantiable
+@Instantiable(generateMock: true)
 public final class ChildC: Instantiable {
 	public init(shared: SharedThing, grandchildC: GrandchildC) {
 		self.shared = shared

@@ -12,7 +12,7 @@ There are a total of five macros in the SafeDI library:
 | [`@Instantiated`](#instantiated) | Property declaration | Instantiates an instance or value when the enclosing `@Instantiable`-decorated type is instantiated. |
 | [`@Forwarded`](#forwarded) | Property declaration | Propagates a runtime-created instance or value (e.g. a `User` object, network response, or customer input) down the dependency tree. |
 | [`@Received`](#received) | Property declaration | Receives an instance or value from an `@Instantiated` or `@Forwarded` property further up the dependency tree. |
-| [`@SafeDIConfiguration`](#configuration) | Enum declaration | Provides build-time configuration for SafeDI’s code generation plugin. |
+| [`@SafeDIConfiguration`](#enabling-mock-generation) | Enum declaration | Provides build-time configuration for SafeDI’s code generation plugin. |
 
 Let’s walk through each of these macros in detail.
 
