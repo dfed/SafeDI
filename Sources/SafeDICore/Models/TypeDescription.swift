@@ -388,7 +388,20 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			} else {
 				return type
 			}
-		default:
+		case .any,
+		     .array,
+		     .closure,
+		     .composition,
+		     .dictionary,
+		     .implicitlyUnwrappedOptional,
+		     .metatype,
+		     .nested,
+		     .optional,
+		     .simple,
+		     .some,
+		     .tuple,
+		     .unknown,
+		     .void:
 			return self
 		}
 	}
