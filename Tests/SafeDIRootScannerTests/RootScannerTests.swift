@@ -553,6 +553,32 @@ struct RootScannerTests {
 	}
 
 	@Test
+	func containsConfiguration_returnsTrue_whenConfigExistsOutsideComment() {
+		#expect(RootScanner.containsConfiguration(in: """
+		@SafeDIConfiguration
+		enum Config {}
+		"""))
+	}
+
+	@Test
+	func containsConfiguration_returnsFalse_whenConfigIsOnlyInComment() {
+		#expect(!RootScanner.containsConfiguration(in: """
+		// @SafeDIConfiguration
+		struct NotAConfig {}
+		"""))
+	}
+
+	@Test
+	func containsConfiguration_returnsFalse_whenNoConfigExists() {
+		#expect(!RootScanner.containsConfiguration(in: """
+		@Instantiable
+		public struct MyType: Instantiable {
+		    public init() {}
+		}
+		"""))
+	}
+
+	@Test
 	func fileContainsConfiguration_returnsFalse_whenConfigIsOnlyInComment() throws {
 		let fixture = try ScannerFixture()
 		defer { fixture.delete() }
