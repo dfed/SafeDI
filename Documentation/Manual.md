@@ -558,7 +558,7 @@ let root = Root.mock(
 
 When no override is provided, the original default expression (`false`) is used.
 
-Default-valued parameters with argument labels bubble transitively through the dependency tree — a grandchild's default parameter will appear at the root mock level. However, they do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
+Default-valued parameters with [argument labels](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/functions/#Function-Argument-Labels-and-Parameter-Names) bubble transitively through the dependency tree — a grandchild's default parameter will appear at the root mock level. However, they do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
 
 ### The `mockAttributes` parameter
 
