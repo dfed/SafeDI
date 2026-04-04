@@ -670,6 +670,110 @@ struct RootScannerTests {
 	}
 
 	@Test
+	func containsGenerateMockTrue_detectsMultilineArguments() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(
+		    generateMock: true
+		)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_detectsMultilineWithOtherArguments() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(
+		    fulfillingAdditionalTypes: [Foo.self],
+		    generateMock: true,
+		    mockAttributes: "@MainActor"
+		)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_handlesWhitespaceInsideParens() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable( generateMock: true )
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_handlesTabSeparator() {
+		#expect(RootScanner.containsGenerateMockTrue(in: "@Instantiable(generateMock:\ttrue)\nstruct MyType {}"))
+	}
+
+	@Test
+	func containsGenerateMockTrue_detectsInFileWithMultipleInstantiables() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable
+		struct TypeA {}
+		@Instantiable(generateMock: true)
+		struct TypeB {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenOnlyOtherInstantiablesExist() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable
+		struct TypeA {}
+		@Instantiable(isRoot: true)
+		struct TypeB {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_ignoresCommentedGenerateMockNextToRealInstantiable() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		// @Instantiable(generateMock: true)
+		@Instantiable
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_detectsRealOneAfterCommentedOne() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		// @Instantiable(generateMock: true)
+		@Instantiable(generateMock: true)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_ignoresStringLiteralContainingGenerateMock() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		let docs = "@Instantiable(generateMock: true)"
+		@Instantiable
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_detectsAfterBlockComment() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		/*
+		@Instantiable(generateMock: true)
+		*/
+		@Instantiable(generateMock: true)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenOnlyInBlockComment() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		/*
+		@Instantiable(generateMock: true)
+		*/
+		@Instantiable
+		struct MyType {}
+		"""))
+	}
+
+	@Test
 	func scan_createsMockEntryForOptedInType_whenNoConfigExists() throws {
 		let fixture = try ScannerFixture()
 		defer { fixture.delete() }
