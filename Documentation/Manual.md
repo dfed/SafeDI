@@ -480,8 +480,14 @@ To generate a `mock()` method for a type, set `generateMock: true` on the `@Inst
 
 ```swift
 @Instantiable(generateMock: true)
-public struct MyService: Instantiable {
-    public init() {}
+public final class UserService: Instantiable {
+    public init(authService: AuthService, securePersistentStorage: SecurePersistentStorage) {
+        self.authService = authService
+        self.securePersistentStorage = securePersistentStorage
+    }
+
+    @Instantiated private let authService: AuthService
+    @Received private let securePersistentStorage: SecurePersistentStorage
 }
 ```
 
@@ -492,7 +498,7 @@ By default, `generateMock` is `false` and no mock is generated. Generated mocks 
 enum MyConfiguration {
     static let additionalImportedModules: [StaticString] = []
     static let additionalDirectoriesToInclude: [StaticString] = []
-    static let mockConditionalCompilation: StaticString? = "TESTING"
+    static let mockConditionalCompilation: StaticString? = "DEBUG"
 }
 ```
 
