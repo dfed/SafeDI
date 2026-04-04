@@ -276,9 +276,9 @@ public struct Initializer: Codable, Hashable, Sendable {
 				}
 			} else if argument.hasDefaultValue {
 				let variableName = mockContext?.disambiguatedLabel(
-					forPropertyLabel: argument.innerLabel,
+					forPropertyLabel: argument.mockPropertyLabel,
 					typeDescription: argument.typeDescription,
-				) ?? argument.innerLabel
+				) ?? argument.mockPropertyLabel
 				parts.append("\(argument.label): \(variableName)")
 			}
 			// Arguments that don't match a dependency and have no default are
@@ -322,6 +322,15 @@ public struct Initializer: Codable, Hashable, Sendable {
 		/// The label by which this argument is referenced at the call site.
 		public var label: String {
 			outerLabel ?? innerLabel
+		}
+
+		/// The label to use when creating mock parameters for default-valued init arguments.
+		/// When `innerLabel` is `_` (not usable as a variable name), falls back to `outerLabel`.
+		public var mockPropertyLabel: String {
+			if innerLabel == "_", let outerLabel, outerLabel != "_" {
+				return outerLabel
+			}
+			return innerLabel
 		}
 
 		public var asProperty: Property {
