@@ -45,7 +45,10 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 	// MARK: Hashable
 
 	public static func < (lhs: Property, rhs: Property) -> Bool {
-		lhs.label < rhs.label
+		if lhs.label != rhs.label {
+			return lhs.label < rhs.label
+		}
+		return lhs.typeDescription.asSource < rhs.typeDescription.asSource
 	}
 
 	// MARK: Public

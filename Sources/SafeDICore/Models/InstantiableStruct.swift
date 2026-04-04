@@ -28,12 +28,16 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		additionalInstantiables: [TypeDescription]?,
 		dependencies: [Dependency],
 		declarationType: DeclarationType,
+		mockAttributes: String = "",
+		mockInitializer: Initializer? = nil,
 	) {
 		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
 		self.isRoot = isRoot
 		self.initializer = initializer
 		self.dependencies = dependencies
 		self.declarationType = declarationType
+		self.mockAttributes = mockAttributes
+		self.mockInitializer = mockInitializer
 	}
 
 	// MARK: Public
@@ -48,12 +52,17 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// Whether the instantiable type is a root of a dependency graph.
 	public let isRoot: Bool
 	/// A memberwise initializer for the concrete instantiable type.
-	/// If `nil`, the Instanitable type is incorrectly configured.
+	/// If `nil`, the Instantiable type is incorrectly configured.
 	public let initializer: Initializer?
 	/// The ordered dependencies of this Instantiable.
 	public let dependencies: [Dependency]
 	/// The declaration type of the Instantiable’s concrete type.
 	public let declarationType: DeclarationType
+	/// Attributes to add to the generated `mock()` method (e.g. `"@MainActor"`).
+	public let mockAttributes: String
+	/// A user-defined `static func mock(...)` method, if one exists.
+	/// When present, generated mocks call `TypeName.mock(...)` instead of `TypeName(...)`.
+	public var mockInitializer: Initializer?
 
 	/// The path to the source file that declared this Instantiable.
 	public var sourceFilePath: String?

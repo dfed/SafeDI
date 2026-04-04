@@ -18,6 +18,7 @@
 		3289B4082BF955720053F2E4 /* Subproject.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3289B4012BF955710053F2E4 /* Subproject.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3289B40D2BF955A10053F2E4 /* StringStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECC2B314DB20001AC0C /* StringStorage.swift */; };
 		3289B40F2BF955A10053F2E4 /* UserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECA2B314D8D0001AC0C /* UserService.swift */; };
+		BB000003BBBBBBBB00000001 /* SafeDIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000004BBBBBBBB00000001 /* SafeDIConfiguration.swift */; };
 		32B72E192D39763900F5EB6F /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 32B72E182D39763900F5EB6F /* SafeDI */; };
 		32B72E1B2D39764200F5EB6F /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 32B72E1A2D39764200F5EB6F /* SafeDI */; };
 /* End PBXBuildFile section */
@@ -47,9 +48,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		324F1EBF2B314E030001AC0C /* SafeDIConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeDIConfiguration.swift; sourceTree = "<group>"; };
 		324F1ECA2B314D8D0001AC0C /* UserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserService.swift; sourceTree = "<group>"; };
 		324F1ECC2B314DB20001AC0C /* StringStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringStorage.swift; sourceTree = "<group>"; };
-		324F1EBF2B314E030001AC0C /* SafeDIConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeDIConfiguration.swift; sourceTree = "<group>"; };
 		324F1ECE2B314E030001AC0C /* NameEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NameEntryView.swift; sourceTree = "<group>"; };
 		324F1ED12B3150480001AC0C /* NoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteView.swift; sourceTree = "<group>"; };
 		32756FE22B24C042006BDD24 /* ExampleMultiProjectIntegration.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ExampleMultiProjectIntegration.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -59,6 +60,7 @@
 		32756FED2B24C044006BDD24 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		3289B4012BF955710053F2E4 /* Subproject.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Subproject.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		3289B4032BF955720053F2E4 /* Subproject.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Subproject.h; sourceTree = "<group>"; };
+		BB000004BBBBBBBB00000001 /* SafeDIConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeDIConfiguration.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -134,6 +136,7 @@
 		3289B4022BF955720053F2E4 /* Subproject */ = {
 			isa = PBXGroup;
 			children = (
+				BB000004BBBBBBBB00000001 /* SafeDIConfiguration.swift */,
 				324F1ECA2B314D8D0001AC0C /* UserService.swift */,
 				324F1ECC2B314DB20001AC0C /* StringStorage.swift */,
 				3289B4032BF955720053F2E4 /* Subproject.h */,
@@ -197,6 +200,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				BB000001BBBBBBBB00000001 /* PBXTargetDependency */,
 			);
 			name = Subproject;
 			packageProductDependencies = (
@@ -281,6 +285,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BB000003BBBBBBBB00000001 /* SafeDIConfiguration.swift in Sources */,
 				3289B40D2BF955A10053F2E4 /* StringStorage.swift in Sources */,
 				3289B40F2BF955A10053F2E4 /* UserService.swift in Sources */,
 			);
@@ -297,6 +302,10 @@
 		32B72E1D2D39765B00F5EB6F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			productRef = 32B72E1C2D39765B00F5EB6F /* SafeDIGenerator */;
+		};
+		BB000001BBBBBBBB00000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = BB000002BBBBBBBB00000001 /* SafeDIGenerator */;
 		};
 /* End PBXTargetDependency section */
 
@@ -625,6 +634,11 @@
 			productName = SafeDI;
 		};
 		32B72E1C2D39765B00F5EB6F /* SafeDIGenerator */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 32B72E172D39763900F5EB6F /* XCLocalSwiftPackageReference "../../../SafeDI" */;
+			productName = "plugin:SafeDIGenerator";
+		};
+		BB000002BBBBBBBB00000001 /* SafeDIGenerator */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 32B72E172D39763900F5EB6F /* XCLocalSwiftPackageReference "../../../SafeDI" */;
 			productName = "plugin:SafeDIGenerator";

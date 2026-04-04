@@ -23,6 +23,139 @@ import SwiftSyntax
 import Testing
 @testable import SafeDICore
 
+struct SafeDIConfigurationVisitorTests {
+	@Test
+	func nestedStructWithMatchingPropertyNameDoesNotOverrideOuterConfig() {
+		let visitor = SafeDIConfigurationVisitor()
+		visitor.walk(Parser.parse(source: """
+		enum MyConfig {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = []
+		    static let generateMocks: Bool = true
+		    static let mockConditionalCompilation: StaticString? = "DEBUG"
+
+		    struct Helper {
+		        static let generateMocks: Bool = false
+		    }
+		}
+		"""))
+
+		#expect(visitor.generateMocks == true)
+	}
+
+	@Test
+	func nestedClassWithMatchingPropertyNameDoesNotOverrideOuterConfig() {
+		let visitor = SafeDIConfigurationVisitor()
+		visitor.walk(Parser.parse(source: """
+		enum MyConfig {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = []
+		    static let generateMocks: Bool = true
+		    static let mockConditionalCompilation: StaticString? = "DEBUG"
+
+		    class Helper {
+		        static let generateMocks: Bool = false
+		    }
+		}
+		"""))
+
+		#expect(visitor.generateMocks == true)
+	}
+
+	@Test
+	func nestedEnumWithMatchingPropertyNameDoesNotOverrideOuterConfig() {
+		let visitor = SafeDIConfigurationVisitor()
+		visitor.walk(Parser.parse(source: """
+		enum MyConfig {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = []
+		    static let generateMocks: Bool = true
+		    static let mockConditionalCompilation: StaticString? = "DEBUG"
+
+		    enum Helper {
+		        static let generateMocks: Bool = false
+		    }
+		}
+		"""))
+
+		#expect(visitor.generateMocks == true)
+	}
+
+	@Test
+	func configurationPropertyReturnsCorrectValues() {
+		let visitor = SafeDIConfigurationVisitor()
+		visitor.walk(Parser.parse(source: """
+		enum MyConfig {
+		    static let additionalImportedModules: [StaticString] = ["ModuleA", "ModuleB"]
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Other"]
+		    static let generateMocks: Bool = false
+		    static let mockConditionalCompilation: StaticString? = "TESTING"
+		}
+		"""))
+
+		let configuration = visitor.configuration
+		#expect(configuration.additionalImportedModules == ["ModuleA", "ModuleB"])
+		#expect(configuration.additionalDirectoriesToInclude == ["../Other"])
+		#expect(configuration.generateMocks == false)
+		#expect(configuration.mockConditionalCompilation == "TESTING")
+	}
+
+	@Test
+	func mockConditionalCompilationNilLiteral() {
+		let visitor = SafeDIConfigurationVisitor()
+		visitor.walk(Parser.parse(source: """
+		enum MyConfig {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = []
+		    static let generateMocks: Bool = true
+		    static let mockConditionalCompilation: StaticString? = nil
+		}
+		"""))
+
+		#expect(visitor.mockConditionalCompilation == nil)
+	}
+
+	@Test
+	func nestedProtocolWithMatchingPropertyNameDoesNotSetFoundFlag() {
+		let visitor = SafeDIConfigurationVisitor()
+		visitor.walk(Parser.parse(source: """
+		enum MyConfig {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = []
+		    static let generateMocks: Bool = true
+		    static let mockConditionalCompilation: StaticString? = "DEBUG"
+
+		    protocol Helper {
+		        static var generateMocks: Bool { get }
+		    }
+		}
+		"""))
+
+		#expect(visitor.generateMocks == true)
+		// The protocol's requirement must not affect the isValid flag.
+		#expect(visitor.generateMocksIsValid == true)
+	}
+
+	@Test
+	func nestedActorWithMatchingPropertyNameDoesNotOverrideOuterConfig() {
+		let visitor = SafeDIConfigurationVisitor()
+		visitor.walk(Parser.parse(source: """
+		enum MyConfig {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = []
+		    static let generateMocks: Bool = true
+		    static let mockConditionalCompilation: StaticString? = "DEBUG"
+
+		    actor Helper {
+		        static let generateMocks: Bool = false
+		    }
+		}
+		"""))
+
+		#expect(visitor.generateMocks == true)
+	}
+}
+
 struct FileVisitorTests {
 	@Test
 	func walk_findsInstantiable() {
@@ -50,12 +183,12 @@ struct FileVisitorTests {
 						.init(
 							innerLabel: "user",
 							typeDescription: .simple(name: "User"),
-							hasDefaultValue: false,
+							defaultValueExpression: nil,
 						),
 						.init(
 							innerLabel: "networkService",
 							typeDescription: .simple(name: "NetworkService"),
-							hasDefaultValue: false,
+							defaultValueExpression: nil,
 						),
 					],
 				),
@@ -110,12 +243,12 @@ struct FileVisitorTests {
 						.init(
 							innerLabel: "user",
 							typeDescription: .simple(name: "User"),
-							hasDefaultValue: false,
+							defaultValueExpression: nil,
 						),
 						.init(
 							innerLabel: "networkService",
 							typeDescription: .simple(name: "NetworkService"),
-							hasDefaultValue: false,
+							defaultValueExpression: nil,
 						),
 					],
 				),

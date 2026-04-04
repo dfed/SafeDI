@@ -32,6 +32,9 @@ public enum FixableInstantiableError: DiagnosticError {
 	case dependencyHasInitializer
 	case missingPublicOrOpenAttribute
 	case missingRequiredInitializer(MissingInitializer)
+	case mockMethodMissingArguments([Property])
+	case mockMethodNotPublic
+	case duplicateMockMethod
 
 	public enum MissingInitializer: Sendable {
 		case hasOnlyInjectableProperties
@@ -76,6 +79,12 @@ public enum FixableInstantiableError: DiagnosticError {
 			case .missingArguments:
 				"@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property."
 			}
+		case .mockMethodMissingArguments:
+			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method must have a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. Extra parameters with default values are allowed."
+		case .mockMethodNotPublic:
+			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method must be `public` or `open`."
+		case .duplicateMockMethod:
+			"@\(InstantiableVisitor.macroName)-decorated type must have at most one `mock()` method. Remove this duplicate."
 		}
 	}
 
@@ -103,7 +112,10 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .dependencyHasTooManyAttributes,
 			     .dependencyHasInitializer,
 			     .missingPublicOrOpenAttribute,
-			     .missingRequiredInitializer:
+			     .missingRequiredInitializer,
+			     .mockMethodMissingArguments,
+			     .mockMethodNotPublic,
+			     .duplicateMockMethod:
 				.error
 			}
 			message = error.description
@@ -150,6 +162,12 @@ public enum FixableInstantiableError: DiagnosticError {
 				case let .missingArguments(properties):
 					"Add arguments for \(properties.map(\.asSource).joined(separator: ", "))"
 				}
+			case let .mockMethodMissingArguments(properties):
+				"Add mock() arguments for \(properties.map(\.asSource).joined(separator: ", "))"
+			case .mockMethodNotPublic:
+				"Add `public` modifier to mock() method"
+			case .duplicateMockMethod:
+				"Remove duplicate mock() method"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}

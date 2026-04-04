@@ -776,6 +776,31 @@ struct TypeDescriptionTests {
 	}
 
 	@Test
+	func strippingEscaping_removesEscapingButPreservesSpecifiers() {
+		let type = TypeDescription.attributed(
+			.closure(
+				arguments: [],
+				isAsync: false,
+				doesThrow: false,
+				returnType: .void(.tuple),
+			),
+			specifiers: ["borrowing"],
+			attributes: ["escaping"],
+		)
+		let stripped = type.strippingEscaping
+		#expect(stripped == .attributed(
+			.closure(
+				arguments: [],
+				isAsync: false,
+				doesThrow: false,
+				returnType: .void(.tuple),
+			),
+			specifiers: ["borrowing"],
+			attributes: nil,
+		))
+	}
+
+	@Test
 	func asFunctionParameter_addsEscapingWhenNoAttributesFound() {
 		#expect(TypeDescription.attributed(
 			.closure(
@@ -796,6 +821,591 @@ struct TypeDescriptionTests {
 			specifiers: nil,
 			attributes: ["escaping"],
 		))
+	}
+
+	// MARK: - simplified Tests
+
+	@Test
+	func simplified_stripsOptional() {
+		let type = TypeDescription.optional(.simple(name: "Service"))
+		#expect(type.simplified == .simple(name: "Service"))
+	}
+
+	@Test
+	func simplified_stripsImplicitlyUnwrappedOptional() {
+		let type = TypeDescription.implicitlyUnwrappedOptional(.simple(name: "Service"))
+		#expect(type.simplified == .simple(name: "Service"))
+	}
+
+	@Test
+	func simplified_stripsSome() {
+		let type = TypeDescription.some(.simple(name: "Equatable"))
+		#expect(type.simplified == .simple(name: "Equatable"))
+	}
+
+	@Test
+	func simplified_stripsAny() {
+		let type = TypeDescription.any(.simple(name: "Collection"))
+		#expect(type.simplified == .simple(name: "Collection"))
+	}
+
+	@Test
+	func simplified_stripsMetatype() {
+		let type = TypeDescription.metatype(.simple(name: "Int"), isType: true)
+		#expect(type.simplified == .simple(name: "Int"))
+	}
+
+	@Test
+	func simplified_stripsAttributes() {
+		let type = TypeDescription.attributed(.simple(name: "Int"), specifiers: ["inout"], attributes: nil)
+		#expect(type.simplified == .simple(name: "Int"))
+	}
+
+	@Test
+	func simplified_stripsNestedWrappers() {
+		let type = TypeDescription.optional(.attributed(.some(.simple(name: "Service")), specifiers: nil, attributes: ["Sendable"]))
+		#expect(type.simplified == .simple(name: "Service"))
+	}
+
+	@Test
+	func simplified_preservesSimpleType() {
+		let type = TypeDescription.simple(name: "String")
+		#expect(type.simplified == .simple(name: "String"))
+	}
+
+	@Test
+	func simplified_preservesClosure() {
+		let type = TypeDescription.closure(arguments: [], isAsync: false, doesThrow: false, returnType: .void(.identifier))
+		#expect(type.simplified == type)
+	}
+
+	@Test
+	func simplified_preservesArray() {
+		let type = TypeDescription.array(element: .simple(name: "Int"))
+		#expect(type.simplified == type)
+	}
+
+	// MARK: - asIdentifier Tests
+
+	@Test
+	func asIdentifier_forNestedTypeWithoutGenerics_producesValidIdentifier() throws {
+		let content = """
+		var int: Swift.Int = 1
+		"""
+
+		let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.nestedType)
+		#expect(typeDescription.asIdentifier == "Swift_Int")
+	}
+
+	@Test
+	func asIdentifier_forFunctionType_producesValidIdentifier() throws {
+		let content = """
+		var test: (Int, Double) -> String
+		"""
+
+		let visitor = FunctionTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.functionIdentifier)
+		#expect(typeDescription.asIdentifier == "Int_Double_to_String")
+	}
+
+	@Test
+	func asIdentifier_forThrowingFunctionType_producesValidIdentifier() throws {
+		let content = """
+		var test: (Int, Double) throws -> String
+		"""
+
+		let visitor = FunctionTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.functionIdentifier)
+		#expect(typeDescription.asIdentifier == "Int_Double_throws_to_String")
+	}
+
+	@Test
+	func asIdentifier_forExprClosureType_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = (() -> ()).self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Void_to_Void")
+	}
+
+	@Test
+	func asIdentifier_forExprThrowingClosureType_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = (() throws -> ()).self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Void_throws_to_Void")
+	}
+
+	@Test
+	func asIdentifier_forExprAsyncClosureType_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = (() async -> ()).self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Void_async_to_Void")
+	}
+
+	@Test
+	func asIdentifier_forExprAsyncThrowingClosureType_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = (() async throws -> ()).self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Void_async_throws_to_Void")
+	}
+
+	@Test
+	func asIdentifier_forNestedGenericType_producesValidIdentifier() throws {
+		let content = """
+		var test: OuterGenericType<Int>.InnerGenericType<String>
+		"""
+
+		let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.nestedType)
+		#expect(typeDescription.asIdentifier == "OuterGenericType__Int_InnerGenericType__String")
+	}
+
+	@Test
+	func asIdentifier_forImplicitlyUnwrappedOptional_producesValidIdentifier() throws {
+		let content = """
+		var type: Int! = 1
+		"""
+
+		let visitor = ImplicitlyUnwrappedOptionalTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.implictlyUnwrappedOptionalTypeIdentifier)
+		#expect(typeDescription.asIdentifier == "Int_Optional")
+	}
+
+	@Test
+	func asIdentifier_forSomeType_producesValidIdentifier() throws {
+		let content = """
+		var type: some Equatable = 1
+		"""
+
+		let visitor = SomeOrAnyTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.someOrAnyTypeIdentifier)
+		#expect(typeDescription.asIdentifier == "some_Equatable")
+	}
+
+	@Test
+	func asIdentifier_forMetatypeType_producesValidIdentifier() throws {
+		let content = """
+		var type: Int.Type = Int.self
+		"""
+
+		let visitor = MetatypeTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let metatypeTypeIdentifier = try #require(visitor.metatypeTypeIdentifier)
+		#expect(metatypeTypeIdentifier.asIdentifier == "Int_Type")
+	}
+
+	@Test
+	func asIdentifier_forInoutAttribute_producesValidIdentifier() throws {
+		let content = """
+		func test(parameter: inout Int) {}
+		"""
+
+		let visitor = AttributedTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeIdentifier = try #require(visitor.attributedTypeIdentifier)
+		#expect(typeIdentifier.asIdentifier == "inout_Int")
+	}
+
+	@Test
+	func asIdentifier_forAutoclosureAttribute_producesValidIdentifier() throws {
+		let content = """
+		func test(parameter: @autoclosure () -> Void) {}
+		"""
+
+		let visitor = AttributedTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeIdentifier = try #require(visitor.attributedTypeIdentifier)
+		#expect(typeIdentifier.asIdentifier == "autoclosure_Void_to_Void")
+	}
+
+	@Test
+	func asIdentifier_forInoutAutoclosureAttribute_producesValidIdentifier() throws {
+		let content = """
+		func test(parameter: inout @autoclosure () -> Void) {}
+		"""
+
+		let visitor = AttributedTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeIdentifier = try #require(visitor.attributedTypeIdentifier)
+		#expect(typeIdentifier.asIdentifier == "inout_autoclosure_Void_to_Void")
+	}
+
+	@Test
+	func asIdentifier_forSendingAutoclosureAttribute_producesValidIdentifier() throws {
+		let content = """
+		func test(parameter: sending @autoclosure () -> Void) {}
+		"""
+
+		let visitor = AttributedTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeIdentifier = try #require(visitor.attributedTypeIdentifier)
+		#expect(typeIdentifier.asIdentifier == "sending_autoclosure_Void_to_Void")
+	}
+
+	@Test
+	func asIdentifier_forArrayTypeSyntax_producesValidIdentifier() throws {
+		let content = """
+		var array: [Int] = []
+		"""
+
+		let visitor = ArrayTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let arrayTypeIdentifier = try #require(visitor.arrayTypeIdentifier)
+		#expect(arrayTypeIdentifier.asIdentifier == "Array_Int")
+	}
+
+	@Test
+	func asIdentifier_forGenericArray_producesValidIdentifier() throws {
+		let content = """
+		var array: Array<Int> = []
+		"""
+
+		let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let arrayTypeIdentifier = try #require(visitor.typeIdentifier)
+		#expect(arrayTypeIdentifier.asIdentifier == "Array__Int")
+	}
+
+	@Test
+	func asIdentifier_forTwoDimensionalArray_producesValidIdentifier() throws {
+		let content = """
+		var array: Array<Array<Int>> = []
+		"""
+
+		let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let arrayTypeIdentifier = try #require(visitor.typeIdentifier)
+		#expect(arrayTypeIdentifier.asIdentifier == "Array__Array__Int")
+	}
+
+	@Test
+	func asIdentifier_forDictionaryTypeSyntax_producesValidIdentifier() throws {
+		let content = """
+		var dict: [Int: String] = [:]
+		"""
+
+		let visitor = DictionaryTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let dictionaryTypeIdentifier = try #require(visitor.dictionaryTypeIdentifier)
+		#expect(dictionaryTypeIdentifier.asIdentifier == "Dictionary_Int_String")
+	}
+
+	@Test
+	func asIdentifier_forGenericDictionary_producesValidIdentifier() throws {
+		let content = """
+		var dict: Dictionary<Int, String> = [:]
+		"""
+
+		let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let dictionaryTypeIdentifier = try #require(visitor.typeIdentifier)
+		#expect(dictionaryTypeIdentifier.asIdentifier == "Dictionary__Int__String")
+	}
+
+	@Test
+	func asIdentifier_forTwoDimensionalDictionary_producesValidIdentifier() throws {
+		let content = """
+		var dict: Dictionary<Int, Dictionary<Int, String>> = [:]
+		"""
+
+		let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let dictionaryTypeIdentifier = try #require(visitor.typeIdentifier)
+		#expect(dictionaryTypeIdentifier.asIdentifier == "Dictionary__Int__Dictionary__Int__String")
+	}
+
+	@Test
+	func asIdentifier_forVoidTuple_producesValidIdentifier() throws {
+		let content = """
+		var void: () = ()
+		"""
+
+		let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let tupleTypeIdentifier = try #require(visitor.tupleTypeIdentifier)
+		#expect(tupleTypeIdentifier.asIdentifier == "Void")
+	}
+
+	@Test
+	func asIdentifier_forSpelledOutVoidInTuple_producesValidIdentifier() throws {
+		let content = """
+		var void: (Void) = ()
+		"""
+
+		let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let tupleTypeIdentifier = try #require(visitor.tupleTypeIdentifier)
+		#expect(tupleTypeIdentifier.asIdentifier == "Void")
+	}
+
+	@Test
+	func asIdentifier_forVoidWrappedInTuple_producesValidIdentifier() throws {
+		let content = """
+		var void: (()) = ()
+		"""
+
+		let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let tupleTypeIdentifier = try #require(visitor.tupleTypeIdentifier)
+		#expect(tupleTypeIdentifier.asIdentifier == "Void")
+	}
+
+	@Test
+	func asIdentifier_forTupleType_producesValidIdentifier() throws {
+		let content = """
+		var tuple: (Int, String) = (1, "")
+		"""
+
+		let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let tupleTypeIdentifier = try #require(visitor.tupleTypeIdentifier)
+		#expect(tupleTypeIdentifier.asIdentifier == "Int_and_String")
+	}
+
+	@Test
+	func asIdentifier_forSingleElementTuple_producesValidIdentifier() throws {
+		let content = """
+		var element: (String) = ""
+		"""
+
+		let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let tupleTypeIdentifier = try #require(visitor.tupleTypeIdentifier)
+		#expect(tupleTypeIdentifier.asIdentifier == "String")
+	}
+
+	@Test
+	func asIdentifier_forClassRestriction_producesValidIdentifier() throws {
+		let content = """
+		protocol SomeObject: class {}
+		"""
+
+		let visitor = ClassRestrictionTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let classRestrictionTypeIdentifier = try #require(visitor.classRestrictionIdentifier)
+		#expect(classRestrictionTypeIdentifier.asIdentifier == "AnyObject")
+	}
+
+	@Test
+	func asIdentifier_forExprVoidType_producesValidIdentifier() throws {
+		let content = """
+		let type: Void.Type = Void.self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Void")
+	}
+
+	@Test
+	func asIdentifier_forExprSimpleType_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = String.self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "String")
+	}
+
+	@Test
+	func asIdentifier_forExprGenericType_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = Array<Int>.self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Array__Int")
+	}
+
+	@Test
+	func asIdentifier_forExprNestedGenericType_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = Swift.Array<Int>.self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Swift_Array__Int")
+	}
+
+	@Test
+	func asIdentifier_forExprAnyType_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = (any Collection).self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "any_Collection")
+	}
+
+	@Test
+	func asIdentifier_forExprCompositionType_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = (Decodable & Encodable).self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Decodable_and_Encodable")
+	}
+
+	@Test
+	func asIdentifier_forExprOptionalType_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = Int?.self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Int_Optional")
+	}
+
+	@Test
+	func asIdentifier_forExprMetatypeType_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = Int.Type.self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Int_Type")
+	}
+
+	@Test
+	func asIdentifier_forExprMetatypeProtocol_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = Int.Protocol.self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Int_Protocol")
+	}
+
+	@Test
+	func asIdentifier_forExprArrayType_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = [Int].self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Array_Int")
+	}
+
+	@Test
+	func asIdentifier_forExprDictionaryType_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = [Int: String].self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Dictionary_Int_String")
+	}
+
+	@Test
+	func asIdentifier_forExprTupleWithoutLabels_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = (Int, String).self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Int_and_String")
+	}
+
+	@Test
+	func asIdentifier_forExprTupleWithOneLabel_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = (int: Int, String).self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Int_and_String")
+	}
+
+	@Test
+	func asIdentifier_forExprTupleWithLabels_producesValidIdentifier() throws {
+		let content = """
+		let type: Any.Type = (int: Int, string: String).self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asIdentifier == "Int_and_String")
+	}
+
+	@Test
+	func asIdentifier_forUnknownType_producesValidIdentifier() {
+		let typeDescription = TypeSyntax(stringLiteral: "<[]>    ").typeDescription
+		#expect(typeDescription.asIdentifier == "")
 	}
 
 	// MARK: - Visitors

@@ -61,6 +61,30 @@ extension AttributeSyntax {
 		return firstLabeledExpression.expression
 	}
 
+	public var mockAttributes: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let firstLabeledExpression = labeledExpressionList.first(where: {
+		      	$0.label?.text == "mockAttributes"
+		      })
+		else {
+			return nil
+		}
+
+		return firstLabeledExpression.expression
+	}
+
+	public var mockAttributesValue: String {
+		guard let mockAttributes,
+		      let stringLiteral = StringLiteralExprSyntax(mockAttributes),
+		      stringLiteral.segments.count == 1,
+		      case let .stringSegment(segment) = stringLiteral.segments.first
+		else {
+			return ""
+		}
+		return segment.content.text
+	}
+
 	public var fulfilledByDependencyNamed: ExprSyntax? {
 		guard let arguments,
 		      let labeledExpressionList = LabeledExprListSyntax(arguments),

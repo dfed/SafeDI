@@ -24,11 +24,16 @@ import SwiftUI
 @MainActor
 @Instantiable
 public struct NoteView: Instantiable, View {
-	public init(userName: String, userService: AnyUserService, stringStorage: StringStorage) {
+	public init(
+		userName: String,
+		userService: AnyUserService,
+		stringStorage: StringStorage,
+		defaultNote: String = "",
+	) {
 		self.userName = userName
 		self.userService = userService
 		self.stringStorage = stringStorage
-		_note = State(initialValue: stringStorage.string(forKey: userName) ?? "")
+		_note = State(initialValue: stringStorage.string(forKey: userName) ?? defaultNote)
 	}
 
 	public var body: some View {
@@ -54,10 +59,11 @@ public struct NoteView: Instantiable, View {
 	@State private var note: String = ""
 }
 
-#Preview {
-	NoteView(
-		userName: "dfed",
-		userService: .init(DefaultUserService(stringStorage: UserDefaults.standard)),
-		stringStorage: UserDefaults.standard,
-	)
-}
+#if DEBUG
+	#Preview {
+		NoteView.mock(
+			userName: "dfed",
+			defaultNote: "dfed says hello",
+		)
+	}
+#endif

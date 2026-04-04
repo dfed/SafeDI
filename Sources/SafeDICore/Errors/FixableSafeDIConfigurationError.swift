@@ -23,6 +23,8 @@ import SwiftDiagnostics
 public enum FixableSafeDIConfigurationError: DiagnosticError {
 	case missingAdditionalImportedModulesProperty
 	case missingAdditionalDirectoriesToIncludeProperty
+	case missingGenerateMocksProperty
+	case missingMockConditionalCompilationProperty
 
 	public var description: String {
 		switch self {
@@ -30,6 +32,10 @@ public enum FixableSafeDIConfigurationError: DiagnosticError {
 			"@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `static let additionalImportedModules: [StaticString]` property"
 		case .missingAdditionalDirectoriesToIncludeProperty:
 			"@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `static let additionalDirectoriesToInclude: [StaticString]` property"
+		case .missingGenerateMocksProperty:
+			"@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `static let generateMocks: Bool` property"
+		case .missingMockConditionalCompilationProperty:
+			"@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `static let mockConditionalCompilation: StaticString?` property"
 		}
 	}
 
@@ -48,7 +54,9 @@ public enum FixableSafeDIConfigurationError: DiagnosticError {
 			diagnosticID = MessageID(domain: "\(Self.self)", id: error.description)
 			severity = switch error {
 			case .missingAdditionalImportedModulesProperty,
-			     .missingAdditionalDirectoriesToIncludeProperty:
+			     .missingAdditionalDirectoriesToIncludeProperty,
+			     .missingGenerateMocksProperty,
+			     .missingMockConditionalCompilationProperty:
 				.error
 			}
 			message = error.description
@@ -68,6 +76,10 @@ public enum FixableSafeDIConfigurationError: DiagnosticError {
 				"Add `static let additionalImportedModules: [StaticString]` property"
 			case .missingAdditionalDirectoriesToIncludeProperty:
 				"Add `static let additionalDirectoriesToInclude: [StaticString]` property"
+			case .missingGenerateMocksProperty:
+				"Add `static let generateMocks: Bool` property"
+			case .missingMockConditionalCompilationProperty:
+				"Add `static let mockConditionalCompilation: StaticString?` property"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}

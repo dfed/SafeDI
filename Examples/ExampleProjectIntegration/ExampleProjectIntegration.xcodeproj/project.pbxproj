@@ -15,6 +15,7 @@
 		32756FE62B24C042006BDD24 /* ExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FE52B24C042006BDD24 /* ExampleApp.swift */; };
 		32756FEA2B24C044006BDD24 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 32756FE92B24C044006BDD24 /* Assets.xcassets */; };
 		32756FEE2B24C044006BDD24 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 32756FED2B24C044006BDD24 /* Preview Assets.xcassets */; };
+		AA000001AAAAAAAA00000001 /* SafeDIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000002AAAAAAAA00000001 /* SafeDIConfiguration.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +28,7 @@
 		32756FE92B24C044006BDD24 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		32756FEB2B24C044006BDD24 /* ExampleProjectIntegration.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ExampleProjectIntegration.entitlements; sourceTree = "<group>"; };
 		32756FED2B24C044006BDD24 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		AA000002AAAAAAAA00000001 /* SafeDIConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeDIConfiguration.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -82,6 +84,7 @@
 			children = (
 				324F1EDA2B315AB20001AC0C /* Views */,
 				324F1EDC2B315ABB0001AC0C /* Models */,
+				AA000002AAAAAAAA00000001 /* SafeDIConfiguration.swift */,
 				32756FE92B24C044006BDD24 /* Assets.xcassets */,
 				32756FEB2B24C044006BDD24 /* ExampleProjectIntegration.entitlements */,
 				32756FEC2B24C044006BDD24 /* Preview Content */,
@@ -186,6 +189,7 @@
 				32756FE62B24C042006BDD24 /* ExampleApp.swift in Sources */,
 				324F1ECD2B314DB20001AC0C /* StringStorage.swift in Sources */,
 				324F1ECB2B314D8D0001AC0C /* UserService.swift in Sources */,
+				AA000001AAAAAAAA00000001 /* SafeDIConfiguration.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -106,6 +106,7 @@ final class Scope: Hashable {
 		propertyStack: OrderedSet<Property>,
 		receivableProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
+		forMockGeneration: Bool = false,
 	) throws -> ScopeGenerator {
 		var childPropertyStack = propertyStack
 		let isPropertyCycle: Bool
@@ -116,29 +117,36 @@ final class Scope: Hashable {
 			isPropertyCycle = false
 		}
 		let receivableProperties = receivableProperties.union(createdProperties)
-		func isPropertyUnavailable(_ property: Property) -> Bool {
-			let propertyIsAvailableInParentStack = receivableProperties.contains(property) && !propertyStack.contains(property)
-			let unwrappedPropertyIsAvailableInParentStack = receivableProperties.contains(property.asUnwrappedProperty) && !propertyStack.contains(property.asUnwrappedProperty)
-			return !(propertyIsAvailableInParentStack || unwrappedPropertyIsAvailableInParentStack)
-		}
-		let unavailableOptionalProperties = Set<Property>(instantiable.dependencies.flatMap { dependency in
-			switch dependency.source {
-			case .instantiated, .forwarded:
-				[Property]()
-			case let .received(onlyIfAvailable):
-				if onlyIfAvailable, isPropertyUnavailable(dependency.property) {
-					[dependency.property]
-				} else {
-					[Property]()
-				}
-			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-				if onlyIfAvailable, isPropertyUnavailable(fulfillingProperty) {
-					[dependency.property, fulfillingProperty]
-				} else {
-					[Property]()
-				}
+		// In mock mode, unavailableOptionalProperties is empty — onlyIfAvailable
+		// dependencies become optional mock parameters instead of being marked unavailable.
+		let unavailableOptionalProperties: Set<Property>
+		if forMockGeneration {
+			unavailableOptionalProperties = []
+		} else {
+			func isPropertyUnavailable(_ property: Property) -> Bool {
+				let propertyIsAvailableInParentStack = receivableProperties.contains(property) && !propertyStack.contains(property)
+				let unwrappedPropertyIsAvailableInParentStack = receivableProperties.contains(property.asUnwrappedProperty) && !propertyStack.contains(property.asUnwrappedProperty)
+				return !(propertyIsAvailableInParentStack || unwrappedPropertyIsAvailableInParentStack)
 			}
-		})
+			unavailableOptionalProperties = Set<Property>(instantiable.dependencies.flatMap { dependency in
+				switch dependency.source {
+				case .instantiated, .forwarded:
+					[Property]()
+				case let .received(onlyIfAvailable):
+					if onlyIfAvailable, isPropertyUnavailable(dependency.property) {
+						[dependency.property]
+					} else {
+						[Property]()
+					}
+				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+					if onlyIfAvailable, isPropertyUnavailable(fulfillingProperty) {
+						[dependency.property, fulfillingProperty]
+					} else {
+						[Property]()
+					}
+				}
+			})
+		}
 		let scopeGenerator = try ScopeGenerator(
 			instantiable: instantiable,
 			property: property,
@@ -150,6 +158,7 @@ final class Scope: Hashable {
 						propertyStack: childPropertyStack,
 						receivableProperties: receivableProperties,
 						erasedToConcreteExistential: erasedToConcreteExistential,
+						forMockGeneration: forMockGeneration,
 					)
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
 					ScopeGenerator(
@@ -165,9 +174,11 @@ final class Scope: Hashable {
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			isPropertyCycle: isPropertyCycle,
 		)
-		Task.detached {
-			// Kick off code generation.
-			try await scopeGenerator.generateCode()
+		if !forMockGeneration {
+			Task.detached {
+				// Kick off code generation.
+				try await scopeGenerator.generateCode()
+			}
 		}
 		return scopeGenerator
 	}

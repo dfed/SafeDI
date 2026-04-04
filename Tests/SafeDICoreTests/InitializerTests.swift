@@ -78,7 +78,7 @@ struct InitializerTests {
 				.init(
 					innerLabel: "variant",
 					typeDescription: .simple(name: "Variant"),
-					hasDefaultValue: false,
+					defaultValueExpression: nil,
 				),
 			],
 		)
@@ -106,7 +106,7 @@ struct InitializerTests {
 				.init(
 					innerLabel: "variant",
 					typeDescription: .simple(name: "Variant"),
-					hasDefaultValue: false,
+					defaultValueExpression: nil,
 				),
 			],
 		)
@@ -133,7 +133,7 @@ struct InitializerTests {
 				.init(
 					innerLabel: "variant",
 					typeDescription: .simple(name: "Variant"),
-					hasDefaultValue: false,
+					defaultValueExpression: nil,
 				),
 			],
 		)
@@ -169,7 +169,7 @@ struct InitializerTests {
 				.init(
 					innerLabel: "someVariant",
 					typeDescription: .simple(name: "Variant"),
-					hasDefaultValue: false,
+					defaultValueExpression: nil,
 				),
 			],
 		)
@@ -196,7 +196,7 @@ struct InitializerTests {
 				.init(
 					innerLabel: "variant",
 					typeDescription: .simple(name: "NotThatVariant"),
-					hasDefaultValue: false,
+					defaultValueExpression: nil,
 				),
 			],
 		)
@@ -214,5 +214,111 @@ struct InitializerTests {
 				],
 			)
 		})
+	}
+
+	// MARK: createMockInitializerArgumentList
+
+	@Test
+	func createMockInitializerArgumentList_passesNilForUnavailableDependency() {
+		let initializer = Initializer(
+			arguments: [
+				.init(
+					innerLabel: "service",
+					typeDescription: .simple(name: "Service"),
+					defaultValueExpression: nil,
+				),
+				.init(
+					innerLabel: "optionalDep",
+					typeDescription: .optional(.simple(name: "OptionalDep")),
+					defaultValueExpression: nil,
+				),
+			],
+		)
+		let dependencies: [Dependency] = [
+			.init(
+				property: .init(label: "service", typeDescription: .simple(name: "Service")),
+				source: .received(onlyIfAvailable: false),
+			),
+			.init(
+				property: .init(label: "optionalDep", typeDescription: .optional(.simple(name: "OptionalDep"))),
+				source: .received(onlyIfAvailable: true),
+			),
+		]
+		let unavailable: Set<Property> = [
+			.init(label: "optionalDep", typeDescription: .optional(.simple(name: "OptionalDep"))),
+		]
+
+		let result = initializer.createMockInitializerArgumentList(
+			given: dependencies,
+			unavailableProperties: unavailable,
+		)
+
+		#expect(result == "service: service, optionalDep: nil")
+	}
+
+	@Test
+	func createMockInitializerArgumentList_includesNonDependencyDefaultValuedArguments() {
+		let initializer = Initializer(
+			arguments: [
+				.init(
+					innerLabel: "service",
+					typeDescription: .simple(name: "Service"),
+					defaultValueExpression: nil,
+				),
+				.init(
+					innerLabel: "flag",
+					typeDescription: .simple(name: "Bool"),
+					defaultValueExpression: "false",
+				),
+			],
+		)
+		let dependencies: [Dependency] = [
+			.init(
+				property: .init(label: "service", typeDescription: .simple(name: "Service")),
+				source: .received(onlyIfAvailable: false),
+			),
+		]
+
+		let result = initializer.createMockInitializerArgumentList(given: dependencies)
+
+		#expect(result == "service: service, flag: flag")
+	}
+
+	@Test
+	func createMockInitializerArgumentList_includesDependencyWithDefaultValue() {
+		let initializer = Initializer(
+			arguments: [
+				.init(
+					innerLabel: "service",
+					typeDescription: .simple(name: "Service"),
+					defaultValueExpression: nil,
+				),
+				.init(
+					innerLabel: "crossModuleDependency",
+					typeDescription: .simple(name: "CrossModuleType"),
+					defaultValueExpression: ".mock()",
+				),
+				.init(
+					innerLabel: "flag",
+					typeDescription: .simple(name: "Bool"),
+					defaultValueExpression: "false",
+				),
+			],
+		)
+		let dependencies: [Dependency] = [
+			.init(
+				property: .init(label: "service", typeDescription: .simple(name: "Service")),
+				source: .received(onlyIfAvailable: false),
+			),
+			.init(
+				property: .init(label: "crossModuleDependency", typeDescription: .simple(name: "CrossModuleType")),
+				source: .instantiated(fulfillingTypeDescription: nil, erasedToConcreteExistential: false),
+			),
+		]
+
+		let result = initializer.createMockInitializerArgumentList(given: dependencies)
+
+		// All args included: deps (with or without defaults) + non-dep defaults.
+		#expect(result == "service: service, crossModuleDependency: crossModuleDependency, flag: flag")
 	}
 }

@@ -265,6 +265,134 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// Whether this type is a closure (function) type, possibly wrapped in attributes.
+	public var isClosure: Bool {
+		switch self {
+		case .closure:
+			true
+		case let .attributed(type, _, _):
+			type.isClosure
+		case .any,
+		     .array,
+		     .composition,
+		     .dictionary,
+		     .implicitlyUnwrappedOptional,
+		     .metatype,
+		     .nested,
+		     .optional,
+		     .simple,
+		     .some,
+		     .tuple,
+		     .unknown,
+		     .void:
+			false
+		}
+	}
+
+	/// Recursively strips wrappers that are irrelevant for disambiguation:
+	/// attributes (`@Sendable`, `@escaping`), optionality (`?`, `!`),
+	/// existential wrappers (`some`, `any`), and metatype (`.Type`, `.Protocol`).
+	/// The result is the core type that a human would use to distinguish parameters.
+	public var simplified: TypeDescription {
+		switch self {
+		case .void,
+		     .simple,
+		     .nested,
+		     .composition,
+		     .array,
+		     .dictionary,
+		     .tuple,
+		     .closure,
+		     .unknown:
+			self
+		case let .optional(type):
+			type.simplified
+		case let .implicitlyUnwrappedOptional(type):
+			type.simplified
+		case let .some(type):
+			type.simplified
+		case let .any(type):
+			type.simplified
+		case let .metatype(type, _):
+			type.simplified
+		case let .attributed(type, _, _):
+			type.simplified
+		}
+	}
+
+	/// A valid Swift identifier fragment derived from this type's structure.
+	/// Used as a disambiguation suffix in generated mock parameter names.
+	public var asIdentifier: String {
+		switch self {
+		case .void:
+			return "Void"
+		case let .simple(name, generics):
+			return if generics.isEmpty {
+				name
+			} else {
+				"\(name)__\(generics.map(\.asIdentifier).joined(separator: "__"))"
+			}
+		case let .nested(name, parentType, generics):
+			return if generics.isEmpty {
+				"\(parentType.asIdentifier)_\(name)"
+			} else {
+				"\(parentType.asIdentifier)_\(name)__\(generics.map(\.asIdentifier).joined(separator: "__"))"
+			}
+		case let .composition(types):
+			return types.map(\.asIdentifier).joined(separator: "_and_")
+		case let .optional(type):
+			return "\(type.asIdentifier)_Optional"
+		case let .implicitlyUnwrappedOptional(type):
+			return "\(type.asIdentifier)_Optional"
+		case let .some(type):
+			return "some_\(type.asIdentifier)"
+		case let .any(type):
+			return "any_\(type.asIdentifier)"
+		case let .metatype(type, isType):
+			return "\(type.asIdentifier)_\(isType ? "Type" : "Protocol")"
+		case let .attributed(type, specifiers, attributes):
+			// .attributed always has at least one non-nil specifier or attribute
+			// (the parser sets nil-if-empty, and all programmatic constructors
+			// ensure at least one is present).
+			let prefix = [
+				specifiers?.joined(separator: "_"),
+				attributes?.joined(separator: "_"),
+			].compactMap(\.self).joined(separator: "_")
+			return "\(prefix)_\(type.asIdentifier)"
+		case let .array(element):
+			return "Array_\(element.asIdentifier)"
+		case let .dictionary(key, value):
+			return "Dictionary_\(key.asIdentifier)_\(value.asIdentifier)"
+		case let .tuple(elements):
+			return elements.isEmpty ? "Void" : elements.map(\.typeDescription.asIdentifier).joined(separator: "_and_")
+		case let .closure(arguments, isAsync, doesThrow, returnType):
+			let args = arguments.isEmpty ? "Void" : arguments.map(\.asIdentifier).joined(separator: "_")
+			let modifiers = [isAsync ? "async" : nil, doesThrow ? "throws" : nil].compactMap(\.self)
+			let parts = [args] + modifiers + ["to", returnType.asIdentifier]
+			return parts.joined(separator: "_")
+		case let .unknown(text):
+			return text.filter(\.isLetter)
+		}
+	}
+
+	/// Strips the `@escaping` attribute, if present. Returns `self` unchanged for non-attributed types.
+	/// Used when a type will appear in a position where `@escaping` is invalid (e.g., closure return types).
+	public var strippingEscaping: TypeDescription {
+		switch self {
+		case let .attributed(type, specifiers, attributes):
+			let filtered = attributes?.filter { $0 != "escaping" }
+			if let filtered, !filtered.isEmpty {
+				return .attributed(type, specifiers: specifiers, attributes: filtered)
+			} else if let specifiers, !specifiers.isEmpty {
+				return .attributed(type, specifiers: specifiers, attributes: nil)
+			} else {
+				return type
+			}
+		default:
+			return self
+		}
+	}
+
 	public var isOptional: Bool {
 		switch self {
 		case .any,

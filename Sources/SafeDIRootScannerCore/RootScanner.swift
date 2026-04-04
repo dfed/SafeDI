@@ -34,9 +34,13 @@ public struct RootScanner {
 		}
 
 		public var dependencyTreeGeneration: [InputOutputMap]
+		public var mockGeneration: [InputOutputMap]
+		public var configurationFilePaths: [String]
 
-		public init(dependencyTreeGeneration: [InputOutputMap]) {
+		public init(dependencyTreeGeneration: [InputOutputMap], mockGeneration: [InputOutputMap], configurationFilePaths: [String] = []) {
 			self.dependencyTreeGeneration = dependencyTreeGeneration
+			self.mockGeneration = mockGeneration
+			self.configurationFilePaths = configurationFilePaths
 		}
 	}
 
@@ -48,7 +52,7 @@ public struct RootScanner {
 		public let manifest: Manifest
 
 		public var outputFiles: [URL] {
-			manifest.dependencyTreeGeneration.map {
+			(manifest.dependencyTreeGeneration + manifest.mockGeneration).map {
 				URL(fileURLWithPath: $0.outputFilePath)
 			}
 		}
@@ -70,17 +74,25 @@ public struct RootScanner {
 		let directoryBaseURL = baseURL.hasDirectoryPath
 			? baseURL
 			: baseURL.appendingPathComponent("", isDirectory: true)
+		let allFiles = inputFilePaths.map { inputFilePath in
+			URL(fileURLWithPath: inputFilePath, relativeTo: directoryBaseURL).standardizedFileURL
+		}
 		return try scan(
-			swiftFiles: inputFilePaths.map { inputFilePath in
-				URL(fileURLWithPath: inputFilePath, relativeTo: directoryBaseURL).standardizedFileURL
-			},
+			swiftFiles: allFiles,
+			targetSwiftFiles: allFiles,
 			relativeTo: baseURL,
 			outputDirectory: outputDirectory,
 		)
 	}
 
+	/// - Parameters:
+	///   - swiftFiles: All swift files to scan (target + dependencies) for root detection.
+	///   - targetSwiftFiles: Only the target module's swift files, for mock generation scoping.
+	///   - baseURL: The base URL for computing relative paths.
+	///   - outputDirectory: Where to write output files.
 	public func scan(
 		swiftFiles: [URL],
+		targetSwiftFiles: [URL]? = nil,
 		relativeTo baseURL: URL,
 		outputDirectory: URL,
 	) throws -> Result {
@@ -88,11 +100,23 @@ public struct RootScanner {
 			relativePath(for: $0, relativeTo: baseURL) < relativePath(for: $1, relativeTo: baseURL)
 		}
 		let rootFiles = try sortedSwiftFiles.filter(Self.fileContainsRoot(at:))
-		let outputFileNames = Self.outputFileNames(for: rootFiles, relativeTo: baseURL)
+		let rootOutputFileNames = Self.outputFileNames(for: rootFiles, relativeTo: baseURL)
+
+		// Mock generation is scoped to target files only (to avoid duplicates in multi-module builds).
+		let filesForMockScan = (targetSwiftFiles ?? swiftFiles).sorted {
+			relativePath(for: $0, relativeTo: baseURL) < relativePath(for: $1, relativeTo: baseURL)
+		}
+		let instantiableFiles = try filesForMockScan.filter(Self.fileContainsInstantiable(at:))
+		let mockOutputFileNames = Self.mockOutputFileNames(for: instantiableFiles, relativeTo: baseURL)
+
+		// Find config files in the target's files (not dependency files).
+		let configurationFilePaths = try filesForMockScan
+			.filter(Self.fileContainsConfiguration(at:))
+			.map { relativePath(for: $0, relativeTo: baseURL) }
 
 		return Result(
 			manifest: Manifest(
-				dependencyTreeGeneration: zip(rootFiles, outputFileNames).map { inputURL, outputFileName in
+				dependencyTreeGeneration: zip(rootFiles, rootOutputFileNames).map { inputURL, outputFileName in
 					.init(
 						inputFilePath: relativePath(for: inputURL, relativeTo: baseURL),
 						outputFilePath: outputDirectory
@@ -100,6 +124,15 @@ public struct RootScanner {
 							.path,
 					)
 				},
+				mockGeneration: zip(instantiableFiles, mockOutputFileNames).map { inputURL, outputFileName in
+					.init(
+						inputFilePath: relativePath(for: inputURL, relativeTo: baseURL),
+						outputFilePath: outputDirectory
+							.appendingPathComponent(outputFileName)
+							.path,
+					)
+				},
+				configurationFilePaths: configurationFilePaths,
 			),
 		)
 	}
@@ -112,6 +145,49 @@ public struct RootScanner {
 
 	public static func fileContainsRoot(at fileURL: URL) throws -> Bool {
 		containsRoot(in: try String(contentsOf: fileURL, encoding: .utf8))
+	}
+
+	public static func fileContainsInstantiable(at fileURL: URL) throws -> Bool {
+		containsInstantiable(in: try String(contentsOf: fileURL, encoding: .utf8))
+	}
+
+	public static func fileContainsConfiguration(at fileURL: URL) throws -> Bool {
+		containsConfiguration(in: try String(contentsOf: fileURL, encoding: .utf8))
+	}
+
+	public static func containsConfiguration(in source: String) -> Bool {
+		let sanitizedSource = sanitize(source: source)
+		let macroName = "@SafeDIConfiguration"
+		var searchStart = sanitizedSource.startIndex
+		while let range = sanitizedSource[searchStart...].range(of: macroName) {
+			let afterMacro = range.upperBound
+			if afterMacro >= sanitizedSource.endIndex || !isIdentifierContinuation(sanitizedSource[afterMacro]) {
+				return true
+			} else {
+				searchStart = afterMacro
+			}
+		}
+		return false
+	}
+
+	public static func containsInstantiable(in source: String) -> Bool {
+		let sanitizedSource = sanitize(source: source)
+		let macroName = "@Instantiable"
+		var searchStart = sanitizedSource.startIndex
+
+		while let macroRange = sanitizedSource[searchStart...].range(of: macroName) {
+			let index = macroRange.upperBound
+			if index < sanitizedSource.endIndex,
+			   isIdentifierContinuation(sanitizedSource[index])
+			{
+				searchStart = index
+				continue
+			}
+			// Found a valid @Instantiable token
+			return true
+		}
+
+		return false
 	}
 
 	public static func containsRoot(in source: String) -> Bool {
@@ -151,14 +227,42 @@ public struct RootScanner {
 		return false
 	}
 
+	private static func mockOutputFileNames(
+		for inputURLs: [URL],
+		relativeTo baseURL: URL,
+	) -> [String] {
+		outputFileNames(for: inputURLs, relativeTo: baseURL, suffix: "+SafeDIMock.swift")
+	}
+
 	/// Extracts `additionalDirectoriesToInclude` paths from a source file
 	/// containing `@SafeDIConfiguration`. Uses text-based scanning (no SwiftSyntax).
 	/// Returns an empty array if the file does not contain a configuration.
 	public static func extractAdditionalDirectoriesToInclude(in source: String) -> [String] {
 		let sanitizedSource = sanitize(source: source)
-		guard sanitizedSource.contains("@SafeDIConfiguration") else { return [] }
+		let macroName = "@SafeDIConfiguration"
+		var macroSearchStart = sanitizedSource.startIndex
+		var configRange: Range<String.Index>?
+		while let candidateRange = sanitizedSource[macroSearchStart...].range(of: macroName) {
+			let afterMacro = candidateRange.upperBound
+			if afterMacro >= sanitizedSource.endIndex || !isIdentifierContinuation(sanitizedSource[afterMacro]) {
+				configRange = candidateRange
+				break
+			} else {
+				macroSearchStart = afterMacro
+			}
+		}
+		guard let configRange else { return [] }
+
+		// Find the opening brace of the config body, then the matching close.
+		guard let bodyOpen = sanitizedSource[configRange.upperBound...].firstIndex(of: "{"),
+		      let bodyClose = matchingBraceIndex(in: sanitizedSource, openingBraceIndex: bodyOpen)
+		else { return [] }
+		let configBody = sanitizedSource[bodyOpen...bodyClose]
+
+		// Search for the property only at the top level of the config body
+		// (brace depth 1). Nested types at depth 2+ are ignored.
 		let propertyName = "additionalDirectoriesToInclude"
-		guard let propRange = sanitizedSource.range(of: propertyName) else { return [] }
+		guard let propRange = rangeOfTopLevelProperty(named: propertyName, in: configBody) else { return [] }
 
 		// Convert the sanitized-source index to an index in the original source.
 		// The sanitizer preserves character count, so offsets are equivalent.
@@ -198,6 +302,36 @@ public struct RootScanner {
 		return []
 	}
 
+	/// Finds the range of a property name that appears at brace depth 1 in a config body.
+	/// Ignores occurrences inside nested types (depth 2+).
+	private static func rangeOfTopLevelProperty(named propertyName: String, in body: Substring) -> Range<String.Index>? {
+		var depth = 0
+		var searchStart = body.startIndex
+		while searchStart < body.endIndex {
+			let character = body[searchStart]
+			if character == "{" {
+				depth += 1
+			} else if character == "}" {
+				depth -= 1
+			}
+			// Only match at depth 1 (inside the config enum, outside nested types).
+			// Check identifier boundary to avoid prefix-matching longer names.
+			if depth == 1,
+			   body[searchStart...].hasPrefix(propertyName),
+			   {
+			   	let end = body.index(searchStart, offsetBy: propertyName.count)
+			   	return end >= body.endIndex || !isIdentifierContinuation(body[end])
+			   }()
+			{
+				let end = body.index(searchStart, offsetBy: propertyName.count)
+				return searchStart..<end
+			} else {
+				searchStart = body.index(after: searchStart)
+			}
+		}
+		return nil
+	}
+
 	/// Extracts quoted string literal values from the interior of an array expression.
 	private static func extractStringLiterals(from arrayContent: some StringProtocol) -> [String] {
 		var results = [String]()
@@ -217,6 +351,7 @@ public struct RootScanner {
 	private static func outputFileNames(
 		for inputURLs: [URL],
 		relativeTo baseURL: URL,
+		suffix: String = "+SafeDI.swift",
 	) -> [String] {
 		struct FileInfo {
 			let relativePath: String
@@ -247,7 +382,7 @@ public struct RootScanner {
 		for (baseName, entries) in groups {
 			guard entries.count > 1 else {
 				let entry = entries[0]
-				outputFileNames[entry.offset] = "\(baseName)+SafeDI.swift"
+				outputFileNames[entry.offset] = "\(baseName)\(suffix)"
 				continue
 			}
 
@@ -272,7 +407,7 @@ public struct RootScanner {
 
 			for entry in entries {
 				let name = namesByIndex[entry.offset, default: baseName]
-				outputFileNames[entry.offset] = "\(name)+SafeDI.swift"
+				outputFileNames[entry.offset] = "\(name)\(suffix)"
 			}
 		}
 
@@ -359,6 +494,31 @@ public struct RootScanner {
 			case "(":
 				depth += 1
 			case ")":
+				depth -= 1
+				if depth == 0 {
+					return index
+				}
+			default:
+				break
+			}
+			index = source.index(after: index)
+		}
+
+		return nil
+	}
+
+	private static func matchingBraceIndex(
+		in source: String,
+		openingBraceIndex: String.Index,
+	) -> String.Index? {
+		var depth = 0
+		var index = openingBraceIndex
+
+		while index < source.endIndex {
+			switch source[index] {
+			case "{":
+				depth += 1
+			case "}":
 				depth -= 1
 				if depth == 0 {
 					return index

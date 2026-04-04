@@ -150,6 +150,19 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+		// Detect existing static/class func mock(...) methods.
+		if node.name.text == "mock",
+		   node.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) || $0.name.tokenKind == .keyword(.class) })
+		{
+			if mockFunctionSyntax != nil {
+				// Already found one mock() method — this is a duplicate.
+				duplicateMockFunctionSyntaxes.append(node)
+			} else {
+				mockInitializer = Initializer(node)
+				mockFunctionSyntax = node
+			}
+		}
+
 		guard declarationType.isExtension else {
 			return .skipChildren
 		}
@@ -200,6 +213,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					)
 				},
 				declarationType: .extensionType,
+				mockAttributes: mockAttributes,
+				mockInitializer: mockInitializer,
 			))
 		}
 
@@ -289,6 +304,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var initializerToInitSyntaxMap: [Initializer: InitializerDeclSyntax] = [:]
 	public private(set) var instantiableType: TypeDescription?
 	public private(set) var additionalInstantiables: [TypeDescription]?
+	public private(set) var mockAttributes = ""
+	public private(set) var mockInitializer: Initializer?
+	public private(set) var mockFunctionSyntax: FunctionDeclSyntax?
+	public private(set) var duplicateMockFunctionSyntaxes = [FunctionDeclSyntax]()
 	public private(set) var diagnostics = [Diagnostic]()
 	public private(set) var uninitializedNonOptionalPropertyNames = [String]()
 
@@ -342,13 +361,24 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						additionalInstantiables: additionalInstantiables,
 						dependencies: dependencies,
 						declarationType: instantiableDeclarationType.asDeclarationType,
+						mockAttributes: mockAttributes,
+						mockInitializer: mockInitializer,
 					),
 				]
 			} else {
 				[]
 			}
 		case .extensionDecl:
-			extensionInstantiables
+			// mockInitializer may be set after extensionInstantiables are built
+			// (visit order depends on source order). Patch it in here.
+			extensionInstantiables.map { instantiable in
+				guard instantiable.mockInitializer == nil, let mockInitializer else {
+					return instantiable
+				}
+				var patched = instantiable
+				patched.mockInitializer = mockInitializer
+				return patched
+			}
 		}
 	}
 
@@ -414,9 +444,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				.elements
 				.map(\.expression.typeDescription.asInstantiatedType)
 		}
+		func processMockAttributes() {
+			mockAttributes = macro.mockAttributesValue
+		}
 
 		processIsRoot()
 		processFulfillingAdditionalTypesParameter()
+		processMockAttributes()
 	}
 
 	private func processModifiers(_: DeclModifierListSyntax, on node: some ConcreteDeclSyntaxProtocol) {

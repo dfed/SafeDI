@@ -52,11 +52,15 @@ func discoverAdditionalDirectorySwiftFiles(
 	relativeTo projectRoot: URL,
 ) -> [URL] {
 	for swiftFile in moduleSwiftFiles {
-		guard let content = try? String(contentsOf: swiftFile, encoding: .utf8) else { continue }
-		let directories = RootScanner.extractAdditionalDirectoriesToInclude(in: content)
-		guard !directories.isEmpty else { continue }
+		guard let content = try? String(contentsOf: swiftFile, encoding: .utf8),
+		      RootScanner.containsConfiguration(in: content)
+		else { continue }
 
-		// Use only the first configuration found, matching SafeDITool's behavior.
+		// Use only the first configuration found. If this config has no
+		// additional directories, return empty — don't fall through to later configs.
+		let directories = RootScanner.extractAdditionalDirectoriesToInclude(in: content)
+		guard !directories.isEmpty else { return [] }
+
 		var additionalSwiftFiles = [URL]()
 		let directoryBaseURL = projectRoot.hasDirectoryPath
 			? projectRoot
@@ -83,18 +87,20 @@ func runRootScanner(
 	outputDirectory: URL,
 	manifestFile: URL,
 	additionalSwiftFiles: [URL] = [],
+	mockScopedSwiftFiles: [URL]? = nil,
 ) throws -> RootScannerResult {
 	let inputFilePaths = try RootScanner.inputFilePaths(from: inputSourcesFile)
 
 	let directoryBaseURL = projectRoot.hasDirectoryPath
 		? projectRoot
 		: projectRoot.appendingPathComponent("", isDirectory: true)
-	let targetSwiftFiles = inputFilePaths.map {
+	let csvSwiftFiles = inputFilePaths.map {
 		URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL
 	}
-	let allSwiftFiles = targetSwiftFiles + additionalSwiftFiles
+	let allSwiftFiles = csvSwiftFiles + additionalSwiftFiles
 	let result = try RootScanner().scan(
 		swiftFiles: allSwiftFiles,
+		targetSwiftFiles: mockScopedSwiftFiles,
 		relativeTo: projectRoot,
 		outputDirectory: outputDirectory,
 	)

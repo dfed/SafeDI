@@ -48,6 +48,16 @@ public struct InstantiableMacro: MemberMacro {
 			}
 		}
 
+		if let mockAttributesArgument = declaration
+			.attributes
+			.instantiableMacro?
+			.mockAttributes
+		{
+			if StringLiteralExprSyntax(mockAttributesArgument) == nil {
+				throw InstantiableError.mockAttributesArgumentInvalid
+			}
+		}
+
 		if let concreteDeclaration: ConcreteDeclSyntaxProtocol
 			= ActorDeclSyntax(declaration)
 			?? ClassDeclSyntax(declaration)
@@ -381,6 +391,77 @@ public struct InstantiableMacro: MemberMacro {
 				}
 				return []
 			}
+			// Emit diagnostics for duplicate mock() methods.
+			for duplicateMockSyntax in visitor.duplicateMockFunctionSyntaxes {
+				context.diagnose(Diagnostic(
+					node: Syntax(duplicateMockSyntax),
+					error: FixableInstantiableError.duplicateMockMethod,
+					changes: [
+						.replace(
+							oldNode: Syntax(duplicateMockSyntax),
+							newNode: Syntax("" as DeclSyntax),
+						),
+					],
+				))
+			}
+
+			// Validate mock() method if one exists: must be public and have parameters for all dependencies.
+			if let mockInitializer = visitor.mockInitializer,
+			   let mockSyntax = visitor.mockFunctionSyntax
+			{
+				if !mockInitializer.isPublicOrOpen {
+					var fixedMockSyntax = mockSyntax
+					// Mock detection requires `static` or `class`, so modifiers.first is always non-nil.
+					let firstModifier = mockSyntax.modifiers.first
+					fixedMockSyntax.modifiers.insert(
+						DeclModifierSyntax(
+							leadingTrivia: firstModifier?.leadingTrivia ?? mockSyntax.funcKeyword.leadingTrivia,
+							name: .keyword(.public),
+							trailingTrivia: .space,
+						),
+						at: fixedMockSyntax.modifiers.startIndex,
+					)
+					if let firstModifier {
+						fixedMockSyntax.modifiers[fixedMockSyntax.modifiers.startIndex].leadingTrivia = firstModifier.leadingTrivia
+					}
+					context.diagnose(Diagnostic(
+						node: Syntax(mockSyntax),
+						error: FixableInstantiableError.mockMethodNotPublic,
+						changes: [
+							.replace(
+								oldNode: Syntax(mockSyntax),
+								newNode: Syntax(fixedMockSyntax),
+							),
+						],
+					))
+				}
+				if !visitor.dependencies.isEmpty {
+					do {
+						try mockInitializer.validate(fulfilling: visitor.dependencies)
+					} catch {
+						if let fixableError = error.asFixableError,
+						   case let .missingArguments(missingArguments) = fixableError.asErrorToFix
+						{
+							var fixedSyntax = mockSyntax
+							fixedSyntax.signature.parameterClause = Self.buildFixedParameterClause(
+								from: mockSyntax.signature.parameterClause,
+								requiredProperties: visitor.dependencies.map(\.property),
+							)
+							context.diagnose(Diagnostic(
+								node: Syntax(mockSyntax),
+								error: FixableInstantiableError.mockMethodMissingArguments(missingArguments),
+								changes: [
+									.replace(
+										oldNode: Syntax(mockSyntax),
+										newNode: Syntax(fixedSyntax),
+									),
+								],
+							))
+						}
+					}
+				}
+			}
+
 			return generateForwardedProperties(from: forwardedProperties)
 
 		} else if let extensionDeclaration = ExtensionDeclSyntax(declaration) {
@@ -451,10 +532,13 @@ public struct InstantiableMacro: MemberMacro {
 			}
 
 			if visitor.isRoot, let instantiableType = visitor.instantiableType {
-				guard visitor.instantiables.flatMap(\.dependencies).isEmpty else {
+				let rootDependencies = visitor.instantiables
+					.first(where: { $0.concreteInstantiable == instantiableType })?
+					.dependencies ?? []
+				guard rootDependencies.isEmpty else {
 					throw InstantiableError.cannotBeRoot(
 						instantiableType,
-						violatingDependencies: visitor.instantiables.flatMap(\.dependencies),
+						violatingDependencies: rootDependencies,
 					)
 				}
 			}
@@ -588,12 +672,65 @@ public struct InstantiableMacro: MemberMacro {
 		}
 	}
 
+	// MARK: - Parameter Clause Fix-It
+
+	/// Builds a fixed parameter clause that includes all required properties in order,
+	/// preserving existing parameters where possible and appending any remaining
+	/// non-required parameters at the end.
+	private static func buildFixedParameterClause(
+		from original: FunctionParameterClauseSyntax,
+		requiredProperties: [Property],
+	) -> FunctionParameterClauseSyntax {
+		var result = original
+		let existingArgumentCount = original.parameters.count
+		var existingParameters = original.parameters.reduce(into: [Property: FunctionParameterSyntax]()) { partialResult, next in
+			partialResult[Initializer.Argument(next).asProperty] = next
+		}
+		result.parameters = []
+		for property in requiredProperties {
+			if let existingParameter = existingParameters.removeValue(forKey: property) {
+				result.parameters.append(existingParameter)
+			} else {
+				result.parameters.append(property.asFunctionParamterSyntax)
+			}
+		}
+		// Append remaining non-required parameters (e.g., extra parameters with defaults).
+		for (_, parameter) in existingParameters {
+			result.parameters.append(parameter)
+		}
+		// Fix up trailing commas.
+		for index in result.parameters.indices {
+			if index == result.parameters.index(before: result.parameters.endIndex) {
+				result.parameters[index].trailingComma = nil
+			} else {
+				result.parameters[index].trailingComma = result.parameters[index].trailingComma ?? .commaToken(trailingTrivia: .space)
+			}
+		}
+		// Fix up trivia for multi-parameter layout.
+		if result.parameters.count > 1 {
+			for index in result.parameters.indices {
+				if index == result.parameters.startIndex {
+					result.parameters[index].leadingTrivia = existingArgumentCount > 1
+						? original.parameters.first?.leadingTrivia ?? .newline
+						: .newline
+				}
+				if index == result.parameters.index(before: result.parameters.endIndex) {
+					result.parameters[index].trailingTrivia = existingArgumentCount > 1
+						? original.parameters.last?.trailingTrivia ?? .newline
+						: .newline
+				}
+			}
+		}
+		return result
+	}
+
 	// MARK: - InstantiableError
 
 	private enum InstantiableError: Error, CustomStringConvertible {
 		case decoratingIncompatibleType
 		case fulfillingAdditionalTypesContainsOptional
 		case fulfillingAdditionalTypesArgumentInvalid
+		case mockAttributesArgumentInvalid
 		case tooManyInstantiateMethods(TypeDescription)
 		case cannotBeRoot(TypeDescription, violatingDependencies: [Dependency])
 
@@ -605,6 +742,8 @@ public struct InstantiableMacro: MemberMacro {
 				"The argument `fulfillingAdditionalTypes` must not include optionals"
 			case .fulfillingAdditionalTypesArgumentInvalid:
 				"The argument `fulfillingAdditionalTypes` must be an inlined array"
+			case .mockAttributesArgumentInvalid:
+				"The argument `mockAttributes` must be a string literal"
 			case let .tooManyInstantiateMethods(type):
 				"@\(InstantiableVisitor.macroName)-decorated extension must have a single `\(InstantiableVisitor.instantiateMethodName)(…)` method that returns `\(type.asSource)`"
 			case let .cannotBeRoot(declaredRootType, violatingDependencies):

@@ -159,7 +159,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	mutating func run_onCodeWithMultipleInstantiateMethodsForTheSameTypeWithSameParameters_throwsError() async {
 		await assertThrowsError(
 			"""
-			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `Container<Int>`
+			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `Container<Int>`
 			""",
 		) {
 			try await executeSafeDIToolTest(
@@ -194,7 +194,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	mutating func run_onCodeWithMultipleInstantiateMethodsForTheSameTypeWithDifferentParameters_throwsError() async {
 		await assertThrowsError(
 			"""
-			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `Container<Int>`
+			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `Container<Int>`
 			""",
 		) {
 			try await executeSafeDIToolTest(
@@ -1108,7 +1108,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	mutating func run_onCodeWithDuplicateInstantiableNames_throwsError() async {
 		await assertThrowsError(
 			"""
-			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
+			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 			""",
 		) {
 			try await executeSafeDIToolTest(
@@ -1136,7 +1136,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	mutating func run_onCodeWithDuplicateInstantiableNamesWhereOneIsRoot_throwsError() async {
 		await assertThrowsError(
 			"""
-			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
+			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 			""",
 		) {
 			try await executeSafeDIToolTest(
@@ -1164,7 +1164,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	mutating func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtension_throwsError() async {
 		await assertThrowsError(
 			"""
-			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
+			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 			""",
 		) {
 			try await executeSafeDIToolTest(
@@ -1196,7 +1196,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	mutating func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtensionWhereDeclarationIsRoot_throwsError() async {
 		await assertThrowsError(
 			"""
-			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
+			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 			""",
 		) {
 			try await executeSafeDIToolTest(
@@ -1228,7 +1228,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	mutating func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtensionWhereExtensionIsRoot_throwsError() async {
 		await assertThrowsError(
 			"""
-			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `RootViewController`
+			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 			""",
 		) {
 			try await executeSafeDIToolTest(
@@ -1260,7 +1260,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	mutating func run_onCodeWithDuplicateInstantiableNamesViaExtension_throwsError() async {
 		await assertThrowsError(
 			"""
-			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `UserDefaults`
+			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UserDefaults`
 			""",
 		) {
 			try await executeSafeDIToolTest(
@@ -1296,7 +1296,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	mutating func run_onCodeWithDuplicateInstantiableFulfillment_throwsError() async {
 		await assertThrowsError(
 			"""
-			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `UIViewController`
+			@Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UIViewController`
 			""",
 		) {
 			try await executeSafeDIToolTest(
@@ -2034,6 +2034,48 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			tool.swiftManifest = manifestFile.relativePath
 			tool.dotFileOutput = nil
 			try await tool.run()
+		}
+	}
+
+	@Test
+	mutating func run_onCodeWithMultipleSafeDIConfigurations_throwsError() async {
+		do {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@SafeDIConfiguration
+					enum ConfigA {
+					    static let additionalImportedModules: [StaticString] = []
+					    static let additionalDirectoriesToInclude: [StaticString] = []
+					    static let generateMocks: Bool = true
+					    static let mockConditionalCompilation: StaticString? = "DEBUG"
+					}
+					""",
+					"""
+					@SafeDIConfiguration
+					enum ConfigB {
+					    static let additionalImportedModules: [StaticString] = []
+					    static let additionalDirectoriesToInclude: [StaticString] = []
+					    static let generateMocks: Bool = false
+					    static let mockConditionalCompilation: StaticString? = nil
+					}
+					""",
+					"""
+					@Instantiable
+					public struct SimpleType: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+			Issue.record("Did not throw error!")
+		} catch {
+			let errorMessage = "\(error)"
+			#expect(errorMessage.hasPrefix("Found 2 @SafeDIConfiguration declarations in this module. Each module must have at most one @SafeDIConfiguration. Found in:"))
+			#expect(errorMessage.contains("ConfigA.swift"))
+			#expect(errorMessage.contains("ConfigB.swift"))
 		}
 	}
 

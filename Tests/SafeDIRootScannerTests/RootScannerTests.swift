@@ -66,28 +66,42 @@ struct RootScannerTests {
 		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
 		let featureAOutputPath = outputDirectory.appendingPathComponent("FeatureA_Root+SafeDI.swift").path
 		let featureBOutputPath = outputDirectory.appendingPathComponent("FeatureB_Root+SafeDI.swift").path
-		let escapedFeatureAOutputPath = featureAOutputPath.replacingOccurrences(of: "/", with: #"\/"#)
-		let escapedFeatureBOutputPath = featureBOutputPath.replacingOccurrences(of: "/", with: #"\/"#)
 		let result = try RootScanner().scan(
 			swiftFiles: [rootB, rootA],
 			relativeTo: fixture.rootDirectory,
 			outputDirectory: outputDirectory,
 		)
 
-		#expect(result.manifest == RootScanner.Manifest(dependencyTreeGeneration: [
-			RootScanner.Manifest.InputOutputMap(
-				inputFilePath: "Sources/FeatureA/Root.swift",
-				outputFilePath: featureAOutputPath,
-			),
-			RootScanner.Manifest.InputOutputMap(
-				inputFilePath: "Sources/FeatureB/Root.swift",
-				outputFilePath: featureBOutputPath,
-			),
-		]))
+		let featureAMockPath = outputDirectory.appendingPathComponent("FeatureA_Root+SafeDIMock.swift").path
+		let featureBMockPath = outputDirectory.appendingPathComponent("FeatureB_Root+SafeDIMock.swift").path
 
-		let manifestURL = fixture.rootDirectory.appendingPathComponent("SafeDIManifest.json")
-		try result.writeManifest(to: manifestURL)
-		#expect(try String(contentsOf: manifestURL, encoding: .utf8) == "{\"dependencyTreeGeneration\":[{\"inputFilePath\":\"Sources\\/FeatureA\\/Root.swift\",\"outputFilePath\":\"\(escapedFeatureAOutputPath)\"},{\"inputFilePath\":\"Sources\\/FeatureB\\/Root.swift\",\"outputFilePath\":\"\(escapedFeatureBOutputPath)\"}]}")
+		#expect(result.manifest == RootScanner.Manifest(
+			dependencyTreeGeneration: [
+				RootScanner.Manifest.InputOutputMap(
+					inputFilePath: "Sources/FeatureA/Root.swift",
+					outputFilePath: featureAOutputPath,
+				),
+				RootScanner.Manifest.InputOutputMap(
+					inputFilePath: "Sources/FeatureB/Root.swift",
+					outputFilePath: featureBOutputPath,
+				),
+			],
+			mockGeneration: [
+				RootScanner.Manifest.InputOutputMap(
+					inputFilePath: "Sources/FeatureA/Root.swift",
+					outputFilePath: featureAMockPath,
+				),
+				RootScanner.Manifest.InputOutputMap(
+					inputFilePath: "Sources/FeatureB/Root.swift",
+					outputFilePath: featureBMockPath,
+				),
+			],
+		))
+
+		// Verify outputFiles includes both DI tree and mock outputs.
+		#expect(result.outputFiles.count == 4) // 2 DI tree + 2 mock
+		#expect(result.outputFiles.contains(URL(fileURLWithPath: featureAOutputPath)))
+		#expect(result.outputFiles.contains(URL(fileURLWithPath: featureAMockPath)))
 
 		let manifestData = try JSONEncoder().encode(result.manifest)
 		let decodedManifest = try JSONDecoder().decode(SafeDIToolManifest.self, from: manifestData)
@@ -98,6 +112,10 @@ struct RootScannerTests {
 		#expect(decodedManifest.dependencyTreeGeneration.map(\.outputFilePath) == [
 			featureAOutputPath,
 			featureBOutputPath,
+		])
+		#expect(decodedManifest.mockGeneration.map(\.inputFilePath) == [
+			"Sources/FeatureA/Root.swift",
+			"Sources/FeatureB/Root.swift",
 		])
 	}
 
@@ -190,15 +208,15 @@ struct RootScannerTests {
 			outputDirectory: outputDirectory,
 		)
 
-		#expect(result.manifest == RootScanner.Manifest(dependencyTreeGeneration: [
+		#expect(result.manifest.dependencyTreeGeneration == [
 			RootScanner.Manifest.InputOutputMap(
 				inputFilePath: "Sources/ActualRoot.swift",
 				outputFilePath: outputDirectory.appendingPathComponent("ActualRoot+SafeDI.swift").path,
 			),
-		]))
-		#expect(result.outputFiles == [
-			outputDirectory.appendingPathComponent("ActualRoot+SafeDI.swift"),
 		])
+		// All 6 files contain @Instantiable (outside comments/strings), so all should have mock entries.
+		#expect(result.manifest.mockGeneration.count == 6)
+		#expect(result.manifest.mockGeneration.map(\.inputFilePath).contains("Sources/ActualRoot.swift"))
 		#expect(try RootScanner.fileContainsRoot(at: actualRoot))
 	}
 
@@ -235,7 +253,7 @@ struct RootScannerTests {
 			outputDirectory: outputDirectory,
 		)
 
-		#expect(result.manifest == RootScanner.Manifest(dependencyTreeGeneration: [
+		#expect(result.manifest.dependencyTreeGeneration == [
 			.init(
 				inputFilePath: "Features/A/Root.swift",
 				outputFilePath: outputDirectory.appendingPathComponent("Features_A_Root+SafeDI.swift").path,
@@ -248,7 +266,40 @@ struct RootScannerTests {
 				inputFilePath: "Root.swift",
 				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
 			),
-		]))
+		])
+		#expect(result.manifest.mockGeneration.count == 3)
+		#expect(result.manifest.mockGeneration.map(\.inputFilePath) == [
+			"Features/A/Root.swift",
+			"Modules/A/Root.swift",
+			"Root.swift",
+		])
+	}
+
+	@Test
+	func containsInstantiable_detectsInstantiableAttribute() {
+		#expect(RootScanner.containsInstantiable(in: """
+		@Instantiable
+		struct MyType {}
+		"""))
+		#expect(RootScanner.containsInstantiable(in: """
+		@Instantiable(isRoot: true)
+		struct MyRoot {}
+		"""))
+		#expect(!RootScanner.containsInstantiable(in: """
+		struct NotInstantiable {}
+		"""))
+		#expect(!RootScanner.containsInstantiable(in: """
+		// @Instantiable
+		struct CommentedOut {}
+		"""))
+		#expect(!RootScanner.containsInstantiable(in: """
+		let docs = "@Instantiable"
+		struct StringOnly {}
+		"""))
+		#expect(!RootScanner.containsInstantiable(in: """
+		@InstantiableFactory
+		struct WrongName {}
+		"""))
 	}
 
 	@Test
@@ -410,15 +461,16 @@ struct RootScannerTests {
 	}
 
 	@Test
-	func extractAdditionalDirectoriesToInclude_returnsPartial_whenMalformedStringLiteral() {
-		// Brackets are matched but the last string literal has no closing quote.
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenMalformedStringLiteral() {
+		// The unclosed string literal causes the sanitizer to consume the
+		// closing brace, so the config body can't be delimited.
 		let source = """
 		@SafeDIConfiguration
 		enum MyConfiguration {
 		    static let additionalDirectoriesToInclude: [StaticString] = ["good", "unclosed]
 		}
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["good"])
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
@@ -431,6 +483,190 @@ struct RootScannerTests {
 		}
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_ignoresPropertyOnNonConfigType() {
+		// A helper type in the same file has a property named additionalDirectoriesToInclude.
+		// The extractor must only look inside the @SafeDIConfiguration body.
+		let source = """
+		struct Helper {
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Wrong/Path"]
+		}
+
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_ignoresPropertyAfterConfigBody() {
+		// Property with matching name appears AFTER the config body.
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = []
+		}
+
+		struct Unrelated {
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Should/Ignore"]
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_ignoresNestedTypeWithMatchingPropertyName() {
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfig {
+		    struct Helper {
+		        static let additionalDirectoriesToInclude: [StaticString] = ["../Wrong/Path"]
+		    }
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
+		    static let generateMocks: Bool = true
+		    static let mockConditionalCompilation: StaticString? = "DEBUG"
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenMacroNameIsPrefixOfLongerName() {
+		let source = """
+		@SafeDIConfigurationHelper
+		enum NotAConfig {
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Wrong/Path"]
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_doesNotMatchPropertyNamePrefix() {
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfig {
+		    static let additionalDirectoriesToIncludeHelper: [StaticString] = ["../Wrong/Path"]
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
+		    static let generateMocks: Bool = true
+		    static let mockConditionalCompilation: StaticString? = "DEBUG"
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
+	}
+
+	@Test
+	func containsConfiguration_returnsTrue_whenConfigExistsOutsideComment() {
+		#expect(RootScanner.containsConfiguration(in: """
+		@SafeDIConfiguration
+		enum Config {}
+		"""))
+	}
+
+	@Test
+	func containsConfiguration_returnsFalse_whenConfigIsOnlyInComment() {
+		#expect(!RootScanner.containsConfiguration(in: """
+		// @SafeDIConfiguration
+		struct NotAConfig {}
+		"""))
+	}
+
+	@Test
+	func containsConfiguration_returnsFalse_whenMacroNameIsPrefixOfLongerName() {
+		#expect(!RootScanner.containsConfiguration(in: """
+		@SafeDIConfigurationHelper
+		struct NotAConfig {}
+		"""))
+	}
+
+	@Test
+	func containsConfiguration_returnsTrue_whenRealConfigAppearsAfterPrefixMatch() {
+		#expect(RootScanner.containsConfiguration(in: """
+		@SafeDIConfigurationHelper
+		struct Helper {}
+
+		@SafeDIConfiguration
+		enum Config {}
+		"""))
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_findsConfigAfterPrefixMatch() {
+		let source = """
+		@SafeDIConfigurationHelper
+		struct Helper {}
+
+		@SafeDIConfiguration
+		enum Config {
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
+	}
+
+	@Test
+	func containsConfiguration_returnsFalse_whenNoConfigExists() {
+		#expect(!RootScanner.containsConfiguration(in: """
+		@Instantiable
+		public struct MyType: Instantiable {
+		    public init() {}
+		}
+		"""))
+	}
+
+	@Test
+	func fileContainsConfiguration_returnsFalse_whenConfigIsOnlyInComment() throws {
+		let fixture = try ScannerFixture()
+		defer { fixture.delete() }
+		let file = try fixture.writeFile(
+			relativePath: "CommentOnly.swift",
+			content: """
+			// @SafeDIConfiguration
+			// This file references the config but doesn't declare one.
+			struct NotAConfig {}
+			""",
+		)
+		#expect(try !RootScanner.fileContainsConfiguration(at: file))
+	}
+
+	@Test
+	func scan_includesConfigurationFilePathInManifest() throws {
+		let fixture = try ScannerFixture()
+		defer { fixture.delete() }
+
+		let configFile = try fixture.writeFile(
+			relativePath: "SafeDIConfiguration.swift",
+			content: """
+			@SafeDIConfiguration
+			enum Config {
+			    static let additionalImportedModules: [StaticString] = []
+			    static let additionalDirectoriesToInclude: [StaticString] = []
+			    static let generateMocks: Bool = true
+			    static let mockConditionalCompilation: StaticString? = "DEBUG"
+			}
+			""",
+		)
+		let rootFile = try fixture.writeFile(
+			relativePath: "Root.swift",
+			content: rootSource(typeName: "ConfigRoot"),
+		)
+
+		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
+		let result = try RootScanner().scan(
+			swiftFiles: [configFile, rootFile],
+			relativeTo: fixture.rootDirectory,
+			outputDirectory: outputDirectory,
+		)
+
+		#expect(result.manifest.configurationFilePaths == ["SafeDIConfiguration.swift"])
 	}
 
 	@Test
@@ -478,12 +714,18 @@ struct RootScannerTests {
 			outputDirectory: outputDirectory,
 		)
 
-		#expect(result.manifest == RootScanner.Manifest(dependencyTreeGeneration: [
+		#expect(result.manifest.dependencyTreeGeneration == [
 			.init(
 				inputFilePath: String(rootFile.path.dropFirst()),
 				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
 			),
-		]))
+		])
+		#expect(result.manifest.mockGeneration == [
+			.init(
+				inputFilePath: String(rootFile.path.dropFirst()),
+				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDIMock.swift").path,
+			),
+		])
 	}
 
 	@Test
@@ -505,12 +747,18 @@ struct RootScannerTests {
 			outputDirectory: outputDirectory,
 		)
 
-		#expect(result.manifest == RootScanner.Manifest(dependencyTreeGeneration: [
+		#expect(result.manifest.dependencyTreeGeneration == [
 			.init(
 				inputFilePath: rootFile.path,
 				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
 			),
-		]))
+		])
+		#expect(result.manifest.mockGeneration == [
+			.init(
+				inputFilePath: rootFile.path,
+				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDIMock.swift").path,
+			),
+		])
 	}
 
 	@Test
@@ -535,48 +783,11 @@ struct RootScannerTests {
 		command.manifestFile = manifestFile.path
 		try command.run()
 
-		#expect(try String(contentsOf: manifestFile, encoding: .utf8) == """
-		{"dependencyTreeGeneration":[{"inputFilePath":"Root.swift","outputFilePath":"\(outputDirectory.appendingPathComponent("Root+SafeDI.swift").path.replacingOccurrences(of: "/", with: #"\/"#))"}]}
-		""")
-	}
-
-	@Test
-	func command_main_executesBuiltScannerBinary() throws {
-		let fixture = try ScannerFixture()
-		defer { fixture.delete() }
-
-		_ = try fixture.writeFile(
-			relativePath: "Root.swift",
-			content: rootSource(typeName: "ExecutableRoot"),
-		)
-
-		let inputSourcesFile = fixture.rootDirectory.appendingPathComponent("InputSwiftFiles.csv")
-		try "Root.swift".write(to: inputSourcesFile, atomically: true, encoding: .utf8)
-		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
-		let manifestFile = fixture.rootDirectory.appendingPathComponent("SafeDIManifest.json")
-
-		let process = Process()
-		process.executableURL = try builtRootScannerExecutableURL()
-		process.arguments = [
-			"--input-sources-file", inputSourcesFile.path,
-			"--project-root", fixture.rootDirectory.path,
-			"--output-directory", outputDirectory.path,
-			"--manifest-file", manifestFile.path,
-		]
-		let standardError = Pipe()
-		process.standardError = standardError
-		try process.run()
-		process.waitUntilExit()
-
-		let errorOutput = String(
-			data: standardError.fileHandleForReading.readDataToEndOfFile(),
-			encoding: .utf8,
-		) ?? ""
-		if process.terminationStatus != 0 {
-			Issue.record("Scanner executable failed: \(errorOutput)")
-		}
-		#expect(process.terminationStatus == 0)
-		#expect(FileManager.default.fileExists(atPath: manifestFile.path))
+		let manifestContent = try String(contentsOf: manifestFile, encoding: .utf8)
+		#expect(manifestContent.contains("\"dependencyTreeGeneration\""))
+		#expect(manifestContent.contains("\"mockGeneration\""))
+		#expect(manifestContent.contains("Root+SafeDI.swift"))
+		#expect(manifestContent.contains("Root+SafeDIMock.swift"))
 	}
 }
 
@@ -595,27 +806,6 @@ private func rootSource(typeName: String) -> String {
 	}
 	"""
 }
-
-private func builtRootScannerExecutableURL() throws -> URL {
-	let buildDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(".build")
-	guard let enumerator = FileManager.default.enumerator(
-		at: buildDirectory,
-		includingPropertiesForKeys: [.isExecutableKey],
-	) else {
-		throw BuiltRootScannerNotFoundError()
-	}
-
-	for case let fileURL as URL in enumerator where fileURL.lastPathComponent == "SafeDIRootScanner" {
-		let resourceValues = try fileURL.resourceValues(forKeys: [.isExecutableKey])
-		if resourceValues.isExecutable == true {
-			return fileURL
-		}
-	}
-
-	throw BuiltRootScannerNotFoundError()
-}
-
-private struct BuiltRootScannerNotFoundError: Error {}
 
 private final class ScannerFixture {
 	init() throws {

@@ -225,16 +225,66 @@ public struct Initializer: Codable, Hashable, Sendable {
 	func createInitializerArgumentList(
 		given dependencies: [Dependency],
 		unavailableProperties: Set<Property>? = nil,
+		mockContext: ScopeGenerator.MockContext? = nil,
 	) throws(GenerationError) -> String {
 		try createDependencyAndArgumentBinding(given: dependencies)
 			.map {
 				if let unavailableProperties, unavailableProperties.contains($0.dependency.property) {
-					"\($0.argument.label): nil"
+					return "\($0.argument.label): nil"
+				} else if $0.dependency.source == .forwarded {
+					return "\($0.argument.label): \($0.argument.innerLabel)"
 				} else {
-					"\($0.argument.label): \($0.argument.innerLabel)"
+					let variableName = mockContext?.disambiguatedLabel(
+						forPropertyLabel: $0.argument.innerLabel,
+						typeDescription: $0.argument.typeDescription,
+					) ?? $0.argument.innerLabel
+					return "\($0.argument.label): \(variableName)"
 				}
 			}
 			.joined(separator: ", ")
+	}
+
+	/// Creates an argument list that includes ALL arguments — both dependency-matching
+	/// and default-valued non-dependency arguments. Used in mock generation where
+	/// default-valued parameters are bubbled up to the root mock method and
+	/// dependency args are fulfilled from the tree.
+	/// When a mock parameter was renamed (e.g., `service` → `service_ExternalService`),
+	/// the argument reference must use the disambiguated name. The `mockContext`
+	/// resolves ambiguity using both the label and type.
+	func createMockInitializerArgumentList(
+		given dependencies: [Dependency],
+		unavailableProperties: Set<Property>? = nil,
+		mockContext: ScopeGenerator.MockContext? = nil,
+	) -> String {
+		var parts = [String]()
+		for argument in arguments {
+			if let dependency = dependencies.first(where: {
+				$0.property.label == argument.innerLabel
+					&& $0.property.typeDescription.isEqualToFunctionArgument(argument.typeDescription)
+			}) {
+				if let unavailableProperties, unavailableProperties.contains(dependency.property) {
+					parts.append("\(argument.label): nil")
+				} else if dependency.source == .forwarded {
+					// Forwarded deps use the bare parameter name — no remapping.
+					parts.append("\(argument.label): \(argument.innerLabel)")
+				} else {
+					let variableName = mockContext?.disambiguatedLabel(
+						forPropertyLabel: argument.innerLabel,
+						typeDescription: argument.typeDescription,
+					) ?? argument.innerLabel
+					parts.append("\(argument.label): \(variableName)")
+				}
+			} else if argument.hasDefaultValue {
+				let variableName = mockContext?.disambiguatedLabel(
+					forPropertyLabel: argument.innerLabel,
+					typeDescription: argument.typeDescription,
+				) ?? argument.innerLabel
+				parts.append("\(argument.label): \(variableName)")
+			}
+			// Arguments that don't match a dependency and have no default are
+			// caught by validate(fulfilling:) before mock code gen runs.
+		}
+		return parts.joined(separator: ", ")
 	}
 
 	// MARK: - GenerationError
@@ -262,8 +312,13 @@ public struct Initializer: Codable, Hashable, Sendable {
 		public let innerLabel: String
 		/// The type to which the property conforms.
 		public let typeDescription: TypeDescription
+		/// The source text of the default value expression, if one exists (e.g., `"nil"`, `".init()"`).
+		public let defaultValueExpression: String?
 		/// Whether the argument has a default value.
-		public let hasDefaultValue: Bool
+		public var hasDefaultValue: Bool {
+			defaultValueExpression != nil
+		}
+
 		/// The label by which this argument is referenced at the call site.
 		public var label: String {
 			outerLabel ?? innerLabel
@@ -285,14 +340,14 @@ public struct Initializer: Codable, Hashable, Sendable {
 				innerLabel = node.firstName.text
 			}
 			typeDescription = node.type.typeDescription
-			hasDefaultValue = node.defaultValue != nil
+			defaultValueExpression = node.defaultValue?.value.trimmedDescription
 		}
 
-		init(outerLabel: String? = nil, innerLabel: String, typeDescription: TypeDescription, hasDefaultValue: Bool) {
+		init(outerLabel: String? = nil, innerLabel: String, typeDescription: TypeDescription, defaultValueExpression: String? = nil) {
 			self.outerLabel = outerLabel
 			self.innerLabel = innerLabel
 			self.typeDescription = typeDescription
-			self.hasDefaultValue = hasDefaultValue
+			self.defaultValueExpression = defaultValueExpression
 		}
 
 		public func withUpdatedTypeDescription(_ typeDescription: TypeDescription) -> Self {
@@ -300,7 +355,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 				outerLabel: outerLabel,
 				innerLabel: innerLabel,
 				typeDescription: typeDescription,
-				hasDefaultValue: hasDefaultValue,
+				defaultValueExpression: defaultValueExpression,
 			)
 		}
 

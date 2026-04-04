@@ -469,6 +469,114 @@ public struct ParentView: View, Instantiable {
 }
 ```
 
+## Mock generation
+
+SafeDI can automatically generate `mock()` methods for every `@Instantiable` type, drastically simplifying testing and SwiftUI previews. Mock generation requires a `@SafeDIConfiguration` enum to be present. When one exists, mock generation is enabled by default (controlled by the `generateMocks` property).
+
+### Configuration
+
+```swift
+@SafeDIConfiguration
+enum MyConfiguration {
+    static let additionalImportedModules: [StaticString] = []
+    static let additionalDirectoriesToInclude: [StaticString] = []
+    static let generateMocks: Bool = true
+    static let mockConditionalCompilation: StaticString? = "DEBUG"
+}
+```
+
+- `generateMocks`: Set to `false` to disable mock generation entirely.
+- `mockConditionalCompilation`: The `#if` flag wrapping generated mocks. Default is `"DEBUG"`. Set to `nil` to generate mocks without conditional compilation.
+
+### Using generated mocks
+
+Each `@Instantiable` type gets a `mock()` static method that builds its full dependency subtree. If the decorated type declaration already contains a `static func mock(...)` or `class func mock(...)` method, SafeDI will not generate a mock file for that type — your hand-written mock takes precedence. However, parent types that instantiate the child will call `ChildType.mock(...)` instead of `ChildType(...)` when constructing it, threading mock parameters through your custom method. Note that mocks defined in separate extensions are not detected; the method must be in the `@Instantiable`-decorated declaration body.
+
+Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type's `@Instantiated`, `@Received`, and `@Forwarded` dependencies. It may also accept additional parameters with default values. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
+
+```swift
+#if DEBUG
+#Preview {
+    MyView.mock()
+}
+#endif
+```
+
+Every dependency in the tree can be overridden via parameters:
+
+```swift
+let view = MyView.mock(
+    sharedThing: CustomSharedThing()
+)
+```
+
+Dependencies that require inline construction (e.g., types with their own subtrees) use optional parameters:
+
+```swift
+let root = Root.mock(
+    child: CustomChild()  // Override entire child with a pre-built instance
+)
+```
+
+Leaf dependencies use `@autoclosure` parameters with a default construction:
+
+```swift
+let root = Root.mock(
+    cache: Cache(size: 200)  // Override the default Cache()
+)
+```
+
+### @Forwarded properties in mocks
+
+`@Forwarded` properties become required parameters on the mock method (no default value), since they represent runtime input:
+
+```swift
+let noteView = NoteView.mock(userName: "Preview User")
+```
+
+### Default-valued init parameters in mocks
+
+If an `@Instantiable` type's initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are automatically exposed in the generated `mock()` method. This lets you override values like feature flags or optional view models in tests while keeping the original defaults for production code.
+
+```swift
+@Instantiable
+public struct ProfileView: Instantiable {
+    public init(user: User, showDebugInfo: Bool = false) {
+        self.user = user
+    }
+    @Received let user: User
+}
+```
+
+The generated mock for a parent that instantiates `ProfileView` will include `showDebugInfo` as an `@autoclosure` parameter with the original default:
+
+```swift
+let root = Root.mock(
+    showDebugInfo: true  // Override the default
+)
+```
+
+When no override is provided, the original default expression (`false`) is used.
+
+Default-valued parameters bubble transitively through the dependency tree — a grandchild's default parameter will appear at the root mock level. However, they do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
+
+### The `mockAttributes` parameter
+
+When a type's initializer is bound to a global actor that the plugin cannot detect (e.g. inherited `@MainActor`), use `mockAttributes` to annotate the generated mock:
+
+```swift
+@Instantiable(mockAttributes: "@MainActor")
+public final class MyPresenter: Instantiable { ... }
+```
+
+### Multi-module mock generation
+
+To generate mocks for non-root modules, add the `SafeDIGenerator` plugin to all first-party targets in your `Package.swift`. Each module's mocks are scoped to its own types to avoid duplicates.
+
+Each module that generates mocks must have its own `@SafeDIConfiguration` with `generateMocks: true`. When no configuration exists, mock generation is disabled by default.
+
+**Note:** Mock generation only creates mocks for types defined in the current module. Types from dependent modules or `additionalDirectoriesToInclude` are not mocked — each module must have its own `SafeDIGenerator` plugin to generate mocks for its types.
+
 ## Comparing SafeDI and Manual Injection: Key Differences
 
 SafeDI is designed to be simple to adopt and minimize architectural changes required to get the benefits of a compile-time safe DI system. Despite this design goal, there are a few key differences between projects that utilize SafeDI and projects that don’t. As the benefits of this system are clearly outlined in the [Features](../README.md#features) section above, this section outlines the pattern changes required to utilize a DI system like SafeDI.

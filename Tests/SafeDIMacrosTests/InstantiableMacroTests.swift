@@ -434,6 +434,38 @@ import Testing
 			)
 		}
 
+		@Test
+		func extension_rootWithNestedInstantiableHavingDependenciesDoesNotThrow() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true)
+				extension Foo: Instantiable {
+				    public static func instantiate() -> Foo { fatalError() }
+
+				    @Instantiable
+				    public struct Helper: Instantiable {
+				        public init(bar: Bar) {
+				            self.bar = bar
+				        }
+				        @Received let bar: Bar
+				    }
+				}
+				""",
+				expandedSource: """
+				extension Foo: Instantiable {
+				    public static func instantiate() -> Foo { fatalError() }
+				    public struct Helper: Instantiable {
+				        public init(bar: Bar) {
+				            self.bar = bar
+				        }
+				        let bar: Bar
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
 		// MARK: FixIt tests
 
 		@Test
@@ -4308,6 +4340,311 @@ import Testing
 				    public static func instantiate() -> Array { fatalError() }
 				}
 				""",
+			)
+		}
+
+		// MARK: mockAttributes Tests
+
+		@Test
+		func expandsWithoutIssueWhenMockAttributesIsProvided() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockAttributes: "@MainActor")
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func throwsErrorWhenMockAttributesIsNotStringLiteral() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockAttributes: someVariable)
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `mockAttributes` must be a string literal",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		// MARK: Mock Method Validation Tests
+
+		@Test
+		func mockMethodMissingDependencyProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Received let dep: Dep
+
+				    public static func mock() -> MyService {
+				        MyService(dep: Dep())
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    let dep: Dep
+
+				    public static func mock() -> MyService {
+				        MyService(dep: Dep())
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						line: 8,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add mock() arguments for dep: Dep"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add mock() arguments for dep: Dep",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Received let dep: Dep
+
+				    public static func mock(dep: Dep) -> MyService {
+				        MyService(dep: Dep())
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func mockMethodMissingMultipleDependenciesProducesDiagnosticWithFixIt() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(depA: DepA, depB: DepB) {
+				        self.depA = depA
+				        self.depB = depB
+				    }
+				    @Received let depA: DepA
+				    @Instantiated let depB: DepB
+
+				    public static func mock() -> MyService {
+				        MyService(depA: DepA(), depB: DepB())
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(depA: DepA, depB: DepB) {
+				        self.depA = depA
+				        self.depB = depB
+				    }
+				    let depA: DepA
+				    let depB: DepB
+
+				    public static func mock() -> MyService {
+				        MyService(depA: DepA(), depB: DepB())
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						line: 10,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add mock() arguments for depA: DepA, depB: DepB"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add mock() arguments for depA: DepA, depB: DepB",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(depA: DepA, depB: DepB) {
+				        self.depA = depA
+				        self.depB = depB
+				    }
+				    @Received let depA: DepA
+				    @Instantiated let depB: DepB
+
+				    public static func mock(
+				depA: DepA, depB: DepB
+				) -> MyService {
+				        MyService(depA: DepA(), depB: DepB())
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func mockMethodWithPartialDepsProducesFixItPreservingExistingParams() {
+			// mock() already has depA but is missing depB.
+			// Fix-it should reorder: depA first, then add depB, preserving existing extra default params.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(depA: DepA, depB: DepB) {
+				        self.depA = depA
+				        self.depB = depB
+				    }
+				    @Received let depA: DepA
+				    @Instantiated let depB: DepB
+
+				    public static func mock(depA: DepA, extra: Bool = false) -> MyService {
+				        MyService(depA: depA, depB: DepB())
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(depA: DepA, depB: DepB) {
+				        self.depA = depA
+				        self.depB = depB
+				    }
+				    let depA: DepA
+				    let depB: DepB
+
+				    public static func mock(depA: DepA, extra: Bool = false) -> MyService {
+				        MyService(depA: depA, depB: DepB())
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						line: 10,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add mock() arguments for depB: DepB"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func mockMethodNotPublicProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method must be `public` or `open`.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier to mock() method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func multipleMockMethodsProducesDiagnosticOnSecond() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    @Received let dependency: Dependency
+
+				    public static func mock(dependency: Dependency) -> MyService {
+				        MyService(dependency: dependency)
+				    }
+
+				    public static func mock() -> MyService {
+				        MyService(dependency: Dependency())
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    let dependency: Dependency
+
+				    public static func mock(dependency: Dependency) -> MyService {
+				        MyService(dependency: dependency)
+				    }
+
+				    public static func mock() -> MyService {
+				        MyService(dependency: Dependency())
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have at most one `mock()` method. Remove this duplicate.",
+						line: 12,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Remove duplicate mock() method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
 			)
 		}
 	}

@@ -110,6 +110,13 @@ enum MySafeDIConfiguration {
     /// The names of modules to import in the generated dependency tree.
     /// This list is in addition to the import statements found in files that declare @Instantiable types.
     static let additionalImportedModules: [StaticString] = []
+
+    /// Whether to generate `mock()` methods for `@Instantiable` types.
+    static let generateMocks: Bool = true
+
+    /// The conditional compilation flag to wrap generated mock code in.
+    /// Set to `nil` to generate mocks without conditional compilation.
+    static let mockConditionalCompilation: StaticString? = "DEBUG"
 }
 ```
 
@@ -125,6 +132,8 @@ If your first-party code is entirely contained in a Swift Package with one or mo
     ]
 ```
 
+To also generate mocks for non-root modules, add the plugin to all first-party targets.
+
 You can see this integration in practice in the [Example Package Integration](Examples/Example Package Integration) package.
 
 Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may create a `@SafeDIConfiguration`-decorated enum in your root module with the additional module names:
@@ -136,6 +145,8 @@ import SafeDI
 enum MySafeDIConfiguration {
     static let additionalImportedModules: [StaticString] = ["MyModule"]
     static let additionalDirectoriesToInclude: [StaticString] = []
+    static let generateMocks: Bool = true
+    static let mockConditionalCompilation: StaticString? = "DEBUG"
 }
 ```
 
