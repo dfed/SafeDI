@@ -469,6 +469,8 @@ public struct InstantiableMacro: MemberMacro {
 					)
 					if let firstModifier {
 						fixedMockSyntax.modifiers[fixedMockSyntax.modifiers.startIndex].leadingTrivia = firstModifier.leadingTrivia
+						let secondModifierIndex = fixedMockSyntax.modifiers.index(after: fixedMockSyntax.modifiers.startIndex)
+						fixedMockSyntax.modifiers[secondModifierIndex].leadingTrivia = []
 					}
 					context.diagnose(Diagnostic(
 						node: Syntax(mockSyntax),
@@ -575,6 +577,115 @@ public struct InstantiableMacro: MemberMacro {
 			visitor.walk(extensionDeclaration)
 			for diagnostic in visitor.diagnostics {
 				context.diagnose(diagnostic)
+			}
+
+			// Validate mock() methods on extensions: must be public, return the extended type or Self, and be unique per return type.
+			let extendedTypeDescription = extensionDeclaration.extendedType.typeDescription
+			let extendedTypeName = extendedTypeDescription.asSource
+			var allMockFunctions = [FunctionDeclSyntax]()
+			if let firstMock = visitor.mockFunctionSyntax {
+				allMockFunctions.append(firstMock)
+			}
+			allMockFunctions.append(contentsOf: visitor.duplicateMockFunctionSyntaxes)
+			var seenMockReturnTypes = [TypeDescription: FunctionDeclSyntax]()
+			for mockFunction in allMockFunctions {
+				let mockReturnType = mockFunction.signature.returnClause?.type.typeDescription
+				let extendedBaseTypeName = switch extendedTypeDescription {
+				case let .simple(name, _):
+					name
+				case let .nested(name, _, _):
+					name
+				case .void, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown:
+					extendedTypeName
+				}
+				let returnTypeMatchesExtendedType = switch mockReturnType {
+				case let .simple(name, _):
+					name == "Self" || name == extendedBaseTypeName
+				case .nested, .void, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown, .none:
+					false
+				}
+				if !returnTypeMatchesExtendedType {
+					var fixedMockFunction = mockFunction
+					if let existingReturnClause = mockFunction.signature.returnClause {
+						fixedMockFunction.signature.returnClause = ReturnClauseSyntax(
+							arrow: .arrowToken(
+								leadingTrivia: existingReturnClause.arrow.leadingTrivia,
+								trailingTrivia: existingReturnClause.arrow.trailingTrivia,
+							),
+							type: IdentifierTypeSyntax(
+								leadingTrivia: existingReturnClause.type.leadingTrivia,
+								name: .identifier(extendedTypeName),
+								trailingTrivia: existingReturnClause.type.trailingTrivia,
+							),
+						)
+					} else {
+						fixedMockFunction.signature.parameterClause.rightParen.trailingTrivia = []
+						fixedMockFunction.signature.returnClause = ReturnClauseSyntax(
+							arrow: .arrowToken(
+								leadingTrivia: .space,
+								trailingTrivia: .space,
+							),
+							type: IdentifierTypeSyntax(
+								name: .identifier(extendedTypeName),
+								trailingTrivia: .space,
+							),
+						)
+					}
+					context.diagnose(Diagnostic(
+						node: Syntax(mockFunction),
+						error: FixableInstantiableError.mockMethodIncorrectReturnType(typeName: extendedTypeName),
+						changes: [
+							.replace(
+								oldNode: Syntax(mockFunction),
+								newNode: Syntax(fixedMockFunction),
+							),
+						],
+					))
+				}
+				if !mockFunction.modifiers.containsPublicOrOpen {
+					var fixedMockFunction = mockFunction
+					let firstModifier = mockFunction.modifiers.first
+					fixedMockFunction.modifiers.insert(
+						DeclModifierSyntax(
+							leadingTrivia: firstModifier?.leadingTrivia ?? mockFunction.funcKeyword.leadingTrivia,
+							name: .keyword(.public),
+							trailingTrivia: .space,
+						),
+						at: fixedMockFunction.modifiers.startIndex,
+					)
+					if let firstModifier {
+						fixedMockFunction.modifiers[fixedMockFunction.modifiers.startIndex].leadingTrivia = firstModifier.leadingTrivia
+						let secondModifierIndex = fixedMockFunction.modifiers.index(after: fixedMockFunction.modifiers.startIndex)
+						fixedMockFunction.modifiers[secondModifierIndex].leadingTrivia = []
+					}
+					context.diagnose(Diagnostic(
+						node: Syntax(mockFunction),
+						error: FixableInstantiableError.mockMethodNotPublic,
+						changes: [
+							.replace(
+								oldNode: Syntax(mockFunction),
+								newNode: Syntax(fixedMockFunction),
+							),
+						],
+					))
+				}
+				// Duplicate detection: one mock per return type.
+				if let mockReturnType {
+					if seenMockReturnTypes[mockReturnType] != nil {
+						context.diagnose(Diagnostic(
+							node: Syntax(mockFunction),
+							error: FixableInstantiableError.duplicateMockMethod,
+							changes: [
+								.replace(
+									oldNode: Syntax(mockFunction),
+									newNode: Syntax("" as DeclSyntax),
+								),
+							],
+						))
+					} else {
+						seenMockReturnTypes[mockReturnType] = mockFunction
+					}
+				}
 			}
 
 			if visitor.isRoot, let instantiableType = visitor.instantiableType {

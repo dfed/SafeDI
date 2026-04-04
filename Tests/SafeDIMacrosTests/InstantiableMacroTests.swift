@@ -4746,6 +4746,322 @@ import Testing
 		}
 
 		@Test
+		func extension_mockMethodNotPublicProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method must be `public` or `open`.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier to mock() method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier to mock() method",
+				],
+				fixedSource: """
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_mockMethodWithWrongReturnTypeProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> String {
+				        ""
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> String {
+				        ""
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `ExampleService`.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Change mock() return type to `ExampleService`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Change mock() return type to `ExampleService`",
+				],
+				fixedSource: """
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> ExampleService {
+				        ""
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_mockMethodWithNoReturnTypeProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() {
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() {
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `ExampleService`.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Change mock() return type to `ExampleService`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Change mock() return type to `ExampleService`",
+				],
+				fixedSource: """
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> ExampleService {
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_mockMethodReturningSelfProducesNoDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> Self {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> Self {
+				        ExampleService()
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_mockMethodReturningExtendedTypeProducesNoDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_duplicateMockMethodsWithSameReturnTypeProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Container: Instantiable {
+				    public static func instantiate() -> Container<Bool> {
+				        Container(false)
+				    }
+
+				    public static func mock() -> Container<Bool> {
+				        Container(true)
+				    }
+
+				    public static func mock() -> Container<Bool> {
+				        Container(false)
+				    }
+				}
+				""",
+				expandedSource: """
+				extension Container: Instantiable {
+				    public static func instantiate() -> Container<Bool> {
+				        Container(false)
+				    }
+
+				    public static func mock() -> Container<Bool> {
+				        Container(true)
+				    }
+
+				    public static func mock() -> Container<Bool> {
+				        Container(false)
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have at most one `mock()` method. Remove this duplicate.",
+						line: 11,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Remove duplicate mock() method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_multipleMockMethodsWithDifferentReturnTypesProducesNoDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Container: Instantiable {
+				    public static func instantiate() -> Container<Bool> {
+				        Container(false)
+				    }
+				    public static func instantiate() -> Container<Int> {
+				        Container(0)
+				    }
+
+				    public static func mock() -> Container<Bool> {
+				        Container(true)
+				    }
+				    public static func mock() -> Container<Int> {
+				        Container(1)
+				    }
+				}
+				""",
+				expandedSource: """
+				extension Container: Instantiable {
+				    public static func instantiate() -> Container<Bool> {
+				        Container(false)
+				    }
+				    public static func instantiate() -> Container<Int> {
+				        Container(0)
+				    }
+
+				    public static func mock() -> Container<Bool> {
+				        Container(true)
+				    }
+				    public static func mock() -> Container<Int> {
+				        Container(1)
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_mockMethodReturningGenericSpecializationProducesNoDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Container: Instantiable {
+				    public static func instantiate() -> Container<String> {
+				        Container("")
+				    }
+
+				    public static func mock() -> Container<String> {
+				        Container("mock")
+				    }
+				}
+				""",
+				expandedSource: """
+				extension Container: Instantiable {
+				    public static func instantiate() -> Container<String> {
+				        Container("")
+				    }
+
+				    public static func mock() -> Container<String> {
+				        Container("mock")
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func multipleMockMethodsProducesDiagnosticOnSecond() {
 			assertMacroExpansion(
 				"""
