@@ -434,7 +434,7 @@ import Testing
 			)
 		}
 
-			@Test
+		@Test
 		func extension_rootWithNestedInstantiableHavingDependenciesDoesNotThrow() {
 			assertMacroExpansion(
 				"""

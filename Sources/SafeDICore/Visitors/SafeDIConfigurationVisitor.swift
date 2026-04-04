@@ -30,39 +30,39 @@ public final class SafeDIConfigurationVisitor: SyntaxVisitor {
 
 	// MARK: SyntaxVisitor
 
-	public override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
+	public override func visit(_: StructDeclSyntax) -> SyntaxVisitorContinueKind {
 		nestingDepth += 1
 		return .visitChildren
 	}
 
-	public override func visitPost(_ node: StructDeclSyntax) {
+	public override func visitPost(_: StructDeclSyntax) {
 		nestingDepth -= 1
 	}
 
-	public override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
+	public override func visit(_: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
 		nestingDepth += 1
 		return .visitChildren
 	}
 
-	public override func visitPost(_ node: ClassDeclSyntax) {
+	public override func visitPost(_: ClassDeclSyntax) {
 		nestingDepth -= 1
 	}
 
-	public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+	public override func visit(_: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
 		nestingDepth += 1
 		return .visitChildren
 	}
 
-	public override func visitPost(_ node: EnumDeclSyntax) {
+	public override func visitPost(_: EnumDeclSyntax) {
 		nestingDepth -= 1
 	}
 
-	public override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
+	public override func visit(_: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
 		nestingDepth += 1
 		return .visitChildren
 	}
 
-	public override func visitPost(_ node: ActorDeclSyntax) {
+	public override func visitPost(_: ActorDeclSyntax) {
 		nestingDepth -= 1
 	}
 
