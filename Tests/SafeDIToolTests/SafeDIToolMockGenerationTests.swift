@@ -36,30 +36,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		}
 	}
 
-	// MARK: Tests – Default behavior
-
-	@Test
-	mutating func mock_notGeneratedWhenNoConfigurationExists() async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable
-				public struct SimpleType: Instantiable {
-				    public init() {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(output.mockFiles.count == 1)
-		let mockContent = try #require(output.mockFiles["SimpleType+SafeDIMock.swift"])
-		// When no @SafeDIConfiguration exists, generateMocks defaults to false.
-		// The mock file exists (for the build system) but contains only the header.
-		#expect(!mockContent.contains("extension"))
-	}
-
 	// MARK: Tests – Simple types
 
 	@Test
@@ -67,7 +43,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct SimpleType: Instantiable {
 				    public init() {}
 				}
@@ -75,7 +51,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 1)
@@ -101,7 +76,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public class SomeThirdPartyType {}
 
-				@Instantiable
+				@Instantiable(generateMock: true)
 				extension SomeThirdPartyType: Instantiable {
 				    public static func instantiate() -> SomeThirdPartyType {
 				        SomeThirdPartyType()
@@ -111,7 +86,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 1)
@@ -137,7 +111,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(dependency: Dependency) {
 				        self.dependency = dependency
@@ -146,7 +120,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Dependency: Instantiable {
 				    public init() {}
 				}
@@ -154,7 +128,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -195,7 +168,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child, shared: SharedThing) {
 				        self.child = child
@@ -206,7 +179,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(shared: SharedThing) {
 				        self.shared = shared
@@ -215,7 +188,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct SharedThing: Instantiable {
 				    public init() {}
 				}
@@ -223,7 +196,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -283,7 +255,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, shared: SharedThing) {
 				        self.childA = childA
@@ -294,7 +266,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(shared: SharedThing, grandchild: Grandchild) {
 				        self.shared = shared
@@ -305,7 +277,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(shared: SharedThing) {
 				        self.shared = shared
@@ -314,7 +286,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct SharedThing: Instantiable {
 				    public init() {}
 				}
@@ -322,7 +294,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 4)
@@ -412,12 +383,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				enum Config {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = nil
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct NoBranch: Instantiable {
 				    public init() {}
 				}
@@ -450,12 +420,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				enum Config {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "TESTING"
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct CustomFlag: Instantiable {
 				    public init() {}
 				}
@@ -490,12 +459,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				enum Config {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = nil
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(dependency: Dependency) {
 				        self.dependency = dependency
@@ -504,7 +472,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Dependency: Instantiable {
 				    public init() {}
 				}
@@ -544,41 +512,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_notGeneratedWhenGenerateMocksIsFalse() async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@SafeDIConfiguration
-				enum Config {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = false
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
-				""",
-				"""
-				@Instantiable
-				public struct NoMocks: Instantiable {
-				    public init() {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(output.mockFiles.count == 1)
-		let mockContent = try #require(output.mockFiles["NoMocks+SafeDIMock.swift"])
-		// When generateMocks is false, the file exists but contains only the header.
-		#expect(!mockContent.contains("extension"))
-	}
-
-	@Test
 	mutating func mock_respectsMockAttributes() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(mockAttributes: "@MainActor")
+				@Instantiable(mockAttributes: "@MainActor", generateMock: true)
 				public struct ActorBound: Instantiable {
 				    public init() {}
 				}
@@ -586,7 +524,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 1)
@@ -612,7 +549,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public protocol SomeProtocol {}
 
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Consumer: Instantiable {
 				    public init(dependency: SomeProtocol) {
 				        self.dependency = dependency
@@ -623,7 +560,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 1)
@@ -654,14 +590,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				enum Config {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = nil
 				}
 				""",
 				"""
 				public class ThirdParty {}
 
-				@Instantiable
+				@Instantiable(generateMock: true)
 				extension ThirdParty: Instantiable {
 				    public static func instantiate() -> ThirdParty {
 				        ThirdParty()
@@ -697,7 +632,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child, myService: AnyService) {
 				        self.child = child
@@ -708,7 +643,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(myService: AnyService) {
 				        self.myService = myService
@@ -717,7 +652,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ConcreteService: Instantiable {
 				    public init() {}
 				}
@@ -725,7 +660,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Child receives AnyService, which is erased-to-concrete.
@@ -793,7 +727,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(myService: AnyMyService) {
 				        self.myService = myService
@@ -802,7 +736,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable(fulfillingAdditionalTypes: [MyService.self])
+				@Instantiable(fulfillingAdditionalTypes: [MyService.self], generateMock: true)
 				public struct DefaultMyService: Instantiable, MyService {
 				    public init() {}
 				}
@@ -810,7 +744,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -853,7 +786,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public final class Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB, shared: Shared) {
 				        self.childA = childA
@@ -866,7 +799,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class ChildA: Instantiable {
 				    public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB) {
 				        self.grandchildAA = grandchildAA
@@ -877,7 +810,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class GrandchildAA: Instantiable {
 				    public init(shared: Shared) {
 				        self.shared = shared
@@ -886,7 +819,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class GrandchildAB: Instantiable {
 				    public init(shared: Shared) {
 				        self.shared = shared
@@ -895,7 +828,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class ChildB: Instantiable {
 				    public init(shared: Shared) {
 				        self.shared = shared
@@ -904,7 +837,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class Shared: Instantiable {
 				    public init() {}
 				}
@@ -912,7 +845,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 6)
@@ -1038,13 +970,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public protocol NetworkService {}
 
-				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self], generateMock: true)
 				public final class DefaultNetworkService: Instantiable, NetworkService {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public final class Root: Instantiable {
 				    public init(networkService: NetworkService) {
 				        self.networkService = networkService
@@ -1055,7 +987,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -1096,7 +1027,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct RootA: Instantiable {
 				    public init(dependency: Dependency) {
 				        self.dependency = dependency
@@ -1105,7 +1036,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct RootB: Instantiable {
 				    public init(dependency: Dependency) {
 				        self.dependency = dependency
@@ -1114,7 +1045,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Dependency: Instantiable {
 				    public init() {}
 				}
@@ -1122,7 +1053,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Each root gets its own mock. Dependency also gets a mock.
@@ -1179,7 +1109,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB, shared: Shared) {
 				        self.childA = childA
@@ -1192,7 +1122,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(shared: Shared) {
 				        self.shared = shared
@@ -1201,13 +1131,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Shared: Instantiable {
 				    public init() {}
 				}
@@ -1215,7 +1145,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Shared must be constructed before ChildA (which depends on it via @Received).
@@ -1292,7 +1221,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child, leaf: Leaf) {
 				        self.child = child
@@ -1303,7 +1232,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(grandchild: Grandchild, leaf: Leaf) {
 				        self.grandchild = grandchild
@@ -1314,7 +1243,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild, leaf: Leaf) {
 				        self.greatGrandchild = greatGrandchild
@@ -1325,7 +1254,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct GreatGrandchild: Instantiable {
 				    public init(leaf: Leaf) {
 				        self.leaf = leaf
@@ -1334,7 +1263,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Leaf: Instantiable {
 				    public init() {}
 				}
@@ -1342,7 +1271,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 5)
@@ -1455,7 +1383,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child, shared: Shared) {
 				        self.child = child
@@ -1466,7 +1394,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(shared: Shared, flag: Bool = false) {
 				        self.shared = shared
@@ -1475,7 +1403,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Shared: Instantiable {
 				    public init() {}
 				}
@@ -1483,7 +1411,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -1550,7 +1477,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(shared: Shared, childBuilder: Instantiator<Child>) {
 				        self.shared = shared
@@ -1561,7 +1488,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(name: String, shared: Shared) {
 				        self.name = name
@@ -1572,7 +1499,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Shared: Instantiable {
 				    public init() {}
 				}
@@ -1580,7 +1507,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -1646,7 +1572,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(viewBuilder: Instantiator<SimpleView>) {
 				        self.viewBuilder = viewBuilder
@@ -1655,7 +1581,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct SimpleView: Instantiable {
 				    public init() {}
 				}
@@ -1663,7 +1589,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -1707,7 +1632,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childBuilder: Instantiator<Child>) {
 				        self.childBuilder = childBuilder
@@ -1716,7 +1641,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(name: String, age: Int) {
 				        self.name = name
@@ -1729,7 +1654,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -1780,14 +1704,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				import Combine
 				public protocol StringStorage {}
-				@Instantiable(fulfillingAdditionalTypes: [StringStorage.self])
+				@Instantiable(fulfillingAdditionalTypes: [StringStorage.self], generateMock: true)
 				extension UserDefaults: Instantiable, StringStorage {
 				    public static func instantiate() -> UserDefaults { .standard }
 				}
 				""",
 				"""
 				import Combine
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class DefaultUserService: Instantiable {
 				    public init(stringStorage: StringStorage) {
 				        self.stringStorage = stringStorage
@@ -1798,7 +1722,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// DefaultUserService should get a mock even with @Published on the property.
@@ -1850,7 +1773,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(thirdParty: ThirdParty, helper: Helper) {
 				        self.thirdParty = thirdParty
@@ -1863,7 +1786,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public class ThirdParty {}
 
-				@Instantiable
+				@Instantiable(generateMock: true)
 				extension ThirdParty: Instantiable {
 				    public static func instantiate(helper: Helper) -> ThirdParty {
 				        ThirdParty()
@@ -1872,7 +1795,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Helper: Instantiable {
 				    public init() {}
 				}
@@ -1880,7 +1803,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -1942,7 +1864,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public class ThirdPartyDep {}
 
-				@Instantiable
+				@Instantiable(generateMock: true)
 				extension ThirdPartyDep: Instantiable {
 				    public static func instantiate() -> ThirdPartyDep {
 				        ThirdPartyDep()
@@ -1950,7 +1872,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child, dep: ThirdPartyDep) {
 				        self.child = child
@@ -1961,7 +1883,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(dep: ThirdPartyDep) {
 				        self.dep = dep
@@ -1972,7 +1894,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -2032,7 +1953,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(shared: Shared, childBuilder: Instantiator<Child>) {
 				        self.shared = shared
@@ -2043,7 +1964,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(name: String, shared: Shared, flag: Bool = false) {
 				        self.name = name
@@ -2054,7 +1975,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Shared: Instantiable {
 				    public init() {}
 				}
@@ -2062,7 +1983,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -2130,7 +2050,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(shared: Shared, thirdPartyBuilder: Instantiator<ThirdParty>) {
 				        self.shared = shared
@@ -2143,7 +2063,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public class ThirdParty {}
 
-				@Instantiable
+				@Instantiable(generateMock: true)
 				extension ThirdParty: Instantiable {
 				    public static func instantiate(shared: Shared) -> ThirdParty {
 				        ThirdParty()
@@ -2152,7 +2072,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Shared: Instantiable {
 				    public init() {}
 				}
@@ -2160,7 +2080,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -2223,7 +2142,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(selfBuilder: Instantiator<Root>) {
 				        self.selfBuilder = selfBuilder
@@ -2234,7 +2153,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Lazy self-cycle: Root instantiates Instantiator<Root>.
@@ -2271,7 +2189,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public final class Root: Instantiable {
 				    public init(a: A, b: B) {
 				        self.a = a
@@ -2282,13 +2200,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class A: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class B: Instantiable {
 				    public init(a: A?) {
 				        self.a = a
@@ -2299,7 +2217,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -2361,7 +2278,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public protocol UserType {}
 
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child, user: User) {
 				        self.child = child
@@ -2372,13 +2289,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct User: Instantiable, UserType {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(userType: UserType) {
 				        self.userType = userType
@@ -2389,7 +2306,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -2456,7 +2372,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public final class Root {
 				    public init(a: A?, b: B) {
 				        self.a = a
@@ -2468,13 +2384,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class A {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class B {
 				    public init(a: A?) {
 				        self.a = a
@@ -2486,7 +2402,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -2546,7 +2461,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root {
 				    public init(defaultUserService: DefaultUserService, userService: any UserService) {
 				        self.defaultUserService = defaultUserService
@@ -2563,7 +2478,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				    var userName: String? { get set }
 				}
 
-				@Instantiable(fulfillingAdditionalTypes: [UserService.self])
+				@Instantiable(fulfillingAdditionalTypes: [UserService.self], generateMock: true)
 				public final class DefaultUserService: UserService {
 				    public init() {}
 
@@ -2573,7 +2488,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -2622,7 +2536,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				    func login(username: String, password: String) async -> User
 				}
 
-				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+				@Instantiable(fulfillingAdditionalTypes: [AuthService.self], generateMock: true)
 				public final class DefaultAuthService: AuthService {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -2638,7 +2552,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public protocol NetworkService {}
 
-				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self], generateMock: true)
 				public final class DefaultNetworkService: NetworkService {
 				    public init() {}
 				}
@@ -2646,7 +2560,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				import UIKit
 
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public final class RootViewController: UIViewController {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>) {
 				        self.authService = authService
@@ -2665,7 +2579,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				import UIKit
 
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class LoggedInViewController: UIViewController {
 				    public init(user: User, networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -2679,7 +2593,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 4)
@@ -2780,7 +2693,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childBuilder: SendableInstantiator<Child>) {
 				        self.childBuilder = childBuilder
@@ -2789,7 +2702,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(name: String) {
 				        self.name = name
@@ -2800,7 +2713,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -2848,7 +2760,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childBuilder: Instantiator<Child>) {
 				        self.childBuilder = childBuilder
@@ -2857,7 +2769,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(name: String, grandchildBuilder: Instantiator<Grandchild>) {
 				        self.name = name
@@ -2868,7 +2780,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(age: Int) {
 				        self.age = age
@@ -2879,7 +2791,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -2962,7 +2873,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public protocol NetworkService {}
 
-				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self], generateMock: true)
 				public final class DefaultNetworkService: NetworkService {
 				    public init() {}
 				}
@@ -2970,7 +2881,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public protocol AuthService {}
 
-				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+				@Instantiable(fulfillingAdditionalTypes: [AuthService.self], generateMock: true)
 				public final class DefaultAuthService: AuthService {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -2982,13 +2893,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public protocol UserVendor {}
 
-				@Instantiable(fulfillingAdditionalTypes: [UserVendor.self])
+				@Instantiable(fulfillingAdditionalTypes: [UserVendor.self], generateMock: true)
 				public final class UserManager: UserVendor {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public final class RootViewController {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 				        self.authService = authService
@@ -3004,7 +2915,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class LoggedInViewController {
 				    public init(userManager: UserManager, userNetworkService: NetworkService, profileViewControllerBuilder: Instantiator<ProfileViewController>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -3018,7 +2929,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class ProfileViewController {
 				    public init(userVendor: UserVendor, editProfileViewControllerBuilder: Instantiator<EditProfileViewController>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -3030,7 +2941,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class EditProfileViewController {
 				    public init(userVendor: UserVendor, userManager: UserManager, userNetworkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -3044,7 +2955,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 7)
@@ -3213,7 +3123,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public final class Root {
 				    public init(childBuilder: Instantiator<Child>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -3223,7 +3133,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class Child {
 				    public init(iterator: IndexingIterator<Array<Element>>, grandchildBuilder: Instantiator<Grandchild>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -3234,7 +3144,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class Grandchild {
 				    public init(anyIterator: AnyIterator) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -3246,7 +3156,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -3327,13 +3236,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public protocol ChildAProtocol {}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Recreated: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable(fulfillingAdditionalTypes: [ChildAProtocol.self])
+				@Instantiable(fulfillingAdditionalTypes: [ChildAProtocol.self], generateMock: true)
 				public final class ChildA: ChildAProtocol {
 				    public init(recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -3342,7 +3251,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class ChildB {
 				    public init(recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -3351,7 +3260,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public final class Root {
 				    public init(childABuilder: SendableErasedInstantiator<Recreated, ChildAProtocol>, childB: ChildB, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -3364,7 +3273,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 4)
@@ -3452,7 +3360,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public protocol NetworkService {}
 
-				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
+				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self], generateMock: true)
 				public final class DefaultNetworkService: NetworkService {
 				    public init() {}
 				}
@@ -3460,7 +3368,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public protocol AuthService {}
 
-				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
+				@Instantiable(fulfillingAdditionalTypes: [AuthService.self], generateMock: true)
 				public final class DefaultAuthService: AuthService {
 				    public init(networkService: NetworkService, renamedNetworkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -3472,7 +3380,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public final class RootViewController {
 				    public init(authService: AuthService) {
 				        self.authService = authService
@@ -3484,7 +3392,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -3554,7 +3461,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -3565,7 +3472,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(childB: Instantiator<Other>) {
 				        self.childB = childB
@@ -3574,13 +3481,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Other: Instantiable {
 				    public init() {}
 				}
@@ -3588,7 +3495,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 4)
@@ -3676,7 +3582,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct TypeWithMock: Instantiable {
 				    public init() {}
 				    public static func mock() -> TypeWithMock {
@@ -3687,7 +3593,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 1)
@@ -3701,7 +3606,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct TypeWithCustomMock: Instantiable {
 				    public init(dependency: Dependency) {
 				        self.dependency = dependency
@@ -3713,7 +3618,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Dependency: Instantiable {
 				    public init() {}
 				}
@@ -3721,7 +3626,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -3750,7 +3654,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct TypeWithInstanceMock: Instantiable {
 				    public init() {}
 				    public func mock() -> TypeWithInstanceMock {
@@ -3761,7 +3665,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 1)
@@ -3786,7 +3689,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(child: Child, shared: Shared?) {
 				        self.child = child
@@ -3797,7 +3700,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(unrelated: Unrelated?, shared: Shared?) {
 				        self.unrelated = unrelated
@@ -3812,13 +3715,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Shared: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Unrelated: Instantiable {
 				    public init() {}
 				}
@@ -3826,7 +3729,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Child's mock() is missing required dependency parameters (unrelated, shared).
@@ -3861,7 +3763,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public struct ExternalType {}
 
-				@Instantiable
+				@Instantiable(generateMock: true)
 				extension ExternalType {
 				    public static func instantiate() -> ExternalType {
 				        ExternalType()
@@ -3869,7 +3771,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(externalType: ExternalType) {
 				        self.externalType = externalType
@@ -3880,7 +3782,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -3924,7 +3825,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(parentBuilder: Instantiator<Parent>) {
 				        self.parentBuilder = parentBuilder
@@ -3933,7 +3834,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(config: Config, childBuilder: Instantiator<Child>) {
 				        self.config = config
@@ -3944,7 +3845,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(config: Config) {
 				        self.config = config
@@ -3953,7 +3854,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Config: Instantiable {
 				    public init() {}
 				}
@@ -3961,7 +3862,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// childBuilder should be nested inside parentBuilder's closure
@@ -4002,7 +3902,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public class ExternalService {}
 
-				@Instantiable(mockAttributes: "@MainActor")
+				@Instantiable(mockAttributes: "@MainActor", generateMock: true)
 				extension ExternalService {
 				    public static func instantiate() -> ExternalService {
 				        ExternalService()
@@ -4012,7 +3912,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 1)
@@ -4036,7 +3935,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(receivedValue: ReceivedValue, service: Service) {
 				        self.receivedValue = receivedValue
@@ -4047,7 +3946,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init(database: Database, receivedValue: ReceivedValue) {
 				        self.database = database
@@ -4058,13 +3957,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Database: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ReceivedValue: Instantiable {
 				    public init() {}
 				}
@@ -4072,7 +3971,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Service's @Instantiated dep `database` is in the tree (from collectTreeInfo)
@@ -4107,7 +4005,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(parentBuilder: Instantiator<Parent>) {
 				        self.parentBuilder = parentBuilder
@@ -4116,7 +4014,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(token: Token, child: Child) {
 				        self.token = token
@@ -4127,7 +4025,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(token: Token) {
 				        self.token = token
@@ -4141,7 +4039,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Child is a constant (not an Instantiator) but depends on `token`
@@ -4177,13 +4074,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class ConcreteService {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class Consumer {
 				    public init(service: ConcreteService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -4192,7 +4089,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(service: ConcreteService, consumer: Consumer) {
 				        self.service = service
@@ -4205,7 +4102,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Consumer receives ConcreteService which Root instantiates.
@@ -4236,7 +4132,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(shared: Shared, service: Service) {
 				        self.shared = shared
@@ -4247,7 +4143,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init(channelBuilder: Instantiator<Channel>, shared: Shared) {
 				        self.channelBuilder = channelBuilder
@@ -4258,7 +4154,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Channel: Instantiable {
 				    public init(key: String, shared: Shared) {
 				        self.key = key
@@ -4269,7 +4165,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Shared: Instantiable {
 				    public init() {}
 				}
@@ -4277,7 +4173,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// When Service is constructed inline, its `channelBuilder: Instantiator<Channel>`
@@ -4320,7 +4215,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childBuilder: SendableInstantiator<Child>) {
 				        self.childBuilder = childBuilder
@@ -4329,7 +4224,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init() {}
 				}
@@ -4337,7 +4232,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// @Sendable closures with no parameters still need `in`:
@@ -4368,7 +4262,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(parentBuilder: Instantiator<Parent>) {
 				        self.parentBuilder = parentBuilder
@@ -4377,7 +4271,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(token: Token, child: Child) {
 				        self.token = token
@@ -4388,7 +4282,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(token: Token, grandchild: Grandchild) {
 				        self.token = token
@@ -4399,7 +4293,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(token: Token) {
 				        self.token = token
@@ -4413,7 +4307,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Child and Grandchild both depend on `token` which is only available
@@ -4458,13 +4351,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public protocol ServiceProtocol {}
 				""",
 				"""
-				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], generateMock: true)
 				public final class ConcreteService: ServiceProtocol {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public final class Consumer {
 				    public init(service: ServiceProtocol) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
@@ -4473,7 +4366,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(consumerBuilder: Instantiator<Consumer>, concreteService: ConcreteService) {
 				        self.consumerBuilder = consumerBuilder
@@ -4486,7 +4379,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Consumer receives ServiceProtocol aliased from concreteService.
@@ -4521,7 +4413,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -4532,7 +4424,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(service: ServiceA) {
 				        self.service = service
@@ -4541,7 +4433,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(service: ServiceB) {
 				        self.service = service
@@ -4550,13 +4442,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ServiceA: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ServiceB: Instantiable {
 				    public init() {}
 				}
@@ -4564,7 +4456,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Both ChildA and ChildB have `@Instantiated let service: ...` with different types.
@@ -4606,13 +4497,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public protocol IDProvider {}
 
-				@Instantiable(fulfillingAdditionalTypes: [IDProvider.self])
+				@Instantiable(fulfillingAdditionalTypes: [IDProvider.self], generateMock: true)
 				public struct ConcreteIDProvider: IDProvider, Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Consumer: Instantiable {
 				    public init(idProvider: IDProvider?, dependency: Dependency) {
 				        self.idProvider = idProvider
@@ -4623,7 +4514,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Dependency: Instantiable {
 				    public init() {}
 				}
@@ -4631,7 +4522,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Consumer has @Received(onlyIfAvailable: true) idProvider: IDProvider?
@@ -4662,7 +4552,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(child: Child) {
 				        self.child = child
@@ -4671,7 +4561,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(transitiveDep: TransitiveDep) {
 				        self.transitiveDep = transitiveDep
@@ -4680,7 +4570,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct TransitiveDep: Instantiable {
 				    public init() {}
 				}
@@ -4688,7 +4578,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Parent receives Child, which receives TransitiveDep.
@@ -4723,7 +4612,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public class ExternalClient {}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init(client: ExternalClient) {
 				        self.client = client
@@ -4734,7 +4623,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Service receives ExternalClient which is NOT @Instantiable.
@@ -4766,7 +4654,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public class ExternalClient {}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(client: ExternalClient) {
 				        self.client = client
@@ -4775,7 +4663,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(child: Child) {
 				        self.child = child
@@ -4786,7 +4674,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Parent receives Child, which receives ExternalClient (not @Instantiable).
@@ -4818,13 +4705,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public protocol IDProvider {}
 
-				@Instantiable(fulfillingAdditionalTypes: [IDProvider.self])
+				@Instantiable(fulfillingAdditionalTypes: [IDProvider.self], generateMock: true)
 				public struct ConcreteIDProvider: IDProvider, Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(idProvider: IDProvider?) {
 				        self.idProvider = idProvider
@@ -4833,7 +4720,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(child: Child) {
 				        self.child = child
@@ -4844,7 +4731,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Parent receives Child, which has @Received(onlyIfAvailable: true) idProvider.
@@ -4877,13 +4763,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public protocol AppClipService {}
 
-				@Instantiable(fulfillingAdditionalTypes: [AppClipService.self])
+				@Instantiable(fulfillingAdditionalTypes: [AppClipService.self], generateMock: true)
 				public struct ConcreteAppClipService: AppClipService, Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct DeviceService: Instantiable {
 				    public init(appClipService: AppClipService?, name: String) {
 				        self.appClipService = appClipService
@@ -4896,7 +4782,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// DeviceService has @Received(onlyIfAvailable: true) appClipService.
@@ -4927,7 +4812,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(interceptorBuilder: SendableInstantiator<Interceptor>) {
 				        self.interceptorBuilder = interceptorBuilder
@@ -4936,7 +4821,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Interceptor: Instantiable {
 				    public init(loggingService: LoggingService) {
 				        self.loggingService = loggingService
@@ -4945,7 +4830,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct LoggingService: Instantiable {
 				    public init() {}
 				}
@@ -4953,7 +4838,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// LoggingService is captured inside @Sendable func __safeDI_interceptorBuilder,
@@ -4986,7 +4870,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childBuilder: Instantiator<Child>) {
 				        self.childBuilder = childBuilder
@@ -4995,7 +4879,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(name: String, service: Service) {
 				        self.name = name
@@ -5006,7 +4890,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init() {}
 				}
@@ -5014,7 +4898,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Non-Sendable Instantiator — closures should NOT be @Sendable.
@@ -5083,7 +4966,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init(externalEngine: ExternalEngine, name: String) {
 				        self.externalEngine = externalEngine
@@ -5097,7 +4980,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			dependentModuleInfoPaths: [externalModuleOutput.moduleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// ExternalEngine is constructible via module info — the generated mock imports
@@ -5163,7 +5045,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init(externalEngine: ExternalEngine) {
 				        self.externalEngine = externalEngine
@@ -5175,7 +5057,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			dependentModuleInfoPaths: [externalModuleOutput.moduleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// ExternalEngine is @Received and constructible via module info.
@@ -5206,13 +5087,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public struct ExternalService {}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct InternalService: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(service: InternalService) {
 				        self.service = service
@@ -5221,7 +5102,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(service: ExternalService, child: Child) {
 				        self.service = service
@@ -5234,7 +5115,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Parent has an uncovered @Instantiated `service: ExternalService`, while Child
@@ -5271,13 +5151,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct UserDefaultsService: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init(
 				        installScopedDefaultsService: UserDefaultsService,
@@ -5293,7 +5173,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Both properties have type UserDefaultsService but different labels.
@@ -5334,13 +5213,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable(fulfillingAdditionalTypes: [UserService.self])
+				@Instantiable(fulfillingAdditionalTypes: [UserService.self], generateMock: true)
 				public final class DefaultUserService: UserService, Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(
 				        userService: AnyUserService,
@@ -5354,7 +5233,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct NoteView: Instantiable {
 				    public init(userName: String, userService: AnyUserService) {
 				        self.userName = userName
@@ -5367,7 +5246,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// NoteView @Received AnyUserService which is a concrete existential wrapper.
@@ -5398,7 +5276,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -5409,13 +5287,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct SharedThing: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(shared: SharedThing) {
 				        self.shared = shared
@@ -5424,7 +5302,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(shared: SharedThing) {
 				        self.shared = shared
@@ -5435,7 +5313,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Parent does NOT directly @Instantiate SharedThing.
@@ -5476,7 +5353,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public class SomeExternalType {}
 
-				@Instantiable(fulfillingAdditionalTypes: [StringStorage.self])
+				@Instantiable(fulfillingAdditionalTypes: [StringStorage.self], generateMock: true)
 				extension SomeExternalType: Instantiable, StringStorage {
 				    public static func instantiate() -> SomeExternalType {
 				        SomeExternalType()
@@ -5485,7 +5362,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct UserService: Instantiable {
 				    public init(stringStorage: StringStorage) {
 				        self.stringStorage = stringStorage
@@ -5494,7 +5371,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct NameEntry: Instantiable {
 				    public init(userService: UserService) {
 				        self.userService = userService
@@ -5505,7 +5382,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// StringStorage is a protocol fulfilled by SomeExternalType via extension.
@@ -5540,7 +5416,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public protocol ServiceProtocol {}
 				""",
 				"""
-				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], generateMock: true)
 				public final class ConcreteService: ServiceProtocol, Instantiable {
 				    public init(helper: Helper) {
 				        self.helper = helper
@@ -5549,7 +5425,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Helper: Instantiable {
 				    public init() {}
 				}
@@ -5563,7 +5439,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(service: AnyService) {
 				        self.service = service
@@ -5574,7 +5450,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Root @Instantiates AnyService via erasedToConcreteExistential wrapping ConcreteService.
@@ -5610,13 +5485,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public protocol AppClipService {}
 
-				@Instantiable(fulfillingAdditionalTypes: [AppClipService.self])
+				@Instantiable(fulfillingAdditionalTypes: [AppClipService.self], generateMock: true)
 				public struct ConcreteAppClipService: AppClipService, Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(appClipService: AppClipService?) {
 				        self.appClipService = appClipService
@@ -5625,7 +5500,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(appClipService: AppClipService?) {
 				        self.appClipService = appClipService
@@ -5634,7 +5509,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -5647,7 +5522,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Both ChildA and ChildB have @Received(onlyIfAvailable: true) appClipService.
@@ -5664,13 +5538,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct StateService: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ImageLoader: Instantiable {
 				    public init(stateService: StateService) {
 				        self.stateService = stateService
@@ -5679,7 +5553,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Engine: Instantiable {
 				    public init(stateService: StateService) {
 				        self.stateService = stateService
@@ -5688,7 +5562,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Container: Instantiable {
 				    public init(imageLoader: ImageLoader, engine: Engine) {
 				        self.imageLoader = imageLoader
@@ -5701,7 +5575,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// stateService is @Received by ImageLoader and @Instantiated by Engine.
@@ -5736,13 +5609,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Config: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(config: Config) {
 				        self.config = config
@@ -5751,7 +5624,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(config: Config?) {
 				        self.config = config
@@ -5760,7 +5633,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -5773,7 +5646,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// ChildA @Received config (required), ChildB @Received(onlyIfAvailable: true) config.
@@ -5799,7 +5671,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public class User {}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(user: User) {
 				        self.user = user
@@ -5808,7 +5680,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(user: User?) {
 				        self.user = user
@@ -5817,7 +5689,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -5830,7 +5702,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// ChildA requires user: User (not @Instantiable), ChildB has @Received(onlyIfAvailable: true) user: User?.
@@ -5869,7 +5740,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public class ExternalEngine {}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ServiceWithExternalDependency: Instantiable {
 				    public init(engine: ExternalEngine, name: String) {
 				        self.engine = engine
@@ -5882,7 +5753,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// ExternalEngine is @Instantiated but not @Instantiable in this module.
@@ -5919,7 +5789,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public class ExternalType {}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init(externalTypeBuilder: Instantiator<ExternalType>) {
 				        self.externalTypeBuilder = externalTypeBuilder
@@ -5930,7 +5800,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// The Instantiator's built type (ExternalType) is not @Instantiable in this module.
@@ -5964,7 +5833,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public class ExternalEngine {}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(name: String, engine: ExternalEngine) {
 				        self.name = name
@@ -5975,7 +5844,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(childBuilder: Instantiator<Child>) {
 				        self.childBuilder = childBuilder
@@ -5986,7 +5855,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Child has @Forwarded name and @Instantiated engine (not in scope map).
@@ -6022,13 +5890,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public protocol ServiceProtocol {}
 
-				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], generateMock: true)
 				public struct ConcreteService: ServiceProtocol, Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Consumer: Instantiable {
 				    public init(service: ServiceProtocol?) {
 				        self.service = service
@@ -6037,7 +5905,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(consumer: Consumer) {
 				        self.consumer = consumer
@@ -6048,7 +5916,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Consumer has an aliased onlyIfAvailable dependency on ConcreteService (via ServiceProtocol).
@@ -6088,13 +5955,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct NotificationCenter: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ApplicationStateService: Instantiable {
 				    public init(notificationCenter: NotificationCenter) {
 				        self.notificationCenter = notificationCenter
@@ -6103,7 +5970,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ImageService: Instantiable {
 				    public init(applicationStateService: ApplicationStateService?) {
 				        self.applicationStateService = applicationStateService
@@ -6112,7 +5979,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ProfileService: Instantiable {
 				    public init(imageService: ImageService) {
 				        self.imageService = imageService
@@ -6123,7 +5990,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// ProfileService → ImageService → @Received(onlyIfAvailable) ApplicationStateService?
@@ -6156,7 +6022,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Presenter: Instantiable {
 				    public init(onDismiss: @escaping () -> Void) {
 				        self.onDismiss = onDismiss
@@ -6165,7 +6031,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(presenterBuilder: Instantiator<Presenter>) {
 				        self.presenterBuilder = presenterBuilder
@@ -6176,7 +6042,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		let parentMock = try #require(output.mockFiles["Parent+SafeDIMock.swift"])
@@ -6210,7 +6075,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init(callback: @Sendable () -> Void) {
 				        self.callback = callback
@@ -6221,7 +6086,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// The @Sendable attribute and empty () args should produce a valid enum name:
@@ -6251,7 +6115,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Presenter: Instantiable {
 				    public init(onDismiss: @escaping () -> Void) {
 				        self.onDismiss = onDismiss
@@ -6260,7 +6124,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(presenterBuilder: Instantiator<Presenter>) {
 				        self.presenterBuilder = presenterBuilder
@@ -6271,7 +6135,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Presenter's mock has @Forwarded onDismiss — must be @escaping in the signature.
@@ -6300,13 +6163,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Dependency: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(dependency: Dependency) {
 				        self.dependency = dependency
@@ -6319,7 +6182,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(child: Child) {
 				        self.child = child
@@ -6330,7 +6193,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Parent's mock should call Child.mock(dependency:) not Child(dependency:).
@@ -6365,7 +6227,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ServiceA: Instantiable {
 				    public init() {}
 
@@ -6375,13 +6237,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ServiceB: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(serviceA: ServiceA, serviceB: ServiceB) {
 				        self.serviceA = serviceA
@@ -6394,7 +6256,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// ServiceA has a no-param mock() — can't thread dependencies, so use regular init.
@@ -6426,13 +6287,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(service: Service) {
 				        self.service = service
@@ -6445,7 +6306,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(grandchild: Grandchild) {
 				        self.grandchild = grandchild
@@ -6454,7 +6315,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(child: Child) {
 				        self.child = child
@@ -6465,7 +6326,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Parent → Child → Grandchild.mock(service:)
@@ -6501,7 +6361,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init() {}
 				}
@@ -6512,7 +6372,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				extension Child: Instantiable {
 				    public static func instantiate(service: Service) -> Child {
 				        Child(service: service)
@@ -6524,7 +6384,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(child: Child) {
 				        self.child = child
@@ -6535,7 +6395,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Parent should call Child.mock(service:) instead of Child.instantiate(service:).
@@ -6566,7 +6425,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init() {}
 				}
@@ -6577,7 +6436,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				extension Child: Instantiable {
 				    public static func mock(service: Service) -> Child {
 				        Child(service: service)
@@ -6589,7 +6448,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(child: Child) {
 				        self.child = child
@@ -6600,7 +6459,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Same expectation as the non-reversed test — source order must not matter.
@@ -6631,19 +6489,19 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ServiceA: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ServiceB: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(serviceA: ServiceA, serviceB: ServiceB) {
 				        self.serviceA = serviceA
@@ -6658,7 +6516,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(child: Child) {
 				        self.child = child
@@ -6669,7 +6527,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Both serviceA and serviceB should be threaded to Child.mock().
@@ -6702,7 +6559,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(name: String) {
 				        self.name = name
@@ -6715,7 +6572,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(child: Child) {
 				        self.child = child
@@ -6726,7 +6583,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Child should NOT get a generated mock (it has a user-defined one).
@@ -6765,14 +6621,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(config: String = "hello") {}
 				}
@@ -6780,7 +6636,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Child+SafeDIMock.swift"] == """
@@ -6828,14 +6683,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childBuilder: Instantiator<Child>) { self.childBuilder = childBuilder }
 				    @Instantiated let childBuilder: Instantiator<Child>
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(name: String, flag: Bool = false) { self.name = name }
 				    @Forwarded let name: String
@@ -6844,7 +6699,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -6893,21 +6747,21 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(grandchild: Grandchild) { self.grandchild = grandchild }
 				    @Instantiated let grandchild: Grandchild
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(viewModel: String = "default") {}
 				}
@@ -6915,7 +6769,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -6990,7 +6843,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child, debug: Bool = false) {
 				        self.child = child
@@ -6999,7 +6852,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init() {}
 				}
@@ -7007,7 +6860,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -7035,14 +6887,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childBuilder: SendableInstantiator<Child>) { self.childBuilder = childBuilder }
 				    @Instantiated let childBuilder: SendableInstantiator<Child>
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(name: String, flag: Bool = false) { self.name = name }
 				    @Forwarded let name: String
@@ -7051,7 +6903,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -7082,7 +6933,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -7093,13 +6944,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(flagA: Bool = true) {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(flagB: Int = 42) {}
 				}
@@ -7107,7 +6958,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -7145,14 +6995,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(viewModel: String? = nil) {}
 				}
@@ -7160,7 +7010,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -7208,7 +7057,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -7219,13 +7068,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(flag: Bool = true) {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(flag: String = "on") {}
 				}
@@ -7233,7 +7082,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -7272,7 +7120,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childBuilder: ErasedInstantiator<String, Child>) {
 				        self.childBuilder = childBuilder
@@ -7281,7 +7129,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(name: String, flag: Bool = false) {
 				        self.name = name
@@ -7292,7 +7140,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -7324,7 +7171,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childBuilder: SendableErasedInstantiator<String, Child>) {
 				        self.childBuilder = childBuilder
@@ -7333,7 +7180,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(name: String, flag: Bool = false) {
 				        self.name = name
@@ -7344,7 +7191,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -7376,14 +7222,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(values: [Int] = [1, 2, 3]) {}
 				}
@@ -7391,7 +7237,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -7423,14 +7268,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(dependency: Dependency, extra: Bool = false) {
 				        self.dependency = dependency
@@ -7442,7 +7287,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Dependency: Instantiable {
 				    public init() {}
 				}
@@ -7450,7 +7295,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Child has a user-defined mock() with `extra: Bool = false` (non-dependency default).
@@ -7491,7 +7335,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(clientId: String, child: Child) {
 				        self.clientId = clientId
@@ -7502,7 +7346,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(clientId: String = "default") {}
 				}
@@ -7510,7 +7354,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Parent+SafeDIMock.swift"] == """
@@ -7541,7 +7384,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -7552,7 +7395,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(service: LocalService) {
 				        self.service = service
@@ -7561,7 +7404,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(service: ExternalService) {
 				        self.service = service
@@ -7570,7 +7413,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct LocalService: Instantiable {
 				    public init() {}
 				}
@@ -7581,7 +7424,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// ExternalService has no @Instantiable — it must be a required autoclosure parameter.
@@ -7623,7 +7465,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -7634,7 +7476,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(service: ExternalService) {
 				        self.service = service
@@ -7643,7 +7485,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(service: LocalService?) {
 				        self.service = service
@@ -7660,7 +7502,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Both must appear as parameters — different types should not suppress each other.
@@ -7697,7 +7538,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -7708,14 +7549,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(service: ExternalService) { self.service = service }
 				    @Received let service: ExternalService
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(service: LocalService?) { self.service = service }
 				    @Received(onlyIfAvailable: true) let service: LocalService?
@@ -7730,7 +7571,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -7765,7 +7605,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -7776,21 +7616,21 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(service: Service) { self.service = service }
 				    @Instantiated let service: Service
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(service: Service?) { self.service = service }
 				    @Received(onlyIfAvailable: true) let service: Service?
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init() {}
 				}
@@ -7798,7 +7638,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -7836,7 +7675,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -7847,13 +7686,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(viewModel: ViewModelA = ViewModelA()) {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(viewModel: ViewModelB = ViewModelB()) {}
 				}
@@ -7867,7 +7706,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Each viewModel binding must be INSIDE its child function, not at root scope.
@@ -7922,14 +7760,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childService: ChildService) { self.childService = childService }
 				    @Instantiated let childService: ChildService
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildService: Instantiable {
 				    public init(engine: Engine) { self.engine = engine }
 				    @Instantiated let engine: Engine
@@ -7942,7 +7780,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// engine must be evaluated before passing to .mock()
@@ -7977,28 +7814,28 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(parent: Parent) { self.parent = parent }
 				    @Instantiated let parent: Parent
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(leaf: Leaf) { self.leaf = leaf }
 				    @Instantiated let leaf: Leaf
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Leaf: Instantiable {
 				    public init() {}
 				}
@@ -8006,7 +7843,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -8045,7 +7881,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(parent: Parent, widgetService: WidgetService) {
 				        self.parent = parent
@@ -8056,7 +7892,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(widgetService: WidgetService) {
 				        self.widgetService = widgetService
@@ -8065,14 +7901,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct WidgetService: Instantiable {
 				    public init(config: Config) { self.config = config }
 				    @Instantiated let config: Config
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Config: Instantiable {
 				    public init() {}
 				}
@@ -8080,7 +7916,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -8117,7 +7952,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(parent: Parent, widgetService: WidgetService) {
 				        self.parent = parent
@@ -8128,7 +7963,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(grandchild: Grandchild) {
 				        self.grandchild = grandchild
@@ -8137,7 +7972,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(widgetService: WidgetService) {
 				        self.widgetService = widgetService
@@ -8146,14 +7981,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct WidgetService: Instantiable {
 				    public init(config: Config) { self.config = config }
 				    @Instantiated let config: Config
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Config: Instantiable {
 				    public init() {}
 				}
@@ -8161,7 +7996,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -8203,7 +8037,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(parent: Parent, widgetService: WidgetService) {
 				        self.parent = parent
@@ -8214,7 +8048,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(grandchild: Grandchild) {
 				        self.grandchild = grandchild
@@ -8223,7 +8057,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(widgetService: WidgetService) {
 				        self.widgetService = widgetService
@@ -8232,14 +8066,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct WidgetService: Instantiable {
 				    public init(config: Config) { self.config = config }
 				    @Instantiated let config: Config
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Config: Instantiable {
 				    public init() {}
 				}
@@ -8247,7 +8081,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -8296,7 +8129,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(
 				        parent: Parent,
@@ -8310,7 +8143,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(childBuilder: Instantiator<Child>) {
 				        self.childBuilder = childBuilder
@@ -8319,7 +8152,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(name: String) { self.name = name }
 				    @Forwarded let name: String
@@ -8328,7 +8161,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -8365,7 +8197,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childABuilder: Instantiator<ChildA>, childB: ChildB) {
 				        self.childABuilder = childABuilder
@@ -8376,7 +8208,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(name: String, presenter: PresenterA) {
 				        self.name = name
@@ -8387,7 +8219,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(presenter: PresenterB) {
 				        self.presenter = presenter
@@ -8404,7 +8236,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -8443,7 +8274,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(parent: Parent, childBuilder: Instantiator<ChildA>) {
 				        self.parent = parent
@@ -8454,7 +8285,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(childBuilder: Instantiator<ChildB>) {
 				        self.childBuilder = childBuilder
@@ -8463,14 +8294,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(name: String) { self.name = name }
 				    @Forwarded let name: String
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(name: String) { self.name = name }
 				    @Forwarded let name: String
@@ -8479,7 +8310,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -8525,7 +8355,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childC: ChildC, childD: ChildD) {
 				        self.childC = childC
@@ -8536,7 +8366,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildC: Instantiable {
 				    public init(childBuilder: Instantiator<ChildA>) {
 				        self.childBuilder = childBuilder
@@ -8545,7 +8375,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildD: Instantiable {
 				    public init(childBuilder: Instantiator<ChildB>) {
 				        self.childBuilder = childBuilder
@@ -8554,14 +8384,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(name: String) { self.name = name }
 				    @Forwarded let name: String
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(name: String) { self.name = name }
 				    @Forwarded let name: String
@@ -8570,7 +8400,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -8617,7 +8446,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(parentBuilder: Instantiator<Parent>, childBuilder: Instantiator<ChildA>) {
 				        self.parentBuilder = parentBuilder
@@ -8628,7 +8457,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(childBuilder: Instantiator<ChildA>, otherBuilder: Instantiator<ChildB>) {
 				        self.childBuilder = childBuilder
@@ -8639,14 +8468,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(name: String) { self.name = name }
 				    @Forwarded let name: String
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(name: String) { self.name = name }
 				    @Forwarded let name: String
@@ -8655,7 +8484,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -8704,7 +8532,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childBBuilder: Instantiator<ChildB>) {
 				        self.childA = childA
@@ -8715,7 +8543,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(builder: Instantiator<TypeA>) {
 				        self.builder = builder
@@ -8724,7 +8552,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(subChild: SubChild) {
 				        self.subChild = subChild
@@ -8733,7 +8561,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct SubChild: Instantiable {
 				    public init(builder: Instantiator<TypeB>) {
 				        self.builder = builder
@@ -8742,14 +8570,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct TypeA: Instantiable {
 				    public init(name: String) { self.name = name }
 				    @Forwarded let name: String
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct TypeB: Instantiable {
 				    public init(name: String) { self.name = name }
 				    @Forwarded let name: String
@@ -8758,7 +8586,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -8805,14 +8632,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(grandchild: Grandchild, config: String = "dev") {
 				        self.grandchild = grandchild
@@ -8821,7 +8648,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(viewModel: String = "default") {}
 				}
@@ -8829,7 +8656,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -8868,14 +8694,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(grandchildBuilder: Instantiator<Grandchild>) {
 				        self.grandchildBuilder = grandchildBuilder
@@ -8884,7 +8710,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(name: String, viewModel: String = "default") {
 				        self.name = name
@@ -8895,7 +8721,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -8932,14 +8757,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(onDismiss: @escaping () -> Void = {}) {}
 				}
@@ -8947,7 +8772,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -8975,14 +8799,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(
 				        onCancel: @escaping @MainActor (String) -> Void = { _ in },
@@ -8993,7 +8817,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -9020,14 +8843,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(onComplete: @escaping @Sendable () -> Void = {}) {}
 				}
@@ -9035,7 +8858,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -9063,14 +8885,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(service: Service) { self.service = service }
 				    @Instantiated let service: Service
 				}
 				""",
 				"""
-				@Instantiable @MainActor
+				@Instantiable(generateMock: true) @MainActor
 				public final class Service: Instantiable {
 				    public init(
 				        onCancel: @escaping @MainActor (String) -> Void = { _ in },
@@ -9089,7 +8911,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Service has a user-defined mock() — mock file is header-only.
@@ -9128,14 +8949,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(presenter: Presenter) { self.presenter = presenter }
 				    @Instantiated let presenter: Presenter
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Presenter: Instantiable {
 				    public init(service: Service, client: Client) {
 				        self.service = service
@@ -9149,13 +8970,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Client: Instantiable {
 				    public init() {}
 				}
@@ -9163,7 +8984,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Presenter's mock() takes only `service`, not `client`.
@@ -9202,7 +9022,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -9213,7 +9033,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(service: Service?) {
 				        self.service = service
@@ -9222,13 +9042,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(service: Service? = nil) {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init() {}
 				}
@@ -9236,7 +9056,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// ChildA receives `service` (onlyIfAvailable). ChildB has `service` as a
@@ -9282,14 +9101,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(localService: LocalService, crossModuleService: CrossModuleService) {
 				        self.localService = localService
@@ -9300,7 +9119,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct LocalService: Instantiable {
 				    public init() {}
 				}
@@ -9309,7 +9128,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -9366,7 +9184,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(dependentService: DependentService) { self.dependentService = dependentService }
 				    @Instantiated let dependentService: DependentService
@@ -9376,7 +9194,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			dependentModuleInfoPaths: [dependentServiceOnlyOutput.moduleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// parallelModuleType is NOT in the scope map — required (non-optional) parameter.
@@ -9410,14 +9227,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(service: Service) { self.service = service }
 				    @Instantiated let service: Service
@@ -9427,7 +9244,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init() {}
 				}
@@ -9435,7 +9252,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -9481,14 +9297,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(externalService: ExternalService) { self.externalService = externalService }
 				    @Instantiated let externalService: ExternalService
@@ -9501,7 +9317,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -9534,14 +9349,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(service: Service?) { self.service = service }
 				    @Received(onlyIfAvailable: true) let service: Service?
@@ -9551,7 +9366,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init() {}
 				}
@@ -9559,7 +9374,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -9594,14 +9408,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(grandchild: Grandchild, service: ExternalService) {
 				        self.grandchild = grandchild
@@ -9612,23 +9426,22 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(service: LocalService) { self.service = service }
 				    @Instantiated let service: LocalService
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct LocalService: Instantiable {
 				    public init() {}
 				}
 				""",
-				// ExternalService is NOT @Instantiable here — simulates parallel module.
+				// ExternalService is NOT @Instantiable(generateMock: true) here — simulates parallel module.
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// ExternalService appears as required parameter despite grandchild having
@@ -9670,7 +9483,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init() {}
 
@@ -9680,7 +9493,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Both dependency tree AND mock outputs should have the error.
@@ -9698,7 +9510,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(name: String, child: Child) {
 				        self.name = name
@@ -9709,7 +9521,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(name: String = "default") {}
 				}
@@ -9717,7 +9529,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// name (forwarded, bare) stays as-is. name_String (bubbled default) is disambiguated.
@@ -9753,7 +9564,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(parentBuilder: Instantiator<Parent>, shared: SharedThing) {
 				        self.parentBuilder = parentBuilder
@@ -9764,7 +9575,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(name: String, shared: SharedThing) {
 				        self.name = name
@@ -9775,7 +9586,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct SharedThing: Instantiable {
 				    public init() {}
 				}
@@ -9783,7 +9594,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -9820,7 +9630,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(parentBuilder: Instantiator<Parent>, childB: ChildB) {
 				        self.parentBuilder = parentBuilder
@@ -9831,7 +9641,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(name: String, config: ConfigA) {
 				        self.name = name
@@ -9842,7 +9652,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(config: ConfigB) { self.config = config }
 				    @Received let config: ConfigB
@@ -9857,7 +9667,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -9898,7 +9707,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(parent: Parent, child: Child) {
 				        self.parent = parent
@@ -9909,14 +9718,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(engine: EngineA) { self.engine = engine }
 				    @Received let engine: EngineA
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(engine: EngineB) { self.engine = engine }
 				    @Received let engine: EngineB
@@ -9931,7 +9740,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -9966,7 +9774,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -9977,14 +9785,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(service: ExternalService) { self.service = service }
 				    @Received let service: ExternalService
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(service: LocalService?) { self.service = service }
 				    @Received(onlyIfAvailable: true) let service: LocalService?
@@ -9999,7 +9807,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -10035,7 +9842,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -10046,13 +9853,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(onAction: @escaping () -> Void = {}) {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(onAction: @escaping (String) -> Void = { _ in }) {}
 				}
@@ -10060,7 +9867,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -10094,7 +9900,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childBuilder: Instantiator<Item>, wrapper: ThirdPartyWrapper) {
 				        self.childBuilder = childBuilder
@@ -10107,7 +9913,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				public class ThirdPartyWrapper {}
 
-				@Instantiable
+				@Instantiable(generateMock: true)
 				extension ThirdPartyWrapper: Instantiable {
 				    public static func instantiate(childBuilder: Instantiator<Item>) -> ThirdPartyWrapper {
 				        ThirdPartyWrapper()
@@ -10116,7 +9922,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Item: Instantiable {
 				    public init(name: String) { self.name = name }
 				    @Forwarded let name: String
@@ -10125,7 +9931,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -10160,7 +9965,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB, childC: ChildC) {
 				        self.childA = childA
@@ -10173,21 +9978,21 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(service: ServiceA) { self.service = service }
 				    @Received let service: ServiceA
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(service: ServiceB) { self.service = service }
 				    @Received let service: ServiceB
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildC: Instantiable {
 				    public init(service: ServiceC) { self.service = service }
 				    @Received let service: ServiceC
@@ -10205,7 +10010,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -10248,7 +10052,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(
 				        childBuilder: Instantiator<ChildA>,
@@ -10265,7 +10069,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Parent: Instantiable {
 				    public init(childBuilder: Instantiator<ChildA>) {
 				        self.childBuilder = childBuilder
@@ -10274,7 +10078,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Other: Instantiable {
 				    public init(childBuilder: Instantiator<ChildB>) {
 				        self.childBuilder = childBuilder
@@ -10283,14 +10087,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(name: String) { self.name = name }
 				    @Forwarded let name: String
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(name: String) { self.name = name }
 				    @Forwarded let name: String
@@ -10299,7 +10103,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -10359,7 +10162,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(
 				        childABuilder: Instantiator<ChildA>,
@@ -10373,7 +10176,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(shared: Shared, name: String) {
 				        self.shared = shared
@@ -10384,7 +10187,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(shared: Shared, name: String) {
 				        self.shared = shared
@@ -10395,7 +10198,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Shared: Instantiable {
 				    public init() {}
 				}
@@ -10403,7 +10206,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -10446,7 +10248,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(shared: Shared, child: Child) {
 				        self.shared = shared
@@ -10457,7 +10259,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(grandchildBuilder: Instantiator<Grandchild>) {
 				        self.grandchildBuilder = grandchildBuilder
@@ -10466,7 +10268,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(shared: Shared, name: String) {
 				        self.shared = shared
@@ -10477,7 +10279,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Shared: Instantiable {
 				    public init() {}
 				}
@@ -10485,7 +10287,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
@@ -10502,7 +10303,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(builderA: Instantiator<ChildA>, builderB: Instantiator<ChildB>) {
 				        self.builderA = builderA
@@ -10513,7 +10314,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(shared: Shared, name: String) {
 				        self.shared = shared
@@ -10524,7 +10325,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(shared: Shared, name: String) {
 				        self.shared = shared
@@ -10535,7 +10336,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Shared: Instantiable {
 				    public init() {}
 				}
@@ -10543,7 +10344,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// shared is at root scope, before builderB — ordering is correct.
@@ -10587,7 +10387,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -10598,14 +10398,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(shared: Shared) { self.shared = shared }
 				    @Instantiated let shared: Shared
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(grandchildBuilder: Instantiator<Grandchild>) {
 				        self.grandchildBuilder = grandchildBuilder
@@ -10614,7 +10414,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(shared: Shared, name: String) {
 				        self.shared = shared
@@ -10625,7 +10425,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Shared: Instantiable {
 				    public init() {}
 				}
@@ -10633,7 +10433,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -10679,14 +10478,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(grandchildBuilder: Instantiator<Grandchild>) {
 				        self.grandchildBuilder = grandchildBuilder
@@ -10695,7 +10494,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(serviceA: ServiceA, serviceB: ServiceB, name: String) {
 				        self.serviceA = serviceA
@@ -10708,14 +10507,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ServiceA: Instantiable {
 				    public init(serviceB: ServiceB) { self.serviceB = serviceB }
 				    @Instantiated let serviceB: ServiceB
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ServiceB: Instantiable {
 				    public init() {}
 				}
@@ -10723,7 +10522,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -10769,7 +10567,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -10780,14 +10578,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(grandchild: Grandchild) { self.grandchild = grandchild }
 				    @Instantiated let grandchild: Grandchild
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Grandchild: Instantiable {
 				    public init(greatGrandchildBuilder: Instantiator<GreatGrandchild>) {
 				        self.greatGrandchildBuilder = greatGrandchildBuilder
@@ -10796,7 +10594,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct GreatGrandchild: Instantiable {
 				    public init(shared: Shared, name: String) {
 				        self.shared = shared
@@ -10807,14 +10605,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(shared: Shared) { self.shared = shared }
 				    @Instantiated let shared: Shared
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Shared: Instantiable {
 				    public init() {}
 				}
@@ -10822,7 +10620,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -10867,7 +10664,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        self.childA = childA
@@ -10878,7 +10675,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(service: Service) {
 				        self.service = service
@@ -10887,7 +10684,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(service: Service?) {
 				        self.service = service
@@ -10896,7 +10693,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Service: Instantiable {
 				    public init() {}
 				}
@@ -10904,7 +10701,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Service should NOT be treated as onlyIfAvailable — ChildA has a required @Received.
@@ -10937,7 +10733,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB, childC: ChildC) {
 				        self.childA = childA
@@ -10950,7 +10746,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(service: UserService) {
 				        self.service = service
@@ -10959,7 +10755,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(service: AdminService) {
 				        self.service = service
@@ -10968,7 +10764,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildC: Instantiable {
 				    public init(service_UserService: OtherType) {
 				        self.service_UserService = service_UserService
@@ -10977,19 +10773,19 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct UserService: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct AdminService: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct OtherType: Instantiable {
 				    public init() {}
 				}
@@ -10997,7 +10793,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// After disambiguation, "service" splits into "service_UserService" and "service_AdminService".
@@ -11036,7 +10831,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child, service: TypeA) {
 				        self.child = child
@@ -11047,7 +10842,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(service: TypeB, serviceAlias: TypeB) {
 				        self.service = service
@@ -11058,13 +10853,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct TypeA: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct TypeB: Instantiable {
 				    public init() {}
 				}
@@ -11072,7 +10867,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// Root has "service: TypeA" and Child has "service: TypeB" — the label "service"
@@ -11113,7 +10907,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB, childC: ChildC) {
 				        self.childA = childA
@@ -11126,31 +10920,31 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildA: Instantiable {
 				    public init(value: ServiceA = ServiceA()) {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildB: Instantiable {
 				    public init(value: ServiceA? = nil) {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ChildC: Instantiable {
 				    public init(value: ServiceB = ServiceB()) {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ServiceA: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct ServiceB: Instantiable {
 				    public init() {}
 				}
@@ -11158,7 +10952,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
 		// "value" label appears three times: ServiceA, ServiceA?, ServiceB.
@@ -11203,60 +10996,163 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
 	}
 
+	// MARK: Tests – Per-type generateMock
+
 	@Test
-	mutating func mock_usesOuterLabelForChildMock_whenDefaultValuedParameterHasUnderscoreInnerLabel() async throws {
+	mutating func mock_generatedForType_whenGenerateMockIsTrue() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
-				public struct Root: Instantiable {
-				    public init(child: Child) { self.child = child }
-				    @Instantiated let child: Child
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Child: Instantiable {
-				    public init(isLoggingEnabled _: Bool = false) {}
+				@Instantiable(generateMock: true)
+				public struct OptedIn: Instantiable {
+				    public init() {}
 				}
 				""",
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
-		#expect(output.mockFiles["Child+SafeDIMock.swift"] == """
+		#expect(output.mockFiles.count == 1)
+		#expect(output.mockFiles["OptedIn+SafeDIMock.swift"] == """
 		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
 		// Any modifications made to this file will be overwritten on subsequent builds.
 		// Please refrain from editing this file directly.
 
 		#if DEBUG
-		extension Child {
-		    public static func mock(
-		        isLoggingEnabled: @autoclosure @escaping () -> Bool = false
-		    ) -> Child {
-		        let isLoggingEnabled = isLoggingEnabled()
-		        return Child(isLoggingEnabled: isLoggingEnabled)
+		extension OptedIn {
+		    public static func mock() -> OptedIn {
+		        OptedIn()
 		    }
 		}
 		#endif
-		""", "Unexpected output \(output.mockFiles["Child+SafeDIMock.swift"] ?? "")")
+		""", "Unexpected output \(output.mockFiles["OptedIn+SafeDIMock.swift"] ?? "")")
 	}
 
 	@Test
-	mutating func mock_usesOuterLabelForRootMock_whenDefaultValuedParameterHasUnderscoreInnerLabel() async throws {
+	mutating func mock_generatedForType_whenEnableMockGenerationIsTrue() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(generateMock: true)
+				public struct DefaultType: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// With generateMock: true, the type gets a mock.
+		#expect(output.mockFiles.count == 1)
+		#expect(output.mockFiles["DefaultType+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension DefaultType {
+		    public static func mock() -> DefaultType {
+		        DefaultType()
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["DefaultType+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	mutating func mock_notGeneratedForType_whenGenerateMockIsDefault() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct NoMock: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles.isEmpty)
+	}
+
+	@Test
+	mutating func mock_notGeneratedForType_whenGenerateMockIsFalse() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: false)
+				public struct NoMock: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles.isEmpty)
+	}
+
+	@Test
+	mutating func mock_generatedOnlyForOptedInTypes_whenMixOfGenerateMockValues() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public struct OptedIn: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct DefaultType: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(generateMock: false)
+				public struct OptedOut: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles.count == 1)
+		#expect(output.mockFiles["OptedIn+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension OptedIn {
+		    public static func mock() -> OptedIn {
+		        OptedIn()
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["OptedIn+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	mutating func mock_usesOuterLabel_whenDefaultValuedParameterHasUnderscoreInnerLabel() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(isLoggingEnabled _: Bool = false) {}
 				}
@@ -11264,9 +11160,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
+		#expect(output.mockFiles.count == 2)
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
 		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
 		// Any modifications made to this file will be overwritten on subsequent builds.
@@ -11288,6 +11184,22 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		}
 		#endif
 		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+		#expect(output.mockFiles["Child+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Child {
+		    public static func mock(
+		        isLoggingEnabled: @autoclosure @escaping () -> Bool = false
+		    ) -> Child {
+		        let isLoggingEnabled = isLoggingEnabled()
+		        return Child(isLoggingEnabled: isLoggingEnabled)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Child+SafeDIMock.swift"] ?? "")")
 	}
 
 	@Test
@@ -11295,14 +11207,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(_ isLoggingEnabled: Bool = false) {}
 				}
@@ -11310,9 +11222,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
+		#expect(output.mockFiles.count == 2)
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
 		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
 		// Any modifications made to this file will be overwritten on subsequent builds.
@@ -11329,31 +11241,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		}
 		#endif
 		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
-	}
-
-	@Test
-	mutating func mock_doesNotBubbleDefaultValuedParameterForChildMock_whenOuterLabelIsUnderscore() async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable(isRoot: true)
-				public struct Root: Instantiable {
-				    public init(child: Child) { self.child = child }
-				    @Instantiated let child: Child
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Child: Instantiable {
-				    public init(_ isLoggingEnabled: Bool = false) {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
-		)
-
 		#expect(output.mockFiles["Child+SafeDIMock.swift"] == """
 		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
 		// Any modifications made to this file will be overwritten on subsequent builds.
@@ -11374,14 +11261,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Child: Instantiable {
 				    public init(_: Bool = false) {}
 				}
@@ -11389,9 +11276,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
 		)
 
+		#expect(output.mockFiles.count == 2)
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
 		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
 		// Any modifications made to this file will be overwritten on subsequent builds.
@@ -11408,31 +11295,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		}
 		#endif
 		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
-	}
-
-	@Test
-	mutating func mock_doesNotBubbleDefaultValuedParameterForChildMock_whenOnlyLabelIsUnderscore() async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable(isRoot: true)
-				public struct Root: Instantiable {
-				    public init(child: Child) { self.child = child }
-				    @Instantiated let child: Child
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Child: Instantiable {
-				    public init(_: Bool = false) {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-			enableMockGeneration: true,
-		)
-
 		#expect(output.mockFiles["Child+SafeDIMock.swift"] == """
 		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
 		// Any modifications made to this file will be overwritten on subsequent builds.

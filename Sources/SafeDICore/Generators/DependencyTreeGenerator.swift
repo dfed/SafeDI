@@ -107,8 +107,10 @@ public actor DependencyTreeGenerator {
 				.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
 			{
 				// Skip types with user-defined mock methods, duplicates, types not in the scope map,
-				// and types from dependent modules (their module generates their own mocks).
-				guard instantiable.mockInitializer == nil,
+				// types from dependent modules (their module generates their own mocks),
+				// and types where mock generation is disabled.
+				guard instantiable.generateMock,
+				      instantiable.mockInitializer == nil,
 				      seen.insert(instantiable.concreteInstantiable).inserted,
 				      let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable]
 				else { continue }

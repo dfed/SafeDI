@@ -2047,8 +2047,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					enum ConfigA {
 					    static let additionalImportedModules: [StaticString] = []
 					    static let additionalDirectoriesToInclude: [StaticString] = []
-					    static let generateMocks: Bool = true
-					    static let mockConditionalCompilation: StaticString? = "DEBUG"
+						    static let mockConditionalCompilation: StaticString? = "DEBUG"
 					}
 					""",
 					"""
@@ -2056,8 +2055,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					enum ConfigB {
 					    static let additionalImportedModules: [StaticString] = []
 					    static let additionalDirectoriesToInclude: [StaticString] = []
-					    static let generateMocks: Bool = false
-					    static let mockConditionalCompilation: StaticString? = nil
+						    static let mockConditionalCompilation: StaticString? = nil
 					}
 					""",
 					"""

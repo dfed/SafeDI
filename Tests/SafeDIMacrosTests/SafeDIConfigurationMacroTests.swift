@@ -46,7 +46,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = ["MyModule"]
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -54,7 +53,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = ["MyModule"]
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -70,7 +68,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -78,31 +75,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
-				""",
-				macros: safeDIConfigurationTestMacros,
-			)
-		}
-
-		@Test
-		func expandsWithoutIssueWhenGenerateMocksIsFalse() {
-			assertMacroExpansion(
-				"""
-				@SafeDIConfiguration
-				enum MyConfiguration {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = false
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
-				""",
-				expandedSource: """
-				enum MyConfiguration {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = false
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -118,7 +90,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = nil
 				}
 				""",
@@ -126,7 +97,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = nil
 				}
 				""",
@@ -142,7 +112,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "TESTING"
 				}
 				""",
@@ -150,7 +119,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "TESTING"
 				}
 				""",
@@ -166,7 +134,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = ["ModuleA", "ModuleB"]
 				    static let additionalDirectoriesToInclude: [StaticString] = ["DirA", "DirB"]
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -174,7 +141,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = ["ModuleA", "ModuleB"]
 				    static let additionalDirectoriesToInclude: [StaticString] = ["DirA", "DirB"]
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -192,7 +158,6 @@ import Testing
 				class MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -200,7 +165,6 @@ import Testing
 				class MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -223,7 +187,6 @@ import Testing
 				struct MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -231,7 +194,6 @@ import Testing
 				struct MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -254,7 +216,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = someVariable
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -262,7 +223,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = someVariable
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -285,7 +245,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = someVariable
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -293,7 +252,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = someVariable
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -316,7 +274,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = ["\\(someVar)"]
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -324,44 +281,12 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = ["\\(someVar)"]
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
 				diagnostics: [
 					DiagnosticSpec(
 						message: "The `additionalImportedModules` property must be initialized with an array of string literals",
-						line: 1,
-						column: 1,
-					),
-				],
-				macros: safeDIConfigurationTestMacros,
-			)
-		}
-
-		@Test
-		func throwsErrorWhenGenerateMocksHasNonLiteralValue() {
-			assertMacroExpansion(
-				"""
-				@SafeDIConfiguration
-				enum MyConfiguration {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = someVariable
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
-				""",
-				expandedSource: """
-				enum MyConfiguration {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = someVariable
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
-				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "The `generateMocks` property must be initialized with a Bool literal (`true` or `false`)",
 						line: 1,
 						column: 1,
 					),
@@ -378,7 +303,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = someVariable
 				}
 				""",
@@ -386,7 +310,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = someVariable
 				}
 				""",
@@ -438,148 +361,9 @@ import Testing
 				/// Directories containing Swift files to include, relative to the executing directory.
 				/// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
 				static let additionalDirectoriesToInclude: [StaticString] = []
-				/// Whether to generate `mock()` methods for `@Instantiable` types.
-				static let generateMocks: Bool = true
 				/// The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`).
 				/// Set to `nil` to generate mocks without conditional compilation.
 				static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
-				""",
-			)
-		}
-
-		@Test
-		func fixItAddsOnlyMissingMockProperties() {
-			assertMacroExpansion(
-				"""
-				@SafeDIConfiguration
-				enum MyConfiguration {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				}
-				""",
-				expandedSource: """
-				enum MyConfiguration {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				}
-				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "@SafeDIConfiguration-decorated type must have a `static let generateMocks: Bool` property",
-						line: 2,
-						column: 22,
-						fixIts: [
-							FixItSpec(message: "Add `static let generateMocks: Bool` property"),
-						],
-					),
-				],
-				macros: safeDIConfigurationTestMacros,
-				applyFixIts: [
-					"Add `static let generateMocks: Bool` property",
-				],
-				fixedSource: """
-				@SafeDIConfiguration
-				enum MyConfiguration {
-				/// Whether to generate `mock()` methods for `@Instantiable` types.
-				static let generateMocks: Bool = true
-				/// The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`).
-				/// Set to `nil` to generate mocks without conditional compilation.
-				static let mockConditionalCompilation: StaticString? = "DEBUG"
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				}
-				""",
-			)
-		}
-
-		@Test
-		func fixItAddsOnlyMissingAdditionalDirectoriesToInclude() {
-			assertMacroExpansion(
-				"""
-				@SafeDIConfiguration
-				enum MyConfiguration {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let generateMocks: Bool = true
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
-				""",
-				expandedSource: """
-				enum MyConfiguration {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let generateMocks: Bool = true
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
-				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "@SafeDIConfiguration-decorated type must have a `static let additionalDirectoriesToInclude: [StaticString]` property",
-						line: 2,
-						column: 22,
-						fixIts: [
-							FixItSpec(message: "Add `static let additionalDirectoriesToInclude: [StaticString]` property"),
-						],
-					),
-				],
-				macros: safeDIConfigurationTestMacros,
-				applyFixIts: [
-					"Add `static let additionalDirectoriesToInclude: [StaticString]` property",
-				],
-				fixedSource: """
-				@SafeDIConfiguration
-				enum MyConfiguration {
-				/// Directories containing Swift files to include, relative to the executing directory.
-				/// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-				static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let additionalImportedModules: [StaticString] = []
-				    static let generateMocks: Bool = true
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
-				""",
-			)
-		}
-
-		@Test
-		func fixItAddsOnlyMissingAdditionalImportedModules() {
-			assertMacroExpansion(
-				"""
-				@SafeDIConfiguration
-				enum MyConfiguration {
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
-				""",
-				expandedSource: """
-				enum MyConfiguration {
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
-				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "@SafeDIConfiguration-decorated type must have a `static let additionalImportedModules: [StaticString]` property",
-						line: 2,
-						column: 22,
-						fixIts: [
-							FixItSpec(message: "Add `static let additionalImportedModules: [StaticString]` property"),
-						],
-					),
-				],
-				macros: safeDIConfigurationTestMacros,
-				applyFixIts: [
-					"Add `static let additionalImportedModules: [StaticString]` property",
-				],
-				fixedSource: """
-				@SafeDIConfiguration
-				enum MyConfiguration {
-				/// The names of modules to import in the generated dependency tree.
-				/// This list is in addition to the import statements found in files that declare @Instantiable types.
-				static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
 			)
@@ -593,14 +377,12 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				}
 				""",
 				expandedSource: """
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				}
 				""",
 				diagnostics: [
@@ -625,7 +407,92 @@ import Testing
 				static let mockConditionalCompilation: StaticString? = "DEBUG"
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
+				}
+				""",
+			)
+		}
+
+		@Test
+		func fixItAddsOnlyMissingAdditionalDirectoriesToInclude() {
+			assertMacroExpansion(
+				"""
+				@SafeDIConfiguration
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let mockConditionalCompilation: StaticString? = "DEBUG"
+				}
+				""",
+				expandedSource: """
+				enum MyConfiguration {
+				    static let additionalImportedModules: [StaticString] = []
+				    static let mockConditionalCompilation: StaticString? = "DEBUG"
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@SafeDIConfiguration-decorated type must have a `static let additionalDirectoriesToInclude: [StaticString]` property",
+						line: 2,
+						column: 22,
+						fixIts: [
+							FixItSpec(message: "Add `static let additionalDirectoriesToInclude: [StaticString]` property"),
+						],
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+				applyFixIts: [
+					"Add `static let additionalDirectoriesToInclude: [StaticString]` property",
+				],
+				fixedSource: """
+				@SafeDIConfiguration
+				enum MyConfiguration {
+				/// Directories containing Swift files to include, relative to the executing directory.
+				/// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
+				static let additionalDirectoriesToInclude: [StaticString] = []
+				    static let additionalImportedModules: [StaticString] = []
+				    static let mockConditionalCompilation: StaticString? = "DEBUG"
+				}
+				""",
+			)
+		}
+
+		@Test
+		func fixItAddsOnlyMissingAdditionalImportedModules() {
+			assertMacroExpansion(
+				"""
+				@SafeDIConfiguration
+				enum MyConfiguration {
+				    static let additionalDirectoriesToInclude: [StaticString] = []
+				    static let mockConditionalCompilation: StaticString? = "DEBUG"
+				}
+				""",
+				expandedSource: """
+				enum MyConfiguration {
+				    static let additionalDirectoriesToInclude: [StaticString] = []
+				    static let mockConditionalCompilation: StaticString? = "DEBUG"
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@SafeDIConfiguration-decorated type must have a `static let additionalImportedModules: [StaticString]` property",
+						line: 2,
+						column: 22,
+						fixIts: [
+							FixItSpec(message: "Add `static let additionalImportedModules: [StaticString]` property"),
+						],
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+				applyFixIts: [
+					"Add `static let additionalImportedModules: [StaticString]` property",
+				],
+				fixedSource: """
+				@SafeDIConfiguration
+				enum MyConfiguration {
+				/// The names of modules to import in the generated dependency tree.
+				/// This list is in addition to the import statements found in files that declare @Instantiable types.
+				static let additionalImportedModules: [StaticString] = []
+				    static let additionalDirectoriesToInclude: [StaticString] = []
+				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
 			)
@@ -639,7 +506,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString?
 				}
 				""",
@@ -647,7 +513,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString?
 				}
 				""",
@@ -670,7 +535,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "\\(flag)"
 				}
 				""",
@@ -678,7 +542,6 @@ import Testing
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "\\(flag)"
 				}
 				""",

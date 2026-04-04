@@ -54,12 +54,14 @@
 ///   - additionalTypes: The types (in addition to the type decorated with this macro) of properties that can be decorated with `@Instantiated` and yield a result of this type. The types provided *must* be either superclasses of this type or protocols to which this type conforms.
 ///   - conformsElsewhere: Whether the decorated type already conforms to the `Instantiable` protocol elsewhere. If set to `true`, the macro does not enforce that this declaration conforms to `Instantiable`.
 ///   - mockAttributes: Attributes to add to the generated `mock()` method. Use this when the type's initializer is bound to a global actor that the plugin cannot detect from source (e.g. inherited `@MainActor`). Example: `@Instantiable(mockAttributes: "@MainActor")`.
+///   - generateMock: Whether to generate a `mock()` method for this type. Defaults to `false`.
 @attached(member, names: named(ForwardedProperties))
 public macro Instantiable(
 	isRoot: Bool = false,
 	fulfillingAdditionalTypes additionalTypes: [Any.Type] = [],
 	conformsElsewhere: Bool = false,
 	mockAttributes: StaticString = "",
+	generateMock: Bool = false,
 ) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")
 
 /// A type that can be instantiated with runtime-injected properties.

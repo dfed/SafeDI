@@ -110,9 +110,6 @@ enum MySafeDIConfiguration {
     /// This list is in addition to the import statements found in files that declare @Instantiable types.
     static let additionalImportedModules: [StaticString] = []
 
-    /// Whether to generate `mock()` methods for `@Instantiable` types.
-    static let generateMocks: Bool = true
-
     /// The conditional compilation flag to wrap generated mock code in.
     /// Set to `nil` to generate mocks without conditional compilation.
     static let mockConditionalCompilation: StaticString? = "DEBUG"
@@ -144,7 +141,6 @@ import SafeDI
 enum MySafeDIConfiguration {
     static let additionalImportedModules: [StaticString] = ["MyModule"]
     static let additionalDirectoriesToInclude: [StaticString] = []
-    static let generateMocks: Bool = true
     static let mockConditionalCompilation: StaticString? = "DEBUG"
 }
 ```

@@ -74,6 +74,28 @@ extension AttributeSyntax {
 		return firstLabeledExpression.expression
 	}
 
+	public var generateMock: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let firstLabeledExpression = labeledExpressionList.first(where: {
+		      	$0.label?.text == "generateMock"
+		      })
+		else {
+			return nil
+		}
+
+		return firstLabeledExpression.expression
+	}
+
+	public var generateMockValue: Bool {
+		guard let generateMock,
+		      let boolLiteral = BooleanLiteralExprSyntax(generateMock)
+		else {
+			return false
+		}
+		return boolLiteral.literal.tokenKind == .keyword(.true)
+	}
+
 	public var mockAttributesValue: String {
 		guard let mockAttributes,
 		      let stringLiteral = StringLiteralExprSyntax(mockAttributes),

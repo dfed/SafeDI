@@ -31,16 +31,15 @@ struct SafeDIConfigurationVisitorTests {
 		enum MyConfig {
 		    static let additionalImportedModules: [StaticString] = []
 		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let generateMocks: Bool = true
 		    static let mockConditionalCompilation: StaticString? = "DEBUG"
 
 		    struct Helper {
-		        static let generateMocks: Bool = false
+		        static let mockConditionalCompilation: StaticString? = "TESTING"
 		    }
 		}
 		"""))
 
-		#expect(visitor.generateMocks == true)
+		#expect(visitor.mockConditionalCompilation == "DEBUG")
 	}
 
 	@Test
@@ -50,16 +49,15 @@ struct SafeDIConfigurationVisitorTests {
 		enum MyConfig {
 		    static let additionalImportedModules: [StaticString] = []
 		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let generateMocks: Bool = true
 		    static let mockConditionalCompilation: StaticString? = "DEBUG"
 
 		    class Helper {
-		        static let generateMocks: Bool = false
+		        static let mockConditionalCompilation: StaticString? = "TESTING"
 		    }
 		}
 		"""))
 
-		#expect(visitor.generateMocks == true)
+		#expect(visitor.mockConditionalCompilation == "DEBUG")
 	}
 
 	@Test
@@ -69,16 +67,15 @@ struct SafeDIConfigurationVisitorTests {
 		enum MyConfig {
 		    static let additionalImportedModules: [StaticString] = []
 		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let generateMocks: Bool = true
 		    static let mockConditionalCompilation: StaticString? = "DEBUG"
 
 		    enum Helper {
-		        static let generateMocks: Bool = false
+		        static let mockConditionalCompilation: StaticString? = "TESTING"
 		    }
 		}
 		"""))
 
-		#expect(visitor.generateMocks == true)
+		#expect(visitor.mockConditionalCompilation == "DEBUG")
 	}
 
 	@Test
@@ -88,7 +85,6 @@ struct SafeDIConfigurationVisitorTests {
 		enum MyConfig {
 		    static let additionalImportedModules: [StaticString] = ["ModuleA", "ModuleB"]
 		    static let additionalDirectoriesToInclude: [StaticString] = ["../Other"]
-		    static let generateMocks: Bool = false
 		    static let mockConditionalCompilation: StaticString? = "TESTING"
 		}
 		"""))
@@ -96,7 +92,6 @@ struct SafeDIConfigurationVisitorTests {
 		let configuration = visitor.configuration
 		#expect(configuration.additionalImportedModules == ["ModuleA", "ModuleB"])
 		#expect(configuration.additionalDirectoriesToInclude == ["../Other"])
-		#expect(configuration.generateMocks == false)
 		#expect(configuration.mockConditionalCompilation == "TESTING")
 	}
 
@@ -107,7 +102,6 @@ struct SafeDIConfigurationVisitorTests {
 		enum MyConfig {
 		    static let additionalImportedModules: [StaticString] = []
 		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let generateMocks: Bool = true
 		    static let mockConditionalCompilation: StaticString? = nil
 		}
 		"""))
@@ -122,18 +116,17 @@ struct SafeDIConfigurationVisitorTests {
 		enum MyConfig {
 		    static let additionalImportedModules: [StaticString] = []
 		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let generateMocks: Bool = true
 		    static let mockConditionalCompilation: StaticString? = "DEBUG"
 
 		    protocol Helper {
-		        static var generateMocks: Bool { get }
+		        static var mockConditionalCompilation: StaticString? { get }
 		    }
 		}
 		"""))
 
-		#expect(visitor.generateMocks == true)
+		#expect(visitor.mockConditionalCompilation == "DEBUG")
 		// The protocol's requirement must not affect the isValid flag.
-		#expect(visitor.generateMocksIsValid == true)
+		#expect(visitor.mockConditionalCompilationIsValid == true)
 	}
 
 	@Test
@@ -143,16 +136,15 @@ struct SafeDIConfigurationVisitorTests {
 		enum MyConfig {
 		    static let additionalImportedModules: [StaticString] = []
 		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let generateMocks: Bool = true
 		    static let mockConditionalCompilation: StaticString? = "DEBUG"
 
 		    actor Helper {
-		        static let generateMocks: Bool = false
+		        static let mockConditionalCompilation: StaticString? = "TESTING"
 		    }
 		}
 		"""))
 
-		#expect(visitor.generateMocks == true)
+		#expect(visitor.mockConditionalCompilation == "DEBUG")
 	}
 }
 
@@ -946,6 +938,71 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
+			),
+		])
+	}
+
+	@Test
+	func walk_parsesGenerateMockTrue() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		@Instantiable(generateMock: true)
+		public struct OptedIn {
+		    public init() {}
+		}
+		"""))
+		#expect(fileVisitor.instantiables == [
+			Instantiable(
+				instantiableType: .simple(name: "OptedIn"),
+				isRoot: false,
+				initializer: Initializer(arguments: []),
+				additionalInstantiables: nil,
+				dependencies: [],
+				declarationType: .structType,
+				generateMock: true,
+			),
+		])
+	}
+
+	@Test
+	func walk_parsesGenerateMockFalse() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		@Instantiable(generateMock: false)
+		public struct OptedOut {
+		    public init() {}
+		}
+		"""))
+		#expect(fileVisitor.instantiables == [
+			Instantiable(
+				instantiableType: .simple(name: "OptedOut"),
+				isRoot: false,
+				initializer: Initializer(arguments: []),
+				additionalInstantiables: nil,
+				dependencies: [],
+				declarationType: .structType,
+				generateMock: false,
+			),
+		])
+	}
+
+	@Test
+	func walk_parsesGenerateMockDefault() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		@Instantiable
+		public struct DefaultType {
+		    public init() {}
+		}
+		"""))
+		#expect(fileVisitor.instantiables == [
+			Instantiable(
+				instantiableType: .simple(name: "DefaultType"),
+				isRoot: false,
+				initializer: Initializer(arguments: []),
+				additionalInstantiables: nil,
+				dependencies: [],
+				declarationType: .structType,
 			),
 		])
 	}

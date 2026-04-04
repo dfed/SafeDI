@@ -23,7 +23,6 @@ import SwiftDiagnostics
 public enum FixableSafeDIConfigurationError: DiagnosticError {
 	case missingAdditionalImportedModulesProperty
 	case missingAdditionalDirectoriesToIncludeProperty
-	case missingGenerateMocksProperty
 	case missingMockConditionalCompilationProperty
 
 	public var description: String {
@@ -32,8 +31,6 @@ public enum FixableSafeDIConfigurationError: DiagnosticError {
 			"@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `static let additionalImportedModules: [StaticString]` property"
 		case .missingAdditionalDirectoriesToIncludeProperty:
 			"@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `static let additionalDirectoriesToInclude: [StaticString]` property"
-		case .missingGenerateMocksProperty:
-			"@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `static let generateMocks: Bool` property"
 		case .missingMockConditionalCompilationProperty:
 			"@\(SafeDIConfigurationVisitor.macroName)-decorated type must have a `static let mockConditionalCompilation: StaticString?` property"
 		}
@@ -55,7 +52,6 @@ public enum FixableSafeDIConfigurationError: DiagnosticError {
 			severity = switch error {
 			case .missingAdditionalImportedModulesProperty,
 			     .missingAdditionalDirectoriesToIncludeProperty,
-			     .missingGenerateMocksProperty,
 			     .missingMockConditionalCompilationProperty:
 				.error
 			}
@@ -76,8 +72,6 @@ public enum FixableSafeDIConfigurationError: DiagnosticError {
 				"Add `static let additionalImportedModules: [StaticString]` property"
 			case .missingAdditionalDirectoriesToIncludeProperty:
 				"Add `static let additionalDirectoriesToInclude: [StaticString]` property"
-			case .missingGenerateMocksProperty:
-				"Add `static let generateMocks: Bool` property"
 			case .missingMockConditionalCompilationProperty:
 				"Add `static let mockConditionalCompilation: StaticString?` property"
 			}

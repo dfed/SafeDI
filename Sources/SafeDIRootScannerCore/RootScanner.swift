@@ -106,13 +106,18 @@ public struct RootScanner {
 		let filesForMockScan = (targetSwiftFiles ?? swiftFiles).sorted {
 			relativePath(for: $0, relativeTo: baseURL) < relativePath(for: $1, relativeTo: baseURL)
 		}
-		let instantiableFiles = try filesForMockScan.filter(Self.fileContainsInstantiable(at:))
-		let mockOutputFileNames = Self.mockOutputFileNames(for: instantiableFiles, relativeTo: baseURL)
 
 		// Find config files in the target's files (not dependency files).
 		let configurationFilePaths = try filesForMockScan
 			.filter(Self.fileContainsConfiguration(at:))
 			.map { relativePath(for: $0, relativeTo: baseURL) }
+
+		// Only create mock output entries for files that contain @Instantiable(generateMock: true).
+		let instantiableFiles = try filesForMockScan.filter { fileURL in
+			let source = try String(contentsOf: fileURL, encoding: .utf8)
+			return Self.containsGenerateMockTrue(in: source)
+		}
+		let mockOutputFileNames = Self.mockOutputFileNames(for: instantiableFiles, relativeTo: baseURL)
 
 		return Result(
 			manifest: Manifest(
@@ -145,10 +150,6 @@ public struct RootScanner {
 
 	public static func fileContainsRoot(at fileURL: URL) throws -> Bool {
 		containsRoot(in: try String(contentsOf: fileURL, encoding: .utf8))
-	}
-
-	public static func fileContainsInstantiable(at fileURL: URL) throws -> Bool {
-		containsInstantiable(in: try String(contentsOf: fileURL, encoding: .utf8))
 	}
 
 	public static func fileContainsConfiguration(at fileURL: URL) throws -> Bool {
@@ -300,6 +301,113 @@ public struct RootScanner {
 			closingIndex = source.index(after: closingIndex)
 		}
 		return []
+	}
+
+	/// Detects `@Instantiable(... generateMock: true ...)` in source text.
+	/// Returns `true` if any `@Instantiable` in the source has a `generateMock: true` argument.
+	public static func containsGenerateMockTrue(in source: String) -> Bool {
+		let sanitizedSource = sanitize(source: source)
+		let macroName = "@Instantiable"
+		var searchStart = sanitizedSource.startIndex
+
+		while let macroRange = sanitizedSource[searchStart...].range(of: macroName) {
+			var index = macroRange.upperBound
+			if index < sanitizedSource.endIndex,
+			   isIdentifierContinuation(sanitizedSource[index])
+			{
+				searchStart = index
+				continue
+			}
+
+			skipWhitespace(in: sanitizedSource, index: &index)
+			guard index < sanitizedSource.endIndex,
+			      sanitizedSource[index] == "(",
+			      let closingParenIndex = matchingParenIndex(
+			      	in: sanitizedSource,
+			      	openingParenIndex: index,
+			      )
+			else {
+				searchStart = macroRange.upperBound
+				continue
+			}
+
+			let arguments = sanitizedSource[sanitizedSource.index(after: index)..<closingParenIndex]
+			if containsGenerateMockTrueArgument(in: arguments) {
+				return true
+			}
+
+			searchStart = sanitizedSource.index(after: closingParenIndex)
+		}
+
+		return false
+	}
+
+	private static func containsGenerateMockTrueArgument(in arguments: Substring) -> Bool {
+		var clauseStart = arguments.startIndex
+		var parenthesisDepth = 0
+		var bracketDepth = 0
+		var braceDepth = 0
+		var index = arguments.startIndex
+
+		while index < arguments.endIndex {
+			switch arguments[index] {
+			case "(":
+				parenthesisDepth += 1
+			case ")":
+				parenthesisDepth -= 1
+			case "[":
+				bracketDepth += 1
+			case "]":
+				bracketDepth -= 1
+			case "{":
+				braceDepth += 1
+			case "}":
+				braceDepth -= 1
+			case "," where parenthesisDepth == 0 && bracketDepth == 0 && braceDepth == 0:
+				if isGenerateMockTrueClause(arguments[clauseStart..<index]) {
+					return true
+				}
+				clauseStart = arguments.index(after: index)
+			default:
+				break
+			}
+			index = arguments.index(after: index)
+		}
+
+		return isGenerateMockTrueClause(arguments[clauseStart..<arguments.endIndex])
+	}
+
+	private static func isGenerateMockTrueClause(_ clause: Substring) -> Bool {
+		let trimmedClause = clause.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard trimmedClause.hasPrefix("generateMock") else { return false }
+
+		var index = trimmedClause.index(trimmedClause.startIndex, offsetBy: "generateMock".count)
+		if index < trimmedClause.endIndex,
+		   isIdentifierContinuation(trimmedClause[index])
+		{
+			return false
+		}
+
+		skipWhitespace(in: trimmedClause, index: &index)
+		guard index < trimmedClause.endIndex,
+		      trimmedClause[index] == ":"
+		else {
+			return false
+		}
+
+		index = trimmedClause.index(after: index)
+		skipWhitespace(in: trimmedClause, index: &index)
+
+		guard trimmedClause[index...].hasPrefix("true") else { return false }
+		index = trimmedClause.index(index, offsetBy: "true".count)
+		if index < trimmedClause.endIndex,
+		   isIdentifierContinuation(trimmedClause[index])
+		{
+			return false
+		}
+
+		skipWhitespace(in: trimmedClause, index: &index)
+		return index == trimmedClause.endIndex
 	}
 
 	/// Finds the range of a property name that appears at brace depth 1 in a config body.

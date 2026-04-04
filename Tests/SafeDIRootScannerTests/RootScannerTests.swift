@@ -72,9 +72,6 @@ struct RootScannerTests {
 			outputDirectory: outputDirectory,
 		)
 
-		let featureAMockPath = outputDirectory.appendingPathComponent("FeatureA_Root+SafeDIMock.swift").path
-		let featureBMockPath = outputDirectory.appendingPathComponent("FeatureB_Root+SafeDIMock.swift").path
-
 		#expect(result.manifest == RootScanner.Manifest(
 			dependencyTreeGeneration: [
 				RootScanner.Manifest.InputOutputMap(
@@ -86,22 +83,12 @@ struct RootScannerTests {
 					outputFilePath: featureBOutputPath,
 				),
 			],
-			mockGeneration: [
-				RootScanner.Manifest.InputOutputMap(
-					inputFilePath: "Sources/FeatureA/Root.swift",
-					outputFilePath: featureAMockPath,
-				),
-				RootScanner.Manifest.InputOutputMap(
-					inputFilePath: "Sources/FeatureB/Root.swift",
-					outputFilePath: featureBMockPath,
-				),
-			],
+			mockGeneration: [],
 		))
 
-		// Verify outputFiles includes both DI tree and mock outputs.
-		#expect(result.outputFiles.count == 4) // 2 DI tree + 2 mock
+		// Verify outputFiles includes only DI tree outputs (no mock outputs without config).
+		#expect(result.outputFiles.count == 2)
 		#expect(result.outputFiles.contains(URL(fileURLWithPath: featureAOutputPath)))
-		#expect(result.outputFiles.contains(URL(fileURLWithPath: featureAMockPath)))
 
 		let manifestData = try JSONEncoder().encode(result.manifest)
 		let decodedManifest = try JSONDecoder().decode(SafeDIToolManifest.self, from: manifestData)
@@ -113,10 +100,7 @@ struct RootScannerTests {
 			featureAOutputPath,
 			featureBOutputPath,
 		])
-		#expect(decodedManifest.mockGeneration.map(\.inputFilePath) == [
-			"Sources/FeatureA/Root.swift",
-			"Sources/FeatureB/Root.swift",
-		])
+		#expect(decodedManifest.mockGeneration.isEmpty)
 	}
 
 	@Test
@@ -214,9 +198,8 @@ struct RootScannerTests {
 				outputFilePath: outputDirectory.appendingPathComponent("ActualRoot+SafeDI.swift").path,
 			),
 		])
-		// All 6 files contain @Instantiable (outside comments/strings), so all should have mock entries.
-		#expect(result.manifest.mockGeneration.count == 6)
-		#expect(result.manifest.mockGeneration.map(\.inputFilePath).contains("Sources/ActualRoot.swift"))
+		// No @SafeDIConfiguration exists, so no mock entries are created.
+		#expect(result.manifest.mockGeneration.isEmpty)
 		#expect(try RootScanner.fileContainsRoot(at: actualRoot))
 	}
 
@@ -267,12 +250,8 @@ struct RootScannerTests {
 				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
 			),
 		])
-		#expect(result.manifest.mockGeneration.count == 3)
-		#expect(result.manifest.mockGeneration.map(\.inputFilePath) == [
-			"Features/A/Root.swift",
-			"Modules/A/Root.swift",
-			"Root.swift",
-		])
+		// No @SafeDIConfiguration exists, so no mock entries are created.
+		#expect(result.manifest.mockGeneration.isEmpty)
 	}
 
 	@Test
@@ -474,6 +453,19 @@ struct RootScannerTests {
 	}
 
 	@Test
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenBracketIsUnmatchedInsideValidConfig() {
+		// The config body is properly delimited, the property is found, the opening
+		// bracket is found, but no closing bracket exists — reaches the final `return []`.
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let additionalDirectoriesToInclude: [StaticString] = [
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
 	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenArrayHasNoStringLiterals() {
 		// Brackets matched but content has no quotes at all.
 		let source = """
@@ -530,7 +522,6 @@ struct RootScannerTests {
 		    }
 		    static let additionalImportedModules: [StaticString] = []
 		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
-		    static let generateMocks: Bool = true
 		    static let mockConditionalCompilation: StaticString? = "DEBUG"
 		}
 		"""
@@ -556,11 +547,266 @@ struct RootScannerTests {
 		    static let additionalDirectoriesToIncludeHelper: [StaticString] = ["../Wrong/Path"]
 		    static let additionalImportedModules: [StaticString] = []
 		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
-		    static let generateMocks: Bool = true
 		    static let mockConditionalCompilation: StaticString? = "DEBUG"
 		}
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
+	}
+
+	@Test
+	func containsGenerateMockTrue_detectsGenerateMockArgument() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock: true)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenGenerateMockIsFalse() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock: false)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenNoGenerateMockArgument() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_ignoresCommentsAndStrings() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		// @Instantiable(generateMock: true)
+		struct MyType {}
+		"""))
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		let docs = "@Instantiable(generateMock: true)"
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_ignoresSimilarNames() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@InstantiableFactory(generateMock: true)
+		struct MyType {}
+		"""))
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMockery: true)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenValueIsTrueish() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock: trueish)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_handlesClosureBracesInArguments() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(
+		    someArg: { value in value },
+		    generateMock: true
+		)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenLabelHasNoColon() {
+		// "generateMock true" without a colon separator.
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock true)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_detectsWhenNotLastArgument() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock: true, isRoot: true)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_handlesNoSpaceAfterColon() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock:true)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenValueIsTypeName() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock: Bool)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenEqualsUsedInsteadOfColon() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock = true)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenClauseIsJustLabel() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_detectsMultilineArguments() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(
+		    generateMock: true
+		)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_detectsMultilineWithOtherArguments() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(
+		    fulfillingAdditionalTypes: [Foo.self],
+		    generateMock: true,
+		    mockAttributes: "@MainActor"
+		)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_handlesWhitespaceInsideParens() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable( generateMock: true )
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_handlesTabSeparator() {
+		#expect(RootScanner.containsGenerateMockTrue(in: "@Instantiable(generateMock:\ttrue)\nstruct MyType {}"))
+	}
+
+	@Test
+	func containsGenerateMockTrue_detectsInFileWithMultipleInstantiables() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable
+		struct TypeA {}
+		@Instantiable(generateMock: true)
+		struct TypeB {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenOnlyOtherInstantiablesExist() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable
+		struct TypeA {}
+		@Instantiable(isRoot: true)
+		struct TypeB {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_ignoresCommentedGenerateMockNextToRealInstantiable() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		// @Instantiable(generateMock: true)
+		@Instantiable
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_detectsRealOneAfterCommentedOne() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		// @Instantiable(generateMock: true)
+		@Instantiable(generateMock: true)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_ignoresStringLiteralContainingGenerateMock() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		let docs = "@Instantiable(generateMock: true)"
+		@Instantiable
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_detectsAfterBlockComment() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		/*
+		@Instantiable(generateMock: true)
+		*/
+		@Instantiable(generateMock: true)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenOnlyInBlockComment() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		/*
+		@Instantiable(generateMock: true)
+		*/
+		@Instantiable
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func scan_createsMockEntryForOptedInType_whenNoConfigExists() throws {
+		let fixture = try ScannerFixture()
+		defer { fixture.delete() }
+
+		_ = try fixture.writeFile(
+			relativePath: "OptedIn.swift",
+			content: """
+			@Instantiable(generateMock: true)
+			struct OptedIn {
+			    init() {}
+			}
+			""",
+		)
+		_ = try fixture.writeFile(
+			relativePath: "Regular.swift",
+			content: """
+			@Instantiable
+			struct Regular {
+			    init() {}
+			}
+			""",
+		)
+
+		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
+		let result = try RootScanner().scan(
+			swiftFiles: fixture.swiftFiles,
+			relativeTo: fixture.rootDirectory,
+			outputDirectory: outputDirectory,
+		)
+
+		// No config exists. Only the opted-in type gets a mock entry.
+		#expect(result.manifest.mockGeneration.count == 1)
+		#expect(result.manifest.mockGeneration.first?.inputFilePath == "OptedIn.swift")
 	}
 
 	@Test
@@ -649,8 +895,7 @@ struct RootScannerTests {
 			enum Config {
 			    static let additionalImportedModules: [StaticString] = []
 			    static let additionalDirectoriesToInclude: [StaticString] = []
-			    static let generateMocks: Bool = true
-			    static let mockConditionalCompilation: StaticString? = "DEBUG"
+				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 			}
 			""",
 		)
@@ -720,12 +965,8 @@ struct RootScannerTests {
 				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
 			),
 		])
-		#expect(result.manifest.mockGeneration == [
-			.init(
-				inputFilePath: String(rootFile.path.dropFirst()),
-				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDIMock.swift").path,
-			),
-		])
+		// No @SafeDIConfiguration exists, so no mock entries are created.
+		#expect(result.manifest.mockGeneration.isEmpty)
 	}
 
 	@Test
@@ -753,12 +994,8 @@ struct RootScannerTests {
 				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
 			),
 		])
-		#expect(result.manifest.mockGeneration == [
-			.init(
-				inputFilePath: rootFile.path,
-				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDIMock.swift").path,
-			),
-		])
+		// No @SafeDIConfiguration exists, so no mock entries are created.
+		#expect(result.manifest.mockGeneration.isEmpty)
 	}
 
 	@Test
@@ -787,7 +1024,8 @@ struct RootScannerTests {
 		#expect(manifestContent.contains("\"dependencyTreeGeneration\""))
 		#expect(manifestContent.contains("\"mockGeneration\""))
 		#expect(manifestContent.contains("Root+SafeDI.swift"))
-		#expect(manifestContent.contains("Root+SafeDIMock.swift"))
+		// No @SafeDIConfiguration exists, so no mock entries are created.
+		#expect(!manifestContent.contains("Root+SafeDIMock.swift"))
 	}
 }
 

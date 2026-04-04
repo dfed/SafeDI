@@ -23,7 +23,7 @@ import Subproject
 import SwiftUI
 
 @MainActor
-@Instantiable
+@Instantiable(generateMock: true)
 public struct NoteView: Instantiable, View {
 	public init(
 		userName: String,
