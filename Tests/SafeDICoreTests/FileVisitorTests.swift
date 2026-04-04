@@ -82,6 +82,40 @@ struct SafeDIConfigurationVisitorTests {
 	}
 
 	@Test
+	func configurationPropertyReturnsCorrectValues() {
+		let visitor = SafeDIConfigurationVisitor()
+		visitor.walk(Parser.parse(source: """
+		enum MyConfig {
+		    static let additionalImportedModules: [StaticString] = ["ModuleA", "ModuleB"]
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Other"]
+		    static let generateMocks: Bool = false
+		    static let mockConditionalCompilation: StaticString? = "TESTING"
+		}
+		"""))
+
+		let configuration = visitor.configuration
+		#expect(configuration.additionalImportedModules == ["ModuleA", "ModuleB"])
+		#expect(configuration.additionalDirectoriesToInclude == ["../Other"])
+		#expect(configuration.generateMocks == false)
+		#expect(configuration.mockConditionalCompilation == "TESTING")
+	}
+
+	@Test
+	func mockConditionalCompilationNilLiteral() {
+		let visitor = SafeDIConfigurationVisitor()
+		visitor.walk(Parser.parse(source: """
+		enum MyConfig {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = []
+		    static let generateMocks: Bool = true
+		    static let mockConditionalCompilation: StaticString? = nil
+		}
+		"""))
+
+		#expect(visitor.mockConditionalCompilation == nil)
+	}
+
+	@Test
 	func nestedActorWithMatchingPropertyNameDoesNotOverrideOuterConfig() {
 		let visitor = SafeDIConfigurationVisitor()
 		visitor.walk(Parser.parse(source: """
