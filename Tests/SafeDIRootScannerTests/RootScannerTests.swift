@@ -594,6 +594,38 @@ struct RootScannerTests {
 	}
 
 	@Test
+	func scan_includesConfigurationFilePathInManifest() throws {
+		let fixture = try ScannerFixture()
+		defer { fixture.delete() }
+
+		let configFile = try fixture.writeFile(
+			relativePath: "SafeDIConfiguration.swift",
+			content: """
+			@SafeDIConfiguration
+			enum Config {
+			    static let additionalImportedModules: [StaticString] = []
+			    static let additionalDirectoriesToInclude: [StaticString] = []
+			    static let generateMocks: Bool = true
+			    static let mockConditionalCompilation: StaticString? = "DEBUG"
+			}
+			""",
+		)
+		let rootFile = try fixture.writeFile(
+			relativePath: "Root.swift",
+			content: rootSource(typeName: "ConfigRoot"),
+		)
+
+		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
+		let result = try RootScanner().scan(
+			swiftFiles: [configFile, rootFile],
+			relativeTo: fixture.rootDirectory,
+			outputDirectory: outputDirectory,
+		)
+
+		#expect(result.manifest.configurationFilePaths == ["SafeDIConfiguration.swift"])
+	}
+
+	@Test
 	func containsRoot_returnsFalse_whenParenIsUnmatched() {
 		#expect(!RootScanner.containsRoot(in: "@Instantiable(isRoot: true"))
 	}
