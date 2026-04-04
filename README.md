@@ -82,7 +82,6 @@ dependencies: [
 ]
 ```
 
-> **Note:** SafeDI 2.x requires Swift 6.3 or later. Projects using an earlier Swift version should use SafeDI 1.x.
 
 To install the SafeDI framework into an Xcode project with Swift Package Manager, follow [Apple’s instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to add `https://github.com/dfed/SafeDI.git` as a dependency.
 
@@ -168,7 +167,9 @@ Other Swift DI libraries, like [Factory](https://github.com/hmlongco/Factory) an
 
 ## Migrating from SafeDI 1.x to 2.x
 
-SafeDI 2.x requires Swift 6.3 or later and removes support for CSV-based configuration files (`.safedi/configuration/include.csv` and `.safedi/configuration/additionalImportedModules.csv`). Configuration is now done via the `@SafeDIConfiguration` macro.
+SafeDI 2.x requires Swift 6.3 or later and does not support CocoaPods. Projects using an earlier Swift version or CocoaPods should use SafeDI 1.x.
+
+SafeDI 2.x also removes support for CSV-based configuration files (`.safedi/configuration/include.csv` and `.safedi/configuration/additionalImportedModules.csv`). Configuration is now done via the `@SafeDIConfiguration` macro.
 
 ### Automated migration
 
