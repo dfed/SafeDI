@@ -28,9 +28,6 @@ enum SubprojectSafeDIConfiguration {
 	/// Directories containing Swift files to include, relative to the executing directory.
 	static let additionalDirectoriesToInclude: [StaticString] = []
 
-	/// Whether to generate `mock()` methods for `@Instantiable` types.
-	static let generateMocks: Bool = true
-
 	/// The conditional compilation flag to wrap generated mock code in.
 	static let mockConditionalCompilation: StaticString? = "DEBUG"
 }

@@ -49,16 +49,10 @@ func executeSafeDIToolTest(
 	}
 
 	var swiftFileContent = swiftFileContent
-	if enableMockGeneration, !swiftFileContent.contains(where: { $0.contains("@SafeDIConfiguration") }) {
-		swiftFileContent.insert("""
-		@SafeDIConfiguration
-		enum TestConfig {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let generateMocks: Bool = true
-		    static let mockConditionalCompilation: StaticString? = "DEBUG"
+	if enableMockGeneration {
+		swiftFileContent = swiftFileContent.map { content in
+			addGenerateMockTrue(to: content)
 		}
-		""", at: 0)
 	}
 
 	let swiftFileCSV = URL.temporaryFile
@@ -330,4 +324,38 @@ private func createSwiftFixtureFiles(
 		try content.write(to: fileURL, atomically: true, encoding: .utf8)
 		return fileURL
 	}
+}
+
+/// Adds `generateMock: true` to every `@Instantiable` decorator in the given source content.
+/// Appends (not prepends) to preserve existing argument order.
+private func addGenerateMockTrue(to content: String) -> String {
+	var result = content
+
+	// Step 1: Handle @Instantiable with existing args — append generateMock: true before closing paren.
+	// Test content doesn't nest parens inside @Instantiable args, so [^)]* is safe.
+	if let regex = try? NSRegularExpression(pattern: #"@Instantiable\(([^)]*)\)"#) {
+		let nsRange = NSRange(result.startIndex..<result.endIndex, in: result)
+		for match in regex.matches(in: result, range: nsRange).reversed() {
+			guard let argumentsRange = Range(match.range(at: 1), in: result) else { continue }
+			let arguments = String(result[argumentsRange])
+			guard !arguments.contains("generateMock") else { continue }
+			if arguments.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+				result.replaceSubrange(argumentsRange, with: "generateMock: true")
+			} else {
+				result.replaceSubrange(argumentsRange, with: arguments + ", generateMock: true")
+			}
+		}
+	}
+
+	// Step 2: Handle bare @Instantiable (no parens) — followed by whitespace or newline.
+	// Must run AFTER step 1 to avoid double-processing @Instantiable(...).
+	if let regex = try? NSRegularExpression(pattern: #"@Instantiable(?=[\s\r\n])"#) {
+		let nsRange = NSRange(result.startIndex..<result.endIndex, in: result)
+		for match in regex.matches(in: result, range: nsRange).reversed() {
+			guard let matchRange = Range(match.range, in: result) else { continue }
+			result.replaceSubrange(matchRange, with: "@Instantiable(generateMock: true)")
+		}
+	}
+
+	return result
 }

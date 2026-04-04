@@ -4442,7 +4442,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `generateMock` must be a Bool literal (true, false) or nil",
+						message: "The argument `generateMock` must be a Bool literal (`true` or `false`)",
 						line: 1,
 						column: 1,
 					),

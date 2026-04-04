@@ -522,7 +522,6 @@ struct RootScannerTests {
 		    }
 		    static let additionalImportedModules: [StaticString] = []
 		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
-		    static let generateMocks: Bool = true
 		    static let mockConditionalCompilation: StaticString? = "DEBUG"
 		}
 		"""
@@ -548,62 +547,10 @@ struct RootScannerTests {
 		    static let additionalDirectoriesToIncludeHelper: [StaticString] = ["../Wrong/Path"]
 		    static let additionalImportedModules: [StaticString] = []
 		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
-		    static let generateMocks: Bool = true
 		    static let mockConditionalCompilation: StaticString? = "DEBUG"
 		}
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
-	}
-
-	@Test
-	func extractGenerateMocks_returnsTrue_whenConfigHasGenerateMocksTrue() {
-		let source = """
-		@SafeDIConfiguration
-		enum MyConfig {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let generateMocks: Bool = true
-		    static let mockConditionalCompilation: StaticString? = "DEBUG"
-		}
-		"""
-		#expect(RootScanner.extractGenerateMocks(in: source) == true)
-	}
-
-	@Test
-	func extractGenerateMocks_returnsFalse_whenConfigHasGenerateMocksFalse() {
-		let source = """
-		@SafeDIConfiguration
-		enum MyConfig {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let generateMocks: Bool = false
-		    static let mockConditionalCompilation: StaticString? = "DEBUG"
-		}
-		"""
-		#expect(RootScanner.extractGenerateMocks(in: source) == false)
-	}
-
-	@Test
-	func extractGenerateMocks_returnsNil_whenNoConfigExists() {
-		let source = """
-		@Instantiable(isRoot: true)
-		struct Root {
-		    init() {}
-		}
-		"""
-		#expect(RootScanner.extractGenerateMocks(in: source) == nil)
-	}
-
-	@Test
-	func extractGenerateMocks_returnsNil_whenConfigHasNoGenerateMocksProperty() {
-		let source = """
-		@SafeDIConfiguration
-		enum MyConfig {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		}
-		"""
-		#expect(RootScanner.extractGenerateMocks(in: source) == nil)
 	}
 
 	@Test
@@ -683,52 +630,11 @@ struct RootScannerTests {
 	}
 
 	@Test
-	func extractGenerateMocks_skipsLongerMacroName() {
-		let source = """
-		@SafeDIConfigurationHelper
-		enum NotAConfig {
-		    static let generateMocks: Bool = true
-		}
-
-		@SafeDIConfiguration
-		enum RealConfig {
-		    static let generateMocks: Bool = false
-		}
-		"""
-		#expect(RootScanner.extractGenerateMocks(in: source) == false)
-	}
-
-	@Test
-	func extractGenerateMocks_returnsNil_whenValueIsNotBoolLiteral() {
-		let source = """
-		@SafeDIConfiguration
-		enum MyConfig {
-		    static let generateMocks: Bool = someVariable
-		}
-		"""
-		#expect(RootScanner.extractGenerateMocks(in: source) == nil)
-	}
-
-	@Test
-	func extractGenerateMocks_returnsNil_whenValueStartsWithTrueButIsLongerIdentifier() {
-		let source = """
-		@SafeDIConfiguration
-		enum MyConfig {
-		    static let generateMocks: Bool = trueness
-		}
-		"""
-		#expect(RootScanner.extractGenerateMocks(in: source) == nil)
-	}
-
-	@Test
-	func extractGenerateMocks_returnsNil_whenValueStartsWithFalseButIsLongerIdentifier() {
-		let source = """
-		@SafeDIConfiguration
-		enum MyConfig {
-		    static let generateMocks: Bool = falsehood
-		}
-		"""
-		#expect(RootScanner.extractGenerateMocks(in: source) == nil)
+	func containsGenerateMockTrue_detectsWhenNotLastArgument() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock: true, isRoot: true)
+		struct MyType {}
+		"""))
 	}
 
 	@Test
@@ -764,277 +670,6 @@ struct RootScannerTests {
 	}
 
 	@Test
-	func containsInstantiableEligibleForMock_handlesNoSpaceAfterColonForFalse() {
-		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable(generateMock:false)
-		struct MyType {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_returnsTrue_whenEqualsUsedInsteadOfColon() {
-		// "generateMock = false" is not recognized as "generateMock: false", so it's eligible.
-		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable(generateMock = false)
-		struct MyType {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_returnsTrue_whenClauseIsJustLabel() {
-		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable(generateMock)
-		struct MyType {}
-		"""))
-	}
-
-	@Test
-	func extractGenerateMocks_handlesNoSpaceAfterEquals() {
-		let source = """
-		@SafeDIConfiguration
-		enum MyConfig {
-		    static let generateMocks: Bool =true
-		}
-		"""
-		#expect(RootScanner.extractGenerateMocks(in: source) == true)
-	}
-
-	@Test
-	func extractGenerateMocks_handlesExtraWhitespace() {
-		let source = """
-		@SafeDIConfiguration
-		enum MyConfig {
-		    static let generateMocks: Bool =   false
-		}
-		"""
-		#expect(RootScanner.extractGenerateMocks(in: source) == false)
-	}
-
-	@Test
-	func containsGenerateMockTrue_detectsAmongOtherArguments() {
-		#expect(RootScanner.containsGenerateMockTrue(in: """
-		@Instantiable(isRoot: true, generateMock: true)
-		struct MyType {}
-		"""))
-		#expect(RootScanner.containsGenerateMockTrue(in: """
-		@Instantiable(
-		    fulfillingAdditionalTypes: [Foo.self],
-		    generateMock: true,
-		    mockAttributes: "@MainActor"
-		)
-		struct MyType {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_returnsTrue_whenNoArguments() {
-		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable
-		struct MyType {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_returnsTrue_whenGenerateMockIsTrue() {
-		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable(generateMock: true)
-		struct MyType {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_returnsFalse_whenAllTypesOptOut() {
-		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable(generateMock: false)
-		struct TypeA {}
-		@Instantiable(generateMock: false)
-		struct TypeB {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_returnsTrue_whenSomeTypesOptOut() {
-		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable(generateMock: false)
-		struct TypeA {}
-		@Instantiable
-		struct TypeB {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_returnsFalse_whenNoInstantiable() {
-		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
-		struct NoMacro {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_returnsTrue_whenOtherArgumentsPresent() {
-		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable(isRoot: true)
-		struct Root {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_ignoresCommentedOutInstantiable() {
-		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
-		// @Instantiable
-		struct Commented {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_skipsSimilarMacroName() {
-		// @InstantiableFactory should not match — tests the identifier continuation skip path.
-		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
-		@InstantiableFactory(generateMock: false)
-		struct NotInstantiable {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_handlesUnmatchedParen() {
-		// Unmatched paren — the scanner should skip and not crash.
-		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable(generateMock: false
-		struct Broken {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_returnsFalse_whenOptOutHasMultipleArguments() {
-		// generateMock: false appears among other arguments with commas, parens, and braces.
-		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable(
-		    fulfillingAdditionalTypes: [Foo.self],
-		    mockAttributes: { return "@MainActor" }(),
-		    generateMock: false
-		)
-		struct OptedOut {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_returnsFalse_whenGenerateMockFalseIsFirstArgument() {
-		// generateMock: false as first argument, followed by commas.
-		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable(generateMock: false, isRoot: true)
-		struct OptedOut {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_ignoresSimilarLabelNames() {
-		// generateMockery: false should NOT be treated as generateMock: false.
-		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable(generateMockery: false)
-		struct StillEligible {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_ignoresLabelWithoutColon() {
-		// "generateMock false" without colon should NOT be treated as generateMock: false.
-		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable(generateMock false)
-		struct StillEligible {}
-		"""))
-	}
-
-	@Test
-	func containsInstantiableEligibleForMock_ignoresFalseishValue() {
-		// "generateMock: falsehood" should NOT be treated as generateMock: false.
-		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable(generateMock: falsehood)
-		struct StillEligible {}
-		"""))
-	}
-
-	@Test
-	func scan_excludesMockEntryForFile_whenAllTypesOptOutAndModuleConfigIsTrue() throws {
-		let fixture = try ScannerFixture()
-		defer { fixture.delete() }
-
-		_ = try fixture.writeFile(
-			relativePath: "Config.swift",
-			content: """
-			@SafeDIConfiguration
-			enum Config {
-			    static let additionalImportedModules: [StaticString] = []
-			    static let additionalDirectoriesToInclude: [StaticString] = []
-			    static let generateMocks: Bool = true
-			    static let mockConditionalCompilation: StaticString? = "DEBUG"
-			}
-			""",
-		)
-		_ = try fixture.writeFile(
-			relativePath: "OptedOut.swift",
-			content: """
-			@Instantiable(generateMock: false)
-			struct OptedOut {
-			    init() {}
-			}
-			""",
-		)
-		_ = try fixture.writeFile(
-			relativePath: "Regular.swift",
-			content: """
-			@Instantiable
-			struct Regular {
-			    init() {}
-			}
-			""",
-		)
-
-		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
-		let result = try RootScanner().scan(
-			swiftFiles: fixture.swiftFiles,
-			relativeTo: fixture.rootDirectory,
-			outputDirectory: outputDirectory,
-		)
-
-		// OptedOut file is excluded; Regular file is included.
-		#expect(result.manifest.mockGeneration.count == 1)
-		#expect(result.manifest.mockGeneration.first?.inputFilePath == "Regular.swift")
-	}
-
-	@Test
-	func scan_createsMockEntriesForAllInstantiables_whenModuleConfigGenerateMocksIsTrue() throws {
-		let fixture = try ScannerFixture()
-		defer { fixture.delete() }
-
-		_ = try fixture.writeFile(
-			relativePath: "Config.swift",
-			content: """
-			@SafeDIConfiguration
-			enum Config {
-			    static let additionalImportedModules: [StaticString] = []
-			    static let additionalDirectoriesToInclude: [StaticString] = []
-			    static let generateMocks: Bool = true
-			    static let mockConditionalCompilation: StaticString? = "DEBUG"
-			}
-			""",
-		)
-		_ = try fixture.writeFile(
-			relativePath: "Root.swift",
-			content: rootSource(typeName: "Root"),
-		)
-
-		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
-		let result = try RootScanner().scan(
-			swiftFiles: fixture.swiftFiles,
-			relativeTo: fixture.rootDirectory,
-			outputDirectory: outputDirectory,
-		)
-
-		// With generateMocks: true, all @Instantiable files get mock entries.
-		#expect(result.manifest.mockGeneration.count == 1)
-		#expect(result.manifest.mockGeneration.map(\.inputFilePath).contains("Root.swift"))
-	}
-
-	@Test
 	func scan_createsMockEntryForOptedInType_whenNoConfigExists() throws {
 		let fixture = try ScannerFixture()
 		defer { fixture.delete() }
@@ -1066,54 +701,6 @@ struct RootScannerTests {
 		)
 
 		// No config exists. Only the opted-in type gets a mock entry.
-		#expect(result.manifest.mockGeneration.count == 1)
-		#expect(result.manifest.mockGeneration.first?.inputFilePath == "OptedIn.swift")
-	}
-
-	@Test
-	func scan_createsMockEntryForOptedInType_whenModuleConfigIsFalse() throws {
-		let fixture = try ScannerFixture()
-		defer { fixture.delete() }
-
-		_ = try fixture.writeFile(
-			relativePath: "Config.swift",
-			content: """
-			@SafeDIConfiguration
-			enum Config {
-			    static let additionalImportedModules: [StaticString] = []
-			    static let additionalDirectoriesToInclude: [StaticString] = []
-			    static let generateMocks: Bool = false
-			    static let mockConditionalCompilation: StaticString? = "DEBUG"
-			}
-			""",
-		)
-		_ = try fixture.writeFile(
-			relativePath: "OptedIn.swift",
-			content: """
-			@Instantiable(generateMock: true)
-			struct OptedIn {
-			    init() {}
-			}
-			""",
-		)
-		_ = try fixture.writeFile(
-			relativePath: "Regular.swift",
-			content: """
-			@Instantiable
-			struct Regular {
-			    init() {}
-			}
-			""",
-		)
-
-		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
-		let result = try RootScanner().scan(
-			swiftFiles: fixture.swiftFiles,
-			relativeTo: fixture.rootDirectory,
-			outputDirectory: outputDirectory,
-		)
-
-		// Module config is false. Only the opted-in type gets a mock entry.
 		#expect(result.manifest.mockGeneration.count == 1)
 		#expect(result.manifest.mockGeneration.first?.inputFilePath == "OptedIn.swift")
 	}
@@ -1204,8 +791,7 @@ struct RootScannerTests {
 			enum Config {
 			    static let additionalImportedModules: [StaticString] = []
 			    static let additionalDirectoriesToInclude: [StaticString] = []
-			    static let generateMocks: Bool = true
-			    static let mockConditionalCompilation: StaticString? = "DEBUG"
+				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 			}
 			""",
 		)

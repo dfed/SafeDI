@@ -31,9 +31,6 @@ enum ExampleSafeDIConfiguration {
 	/// Needed for DI tree generation even though Subproject has its own plugin for mock generation.
 	static let additionalDirectoriesToInclude: [StaticString] = ["Subproject"]
 
-	/// Whether to generate `mock()` methods for `@Instantiable` types.
-	static let generateMocks: Bool = true
-
 	/// The conditional compilation flag to wrap generated mock code in.
 	/// Set to `nil` to generate mocks without conditional compilation.
 	static let mockConditionalCompilation: StaticString? = "DEBUG"

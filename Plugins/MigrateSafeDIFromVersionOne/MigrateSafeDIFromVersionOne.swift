@@ -160,9 +160,6 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 		\t/// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
 		\tstatic let additionalDirectoriesToInclude: [StaticString] = \(directoriesToIncludeArray)
 
-		\t/// Whether to generate `mock()` methods for `@Instantiable` types.
-		\tstatic let generateMocks: Bool = true
-
 		\t/// The conditional compilation flag to wrap generated mock code in.
 		\t/// Set to `nil` to generate mocks without conditional compilation.
 		\tstatic let mockConditionalCompilation: StaticString? = "DEBUG"

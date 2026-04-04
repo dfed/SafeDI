@@ -77,7 +77,6 @@ public actor DependencyTreeGenerator {
 	public func generateMockCode(
 		mockConditionalCompilation: String?,
 		currentModuleSourceFilePaths: Set<String>? = nil,
-		moduleGenerateMocks: Bool = true,
 	) async throws -> [GeneratedRoot] {
 		// Build a map of erased wrapper types → concrete fulfilling types.
 		// This lets mocks construct types like AnyUserService(DefaultUserService())
@@ -110,8 +109,7 @@ public actor DependencyTreeGenerator {
 				// Skip types with user-defined mock methods, duplicates, types not in the scope map,
 				// types from dependent modules (their module generates their own mocks),
 				// and types where mock generation is disabled.
-				let effectiveGenerateMock = instantiable.generateMock ?? moduleGenerateMocks
-				guard effectiveGenerateMock,
+				guard instantiable.generateMock,
 				      instantiable.mockInitializer == nil,
 				      seen.insert(instantiable.concreteInstantiable).inserted,
 				      let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable]

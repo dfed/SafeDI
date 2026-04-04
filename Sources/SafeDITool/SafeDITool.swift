@@ -244,7 +244,6 @@ struct SafeDITool: AsyncParsableCommand {
 				}
 
 				// Generate and write mock output files.
-				let moduleGenerateMocks = sourceConfiguration?.generateMocks ?? false
 				if !manifest.mockGeneration.isEmpty {
 					// Use the config's mockConditionalCompilation if a config exists;
 					// default to "DEBUG" when no config exists (per-type opt-in without config).
@@ -257,7 +256,6 @@ struct SafeDITool: AsyncParsableCommand {
 					let generatedMocks = try await generator.generateMockCode(
 						mockConditionalCompilation: mockConditionalCompilation,
 						currentModuleSourceFilePaths: currentModuleSourceFilePaths,
-						moduleGenerateMocks: moduleGenerateMocks,
 					)
 
 					var sourceFileToMockExtensions = [String: [String]]()

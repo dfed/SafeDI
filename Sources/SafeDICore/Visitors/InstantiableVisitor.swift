@@ -306,7 +306,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var instantiableType: TypeDescription?
 	public private(set) var additionalInstantiables: [TypeDescription]?
 	public private(set) var mockAttributes = ""
-	public private(set) var generateMock: Bool?
+	public private(set) var generateMock: Bool = false
 	public private(set) var mockInitializer: Initializer?
 	public private(set) var mockFunctionSyntax: FunctionDeclSyntax?
 	public private(set) var duplicateMockFunctionSyntaxes = [FunctionDeclSyntax]()

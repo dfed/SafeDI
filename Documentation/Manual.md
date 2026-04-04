@@ -472,48 +472,31 @@ public struct ParentView: View, Instantiable {
 
 ## Mock generation
 
-SafeDI can automatically generate `mock()` methods for `@Instantiable` types, drastically simplifying testing and SwiftUI previews. Module-wide mock generation is controlled by a `@SafeDIConfiguration` enum's `generateMocks` property. Individual types can also opt in or out independently via `@Instantiable(generateMock: true/false)`.
+SafeDI can automatically generate `mock()` methods for `@Instantiable` types, drastically simplifying testing and SwiftUI previews. Mock generation is controlled per type via `@Instantiable(generateMock: true)`.
 
-### Configuration
+### Enabling mock generation
+
+To generate a `mock()` method for a type, set `generateMock: true` on the `@Instantiable` decorator:
+
+```swift
+@Instantiable(generateMock: true)
+public struct MyService: Instantiable {
+    public init() {}
+}
+```
+
+By default, `generateMock` is `false` and no mock is generated. Generated mocks are wrapped in `#if DEBUG` by default. To customize the conditional compilation flag, add a `@SafeDIConfiguration` enum with a `mockConditionalCompilation` property:
 
 ```swift
 @SafeDIConfiguration
 enum MyConfiguration {
     static let additionalImportedModules: [StaticString] = []
     static let additionalDirectoriesToInclude: [StaticString] = []
-    static let generateMocks: Bool = true
-    static let mockConditionalCompilation: StaticString? = "DEBUG"
+    static let mockConditionalCompilation: StaticString? = "TESTING"
 }
 ```
 
-- `generateMocks`: Set to `false` to disable mock generation entirely. Individual types can override this setting with the `generateMock` parameter on `@Instantiable` (see [Per-type mock opt-in/opt-out](#per-type-mock-opt-inopt-out)).
-- `mockConditionalCompilation`: The `#if` flag wrapping generated mocks. Default is `"DEBUG"`. Set to `nil` to generate mocks without conditional compilation.
-
-### Per-type mock opt-in/opt-out
-
-The `@Instantiable` macro accepts an optional `generateMock` parameter that overrides the module-level `generateMocks` setting for a specific type:
-
-```swift
-// Force mock generation for this type, even if the module config has generateMocks: false
-// or no @SafeDIConfiguration exists.
-@Instantiable(generateMock: true)
-public struct AlwaysMocked: Instantiable {
-    public init() {}
-}
-
-// Suppress mock generation for this type, even if the module config has generateMocks: true.
-@Instantiable(generateMock: false)
-public struct NeverMocked: Instantiable {
-    public init() {}
-}
-```
-
-The three-state logic:
-- **`nil` (default)**: Defer to the module-level `@SafeDIConfiguration.generateMocks` setting. No configuration means no mock.
-- **`true`**: Always generate a mock for this type. When no `@SafeDIConfiguration` exists, mocks are wrapped in `#if DEBUG` by default.
-- **`false`**: Never generate a mock for this type.
-
-This is useful when you want to enable mocks for only a few types without turning on module-wide mock generation, or when you want to exclude specific types from an otherwise module-wide mock generation.
+Set `mockConditionalCompilation` to `nil` to generate mocks without conditional compilation.
 
 ### Using generated mocks
 
@@ -600,7 +583,7 @@ public final class MyPresenter: Instantiable { ... }
 
 To generate mocks for non-root modules, add the `SafeDIGenerator` plugin to all first-party targets in your `Package.swift`. Each module's mocks are scoped to its own types to avoid duplicates.
 
-Each module that generates mocks module-wide must have its own `@SafeDIConfiguration` with `generateMocks: true`. When no configuration exists, only types with `@Instantiable(generateMock: true)` will have mocks generated.
+Each type that should have a mock must be decorated with `@Instantiable(generateMock: true)`.
 
 **Note:** Mock generation only creates mocks for types defined in the current module. Types from dependent modules or `additionalDirectoriesToInclude` are not mocked — each module must have its own `SafeDIGenerator` plugin to generate mocks for its types.
 

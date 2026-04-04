@@ -63,9 +63,7 @@ public struct InstantiableMacro: MemberMacro {
 			.instantiableMacro?
 			.generateMock
 		{
-			if BooleanLiteralExprSyntax(generateMockArgument) == nil,
-			   NilLiteralExprSyntax(generateMockArgument) == nil
-			{
+			if BooleanLiteralExprSyntax(generateMockArgument) == nil {
 				throw InstantiableError.generateMockArgumentInvalid
 			}
 		}
@@ -758,7 +756,7 @@ public struct InstantiableMacro: MemberMacro {
 			case .mockAttributesArgumentInvalid:
 				"The argument `mockAttributes` must be a string literal"
 			case .generateMockArgumentInvalid:
-				"The argument `generateMock` must be a Bool literal (true, false) or nil"
+				"The argument `generateMock` must be a Bool literal (`true` or `false`)"
 			case let .tooManyInstantiateMethods(type):
 				"@\(InstantiableVisitor.macroName)-decorated extension must have a single `\(InstantiableVisitor.instantiateMethodName)(…)` method that returns `\(type.asSource)`"
 			case let .cannotBeRoot(declaredRootType, violatingDependencies):

@@ -96,13 +96,6 @@ public final class SafeDIConfigurationVisitor: SyntaxVisitor {
 				} else {
 					additionalDirectoriesToIncludeIsValid = false
 				}
-			} else if name == Self.generateMocksPropertyName {
-				foundGenerateMocks = true
-				if let value = extractBoolLiteral(from: binding) {
-					generateMocks = value
-				} else {
-					generateMocksIsValid = false
-				}
 			} else if name == Self.mockConditionalCompilationPropertyName {
 				foundMockConditionalCompilation = true
 				if let value = extractOptionalStringLiteral(from: binding) {
@@ -120,27 +113,22 @@ public final class SafeDIConfigurationVisitor: SyntaxVisitor {
 	public static let macroName = "SafeDIConfiguration"
 	public static let additionalImportedModulesPropertyName = "additionalImportedModules"
 	public static let additionalDirectoriesToIncludePropertyName = "additionalDirectoriesToInclude"
-	public static let generateMocksPropertyName = "generateMocks"
 	public static let mockConditionalCompilationPropertyName = "mockConditionalCompilation"
 
 	public private(set) var additionalImportedModules = [String]()
 	public private(set) var additionalDirectoriesToInclude = [String]()
-	public private(set) var generateMocks = true
 	public private(set) var mockConditionalCompilation: String? = "DEBUG"
 	public private(set) var foundAdditionalImportedModules = false
 	public private(set) var foundAdditionalDirectoriesToInclude = false
-	public private(set) var foundGenerateMocks = false
 	public private(set) var foundMockConditionalCompilation = false
 	public private(set) var additionalImportedModulesIsValid = true
 	public private(set) var additionalDirectoriesToIncludeIsValid = true
-	public private(set) var generateMocksIsValid = true
 	public private(set) var mockConditionalCompilationIsValid = true
 
 	public var configuration: SafeDIConfiguration {
 		SafeDIConfiguration(
 			additionalImportedModules: additionalImportedModules,
 			additionalDirectoriesToInclude: additionalDirectoriesToInclude,
-			generateMocks: generateMocks,
 			mockConditionalCompilation: mockConditionalCompilation,
 		)
 	}
@@ -168,15 +156,6 @@ public final class SafeDIConfigurationVisitor: SyntaxVisitor {
 			values.append(segment.content.text)
 		}
 		return values
-	}
-
-	private func extractBoolLiteral(from binding: PatternBindingSyntax) -> Bool? {
-		guard let initializer = binding.initializer,
-		      let boolLiteral = BooleanLiteralExprSyntax(initializer.value)
-		else {
-			return nil
-		}
-		return boolLiteral.literal.tokenKind == .keyword(.true)
 	}
 
 	/// Extracts a `String?` from a binding initialized with a string literal or `nil`.

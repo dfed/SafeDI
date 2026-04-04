@@ -87,12 +87,11 @@ extension AttributeSyntax {
 		return firstLabeledExpression.expression
 	}
 
-	public var generateMockValue: Bool? {
+	public var generateMockValue: Bool {
 		guard let generateMock,
-		      NilLiteralExprSyntax(generateMock) == nil,
 		      let boolLiteral = BooleanLiteralExprSyntax(generateMock)
 		else {
-			return nil
+			return false
 		}
 		return boolLiteral.literal.tokenKind == .keyword(.true)
 	}

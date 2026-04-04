@@ -36,27 +36,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		}
 	}
 
-	// MARK: Tests – Default behavior
-
-	@Test
-	mutating func mock_notGeneratedWhenNoConfigurationExists() async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable
-				public struct SimpleType: Instantiable {
-				    public init() {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		// When no @SafeDIConfiguration exists, no mock output files are created.
-		#expect(output.mockFiles.isEmpty)
-	}
-
 	// MARK: Tests – Simple types
 
 	@Test
@@ -409,12 +388,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				enum Config {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = nil
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct NoBranch: Instantiable {
 				    public init() {}
 				}
@@ -447,12 +425,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				enum Config {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "TESTING"
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct CustomFlag: Instantiable {
 				    public init() {}
 				}
@@ -487,12 +464,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				enum Config {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = nil
 				}
 				""",
 				"""
-				@Instantiable(isRoot: true)
+				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(dependency: Dependency) {
 				        self.dependency = dependency
@@ -501,7 +477,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(generateMock: true)
 				public struct Dependency: Instantiable {
 				    public init() {}
 				}
@@ -538,34 +514,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 		}
 		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
-	}
-
-	@Test
-	mutating func mock_notGeneratedWhenGenerateMocksIsFalse() async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@SafeDIConfiguration
-				enum Config {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = false
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
-				""",
-				"""
-				@Instantiable
-				public struct NoMocks: Instantiable {
-				    public init() {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		// When generateMocks is false, no mock output files are created.
-		#expect(output.mockFiles.isEmpty)
 	}
 
 	@Test
@@ -649,14 +597,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				enum Config {
 				    static let additionalImportedModules: [StaticString] = []
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = nil
 				}
 				""",
 				"""
 				public class ThirdParty {}
 
-				@Instantiable
+				@Instantiable(generateMock: true)
 				extension ThirdParty: Instantiable {
 				    public static func instantiate() -> ThirdParty {
 				        ThirdParty()
@@ -11201,7 +11148,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Tests – Per-type generateMock
 
 	@Test
-	mutating func mock_generatedForType_whenGenerateMockIsTrue_andNoConfigExists() async throws {
+	mutating func mock_generatedForType_whenGenerateMockIsTrue() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -11232,97 +11179,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_generatedForType_whenGenerateMockIsTrue_andModuleConfigIsFalse() async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@SafeDIConfiguration
-				enum Config {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = false
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
-				""",
-				"""
-				@Instantiable(generateMock: true)
-				public struct OptedIn: Instantiable {
-				    public init() {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(output.mockFiles.count == 1)
-		#expect(output.mockFiles["OptedIn+SafeDIMock.swift"] == """
-		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-		// Any modifications made to this file will be overwritten on subsequent builds.
-		// Please refrain from editing this file directly.
-
-		#if DEBUG
-		extension OptedIn {
-		    public static func mock() -> OptedIn {
-		        OptedIn()
-		    }
-		}
-		#endif
-		""", "Unexpected output \(output.mockFiles["OptedIn+SafeDIMock.swift"] ?? "")")
-	}
-
-	@Test
-	mutating func mock_notGeneratedForType_whenGenerateMockIsFalse_andModuleConfigIsTrue() async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@SafeDIConfiguration
-				enum Config {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
-				""",
-				"""
-				@Instantiable(generateMock: false)
-				public struct OptedOut: Instantiable {
-				    public init() {}
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Regular: Instantiable {
-				    public init() {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		// OptedOut has no mock file — the scanner excludes files where all types opt out.
-		#expect(output.mockFiles.count == 1)
-		#expect(output.mockFiles["OptedOut+SafeDIMock.swift"] == nil)
-
-		// Regular gets a real mock since module config is true.
-		#expect(output.mockFiles["Regular+SafeDIMock.swift"] == """
-		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-		// Any modifications made to this file will be overwritten on subsequent builds.
-		// Please refrain from editing this file directly.
-
-		#if DEBUG
-		extension Regular {
-		    public static func mock() -> Regular {
-		        Regular()
-		    }
-		}
-		#endif
-		""", "Unexpected output \(output.mockFiles["Regular+SafeDIMock.swift"] ?? "")")
-	}
-
-	@Test
-	mutating func mock_respectsDefaultBehavior_whenGenerateMockIsNil() async throws {
+	mutating func mock_generatedForType_whenEnableMockGenerationIsTrue() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -11337,7 +11194,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			enableMockGeneration: true,
 		)
 
-		// With enableMockGeneration (which sets generateMocks: true), the type gets a mock.
+		// With enableMockGeneration (which injects generateMock: true), the type gets a mock.
 		#expect(output.mockFiles.count == 1)
 		#expect(output.mockFiles["DefaultType+SafeDIMock.swift"] == """
 		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.

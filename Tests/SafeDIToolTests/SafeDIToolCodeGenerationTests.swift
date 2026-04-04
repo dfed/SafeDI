@@ -6221,7 +6221,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				enum MyConfiguration {
 				    static let additionalImportedModules: [StaticString] = ["Test"]
 				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let generateMocks: Bool = true
 				    static let mockConditionalCompilation: StaticString? = "DEBUG"
 				}
 				""",
@@ -6237,7 +6236,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		)
 
 		#expect(output.dependencyTreeFiles.isEmpty)
-		#expect(output.mockFiles.count == 1)
+		// No @Instantiable has generateMock: true, so no mock output files are created.
+		#expect(output.mockFiles.isEmpty)
 	}
 
 	@Test
