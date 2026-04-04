@@ -35,12 +35,12 @@ public struct RootScanner {
 
 		public var dependencyTreeGeneration: [InputOutputMap]
 		public var mockGeneration: [InputOutputMap]
-		public var currentModuleSourceFilePaths: [String]
+		public var configurationFilePaths: [String]
 
-		public init(dependencyTreeGeneration: [InputOutputMap], mockGeneration: [InputOutputMap], currentModuleSourceFilePaths: [String] = []) {
+		public init(dependencyTreeGeneration: [InputOutputMap], mockGeneration: [InputOutputMap], configurationFilePaths: [String] = []) {
 			self.dependencyTreeGeneration = dependencyTreeGeneration
 			self.mockGeneration = mockGeneration
-			self.currentModuleSourceFilePaths = currentModuleSourceFilePaths
+			self.configurationFilePaths = configurationFilePaths
 		}
 	}
 
@@ -109,6 +109,11 @@ public struct RootScanner {
 		let instantiableFiles = try filesForMockScan.filter(Self.fileContainsInstantiable(at:))
 		let mockOutputFileNames = Self.mockOutputFileNames(for: instantiableFiles, relativeTo: baseURL)
 
+		// Find config files in the target's files (not dependency files).
+		let configurationFilePaths = try filesForMockScan
+			.filter(Self.fileContainsConfiguration(at:))
+			.map { relativePath(for: $0, relativeTo: baseURL) }
+
 		return Result(
 			manifest: Manifest(
 				dependencyTreeGeneration: zip(rootFiles, rootOutputFileNames).map { inputURL, outputFileName in
@@ -127,7 +132,7 @@ public struct RootScanner {
 							.path,
 					)
 				},
-				currentModuleSourceFilePaths: filesForMockScan.map { relativePath(for: $0, relativeTo: baseURL) },
+				configurationFilePaths: configurationFilePaths,
 			),
 		)
 	}
@@ -144,6 +149,10 @@ public struct RootScanner {
 
 	public static func fileContainsInstantiable(at fileURL: URL) throws -> Bool {
 		containsInstantiable(in: try String(contentsOf: fileURL, encoding: .utf8))
+	}
+
+	public static func fileContainsConfiguration(at fileURL: URL) throws -> Bool {
+		try String(contentsOf: fileURL, encoding: .utf8).contains("@SafeDIConfiguration")
 	}
 
 	public static func containsInstantiable(in source: String) -> Bool {

@@ -66,17 +66,17 @@ struct SafeDITool: AsyncParsableCommand {
 
 		// In multi-module builds, the CSV includes all modules' files, so multiple
 		// configs may be present. Scope to the current module using the manifest's
-		// currentModuleSourceFilePaths (which lists only this target's own files).
+		// configurationFilePaths (which lists only this target's own config files).
 		let currentModuleConfigurations: [SafeDIConfiguration]
 		if let swiftManifest {
 			let manifest = try JSONDecoder().decode(
 				SafeDIToolManifest.self,
 				from: Data(contentsOf: swiftManifest.asFileURL),
 			)
-			let currentModuleFilePaths = Set(manifest.currentModuleSourceFilePaths)
+			let configurationFilePaths = Set(manifest.configurationFilePaths)
 			currentModuleConfigurations = initialModule.configurations.filter { configuration in
 				guard let configPath = configuration.sourceFilePath else { return false }
-				return currentModuleFilePaths.contains(configPath)
+				return configurationFilePaths.contains(configPath)
 			}
 		} else {
 			currentModuleConfigurations = initialModule.configurations
