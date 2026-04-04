@@ -214,6 +214,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				},
 				declarationType: .extensionType,
 				mockAttributes: mockAttributes,
+				generateMock: generateMock,
 				mockInitializer: mockInitializer,
 			))
 		}
@@ -305,6 +306,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var instantiableType: TypeDescription?
 	public private(set) var additionalInstantiables: [TypeDescription]?
 	public private(set) var mockAttributes = ""
+	public private(set) var generateMock: Bool?
 	public private(set) var mockInitializer: Initializer?
 	public private(set) var mockFunctionSyntax: FunctionDeclSyntax?
 	public private(set) var duplicateMockFunctionSyntaxes = [FunctionDeclSyntax]()
@@ -362,6 +364,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						dependencies: dependencies,
 						declarationType: instantiableDeclarationType.asDeclarationType,
 						mockAttributes: mockAttributes,
+						generateMock: generateMock,
 						mockInitializer: mockInitializer,
 					),
 				]
@@ -447,10 +450,14 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		func processMockAttributes() {
 			mockAttributes = macro.mockAttributesValue
 		}
+		func processGenerateMock() {
+			generateMock = macro.generateMockValue
+		}
 
 		processIsRoot()
 		processFulfillingAdditionalTypesParameter()
 		processMockAttributes()
+		processGenerateMock()
 	}
 
 	private func processModifiers(_: DeclModifierListSyntax, on node: some ConcreteDeclSyntaxProtocol) {

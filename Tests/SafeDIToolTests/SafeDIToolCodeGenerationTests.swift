@@ -2885,7 +2885,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		)
 
 		#expect(output.dependencyTreeFiles.isEmpty)
-		#expect(output.mockFiles.count == 1)
+		// No @SafeDIConfiguration exists, so no mock output files are created.
+		#expect(output.mockFiles.isEmpty)
 	}
 
 	@Test
@@ -2906,7 +2907,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		)
 
 		#expect(output.dependencyTreeFiles.isEmpty)
-		#expect(output.mockFiles.count == 1)
+		// No @SafeDIConfiguration exists, so no mock output files are created.
+		#expect(output.mockFiles.isEmpty)
 	}
 
 	@Test
@@ -2925,7 +2927,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		)
 
 		#expect(output.dependencyTreeFiles.isEmpty)
-		#expect(output.mockFiles.count == 1)
+		// No @SafeDIConfiguration exists, so no mock output files are created.
+		#expect(output.mockFiles.isEmpty)
 	}
 
 	@Test
@@ -5905,7 +5908,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			}
 			""",
 		])
-		#expect(output.mockFiles.count == 2) // Dep+SafeDIMock.swift, Root1+SafeDIMock.swift
+		// No @SafeDIConfiguration exists, so no mock output files are created.
+		#expect(output.mockFiles.isEmpty)
 	}
 
 	@Test

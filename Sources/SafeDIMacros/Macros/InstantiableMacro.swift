@@ -58,6 +58,18 @@ public struct InstantiableMacro: MemberMacro {
 			}
 		}
 
+		if let generateMockArgument = declaration
+			.attributes
+			.instantiableMacro?
+			.generateMock
+		{
+			if BooleanLiteralExprSyntax(generateMockArgument) == nil,
+			   NilLiteralExprSyntax(generateMockArgument) == nil
+			{
+				throw InstantiableError.generateMockArgumentInvalid
+			}
+		}
+
 		if let concreteDeclaration: ConcreteDeclSyntaxProtocol
 			= ActorDeclSyntax(declaration)
 			?? ClassDeclSyntax(declaration)
@@ -731,6 +743,7 @@ public struct InstantiableMacro: MemberMacro {
 		case fulfillingAdditionalTypesContainsOptional
 		case fulfillingAdditionalTypesArgumentInvalid
 		case mockAttributesArgumentInvalid
+		case generateMockArgumentInvalid
 		case tooManyInstantiateMethods(TypeDescription)
 		case cannotBeRoot(TypeDescription, violatingDependencies: [Dependency])
 
@@ -744,6 +757,8 @@ public struct InstantiableMacro: MemberMacro {
 				"The argument `fulfillingAdditionalTypes` must be an inlined array"
 			case .mockAttributesArgumentInvalid:
 				"The argument `mockAttributes` must be a string literal"
+			case .generateMockArgumentInvalid:
+				"The argument `generateMock` must be a Bool literal (true, false) or nil"
 			case let .tooManyInstantiateMethods(type):
 				"@\(InstantiableVisitor.macroName)-decorated extension must have a single `\(InstantiableVisitor.instantiateMethodName)(…)` method that returns `\(type.asSource)`"
 			case let .cannotBeRoot(declaredRootType, violatingDependencies):

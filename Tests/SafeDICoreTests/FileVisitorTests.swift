@@ -949,4 +949,69 @@ struct FileVisitorTests {
 			),
 		])
 	}
+
+	@Test
+	func walk_parsesGenerateMockTrue() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		@Instantiable(generateMock: true)
+		public struct OptedIn {
+		    public init() {}
+		}
+		"""))
+		#expect(fileVisitor.instantiables == [
+			Instantiable(
+				instantiableType: .simple(name: "OptedIn"),
+				isRoot: false,
+				initializer: Initializer(arguments: []),
+				additionalInstantiables: nil,
+				dependencies: [],
+				declarationType: .structType,
+				generateMock: true,
+			),
+		])
+	}
+
+	@Test
+	func walk_parsesGenerateMockFalse() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		@Instantiable(generateMock: false)
+		public struct OptedOut {
+		    public init() {}
+		}
+		"""))
+		#expect(fileVisitor.instantiables == [
+			Instantiable(
+				instantiableType: .simple(name: "OptedOut"),
+				isRoot: false,
+				initializer: Initializer(arguments: []),
+				additionalInstantiables: nil,
+				dependencies: [],
+				declarationType: .structType,
+				generateMock: false,
+			),
+		])
+	}
+
+	@Test
+	func walk_parsesGenerateMockNil() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		@Instantiable
+		public struct DefaultType {
+		    public init() {}
+		}
+		"""))
+		#expect(fileVisitor.instantiables == [
+			Instantiable(
+				instantiableType: .simple(name: "DefaultType"),
+				isRoot: false,
+				initializer: Initializer(arguments: []),
+				additionalInstantiables: nil,
+				dependencies: [],
+				declarationType: .structType,
+			),
+		])
+	}
 }

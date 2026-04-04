@@ -158,6 +158,7 @@ struct SafeDITool: AsyncParsableCommand {
 				dependencies: normalizedDependencies,
 				declarationType: unnormalizedInstantiable.declarationType,
 				mockAttributes: unnormalizedInstantiable.mockAttributes,
+				generateMock: unnormalizedInstantiable.generateMock,
 				mockInitializer: unnormalizedInstantiable.mockInitializer,
 			)
 			normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath
@@ -243,40 +244,35 @@ struct SafeDITool: AsyncParsableCommand {
 				}
 
 				// Generate and write mock output files.
-				let generateMocks = sourceConfiguration?.generateMocks ?? false
+				let moduleGenerateMocks = sourceConfiguration?.generateMocks ?? false
 				if !manifest.mockGeneration.isEmpty {
-					if generateMocks {
-						// sourceConfiguration is guaranteed non-nil here because
-						// generateMocks defaults to false when no configuration exists.
-						let mockConditionalCompilation = sourceConfiguration.flatMap(\.mockConditionalCompilation)
-						let currentModuleSourceFilePaths = Set(manifest.mockGeneration.map(\.inputFilePath))
-						let generatedMocks = try await generator.generateMockCode(
-							mockConditionalCompilation: mockConditionalCompilation,
-							currentModuleSourceFilePaths: currentModuleSourceFilePaths,
-						)
-
-						var sourceFileToMockExtensions = [String: [String]]()
-						for mock in generatedMocks {
-							if let sourceFilePath = mock.sourceFilePath {
-								sourceFileToMockExtensions[sourceFilePath, default: []].append(mock.code)
-							}
-						}
-
-						for entry in manifest.mockGeneration {
-							let extensions = sourceFileToMockExtensions[entry.inputFilePath]
-							let code = fileHeader + (extensions?.sorted().joined(separator: "\n\n") ?? "")
-							let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
-							if existingContent != code {
-								try code.write(toPath: entry.outputFilePath)
-							}
-						}
+					// Use the config's mockConditionalCompilation if a config exists;
+					// default to "DEBUG" when no config exists (per-type opt-in without config).
+					let mockConditionalCompilation: String? = if let sourceConfiguration {
+						sourceConfiguration.mockConditionalCompilation
 					} else {
-						// generateMocks is false — write empty files so build system has its expected outputs.
-						for entry in manifest.mockGeneration {
-							let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
-							if existingContent != fileHeader {
-								try fileHeader.write(toPath: entry.outputFilePath)
-							}
+						"DEBUG"
+					}
+					let currentModuleSourceFilePaths = Set(manifest.mockGeneration.map(\.inputFilePath))
+					let generatedMocks = try await generator.generateMockCode(
+						mockConditionalCompilation: mockConditionalCompilation,
+						currentModuleSourceFilePaths: currentModuleSourceFilePaths,
+						moduleGenerateMocks: moduleGenerateMocks,
+					)
+
+					var sourceFileToMockExtensions = [String: [String]]()
+					for mock in generatedMocks {
+						if let sourceFilePath = mock.sourceFilePath {
+							sourceFileToMockExtensions[sourceFilePath, default: []].append(mock.code)
+						}
+					}
+
+					for entry in manifest.mockGeneration {
+						let extensions = sourceFileToMockExtensions[entry.inputFilePath]
+						let code = fileHeader + (extensions?.sorted().joined(separator: "\n\n") ?? "")
+						let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
+						if existingContent != code {
+							try code.write(toPath: entry.outputFilePath)
 						}
 					}
 				}

@@ -485,8 +485,34 @@ enum MyConfiguration {
 }
 ```
 
-- `generateMocks`: Set to `false` to disable mock generation entirely.
+- `generateMocks`: Set to `false` to disable mock generation entirely. Individual types can override this setting with the `generateMock` parameter on `@Instantiable` (see [Per-type mock opt-in/opt-out](#per-type-mock-opt-inopt-out)).
 - `mockConditionalCompilation`: The `#if` flag wrapping generated mocks. Default is `"DEBUG"`. Set to `nil` to generate mocks without conditional compilation.
+
+### Per-type mock opt-in/opt-out
+
+The `@Instantiable` macro accepts an optional `generateMock` parameter that overrides the module-level `generateMocks` setting for a specific type:
+
+```swift
+// Force mock generation for this type, even if the module config has generateMocks: false
+// or no @SafeDIConfiguration exists.
+@Instantiable(generateMock: true)
+public struct AlwaysMocked: Instantiable {
+    public init() {}
+}
+
+// Suppress mock generation for this type, even if the module config has generateMocks: true.
+@Instantiable(generateMock: false)
+public struct NeverMocked: Instantiable {
+    public init() {}
+}
+```
+
+The three-state logic:
+- **`nil` (default)**: Defer to the module-level `@SafeDIConfiguration.generateMocks` setting. No configuration means no mock.
+- **`true`**: Always generate a mock for this type. When no `@SafeDIConfiguration` exists, mocks are wrapped in `#if DEBUG` by default.
+- **`false`**: Never generate a mock for this type.
+
+This is useful when you want to enable mocks for only a few types without turning on module-wide mock generation, or when you want to exclude specific types from an otherwise module-wide mock generation.
 
 ### Using generated mocks
 
