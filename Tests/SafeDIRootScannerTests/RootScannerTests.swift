@@ -710,6 +710,28 @@ struct RootScannerTests {
 	}
 
 	@Test
+	func extractGenerateMocks_returnsNil_whenValueStartsWithTrueButIsLongerIdentifier() {
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfig {
+		    static let generateMocks: Bool = trueness
+		}
+		"""
+		#expect(RootScanner.extractGenerateMocks(in: source) == nil)
+	}
+
+	@Test
+	func extractGenerateMocks_returnsNil_whenValueStartsWithFalseButIsLongerIdentifier() {
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfig {
+		    static let generateMocks: Bool = falsehood
+		}
+		"""
+		#expect(RootScanner.extractGenerateMocks(in: source) == nil)
+	}
+
+	@Test
 	func containsGenerateMockTrue_handlesNoSpaceAfterColon() {
 		#expect(RootScanner.containsGenerateMockTrue(in: """
 		@Instantiable(generateMock:true)
