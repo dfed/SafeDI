@@ -2037,6 +2037,46 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	mutating func run_onCodeWithMultipleSafeDIConfigurations_throwsError() async {
+		await assertThrowsError(
+			"""
+			Found 2 @SafeDIConfiguration declarations in this module. Each module must have at most one @SafeDIConfiguration.
+			""",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@SafeDIConfiguration
+					enum ConfigA {
+					    static let additionalImportedModules: [StaticString] = []
+					    static let additionalDirectoriesToInclude: [StaticString] = []
+					    static let generateMocks: Bool = true
+					    static let mockConditionalCompilation: StaticString? = "DEBUG"
+					}
+					""",
+					"""
+					@SafeDIConfiguration
+					enum ConfigB {
+					    static let additionalImportedModules: [StaticString] = []
+					    static let additionalDirectoriesToInclude: [StaticString] = []
+					    static let generateMocks: Bool = false
+					    static let mockConditionalCompilation: StaticString? = nil
+					}
+					""",
+					"""
+					@Instantiable
+					public struct SimpleType: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()
