@@ -220,9 +220,10 @@ public struct RootScanner {
 		else { return [] }
 		let configBody = sanitizedSource[bodyOpen...bodyClose]
 
-		// Search for the property only within the config body.
+		// Search for the property only at the top level of the config body
+		// (brace depth 1). Nested types at depth 2+ are ignored.
 		let propertyName = "additionalDirectoriesToInclude"
-		guard let propRange = configBody.range(of: propertyName) else { return [] }
+		guard let propRange = rangeOfTopLevelProperty(named: propertyName, in: configBody) else { return [] }
 
 		// Convert the sanitized-source index to an index in the original source.
 		// The sanitizer preserves character count, so offsets are equivalent.
@@ -260,6 +261,29 @@ public struct RootScanner {
 			closingIndex = source.index(after: closingIndex)
 		}
 		return []
+	}
+
+	/// Finds the range of a property name that appears at brace depth 1 in a config body.
+	/// Ignores occurrences inside nested types (depth 2+).
+	private static func rangeOfTopLevelProperty(named propertyName: String, in body: Substring) -> Range<String.Index>? {
+		var depth = 0
+		var searchStart = body.startIndex
+		while searchStart < body.endIndex {
+			let character = body[searchStart]
+			if character == "{" {
+				depth += 1
+			} else if character == "}" {
+				depth -= 1
+			}
+			// Only match at depth 1 (inside the config enum, outside nested types).
+			if depth == 1, body[searchStart...].hasPrefix(propertyName) {
+				let end = body.index(searchStart, offsetBy: propertyName.count)
+				return searchStart..<end
+			} else {
+				searchStart = body.index(after: searchStart)
+			}
+		}
+		return nil
 	}
 
 	/// Extracts quoted string literal values from the interior of an array expression.
