@@ -726,9 +726,9 @@ struct RootScannerTests {
 	}
 
 	@Test
-	func containsGenerateMockTrue_returnsFalse_whenValueIsRandomWord() {
+	func containsGenerateMockTrue_returnsFalse_whenEqualsUsedInsteadOfColon() {
 		#expect(!RootScanner.containsGenerateMockTrue(in: """
-		@Instantiable(generateMock: WTF)
+		@Instantiable(generateMock = true)
 		struct MyType {}
 		"""))
 	}
@@ -750,9 +750,10 @@ struct RootScannerTests {
 	}
 
 	@Test
-	func containsInstantiableEligibleForMock_returnsTrue_whenValueIsTypeName() {
+	func containsInstantiableEligibleForMock_returnsTrue_whenEqualsUsedInsteadOfColon() {
+		// "generateMock = false" is not recognized as "generateMock: false", so it's eligible.
 		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
-		@Instantiable(generateMock: Bool)
+		@Instantiable(generateMock = false)
 		struct MyType {}
 		"""))
 	}
