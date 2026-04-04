@@ -472,7 +472,7 @@ public struct ParentView: View, Instantiable {
 
 ## Mock generation
 
-SafeDI can automatically generate `mock()` methods for every `@Instantiable` type, drastically simplifying testing and SwiftUI previews. Mock generation requires a `@SafeDIConfiguration` enum to be present. When one exists, mock generation is enabled by default (controlled by the `generateMocks` property).
+SafeDI can automatically generate `mock()` methods for `@Instantiable` types, drastically simplifying testing and SwiftUI previews. Module-wide mock generation is controlled by a `@SafeDIConfiguration` enum's `generateMocks` property. Individual types can also opt in or out independently via `@Instantiable(generateMock: true/false)`.
 
 ### Configuration
 
@@ -600,7 +600,7 @@ public final class MyPresenter: Instantiable { ... }
 
 To generate mocks for non-root modules, add the `SafeDIGenerator` plugin to all first-party targets in your `Package.swift`. Each module's mocks are scoped to its own types to avoid duplicates.
 
-Each module that generates mocks must have its own `@SafeDIConfiguration` with `generateMocks: true`. When no configuration exists, mock generation is disabled by default.
+Each module that generates mocks module-wide must have its own `@SafeDIConfiguration` with `generateMocks: true`. When no configuration exists, only types with `@Instantiable(generateMock: true)` will have mocks generated.
 
 **Note:** Mock generation only creates mocks for types defined in the current module. Types from dependent modules or `additionalDirectoriesToInclude` are not mocked — each module must have its own `SafeDIGenerator` plugin to generate mocks for its types.
 
