@@ -29,6 +29,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		dependencies: [Dependency],
 		declarationType: DeclarationType,
 		mockAttributes: String = "",
+		generateMock: Bool = false,
 		mockInitializer: Initializer? = nil,
 	) {
 		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
@@ -37,6 +38,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.dependencies = dependencies
 		self.declarationType = declarationType
 		self.mockAttributes = mockAttributes
+		self.generateMock = generateMock
 		self.mockInitializer = mockInitializer
 	}
 
@@ -60,6 +62,8 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public let declarationType: DeclarationType
 	/// Attributes to add to the generated `mock()` method (e.g. `"@MainActor"`).
 	public let mockAttributes: String
+	/// Whether to generate a `mock()` method for this type.
+	public let generateMock: Bool
 	/// A user-defined `static func mock(...)` method, if one exists.
 	/// When present, generated mocks call `TypeName.mock(...)` instead of `TypeName(...)`.
 	public var mockInitializer: Initializer?

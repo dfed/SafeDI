@@ -4388,6 +4388,69 @@ import Testing
 			)
 		}
 
+		// MARK: generateMock Tests
+
+		@Test
+		func expandsWithoutIssue_whenGenerateMockIsTrue() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true)
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func expandsWithoutIssue_whenGenerateMockIsFalse() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: false)
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func throwsError_whenGenerateMockIsNotBoolLiteral() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: someVariable)
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `generateMock` must be a Bool literal (`true` or `false`)",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
 		// MARK: Mock Method Validation Tests
 
 		@Test

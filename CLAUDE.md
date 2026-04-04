@@ -58,7 +58,8 @@ SafeDI is a compile-time dependency injection framework for Swift. It uses Swift
 ## Testing Philosophy
 
 - **TDD**: Write failing tests first, then fix.
-- **One assertion per test method.** Each test verifies one behavior.
+- **One behavior per test method.** Each test verifies one behavior, but may use multiple assertions to fully validate it (e.g., checking both the count and content of output). Do not test unrelated behaviors in the same method.
+- **No tautological tests.** Tests must exercise real code paths with real input. Never use test helpers that rewrite input before processing — the test content should be exactly what production code would see. Tests should verify input code → output code.
 - **Test through the pipeline**, not direct model construction. Mock tests use `executeSafeDIToolTest` which parses real Swift source through the full visitor → generator pipeline.
 - **Full `==` output comparison.** Never use `.contains()` for mock output. Compare the complete expected string.
 - **If code can't be covered by a test with real parsed input, remove the code.** Dead branches and defensive fallbacks for structurally unreachable paths should not exist.

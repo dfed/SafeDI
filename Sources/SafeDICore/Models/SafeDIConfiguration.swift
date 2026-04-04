@@ -21,7 +21,6 @@
 public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 	public let additionalImportedModules: [String]
 	public let additionalDirectoriesToInclude: [String]
-	public let generateMocks: Bool
 	public let mockConditionalCompilation: String?
 	/// The source file path where this configuration was declared.
 	/// Set during parsing to scope configuration to the current module.
@@ -30,12 +29,10 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 	public init(
 		additionalImportedModules: [String],
 		additionalDirectoriesToInclude: [String],
-		generateMocks: Bool = true,
 		mockConditionalCompilation: String? = "DEBUG",
 	) {
 		self.additionalImportedModules = additionalImportedModules
 		self.additionalDirectoriesToInclude = additionalDirectoriesToInclude
-		self.generateMocks = generateMocks
 		self.mockConditionalCompilation = mockConditionalCompilation
 	}
 }

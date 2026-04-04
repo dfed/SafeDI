@@ -33,7 +33,6 @@ func executeSafeDIToolTest(
 	buildDOTFileOutput: Bool = false,
 	filesToDelete: inout [URL],
 	includeFolders: [String] = [],
-	enableMockGeneration: Bool = false,
 ) async throws -> TestOutput {
 	// Create additional directory first so its path can be substituted into target file content.
 	var additionalDirectoryFiles = [URL]()
@@ -46,19 +45,6 @@ func executeSafeDIToolTest(
 			from: additionalDirectorySwiftFileContent,
 			in: additionalDirectory,
 		)
-	}
-
-	var swiftFileContent = swiftFileContent
-	if enableMockGeneration, !swiftFileContent.contains(where: { $0.contains("@SafeDIConfiguration") }) {
-		swiftFileContent.insert("""
-		@SafeDIConfiguration
-		enum TestConfig {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let generateMocks: Bool = true
-		    static let mockConditionalCompilation: StaticString? = "DEBUG"
-		}
-		""", at: 0)
 	}
 
 	let swiftFileCSV = URL.temporaryFile

@@ -23,7 +23,7 @@ import Subproject
 import SwiftUI
 
 @MainActor
-@Instantiable
+@Instantiable(generateMock: true)
 public struct NameEntryView: Instantiable, View {
 	public init(userService: AnyUserService) {
 		self.userService = userService

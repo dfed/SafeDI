@@ -12,7 +12,7 @@ There are a total of five macros in the SafeDI library:
 | [`@Instantiated`](#instantiated) | Property declaration | Instantiates an instance or value when the enclosing `@Instantiable`-decorated type is instantiated. |
 | [`@Forwarded`](#forwarded) | Property declaration | Propagates a runtime-created instance or value (e.g. a `User` object, network response, or customer input) down the dependency tree. |
 | [`@Received`](#received) | Property declaration | Receives an instance or value from an `@Instantiated` or `@Forwarded` property further up the dependency tree. |
-| [`@SafeDIConfiguration`](#configuration) | Enum declaration | Provides build-time configuration for SafeDI’s code generation plugin. |
+| [`@SafeDIConfiguration`](#enabling-mock-generation) | Enum declaration | Provides build-time configuration for SafeDI’s code generation plugin. |
 
 Let’s walk through each of these macros in detail.
 
@@ -472,22 +472,37 @@ public struct ParentView: View, Instantiable {
 
 ## Mock generation
 
-SafeDI can automatically generate `mock()` methods for every `@Instantiable` type, drastically simplifying testing and SwiftUI previews. Mock generation requires a `@SafeDIConfiguration` enum to be present. When one exists, mock generation is enabled by default (controlled by the `generateMocks` property).
+SafeDI can automatically generate `mock()` methods for `@Instantiable` types, drastically simplifying testing and SwiftUI previews. Mock generation is controlled per type via `@Instantiable(generateMock: true)`.
 
-### Configuration
+### Enabling mock generation
+
+To generate a `mock()` method for a type, set `generateMock: true` on the `@Instantiable` decorator:
+
+```swift
+@Instantiable(generateMock: true)
+public final class UserService: Instantiable {
+    public init(authService: AuthService, securePersistentStorage: SecurePersistentStorage) {
+        self.authService = authService
+        self.securePersistentStorage = securePersistentStorage
+    }
+
+    @Instantiated private let authService: AuthService
+    @Received private let securePersistentStorage: SecurePersistentStorage
+}
+```
+
+By default, `generateMock` is `false` and no mock is generated. Generated mocks are wrapped in `#if DEBUG` by default. To customize the conditional compilation flag, add a `@SafeDIConfiguration` enum with a `mockConditionalCompilation` property:
 
 ```swift
 @SafeDIConfiguration
 enum MyConfiguration {
     static let additionalImportedModules: [StaticString] = []
     static let additionalDirectoriesToInclude: [StaticString] = []
-    static let generateMocks: Bool = true
     static let mockConditionalCompilation: StaticString? = "DEBUG"
 }
 ```
 
-- `generateMocks`: Set to `false` to disable mock generation entirely.
-- `mockConditionalCompilation`: The `#if` flag wrapping generated mocks. Default is `"DEBUG"`. Set to `nil` to generate mocks without conditional compilation.
+Set `mockConditionalCompilation` to `nil` to generate mocks without conditional compilation.
 
 ### Using generated mocks
 
@@ -559,7 +574,7 @@ let root = Root.mock(
 
 When no override is provided, the original default expression (`false`) is used.
 
-Default-valued parameters bubble transitively through the dependency tree — a grandchild's default parameter will appear at the root mock level. However, they do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
+Default-valued parameters with [argument labels](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/functions/#Function-Argument-Labels-and-Parameter-Names) bubble transitively through the dependency tree — a grandchild's default parameter will appear at the root mock level. However, they do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
 
 ### The `mockAttributes` parameter
 
@@ -574,7 +589,7 @@ public final class MyPresenter: Instantiable { ... }
 
 To generate mocks for non-root modules, add the `SafeDIGenerator` plugin to all first-party targets in your `Package.swift`. Each module's mocks are scoped to its own types to avoid duplicates.
 
-Each module that generates mocks must have its own `@SafeDIConfiguration` with `generateMocks: true`. When no configuration exists, mock generation is disabled by default.
+Each type that should have a mock must be decorated with `@Instantiable(generateMock: true)`.
 
 **Note:** Mock generation only creates mocks for types defined in the current module. Types from dependent modules or `additionalDirectoriesToInclude` are not mocked — each module must have its own `SafeDIGenerator` plugin to generate mocks for its types.
 

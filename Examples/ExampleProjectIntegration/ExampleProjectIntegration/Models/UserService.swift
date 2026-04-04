@@ -54,7 +54,7 @@ public final class AnyUserService: UserService, ObservableObject {
 	private let userService: any UserService
 }
 
-@Instantiable(fulfillingAdditionalTypes: [UserService.self])
+@Instantiable(fulfillingAdditionalTypes: [UserService.self], generateMock: true)
 public final class DefaultUserService: Instantiable, UserService {
 	public init(stringStorage: StringStorage) {
 		self.stringStorage = stringStorage

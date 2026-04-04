@@ -50,12 +50,6 @@ public struct SafeDIConfigurationMacro: PeerMacro {
 			throw SafeDIConfigurationError.additionalDirectoriesToIncludeNotStringLiteralArray
 		}
 
-		if !visitor.foundGenerateMocks {
-			hasMissingProperties = true
-		} else if !visitor.generateMocksIsValid {
-			throw SafeDIConfigurationError.generateMocksNotBoolLiteral
-		}
-
 		if !visitor.foundMockConditionalCompilation {
 			hasMissingProperties = true
 		} else if !visitor.mockConditionalCompilationIsValid {
@@ -85,15 +79,6 @@ public struct SafeDIConfigurationMacro: PeerMacro {
 					"""),
 				))
 			}
-			if !visitor.foundGenerateMocks {
-				membersToInsert.append(MemberBlockItemSyntax(
-					leadingTrivia: .newline,
-					decl: DeclSyntax("""
-					/// Whether to generate `mock()` methods for `@Instantiable` types.
-					static let \(raw: SafeDIConfigurationVisitor.generateMocksPropertyName): Bool = true
-					"""),
-				))
-			}
 			if !visitor.foundMockConditionalCompilation {
 				membersToInsert.append(MemberBlockItemSyntax(
 					leadingTrivia: .newline,
@@ -114,8 +99,6 @@ public struct SafeDIConfigurationMacro: PeerMacro {
 				.missingAdditionalImportedModulesProperty
 			} else if !visitor.foundAdditionalDirectoriesToInclude {
 				.missingAdditionalDirectoriesToIncludeProperty
-			} else if !visitor.foundGenerateMocks {
-				.missingGenerateMocksProperty
 			} else {
 				.missingMockConditionalCompilationProperty
 			}
@@ -142,7 +125,6 @@ public struct SafeDIConfigurationMacro: PeerMacro {
 		case decoratingNonEnum
 		case additionalImportedModulesNotStringLiteralArray
 		case additionalDirectoriesToIncludeNotStringLiteralArray
-		case generateMocksNotBoolLiteral
 		case mockConditionalCompilationNotStringLiteralOrNil
 
 		var description: String {
@@ -153,8 +135,6 @@ public struct SafeDIConfigurationMacro: PeerMacro {
 				"The `\(SafeDIConfigurationVisitor.additionalImportedModulesPropertyName)` property must be initialized with an array of string literals"
 			case .additionalDirectoriesToIncludeNotStringLiteralArray:
 				"The `\(SafeDIConfigurationVisitor.additionalDirectoriesToIncludePropertyName)` property must be initialized with an array of string literals"
-			case .generateMocksNotBoolLiteral:
-				"The `\(SafeDIConfigurationVisitor.generateMocksPropertyName)` property must be initialized with a Bool literal (`true` or `false`)"
 			case .mockConditionalCompilationNotStringLiteralOrNil:
 				"The `\(SafeDIConfigurationVisitor.mockConditionalCompilationPropertyName)` property must be initialized with a string literal or `nil`"
 			}
