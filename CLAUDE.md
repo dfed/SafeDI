@@ -52,6 +52,7 @@ SafeDI is a compile-time dependency injection framework for Swift. It uses Swift
 - **No `default` in switch statements.** Enumerate all cases explicitly for compile-time safety.
 - **Use `for ... where` for simple boolean filters** instead of `guard ... else { continue }` inside the loop body.
 - **Use `guard` for early exits**, not `if condition { continue/return }`.
+- **No early return from bare `if`.** If an `if` branch returns, the non-returning path must be in an explicit `else` clause. Never fall through after `if { return }`.
 - **Test names follow `method_expectation_conditionUnderTest`** pattern (e.g., `mock_disambiguatesAllParameters_whenThreeChildrenShareSameLabel`).
 
 ## Testing Philosophy
