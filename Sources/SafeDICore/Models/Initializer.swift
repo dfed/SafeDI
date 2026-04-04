@@ -274,11 +274,11 @@ public struct Initializer: Codable, Hashable, Sendable {
 					) ?? argument.innerLabel
 					parts.append("\(argument.label): \(variableName)")
 				}
-			} else if argument.hasDefaultValue {
+			} else if argument.hasDefaultValue, argument.label != "_" {
 				let variableName = mockContext?.disambiguatedLabel(
-					forPropertyLabel: argument.innerLabel,
+					forPropertyLabel: argument.label,
 					typeDescription: argument.typeDescription,
-				) ?? argument.innerLabel
+				) ?? argument.label
 				parts.append("\(argument.label): \(variableName)")
 			}
 			// Arguments that don't match a dependency and have no default are
