@@ -34,6 +34,7 @@ public enum FixableInstantiableError: DiagnosticError {
 	case missingRequiredInitializer(MissingInitializer)
 	case mockMethodMissingArguments([Property])
 	case mockMethodNotPublic
+	case mockMethodIncorrectReturnType(typeName: String)
 	case duplicateMockMethod
 
 	public enum MissingInitializer: Sendable {
@@ -83,6 +84,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method must have a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. Extra parameters with default values are allowed."
 		case .mockMethodNotPublic:
 			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method must be `public` or `open`."
+		case let .mockMethodIncorrectReturnType(typeName):
+			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method must return `Self` or `\(typeName)`."
 		case .duplicateMockMethod:
 			"@\(InstantiableVisitor.macroName)-decorated type must have at most one `mock()` method. Remove this duplicate."
 		}
@@ -115,6 +118,7 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .missingRequiredInitializer,
 			     .mockMethodMissingArguments,
 			     .mockMethodNotPublic,
+			     .mockMethodIncorrectReturnType,
 			     .duplicateMockMethod:
 				.error
 			}
@@ -166,6 +170,8 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Add mock() arguments for \(properties.map(\.asSource).joined(separator: ", "))"
 			case .mockMethodNotPublic:
 				"Add `public` modifier to mock() method"
+			case let .mockMethodIncorrectReturnType(typeName):
+				"Change mock() return type to `\(typeName)`"
 			case .duplicateMockMethod:
 				"Remove duplicate mock() method"
 			}

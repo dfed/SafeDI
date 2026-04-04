@@ -405,10 +405,56 @@ public struct InstantiableMacro: MemberMacro {
 				))
 			}
 
-			// Validate mock() method if one exists: must be public and have parameters for all dependencies.
+			// Validate mock() method if one exists: must be public, return Self or the type name, and have parameters for all dependencies.
 			if let mockInitializer = visitor.mockInitializer,
 			   let mockSyntax = visitor.mockFunctionSyntax
 			{
+				let typeName = concreteDeclaration.name.text
+				let mockReturnType = mockSyntax.signature.returnClause?.type.typeDescription
+				let returnTypeMatchesTypeName = switch mockReturnType {
+				case let .simple(name, _):
+					name == typeName || name == "Self"
+				case .void, .nested, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown, .none:
+					false
+				}
+				if !returnTypeMatchesTypeName {
+					var fixedMockSyntax = mockSyntax
+					if let existingReturnClause = mockSyntax.signature.returnClause {
+						fixedMockSyntax.signature.returnClause = ReturnClauseSyntax(
+							arrow: .arrowToken(
+								leadingTrivia: existingReturnClause.arrow.leadingTrivia,
+								trailingTrivia: existingReturnClause.arrow.trailingTrivia,
+							),
+							type: IdentifierTypeSyntax(
+								leadingTrivia: existingReturnClause.type.leadingTrivia,
+								name: .identifier(typeName),
+								trailingTrivia: existingReturnClause.type.trailingTrivia,
+							),
+						)
+					} else {
+						fixedMockSyntax.signature.parameterClause.rightParen.trailingTrivia = []
+						fixedMockSyntax.signature.returnClause = ReturnClauseSyntax(
+							arrow: .arrowToken(
+								leadingTrivia: .space,
+								trailingTrivia: .space,
+							),
+							type: IdentifierTypeSyntax(
+								name: .identifier(typeName),
+								trailingTrivia: .space,
+							),
+						)
+					}
+					context.diagnose(Diagnostic(
+						node: Syntax(mockSyntax),
+						error: FixableInstantiableError.mockMethodIncorrectReturnType(typeName: typeName),
+						changes: [
+							.replace(
+								oldNode: Syntax(mockSyntax),
+								newNode: Syntax(fixedMockSyntax),
+							),
+						],
+					))
+				}
 				if !mockInitializer.isPublicOrOpen {
 					var fixedMockSyntax = mockSyntax
 					// Mock detection requires `static` or `class`, so modifiers.first is always non-nil.

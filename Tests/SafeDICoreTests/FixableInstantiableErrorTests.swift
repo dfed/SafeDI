@@ -54,6 +54,18 @@ struct FixableInstantiableErrorTests {
 	}
 
 	@Test
+	func mockMethodIncorrectReturnType_description_mentionsMockMethodAndTypeName() {
+		let error = FixableInstantiableError.mockMethodIncorrectReturnType(typeName: "MyService")
+		#expect(error.description == "@Instantiable-decorated type's `mock()` method must return `Self` or `MyService`.")
+	}
+
+	@Test
+	func mockMethodIncorrectReturnType_fixIt_mentionsChangingReturnType() {
+		let error = FixableInstantiableError.mockMethodIncorrectReturnType(typeName: "MyService")
+		#expect(error.fixIt.message == "Change mock() return type to `MyService`")
+	}
+
+	@Test
 	func duplicateMockMethod_description_mentionsAtMostOneMockMethod() {
 		let error = FixableInstantiableError.duplicateMockMethod
 		#expect(error.description == "@Instantiable-decorated type must have at most one `mock()` method. Remove this duplicate.")
