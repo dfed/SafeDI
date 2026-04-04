@@ -25,14 +25,16 @@ public actor DependencyTreeGenerator {
 
 	public init(
 		importStatements: [ImportStatement],
+		globalImportStatements: [ImportStatement] = [],
 		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
 	) {
 		self.importStatements = importStatements
 		self.typeDescriptionToFulfillingInstantiableMap = typeDescriptionToFulfillingInstantiableMap
-		// Base imports are those not associated with any specific Instantiable in the current module.
-		// These come from dependent modules and additionalImportedModules.
-		let perTypeImports = Set(typeDescriptionToFulfillingInstantiableMap.values.flatMap(\.imports))
-		baseImportStatements = importStatements.filter { !perTypeImports.contains($0) }
+		// Global imports (from dependent modules and additionalImportedModules) are included
+		// in every mock file. They are passed explicitly rather than derived by subtraction,
+		// because a current-module file may import the same module — and subtraction would
+		// incorrectly strip the global copy.
+		baseImportStatements = globalImportStatements
 	}
 
 	// MARK: Public

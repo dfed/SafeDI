@@ -164,8 +164,10 @@ struct SafeDITool: AsyncParsableCommand {
 			normalized.imports = unnormalizedInstantiable.imports
 			return normalized
 		}
+		let globalImportStatements = dependentModuleInfo.flatMap(\.imports) + resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let generator = try DependencyTreeGenerator(
-			importStatements: dependentModuleInfo.flatMap(\.imports) + resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
+			importStatements: globalImportStatements + module.imports,
+			globalImportStatements: globalImportStatements,
 			typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
 				instantiables: normalizedInstantiables,
 			),
