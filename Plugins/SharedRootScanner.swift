@@ -52,14 +52,12 @@ func discoverAdditionalDirectorySwiftFiles(
 	relativeTo projectRoot: URL,
 ) -> [URL] {
 	for swiftFile in moduleSwiftFiles {
-		guard let content = try? String(contentsOf: swiftFile, encoding: .utf8) else { continue }
-		// Extract directly — extractAdditionalDirectoriesToInclude sanitizes
-		// comments/strings internally, so we don't need a prefilter that could
-		// false-positive on @SafeDIConfiguration in a comment.
+		guard let content = try? String(contentsOf: swiftFile, encoding: .utf8),
+		      RootScanner.containsConfiguration(in: content)
+		else { continue }
 
-		// Use only the first configuration found, matching SafeDITool's
-		// configurations.first behavior. If this config has no additional
-		// directories, return empty — don't fall through to later configs.
+		// Use only the first configuration found. If this config has no
+		// additional directories, return empty — don't fall through to later configs.
 		let directories = RootScanner.extractAdditionalDirectoriesToInclude(in: content)
 		guard !directories.isEmpty else { return [] }
 

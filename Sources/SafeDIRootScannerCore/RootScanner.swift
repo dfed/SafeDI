@@ -152,7 +152,11 @@ public struct RootScanner {
 	}
 
 	public static func fileContainsConfiguration(at fileURL: URL) throws -> Bool {
-		sanitize(source: try String(contentsOf: fileURL, encoding: .utf8)).contains("@SafeDIConfiguration")
+		containsConfiguration(in: try String(contentsOf: fileURL, encoding: .utf8))
+	}
+
+	public static func containsConfiguration(in source: String) -> Bool {
+		sanitize(source: source).contains("@SafeDIConfiguration")
 	}
 
 	public static func containsInstantiable(in source: String) -> Bool {
