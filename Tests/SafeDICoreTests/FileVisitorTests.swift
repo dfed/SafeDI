@@ -1014,4 +1014,47 @@ struct FileVisitorTests {
 			),
 		])
 	}
+
+	@Test
+	func walk_parsesExplicitGenerateMockNil() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		@Instantiable(generateMock: nil)
+		public struct ExplicitNil {
+		    public init() {}
+		}
+		"""))
+		#expect(fileVisitor.instantiables == [
+			Instantiable(
+				instantiableType: .simple(name: "ExplicitNil"),
+				isRoot: false,
+				initializer: Initializer(arguments: []),
+				additionalInstantiables: nil,
+				dependencies: [],
+				declarationType: .structType,
+			),
+		])
+	}
+
+	@Test
+	func walk_parsesGenerateMockNonLiteral() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		@Instantiable(generateMock: someVariable)
+		public struct NonLiteral {
+		    public init() {}
+		}
+		"""))
+		// Non-literal expression results in nil generateMock (visitor doesn't validate).
+		#expect(fileVisitor.instantiables == [
+			Instantiable(
+				instantiableType: .simple(name: "NonLiteral"),
+				isRoot: false,
+				initializer: Initializer(arguments: []),
+				additionalInstantiables: nil,
+				dependencies: [],
+				declarationType: .structType,
+			),
+		])
+	}
 }

@@ -642,6 +642,61 @@ struct RootScannerTests {
 	}
 
 	@Test
+	func containsGenerateMockTrue_returnsFalse_whenValueIsTrueish() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock: trueish)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_handlesClosureBracesInArguments() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(
+		    someArg: { value in value },
+		    generateMock: true
+		)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenLabelHasNoColon() {
+		// "generateMock true" without a colon separator.
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock true)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func extractGenerateMocks_skipsLongerMacroName() {
+		let source = """
+		@SafeDIConfigurationHelper
+		enum NotAConfig {
+		    static let generateMocks: Bool = true
+		}
+
+		@SafeDIConfiguration
+		enum RealConfig {
+		    static let generateMocks: Bool = false
+		}
+		"""
+		#expect(RootScanner.extractGenerateMocks(in: source) == false)
+	}
+
+	@Test
+	func extractGenerateMocks_returnsNil_whenValueIsNotBoolLiteral() {
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfig {
+		    static let generateMocks: Bool = someVariable
+		}
+		"""
+		#expect(RootScanner.extractGenerateMocks(in: source) == nil)
+	}
+
+	@Test
 	func containsGenerateMockTrue_detectsAmongOtherArguments() {
 		#expect(RootScanner.containsGenerateMockTrue(in: """
 		@Instantiable(isRoot: true, generateMock: true)
