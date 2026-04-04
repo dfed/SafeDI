@@ -538,6 +538,17 @@ struct RootScannerTests {
 	}
 
 	@Test
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenMacroNameIsPrefixOfLongerName() {
+		let source = """
+		@SafeDIConfigurationHelper
+		enum NotAConfig {
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Wrong/Path"]
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
 	func extractAdditionalDirectoriesToInclude_doesNotMatchPropertyNamePrefix() {
 		let source = """
 		@SafeDIConfiguration
@@ -564,6 +575,14 @@ struct RootScannerTests {
 	func containsConfiguration_returnsFalse_whenConfigIsOnlyInComment() {
 		#expect(!RootScanner.containsConfiguration(in: """
 		// @SafeDIConfiguration
+		struct NotAConfig {}
+		"""))
+	}
+
+	@Test
+	func containsConfiguration_returnsFalse_whenMacroNameIsPrefixOfLongerName() {
+		#expect(!RootScanner.containsConfiguration(in: """
+		@SafeDIConfigurationHelper
 		struct NotAConfig {}
 		"""))
 	}
