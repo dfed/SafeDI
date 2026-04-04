@@ -713,6 +713,113 @@ struct RootScannerTests {
 	}
 
 	@Test
+	func containsInstantiableEligibleForMock_returnsTrue_whenNoArguments() {
+		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
+		@Instantiable
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_returnsTrue_whenGenerateMockIsTrue() {
+		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
+		@Instantiable(generateMock: true)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_returnsFalse_whenAllTypesOptOut() {
+		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
+		@Instantiable(generateMock: false)
+		struct TypeA {}
+		@Instantiable(generateMock: false)
+		struct TypeB {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_returnsTrue_whenSomeTypesOptOut() {
+		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
+		@Instantiable(generateMock: false)
+		struct TypeA {}
+		@Instantiable
+		struct TypeB {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_returnsFalse_whenNoInstantiable() {
+		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
+		struct NoMacro {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_returnsTrue_whenOtherArgumentsPresent() {
+		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
+		@Instantiable(isRoot: true)
+		struct Root {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_ignoresCommentedOutInstantiable() {
+		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
+		// @Instantiable
+		struct Commented {}
+		"""))
+	}
+
+	@Test
+	func scan_excludesMockEntryForFile_whenAllTypesOptOutAndModuleConfigIsTrue() throws {
+		let fixture = try ScannerFixture()
+		defer { fixture.delete() }
+
+		_ = try fixture.writeFile(
+			relativePath: "Config.swift",
+			content: """
+			@SafeDIConfiguration
+			enum Config {
+			    static let additionalImportedModules: [StaticString] = []
+			    static let additionalDirectoriesToInclude: [StaticString] = []
+			    static let generateMocks: Bool = true
+			    static let mockConditionalCompilation: StaticString? = "DEBUG"
+			}
+			""",
+		)
+		_ = try fixture.writeFile(
+			relativePath: "OptedOut.swift",
+			content: """
+			@Instantiable(generateMock: false)
+			struct OptedOut {
+			    init() {}
+			}
+			""",
+		)
+		_ = try fixture.writeFile(
+			relativePath: "Regular.swift",
+			content: """
+			@Instantiable
+			struct Regular {
+			    init() {}
+			}
+			""",
+		)
+
+		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
+		let result = try RootScanner().scan(
+			swiftFiles: fixture.swiftFiles,
+			relativeTo: fixture.rootDirectory,
+			outputDirectory: outputDirectory,
+		)
+
+		// OptedOut file is excluded; Regular file is included.
+		#expect(result.manifest.mockGeneration.count == 1)
+		#expect(result.manifest.mockGeneration.first?.inputFilePath == "Regular.swift")
+	}
+
+	@Test
 	func scan_createsMockEntriesForAllInstantiables_whenModuleConfigGenerateMocksIsTrue() throws {
 		let fixture = try ScannerFixture()
 		defer { fixture.delete() }

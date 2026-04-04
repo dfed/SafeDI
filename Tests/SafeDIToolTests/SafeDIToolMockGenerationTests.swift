@@ -11301,10 +11301,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		// OptedOut gets a mock file (because module config is true) but it's header-only.
-		#expect(output.mockFiles.count == 2)
-		let optedOutContent = try #require(output.mockFiles["OptedOut+SafeDIMock.swift"])
-		#expect(!optedOutContent.contains("extension"))
+		// OptedOut has no mock file — the scanner excludes files where all types opt out.
+		#expect(output.mockFiles.count == 1)
+		#expect(output.mockFiles["OptedOut+SafeDIMock.swift"] == nil)
 
 		// Regular gets a real mock since module config is true.
 		#expect(output.mockFiles["Regular+SafeDIMock.swift"] == """

@@ -130,7 +130,13 @@ public struct RootScanner {
 		let instantiableFiles = try filesForMockScan.filter { fileURL in
 			let source = try String(contentsOf: fileURL, encoding: .utf8)
 			guard Self.containsInstantiable(in: source) else { return false }
-			return moduleGenerateMocks || Self.containsGenerateMockTrue(in: source)
+			if moduleGenerateMocks {
+				// Include file unless ALL @Instantiable types opt out.
+				return Self.containsInstantiableEligibleForMock(in: source)
+			} else {
+				// Include file only if at least one type explicitly opts in.
+				return Self.containsGenerateMockTrue(in: source)
+			}
 		}
 		let mockOutputFileNames = Self.mockOutputFileNames(for: instantiableFiles, relativeTo: baseURL)
 
@@ -410,6 +416,116 @@ public struct RootScanner {
 		}
 
 		return false
+	}
+
+	/// Returns `true` if the source has any `@Instantiable` that does NOT have `generateMock: false`.
+	/// Used when module-wide mock generation is enabled to skip files where every type opts out.
+	public static func containsInstantiableEligibleForMock(in source: String) -> Bool {
+		let sanitizedSource = sanitize(source: source)
+		let macroName = "@Instantiable"
+		var searchStart = sanitizedSource.startIndex
+
+		while let macroRange = sanitizedSource[searchStart...].range(of: macroName) {
+			var index = macroRange.upperBound
+			if index < sanitizedSource.endIndex,
+			   isIdentifierContinuation(sanitizedSource[index])
+			{
+				searchStart = index
+				continue
+			}
+
+			// Found a valid @Instantiable token.
+			skipWhitespace(in: sanitizedSource, index: &index)
+			if index >= sanitizedSource.endIndex || sanitizedSource[index] != "(" {
+				// @Instantiable with no arguments — eligible for mock (defers to module config).
+				return true
+			}
+			guard let closingParenIndex = matchingParenIndex(
+				in: sanitizedSource,
+				openingParenIndex: index,
+			) else {
+				searchStart = macroRange.upperBound
+				continue
+			}
+
+			let arguments = sanitizedSource[sanitizedSource.index(after: index)..<closingParenIndex]
+			if !containsGenerateMockFalseArgument(in: arguments) {
+				// This @Instantiable doesn't opt out — eligible for mock.
+				return true
+			}
+
+			searchStart = sanitizedSource.index(after: closingParenIndex)
+		}
+
+		return false
+	}
+
+	private static func containsGenerateMockFalseArgument(in arguments: Substring) -> Bool {
+		var clauseStart = arguments.startIndex
+		var parenthesisDepth = 0
+		var bracketDepth = 0
+		var braceDepth = 0
+		var index = arguments.startIndex
+
+		while index < arguments.endIndex {
+			switch arguments[index] {
+			case "(":
+				parenthesisDepth += 1
+			case ")":
+				parenthesisDepth -= 1
+			case "[":
+				bracketDepth += 1
+			case "]":
+				bracketDepth -= 1
+			case "{":
+				braceDepth += 1
+			case "}":
+				braceDepth -= 1
+			case "," where parenthesisDepth == 0 && bracketDepth == 0 && braceDepth == 0:
+				if isGenerateMockFalseClause(arguments[clauseStart..<index]) {
+					return true
+				}
+				clauseStart = arguments.index(after: index)
+			default:
+				break
+			}
+			index = arguments.index(after: index)
+		}
+
+		return isGenerateMockFalseClause(arguments[clauseStart..<arguments.endIndex])
+	}
+
+	private static func isGenerateMockFalseClause(_ clause: Substring) -> Bool {
+		let trimmedClause = clause.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard trimmedClause.hasPrefix("generateMock") else { return false }
+
+		var index = trimmedClause.index(trimmedClause.startIndex, offsetBy: "generateMock".count)
+		if index < trimmedClause.endIndex,
+		   isIdentifierContinuation(trimmedClause[index])
+		{
+			return false
+		}
+
+		skipWhitespace(in: trimmedClause, index: &index)
+		guard index < trimmedClause.endIndex,
+		      trimmedClause[index] == ":"
+		else {
+			return false
+		}
+
+		index = trimmedClause.index(after: index)
+		skipWhitespace(in: trimmedClause, index: &index)
+
+		guard trimmedClause[index...].hasPrefix("false") else { return false }
+		index = trimmedClause.index(index, offsetBy: "false".count)
+		if index < trimmedClause.endIndex,
+		   isIdentifierContinuation(trimmedClause[index])
+		{
+			return false
+		}
+
+		skipWhitespace(in: trimmedClause, index: &index)
+		return index == trimmedClause.endIndex
 	}
 
 	private static func containsGenerateMockTrueArgument(in arguments: Substring) -> Bool {
