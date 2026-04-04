@@ -459,7 +459,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
-	var strippingGenerics: TypeDescription {
+	public var strippingGenerics: TypeDescription {
 		switch self {
 		case let .simple(name, _):
 			.simple(name: name, generics: [])

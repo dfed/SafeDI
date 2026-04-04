@@ -410,13 +410,11 @@ public struct InstantiableMacro: MemberMacro {
 			   let mockSyntax = visitor.mockFunctionSyntax
 			{
 				let typeName = concreteDeclaration.name.text
+				let instantiableTypeStrippingGenerics = visitor.instantiableType?.strippingGenerics
 				let mockReturnType = mockSyntax.signature.returnClause?.type.typeDescription
-				let returnTypeMatchesTypeName = switch mockReturnType {
-				case let .simple(name, _):
-					name == typeName || name == "Self"
-				case .void, .nested, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown, .none:
-					false
-				}
+				let isSelfReturnType = mockReturnType == .simple(name: "Self", generics: [])
+				let returnTypeMatchesTypeName = isSelfReturnType
+					|| mockReturnType?.strippingGenerics == instantiableTypeStrippingGenerics
 				if !returnTypeMatchesTypeName {
 					var fixedMockSyntax = mockSyntax
 					if let existingReturnClause = mockSyntax.signature.returnClause {
@@ -582,6 +580,7 @@ public struct InstantiableMacro: MemberMacro {
 			// Validate mock() methods on extensions: must be public, return the extended type or Self, and be unique per return type.
 			let extendedTypeDescription = extensionDeclaration.extendedType.typeDescription
 			let extendedTypeName = extendedTypeDescription.asSource
+			let extendedTypeStrippingGenerics = extendedTypeDescription.strippingGenerics
 			var allMockFunctions = [FunctionDeclSyntax]()
 			if let firstMock = visitor.mockFunctionSyntax {
 				allMockFunctions.append(firstMock)
@@ -590,18 +589,9 @@ public struct InstantiableMacro: MemberMacro {
 			var seenMockReturnTypes = [TypeDescription: FunctionDeclSyntax]()
 			for mockFunction in allMockFunctions {
 				let mockReturnType = mockFunction.signature.returnClause?.type.typeDescription
-				let extendedBaseTypeName = switch extendedTypeDescription {
-				case let .simple(name, _):
-					name
-				case .nested, .void, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown:
-					extendedTypeName
-				}
-				let returnTypeMatchesExtendedType = switch mockReturnType {
-				case let .simple(name, _):
-					name == "Self" || name == extendedBaseTypeName
-				case .nested, .void, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown, .none:
-					false
-				}
+				let isSelfReturnType = mockReturnType == .simple(name: "Self", generics: [])
+				let returnTypeMatchesExtendedType = isSelfReturnType
+					|| mockReturnType?.strippingGenerics == extendedTypeStrippingGenerics
 				if !returnTypeMatchesExtendedType {
 					var fixedMockFunction = mockFunction
 					if let existingReturnClause = mockFunction.signature.returnClause {
@@ -667,9 +657,15 @@ public struct InstantiableMacro: MemberMacro {
 						],
 					))
 				}
-				// Duplicate detection: one mock per return type.
-				if let mockReturnType {
-					if seenMockReturnTypes[mockReturnType] != nil {
+				// Duplicate detection: one mock per return type. Canonicalize Self to the extended type so
+				// `-> Self` and `-> ExtendedType` are treated as the same return type.
+				let canonicalReturnType: TypeDescription? = if isSelfReturnType {
+					extendedTypeStrippingGenerics
+				} else {
+					mockReturnType
+				}
+				if let canonicalReturnType {
+					if seenMockReturnTypes[canonicalReturnType] != nil {
 						context.diagnose(Diagnostic(
 							node: Syntax(mockFunction),
 							error: FixableInstantiableError.duplicateMockMethod,
@@ -681,7 +677,7 @@ public struct InstantiableMacro: MemberMacro {
 							],
 						))
 					} else {
-						seenMockReturnTypes[mockReturnType] = mockFunction
+						seenMockReturnTypes[canonicalReturnType] = mockFunction
 					}
 				}
 				// Argument validation: mock must have parameters matching the instantiate() method's dependencies.
