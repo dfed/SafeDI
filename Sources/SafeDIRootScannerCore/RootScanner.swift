@@ -158,9 +158,16 @@ public struct RootScanner {
 	public static func containsConfiguration(in source: String) -> Bool {
 		let sanitizedSource = sanitize(source: source)
 		let macroName = "@SafeDIConfiguration"
-		guard let range = sanitizedSource.range(of: macroName) else { return false }
-		let afterMacro = range.upperBound
-		return afterMacro >= sanitizedSource.endIndex || !isIdentifierContinuation(sanitizedSource[afterMacro])
+		var searchStart = sanitizedSource.startIndex
+		while let range = sanitizedSource[searchStart...].range(of: macroName) {
+			let afterMacro = range.upperBound
+			if afterMacro >= sanitizedSource.endIndex || !isIdentifierContinuation(sanitizedSource[afterMacro]) {
+				return true
+			} else {
+				searchStart = afterMacro
+			}
+		}
+		return false
 	}
 
 	public static func containsInstantiable(in source: String) -> Bool {
@@ -232,9 +239,19 @@ public struct RootScanner {
 	/// Returns an empty array if the file does not contain a configuration.
 	public static func extractAdditionalDirectoriesToInclude(in source: String) -> [String] {
 		let sanitizedSource = sanitize(source: source)
-		guard let configRange = sanitizedSource.range(of: "@SafeDIConfiguration"),
-		      configRange.upperBound >= sanitizedSource.endIndex || !isIdentifierContinuation(sanitizedSource[configRange.upperBound])
-		else { return [] }
+		let macroName = "@SafeDIConfiguration"
+		var macroSearchStart = sanitizedSource.startIndex
+		var configRange: Range<String.Index>?
+		while let candidateRange = sanitizedSource[macroSearchStart...].range(of: macroName) {
+			let afterMacro = candidateRange.upperBound
+			if afterMacro >= sanitizedSource.endIndex || !isIdentifierContinuation(sanitizedSource[afterMacro]) {
+				configRange = candidateRange
+				break
+			} else {
+				macroSearchStart = afterMacro
+			}
+		}
+		guard let configRange else { return [] }
 
 		// Find the opening brace of the config body, then the matching close.
 		guard let bodyOpen = sanitizedSource[configRange.upperBound...].firstIndex(of: "{"),

@@ -588,6 +588,31 @@ struct RootScannerTests {
 	}
 
 	@Test
+	func containsConfiguration_returnsTrue_whenRealConfigAppearsAfterPrefixMatch() {
+		#expect(RootScanner.containsConfiguration(in: """
+		@SafeDIConfigurationHelper
+		struct Helper {}
+
+		@SafeDIConfiguration
+		enum Config {}
+		"""))
+	}
+
+	@Test
+	func extractAdditionalDirectoriesToInclude_findsConfigAfterPrefixMatch() {
+		let source = """
+		@SafeDIConfigurationHelper
+		struct Helper {}
+
+		@SafeDIConfiguration
+		enum Config {
+		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
+	}
+
+	@Test
 	func containsConfiguration_returnsFalse_whenNoConfigExists() {
 		#expect(!RootScanner.containsConfiguration(in: """
 		@Instantiable
