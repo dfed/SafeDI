@@ -593,9 +593,7 @@ public struct InstantiableMacro: MemberMacro {
 				let extendedBaseTypeName = switch extendedTypeDescription {
 				case let .simple(name, _):
 					name
-				case let .nested(name, _, _):
-					name
-				case .void, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown:
+				case .nested, .void, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown:
 					extendedTypeName
 				}
 				let returnTypeMatchesExtendedType = switch mockReturnType {
