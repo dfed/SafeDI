@@ -681,8 +681,17 @@ public struct InstantiableMacro: MemberMacro {
 					}
 				}
 				// Argument validation: mock must have parameters matching the instantiate() method's dependencies.
-				if let mockReturnType,
-				   let matchingInstantiable = visitor.instantiables.first(where: { $0.concreteInstantiable == mockReturnType }),
+				// Use the canonicalized return type so `-> Self` matches the same instantiable as `-> TypeName`.
+				// For Self on a generic extension with multiple specializations, strippingGenerics may match
+				// multiple instantiables — we validate against the first match (all share the same base type).
+				let matchingInstantiable: Instantiable? = if isSelfReturnType {
+					visitor.instantiables.first(where: { $0.concreteInstantiable.strippingGenerics == extendedTypeStrippingGenerics })
+				} else if let mockReturnType {
+					visitor.instantiables.first(where: { $0.concreteInstantiable == mockReturnType })
+				} else {
+					nil
+				}
+				if let matchingInstantiable,
 				   !matchingInstantiable.dependencies.isEmpty
 				{
 					let mockInitializer = Initializer(mockFunction)

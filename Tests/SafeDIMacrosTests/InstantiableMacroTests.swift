@@ -5107,6 +5107,42 @@ import Testing
 		}
 
 		@Test
+		func extension_mockMethodReturningSelfMissingDependencyProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
+
+				    public static func mock() -> Self {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
+
+				    public static func mock() -> Self {
+				        ExampleService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add mock() arguments for dependency: Dependency"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func extension_mockMethodReturningGenericSpecializationProducesNoDiagnostic() {
 			assertMacroExpansion(
 				"""
