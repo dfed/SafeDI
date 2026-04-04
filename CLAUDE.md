@@ -8,7 +8,7 @@ The core documentation is `Documentation/Manual.md`. Read it before making chang
 
 ```bash
 swift build              # Build all targets
-swift test               # Run all tests (622+ across 18 suites)
+swift test               # Run all tests
 ./lint.sh                # SwiftFormat — must pass before every push
 swift test --enable-code-coverage  # Coverage report
 ```
