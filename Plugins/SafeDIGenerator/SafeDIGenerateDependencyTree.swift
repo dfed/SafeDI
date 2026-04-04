@@ -184,6 +184,7 @@ extension Target {
 				outputDirectory: outputDirectory,
 				manifestFile: manifestFile,
 				additionalSwiftFiles: additionalSwiftFiles,
+				mockScopedSwiftFiles: inputSwiftFiles + additionalSwiftFiles,
 			)
 			guard !scanResult.outputFiles.isEmpty else {
 				return []

@@ -4565,5 +4565,55 @@ import Testing
 				macros: instantiableTestMacros,
 			)
 		}
+
+		@Test
+		func multipleMockMethodsProducesDiagnosticOnSecond() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    @Received let dependency: Dependency
+
+				    public static func mock(dependency: Dependency) -> MyService {
+				        MyService(dependency: dependency)
+				    }
+
+				    public static func mock() -> MyService {
+				        MyService(dependency: Dependency())
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    let dependency: Dependency
+
+				    public static func mock(dependency: Dependency) -> MyService {
+				        MyService(dependency: dependency)
+				    }
+
+				    public static func mock() -> MyService {
+				        MyService(dependency: Dependency())
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have at most one `mock()` method. Remove this duplicate.",
+						line: 12,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Remove duplicate mock() method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
 	}
 #endif

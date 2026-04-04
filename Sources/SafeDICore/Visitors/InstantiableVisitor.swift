@@ -154,8 +154,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		if node.name.text == "mock",
 		   node.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) || $0.name.tokenKind == .keyword(.class) })
 		{
-			mockInitializer = Initializer(node)
-			mockFunctionSyntax = node
+			if mockFunctionSyntax != nil {
+				// Already found one mock() method — this is a duplicate.
+				duplicateMockFunctionSyntaxes.append(node)
+			} else {
+				mockInitializer = Initializer(node)
+				mockFunctionSyntax = node
+			}
 		}
 
 		guard declarationType.isExtension else {
@@ -302,6 +307,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var mockAttributes = ""
 	public private(set) var mockInitializer: Initializer?
 	public private(set) var mockFunctionSyntax: FunctionDeclSyntax?
+	public private(set) var duplicateMockFunctionSyntaxes = [FunctionDeclSyntax]()
 	public private(set) var diagnostics = [Diagnostic]()
 	public private(set) var uninitializedNonOptionalPropertyNames = [String]()
 

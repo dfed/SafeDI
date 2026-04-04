@@ -66,6 +66,9 @@ struct SafeDITool: AsyncParsableCommand {
 
 		// Only use this module's own configuration. Dependent modules' configs must not
 		// affect the current module's mock generation or conditional compilation settings.
+		guard initialModule.configurations.count <= 1 else {
+			throw ValidationError("Found \(initialModule.configurations.count) @\(SafeDIConfigurationVisitor.macroName) declarations in this module. Each module must have at most one @\(SafeDIConfigurationVisitor.macroName).")
+		}
 		let sourceConfiguration: SafeDIConfiguration? = initialModule.configurations.first
 
 		let resolvedAdditionalImportedModules: [String] = if let sourceConfiguration {
@@ -480,7 +483,7 @@ struct SafeDITool: AsyncParsableCommand {
 		var description: String {
 			switch self {
 			case let .foundDuplicateInstantiable(duplicateInstantiable):
-				"@\(InstantiableVisitor.macroName)-decorated types and extensions must have globally unique type names and fulfill globally unqiue types. Found multiple types or extensions fulfilling `\(duplicateInstantiable)`"
+				"@\(InstantiableVisitor.macroName)-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `\(duplicateInstantiable)`"
 			}
 		}
 	}

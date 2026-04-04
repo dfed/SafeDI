@@ -391,6 +391,20 @@ public struct InstantiableMacro: MemberMacro {
 				}
 				return []
 			}
+			// Emit diagnostics for duplicate mock() methods.
+			for duplicateMockSyntax in visitor.duplicateMockFunctionSyntaxes {
+				context.diagnose(Diagnostic(
+					node: Syntax(duplicateMockSyntax),
+					error: FixableInstantiableError.duplicateMockMethod,
+					changes: [
+						.replace(
+							oldNode: Syntax(duplicateMockSyntax),
+							newNode: Syntax("" as DeclSyntax),
+						),
+					],
+				))
+			}
+
 			// Validate mock() method if one exists: must be public and have parameters for all dependencies.
 			if let mockInitializer = visitor.mockInitializer,
 			   let mockSyntax = visitor.mockFunctionSyntax

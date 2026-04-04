@@ -95,9 +95,7 @@ public actor DependencyTreeGenerator {
 
 		// Build mock scope mapping — like production but includes all types and
 		// promotes received dependencies as instantiated children.
-		let typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping(
-			erasedToConcreteTypeMap: erasedToConcreteTypeMap,
-		)
+		let typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping()
 
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
@@ -372,7 +370,7 @@ public actor DependencyTreeGenerator {
 		// Filter out forwarded properties — they're bare mock parameters, not promoted children.
 		// ScopeData.root doesn't carry forwardedProperties, so receivedProperties doesn't
 		// subtract them. We filter them here instead.
-		let forwardedPropertyLabels = Set(
+		let forwardedProperties = Set(
 			instantiable.dependencies
 				.filter { $0.source == .forwarded }
 				.map(\.property),
@@ -382,7 +380,7 @@ public actor DependencyTreeGenerator {
 
 		for receivedProperty in allReceived.sorted() {
 			guard !allOnlyIfAvailable.contains(receivedProperty),
-			      !forwardedPropertyLabels.contains(receivedProperty)
+			      !forwardedProperties.contains(receivedProperty)
 			else { continue }
 
 			var dependencyType = receivedProperty.typeDescription.asInstantiatedType
@@ -500,9 +498,7 @@ public actor DependencyTreeGenerator {
 	/// Builds a scope mapping for mock generation. Similar to `createTypeDescriptionToScopeMapping`
 	/// but includes ALL types (not just reachable from roots). Received dependencies are NOT
 	/// promoted here — they're promoted at the root level in `createMockRootScopeGenerator`.
-	private func createMockTypeDescriptionToScopeMapping(
-		erasedToConcreteTypeMap _: [TypeDescription: TypeDescription],
-	) -> [TypeDescription: Scope] {
+	private func createMockTypeDescriptionToScopeMapping() -> [TypeDescription: Scope] {
 		// Create scopes for all types.
 		let typeDescriptionToScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in

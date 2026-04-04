@@ -330,13 +330,13 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			return if generics.isEmpty {
 				name
 			} else {
-				"\(name)_\(generics.map(\.asIdentifier).joined(separator: "_"))"
+				"\(name)__\(generics.map(\.asIdentifier).joined(separator: "__"))"
 			}
 		case let .nested(name, parentType, generics):
 			return if generics.isEmpty {
 				"\(parentType.asIdentifier)_\(name)"
 			} else {
-				"\(parentType.asIdentifier)_\(name)_\(generics.map(\.asIdentifier).joined(separator: "_"))"
+				"\(parentType.asIdentifier)_\(name)__\(generics.map(\.asIdentifier).joined(separator: "__"))"
 			}
 		case let .composition(types):
 			return types.map(\.asIdentifier).joined(separator: "_and_")
@@ -364,7 +364,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		case let .dictionary(key, value):
 			return "Dictionary_\(key.asIdentifier)_\(value.asIdentifier)"
 		case let .tuple(elements):
-			return elements.isEmpty ? "Void" : elements.map(\.typeDescription.asIdentifier).joined(separator: "_")
+			return elements.isEmpty ? "Void" : elements.map(\.typeDescription.asIdentifier).joined(separator: "_and_")
 		case let .closure(arguments, isAsync, doesThrow, returnType):
 			let args = arguments.isEmpty ? "Void" : arguments.map(\.asIdentifier).joined(separator: "_")
 			let modifiers = [isAsync ? "async" : nil, doesThrow ? "throws" : nil].compactMap(\.self)

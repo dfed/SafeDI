@@ -984,7 +984,7 @@ struct TypeDescriptionTests {
 		visitor.walk(Parser.parse(source: content))
 
 		let typeDescription = try #require(visitor.nestedType)
-		#expect(typeDescription.asIdentifier == "OuterGenericType_Int_InnerGenericType_String")
+		#expect(typeDescription.asIdentifier == "OuterGenericType__Int_InnerGenericType__String")
 	}
 
 	@Test
@@ -1101,7 +1101,7 @@ struct TypeDescriptionTests {
 		visitor.walk(Parser.parse(source: content))
 
 		let arrayTypeIdentifier = try #require(visitor.typeIdentifier)
-		#expect(arrayTypeIdentifier.asIdentifier == "Array_Int")
+		#expect(arrayTypeIdentifier.asIdentifier == "Array__Int")
 	}
 
 	@Test
@@ -1114,7 +1114,7 @@ struct TypeDescriptionTests {
 		visitor.walk(Parser.parse(source: content))
 
 		let arrayTypeIdentifier = try #require(visitor.typeIdentifier)
-		#expect(arrayTypeIdentifier.asIdentifier == "Array_Array_Int")
+		#expect(arrayTypeIdentifier.asIdentifier == "Array__Array__Int")
 	}
 
 	@Test
@@ -1140,7 +1140,7 @@ struct TypeDescriptionTests {
 		visitor.walk(Parser.parse(source: content))
 
 		let dictionaryTypeIdentifier = try #require(visitor.typeIdentifier)
-		#expect(dictionaryTypeIdentifier.asIdentifier == "Dictionary_Int_String")
+		#expect(dictionaryTypeIdentifier.asIdentifier == "Dictionary__Int__String")
 	}
 
 	@Test
@@ -1153,7 +1153,7 @@ struct TypeDescriptionTests {
 		visitor.walk(Parser.parse(source: content))
 
 		let dictionaryTypeIdentifier = try #require(visitor.typeIdentifier)
-		#expect(dictionaryTypeIdentifier.asIdentifier == "Dictionary_Int_Dictionary_Int_String")
+		#expect(dictionaryTypeIdentifier.asIdentifier == "Dictionary__Int__Dictionary__Int__String")
 	}
 
 	@Test
@@ -1205,7 +1205,7 @@ struct TypeDescriptionTests {
 		visitor.walk(Parser.parse(source: content))
 
 		let tupleTypeIdentifier = try #require(visitor.tupleTypeIdentifier)
-		#expect(tupleTypeIdentifier.asIdentifier == "Int_String")
+		#expect(tupleTypeIdentifier.asIdentifier == "Int_and_String")
 	}
 
 	@Test
@@ -1267,7 +1267,7 @@ struct TypeDescriptionTests {
 		visitor.walk(Parser.parse(source: content))
 
 		let typeDescription = try #require(visitor.typeDescription)
-		#expect(typeDescription.asIdentifier == "Array_Int")
+		#expect(typeDescription.asIdentifier == "Array__Int")
 	}
 
 	@Test
@@ -1279,7 +1279,7 @@ struct TypeDescriptionTests {
 		visitor.walk(Parser.parse(source: content))
 
 		let typeDescription = try #require(visitor.typeDescription)
-		#expect(typeDescription.asIdentifier == "Swift_Array_Int")
+		#expect(typeDescription.asIdentifier == "Swift_Array__Int")
 	}
 
 	@Test
@@ -1375,7 +1375,7 @@ struct TypeDescriptionTests {
 		visitor.walk(Parser.parse(source: content))
 
 		let typeDescription = try #require(visitor.typeDescription)
-		#expect(typeDescription.asIdentifier == "Int_String")
+		#expect(typeDescription.asIdentifier == "Int_and_String")
 	}
 
 	@Test
@@ -1387,7 +1387,7 @@ struct TypeDescriptionTests {
 		visitor.walk(Parser.parse(source: content))
 
 		let typeDescription = try #require(visitor.typeDescription)
-		#expect(typeDescription.asIdentifier == "Int_String")
+		#expect(typeDescription.asIdentifier == "Int_and_String")
 	}
 
 	@Test
@@ -1399,7 +1399,7 @@ struct TypeDescriptionTests {
 		visitor.walk(Parser.parse(source: content))
 
 		let typeDescription = try #require(visitor.typeDescription)
-		#expect(typeDescription.asIdentifier == "Int_String")
+		#expect(typeDescription.asIdentifier == "Int_and_String")
 	}
 
 	@Test

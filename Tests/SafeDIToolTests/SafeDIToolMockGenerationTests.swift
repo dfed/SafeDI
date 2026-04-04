@@ -3651,14 +3651,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        childA: ChildA? = nil,
 		        childB_ChildB: @autoclosure @escaping () -> ChildB = ChildB(),
-		        childB_Instantiator_Other: Instantiator<Other>? = nil
+		        childB_Instantiator__Other: Instantiator<Other>? = nil
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
 		            func __safeDI_childB() -> Other {
 		                Other()
 		            }
-		            let childB_Instantiator_Other = childB_Instantiator_Other ?? Instantiator<Other>(__safeDI_childB)
-		            return ChildA(childB: childB_Instantiator_Other)
+		            let childB_Instantiator__Other = childB_Instantiator__Other ?? Instantiator<Other>(__safeDI_childB)
+		            return ChildA(childB: childB_Instantiator__Other)
 		        }
 		        let childA: ChildA = childA ?? __safeDI_childA()
 		        let childB_ChildB = childB_ChildB()
@@ -8490,27 +8490,27 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    public static func mock(
-		        childBuilder_Instantiator_ChildA: Instantiator<ChildA>? = nil,
-		        childBuilder_Instantiator_ChildB: Instantiator<ChildB>? = nil,
+		        childBuilder_Instantiator__ChildA: Instantiator<ChildA>? = nil,
+		        childBuilder_Instantiator__ChildB: Instantiator<ChildB>? = nil,
 		        parent: Parent? = nil
 		    ) -> Root {
 		        func __safeDI_parent() -> Parent {
 		            func __safeDI_childBuilder(name: String) -> ChildB {
 		                ChildB(name: name)
 		            }
-		            let childBuilder_Instantiator_ChildB = childBuilder_Instantiator_ChildB ?? Instantiator<ChildB> {
+		            let childBuilder_Instantiator__ChildB = childBuilder_Instantiator__ChildB ?? Instantiator<ChildB> {
 		                __safeDI_childBuilder(name: $0)
 		            }
-		            return Parent(childBuilder: childBuilder_Instantiator_ChildB)
+		            return Parent(childBuilder: childBuilder_Instantiator__ChildB)
 		        }
 		        let parent: Parent = parent ?? __safeDI_parent()
 		        func __safeDI_childBuilder(name: String) -> ChildA {
 		            ChildA(name: name)
 		        }
-		        let childBuilder_Instantiator_ChildA = childBuilder_Instantiator_ChildA ?? Instantiator<ChildA> {
+		        let childBuilder_Instantiator__ChildA = childBuilder_Instantiator__ChildA ?? Instantiator<ChildA> {
 		            __safeDI_childBuilder(name: $0)
 		        }
-		        return Root(parent: parent, childBuilder: childBuilder_Instantiator_ChildA)
+		        return Root(parent: parent, childBuilder: childBuilder_Instantiator__ChildA)
 		    }
 		}
 		#endif
@@ -8521,7 +8521,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	mutating func mock_disambiguatedInstantiatorResolvedBySiblingInNestedBuilder() async throws {
 		// ChildC and ChildD both have a dep named "childBuilder" but with different generic types.
 		// At root, both are promoted → disambiguated. ChildC's builder must reference
-		// childBuilder_Instantiator_ChildA (not childBuilder) since disambiguation occurred.
+		// childBuilder_Instantiator__ChildA (not childBuilder) since disambiguation occurred.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -8581,25 +8581,25 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    public static func mock(
-		        childBuilder_Instantiator_ChildA: Instantiator<ChildA>? = nil,
-		        childBuilder_Instantiator_ChildB: Instantiator<ChildB>? = nil,
+		        childBuilder_Instantiator__ChildA: Instantiator<ChildA>? = nil,
+		        childBuilder_Instantiator__ChildB: Instantiator<ChildB>? = nil,
 		        childC: ChildC? = nil,
 		        childD: ChildD? = nil
 		    ) -> Root {
 		        func __safeDI_childBuilder(name: String) -> ChildA {
 		            ChildA(name: name)
 		        }
-		        let childBuilder_Instantiator_ChildA = childBuilder_Instantiator_ChildA ?? Instantiator<ChildA> {
+		        let childBuilder_Instantiator__ChildA = childBuilder_Instantiator__ChildA ?? Instantiator<ChildA> {
 		            __safeDI_childBuilder(name: $0)
 		        }
-		        let childC = childC ?? ChildC(childBuilder: childBuilder_Instantiator_ChildA)
+		        let childC = childC ?? ChildC(childBuilder: childBuilder_Instantiator__ChildA)
 		        func __safeDI_childBuilder(name: String) -> ChildB {
 		            ChildB(name: name)
 		        }
-		        let childBuilder_Instantiator_ChildB = childBuilder_Instantiator_ChildB ?? Instantiator<ChildB> {
+		        let childBuilder_Instantiator__ChildB = childBuilder_Instantiator__ChildB ?? Instantiator<ChildB> {
 		            __safeDI_childBuilder(name: $0)
 		        }
-		        let childD = childD ?? ChildD(childBuilder: childBuilder_Instantiator_ChildB)
+		        let childD = childD ?? ChildD(childBuilder: childBuilder_Instantiator__ChildB)
 		        return Root(childC: childC, childD: childD)
 		    }
 		}
@@ -8613,7 +8613,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		// Parent uses childBuilder (Instantiator<ChildA>) + also has otherBuilder (Instantiator<ChildB>)
 		// with same label "childBuilder" — causing disambiguation at root.
 		// Inside parentBuilder's function, Parent is constructed.
-		// Parent's init references childBuilder → must be childBuilder_Instantiator_ChildA.
+		// Parent's init references childBuilder → must be childBuilder_Instantiator__ChildA.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -8769,8 +8769,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    public static func mock(
-		        builder_Instantiator_TypeA: Instantiator<TypeA>? = nil,
-		        builder_Instantiator_TypeB: Instantiator<TypeB>? = nil,
+		        builder_Instantiator__TypeA: Instantiator<TypeA>? = nil,
+		        builder_Instantiator__TypeB: Instantiator<TypeB>? = nil,
 		        childA: ChildA? = nil,
 		        childBBuilder: Instantiator<ChildB>? = nil,
 		        subChild: SubChild? = nil
@@ -8778,18 +8778,18 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        func __safeDI_builder(name: String) -> TypeA {
 		            TypeA(name: name)
 		        }
-		        let builder_Instantiator_TypeA = builder_Instantiator_TypeA ?? Instantiator<TypeA> {
+		        let builder_Instantiator__TypeA = builder_Instantiator__TypeA ?? Instantiator<TypeA> {
 		            __safeDI_builder(name: $0)
 		        }
-		        let childA = childA ?? ChildA(builder: builder_Instantiator_TypeA)
+		        let childA = childA ?? ChildA(builder: builder_Instantiator__TypeA)
 		        func __safeDI_builder(name: String) -> TypeB {
 		            TypeB(name: name)
 		        }
-		        let builder_Instantiator_TypeB = builder_Instantiator_TypeB ?? Instantiator<TypeB> {
+		        let builder_Instantiator__TypeB = builder_Instantiator__TypeB ?? Instantiator<TypeB> {
 		            __safeDI_builder(name: $0)
 		        }
 		        func __safeDI_childBBuilder() -> ChildB {
-		            let subChild = subChild ?? SubChild(builder: builder_Instantiator_TypeB)
+		            let subChild = subChild ?? SubChild(builder: builder_Instantiator__TypeB)
 		            return ChildB(subChild: subChild)
 		        }
 		        let childBBuilder = childBBuilder ?? Instantiator<ChildB>(__safeDI_childBBuilder)
@@ -10310,38 +10310,38 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    public static func mock(
-		        childBuilder_Instantiator_ChildA: Instantiator<ChildA>? = nil,
-		        childBuilder_Instantiator_ChildB: Instantiator<ChildB>? = nil,
+		        childBuilder_Instantiator__ChildA: Instantiator<ChildA>? = nil,
+		        childBuilder_Instantiator__ChildB: Instantiator<ChildB>? = nil,
 		        other: Other? = nil,
 		        parentBuilder: Instantiator<Parent>? = nil
 		    ) -> Root {
 		        func __safeDI_childBuilder(name: String) -> ChildA {
 		            ChildA(name: name)
 		        }
-		        let childBuilder_Instantiator_ChildA = childBuilder_Instantiator_ChildA ?? Instantiator<ChildA> {
+		        let childBuilder_Instantiator__ChildA = childBuilder_Instantiator__ChildA ?? Instantiator<ChildA> {
 		            __safeDI_childBuilder(name: $0)
 		        }
 		        func __safeDI_parentBuilder() -> Parent {
 		            func __safeDI_childBuilder(name: String) -> ChildA {
 		                ChildA(name: name)
 		            }
-		            let childBuilder_Instantiator_ChildA = Instantiator<ChildA> {
+		            let childBuilder_Instantiator__ChildA = Instantiator<ChildA> {
 		                __safeDI_childBuilder(name: $0)
 		            }
-		            return Parent(childBuilder: childBuilder_Instantiator_ChildA)
+		            return Parent(childBuilder: childBuilder_Instantiator__ChildA)
 		        }
 		        let parentBuilder = parentBuilder ?? Instantiator<Parent>(__safeDI_parentBuilder)
 		        func __safeDI_other() -> Other {
 		            func __safeDI_childBuilder(name: String) -> ChildB {
 		                ChildB(name: name)
 		            }
-		            let childBuilder_Instantiator_ChildB = childBuilder_Instantiator_ChildB ?? Instantiator<ChildB> {
+		            let childBuilder_Instantiator__ChildB = childBuilder_Instantiator__ChildB ?? Instantiator<ChildB> {
 		                __safeDI_childBuilder(name: $0)
 		            }
-		            return Other(childBuilder: childBuilder_Instantiator_ChildB)
+		            return Other(childBuilder: childBuilder_Instantiator__ChildB)
 		        }
 		        let other: Other = other ?? __safeDI_other()
-		        return Root(childBuilder: childBuilder_Instantiator_ChildA, parentBuilder: parentBuilder, other: other)
+		        return Root(childBuilder: childBuilder_Instantiator__ChildA, parentBuilder: parentBuilder, other: other)
 		    }
 		}
 		#endif
@@ -10856,6 +10856,175 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let childA: ChildA = childA ?? __safeDI_childA()
 		        let childB = childB ?? ChildB(shared: shared)
 		        return Root(childA: childA, childB: childB)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	mutating func mock_requiredReceivedDependencyIsNotTreatedAsOnlyIfAvailableWhenSiblingHasOnlyIfAvailableWithSameLabel() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Root: Instantiable {
+				    public init(childA: ChildA, childB: ChildB) {
+				        self.childA = childA
+				        self.childB = childB
+				    }
+				    @Instantiated let childA: ChildA
+				    @Instantiated let childB: ChildB
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(service: Service) {
+				        self.service = service
+				    }
+				    @Received let service: Service
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(service: Service?) {
+				        self.service = service
+				    }
+				    @Received(onlyIfAvailable: true) let service: Service?
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Service: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		// Service should NOT be treated as onlyIfAvailable — ChildA has a required @Received.
+		// The onlyIfAvailable variant from ChildB must not turn it into an optional parameter.
+		// Since Service has a no-arg init, it gets a default construction = Service().
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    public static func mock(
+		        childA: ChildA? = nil,
+		        childB: ChildB? = nil,
+		        service: @autoclosure @escaping () -> Service = Service()
+		    ) -> Root {
+		        let service = service()
+		        let childA = childA ?? ChildA(service: service)
+		        let childB = childB ?? ChildB(service: service)
+		        return Root(childA: childA, childB: childB)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	mutating func mock_postDisambiguationLabelDoesNotCollideWithExistingPropertyLabel() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Root: Instantiable {
+				    public init(childA: ChildA, childB: ChildB, childC: ChildC) {
+				        self.childA = childA
+				        self.childB = childB
+				        self.childC = childC
+				    }
+				    @Instantiated let childA: ChildA
+				    @Instantiated let childB: ChildB
+				    @Instantiated let childC: ChildC
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildA: Instantiable {
+				    public init(service: UserService) {
+				        self.service = service
+				    }
+				    @Received let service: UserService
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildB: Instantiable {
+				    public init(service: AdminService) {
+				        self.service = service
+				    }
+				    @Received let service: AdminService
+				}
+				""",
+				"""
+				@Instantiable
+				public struct ChildC: Instantiable {
+				    public init(service_UserService: OtherType) {
+				        self.service_UserService = service_UserService
+				    }
+				    @Received let service_UserService: OtherType
+				}
+				""",
+				"""
+				@Instantiable
+				public struct UserService: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct AdminService: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct OtherType: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			enableMockGeneration: true,
+		)
+
+		// After disambiguation, "service" splits into "service_UserService" and "service_AdminService".
+		// ChildC has a literal property labeled "service_UserService" — the disambiguated version
+		// must get a further suffix to avoid colliding with the literal label.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    public static func mock(
+		        childA: ChildA? = nil,
+		        childB: ChildB? = nil,
+		        childC: ChildC? = nil,
+		        service_AdminService: @autoclosure @escaping () -> AdminService = AdminService(),
+		        service_UserService: @autoclosure @escaping () -> OtherType = OtherType(),
+		        service_UserService_UserService: @autoclosure @escaping () -> UserService = UserService()
+		    ) -> Root {
+		        let service_UserService_UserService = service_UserService_UserService()
+		        let childA = childA ?? ChildA(service: service_UserService_UserService)
+		        let service_AdminService = service_AdminService()
+		        let childB = childB ?? ChildB(service: service_AdminService)
+		        let service_UserService = service_UserService()
+		        let childC = childC ?? ChildC(service_UserService: service_UserService)
+		        return Root(childA: childA, childB: childB, childC: childC)
 		    }
 		}
 		#endif

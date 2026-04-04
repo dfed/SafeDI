@@ -336,7 +336,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	private var unavailablePropertiesToGenerateCodeTask = [Set<Property>: Task<String, Error>]()
 
-	private var orderedPropertiesToGenerate: [ScopeGenerator] {
+	private lazy var orderedPropertiesToGenerate: [ScopeGenerator] = {
 		var orderedPropertiesToGenerate = [ScopeGenerator]()
 		var propertyToUnfulfilledScopeMap = propertiesToGenerate
 			.reduce(into: OrderedDictionary<Property, ScopeGenerator>()) { partialResult, scope in
@@ -372,7 +372,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		return orderedPropertiesToGenerate
-	}
+	}()
 
 	private func generateProperties(
 		codeGeneration: CodeGeneration = .dependencyTree,
@@ -1245,6 +1245,37 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return MockDeclaration(
 				propertyLabel: declaration.propertyLabel,
 				parameterLabel: "\(declaration.parameterLabel)_\(suffix)",
+				sourceType: declaration.sourceType,
+				isForwarded: declaration.isForwarded,
+				requiresSendable: declaration.requiresSendable,
+				defaultValueExpression: declaration.defaultValueExpression,
+				hasSubtree: declaration.hasSubtree,
+				defaultConstruction: declaration.defaultConstruction,
+				sourceTypeDescription: declaration.sourceTypeDescription,
+				isClosureType: declaration.isClosureType,
+			)
+		}
+
+		// Post-disambiguation collision check: if a renamed label now matches
+		// a non-renamed label (or another renamed label from a different group),
+		// append the full type suffix to resolve the collision.
+		var finalLabelCounts = [String: Int]()
+		for declaration in declarations {
+			finalLabelCounts[declaration.parameterLabel, default: 0] += 1
+		}
+		for declaration in forwardedDeclarations {
+			finalLabelCounts[declaration.parameterLabel, default: 0] += 1
+		}
+		declarations = declarations.map { declaration in
+			guard !declaration.isForwarded,
+			      declaration.propertyLabel != declaration.parameterLabel,
+			      let count = finalLabelCounts[declaration.parameterLabel],
+			      count > 1
+			else { return declaration }
+			// This declaration was renamed and still collides — append sourceType suffix.
+			return MockDeclaration(
+				propertyLabel: declaration.propertyLabel,
+				parameterLabel: "\(declaration.parameterLabel)_\(declaration.sourceTypeDescription.asIdentifier)",
 				sourceType: declaration.sourceType,
 				isForwarded: declaration.isForwarded,
 				requiresSendable: declaration.requiresSendable,

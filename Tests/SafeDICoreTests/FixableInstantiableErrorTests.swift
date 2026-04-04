@@ -52,4 +52,16 @@ struct FixableInstantiableErrorTests {
 		let error = FixableInstantiableError.mockMethodNotPublic
 		#expect(error.fixIt.message.contains("Add `public` modifier to mock() method"))
 	}
+
+	@Test
+	func duplicateMockMethod_description_mentionsAtMostOneMockMethod() {
+		let error = FixableInstantiableError.duplicateMockMethod
+		#expect(error.description == "@Instantiable-decorated type must have at most one `mock()` method. Remove this duplicate.")
+	}
+
+	@Test
+	func duplicateMockMethod_fixIt_mentionsRemovingDuplicate() {
+		let error = FixableInstantiableError.duplicateMockMethod
+		#expect(error.fixIt.message == "Remove duplicate mock() method")
+	}
 }
