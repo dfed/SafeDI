@@ -116,6 +116,27 @@ struct SafeDIConfigurationVisitorTests {
 	}
 
 	@Test
+	func nestedProtocolWithMatchingPropertyNameDoesNotSetFoundFlag() {
+		let visitor = SafeDIConfigurationVisitor()
+		visitor.walk(Parser.parse(source: """
+		enum MyConfig {
+		    static let additionalImportedModules: [StaticString] = []
+		    static let additionalDirectoriesToInclude: [StaticString] = []
+		    static let generateMocks: Bool = true
+		    static let mockConditionalCompilation: StaticString? = "DEBUG"
+
+		    protocol Helper {
+		        static var generateMocks: Bool { get }
+		    }
+		}
+		"""))
+
+		#expect(visitor.generateMocks == true)
+		// The protocol's requirement must not affect the isValid flag.
+		#expect(visitor.generateMocksIsValid == true)
+	}
+
+	@Test
 	func nestedActorWithMatchingPropertyNameDoesNotOverrideOuterConfig() {
 		let visitor = SafeDIConfigurationVisitor()
 		visitor.walk(Parser.parse(source: """

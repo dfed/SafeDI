@@ -66,6 +66,15 @@ public final class SafeDIConfigurationVisitor: SyntaxVisitor {
 		nestingDepth -= 1
 	}
 
+	public override func visit(_: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
+		nestingDepth += 1
+		return .visitChildren
+	}
+
+	public override func visitPost(_: ProtocolDeclSyntax) {
+		nestingDepth -= 1
+	}
+
 	public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
 		guard nestingDepth <= 1 else { return .skipChildren }
 		for binding in node.bindings {
