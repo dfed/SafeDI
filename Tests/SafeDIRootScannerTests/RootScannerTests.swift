@@ -710,6 +710,84 @@ struct RootScannerTests {
 	}
 
 	@Test
+	func containsGenerateMockTrue_handlesNoSpaceAfterColon() {
+		#expect(RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock:true)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenValueIsTypeName() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock: Bool)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenValueIsRandomWord() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock: WTF)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsGenerateMockTrue_returnsFalse_whenClauseIsJustLabel() {
+		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		@Instantiable(generateMock)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_handlesNoSpaceAfterColonForFalse() {
+		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
+		@Instantiable(generateMock:false)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_returnsTrue_whenValueIsTypeName() {
+		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
+		@Instantiable(generateMock: Bool)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_returnsTrue_whenClauseIsJustLabel() {
+		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
+		@Instantiable(generateMock)
+		struct MyType {}
+		"""))
+	}
+
+	@Test
+	func extractGenerateMocks_handlesNoSpaceAfterEquals() {
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfig {
+		    static let generateMocks: Bool =true
+		}
+		"""
+		#expect(RootScanner.extractGenerateMocks(in: source) == true)
+	}
+
+	@Test
+	func extractGenerateMocks_handlesExtraWhitespace() {
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfig {
+		    static let generateMocks: Bool =   false
+		}
+		"""
+		#expect(RootScanner.extractGenerateMocks(in: source) == false)
+	}
+
+	@Test
 	func containsGenerateMockTrue_detectsAmongOtherArguments() {
 		#expect(RootScanner.containsGenerateMockTrue(in: """
 		@Instantiable(isRoot: true, generateMock: true)
