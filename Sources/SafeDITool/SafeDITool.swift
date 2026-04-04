@@ -64,12 +64,28 @@ struct SafeDITool: AsyncParsableCommand {
 			parsedModule(),
 		)
 
-		// Only use this module's own configuration. Dependent modules' configs must not
-		// affect the current module's mock generation or conditional compilation settings.
-		guard initialModule.configurations.count <= 1 else {
-			throw ValidationError("Found \(initialModule.configurations.count) @\(SafeDIConfigurationVisitor.macroName) declarations in this module. Each module must have at most one @\(SafeDIConfigurationVisitor.macroName).")
+		// In multi-module builds, the CSV includes all modules' files, so multiple
+		// configs may be present. Scope to the current module using the manifest's
+		// currentModuleSourceFilePaths (which lists only this target's own files).
+		let currentModuleConfigurations: [SafeDIConfiguration]
+		if let swiftManifest {
+			let manifest = try JSONDecoder().decode(
+				SafeDIToolManifest.self,
+				from: Data(contentsOf: swiftManifest.asFileURL),
+			)
+			let currentModuleFilePaths = Set(manifest.currentModuleSourceFilePaths)
+			currentModuleConfigurations = initialModule.configurations.filter { configuration in
+				guard let configPath = configuration.sourceFilePath else { return false }
+				return currentModuleFilePaths.contains(configPath)
+			}
+		} else {
+			currentModuleConfigurations = initialModule.configurations
 		}
-		let sourceConfiguration: SafeDIConfiguration? = initialModule.configurations.first
+		guard currentModuleConfigurations.count <= 1 else {
+			let configPaths = currentModuleConfigurations.compactMap(\.sourceFilePath).joined(separator: "\n\t")
+			throw ValidationError("Found \(currentModuleConfigurations.count) @\(SafeDIConfigurationVisitor.macroName) declarations in this module. Each module must have at most one @\(SafeDIConfigurationVisitor.macroName). Found in:\n\t\(configPaths)")
+		}
+		let sourceConfiguration: SafeDIConfiguration? = currentModuleConfigurations.first
 
 		let resolvedAdditionalImportedModules: [String] = if let sourceConfiguration {
 			additionalImportedModules + sourceConfiguration.additionalImportedModules
@@ -393,10 +409,15 @@ struct SafeDITool: AsyncParsableCommand {
 						instantiable.sourceFilePath = filePath
 						return instantiable
 					}
+					let configurations = fileVisitor.configurations.map {
+						var configuration = $0
+						configuration.sourceFilePath = filePath
+						return configuration
+					}
 					return (
 						imports: fileVisitor.imports,
 						instantiables: instantiables,
-						configurations: fileVisitor.configurations,
+						configurations: configurations,
 						encounteredUnexpectedNodeInFile: fileVisitor.encounteredUnexpectedNodesSyntax ? filePath : nil,
 					)
 				}

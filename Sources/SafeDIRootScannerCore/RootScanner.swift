@@ -35,10 +35,12 @@ public struct RootScanner {
 
 		public var dependencyTreeGeneration: [InputOutputMap]
 		public var mockGeneration: [InputOutputMap]
+		public var currentModuleSourceFilePaths: [String]
 
-		public init(dependencyTreeGeneration: [InputOutputMap], mockGeneration: [InputOutputMap]) {
+		public init(dependencyTreeGeneration: [InputOutputMap], mockGeneration: [InputOutputMap], currentModuleSourceFilePaths: [String] = []) {
 			self.dependencyTreeGeneration = dependencyTreeGeneration
 			self.mockGeneration = mockGeneration
+			self.currentModuleSourceFilePaths = currentModuleSourceFilePaths
 		}
 	}
 
@@ -125,6 +127,7 @@ public struct RootScanner {
 							.path,
 					)
 				},
+				currentModuleSourceFilePaths: filesForMockScan.map { relativePath(for: $0, relativeTo: baseURL) },
 			),
 		)
 	}

@@ -2039,11 +2039,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	mutating func run_onCodeWithMultipleSafeDIConfigurations_throwsError() async {
-		await assertThrowsError(
-			"""
-			Found 2 @SafeDIConfiguration declarations in this module. Each module must have at most one @SafeDIConfiguration.
-			""",
-		) {
+		do {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
@@ -2074,6 +2070,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
+			Issue.record("Did not throw error!")
+		} catch {
+			let errorMessage = "\(error)"
+			#expect(errorMessage.hasPrefix("Found 2 @SafeDIConfiguration declarations in this module. Each module must have at most one @SafeDIConfiguration. Found in:"))
+			#expect(errorMessage.contains("ConfigA.swift"))
+			#expect(errorMessage.contains("ConfigB.swift"))
 		}
 	}
 

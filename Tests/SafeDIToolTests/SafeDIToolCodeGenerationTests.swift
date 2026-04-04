@@ -6251,12 +6251,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.moduleInfo.configurations == [
-			SafeDIConfiguration(
-				additionalImportedModules: [],
-				additionalDirectoriesToInclude: ["SomeDirectory"],
-			),
-		])
+		#expect(output.moduleInfo.configurations.count == 1)
+		let configuration = output.moduleInfo.configurations[0]
+		#expect(configuration.additionalImportedModules == [])
+		#expect(configuration.additionalDirectoriesToInclude == ["SomeDirectory"])
+		#expect(configuration.sourceFilePath != nil)
 	}
 
 	// MARK: Additional Directories + Manifest Tests

@@ -96,6 +96,10 @@ struct RootScannerTests {
 					outputFilePath: featureBMockPath,
 				),
 			],
+			currentModuleSourceFilePaths: [
+				"Sources/FeatureA/Root.swift",
+				"Sources/FeatureB/Root.swift",
+			],
 		))
 
 		// Verify outputFiles includes both DI tree and mock outputs.

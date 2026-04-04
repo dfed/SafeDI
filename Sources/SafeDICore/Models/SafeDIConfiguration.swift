@@ -23,6 +23,9 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 	public let additionalDirectoriesToInclude: [String]
 	public let generateMocks: Bool
 	public let mockConditionalCompilation: String?
+	/// The source file path where this configuration was declared.
+	/// Set during parsing to scope configuration to the current module.
+	public var sourceFilePath: String?
 
 	public init(
 		additionalImportedModules: [String],

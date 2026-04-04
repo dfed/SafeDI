@@ -48,11 +48,17 @@ public struct SafeDIToolManifest: Codable, Sendable {
 	/// output file where the generated `mock()` extension should be written.
 	public var mockGeneration: [InputOutputMap]
 
+	/// All Swift source file paths that belong to the current module (target).
+	/// Used to scope configuration selection to the current module in multi-module builds.
+	public var currentModuleSourceFilePaths: [String]
+
 	public init(
 		dependencyTreeGeneration: [InputOutputMap],
 		mockGeneration: [InputOutputMap] = [],
+		currentModuleSourceFilePaths: [String] = [],
 	) {
 		self.dependencyTreeGeneration = dependencyTreeGeneration
 		self.mockGeneration = mockGeneration
+		self.currentModuleSourceFilePaths = currentModuleSourceFilePaths
 	}
 }
