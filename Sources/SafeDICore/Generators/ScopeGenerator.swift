@@ -683,13 +683,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 					"""
 				}
-				let returnLineSansReturn = if erasedToConcreteExistential {
+				let existentialWrappedReturn = if erasedToConcreteExistential {
 					"\(property.typeDescription.asSource)(\(returnLineSansReturn))"
 				} else {
 					returnLineSansReturn
 				}
 				let initializer = if !hasGeneratedContent {
-					returnLineSansReturn
+					existentialWrappedReturn
 				} else {
 					"\(functionName)()"
 				}
@@ -1129,7 +1129,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							parameterLabel: argument.innerLabel,
 							sourceType: strippedType.asSource,
 							isForwarded: false,
-							requiresSendable: insideSendableScope,
+							requiresSendable: childInsideSendable,
 							defaultValueExpression: argument.defaultValueExpression,
 							hasSubtree: false,
 							defaultConstruction: argument.defaultValueExpression,
@@ -1320,7 +1320,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for argument in constructionInitializer.arguments {
 			guard argument.hasDefaultValue,
 			      !dependencyLabels.contains(argument.innerLabel),
-			      argument.defaultValueExpression != nil,
 			      !argument.typeDescription.strippingEscaping.isClosure
 			else { continue }
 			let strippedType = argument.typeDescription.strippingEscaping
