@@ -453,6 +453,19 @@ struct RootScannerTests {
 	}
 
 	@Test
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenBracketIsUnmatchedInsideValidConfig() {
+		// The config body is properly delimited, the property is found, the opening
+		// bracket is found, but no closing bracket exists — reaches the final `return []`.
+		let source = """
+		@SafeDIConfiguration
+		enum MyConfiguration {
+		    static let additionalDirectoriesToInclude: [StaticString] = [
+		}
+		"""
+		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+	}
+
+	@Test
 	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenArrayHasNoStringLiterals() {
 		// Brackets matched but content has no quotes at all.
 		let source = """

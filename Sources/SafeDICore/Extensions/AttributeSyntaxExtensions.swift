@@ -88,13 +88,10 @@ extension AttributeSyntax {
 	}
 
 	public var generateMockValue: Bool? {
-		guard let generateMock else {
-			return nil
-		}
-		if NilLiteralExprSyntax(generateMock) != nil {
-			return nil
-		}
-		guard let boolLiteral = BooleanLiteralExprSyntax(generateMock) else {
+		guard let generateMock,
+		      NilLiteralExprSyntax(generateMock) == nil,
+		      let boolLiteral = BooleanLiteralExprSyntax(generateMock)
+		else {
 			return nil
 		}
 		return boolLiteral.literal.tokenKind == .keyword(.true)

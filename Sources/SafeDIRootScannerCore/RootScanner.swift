@@ -117,11 +117,12 @@ public struct RootScanner {
 			for fileURL in filesForMockScan {
 				let source = try String(contentsOf: fileURL, encoding: .utf8)
 				guard Self.containsConfiguration(in: source) else { continue }
-				if let value = Self.extractGenerateMocks(in: source) {
-					return value
+				return if let value = Self.extractGenerateMocks(in: source) {
+					value
+				} else {
+					// Config exists but doesn't specify generateMocks — default is true.
+					true
 				}
-				// Config exists but doesn't specify generateMocks — default is true.
-				return true
 			}
 			return false
 		}()
@@ -171,10 +172,6 @@ public struct RootScanner {
 
 	public static func fileContainsRoot(at fileURL: URL) throws -> Bool {
 		containsRoot(in: try String(contentsOf: fileURL, encoding: .utf8))
-	}
-
-	public static func fileContainsInstantiable(at fileURL: URL) throws -> Bool {
-		containsInstantiable(in: try String(contentsOf: fileURL, encoding: .utf8))
 	}
 
 	public static func fileContainsConfiguration(at fileURL: URL) throws -> Bool {
@@ -368,15 +365,19 @@ public struct RootScanner {
 			let afterTrue = configBody.index(index, offsetBy: 4)
 			if afterTrue >= configBody.endIndex || !isIdentifierContinuation(configBody[afterTrue]) {
 				return true
+			} else {
+				return nil
 			}
-		}
-		if configBody[index...].hasPrefix("false") {
+		} else if configBody[index...].hasPrefix("false") {
 			let afterFalse = configBody.index(index, offsetBy: 5)
 			if afterFalse >= configBody.endIndex || !isIdentifierContinuation(configBody[afterFalse]) {
 				return false
+			} else {
+				return nil
 			}
+		} else {
+			return nil
 		}
-		return nil
 	}
 
 	/// Detects `@Instantiable(... generateMock: true ...)` in source text.
