@@ -772,6 +772,73 @@ struct RootScannerTests {
 	}
 
 	@Test
+	func containsInstantiableEligibleForMock_skipsSimilarMacroName() {
+		// @InstantiableFactory should not match — tests the identifier continuation skip path.
+		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
+		@InstantiableFactory(generateMock: false)
+		struct NotInstantiable {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_handlesUnmatchedParen() {
+		// Unmatched paren — the scanner should skip and not crash.
+		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
+		@Instantiable(generateMock: false
+		struct Broken {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_returnsFalse_whenOptOutHasMultipleArguments() {
+		// generateMock: false appears among other arguments with commas, parens, and braces.
+		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
+		@Instantiable(
+		    fulfillingAdditionalTypes: [Foo.self],
+		    mockAttributes: { return "@MainActor" }(),
+		    generateMock: false
+		)
+		struct OptedOut {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_returnsFalse_whenGenerateMockFalseIsFirstArgument() {
+		// generateMock: false as first argument, followed by commas.
+		#expect(!RootScanner.containsInstantiableEligibleForMock(in: """
+		@Instantiable(generateMock: false, isRoot: true)
+		struct OptedOut {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_ignoresSimilarLabelNames() {
+		// generateMockery: false should NOT be treated as generateMock: false.
+		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
+		@Instantiable(generateMockery: false)
+		struct StillEligible {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_ignoresLabelWithoutColon() {
+		// "generateMock false" without colon should NOT be treated as generateMock: false.
+		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
+		@Instantiable(generateMock false)
+		struct StillEligible {}
+		"""))
+	}
+
+	@Test
+	func containsInstantiableEligibleForMock_ignoresFalseishValue() {
+		// "generateMock: falsehood" should NOT be treated as generateMock: false.
+		#expect(RootScanner.containsInstantiableEligibleForMock(in: """
+		@Instantiable(generateMock: falsehood)
+		struct StillEligible {}
+		"""))
+	}
+
+	@Test
 	func scan_excludesMockEntryForFile_whenAllTypesOptOutAndModuleConfigIsTrue() throws {
 		let fixture = try ScannerFixture()
 		defer { fixture.delete() }
