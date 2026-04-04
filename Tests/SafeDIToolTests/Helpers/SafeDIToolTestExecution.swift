@@ -29,6 +29,7 @@ func executeSafeDIToolTest(
 	additionalDirectorySwiftFileContent: [String] = [],
 	dependentModuleInfoPaths: [String] = [],
 	additionalImportedModules: [String] = [],
+	moduleName: String? = nil,
 	buildSwiftOutputDirectory: Bool = false,
 	buildDOTFileOutput: Bool = false,
 	filesToDelete: inout [URL],
@@ -94,7 +95,13 @@ func executeSafeDIToolTest(
 		.joined(separator: ",")
 		.write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
 
-	let moduleInfoOutput = URL.temporaryFile.appendingPathExtension("safedi")
+	let moduleInfoOutput: URL = if let moduleName {
+		FileManager.default.temporaryDirectory
+			.appendingPathComponent(moduleName)
+			.appendingPathExtension("safedi")
+	} else {
+		URL.temporaryFile.appendingPathExtension("safedi")
+	}
 	let outputDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
 	let manifestFile = URL.temporaryFile.appendingPathExtension("json")
 	let dotTreeOutput = URL.temporaryFile.appendingPathExtension("dot")

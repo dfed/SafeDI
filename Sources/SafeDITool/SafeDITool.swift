@@ -35,7 +35,7 @@ struct SafeDITool: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "The names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModules: [String] = []
 
-	@Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project‘s non-root module. Must have a `.safedi` suffix.") var moduleInfoOutput: String?
+	@Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project’s non-root module. Must have a `.safedi` suffix.") var moduleInfoOutput: String?
 
 	@Option(help: "A path to a CSV file containing paths of SafeDI representations of other modules to parse.") var dependentModuleInfoFilePath: String?
 
@@ -93,6 +93,14 @@ struct SafeDITool: AsyncParsableCommand {
 			additionalImportedModules
 		}
 
+		// Derive module name from the module-info output filename (e.g. "ModuleB.safedi" → "ModuleB").
+		let derivedModuleName: String? = moduleInfoOutput.flatMap { path in
+			let filename = (path as NSString).lastPathComponent
+			guard filename.hasSuffix(".safedi") else { return nil }
+			let name = String(filename.dropLast(".safedi".count))
+			return name.isEmpty ? nil : name
+		}
+
 		// If the source configuration specifies additional directories to include,
 		// find and parse swift files in those directories and merge with initial results.
 		let module: ModuleInfo
@@ -100,13 +108,20 @@ struct SafeDITool: AsyncParsableCommand {
 			let additionalFiles = try await Self.findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude)
 			let additionalModule = try await Self.parseSwiftFiles(additionalFiles)
 			module = ModuleInfo(
+				moduleName: derivedModuleName,
 				imports: initialModule.imports + additionalModule.imports,
 				instantiables: initialModule.instantiables + additionalModule.instantiables,
 				configurations: initialModule.configurations,
 				filesWithUnexpectedNodes: initialModule.filesWithUnexpectedNodes.map { $0 + (additionalModule.filesWithUnexpectedNodes ?? []) } ?? additionalModule.filesWithUnexpectedNodes,
 			)
 		} else {
-			module = initialModule
+			module = ModuleInfo(
+				moduleName: derivedModuleName,
+				imports: initialModule.imports,
+				instantiables: initialModule.instantiables,
+				configurations: initialModule.configurations,
+				filesWithUnexpectedNodes: initialModule.filesWithUnexpectedNodes,
+			)
 		}
 
 		let unnormalizedInstantiables = dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
@@ -164,7 +179,8 @@ struct SafeDITool: AsyncParsableCommand {
 			normalized.imports = unnormalizedInstantiable.imports
 			return normalized
 		}
-		let globalImportStatements = dependentModuleInfo.flatMap(\.imports) + resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
+		let dependentModuleNameImports = dependentModuleInfo.compactMap(\.moduleName).map { ImportStatement(moduleName: $0) }
+		let globalImportStatements = dependentModuleNameImports + dependentModuleInfo.flatMap(\.imports) + resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let generator = try DependencyTreeGenerator(
 			importStatements: globalImportStatements + module.imports,
 			globalImportStatements: globalImportStatements,
@@ -317,6 +333,7 @@ struct SafeDITool: AsyncParsableCommand {
 	}
 
 	struct ModuleInfo: Codable {
+		let moduleName: String?
 		let imports: [ImportStatement]
 		let instantiables: [Instantiable]
 		let configurations: [SafeDIConfiguration]
@@ -444,6 +461,7 @@ struct SafeDITool: AsyncParsableCommand {
 			}
 
 			return ModuleInfo(
+				moduleName: nil,
 				imports: imports,
 				instantiables: instantiables,
 				configurations: configurations,

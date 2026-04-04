@@ -2633,6 +2633,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 			],
+			moduleName: "GreatGrandchildModule",
 			buildSwiftOutputDirectory: false,
 			filesToDelete: &filesToDelete,
 		)
@@ -2689,6 +2690,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 			],
 			dependentModuleInfoPaths: [greatGrandchildModuleOutput.moduleInfoOutputPath],
+			moduleName: "GrandchildModule",
 			buildSwiftOutputDirectory: false,
 			filesToDelete: &filesToDelete,
 		)
@@ -2728,6 +2730,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				greatGrandchildModuleOutput.moduleInfoOutputPath,
 				grandchildModuleOutput.moduleInfoOutputPath,
 			],
+			moduleName: "ChildModule",
 			buildSwiftOutputDirectory: false,
 			filesToDelete: &filesToDelete,
 		)
