@@ -462,9 +462,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			case let .mock(context):
 				context
 			}
+			let mockReturnTypeIsCompatible = instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription)
 			let argumentList = try instantiable.generateArgumentList(
 				unavailableProperties: unavailableProperties,
 				forMockGeneration: codeGeneration.isMock && property.propertyType.isConstant,
+				useMockInitializer: mockReturnTypeIsCompatible,
 				mockContext: mockContext,
 			)
 			let concreteTypeName = instantiable.concreteInstantiable.asSource
@@ -476,9 +478,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					concreteTypeName
 				}
 			case .mock:
-				// Types with a user-defined mock() use .mock() for construction.
-				// The user's mock method handles all defaults and test configuration.
-				if instantiable.mockInitializer != nil {
+				// Types with a user-defined mock() use .mock() for construction,
+				// but only when the mock's return type is compatible with the property type.
+				// A mock returning a protocol type (via fulfillingAdditionalTypes) should not
+				// be used when the property expects the concrete type.
+				if instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription) {
 					"\(concreteTypeName).mock"
 				} else if instantiable.declarationType.isExtension {
 					"\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
@@ -646,6 +650,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				case let .mock(context):
 					Self.defaultValueBindings(
 						for: instantiable,
+						useMockInitializer: instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription),
 						parameterLabelMap: context.parameterLabelMap,
 						resolvedParameters: context.resolvedParameters,
 					) + Self.uncoveredDependencyBindings(
@@ -1111,9 +1116,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Collect default-valued init parameters from constant children.
 			// These bubble up to the root mock so users can override them.
 			// Instantiator boundaries stop bubbling — those are user-provided closures.
+			let useMockInitializer = childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childProperty.typeDescription)
 			var childDefaultParams = [MockDeclaration]()
 			if !isInstantiator {
-				let constructionInitializer: Initializer? = if let mockInitializer = childInstantiable.mockInitializer {
+				let constructionInitializer: Initializer? = if useMockInitializer, let mockInitializer = childInstantiable.mockInitializer {
 					mockInitializer.arguments.isEmpty ? nil : mockInitializer
 				} else {
 					childInstantiable.initializer
@@ -1177,7 +1183,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// or can use a simple @autoclosure default.
 			let needsInlineConstruction: Bool = if isInstantiator {
 				true
-			} else if let mockInitializer = childInstantiable.mockInitializer, !mockInitializer.arguments.isEmpty {
+			} else if useMockInitializer, let mockInitializer = childInstantiable.mockInitializer, !mockInitializer.arguments.isEmpty {
 				true
 			} else {
 				!childDeclarations.isEmpty
@@ -1189,7 +1195,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Compute the default construction expression for leaf types.
 			let defaultConstruction: String? = if needsInlineConstruction {
 				nil
-			} else if let mockInitializer = childInstantiable.mockInitializer, mockInitializer.arguments.isEmpty {
+			} else if useMockInitializer, let mockInitializer = childInstantiable.mockInitializer, mockInitializer.arguments.isEmpty {
 				"\(childInstantiable.concreteInstantiable.asSource).mock()"
 			} else if childInstantiable.declarationType.isExtension {
 				"\(childInstantiable.concreteInstantiable.asSource).\(InstantiableVisitor.instantiateMethodName)()"
@@ -1302,15 +1308,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Each binding evaluates the corresponding `@autoclosure` parameter.
 	private static func defaultValueBindings(
 		for instantiable: Instantiable,
+		useMockInitializer: Bool,
 		parameterLabelMap: [MockParameterIdentifier: String],
 		resolvedParameters: Set<MockParameterIdentifier>,
 	) -> [String] {
 		// Collect non-dependency default-valued params from the construction initializer.
-		// When a user-defined mock() exists, use its params (nil for no-arg mocks).
-		// When no mock exists, use the regular init.
+		// When a user-defined mock() is compatible, use its params (nil for no-arg mocks).
+		// When no compatible mock exists, use the regular init.
 		// The dependencyLabels guard below ensures SafeDI dependencies
 		// (even those with defaults) are never bubbled as default params.
-		let constructionInitializer: Initializer? = if let mockInitializer = instantiable.mockInitializer {
+		let constructionInitializer: Initializer? = if useMockInitializer, let mockInitializer = instantiable.mockInitializer {
 			mockInitializer.arguments.isEmpty ? nil : mockInitializer
 		} else {
 			instantiable.initializer
@@ -1392,9 +1399,10 @@ extension Instantiable {
 	fileprivate func generateArgumentList(
 		unavailableProperties: Set<Property>? = nil,
 		forMockGeneration: Bool = false,
+		useMockInitializer: Bool = true,
 		mockContext: ScopeGenerator.MockContext? = nil,
 	) throws -> String {
-		let initializerToUse: Initializer? = if forMockGeneration, let mockInitializer {
+		let initializerToUse: Initializer? = if forMockGeneration, useMockInitializer, let mockInitializer {
 			// User-defined mock handles construction — use its parameter list
 			// (may be empty for no-arg mock methods).
 			mockInitializer
@@ -1408,7 +1416,7 @@ extension Instantiable {
 			// When using a user-defined mock(), validate it covers all dependencies.
 			// If not, emit a comment that triggers a build error directing the user
 			// to the @Instantiable macro fix-it (same pattern as production code gen).
-			if mockInitializer != nil, !initializerToUse.isValid(forFulfilling: dependencies) {
+			if useMockInitializer, mockInitializer != nil, !initializerToUse.isValid(forFulfilling: dependencies) {
 				return Self.incorrectlyConfiguredComment
 			}
 			return initializerToUse
