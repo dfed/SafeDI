@@ -889,11 +889,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 		}
 
-		// Collect the root type's own default-valued init parameters.
+		// Collect the root type's own default-valued non-dependency parameters.
+		// When a hand-written mock exists, use the mock's parameters as the API surface.
+		// Otherwise, use the init's parameters.
 		var rootDefaultIdentifiers = Set<MockParameterIdentifier>()
-		if let rootInitializer = instantiable.initializer {
+		let rootConstructionInitializer: Initializer? = if let mockInitializer = instantiable.mockInitializer {
+			mockInitializer
+		} else {
+			instantiable.initializer
+		}
+		if let rootConstructionInitializer {
 			let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
-			for argument in rootInitializer.arguments {
+			for argument in rootConstructionInitializer.arguments {
 				guard argument.hasDefaultValue,
 				      !dependencyLabels.contains(argument.innerLabel),
 				      argument.label != "_",
