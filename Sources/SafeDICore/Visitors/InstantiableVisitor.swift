@@ -159,6 +159,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				duplicateMockFunctionSyntaxes.append(node)
 			} else {
 				mockInitializer = Initializer(node)
+				mockReturnType = node.signature.returnClause?.type.typeDescription
 				mockFunctionSyntax = node
 			}
 		}
@@ -216,6 +217,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				mockAttributes: mockAttributes,
 				generateMock: generateMock,
 				mockInitializer: mockInitializer,
+				mockReturnType: mockReturnType,
 			))
 		}
 
@@ -308,6 +310,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var mockAttributes = ""
 	public private(set) var generateMock: Bool = false
 	public private(set) var mockInitializer: Initializer?
+	public private(set) var mockReturnType: TypeDescription?
 	public private(set) var mockFunctionSyntax: FunctionDeclSyntax?
 	public private(set) var duplicateMockFunctionSyntaxes = [FunctionDeclSyntax]()
 	public private(set) var diagnostics = [Diagnostic]()
@@ -366,6 +369,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
 						mockInitializer: mockInitializer,
+						mockReturnType: mockReturnType,
 					),
 				]
 			} else {
@@ -380,6 +384,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				}
 				var patched = instantiable
 				patched.mockInitializer = mockInitializer
+				patched.mockReturnType = mockReturnType
 				return patched
 			}
 		}
