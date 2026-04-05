@@ -9478,24 +9478,36 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	mutating func mock_userMockReturningAdditionalTypeUsedForProtocolProperty() async throws {
-		// ChildService fulfills ChildServiceProtocol. Its mock returns the protocol type.
-		// Root's property is typed as the protocol. The generator should use .mock for construction.
+		// ChildService fulfills ChildServiceProtocol. Its mock returns the protocol type
+		// and accepts a received dependency. Root's property is typed as the protocol.
+		// The generator should use .mock for construction, threading the dependency through.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
-				    public init(childService: ChildServiceProtocol) { self.childService = childService }
+				    public init(childService: ChildServiceProtocol, engine: Engine) {
+				        self.childService = childService
+				        self.engine = engine
+				    }
 				    @Instantiated let childService: ChildServiceProtocol
+				    @Instantiated let engine: Engine
 				}
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ChildServiceProtocol.self], generateMock: true)
 				public struct ChildService: ChildServiceProtocol, Instantiable {
-				    public init() {}
-				    public static func mock() -> ChildServiceProtocol {
-				        ChildService()
+				    public init(engine: Engine) { self.engine = engine }
+				    @Received let engine: Engine
+				    public static func mock(engine: Engine) -> ChildServiceProtocol {
+				        ChildService(engine: engine)
 				    }
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Engine: Instantiable {
+				    public init() {}
 				}
 				""",
 			],
@@ -9511,10 +9523,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    public static func mock(
-		        childService: @autoclosure @escaping () -> ChildServiceProtocol = ChildService.mock()
+		        childService: ChildServiceProtocol? = nil,
+		        engine: @autoclosure @escaping () -> Engine = Engine()
 		    ) -> Root {
-		        let childService: ChildServiceProtocol = childService()
-		        return Root(childService: childService)
+		        let engine = engine()
+		        let childService: ChildServiceProtocol = childService ?? ChildService.mock(engine: engine)
+		        return Root(childService: childService, engine: engine)
 		    }
 		}
 		#endif
@@ -9523,25 +9537,37 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	mutating func mock_userMockReturningAdditionalTypeNotUsedForConcreteProperty() async throws {
-		// ChildService fulfills ChildServiceProtocol. Its mock returns the protocol type.
-		// Root's property is typed as the concrete type. The generator should NOT use .mock
-		// (which returns the protocol) and instead fall through to init.
+		// ChildService fulfills ChildServiceProtocol. Its mock returns the protocol type
+		// and accepts a received dependency. Root's property is typed as the concrete type.
+		// The generator should NOT use .mock and instead fall through to init,
+		// threading the dependency through init's parameter list.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
-				    public init(childService: ChildService) { self.childService = childService }
+				    public init(childService: ChildService, engine: Engine) {
+				        self.childService = childService
+				        self.engine = engine
+				    }
 				    @Instantiated let childService: ChildService
+				    @Instantiated let engine: Engine
 				}
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ChildServiceProtocol.self], generateMock: true)
 				public struct ChildService: ChildServiceProtocol, Instantiable {
-				    public init() {}
-				    public static func mock() -> ChildServiceProtocol {
-				        ChildService()
+				    public init(engine: Engine) { self.engine = engine }
+				    @Received let engine: Engine
+				    public static func mock(engine: Engine) -> ChildServiceProtocol {
+				        ChildService(engine: engine)
 				    }
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Engine: Instantiable {
+				    public init() {}
 				}
 				""",
 			],
@@ -9557,10 +9583,129 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    public static func mock(
-		        childService: @autoclosure @escaping () -> ChildService = ChildService()
+		        childService: ChildService? = nil,
+		        engine: @autoclosure @escaping () -> Engine = Engine()
 		    ) -> Root {
-		        let childService = childService()
-		        return Root(childService: childService)
+		        let engine = engine()
+		        let childService = childService ?? ChildService(engine: engine)
+		        return Root(childService: childService, engine: engine)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	mutating func mock_extensionUserMockReturningAdditionalTypeUsedForProtocolProperty() async throws {
+		// Extension-based ChildService fulfills ChildServiceProtocol. Its mock returns the protocol
+		// type and accepts a received dependency. Root's property is typed as the protocol.
+		// The generator should use .mock for construction, threading the dependency through.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(childService: ChildServiceProtocol, engine: Engine) {
+				        self.childService = childService
+				        self.engine = engine
+				    }
+				    @Instantiated let childService: ChildServiceProtocol
+				    @Instantiated let engine: Engine
+				}
+				""",
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [ChildServiceProtocol.self], generateMock: true)
+				extension ChildService: Instantiable {
+				    public static func instantiate(engine: Engine) -> ChildService { ChildService() }
+				    public static func mock(engine: Engine) -> ChildServiceProtocol {
+				        ChildService()
+				    }
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Engine: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    public static func mock(
+		        childService: ChildServiceProtocol? = nil,
+		        engine: @autoclosure @escaping () -> Engine = Engine()
+		    ) -> Root {
+		        let engine = engine()
+		        let childService: ChildServiceProtocol = childService ?? ChildService.mock(engine: engine)
+		        return Root(childService: childService, engine: engine)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	mutating func mock_extensionUserMockReturningAdditionalTypeNotUsedForConcreteProperty() async throws {
+		// Extension-based ChildService fulfills ChildServiceProtocol. Its mock returns the protocol
+		// type and accepts a received dependency. Root's property is typed as the concrete type.
+		// The generator should NOT use .mock and instead fall through to instantiate(),
+		// threading the dependency through instantiate's parameter list.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(childService: ChildService, engine: Engine) {
+				        self.childService = childService
+				        self.engine = engine
+				    }
+				    @Instantiated let childService: ChildService
+				    @Instantiated let engine: Engine
+				}
+				""",
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [ChildServiceProtocol.self], generateMock: true)
+				extension ChildService: Instantiable {
+				    public static func instantiate(engine: Engine) -> ChildService { ChildService() }
+				    public static func mock(engine: Engine) -> ChildServiceProtocol {
+				        ChildService()
+				    }
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Engine: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    public static func mock(
+		        childService: ChildService? = nil,
+		        engine: @autoclosure @escaping () -> Engine = Engine()
+		    ) -> Root {
+		        let engine = engine()
+		        let childService: ChildService = childService ?? ChildService.instantiate(engine: engine)
+		        return Root(childService: childService, engine: engine)
 		    }
 		}
 		#endif
