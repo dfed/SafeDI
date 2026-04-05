@@ -432,9 +432,11 @@ public struct InstantiableMacro: MemberMacro {
 				let typeName = concreteDeclaration.name.text
 				let instantiableTypeStrippingGenerics = visitor.instantiableType?.strippingGenerics
 				let mockReturnType = mockSyntax.signature.returnClause?.type.typeDescription
+				let additionalTypesStrippingGenerics = (visitor.additionalInstantiables ?? []).map(\.strippingGenerics)
 				let isSelfReturnType = mockReturnType == .simple(name: "Self", generics: [])
 				let returnTypeMatchesTypeName = isSelfReturnType
 					|| mockReturnType?.strippingGenerics == instantiableTypeStrippingGenerics
+					|| additionalTypesStrippingGenerics.contains(where: { $0 == mockReturnType?.strippingGenerics })
 				if !returnTypeMatchesTypeName {
 					var fixedMockSyntax = mockSyntax
 					if let existingReturnClause = mockSyntax.signature.returnClause {
@@ -620,7 +622,9 @@ public struct InstantiableMacro: MemberMacro {
 			var seenMockReturnTypes = [TypeDescription: FunctionDeclSyntax]()
 			for mockFunction in allMockFunctions {
 				let mockReturnType = mockFunction.signature.returnClause?.type.typeDescription
+				let additionalTypesStrippingGenerics = (visitor.additionalInstantiables ?? []).map(\.strippingGenerics)
 				let returnTypeMatchesExtendedType = mockReturnType?.strippingGenerics == extendedTypeStrippingGenerics
+					|| additionalTypesStrippingGenerics.contains(where: { $0 == mockReturnType?.strippingGenerics })
 				if !returnTypeMatchesExtendedType {
 					var fixedMockFunction = mockFunction
 					if let existingReturnClause = mockFunction.signature.returnClause {
