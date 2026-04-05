@@ -421,10 +421,12 @@ public struct InstantiableMacro: MemberMacro {
 			{
 				let typeName = concreteDeclaration.name.text
 				let instantiableTypeStrippingGenerics = visitor.instantiableType?.strippingGenerics
+				let additionalTypesStrippingGenerics = (visitor.additionalInstantiables ?? []).map(\.strippingGenerics)
 				let mockReturnType = mockSyntax.signature.returnClause?.type.typeDescription
 				let isSelfReturnType = mockReturnType == .simple(name: "Self", generics: [])
 				let returnTypeMatchesTypeName = isSelfReturnType
 					|| mockReturnType?.strippingGenerics == instantiableTypeStrippingGenerics
+					|| additionalTypesStrippingGenerics.contains(where: { $0 == mockReturnType?.strippingGenerics })
 				if !returnTypeMatchesTypeName {
 					var fixedMockSyntax = mockSyntax
 					if let existingReturnClause = mockSyntax.signature.returnClause {
@@ -587,10 +589,11 @@ public struct InstantiableMacro: MemberMacro {
 				context.diagnose(diagnostic)
 			}
 
-			// Validate mock() methods on extensions: must be public, return the extended type or Self, and be unique per return type.
+			// Validate mock() methods on extensions: must be public, return the extended type or an additional type, and be unique per return type.
 			let extendedTypeDescription = extensionDeclaration.extendedType.typeDescription
 			let extendedTypeName = extendedTypeDescription.asSource
 			let extendedTypeStrippingGenerics = extendedTypeDescription.strippingGenerics
+			let additionalTypesStrippingGenerics = (visitor.additionalInstantiables ?? []).map(\.strippingGenerics)
 			var allMockFunctions = [FunctionDeclSyntax]()
 			if let firstMock = visitor.mockFunctionSyntax {
 				allMockFunctions.append(firstMock)
@@ -600,6 +603,7 @@ public struct InstantiableMacro: MemberMacro {
 			for mockFunction in allMockFunctions {
 				let mockReturnType = mockFunction.signature.returnClause?.type.typeDescription
 				let returnTypeMatchesExtendedType = mockReturnType?.strippingGenerics == extendedTypeStrippingGenerics
+					|| additionalTypesStrippingGenerics.contains(where: { $0 == mockReturnType?.strippingGenerics })
 				if !returnTypeMatchesExtendedType {
 					var fixedMockFunction = mockFunction
 					if let existingReturnClause = mockFunction.signature.returnClause {
