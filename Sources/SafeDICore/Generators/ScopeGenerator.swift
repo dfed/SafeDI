@@ -922,7 +922,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableOptionalProperties,
 				forMockGeneration: true,
 			)
-			let construction = if instantiable.declarationType.isExtension {
+			let construction = if instantiable.mockInitializer != nil {
+				"\(typeName).mock(\(argumentList))"
+			} else if instantiable.declarationType.isExtension {
 				"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
 			} else {
 				"\(typeName)(\(argumentList))"
@@ -1012,7 +1014,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			forMockGeneration: true,
 			mockContext: bodyContext,
 		)
-		let construction = if instantiable.declarationType.isExtension {
+		let construction = if instantiable.mockInitializer != nil {
+			"\(typeName).mock(\(argumentList))"
+		} else if instantiable.declarationType.isExtension {
 			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
 		} else {
 			"\(typeName)(\(argumentList))"

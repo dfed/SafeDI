@@ -78,14 +78,46 @@ struct FixableInstantiableErrorTests {
 	}
 
 	@Test
-	func mockMethodConflictsWithGenerateMock_description_mentionsBothGenerateMockAndMockMethod() {
+	func mockMethodConflictsWithGenerateMock_description_mentionsAmbiguousSignatures() {
 		let error = FixableInstantiableError.mockMethodConflictsWithGenerateMock
-		#expect(error.description == "@Instantiable-decorated type must not have both `generateMock: true` and a hand-written `mock()` method.")
+		#expect(error.description == "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method when there are no dependencies, because the generated and hand-written methods would have ambiguous signatures.")
 	}
 
 	@Test
 	func mockMethodConflictsWithGenerateMock_fixIt_mentionsRemovingGenerateMock() {
 		let error = FixableInstantiableError.mockMethodConflictsWithGenerateMock
 		#expect(error.fixIt.message == "Remove `generateMock: true`")
+	}
+
+	@Test
+	func mockMethodDependencyHasDefaultValue_description_mentionsDefaultValuesAndGenerateMock() {
+		let error = FixableInstantiableError.mockMethodDependencyHasDefaultValue([
+			Property(label: "service", typeDescription: .simple(name: "Service")),
+		])
+		#expect(error.description == "@Instantiable-decorated type's `mock()` method must not have default values on dependency parameters when `generateMock` is `true`. Default values would create ambiguity with the generated mock method.")
+	}
+
+	@Test
+	func mockMethodDependencyHasDefaultValue_fixIt_mentionsRemovingDefaultValues() {
+		let error = FixableInstantiableError.mockMethodDependencyHasDefaultValue([
+			Property(label: "service", typeDescription: .simple(name: "Service")),
+		])
+		#expect(error.fixIt.message == "Remove default values from mock() dependency parameters for service: Service")
+	}
+
+	@Test
+	func mockMethodNonDependencyMissingDefaultValue_description_mentionsNonDependencyParameters() {
+		let error = FixableInstantiableError.mockMethodNonDependencyMissingDefaultValue([
+			Property(label: "extra", typeDescription: .simple(name: "Bool")),
+		])
+		#expect(error.description == "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.")
+	}
+
+	@Test
+	func mockMethodNonDependencyMissingDefaultValue_fixIt_mentionsAddingDefaultValues() {
+		let error = FixableInstantiableError.mockMethodNonDependencyMissingDefaultValue([
+			Property(label: "extra", typeDescription: .simple(name: "Bool")),
+		])
+		#expect(error.fixIt.message == "Add default values to mock() non-dependency parameters for extra: Bool")
 	}
 }

@@ -37,6 +37,8 @@ public enum FixableInstantiableError: DiagnosticError {
 	case mockMethodIncorrectReturnType(typeName: String)
 	case duplicateMockMethod
 	case mockMethodConflictsWithGenerateMock
+	case mockMethodDependencyHasDefaultValue([Property])
+	case mockMethodNonDependencyMissingDefaultValue([Property])
 
 	public enum MissingInitializer: Sendable {
 		case hasOnlyInjectableProperties
@@ -90,7 +92,11 @@ public enum FixableInstantiableError: DiagnosticError {
 		case .duplicateMockMethod:
 			"@\(InstantiableVisitor.macroName)-decorated type must have at most one `mock()` method. Remove this duplicate."
 		case .mockMethodConflictsWithGenerateMock:
-			"@\(InstantiableVisitor.macroName)-decorated type must not have both `generateMock: true` and a hand-written `mock()` method."
+			"@\(InstantiableVisitor.macroName)-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method when there are no dependencies, because the generated and hand-written methods would have ambiguous signatures."
+		case .mockMethodDependencyHasDefaultValue:
+			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method must not have default values on dependency parameters when `generateMock` is `true`. Default values would create ambiguity with the generated mock method."
+		case .mockMethodNonDependencyMissingDefaultValue:
+			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values."
 		}
 	}
 
@@ -123,7 +129,9 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .mockMethodNotPublic,
 			     .mockMethodIncorrectReturnType,
 			     .duplicateMockMethod,
-			     .mockMethodConflictsWithGenerateMock:
+			     .mockMethodConflictsWithGenerateMock,
+			     .mockMethodDependencyHasDefaultValue,
+			     .mockMethodNonDependencyMissingDefaultValue:
 				.error
 			}
 			message = error.description
@@ -180,6 +188,10 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Remove duplicate mock() method"
 			case .mockMethodConflictsWithGenerateMock:
 				"Remove `generateMock: true`"
+			case let .mockMethodDependencyHasDefaultValue(properties):
+				"Remove default values from mock() dependency parameters for \(properties.map(\.asSource).joined(separator: ", "))"
+			case let .mockMethodNonDependencyMissingDefaultValue(properties):
+				"Add default values to mock() non-dependency parameters for \(properties.map(\.asSource).joined(separator: ", "))"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}
