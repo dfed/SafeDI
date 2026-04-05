@@ -677,12 +677,12 @@ public struct InstantiableMacro: MemberMacro {
 				allMockFunctions.append(firstMock)
 			}
 			allMockFunctions.append(contentsOf: visitor.duplicateMockFunctionSyntaxes)
+			let extensionDependencies = visitor.instantiables.flatMap(\.dependencies)
 			// When generateMock: true and a user-defined mock exists, validate compatibility.
 			if let firstMock = visitor.mockFunctionSyntax,
 			   let instantiableMacro = declaration.attributes.instantiableMacro,
 			   instantiableMacro.generateMockValue
 			{
-				let extensionDependencies = visitor.instantiables.flatMap(\.dependencies)
 				if extensionDependencies.isEmpty {
 					// No dependencies: generated and hand-written mocks would have identical signatures.
 					context.diagnose(Diagnostic(
@@ -725,7 +725,6 @@ public struct InstantiableMacro: MemberMacro {
 			}
 			// Always: check that non-dependency parameters on mock methods have default values.
 			if let firstMock = visitor.mockFunctionSyntax {
-				let extensionDependencies = visitor.instantiables.flatMap(\.dependencies)
 				if !extensionDependencies.isEmpty {
 					let dependencyLabels = Set(extensionDependencies.map(\.property.label))
 					let firstMockInitializer = Initializer(firstMock)
