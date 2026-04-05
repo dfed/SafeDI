@@ -4451,6 +4451,104 @@ import Testing
 			)
 		}
 
+		@Test
+		func producesDiagnostic_whenGenerateMockIsTrueAndUserDefinedMockExists() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true)
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must not have both `generateMock: true` and a hand-written `mock()` method.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Remove `generateMock: true`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove `generateMock: true`",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func producesDiagnostic_whenGenerateMockIsTrueAndUserDefinedMockExistsWithOtherArguments() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must not have both `generateMock: true` and a hand-written `mock()` method.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Remove `generateMock: true`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove `generateMock: true`",
+				],
+				fixedSource: """
+				@Instantiable(isRoot: true)
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+			)
+		}
+
 		// MARK: Mock Method Validation Tests
 
 		@Test

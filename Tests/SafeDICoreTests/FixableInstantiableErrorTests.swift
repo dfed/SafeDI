@@ -76,4 +76,16 @@ struct FixableInstantiableErrorTests {
 		let error = FixableInstantiableError.duplicateMockMethod
 		#expect(error.fixIt.message == "Remove duplicate mock() method")
 	}
+
+	@Test
+	func mockMethodConflictsWithGenerateMock_description_mentionsBothGenerateMockAndMockMethod() {
+		let error = FixableInstantiableError.mockMethodConflictsWithGenerateMock
+		#expect(error.description == "@Instantiable-decorated type must not have both `generateMock: true` and a hand-written `mock()` method.")
+	}
+
+	@Test
+	func mockMethodConflictsWithGenerateMock_fixIt_mentionsRemovingGenerateMock() {
+		let error = FixableInstantiableError.mockMethodConflictsWithGenerateMock
+		#expect(error.fixIt.message == "Remove `generateMock: true`")
+	}
 }

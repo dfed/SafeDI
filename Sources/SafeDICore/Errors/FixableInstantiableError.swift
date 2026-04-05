@@ -36,6 +36,7 @@ public enum FixableInstantiableError: DiagnosticError {
 	case mockMethodNotPublic
 	case mockMethodIncorrectReturnType(typeName: String)
 	case duplicateMockMethod
+	case mockMethodConflictsWithGenerateMock
 
 	public enum MissingInitializer: Sendable {
 		case hasOnlyInjectableProperties
@@ -88,6 +89,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method must return `Self` or `\(typeName)`."
 		case .duplicateMockMethod:
 			"@\(InstantiableVisitor.macroName)-decorated type must have at most one `mock()` method. Remove this duplicate."
+		case .mockMethodConflictsWithGenerateMock:
+			"@\(InstantiableVisitor.macroName)-decorated type must not have both `generateMock: true` and a hand-written `mock()` method."
 		}
 	}
 
@@ -119,7 +122,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .mockMethodMissingArguments,
 			     .mockMethodNotPublic,
 			     .mockMethodIncorrectReturnType,
-			     .duplicateMockMethod:
+			     .duplicateMockMethod,
+			     .mockMethodConflictsWithGenerateMock:
 				.error
 			}
 			message = error.description
@@ -174,6 +178,8 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Change mock() return type to `\(typeName)`"
 			case .duplicateMockMethod:
 				"Remove duplicate mock() method"
+			case .mockMethodConflictsWithGenerateMock:
+				"Remove `generateMock: true`"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}
