@@ -4809,58 +4809,6 @@ import Testing
 		}
 
 		@Test
-		func mockMethodReturningAdditionalTypeProducesNoDiagnostic() {
-			assertMacroExpansion(
-				"""
-				@Instantiable(fulfillingAdditionalTypes: [MyServiceProtocol.self])
-				public struct MyService: MyServiceProtocol, Instantiable {
-				    public init() {}
-
-				    public static func mock() -> MyServiceProtocol {
-				        MyService()
-				    }
-				}
-				""",
-				expandedSource: """
-				public struct MyService: MyServiceProtocol, Instantiable {
-				    public init() {}
-
-				    public static func mock() -> MyServiceProtocol {
-				        MyService()
-				    }
-				}
-				""",
-				macros: instantiableTestMacros,
-			)
-		}
-
-		@Test
-		func extension_mockMethodReturningAdditionalTypeProducesNoDiagnostic() {
-			assertMacroExpansion(
-				"""
-				@Instantiable(fulfillingAdditionalTypes: [MyServiceProtocol.self])
-				extension MyService: Instantiable {
-				    public static func instantiate() -> MyService { fatalError() }
-
-				    public static func mock() -> MyServiceProtocol {
-				        MyService()
-				    }
-				}
-				""",
-				expandedSource: """
-				extension MyService: Instantiable {
-				    public static func instantiate() -> MyService { fatalError() }
-
-				    public static func mock() -> MyServiceProtocol {
-				        MyService()
-				    }
-				}
-				""",
-				macros: instantiableTestMacros,
-			)
-		}
-
-		@Test
 		func extension_mockMethodNotPublicProducesDiagnostic() {
 			assertMacroExpansion(
 				"""

@@ -31,6 +31,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		mockAttributes: String = "",
 		generateMock: Bool = false,
 		mockInitializer: Initializer? = nil,
+		mockReturnType: TypeDescription? = nil,
 	) {
 		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
 		self.isRoot = isRoot
@@ -40,6 +41,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.mockAttributes = mockAttributes
 		self.generateMock = generateMock
 		self.mockInitializer = mockInitializer
+		self.mockReturnType = mockReturnType
 	}
 
 	// MARK: Public
@@ -67,6 +69,19 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// A user-defined `static func mock(...)` method, if one exists.
 	/// When present, generated mocks call `TypeName.mock(...)` instead of `TypeName(...)`.
 	public var mockInitializer: Initializer?
+	/// The return type of the user-defined `mock()` method, if one exists.
+	/// Used to determine whether to call `.mock` or fall through to `init` based on the property type.
+	public var mockReturnType: TypeDescription?
+
+	/// Whether the user-defined mock() method's return type is compatible with the given property type.
+	/// Returns `true` when the mock returns the concrete type, `Self`, or the exact property type.
+	/// Returns `false` when there is no mock method.
+	public func mockReturnTypeIsCompatible(withPropertyType propertyType: TypeDescription) -> Bool {
+		guard let mockReturnType else { return false }
+		return mockReturnType == propertyType
+			|| mockReturnType == concreteInstantiable
+			|| mockReturnType == .simple(name: "Self", generics: [])
+	}
 
 	/// The path to the source file that declared this Instantiable.
 	public var sourceFilePath: String?
