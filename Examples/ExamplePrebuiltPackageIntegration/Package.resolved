@@ -1,13 +1,13 @@
 {
-  "originHash" : "85773eaa84be6dd209439134aa63e73b669e0d537cb577768fc833dd8966a9bb",
+  "originHash" : "e70ac9d74c96f4bf98974e903fd0d660e828e0334b7b72eb01de2274431d80d1",
   "pins" : [
     {
       "identity" : "safedi",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/dfed/SafeDI.git",
       "state" : {
-        "revision" : "7c188230b316ca266725aae54cbdfd86784d3a07",
-        "version" : "1.5.1"
+        "revision" : "54179d47b7bfe55b1cfd162afb7c30cbaa0e2272",
+        "version" : "2.0.0-alpha-3"
       }
     },
     {
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-syntax.git",
       "state" : {
-        "revision" : "0687f71944021d616d34d922343dcef086855920",
-        "version" : "600.0.1"
+        "revision" : "2b59c0c741e9184ab057fd22950b491076d42e91",
+        "version" : "603.0.0"
       }
     }
   ],
