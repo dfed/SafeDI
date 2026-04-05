@@ -151,7 +151,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	public override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
 		// Detect existing static/class func mock(...) methods.
-		if node.name.text == "mock",
+		// When customMockName is set, detect by that name; otherwise detect "mock".
+		let mockMethodName = customMockName ?? "mock"
+		if node.name.text == mockMethodName,
 		   node.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) || $0.name.tokenKind == .keyword(.class) })
 		{
 			if mockFunctionSyntax != nil {
@@ -218,6 +220,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				generateMock: generateMock,
 				mockInitializer: mockInitializer,
 				mockReturnType: mockReturnType,
+				customMockName: customMockName,
 			))
 		}
 
@@ -309,6 +312,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var additionalInstantiables: [TypeDescription]?
 	public private(set) var mockAttributes = ""
 	public private(set) var generateMock: Bool = false
+	public private(set) var customMockName: String?
 	public private(set) var mockInitializer: Initializer?
 	public private(set) var mockReturnType: TypeDescription?
 	public private(set) var mockFunctionSyntax: FunctionDeclSyntax?
@@ -370,6 +374,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						generateMock: generateMock,
 						mockInitializer: mockInitializer,
 						mockReturnType: mockReturnType,
+						customMockName: customMockName,
 					),
 				]
 			} else {
@@ -458,11 +463,15 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		func processGenerateMock() {
 			generateMock = macro.generateMockValue
 		}
+		func processCustomMockName() {
+			customMockName = macro.customMockNameValue
+		}
 
 		processIsRoot()
 		processFulfillingAdditionalTypesParameter()
 		processMockAttributes()
 		processGenerateMock()
+		processCustomMockName()
 	}
 
 	private func processModifiers(_: DeclModifierListSyntax, on node: some ConcreteDeclSyntaxProtocol) {

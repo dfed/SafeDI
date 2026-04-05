@@ -506,11 +506,27 @@ Set `mockConditionalCompilation` to `nil` to generate mocks without conditional 
 
 ### Using generated mocks
 
-Each `@Instantiable` type with `generateMock: true` gets a generated `mock()` static method that builds its full dependency subtree. When a type also contains a hand-written `mock()` method, the generated mock calls through to the hand-written one, letting you customize mock behavior while still getting the convenience of generated tree construction. Note that mocks defined in separate extensions are not detected; the method must be in the `@Instantiable`-decorated declaration body.
+Each `@Instantiable` type with `generateMock: true` gets a generated `mock()` static method that builds its full dependency subtree. Note that mocks defined in separate extensions are not detected; the method must be in the `@Instantiable`-decorated declaration body.
 
-When `generateMock: true` and a hand-written mock coexist, dependency parameters on the hand-written mock must **not** have default values — defaults would create ambiguity between the generated and hand-written signatures. If the type has no dependencies at all, `generateMock: true` and a hand-written mock are mutually exclusive (the generated and hand-written methods would have identical signatures).
+When a type also has a hand-written mock method, it must have a different name from the generated `mock()` to avoid ambiguity. Use the `customMockName` parameter to specify the name of the hand-written method, and the generated `mock()` will call through to it:
 
-If you provide a `mock()` method without `generateMock: true`, parent types that instantiate the child will call `ChildType.mock(...)` instead of `ChildType(...)` when constructing it, threading mock parameters through your custom method.
+```swift
+@Instantiable(generateMock: true, customMockName: "customMock")
+public struct MyService: Instantiable {
+    public init(dependency: Dependency) {
+        self.dependency = dependency
+    }
+    @Instantiated let dependency: Dependency
+
+    public static func customMock(dependency: Dependency) -> MyService {
+        MyService(dependency: dependency)
+    }
+}
+```
+
+The `customMockName` parameter requires `generateMock: true`. Default values on dependency parameters are allowed when using `customMockName` since the different names eliminate ambiguity. If `generateMock: true` is set and a hand-written `mock()` method exists without `customMockName`, the macro will emit a fix-it suggesting you rename the method and add the parameter.
+
+If you provide a mock method without `generateMock: true`, parent types that instantiate the child will call `ChildType.mock(...)` (or `ChildType.customMock(...)`) instead of `ChildType(...)` when constructing it, threading mock parameters through your custom method.
 
 Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type's `@Instantiated`, `@Received`, and `@Forwarded` dependencies. Non-dependency parameters must have default values. On concrete type declarations the return type must be `Self`, the type name, or a type listed in `fulfillingAdditionalTypes`; on extension-based `@Instantiable` types the return type must match the extended type (e.g. `-> Container<Bool>`) or a `fulfillingAdditionalTypes` entry, mirroring the corresponding `instantiate()` method. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
 

@@ -161,6 +161,7 @@ struct SafeDITool: AsyncParsableCommand {
 				generateMock: unnormalizedInstantiable.generateMock,
 				mockInitializer: unnormalizedInstantiable.mockInitializer,
 				mockReturnType: unnormalizedInstantiable.mockReturnType,
+				customMockName: unnormalizedInstantiable.customMockName,
 			)
 			normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath
 			return normalized

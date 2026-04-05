@@ -68,6 +68,18 @@ public struct InstantiableMacro: MemberMacro {
 			}
 		}
 
+		if let customMockNameArgument = declaration
+			.attributes
+			.instantiableMacro?
+			.customMockName
+		{
+			if NilLiteralExprSyntax(customMockNameArgument) == nil,
+			   StringLiteralExprSyntax(customMockNameArgument) == nil
+			{
+				throw InstantiableError.customMockNameArgumentInvalid
+			}
+		}
+
 		if let concreteDeclaration: ConcreteDeclSyntaxProtocol
 			= ActorDeclSyntax(declaration)
 			?? ClassDeclSyntax(declaration)
@@ -415,53 +427,49 @@ public struct InstantiableMacro: MemberMacro {
 				))
 			}
 
-			// Validate mock() method if one exists: must be public, return Self or the type name, and have parameters for all dependencies.
+			// Validate customMockName: requires generateMock: true.
+			if let instantiableMacro = declaration.attributes.instantiableMacro {
+				let customMockNameValue = instantiableMacro.customMockNameValue
+				if customMockNameValue != nil, !instantiableMacro.generateMockValue {
+					context.diagnose(Diagnostic(
+						node: Syntax(instantiableMacro),
+						error: FixableInstantiableError.customMockNameWithoutGenerateMock,
+						changes: Self.addGenerateMockArgument(to: instantiableMacro, on: declaration),
+					))
+				}
+				// When generateMock: true and a method named "mock" exists (not custom-named), it must be renamed.
+				if instantiableMacro.generateMockValue,
+				   customMockNameValue == nil,
+				   let mockSyntax = visitor.mockFunctionSyntax
+				{
+					context.diagnose(Diagnostic(
+						node: Syntax(mockSyntax),
+						error: FixableInstantiableError.mockMethodNeedsCustomName,
+						changes: Self.renameMethodToCustomMock(mockSyntax: mockSyntax, instantiableMacro: instantiableMacro, on: declaration),
+					))
+				}
+				// When customMockName is set but no method with that name is found, emit error.
+				if let customMockNameValue,
+				   instantiableMacro.generateMockValue,
+				   visitor.mockFunctionSyntax == nil
+				{
+					context.diagnose(Diagnostic(
+						node: Syntax(instantiableMacro),
+						error: FixableInstantiableError.customMockNameMethodNotFound(customMockNameValue),
+						changes: Self.generateCustomMockStub(
+							named: customMockNameValue,
+							typeName: concreteDeclaration.name.text,
+							dependencies: visitor.dependencies,
+							on: declaration,
+						),
+					))
+				}
+			}
+
+			// Validate mock method if one exists: must be public, return Self or the type name, and have parameters for all dependencies.
 			if let mockInitializer = visitor.mockInitializer,
 			   let mockSyntax = visitor.mockFunctionSyntax
 			{
-				// When generateMock: true and a user-defined mock exists, validate compatibility.
-				if let instantiableMacro = declaration.attributes.instantiableMacro,
-				   instantiableMacro.generateMockValue
-				{
-					if visitor.dependencies.isEmpty {
-						// No dependencies: generated and hand-written mocks would have identical signatures.
-						context.diagnose(Diagnostic(
-							node: Syntax(mockSyntax),
-							error: FixableInstantiableError.mockMethodConflictsWithGenerateMock,
-							changes: Self.removeGenerateMockArgument(from: instantiableMacro, on: declaration),
-						))
-					} else {
-						// Has dependencies: check that no dependency parameter has a default value.
-						let dependencyLabels = Set(visitor.dependencies.map(\.property.label))
-						let dependenciesWithDefaults = mockInitializer.arguments
-							.filter { dependencyLabels.contains($0.innerLabel) && $0.hasDefaultValue }
-							.map(\.asProperty)
-						if !dependenciesWithDefaults.isEmpty {
-							var fixedMockSyntax = mockSyntax
-							fixedMockSyntax.signature.parameterClause.parameters = FunctionParameterListSyntax(
-								mockSyntax.signature.parameterClause.parameters.map { parameter in
-									var fixedParameter = parameter
-									if dependencyLabels.contains(parameter.secondName?.text ?? parameter.firstName.text),
-									   fixedParameter.defaultValue != nil
-									{
-										fixedParameter.defaultValue = nil
-									}
-									return fixedParameter
-								},
-							)
-							context.diagnose(Diagnostic(
-								node: Syntax(mockSyntax),
-								error: FixableInstantiableError.mockMethodDependencyHasDefaultValue(dependenciesWithDefaults),
-								changes: [
-									.replace(
-										oldNode: Syntax(mockSyntax),
-										newNode: Syntax(fixedMockSyntax),
-									),
-								],
-							))
-						}
-					}
-				}
 				// Always: check that non-dependency parameters have default values.
 				if !visitor.dependencies.isEmpty {
 					let dependencyLabels = Set(visitor.dependencies.map(\.property.label))
@@ -678,49 +686,42 @@ public struct InstantiableMacro: MemberMacro {
 			}
 			allMockFunctions.append(contentsOf: visitor.duplicateMockFunctionSyntaxes)
 			let extensionDependencies = visitor.instantiables.flatMap(\.dependencies)
-			// When generateMock: true and a user-defined mock exists, validate compatibility.
-			if let firstMock = visitor.mockFunctionSyntax,
-			   let instantiableMacro = declaration.attributes.instantiableMacro,
-			   instantiableMacro.generateMockValue
-			{
-				if extensionDependencies.isEmpty {
-					// No dependencies: generated and hand-written mocks would have identical signatures.
+			// Validate customMockName: requires generateMock: true.
+			if let instantiableMacro = declaration.attributes.instantiableMacro {
+				let customMockNameValue = instantiableMacro.customMockNameValue
+				if customMockNameValue != nil, !instantiableMacro.generateMockValue {
+					context.diagnose(Diagnostic(
+						node: Syntax(instantiableMacro),
+						error: FixableInstantiableError.customMockNameWithoutGenerateMock,
+						changes: Self.addGenerateMockArgument(to: instantiableMacro, on: declaration),
+					))
+				}
+				// When generateMock: true and a method named "mock" exists (not custom-named), it must be renamed.
+				if instantiableMacro.generateMockValue,
+				   customMockNameValue == nil,
+				   let firstMock = visitor.mockFunctionSyntax
+				{
 					context.diagnose(Diagnostic(
 						node: Syntax(firstMock),
-						error: FixableInstantiableError.mockMethodConflictsWithGenerateMock,
-						changes: Self.removeGenerateMockArgument(from: instantiableMacro, on: declaration),
+						error: FixableInstantiableError.mockMethodNeedsCustomName,
+						changes: Self.renameMethodToCustomMock(mockSyntax: firstMock, instantiableMacro: instantiableMacro, on: declaration),
 					))
-				} else {
-					// Has dependencies: check that no dependency parameter has a default value.
-					let dependencyLabels = Set(extensionDependencies.map(\.property.label))
-					let firstMockInitializer = Initializer(firstMock)
-					let dependenciesWithDefaults = firstMockInitializer.arguments
-						.filter { dependencyLabels.contains($0.innerLabel) && $0.hasDefaultValue }
-						.map(\.asProperty)
-					if !dependenciesWithDefaults.isEmpty {
-						var fixedMock = firstMock
-						fixedMock.signature.parameterClause.parameters = FunctionParameterListSyntax(
-							firstMock.signature.parameterClause.parameters.map { parameter in
-								var fixedParameter = parameter
-								if dependencyLabels.contains(parameter.secondName?.text ?? parameter.firstName.text),
-								   fixedParameter.defaultValue != nil
-								{
-									fixedParameter.defaultValue = nil
-								}
-								return fixedParameter
-							},
-						)
-						context.diagnose(Diagnostic(
-							node: Syntax(firstMock),
-							error: FixableInstantiableError.mockMethodDependencyHasDefaultValue(dependenciesWithDefaults),
-							changes: [
-								.replace(
-									oldNode: Syntax(firstMock),
-									newNode: Syntax(fixedMock),
-								),
-							],
-						))
-					}
+				}
+				// When customMockName is set but no method with that name is found, emit error.
+				if let customMockNameValue,
+				   instantiableMacro.generateMockValue,
+				   visitor.mockFunctionSyntax == nil
+				{
+					context.diagnose(Diagnostic(
+						node: Syntax(instantiableMacro),
+						error: FixableInstantiableError.customMockNameMethodNotFound(customMockNameValue),
+						changes: Self.generateCustomMockStub(
+							named: customMockNameValue,
+							typeName: extendedTypeName,
+							dependencies: extensionDependencies,
+							on: declaration,
+						),
+					))
 				}
 			}
 			// Always: check that non-dependency parameters on mock methods have default values.
@@ -1075,32 +1076,146 @@ public struct InstantiableMacro: MemberMacro {
 		return result
 	}
 
-	/// Builds a `FixIt.Change` array that removes the `generateMock: true` argument
-	/// from an `@Instantiable(…)` attribute. If `generateMock` is the only argument,
-	/// the entire argument clause (including parentheses) is removed.
-	private static func removeGenerateMockArgument(
-		from attribute: AttributeSyntax,
+	/// Builds fix-it changes that add `generateMock: true` to an existing `@Instantiable` attribute.
+	private static func addGenerateMockArgument(
+		to attribute: AttributeSyntax,
 		on declaration: some SyntaxProtocol,
 	) -> [FixIt.Change] {
-		let labeledExpressionList = LabeledExprListSyntax(attribute.arguments!)!
 		var fixedAttribute = attribute
-		let filteredArguments = labeledExpressionList.filter { $0.label?.text != "generateMock" }
-		if filteredArguments.isEmpty {
-			fixedAttribute.leftParen = nil
-			fixedAttribute.arguments = nil
-			fixedAttribute.rightParen = nil
-		} else {
-			var newArguments = Array(filteredArguments)
-			// Remove trailing comma from the new last argument.
-			if var lastArgument = newArguments.last {
-				lastArgument.trailingComma = nil
-				newArguments[newArguments.count - 1] = lastArgument
-			}
-			fixedAttribute.arguments = .argumentList(LabeledExprListSyntax(newArguments))
+		let generateMockArgument = LabeledExprSyntax(
+			label: .identifier("generateMock"),
+			colon: .colonToken(trailingTrivia: .space),
+			expression: BooleanLiteralExprSyntax(booleanLiteral: true),
+		)
+		let labeledExpressionList = LabeledExprListSyntax(attribute.arguments!)!
+		var newArguments = Array(labeledExpressionList)
+		// Add trailing comma to the current last argument.
+		if var lastArgument = newArguments.last {
+			lastArgument.trailingComma = .commaToken(trailingTrivia: .space)
+			newArguments[newArguments.count - 1] = lastArgument
 		}
+		newArguments.append(generateMockArgument)
+		fixedAttribute.arguments = .argumentList(LabeledExprListSyntax(newArguments))
 		let rewriter = AttributeRewriter(oldID: attribute.id, replacement: fixedAttribute)
 		let fixedDeclaration = rewriter.rewrite(Syntax(declaration))
 		return [.replace(oldNode: Syntax(declaration), newNode: fixedDeclaration)]
+	}
+
+	/// Builds fix-it changes that rename a `mock()` method to `customMock()` and add `customMockName: "customMock"` to the attribute.
+	private static func renameMethodToCustomMock(
+		mockSyntax: FunctionDeclSyntax,
+		instantiableMacro: AttributeSyntax,
+		on declaration: some SyntaxProtocol,
+	) -> [FixIt.Change] {
+		// Rename the method from "mock" to "customMock".
+		var renamedMock = mockSyntax
+		renamedMock.name = .identifier("customMock")
+
+		// Add customMockName: "customMock" to the attribute.
+		var fixedAttribute = instantiableMacro
+		let customMockNameArgument = LabeledExprSyntax(
+			label: .identifier("customMockName"),
+			colon: .colonToken(trailingTrivia: .space),
+			expression: StringLiteralExprSyntax(content: "customMock"),
+		)
+		let labeledExpressionList = LabeledExprListSyntax(instantiableMacro.arguments!)!
+		var newArguments = Array(labeledExpressionList)
+		if var lastArgument = newArguments.last {
+			lastArgument.trailingComma = .commaToken(trailingTrivia: .space)
+			newArguments[newArguments.count - 1] = lastArgument
+		}
+		newArguments.append(customMockNameArgument)
+		fixedAttribute.arguments = .argumentList(LabeledExprListSyntax(newArguments))
+
+		// Apply both changes: rename method and update attribute.
+		let rewriter = AttributeRewriter(oldID: instantiableMacro.id, replacement: fixedAttribute)
+		let fixedDeclaration = rewriter.rewrite(Syntax(declaration))
+		return [
+			.replace(oldNode: Syntax(mockSyntax), newNode: Syntax(renamedMock)),
+			.replace(oldNode: Syntax(declaration), newNode: fixedDeclaration),
+		]
+	}
+
+	/// Builds fix-it changes that generate a stub custom mock method below the initializer.
+	private static func generateCustomMockStub(
+		named name: String,
+		typeName: String,
+		dependencies: [Dependency],
+		on declaration: some DeclGroupSyntax,
+	) -> [FixIt.Change] {
+		let parameters = dependencies.map { dependency in
+			FunctionParameterSyntax(
+				firstName: .identifier(dependency.property.label),
+				colon: .colonToken(trailingTrivia: .space),
+				type: IdentifierTypeSyntax(name: .identifier(dependency.property.typeDescription.asSource)),
+			)
+		}
+		let parameterList = FunctionParameterListSyntax(
+			parameters.enumerated().map { index, parameter in
+				var parameter = parameter
+				if index < parameters.count - 1 {
+					parameter.trailingComma = .commaToken(trailingTrivia: .space)
+				}
+				return parameter
+			},
+		)
+		let stubMethod = FunctionDeclSyntax(
+			modifiers: DeclModifierListSyntax(
+				arrayLiteral: DeclModifierSyntax(
+					name: TokenSyntax(
+						TokenKind.keyword(.public),
+						presence: .present,
+					),
+					trailingTrivia: .space,
+				),
+				DeclModifierSyntax(
+					name: TokenSyntax(
+						TokenKind.keyword(.static),
+						presence: .present,
+					),
+					trailingTrivia: .space,
+				),
+			),
+			name: TokenSyntax(
+				TokenKind.identifier(name),
+				leadingTrivia: .space,
+				presence: .present,
+			),
+			signature: FunctionSignatureSyntax(
+				parameterClause: FunctionParameterClauseSyntax(
+					parameters: parameterList,
+				),
+				returnClause: ReturnClauseSyntax(
+					arrow: .arrowToken(
+						leadingTrivia: .space,
+						trailingTrivia: .space,
+					),
+					type: IdentifierTypeSyntax(
+						name: .identifier(typeName),
+					),
+				),
+			),
+			body: CodeBlockSyntax(
+				leadingTrivia: .space,
+				statements: CodeBlockItemListSyntax([]),
+				trailingTrivia: .newline,
+			),
+		)
+
+		var membersWithStub = declaration.memberBlock.members
+		membersWithStub.append(
+			MemberBlockItemSyntax(
+				leadingTrivia: .newline,
+				decl: stubMethod,
+				trailingTrivia: .newline,
+			),
+		)
+		return [
+			.replace(
+				oldNode: Syntax(declaration.memberBlock.members),
+				newNode: Syntax(membersWithStub),
+			),
+		]
 	}
 
 	// MARK: - InstantiableError
@@ -1111,6 +1226,7 @@ public struct InstantiableMacro: MemberMacro {
 		case fulfillingAdditionalTypesArgumentInvalid
 		case mockAttributesArgumentInvalid
 		case generateMockArgumentInvalid
+		case customMockNameArgumentInvalid
 		case tooManyInstantiateMethods(TypeDescription)
 		case cannotBeRoot(TypeDescription, violatingDependencies: [Dependency])
 
@@ -1126,6 +1242,8 @@ public struct InstantiableMacro: MemberMacro {
 				"The argument `mockAttributes` must be a string literal"
 			case .generateMockArgumentInvalid:
 				"The argument `generateMock` must be a Bool literal (`true` or `false`)"
+			case .customMockNameArgumentInvalid:
+				"The argument `customMockName` must be a string literal or `nil`"
 			case let .tooManyInstantiateMethods(type):
 				"@\(InstantiableVisitor.macroName)-decorated extension must have a single `\(InstantiableVisitor.instantiateMethodName)(…)` method that returns `\(type.asSource)`"
 			case let .cannotBeRoot(declaredRootType, violatingDependencies):

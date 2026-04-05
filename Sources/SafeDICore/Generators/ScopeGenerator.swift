@@ -929,10 +929,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableOptionalProperties,
 				forMockGeneration: true,
 			)
-			// When there are no declarations, there are no dependencies — which means
-			// mockInitializer cannot coexist with generateMock (the macro rejects it
-			// and the generator skips it). So we only need init/instantiate here.
-			let construction = if instantiable.declarationType.isExtension {
+			// When a hand-written mock exists (via customMockName), call through to it.
+			// Otherwise use init/instantiate directly.
+			let mockMethodName = instantiable.customMockName ?? "mock"
+			let construction = if instantiable.mockInitializer != nil {
+				"\(typeName).\(mockMethodName)(\(argumentList))"
+			} else if instantiable.declarationType.isExtension {
 				"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
 			} else {
 				"\(typeName)(\(argumentList))"
@@ -1022,8 +1024,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			forMockGeneration: true,
 			mockContext: bodyContext,
 		)
+		let mockMethodName = instantiable.customMockName ?? "mock"
 		let construction = if instantiable.mockInitializer != nil {
-			"\(typeName).mock(\(argumentList))"
+			"\(typeName).\(mockMethodName)(\(argumentList))"
 		} else if instantiable.declarationType.isExtension {
 			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
 		} else {
