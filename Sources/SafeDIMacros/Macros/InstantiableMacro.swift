@@ -419,6 +419,16 @@ public struct InstantiableMacro: MemberMacro {
 			if let mockInitializer = visitor.mockInitializer,
 			   let mockSyntax = visitor.mockFunctionSyntax
 			{
+				// Error if generateMock: true and a user-defined mock exists.
+				if let instantiableMacro = declaration.attributes.instantiableMacro,
+				   instantiableMacro.generateMockValue
+				{
+					context.diagnose(Diagnostic(
+						node: Syntax(mockSyntax),
+						error: FixableInstantiableError.mockMethodConflictsWithGenerateMock,
+						changes: Self.removeGenerateMockArgument(from: instantiableMacro, on: declaration),
+					))
+				}
 				let typeName = concreteDeclaration.name.text
 				let instantiableTypeStrippingGenerics = visitor.instantiableType?.strippingGenerics
 				let mockReturnType = mockSyntax.signature.returnClause?.type.typeDescription
@@ -596,6 +606,17 @@ public struct InstantiableMacro: MemberMacro {
 				allMockFunctions.append(firstMock)
 			}
 			allMockFunctions.append(contentsOf: visitor.duplicateMockFunctionSyntaxes)
+			// Error if generateMock: true and a user-defined mock exists.
+			if let firstMock = visitor.mockFunctionSyntax,
+			   let instantiableMacro = declaration.attributes.instantiableMacro,
+			   instantiableMacro.generateMockValue
+			{
+				context.diagnose(Diagnostic(
+					node: Syntax(firstMock),
+					error: FixableInstantiableError.mockMethodConflictsWithGenerateMock,
+					changes: Self.removeGenerateMockArgument(from: instantiableMacro, on: declaration),
+				))
+			}
 			var seenMockReturnTypes = [TypeDescription: FunctionDeclSyntax]()
 			for mockFunction in allMockFunctions {
 				let mockReturnType = mockFunction.signature.returnClause?.type.typeDescription
@@ -907,6 +928,34 @@ public struct InstantiableMacro: MemberMacro {
 		return result
 	}
 
+	/// Builds a `FixIt.Change` array that removes the `generateMock: true` argument
+	/// from an `@Instantiable(…)` attribute. If `generateMock` is the only argument,
+	/// the entire argument clause (including parentheses) is removed.
+	private static func removeGenerateMockArgument(
+		from attribute: AttributeSyntax,
+		on declaration: some SyntaxProtocol,
+	) -> [FixIt.Change] {
+		let labeledExpressionList = LabeledExprListSyntax(attribute.arguments!)!
+		var fixedAttribute = attribute
+		let filteredArguments = labeledExpressionList.filter { $0.label?.text != "generateMock" }
+		if filteredArguments.isEmpty {
+			fixedAttribute.leftParen = nil
+			fixedAttribute.arguments = nil
+			fixedAttribute.rightParen = nil
+		} else {
+			var newArguments = Array(filteredArguments)
+			// Remove trailing comma from the new last argument.
+			if var lastArgument = newArguments.last {
+				lastArgument.trailingComma = nil
+				newArguments[newArguments.count - 1] = lastArgument
+			}
+			fixedAttribute.arguments = .argumentList(LabeledExprListSyntax(newArguments))
+		}
+		let rewriter = AttributeRewriter(oldID: attribute.id, replacement: fixedAttribute)
+		let fixedDeclaration = rewriter.rewrite(Syntax(declaration))
+		return [.replace(oldNode: Syntax(declaration), newNode: fixedDeclaration)]
+	}
+
 	// MARK: - InstantiableError
 
 	private enum InstantiableError: Error, CustomStringConvertible {
@@ -1030,5 +1079,24 @@ extension Initializer.GenerationError {
 		     .whereClauseOnInitializer:
 			nil
 		}
+	}
+}
+
+// MARK: - AttributeRewriter
+
+/// Replaces a single attribute in a syntax tree by matching its node ID.
+private final class AttributeRewriter: SyntaxRewriter {
+	let oldID: SyntaxIdentifier
+	let replacement: AttributeSyntax
+	init(oldID: SyntaxIdentifier, replacement: AttributeSyntax) {
+		self.oldID = oldID
+		self.replacement = replacement
+	}
+
+	override func visit(_ node: AttributeSyntax) -> AttributeSyntax {
+		if node.id == oldID {
+			return replacement
+		}
+		return node
 	}
 }
