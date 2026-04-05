@@ -965,12 +965,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// Build mock method parameters.
+		// When a custom mock exists, match its parameter order for the generated mock's signature.
+		// Parameters not in the custom mock (transitive dependencies) are appended alphabetically.
 		let indent = Self.standardIndent
 		var parameters = [String]()
 		for declaration in forwardedDeclarations {
 			parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)")
 		}
-		for declaration in allDeclarations.sorted(by: { $0.parameterLabel < $1.parameterLabel }) {
+		let sortedDeclarations: [MockDeclaration] = if let mockInitializer = instantiable.mockInitializer {
+			{
+				let mockArgumentOrder = mockInitializer.arguments.enumerated().reduce(into: [String: Int]()) { result, pair in
+					result[pair.element.innerLabel] = pair.offset
+				}
+				let mockParameterCount = mockInitializer.arguments.count
+				return allDeclarations.sorted { first, second in
+					let firstIndex = mockArgumentOrder[first.propertyLabel] ?? (mockParameterCount + 0)
+					let secondIndex = mockArgumentOrder[second.propertyLabel] ?? (mockParameterCount + 0)
+					if firstIndex != secondIndex {
+						return firstIndex < secondIndex
+					}
+					return first.parameterLabel < second.parameterLabel
+				}
+			}()
+		} else {
+			allDeclarations.sorted(by: { $0.parameterLabel < $1.parameterLabel })
+		}
+		for declaration in sortedDeclarations {
 			let sendablePrefix = declaration.requiresSendable ? "@Sendable " : ""
 			if declaration.hasSubtree {
 				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)? = nil")
@@ -1039,13 +1059,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append(parametersString)
 		lines.append("\(indent)) -> \(typeName) {")
 		// Bindings for uncovered and received dependencies (must come before child constructions).
-		for declaration in allDeclarations {
+		for declaration in sortedDeclarations {
 			guard rootBindingIdentifiers.contains(declaration.identifier) else { continue }
 			lines.append("\(bodyIndent)let \(declaration.parameterLabel) = \(declaration.parameterLabel)()")
 		}
 		// Bindings for root default-valued init params.
 		// Skip labels matching forwarded params — forwarded values take precedence.
-		for declaration in allDeclarations where declaration.defaultValueExpression != nil {
+		for declaration in sortedDeclarations where declaration.defaultValueExpression != nil {
 			guard rootDefaultIdentifiers.contains(declaration.identifier),
 			      !rootBindingIdentifiers.contains(declaration.identifier),
 			      !forwardedLabels.contains(declaration.propertyLabel),
