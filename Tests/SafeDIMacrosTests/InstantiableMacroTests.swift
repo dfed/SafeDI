@@ -4504,7 +4504,7 @@ import Testing
 		func producesDiagnostic_whenGenerateMockIsTrueAndUserDefinedMockExistsWithOtherArguments() {
 			assertMacroExpansion(
 				"""
-				@Instantiable(isRoot: true, generateMock: true)
+				@MainActor @Instantiable(isRoot: true, generateMock: true)
 				public struct MyService: Instantiable {
 				    public init() {}
 
@@ -4514,6 +4514,7 @@ import Testing
 				}
 				""",
 				expandedSource: """
+				@MainActor
 				public struct MyService: Instantiable {
 				    public init() {}
 
@@ -4537,7 +4538,7 @@ import Testing
 					"Remove `generateMock: true`",
 				],
 				fixedSource: """
-				@Instantiable(isRoot: true)
+				@MainActor @Instantiable(isRoot: true)
 				public struct MyService: Instantiable {
 				    public init() {}
 
@@ -4546,6 +4547,32 @@ import Testing
 				    }
 				}
 				""",
+			)
+		}
+
+		@Test
+		func noDiagnostic_whenGenerateMockIsFalseAndUserDefinedMockExists() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
 			)
 		}
 
