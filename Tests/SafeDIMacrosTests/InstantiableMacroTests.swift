@@ -5414,6 +5414,55 @@ import Testing
 		}
 
 		@Test
+		func extension_producesDiagnostic_whenGenerateMockIsTrueAndUserDefinedMockExists() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true)
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must not have both `generateMock: true` and a hand-written `mock()` method.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Remove `generateMock: true`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove `generateMock: true`",
+				],
+				fixedSource: """
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
 		func mockMethodWithArrayWrappedReturnTypeProducesDiagnostic() {
 			assertMacroExpansion(
 				"""
