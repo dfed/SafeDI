@@ -935,11 +935,7 @@ public struct InstantiableMacro: MemberMacro {
 		from attribute: AttributeSyntax,
 		on declaration: some SyntaxProtocol,
 	) -> [FixIt.Change] {
-		guard let arguments = attribute.arguments,
-		      let labeledExpressionList = LabeledExprListSyntax(arguments)
-		else {
-			return []
-		}
+		let labeledExpressionList = LabeledExprListSyntax(attribute.arguments!)!
 		var fixedAttribute = attribute
 		let filteredArguments = labeledExpressionList.filter { $0.label?.text != "generateMock" }
 		if filteredArguments.isEmpty {
