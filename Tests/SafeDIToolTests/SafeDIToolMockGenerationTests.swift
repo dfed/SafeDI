@@ -10093,8 +10093,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		// Both dependency tree AND mock outputs should have the error.
 		// Path is dynamic so we check for the #error directive presence.
-		let rootDep = try #require(output.dependencyTreeFiles["Root+SafeDI.swift"])
-		#expect(rootDep.contains("#error"), "Dependency tree output should have #error. Output:\n\(rootDep)")
+		let rootDependencyTree = try #require(output.dependencyTreeFiles["Root+SafeDI.swift"])
+		#expect(rootDependencyTree.contains("#error"), "Dependency tree output should have #error. Output:\n\(rootDependencyTree)")
 		let rootMock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
 		#expect(rootMock.contains("#error"), "Mock output should have #error. Output:\n\(rootMock)")
 	}
