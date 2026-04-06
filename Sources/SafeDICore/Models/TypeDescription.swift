@@ -662,19 +662,19 @@ extension ExprSyntax {
 		} else if let genericExpr = GenericSpecializationExprSyntax(self) {
 			let genericTypeVisitor = GenericArgumentVisitor(viewMode: .sourceAccurate)
 			genericTypeVisitor.walk(genericExpr.genericArgumentClause)
-			return switch genericExpr.expression.typeDescription {
-			case let .simple(name, _):
-				.simple(
-					name: name,
+			if let declReferenceExpr = DeclReferenceExprSyntax(genericExpr.expression) {
+				return .simple(
+					name: declReferenceExpr.baseName.text,
 					generics: genericTypeVisitor.genericArguments,
 				)
-			case let .nested(name, parentType, _):
-				.nested(
-					name: name,
-					parentType: parentType, generics: genericTypeVisitor.genericArguments,
+			} else if let memberAccessExpr = MemberAccessExprSyntax(genericExpr.expression),
+			          let base = memberAccessExpr.base
+			{
+				return .nested(
+					name: memberAccessExpr.declName.baseName.text,
+					parentType: base.typeDescription,
+					generics: genericTypeVisitor.genericArguments,
 				)
-			case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
-				.unknown(text: trimmedDescription)
 			}
 		} else if let tupleExpr = TupleExprSyntax(self) {
 			let tupleElements = tupleExpr.elements

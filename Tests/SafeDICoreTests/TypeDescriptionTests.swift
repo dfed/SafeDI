@@ -473,6 +473,19 @@ struct TypeDescriptionTests {
 	}
 
 	@Test
+	func typeDescription_whenCalledOnATypeSyntaxNodeRepresentingASuppressedTypeSyntax_returnsUnknown() throws {
+		let content = """
+		var test: ~Copyable
+		"""
+
+		let visitor = SuppressedTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+		let typeDescription = try #require(visitor.suppressedTypeIdentifier)
+		#expect(typeDescription.isUnknown)
+		#expect(typeDescription.asSource == "~Copyable")
+	}
+
+	@Test
 	func typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAVoidType_findsTheType() throws {
 		let content = """
 		let type: Void.Type = Void.self
@@ -653,6 +666,18 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.typeDescription)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "() -> ()")
+	}
+
+	@Test
+	func typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAClosureTypeWithArguments_findsTheType() throws {
+		let content = """
+		let test: Any.Type = ((Int, String) -> Bool).self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
+		#expect(typeDescription.asSource == "(Int, String) -> Bool")
 	}
 
 	@Test
@@ -1518,6 +1543,14 @@ struct TypeDescriptionTests {
 		// but there’s no way to get a TypeSyntax from an object of that type.
 		override func visit(_ node: TypeAnnotationSyntax) -> SyntaxVisitorContinueKind {
 			functionIdentifier = TypeSyntax(node.type)?.typeDescription
+			return .skipChildren
+		}
+	}
+
+	private final class SuppressedTypeSyntaxVisitor: SyntaxVisitor {
+		var suppressedTypeIdentifier: TypeDescription?
+		override func visit(_ node: SuppressedTypeSyntax) -> SyntaxVisitorContinueKind {
+			suppressedTypeIdentifier = TypeSyntax(node).typeDescription
 			return .skipChildren
 		}
 	}
