@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/dfed/SafeDI.git",
       "state" : {
-        "revision" : "54179d47b7bfe55b1cfd162afb7c30cbaa0e2272",
-        "version" : "2.0.0-alpha-3"
+        "revision" : "8a186b44e9faa118dcdcd8dc9fe1c2267aad7107",
+        "version" : "2.0.0-alpha-7"
       }
     },
     {
