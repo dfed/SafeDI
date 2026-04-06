@@ -62,6 +62,7 @@ SafeDI is a compile-time dependency injection framework for Swift. It uses Swift
 - **No tautological tests.** Tests must exercise real code paths with real input. Never use test helpers that rewrite input before processing — the test content should be exactly what production code would see. Tests should verify input code → output code.
 - **Test through the pipeline**, not direct model construction. Mock tests use `executeSafeDIToolTest` which parses real Swift source through the full visitor → generator pipeline.
 - **Full `==` output comparison.** Never use `.contains()` for mock output. Compare the complete expected string.
+- **Verify updated test expectations compile.** When updating expected output in generator tests, review the new expected code to confirm it would compile as valid Swift. Check that variable references resolve to the correct scope, types match (no optional where non-optional expected), and all referenced variables have bindings. Do not blindly update expected output to match actual — the actual output may itself be buggy.
 - **If code can't be covered by a test with real parsed input, remove the code.** Dead branches and defensive fallbacks for structurally unreachable paths should not exist.
 
 ## Common Pitfalls
