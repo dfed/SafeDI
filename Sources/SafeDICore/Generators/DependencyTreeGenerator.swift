@@ -18,8 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Collections
-
 public actor DependencyTreeGenerator {
 	// MARK: Initialization
 
@@ -644,14 +642,14 @@ public actor DependencyTreeGenerator {
 			on scope: Scope,
 			receivableProperties: Set<Property>,
 			property: Property?,
-			propertyStack: OrderedSet<Property>,
+			propertyStack: [Property],
 			root: TypeDescription,
 		) throws {
 			if let property {
 				func validateNoCycleInReceivedProperties(
 					scope: Scope,
-					receivedPropertyStack: OrderedSet<Property>,
-					instantiationStack: OrderedSet<Property>,
+					receivedPropertyStack: [Property],
+					instantiationStack: [Property],
 				) throws {
 					for childProperty in scope.requiredReceivedProperties {
 						guard childProperty != property else {
@@ -665,7 +663,7 @@ public actor DependencyTreeGenerator {
 							return
 						}
 						if let cycleIndex = instantiationStack.firstIndex(of: childProperty) {
-							let instantiationProperties = Array(instantiationStack.elements[0...cycleIndex])
+							let instantiationProperties = Array(instantiationStack[0...cycleIndex])
 							let typesInCycle = (
 								[childProperty]
 									+ receivedPropertyStack.reversed()
@@ -695,8 +693,7 @@ public actor DependencyTreeGenerator {
 						}
 					}
 				}
-				var instantiationStack = propertyStack
-				instantiationStack.insert(property, at: 0)
+				var instantiationStack: [Property] = [property] + propertyStack
 				try validateNoCycleInReceivedProperties(
 					scope: scope,
 					receivedPropertyStack: [],
@@ -735,7 +732,7 @@ public actor DependencyTreeGenerator {
 				}
 				let typesInCycle = (
 					[propertyForDependency]
-						+ childPropertyStack.elements[0...cycleIndex],
+						+ childPropertyStack[0...cycleIndex],
 				).map(\.typeDescription)
 				if propertyForDependency.propertyType.isConstant {
 					// We can break a constant dependency cycle if there's lazy instantiation in the tree.
