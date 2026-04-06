@@ -2040,7 +2040,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@Test
 	mutating func run_onCodeWithMultipleSafeDIConfigurations_throwsError() async {
 		do {
-			try await executeSafeDIToolTest(
+			_ = try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
 					@SafeDIConfiguration
