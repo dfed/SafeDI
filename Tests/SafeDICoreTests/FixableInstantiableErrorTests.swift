@@ -94,8 +94,7 @@ struct FixableInstantiableErrorTests {
 	@Test
 	func mockMethodConflictsWithGeneratedMock_description_mentionsConflict() {
 		let error = FixableInstantiableError.mockMethodConflictsWithGeneratedMock
-		#expect(error.description.contains("generateMock: true"))
-		#expect(error.description.contains("conflict"))
+		#expect(error.description == "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method. The generated `mock()` would conflict with this method. Remove it or rename it.")
 	}
 
 	@Test
