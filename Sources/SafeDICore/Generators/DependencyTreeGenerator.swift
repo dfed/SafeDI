@@ -95,6 +95,15 @@ public actor DependencyTreeGenerator {
 		// promotes received dependencies as instantiated children.
 		let typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping()
 
+		// Validate mock scopes for cycles. Mock-only types (generateMock: true without
+		// isRoot) bypass root validation but can still have partially-lazy cycles.
+		// Uses cyclesOnly to skip unfulfillable property checks — mock-only types
+		// have unfulfillable received properties by design (they become mock parameters).
+		try validatePropertiesAreFulfillable(
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			cyclesOnly: true,
+		)
+
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
 		return try await withThrowingTaskGroup(
@@ -176,6 +185,7 @@ public actor DependencyTreeGenerator {
 		case unfulfillableProperties([UnfulfillableProperty])
 		case instantiableHasForwardedProperty(property: Property, instantiableWithForwardedProperty: Instantiable, parent: Instantiable)
 		case constantDependencyCycleDetected([TypeDescription])
+		case partiallyLazyDependencyCycleDetected([TypeDescription])
 		case receivedInstantiatorDependencyCycleDetected(property: Property, directParent: TypeDescription, cycle: [TypeDescription])
 		case receivedConstantCycleDetected(instantiated: Property, receivedPropertyChain: [Property])
 
@@ -215,6 +225,14 @@ public actor DependencyTreeGenerator {
 			case let .constantDependencyCycleDetected(instantiables):
 				"""
 				Dependency cycle detected:
+				\t\(instantiables
+					.map(\.asSource)
+					.reversed()
+					.joined(separator: " -> "))
+				"""
+			case let .partiallyLazyDependencyCycleDetected(instantiables):
+				"""
+				Dependency cycle detected. Cycles with a mix of constant and lazy (Instantiator) dependencies cannot be resolved. Make all dependencies in the cycle lazy by using Instantiator:
 				\t\(instantiables
 					.map(\.asSource)
 					.reversed()
@@ -263,7 +281,7 @@ public actor DependencyTreeGenerator {
 				try validateReachableTypeDescriptions()
 
 				let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
-				try validatePropertiesAreFulfillable(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
+				try validatePropertiesAreFulfillable(typeDescriptionToScopeMap: typeDescriptionToScopeMap, cyclesOnly: false)
 				return try rootInstantiables
 					.sorted()
 					.compactMap { typeDescription in
@@ -400,6 +418,15 @@ public actor DependencyTreeGenerator {
 			))
 		}
 
+		// Validate the promoted mock scope for cycles before generating code.
+		// This catches cycles that only become visible after @Received dependencies
+		// are promoted to the mock root (e.g., B @Receives Instantiator<A> where A
+		// instantiates B — the promotion creates a cycle in the mock root scope).
+		try validateMockRootScopeForCycles(
+			mockRootScope,
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+		)
+
 		// Build the final ScopeGenerator once.
 		return try mockRootScope.createScopeGenerator(
 			for: nil,
@@ -411,6 +438,76 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// Recursively collects all unsatisfied received properties from a Scope tree.
+	/// Walks a post-promotion mock root scope for dependency cycles.
+	/// The mock root scope has @Received dependencies promoted as children,
+	/// which can create cycles not visible in the pre-promotion scope.
+	private func validateMockRootScopeForCycles(
+		_ scope: Scope,
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		propertyStack: OrderedSet<Property> = [],
+	) throws {
+		// Check dependencies for cycles (catches @Received references back to ancestors).
+		for dependency in scope.instantiable.dependencies {
+			let propertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
+			guard let cycleIndex = propertyStack.firstIndex(of: propertyForDependency) else {
+				continue
+			}
+			let typesInCycle = (
+				[propertyForDependency]
+					+ propertyStack.elements[0...cycleIndex],
+			).map(\.typeDescription)
+			try Self.throwIfInvalidCycle(
+				typesInCycle: typesInCycle,
+				property: propertyForDependency,
+				directParent: scope.instantiable.concreteInstantiable,
+				isReceived: dependency.source.isReceived,
+			)
+		}
+
+		// Recurse into children.
+		for childPropertyToGenerate in scope.propertiesToGenerate {
+			switch childPropertyToGenerate {
+			case let .instantiated(childProperty, childScope, _):
+				guard !propertyStack.contains(childProperty) else { continue }
+				var nextStack = propertyStack
+				nextStack.insert(childProperty, at: 0)
+				try validateMockRootScopeForCycles(
+					childScope,
+					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+					propertyStack: nextStack,
+				)
+			case .aliased:
+				break
+			}
+		}
+	}
+
+	/// Throws the appropriate cycle error based on the property types in the cycle.
+	/// For fully-lazy cycles (all Instantiator hops, no constant entry point), does nothing —
+	/// those are valid and produce compilable code.
+	private static func throwIfInvalidCycle(
+		typesInCycle: [TypeDescription],
+		property: Property,
+		directParent: TypeDescription,
+		isReceived: Bool,
+	) throws {
+		if property.propertyType.isConstant {
+			let hasLazyHop = typesInCycle.contains(where: { !$0.propertyType.isConstant })
+			if hasLazyHop {
+				throw DependencyTreeGeneratorError.partiallyLazyDependencyCycleDetected(typesInCycle)
+			} else {
+				throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
+			}
+		} else if isReceived {
+			throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
+				property: property,
+				directParent: directParent,
+				cycle: typesInCycle,
+			)
+		}
+		// Fully-lazy cycle (Instantiator entry, not received) — valid, no error.
+	}
+
 	/// Mirrors ScopeGenerator's `receivedProperties` and `onlyIfAvailableUnwrappedReceivedProperties`
 	/// computation but operates on Scope objects directly, with memoization for O(1) revisits.
 	private static func collectReceivedProperties(
@@ -636,7 +733,14 @@ public actor DependencyTreeGenerator {
 		return typeDescriptionToScopeMap
 	}
 
-	private func validatePropertiesAreFulfillable(typeDescriptionToScopeMap: [TypeDescription: Scope]) throws {
+	/// Validates scopes for cycles and optionally for unfulfillable properties.
+	/// When `cyclesOnly` is true, unfulfillable property collection is skipped —
+	/// used for mock-only types where unfulfillable received properties are expected
+	/// (they become required mock parameters).
+	private func validatePropertiesAreFulfillable(
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		cyclesOnly: Bool,
+	) throws {
 		var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
 		func validatePropertiesAreFulfillable(
 			on scope: Scope,
@@ -669,19 +773,12 @@ public actor DependencyTreeGenerator {
 									+ receivedPropertyStack.reversed()
 									+ instantiationProperties,
 							).map(\.typeDescription)
-							switch childProperty.propertyType {
-							case .instantiator,
-							     .erasedInstantiator,
-							     .sendableInstantiator,
-							     .sendableErasedInstantiator:
-								throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
-									property: childProperty,
-									directParent: scope.instantiable.concreteInstantiable,
-									cycle: typesInCycle,
-								)
-							case .constant:
-								throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
-							}
+							try Self.throwIfInvalidCycle(
+								typesInCycle: typesInCycle,
+								property: childProperty,
+								directParent: scope.instantiable.concreteInstantiable,
+								isReceived: !childProperty.propertyType.isConstant,
+							)
 						} else if let receivedPropertyScope = typeDescriptionToScopeMap[childProperty.typeDescription] {
 							var childPropertyStack = receivedPropertyStack
 							childPropertyStack.append(childProperty)
@@ -701,21 +798,23 @@ public actor DependencyTreeGenerator {
 				)
 			}
 
-			for receivedProperty in scope.requiredReceivedProperties {
-				let parentContainsProperty = receivableProperties.contains(receivedProperty)
-				let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
-				if !parentContainsProperty, !propertyIsCreatedAtThisScope {
-					if property != nil {
-						// This property is in a dependency tree and is unfulfillable. Record the problem.
-						unfulfillableProperties.insert(.init(
-							property: receivedProperty,
-							instantiable: scope.instantiable,
-							parentStack: propertyStack.map(\.typeDescription) + [root],
-							suggestedAlternatives: receivableProperties.filter {
-								receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
-									|| receivedProperty.label == $0.label
-							}.sorted(),
-						))
+			if !cyclesOnly {
+				for receivedProperty in scope.requiredReceivedProperties {
+					let parentContainsProperty = receivableProperties.contains(receivedProperty)
+					let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
+					if !parentContainsProperty, !propertyIsCreatedAtThisScope {
+						if property != nil {
+							// This property is in a dependency tree and is unfulfillable. Record the problem.
+							unfulfillableProperties.insert(.init(
+								property: receivedProperty,
+								instantiable: scope.instantiable,
+								parentStack: propertyStack.map(\.typeDescription) + [root],
+								suggestedAlternatives: receivableProperties.filter {
+									receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
+										|| receivedProperty.label == $0.label
+								}.sorted(),
+							))
+						}
 					}
 				}
 			}
@@ -734,18 +833,12 @@ public actor DependencyTreeGenerator {
 					[propertyForDependency]
 						+ childPropertyStack[0...cycleIndex],
 				).map(\.typeDescription)
-				if propertyForDependency.propertyType.isConstant {
-					// We can break a constant dependency cycle if there's lazy instantiation in the tree.
-					if !typesInCycle.contains(where: { !$0.propertyType.isConstant }) {
-						throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
-					}
-				} else if dependency.source.isReceived {
-					throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
-						property: propertyForDependency,
-						directParent: scope.instantiable.concreteInstantiable,
-						cycle: typesInCycle,
-					)
-				}
+				try Self.throwIfInvalidCycle(
+					typesInCycle: typesInCycle,
+					property: propertyForDependency,
+					directParent: scope.instantiable.concreteInstantiable,
+					isReceived: dependency.source.isReceived,
+				)
 			}
 
 			for childPropertyToGenerate in scope.propertiesToGenerate {
@@ -780,11 +873,31 @@ public actor DependencyTreeGenerator {
 			)
 		}
 
+		// When checking cycles only (mock validation), also validate non-root types
+		// that have generateMock enabled — they bypass root entry points.
+		if cyclesOnly {
+			let rootInstantiableSet = Set(rootInstantiables)
+			for scope in Set(typeDescriptionToScopeMap.values)
+				where scope.instantiable.generateMock && !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
+			{
+				try validatePropertiesAreFulfillable(
+					on: scope,
+					receivableProperties: Set(scope.properties),
+					property: nil,
+					propertyStack: [],
+					root: scope.instantiable.concreteInstantiable,
+				)
+			}
+		}
+
 		if !unfulfillableProperties.isEmpty {
 			throw DependencyTreeGeneratorError.unfulfillableProperties(Array(unfulfillableProperties))
 		}
 	}
 
+	/// Validates a mock scope for dependency cycles only (not unfulfillable properties).
+	/// Mock-only types may have unfulfillable received properties by design (they become
+	/// required mock parameters), but cycles still generate uncompilable code.
 	private func validateReachableTypeDescriptions() throws {
 		for reachableTypeDescription in reachableTypeDescriptions {
 			if typeDescriptionToFulfillingInstantiableMap[reachableTypeDescription] == nil {
