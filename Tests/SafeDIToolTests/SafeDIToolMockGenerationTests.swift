@@ -3623,7 +3623,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				    public init(dependency: Dependency) {
 				        self.dependency = dependency
 				    }
-				    @Instantiated let dependency: Dependency
+				    @Received let dependency: Dependency
 				    public static func customMock(dependency: Dependency) -> TypeWithCustomMock {
 				        TypeWithCustomMock(dependency: dependency)
 				    }
