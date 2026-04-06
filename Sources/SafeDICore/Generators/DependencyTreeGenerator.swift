@@ -420,6 +420,15 @@ public actor DependencyTreeGenerator {
 			))
 		}
 
+		// Validate the promoted mock scope for cycles before generating code.
+		// This catches cycles that only become visible after @Received dependencies
+		// are promoted to the mock root (e.g., B @Receives Instantiator<A> where A
+		// instantiates B — the promotion creates a cycle in the mock root scope).
+		try validateMockRootScopeForCycles(
+			mockRootScope,
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+		)
+
 		// Build the final ScopeGenerator once.
 		return try mockRootScope.createScopeGenerator(
 			for: nil,
@@ -431,6 +440,58 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// Recursively collects all unsatisfied received properties from a Scope tree.
+	/// Walks a post-promotion mock root scope for dependency cycles.
+	/// The mock root scope has @Received dependencies promoted as children,
+	/// which can create cycles not visible in the pre-promotion scope.
+	private func validateMockRootScopeForCycles(
+		_ scope: Scope,
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		propertyStack: OrderedSet<Property> = [],
+	) throws {
+		// Check dependencies for cycles (catches @Received references back to ancestors).
+		for dependency in scope.instantiable.dependencies {
+			let propertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
+			guard let cycleIndex = propertyStack.firstIndex(of: propertyForDependency) else {
+				continue
+			}
+			let typesInCycle = (
+				[propertyForDependency]
+					+ propertyStack.elements[0...cycleIndex],
+			).map(\.typeDescription)
+			if propertyForDependency.propertyType.isConstant {
+				let hasLazyHop = typesInCycle.contains(where: { !$0.propertyType.isConstant })
+				if hasLazyHop {
+					throw DependencyTreeGeneratorError.partiallyLazyDependencyCycleDetected(typesInCycle)
+				} else {
+					throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
+				}
+			} else if dependency.source.isReceived {
+				throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
+					property: propertyForDependency,
+					directParent: scope.instantiable.concreteInstantiable,
+					cycle: typesInCycle,
+				)
+			}
+		}
+
+		// Recurse into children.
+		for childPropertyToGenerate in scope.propertiesToGenerate {
+			switch childPropertyToGenerate {
+			case let .instantiated(childProperty, childScope, _):
+				guard !propertyStack.contains(childProperty) else { continue }
+				var nextStack = propertyStack
+				nextStack.insert(childProperty, at: 0)
+				try validateMockRootScopeForCycles(
+					childScope,
+					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+					propertyStack: nextStack,
+				)
+			case .aliased:
+				break
+			}
+		}
+	}
+
 	/// Mirrors ScopeGenerator's `receivedProperties` and `onlyIfAvailableUnwrappedReceivedProperties`
 	/// computation but operates on Scope objects directly, with memoization for O(1) revisits.
 	private static func collectReceivedProperties(

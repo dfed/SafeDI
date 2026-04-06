@@ -260,7 +260,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenReceivedInstantiatorDependencyCycleExists() async {
+	mutating func mock_throwsError_whenReceivedInstantiatorDependencyCycleExists_withRoot() async {
 		await assertThrowsError(
 			"""
 			Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `B` as @Instantiated to fix. Full cycle:
@@ -276,6 +276,40 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 					    @Instantiated let aBuilder: Instantiator<A>
 					}
 					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct A: Instantiable {
+					    public init(b: B) { self.b = b }
+					    @Instantiated let b: B
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct B: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Received let aBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenReceivedInstantiatorDependencyCycleExists_withoutRoot() async {
+		// Same cycle as the _withRoot test but no root — the cycle is only visible
+		// after mock generation promotes @Received dependencies.
+		await assertThrowsError(
+			"""
+			Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `B` as @Instantiated to fix. Full cycle:
+			\tInstantiator<A> -> B -> Instantiator<A>
+			""",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
 					"""
 					@Instantiable(generateMock: true)
 					public struct A: Instantiable {
