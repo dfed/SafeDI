@@ -570,6 +570,15 @@ let root = Root.mock(
 let noteView = NoteView.mock(userName: "Preview User")
 ```
 
+However, if a child type's custom mock provides a default for a `@Forwarded` property, that default bubbles up to the parent's generated mock, making the parameter optional. The **nearest receiver's default wins**:
+
+- The root type's own custom mock default takes highest priority
+- Otherwise, the shallowest `@Received` type with a custom mock default wins
+- Types that `@Forward` the property are skipped (they're pass-through, not consumers)
+- Ties at the same depth are broken by declaration order
+
+This rule also applies to `@Received` dependencies that would otherwise be required parameters (e.g., when the dependency's type is not in the current module).
+
 ### Default-valued init parameters in mocks
 
 If an `@Instantiable` type's initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are automatically exposed in the generated `mock()` method. This lets you override values like feature flags or optional view models in tests while keeping the original defaults for production code.
