@@ -178,6 +178,7 @@ public actor DependencyTreeGenerator {
 		case unfulfillableProperties([UnfulfillableProperty])
 		case instantiableHasForwardedProperty(property: Property, instantiableWithForwardedProperty: Instantiable, parent: Instantiable)
 		case constantDependencyCycleDetected([TypeDescription])
+		case partiallyLazyDependencyCycleDetected([TypeDescription])
 		case receivedInstantiatorDependencyCycleDetected(property: Property, directParent: TypeDescription, cycle: [TypeDescription])
 		case receivedConstantCycleDetected(instantiated: Property, receivedPropertyChain: [Property])
 
@@ -217,6 +218,14 @@ public actor DependencyTreeGenerator {
 			case let .constantDependencyCycleDetected(instantiables):
 				"""
 				Dependency cycle detected:
+				\t\(instantiables
+					.map(\.asSource)
+					.reversed()
+					.joined(separator: " -> "))
+				"""
+			case let .partiallyLazyDependencyCycleDetected(instantiables):
+				"""
+				Dependency cycle detected. Cycles with a mix of constant and lazy (Instantiator) dependencies cannot be resolved. Make all dependencies in the cycle lazy by using Instantiator:
 				\t\(instantiables
 					.map(\.asSource)
 					.reversed()
@@ -738,8 +747,12 @@ public actor DependencyTreeGenerator {
 						+ childPropertyStack.elements[0...cycleIndex],
 				).map(\.typeDescription)
 				if propertyForDependency.propertyType.isConstant {
-					// We can break a constant dependency cycle if there's lazy instantiation in the tree.
-					if !typesInCycle.contains(where: { !$0.propertyType.isConstant }) {
+					let hasLazyHop = typesInCycle.contains(where: { !$0.propertyType.isConstant })
+					if hasLazyHop {
+						// Partially-lazy cycle: mix of constant and Instantiator hops.
+						// This generates forward variable references that Swift rejects.
+						throw DependencyTreeGeneratorError.partiallyLazyDependencyCycleDetected(typesInCycle)
+					} else {
 						throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
 					}
 				} else if dependency.source.isReceived {
