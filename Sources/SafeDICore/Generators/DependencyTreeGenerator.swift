@@ -839,7 +839,6 @@ public actor DependencyTreeGenerator {
 	/// Validates a mock scope for dependency cycles only (not unfulfillable properties).
 	/// Mock-only types may have unfulfillable received properties by design (they become
 	/// required mock parameters), but cycles still generate uncompilable code.
-
 	private func validateReachableTypeDescriptions() throws {
 		for reachableTypeDescription in reachableTypeDescriptions {
 			if typeDescriptionToFulfillingInstantiableMap[reachableTypeDescription] == nil {
