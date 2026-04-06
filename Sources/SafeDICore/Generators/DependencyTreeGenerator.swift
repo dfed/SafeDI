@@ -283,7 +283,7 @@ public actor DependencyTreeGenerator {
 				try validateReachableTypeDescriptions()
 
 				let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
-				try validatePropertiesAreFulfillable(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
+				try validatePropertiesAreFulfillable(typeDescriptionToScopeMap: typeDescriptionToScopeMap, cyclesOnly: false)
 				return try rootInstantiables
 					.sorted()
 					.compactMap { typeDescription in
@@ -662,7 +662,7 @@ public actor DependencyTreeGenerator {
 	/// (they become required mock parameters).
 	private func validatePropertiesAreFulfillable(
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
-		cyclesOnly: Bool = false,
+		cyclesOnly: Bool,
 	) throws {
 		var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
 		func validatePropertiesAreFulfillable(
