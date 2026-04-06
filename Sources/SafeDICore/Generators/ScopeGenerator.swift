@@ -417,6 +417,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	private static let standardIndent = "    "
+	/// Prefix for mock method internal parameter labels. Using distinct internal labels
+	/// prevents optional mock parameters from shadowing non-optional local bindings,
+	/// which is critical for cycles through Instantiator boundaries where nested functions
+	/// must capture the non-optional local via forward reference.
+	private static let mockParameterPrefix = "__safeDI_mock_"
 
 	// MARK: Code Generation
 
@@ -608,13 +613,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						// Every Instantiator is collected in parameterLabelMap via
 						// collectMockDeclarations, so this branch always has a label.
 						let parameterLabel = context.parameterLabelMap[identifier] ?? property.label
+						let mockParameterLabel = "\(Self.mockParameterPrefix)\(parameterLabel)"
 						let mockPropertyDeclaration = if !instantiable.declarationType.isExtension, typeDescription == unwrappedTypeDescription {
 							"let \(parameterLabel)"
 						} else {
 							"let \(parameterLabel): \(property.typeDescription.asSource)"
 						}
 						return """
-						\(functionDeclaration)\(mockPropertyDeclaration) = \(parameterLabel) ?? \(instantiatorInstantiation)
+						\(functionDeclaration)\(mockPropertyDeclaration) = \(mockParameterLabel) ?? \(instantiatorInstantiation)
 						"""
 					}
 				}
@@ -702,11 +708,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				switch codeGeneration {
 				case .dependencyTree:
 					return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
-				case .mock where isPropertyCycle:
-					// Cycle reconstruction: emit inline construction without mock parameter
-					// override, matching the production code gen pattern. The cycled type
-					// is reconstructed from available scope bindings.
-					return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 				case let .mock(context):
 					let identifier = MockParameterIdentifier(
 						propertyLabel: property.label,
@@ -714,12 +715,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					)
 					if context.resolvedParameters.contains(identifier) {
 						// Property already bound in parent scope — no code needed here.
-						// The init argument list will capture the parent-scope variable.
+						// The init argument list will capture the parent-scope local variable
+						// (non-optional), not the mock parameter (optional with __safeDI_mock_ prefix).
 						return ""
 					} else {
 						// Every constant is collected in parameterLabelMap via
 						// collectMockDeclarations, so this branch always has a label.
 						let parameterLabel = context.parameterLabelMap[identifier] ?? property.label
+						let mockParameterLabel = "\(Self.mockParameterPrefix)\(parameterLabel)"
 						// Use disambiguated parameter label as local variable name so init
 						// arguments reference the resolved value, not the raw parameter.
 						let mockPropertyDeclaration = if erasedToConcreteExistential || (
@@ -738,10 +741,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							} else {
 								initializer
 							}
-							return "\(functionDeclaration)\(mockPropertyDeclaration) = \(parameterLabel) ?? \(mockInitializer)\n"
+							return "\(functionDeclaration)\(mockPropertyDeclaration) = \(mockParameterLabel) ?? \(mockInitializer)\n"
 						} else {
 							// Autoclosure parameter: evaluate
-							return "\(mockPropertyDeclaration) = \(parameterLabel)()\n"
+							return "\(mockPropertyDeclaration) = \(mockParameterLabel)()\n"
 						}
 					}
 				}
@@ -1056,16 +1059,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		for declaration in sortedDeclarations {
 			let sendablePrefix = declaration.requiresSendable ? "@Sendable " : ""
+			let internalLabel = "\(Self.mockParameterPrefix)\(declaration.parameterLabel)"
 			if declaration.hasSubtree {
-				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)? = nil")
+				parameters.append("\(indent)\(indent)\(declaration.parameterLabel) \(internalLabel): \(declaration.sourceType)? = nil")
 			} else if declaration.isClosureType, let defaultExpr = declaration.defaultConstruction {
 				// Closure-typed default: @escaping directly (no @autoclosure).
-				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(sendablePrefix)@escaping \(declaration.sourceType) = \(defaultExpr)")
+				parameters.append("\(indent)\(indent)\(declaration.parameterLabel) \(internalLabel): \(sendablePrefix)@escaping \(declaration.sourceType) = \(defaultExpr)")
 			} else if let defaultExpr = declaration.defaultConstruction {
-				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(sendablePrefix)@autoclosure @escaping () -> \(declaration.sourceType) = \(defaultExpr)")
+				parameters.append("\(indent)\(indent)\(declaration.parameterLabel) \(internalLabel): \(sendablePrefix)@autoclosure @escaping () -> \(declaration.sourceType) = \(defaultExpr)")
 			} else {
 				// Required autoclosure (uncovered dependency).
-				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(sendablePrefix)@autoclosure @escaping () -> \(declaration.sourceType)")
+				parameters.append("\(indent)\(indent)\(declaration.parameterLabel) \(internalLabel): \(sendablePrefix)@autoclosure @escaping () -> \(declaration.sourceType)")
 			}
 		}
 		let parametersString = parameters.joined(separator: ",\n")
@@ -1125,7 +1129,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Bindings for uncovered and received dependencies (must come before child constructions).
 		for declaration in sortedDeclarations {
 			guard rootBindingIdentifiers.contains(declaration.identifier) else { continue }
-			lines.append("\(bodyIndent)let \(declaration.parameterLabel) = \(declaration.parameterLabel)()")
+			lines.append("\(bodyIndent)let \(declaration.parameterLabel) = \(Self.mockParameterPrefix)\(declaration.parameterLabel)()")
 		}
 		// Bindings for root default-valued init params.
 		// Skip labels matching forwarded params — forwarded values take precedence.
@@ -1135,7 +1139,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			      !forwardedLabels.contains(declaration.propertyLabel),
 			      !declaration.isClosureType
 			else { continue }
-			lines.append("\(bodyIndent)let \(declaration.parameterLabel) = \(declaration.parameterLabel)()")
+			lines.append("\(bodyIndent)let \(declaration.parameterLabel) = \(Self.mockParameterPrefix)\(declaration.parameterLabel)()")
 		}
 		lines.append(contentsOf: propertyLines)
 		lines.append("\(bodyIndent)return \(construction)")
