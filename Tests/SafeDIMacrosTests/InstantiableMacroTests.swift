@@ -5194,6 +5194,50 @@ import Testing
 		}
 
 		@Test
+		func extension_producesDiagnostic_whenMockMethodExistsAlongsideCustomMockName() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func customMock() -> ExampleService {
+				        ExampleService()
+				    }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func customMock() -> ExampleService {
+				        ExampleService()
+				    }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method. The generated `mock()` would conflict with this method. Remove it or rename it."#,
+						line: 9,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: #"Remove this `mock()` method"#),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func extension_secondMockOverloadWithNonDependencyMissingDefaultProducesDiagnostic() {
 			assertMacroExpansion(
 				"""
