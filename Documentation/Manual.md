@@ -508,23 +508,28 @@ Set `mockConditionalCompilation` to `nil` to generate mocks without conditional 
 
 Each `@Instantiable` type with `generateMock: true` gets a generated `mock()` static method that builds its full dependency subtree. Note that mocks defined in separate extensions are not detected; the method must be in the `@Instantiable`-decorated declaration body.
 
-When a type also has a hand-written mock method, it must have a different name from the generated `mock()` to avoid ambiguity. Use the `customMockName` parameter to specify the name of the hand-written method, and the generated `mock()` will call through to it:
+When a type also has a hand-written mock method, it must have a different name from the generated `mock()` to avoid ambiguity. Use the `customMockName` parameter to specify the name of the hand-written method, and the generated `mock()` will call through to it. This is useful when you need custom logic during mock construction — for example, setting up stub behavior, configuring test doubles, or wiring delegates:
 
 ```swift
 @Instantiable(generateMock: true, customMockName: "customMock")
-public struct MyService: Instantiable {
-    public init(dependency: Dependency) {
-        self.dependency = dependency
+public struct NetworkClient: Instantiable {
+    public init(session: URLSession, logger: Logger) {
+        self.session = session
+        self.logger = logger
     }
-    @Instantiated let dependency: Dependency
+    @Instantiated let session: URLSession
+    @Instantiated let logger: Logger
 
-    public static func customMock(dependency: Dependency) -> MyService {
-        MyService(dependency: dependency)
+    public static func customMock(
+        session: URLSession = .mockSession(returning: Data()),
+        logger: Logger = .noop
+    ) -> NetworkClient {
+        NetworkClient(session: session, logger: logger)
     }
 }
 ```
 
-The `customMockName` parameter requires `generateMock: true`. Default values on dependency parameters are allowed when using `customMockName` since the different names eliminate ambiguity. If `generateMock: true` is set and a hand-written `mock()` method exists without `customMockName`, the macro will emit a fix-it suggesting you rename the method and add the parameter.
+The `customMockName` parameter requires `generateMock: true`. Default values on dependency parameters are allowed when using `customMockName` — the different names eliminate ambiguity, and those defaults bubble up to parent-generated mocks. If `generateMock: true` is set and a hand-written `mock()` method exists without `customMockName`, the macro will emit a fix-it suggesting you rename the method and add the parameter.
 
 If you provide a mock method without `generateMock: true`, parent types that instantiate the child will call `ChildType.mock(...)` (or `ChildType.customMock(...)`) instead of `ChildType(...)` when constructing it, threading mock parameters through your custom method.
 
