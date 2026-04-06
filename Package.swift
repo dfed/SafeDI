@@ -4,6 +4,12 @@
 import CompilerPluginSupport
 import PackageDescription
 
+let safeDICoreDependencies: [PackageDescription.Target.Dependency] = [
+	.product(name: "SwiftDiagnostics", package: "swift-syntax"),
+	.product(name: "SwiftSyntax", package: "swift-syntax"),
+	.product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+]
+
 let package = Package(
 	name: "SafeDI",
 	platforms: [
@@ -65,13 +71,9 @@ let package = Package(
 		.macro(
 			name: "SafeDIMacros",
 			dependencies: [
-				"SafeDICore",
 				.product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
-				.product(name: "SwiftDiagnostics", package: "swift-syntax"),
-				.product(name: "SwiftSyntax", package: "swift-syntax"),
-				.product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
 				.product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-			],
+			] + safeDICoreDependencies,
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
 			],
@@ -80,7 +82,6 @@ let package = Package(
 			name: "SafeDIMacrosTests",
 			dependencies: [
 				"SafeDIMacros",
-				"SafeDICore",
 				.product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
 			],
 			swiftSettings: [
@@ -190,11 +191,7 @@ let package = Package(
 		// Core
 		.target(
 			name: "SafeDICore",
-			dependencies: [
-				.product(name: "SwiftDiagnostics", package: "swift-syntax"),
-				.product(name: "SwiftSyntax", package: "swift-syntax"),
-				.product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-			],
+			dependencies: safeDICoreDependencies,
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
 			],
