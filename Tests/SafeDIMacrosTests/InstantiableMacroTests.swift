@@ -4829,6 +4829,86 @@ import Testing
 			)
 		}
 
+		@Test
+		func producesDiagnostic_whenMockMethodExistsAlongsideCustomMockName() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func customMock() -> MyService {
+				        MyService()
+				    }
+
+				    public static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func customMock() -> MyService {
+				        MyService()
+				    }
+
+				    public static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`."#,
+						line: 9,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: #"Rename method to `customMock` and add `customMockName: "customMock"` to `@Instantiable`"#),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesDiagnostic_whenMockMethodHasNonDependencyParameterWithoutDefault_andNoDependencies() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func mock(notADependency: NotADependency) -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func mock(notADependency: NotADependency) -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add default values to mock() non-dependency parameters for notADependency: NotADependency"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
 		// MARK: generateMock + Hand-Written Mock Coexistence Tests
 
 		@Test

@@ -779,7 +779,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.sorted { $0.property < $1.property }
 
 		// Collect all declarations from the dependency tree.
-		var dependencyDefaults = [String: (expression: String, depth: Int)]()
+		var dependencyDefaults = [MockParameterIdentifier: (expression: String, depth: Int)]()
 		var allDeclarations = await collectMockDeclarations(
 			dependencyDefaults: &dependencyDefaults,
 		)
@@ -935,12 +935,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				      rootDependencyLabels.contains(argument.innerLabel),
 				      let defaultExpression = argument.defaultValueExpression
 				else { continue }
-				dependencyDefaults[argument.innerLabel] = (expression: defaultExpression, depth: 0)
+				let identifier = MockParameterIdentifier(
+					propertyLabel: argument.innerLabel,
+					sourceType: argument.typeDescription.strippingEscaping.asSource,
+				)
+				dependencyDefaults[identifier] = (expression: defaultExpression, depth: 0)
 			}
 		}
 		if !dependencyDefaults.isEmpty {
 			forwardedDeclarations = forwardedDeclarations.map { declaration in
-				guard let entry = dependencyDefaults[declaration.propertyLabel] else { return declaration }
+				guard let entry = dependencyDefaults[declaration.identifier] else { return declaration }
 				return MockDeclaration(
 					propertyLabel: declaration.propertyLabel,
 					parameterLabel: declaration.parameterLabel,
@@ -957,7 +961,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			allDeclarations = allDeclarations.map { declaration in
 				guard declaration.defaultConstruction == nil,
 				      !declaration.hasSubtree,
-				      let entry = dependencyDefaults[declaration.propertyLabel]
+				      let entry = dependencyDefaults[declaration.identifier]
 				else { return declaration }
 				return MockDeclaration(
 					propertyLabel: declaration.propertyLabel,
@@ -1185,7 +1189,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private func collectMockDeclarations(
 		insideSendableScope: Bool = false,
 		depth: Int = 0,
-		dependencyDefaults: inout [String: (expression: String, depth: Int)],
+		dependencyDefaults: inout [MockParameterIdentifier: (expression: String, depth: Int)],
 	) async -> [MockDeclaration] {
 		var declarations = [MockDeclaration]()
 
@@ -1260,9 +1264,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					      !childForwardedLabels.contains(argument.innerLabel),
 					      let defaultExpression = argument.defaultValueExpression
 					else { continue }
-					let existingDepth = dependencyDefaults[argument.innerLabel]?.depth ?? Int.max
+					let identifier = MockParameterIdentifier(
+						propertyLabel: argument.innerLabel,
+						sourceType: argument.typeDescription.strippingEscaping.asSource,
+					)
+					let existingDepth = dependencyDefaults[identifier]?.depth ?? Int.max
 					if depth + 1 < existingDepth {
-						dependencyDefaults[argument.innerLabel] = (expression: defaultExpression, depth: depth + 1)
+						dependencyDefaults[identifier] = (expression: defaultExpression, depth: depth + 1)
 					}
 				}
 			}

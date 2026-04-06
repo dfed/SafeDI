@@ -448,6 +448,17 @@ public struct InstantiableMacro: MemberMacro {
 						changes: Self.renameMethodToCustomMock(mockSyntax: mockSyntax, instantiableMacro: instantiableMacro, on: declaration),
 					))
 				}
+				// When customMockName is set and a literal "mock" method also exists, it conflicts with the generated mock.
+				if instantiableMacro.generateMockValue,
+				   customMockNameValue != nil,
+				   let conflictingMock = visitor.conflictingMockFunctionSyntax
+				{
+					context.diagnose(Diagnostic(
+						node: Syntax(conflictingMock),
+						error: FixableInstantiableError.mockMethodNeedsCustomName,
+						changes: Self.renameMethodToCustomMock(mockSyntax: conflictingMock, instantiableMacro: instantiableMacro, on: declaration),
+					))
+				}
 				// When customMockName is set but no method with that name is found, emit error.
 				if let customMockNameValue,
 				   instantiableMacro.generateMockValue,
@@ -470,41 +481,39 @@ public struct InstantiableMacro: MemberMacro {
 			if let mockInitializer = visitor.mockInitializer,
 			   let mockSyntax = visitor.mockFunctionSyntax
 			{
-				// Always: check that non-dependency parameters have default values.
-				if !visitor.dependencies.isEmpty {
-					let dependencyLabels = Set(visitor.dependencies.map(\.property.label))
-					let nonDependenciesWithoutDefaults = mockInitializer.arguments
-						.filter { !dependencyLabels.contains($0.innerLabel) && !$0.hasDefaultValue }
-						.map(\.asProperty)
-					if !nonDependenciesWithoutDefaults.isEmpty {
-						let nonDependencyLabelsWithoutDefaults = Set(nonDependenciesWithoutDefaults.map(\.label))
-						var fixedMockSyntax = mockSyntax
-						fixedMockSyntax.signature.parameterClause.parameters = FunctionParameterListSyntax(
-							mockSyntax.signature.parameterClause.parameters.map { parameter in
-								var fixedParameter = parameter
-								let parameterLabel = parameter.secondName?.text ?? parameter.firstName.text
-								if nonDependencyLabelsWithoutDefaults.contains(parameterLabel),
-								   fixedParameter.defaultValue == nil
-								{
-									fixedParameter.defaultValue = InitializerClauseSyntax(
-										equal: .equalToken(leadingTrivia: .space, trailingTrivia: .space),
-										value: EditorPlaceholderExprSyntax(placeholder: .identifier("<#default#>")),
-									)
-								}
-								return fixedParameter
-							},
-						)
-						context.diagnose(Diagnostic(
-							node: Syntax(mockSyntax),
-							error: FixableInstantiableError.mockMethodNonDependencyMissingDefaultValue(nonDependenciesWithoutDefaults),
-							changes: [
-								.replace(
-									oldNode: Syntax(mockSyntax),
-									newNode: Syntax(fixedMockSyntax),
-								),
-							],
-						))
-					}
+				// Check that non-dependency parameters have default values.
+				let dependencyLabels = Set(visitor.dependencies.map(\.property.label))
+				let nonDependenciesWithoutDefaults = mockInitializer.arguments
+					.filter { !dependencyLabels.contains($0.innerLabel) && !$0.hasDefaultValue }
+					.map(\.asProperty)
+				if !nonDependenciesWithoutDefaults.isEmpty {
+					let nonDependencyLabelsWithoutDefaults = Set(nonDependenciesWithoutDefaults.map(\.label))
+					var fixedMockSyntax = mockSyntax
+					fixedMockSyntax.signature.parameterClause.parameters = FunctionParameterListSyntax(
+						mockSyntax.signature.parameterClause.parameters.map { parameter in
+							var fixedParameter = parameter
+							let parameterLabel = parameter.secondName?.text ?? parameter.firstName.text
+							if nonDependencyLabelsWithoutDefaults.contains(parameterLabel),
+							   fixedParameter.defaultValue == nil
+							{
+								fixedParameter.defaultValue = InitializerClauseSyntax(
+									equal: .equalToken(leadingTrivia: .space, trailingTrivia: .space),
+									value: EditorPlaceholderExprSyntax(placeholder: .identifier("<#default#>")),
+								)
+							}
+							return fixedParameter
+						},
+					)
+					context.diagnose(Diagnostic(
+						node: Syntax(mockSyntax),
+						error: FixableInstantiableError.mockMethodNonDependencyMissingDefaultValue(nonDependenciesWithoutDefaults),
+						changes: [
+							.replace(
+								oldNode: Syntax(mockSyntax),
+								newNode: Syntax(fixedMockSyntax),
+							),
+						],
+					))
 				}
 				let typeName = concreteDeclaration.name.text
 				let instantiableTypeStrippingGenerics = visitor.instantiableType?.strippingGenerics
@@ -707,6 +716,17 @@ public struct InstantiableMacro: MemberMacro {
 						changes: Self.renameMethodToCustomMock(mockSyntax: firstMock, instantiableMacro: instantiableMacro, on: declaration),
 					))
 				}
+				// When customMockName is set and a literal "mock" method also exists, it conflicts with the generated mock.
+				if instantiableMacro.generateMockValue,
+				   customMockNameValue != nil,
+				   let conflictingMock = visitor.conflictingMockFunctionSyntax
+				{
+					context.diagnose(Diagnostic(
+						node: Syntax(conflictingMock),
+						error: FixableInstantiableError.mockMethodNeedsCustomName,
+						changes: Self.renameMethodToCustomMock(mockSyntax: conflictingMock, instantiableMacro: instantiableMacro, on: declaration),
+					))
+				}
 				// When customMockName is set but no method with that name is found, emit error.
 				if let customMockNameValue,
 				   instantiableMacro.generateMockValue,
@@ -725,43 +745,41 @@ public struct InstantiableMacro: MemberMacro {
 					))
 				}
 			}
-			// Always: check that non-dependency parameters on mock methods have default values.
+			// Check that non-dependency parameters on mock methods have default values.
 			if let firstMock = visitor.mockFunctionSyntax {
-				if !extensionDependencies.isEmpty {
-					let dependencyLabels = Set(extensionDependencies.map(\.property.label))
-					let firstMockInitializer = Initializer(firstMock)
-					let nonDependenciesWithoutDefaults = firstMockInitializer.arguments
-						.filter { !dependencyLabels.contains($0.innerLabel) && !$0.hasDefaultValue }
-						.map(\.asProperty)
-					if !nonDependenciesWithoutDefaults.isEmpty {
-						let nonDependencyLabelsWithoutDefaults = Set(nonDependenciesWithoutDefaults.map(\.label))
-						var fixedMock = firstMock
-						fixedMock.signature.parameterClause.parameters = FunctionParameterListSyntax(
-							firstMock.signature.parameterClause.parameters.map { parameter in
-								var fixedParameter = parameter
-								let parameterLabel = parameter.secondName?.text ?? parameter.firstName.text
-								if nonDependencyLabelsWithoutDefaults.contains(parameterLabel),
-								   fixedParameter.defaultValue == nil
-								{
-									fixedParameter.defaultValue = InitializerClauseSyntax(
-										equal: .equalToken(leadingTrivia: .space, trailingTrivia: .space),
-										value: EditorPlaceholderExprSyntax(placeholder: .identifier("<#default#>")),
-									)
-								}
-								return fixedParameter
-							},
-						)
-						context.diagnose(Diagnostic(
-							node: Syntax(firstMock),
-							error: FixableInstantiableError.mockMethodNonDependencyMissingDefaultValue(nonDependenciesWithoutDefaults),
-							changes: [
-								.replace(
-									oldNode: Syntax(firstMock),
-									newNode: Syntax(fixedMock),
-								),
-							],
-						))
-					}
+				let dependencyLabels = Set(extensionDependencies.map(\.property.label))
+				let firstMockInitializer = Initializer(firstMock)
+				let nonDependenciesWithoutDefaults = firstMockInitializer.arguments
+					.filter { !dependencyLabels.contains($0.innerLabel) && !$0.hasDefaultValue }
+					.map(\.asProperty)
+				if !nonDependenciesWithoutDefaults.isEmpty {
+					let nonDependencyLabelsWithoutDefaults = Set(nonDependenciesWithoutDefaults.map(\.label))
+					var fixedMock = firstMock
+					fixedMock.signature.parameterClause.parameters = FunctionParameterListSyntax(
+						firstMock.signature.parameterClause.parameters.map { parameter in
+							var fixedParameter = parameter
+							let parameterLabel = parameter.secondName?.text ?? parameter.firstName.text
+							if nonDependencyLabelsWithoutDefaults.contains(parameterLabel),
+							   fixedParameter.defaultValue == nil
+							{
+								fixedParameter.defaultValue = InitializerClauseSyntax(
+									equal: .equalToken(leadingTrivia: .space, trailingTrivia: .space),
+									value: EditorPlaceholderExprSyntax(placeholder: .identifier("<#default#>")),
+								)
+							}
+							return fixedParameter
+						},
+					)
+					context.diagnose(Diagnostic(
+						node: Syntax(firstMock),
+						error: FixableInstantiableError.mockMethodNonDependencyMissingDefaultValue(nonDependenciesWithoutDefaults),
+						changes: [
+							.replace(
+								oldNode: Syntax(firstMock),
+								newNode: Syntax(fixedMock),
+							),
+						],
+					))
 				}
 			}
 			var seenMockReturnTypes = [TypeDescription: FunctionDeclSyntax]()
