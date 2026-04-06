@@ -1034,8 +1034,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				let mockParameterCount = mockInitializer.arguments.count
 				return allDeclarations.sorted { first, second in
-					let firstIndex = mockArgumentOrder[first.propertyLabel] ?? (mockParameterCount + 0)
-					let secondIndex = mockArgumentOrder[second.propertyLabel] ?? (mockParameterCount + 0)
+					let firstIndex = mockArgumentOrder[first.propertyLabel] ?? mockParameterCount
+					let secondIndex = mockArgumentOrder[second.propertyLabel] ?? mockParameterCount
 					if firstIndex != secondIndex {
 						return firstIndex < secondIndex
 					}

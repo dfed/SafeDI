@@ -719,6 +719,7 @@ public struct InstantiableMacro: MemberMacro {
 							named: customMockNameValue,
 							typeName: extendedTypeName,
 							dependencies: extensionDependencies,
+							isExtension: true,
 							on: declaration,
 						),
 					))
@@ -1141,6 +1142,7 @@ public struct InstantiableMacro: MemberMacro {
 		named name: String,
 		typeName: String,
 		dependencies: [Dependency],
+		isExtension: Bool = false,
 		on declaration: some DeclGroupSyntax,
 	) -> [FixIt.Change] {
 		let parameters = dependencies.map { dependency in
@@ -1159,6 +1161,19 @@ public struct InstantiableMacro: MemberMacro {
 				return parameter
 			},
 		)
+
+		// Build a compilable body: `TypeName(dep1: dep1, dep2: dep2)` for concrete types,
+		// `TypeName.instantiate(dep1: dep1, dep2: dep2)` for extension types.
+		let argumentList = dependencies.enumerated().map { index, dependency in
+			let trailingComma = index < dependencies.count - 1 ? ", " : ""
+			return "\(dependency.property.label): \(dependency.property.label)\(trailingComma)"
+		}.joined()
+		let construction = if isExtension {
+			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
+		} else {
+			"\(typeName)(\(argumentList))"
+		}
+
 		let stubMethod = FunctionDeclSyntax(
 			modifiers: DeclModifierListSyntax(
 				arrayLiteral: DeclModifierSyntax(
@@ -1197,7 +1212,11 @@ public struct InstantiableMacro: MemberMacro {
 			),
 			body: CodeBlockSyntax(
 				leadingTrivia: .space,
-				statements: CodeBlockItemListSyntax([]),
+				statements: CodeBlockItemListSyntax([
+					CodeBlockItemSyntax(
+						item: .expr(ExprSyntax(stringLiteral: construction)),
+					),
+				]),
 				trailingTrivia: .newline,
 			),
 		)
