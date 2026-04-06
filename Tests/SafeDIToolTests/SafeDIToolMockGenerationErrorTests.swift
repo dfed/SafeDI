@@ -50,15 +50,6 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
-					@Instantiable(isRoot: true, generateMock: true)
-					public struct Parent: Instantiable {
-					    public init(player: Player) {
-					        self.player = player
-					    }
-					    @Instantiated let player: Player
-					}
-					""",
-					"""
 					@Instantiable(generateMock: true)
 					public struct Player: Instantiable {
 					    public init(cachedItemBuilder: Instantiator<CachedItem>) {

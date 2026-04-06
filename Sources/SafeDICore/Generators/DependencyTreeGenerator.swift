@@ -97,6 +97,17 @@ public actor DependencyTreeGenerator {
 		// promotes received dependencies as instantiated children.
 		let typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping()
 
+		// Validate mock scopes for cycles. Mock-only types (generateMock: true without
+		// isRoot) bypass root validation but can still have partially-lazy cycles.
+		for scope in Set(typeDescriptionToScopeMap.values)
+			where scope.instantiable.generateMock && !scope.instantiable.isRoot
+		{
+			try validateMockScopeForCycles(
+				scope: scope,
+				typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			)
+		}
+
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
 		return try await withThrowingTaskGroup(
@@ -798,6 +809,55 @@ public actor DependencyTreeGenerator {
 
 		if !unfulfillableProperties.isEmpty {
 			throw DependencyTreeGeneratorError.unfulfillableProperties(Array(unfulfillableProperties))
+		}
+	}
+
+	/// Validates a mock scope for dependency cycles only (not unfulfillable properties).
+	/// Mock-only types may have unfulfillable received properties by design (they become
+	/// required mock parameters), but cycles still generate uncompilable code.
+	/// Validates a mock scope for dependency cycles only (not unfulfillable properties).
+	/// Mock-only types may have unfulfillable received properties by design (they become
+	/// required mock parameters), but cycles still generate uncompilable code.
+	private func validateMockScopeForCycles(
+		scope: Scope,
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		propertyStack: OrderedSet<Property> = [],
+	) throws {
+		for dependency in scope.instantiable.dependencies {
+			let propertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
+			guard let cycleIndex = propertyStack.firstIndex(of: propertyForDependency) else {
+				continue
+			}
+			let typesInCycle = (
+				[propertyForDependency]
+					+ propertyStack.elements[0...cycleIndex],
+			).map(\.typeDescription)
+			if propertyForDependency.propertyType.isConstant {
+				let hasLazyHop = typesInCycle.contains(where: { !$0.propertyType.isConstant })
+				if hasLazyHop {
+					throw DependencyTreeGeneratorError.partiallyLazyDependencyCycleDetected(typesInCycle)
+				} else {
+					throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
+				}
+			}
+		}
+
+		for childPropertyToGenerate in scope.propertiesToGenerate {
+			switch childPropertyToGenerate {
+			case let .instantiated(childProperty, childScope, _):
+				guard !propertyStack.contains(childProperty) else {
+					continue
+				}
+				var nextStack = propertyStack
+				nextStack.insert(childProperty, at: 0)
+				try validateMockScopeForCycles(
+					scope: childScope,
+					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+					propertyStack: nextStack,
+				)
+			case .aliased:
+				break
+			}
 		}
 	}
 
