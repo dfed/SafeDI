@@ -455,8 +455,13 @@ public struct InstantiableMacro: MemberMacro {
 				{
 					context.diagnose(Diagnostic(
 						node: Syntax(conflictingMock),
-						error: FixableInstantiableError.mockMethodNeedsCustomName,
-						changes: Self.renameMethodToCustomMock(mockSyntax: conflictingMock, instantiableMacro: instantiableMacro, on: declaration),
+						error: FixableInstantiableError.mockMethodConflictsWithGeneratedMock,
+						changes: [
+							.replace(
+								oldNode: Syntax(conflictingMock),
+								newNode: Syntax("" as DeclSyntax),
+							),
+						],
 					))
 				}
 				// When customMockName is set but no method with that name is found, emit error.
@@ -723,8 +728,13 @@ public struct InstantiableMacro: MemberMacro {
 				{
 					context.diagnose(Diagnostic(
 						node: Syntax(conflictingMock),
-						error: FixableInstantiableError.mockMethodNeedsCustomName,
-						changes: Self.renameMethodToCustomMock(mockSyntax: conflictingMock, instantiableMacro: instantiableMacro, on: declaration),
+						error: FixableInstantiableError.mockMethodConflictsWithGeneratedMock,
+						changes: [
+							.replace(
+								oldNode: Syntax(conflictingMock),
+								newNode: Syntax("" as DeclSyntax),
+							),
+						],
 					))
 				}
 				// When customMockName is set but no method with that name is found, emit error.
@@ -746,17 +756,18 @@ public struct InstantiableMacro: MemberMacro {
 				}
 			}
 			// Check that non-dependency parameters on mock methods have default values.
-			if let firstMock = visitor.mockFunctionSyntax {
-				let dependencyLabels = Set(extensionDependencies.map(\.property.label))
-				let firstMockInitializer = Initializer(firstMock)
-				let nonDependenciesWithoutDefaults = firstMockInitializer.arguments
+			// Validate all overloads, not just the first.
+			let dependencyLabels = Set(extensionDependencies.map(\.property.label))
+			for mockFunction in allMockFunctions {
+				let mockFunctionInitializer = Initializer(mockFunction)
+				let nonDependenciesWithoutDefaults = mockFunctionInitializer.arguments
 					.filter { !dependencyLabels.contains($0.innerLabel) && !$0.hasDefaultValue }
 					.map(\.asProperty)
 				if !nonDependenciesWithoutDefaults.isEmpty {
 					let nonDependencyLabelsWithoutDefaults = Set(nonDependenciesWithoutDefaults.map(\.label))
-					var fixedMock = firstMock
+					var fixedMock = mockFunction
 					fixedMock.signature.parameterClause.parameters = FunctionParameterListSyntax(
-						firstMock.signature.parameterClause.parameters.map { parameter in
+						mockFunction.signature.parameterClause.parameters.map { parameter in
 							var fixedParameter = parameter
 							let parameterLabel = parameter.secondName?.text ?? parameter.firstName.text
 							if nonDependencyLabelsWithoutDefaults.contains(parameterLabel),
@@ -771,11 +782,11 @@ public struct InstantiableMacro: MemberMacro {
 						},
 					)
 					context.diagnose(Diagnostic(
-						node: Syntax(firstMock),
+						node: Syntax(mockFunction),
 						error: FixableInstantiableError.mockMethodNonDependencyMissingDefaultValue(nonDependenciesWithoutDefaults),
 						changes: [
 							.replace(
-								oldNode: Syntax(firstMock),
+								oldNode: Syntax(mockFunction),
 								newNode: Syntax(fixedMock),
 							),
 						],

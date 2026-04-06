@@ -4830,7 +4830,7 @@ import Testing
 		}
 
 		@Test
-		func producesDiagnostic_whenMockMethodExistsAlongsideCustomMockName() {
+		func producesDiagnostic_whenMockMethodExistsAlongsideCustomMockName_withRemoveFixIt() {
 			assertMacroExpansion(
 				"""
 				@Instantiable(generateMock: true, customMockName: "customMock")
@@ -4861,11 +4861,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`."#,
+						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method. The generated `mock()` would conflict with this method. Remove it or rename it."#,
 						line: 9,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: #"Rename method to `customMock` and add `customMockName: "customMock"` to `@Instantiable`"#),
+							FixItSpec(message: #"Remove this `mock()` method"#),
 						],
 					),
 				],
@@ -5183,6 +5183,50 @@ import Testing
 					DiagnosticSpec(
 						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
 						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add default values to mock() non-dependency parameters for extra: Bool"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_secondMockOverloadWithNonDependencyMissingDefaultProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Container: Instantiable {
+				    public static func instantiate() -> Container<Bool> { fatalError() }
+
+				    public static func mock() -> Container<Bool> {
+				        fatalError()
+				    }
+
+				    public static func mock(extra: Bool) -> Container<Int> {
+				        fatalError()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension Container: Instantiable {
+				    public static func instantiate() -> Container<Bool> { fatalError() }
+
+				    public static func mock() -> Container<Bool> {
+				        fatalError()
+				    }
+
+				    public static func mock(extra: Bool) -> Container<Int> {
+				        fatalError()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						line: 9,
 						column: 5,
 						fixIts: [
 							FixItSpec(message: "Add default values to mock() non-dependency parameters for extra: Bool"),

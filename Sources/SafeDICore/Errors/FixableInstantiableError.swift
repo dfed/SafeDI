@@ -37,6 +37,7 @@ public enum FixableInstantiableError: DiagnosticError {
 	case mockMethodIncorrectReturnType(typeName: String)
 	case duplicateMockMethod
 	case mockMethodNeedsCustomName
+	case mockMethodConflictsWithGeneratedMock
 	case customMockNameWithoutGenerateMock
 	case customMockNameMethodNotFound(String)
 	case mockMethodNonDependencyMissingDefaultValue([Property])
@@ -94,6 +95,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			"@\(InstantiableVisitor.macroName)-decorated type must have at most one `mock()` method. Remove this duplicate."
 		case .mockMethodNeedsCustomName:
 			"@\(InstantiableVisitor.macroName)-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@\(InstantiableVisitor.macroName)`."
+		case .mockMethodConflictsWithGeneratedMock:
+			"@\(InstantiableVisitor.macroName)-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method. The generated `mock()` would conflict with this method. Remove it or rename it."
 		case .customMockNameWithoutGenerateMock:
 			"`customMockName` requires `generateMock: true`."
 		case let .customMockNameMethodNotFound(name):
@@ -133,6 +136,7 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .mockMethodIncorrectReturnType,
 			     .duplicateMockMethod,
 			     .mockMethodNeedsCustomName,
+			     .mockMethodConflictsWithGeneratedMock,
 			     .customMockNameWithoutGenerateMock,
 			     .customMockNameMethodNotFound,
 			     .mockMethodNonDependencyMissingDefaultValue:
@@ -192,6 +196,8 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Remove duplicate mock() method"
 			case .mockMethodNeedsCustomName:
 				"Rename method to `customMock` and add `customMockName: \"customMock\"` to `@Instantiable`"
+			case .mockMethodConflictsWithGeneratedMock:
+				"Remove this `mock()` method"
 			case .customMockNameWithoutGenerateMock:
 				"Add `generateMock: true` to `@Instantiable`"
 			case let .customMockNameMethodNotFound(name):

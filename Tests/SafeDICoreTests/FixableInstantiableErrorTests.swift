@@ -92,6 +92,19 @@ struct FixableInstantiableErrorTests {
 	}
 
 	@Test
+	func mockMethodConflictsWithGeneratedMock_description_mentionsConflict() {
+		let error = FixableInstantiableError.mockMethodConflictsWithGeneratedMock
+		#expect(error.description.contains("generateMock: true"))
+		#expect(error.description.contains("conflict"))
+	}
+
+	@Test
+	func mockMethodConflictsWithGeneratedMock_fixIt_mentionsRemovingMethod() {
+		let error = FixableInstantiableError.mockMethodConflictsWithGeneratedMock
+		#expect(error.fixIt.message == "Remove this `mock()` method")
+	}
+
+	@Test
 	func customMockNameWithoutGenerateMock_description_mentionsRequiringGenerateMock() {
 		let error = FixableInstantiableError.customMockNameWithoutGenerateMock
 		#expect(error.description == "`customMockName` requires `generateMock: true`.")
