@@ -533,7 +533,7 @@ The `customMockName` parameter requires `generateMock: true`.
 
 If you provide a mock method without `generateMock: true`, parent types that instantiate the child will call `ChildType.mock(...)` (or `ChildType.customMock(...)`) instead of `ChildType(...)` when constructing it, threading mock parameters through your custom method.
 
-Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type's `@Instantiated`, `@Received`, and `@Forwarded` dependencies. Non-dependency parameters must have default values. On concrete type declarations the return type must be `Self`, the type name, or a type listed in `fulfillingAdditionalTypes`; on extension-based `@Instantiable` types the return type must match the extended type (e.g. `-> Container<Bool>`) or a `fulfillingAdditionalTypes` entry, mirroring the corresponding `instantiate()` method. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
+Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type’s `@Instantiated`, `@Received`, and `@Forwarded` dependencies. Non-dependency parameters must have default values. On concrete type declarations the return type must be `Self`, the type name, or a type listed in `fulfillingAdditionalTypes`; on extension-based `@Instantiable` types the return type must match the extended type (e.g. `-> Container<Bool>`) or a `fulfillingAdditionalTypes` entry, mirroring the corresponding `instantiate()` method. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
 
 ```swift
 #if DEBUG
@@ -575,14 +575,14 @@ let root = Root.mock(
 let noteView = NoteView.mock(userName: "Preview User")
 ```
 
-However, if a child type's custom mock provides a default for a `@Forwarded` property, that default bubbles up to the parent's generated mock, making the parameter optional. The **nearest receiver's default wins**:
+However, if a child type’s custom mock provides a default for a `@Forwarded` property, that default bubbles up to the parent’s generated mock, making the parameter optional. The **nearest receiver’s default wins**:
 
-- The root type's own custom mock default takes highest priority
+- The root type’s own custom mock default takes highest priority
 - Otherwise, the shallowest `@Received` type with a custom mock default wins
 - Types that `@Forward` the property are skipped (they're pass-through, not consumers)
 - Ties at the same depth are broken by declaration order
 
-This rule also applies to `@Received` dependencies that would otherwise be required parameters (e.g., when the dependency's type is not in the current module).
+This rule also applies to `@Received` dependencies that would otherwise be required parameters (e.g., when the dependency’s type is not in the current module).
 
 ### Default-valued init parameters in mocks
 
