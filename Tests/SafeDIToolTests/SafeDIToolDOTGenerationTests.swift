@@ -1582,51 +1582,6 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesDOTTree_whenPartiallyLazyInstantiationCycleExists() async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable(isRoot: true)
-				public struct Root {
-				    @Instantiated let a: A
-				}
-				""",
-				"""
-				@Instantiable
-				public struct A {
-				    @Instantiated let b: B
-				}
-				""",
-				"""
-				@Instantiable
-				public struct B {
-				    @Instantiated let cBuilder: Instantiator<C>
-				}
-				""",
-				"""
-				@Instantiable
-				public struct C {
-				    @Instantiated let a: A
-				}
-				""",
-			],
-			buildDOTFileOutput: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(try #require(output.dotTree) == """
-		graph SafeDI {
-		    ranksep=2
-		    Root -- "a: A"
-		    "a: A" -- "b: B"
-		    "b: B" -- "cBuilder: Instantiator<C>"
-		    "cBuilder: Instantiator<C>" -- "a: A"
-		}
-		""")
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesDOTTree_whenLazySelfInstantiationCycleExists() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
