@@ -693,7 +693,7 @@ public actor DependencyTreeGenerator {
 						}
 					}
 				}
-				var instantiationStack: [Property] = [property] + propertyStack
+				let instantiationStack: [Property] = [property] + propertyStack
 				try validateNoCycleInReceivedProperties(
 					scope: scope,
 					receivedPropertyStack: [],
