@@ -39,7 +39,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	// MARK: Code Generation Tests
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_successfullyGeneratesOutputFileWhenNoCodeInput() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [],
@@ -51,7 +51,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_doesNotWriteExtensionIfRootAlreadyHasEmptyInitializer() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -76,7 +76,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootIsClass() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -126,7 +126,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootIsActor() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -176,7 +176,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootIsStruct() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -226,7 +226,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenMultipleRootsExist() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -303,7 +303,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootHasAnAnyProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -355,7 +355,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootHasAnAnyPropertyFulfilledByAnyAdditionalType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -405,7 +405,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootHasAnOptionalProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -457,7 +457,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootHasMultipleLayers() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -565,7 +565,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesSingleForwardedPropertyInSubBuilders() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -685,7 +685,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesSingleEscapingForwardedProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -741,7 +741,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizeMultipleForwardedPropertiesInSubBuilders() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -869,7 +869,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizeMultipleForwardedPropertiesAndDependencyInversionInSubBuilders() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -997,7 +997,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesDependencyInversionOfExistentialTypeInSubBuilder() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1049,7 +1049,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizesLazyDependencyInversionOfExistentialTypeInSubBuilder() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1106,7 +1106,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesThatUtilizePropertiesNotDirectlyProvidedByParent() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1227,7 +1227,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleLayersOfInstantiators() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1350,7 +1350,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertyWithMissingInstantiableInitializer() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1404,7 +1404,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertyWithInitializerWithDefaultArgumentForNonInjectedProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1461,7 +1461,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertyWithNotPublicInstantiableInitializer() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1515,7 +1515,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesNonPublicProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1569,7 +1569,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatReceiveTheSameProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1686,7 +1686,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyInMiddleLevel() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1805,7 +1805,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesTheSamePropertyAtMultipleLevels() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1888,7 +1888,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesAReceivedPropertyBelowWhereItIsReceived() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1973,7 +1973,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesAReceivedPropertyMultipleLevelsBelowWhereItIsFirstReceived() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2072,7 +2072,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithSingleTreeThatInstantiatesAPropertyReceivedInOneChildBranchMultipleLevelsBelowWhereItIsFirstReceived() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2191,7 +2191,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesAPropertyForwardedByAChild_doesNotRequirePuttingInstantiatedPropertyBeforeErasedInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2321,7 +2321,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyMultipleLayersDeep() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2452,7 +2452,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesInstantiablePropertyWithNoArguments() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2524,7 +2524,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesInstantiablePropertyWithArguments() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2655,7 +2655,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootInstantiatesPropertiesWithMultipleTreesThatInstantiateTheSamePropertyAcrossMultipleModules() async throws {
 		let greatGrandchildModuleOutput = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2849,7 +2849,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootHasReceivedAliasOfInstantiable() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2904,7 +2904,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_successfullyGeneratesOutputFileWhenNoRootFound() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2925,7 +2925,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_successfullyGeneratesOutputFileWhenNoRootFoundAndAdditionalImportedModulesSet() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2948,7 +2948,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_successfullyGeneratesOutputFileWhenIsRootIsFalse() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2969,7 +2969,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliased() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3126,7 +3126,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedAndExistential() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3191,7 +3191,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedALevelAboveWhereItIsReceived() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3352,7 +3352,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWhenInstantiated() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3429,7 +3429,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedTwice() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3511,7 +3511,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWhenForwarded() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3668,7 +3668,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenReceivedPropertyIsAliasedWasALevelBelowWhereItWasForwarded() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3823,7 +3823,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenFirstPropertyDependsOnLastPropertyAndMiddlePropertyHasNoDependencyEntanglementsWithEither() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3897,7 +3897,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootHasLotsOfDependenciesThatDependOnOneAnother() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4281,7 +4281,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenRootPropertyWithOptionalInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4324,7 +4324,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenLazyInstantiationCycleExists() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4400,7 +4400,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenPartiallyLazyInstantiationCycleExists() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4476,7 +4476,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenLazySelfInstantiationCycleExists() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4528,7 +4528,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenLazySelfForwardingInstantiationCycleExists() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4581,7 +4581,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenAGenericTypeIsAnExtendedInstantiableWithMultipleGenericReturnTypes() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4641,7 +4641,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenAGenericTypeIsAnExtendedInstantiableWithMultipleGenericFullyQualifiedReturnTypes() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4701,7 +4701,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4760,7 +4760,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypesWithNoQualification() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4852,7 +4852,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypesWithMixedQualification() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4944,7 +4944,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypesWithSameObjectReferencedWithDifferingQualification() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5033,7 +5033,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypeFulfillingAdditionalNestedTypes() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5094,7 +5094,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTreeContainsNestedTypeFulfillingAdditionalFullyQualifiedNestedTypes() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5155,7 +5155,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTypeIsFulfilledByNestedType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5199,7 +5199,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenTypeIsFulfilledByNestedTypeAndExtensionIsDefinedFirst() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5251,7 +5251,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenPropertyIsOptionalAndMarkedOnlyIfAvailableAndItIsAvailable() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5305,7 +5305,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenBothParentAndChildPropertyIsOptionalAndMarkedOnlyIfAvailableAndItIsAvailable() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5359,7 +5359,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenPropertyIsOptionalAndMarkedOnlyIfAvailableAndItIsNotAvailable() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5411,7 +5411,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenPropertyIsOptionalAndMarkedOnlyIfAvailableAndItIsAvailableBecauseAnotherDependencyBuildsIt() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5479,7 +5479,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenPropertyIsOptionalAndMarkedOnlyIfAvailableAndItIsAvailableInOneBranch() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5566,7 +5566,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenPropertyIsOptionalAndMarkedOnlyIfAvailableAndItIsOnlyAvialableViaCircularDependency() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5638,7 +5638,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenPropertyAliasIsOptionalAndMarkedOnlyIfAvailableAndItIsNotAvailable() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5694,7 +5694,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenPropertyAliasIsOptionalAndMarkedOnlyIfAvailableAndItIsAvailableBecauseAnotherDependencyBuildsIt() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5766,7 +5766,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenPropertyAliasIsOptionalAndMarkedOnlyIfAvailableAndItIsAvailableInOneBranch() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5858,7 +5858,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_doesNotWriteConvenienceExtensionOnRootOfTree_whenUnexpectedSwiftNodesAreEncountered() async throws {
 		// If this test begins to fail after updating Swift, put the below code into an AST parser and see if unexpected nodes are still encountered.
 		// The broken syntax must produce UnexpectedNodesSyntax at a level FileVisitor visits (class body, not inside function/variable bodies).
@@ -5897,7 +5897,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesErrorToOutputFile_whenUnexpectedSwiftNodesAreEncounteredAndRootExists() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5929,7 +5929,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenMultipleRootsExistInSameFile() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5986,7 +5986,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesEmptyRootContent_whenRootHasNoDependencies() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -6013,7 +6013,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesDistinctManifestOutputs_whenRootFilesShareTheSameBasename() async throws {
 		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
 		let featureADirectory = rootDirectory.appendingPathComponent("FeatureA")
@@ -6119,7 +6119,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_doesNotRewriteOutputFile_whenContentIsUnchanged() async throws {
 		let swiftFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".swift")
 		try """
@@ -6184,7 +6184,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_generatesManifestOutputAndDOTFileSimultaneously() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -6220,7 +6220,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenInstantiatorClosureTransitivelyCapturesVariableDeclaredLaterAlphabetically() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -6291,7 +6291,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_successfullyGeneratesOutputFileWhenNoRootFoundAndAdditionalImportedModulesSetViaSourceConfiguration() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -6320,7 +6320,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_parsesAdditionalDirectoriesToIncludeFromSourceConfiguration() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -6345,7 +6345,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	// MARK: Additional Directories + Manifest Tests
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_generatesOutputForRootInAdditionalDirectory() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -6395,7 +6395,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_generatesOutputForMultipleRootsInAdditionalDirectory() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -6456,7 +6456,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_generatesOutput_whenOnlyAdditionalDirectoryHasRoots() async throws {
 		// No roots in the target, only in the additional directory.
 		// The pre-scan discovers additional directories via @SafeDIConfiguration
@@ -6497,7 +6497,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_generatesCorrectOutput_whenAdditionalDirectoryRootDependsOnTargetRootDependency() async throws {
 		// The additional directory root has a dependency chain that shares
 		// dependencies with the target root. Verifies the full dependency

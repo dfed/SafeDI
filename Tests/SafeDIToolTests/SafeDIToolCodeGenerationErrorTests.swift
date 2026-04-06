@@ -39,7 +39,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	// MARK: Error Tests
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithPropertyWithUnknownFulfilledType_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -65,7 +65,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithPropertyWithUnknownTypeWithDotSuffixOfFulfillableType_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -112,7 +112,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithPropertyWithUnknownTypeWithDotPrefixOfFulfillableType_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -159,7 +159,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithMultipleInstantiateMethodsForTheSameTypeWithSameParameters_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -195,7 +195,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithMultipleInstantiateMethodsForTheSameTypeWithDifferentParameters_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -231,7 +231,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableInstantiatedProperty_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -266,7 +266,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableReceivedProperty_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -302,7 +302,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedAny_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -348,7 +348,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedAny_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -394,7 +394,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedForceUnwrap_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -438,7 +438,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedForceUnwrap_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -482,7 +482,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedOptional_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -525,7 +525,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedOptional_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -569,7 +569,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToIncorrectType_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -616,7 +616,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToIncorrectTypeOrLabel_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -665,7 +665,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithInstantiatedPropertyWithForwardedArgument_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -700,7 +700,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDiamondDependencyWhereAReceivedPropertyIsUnfulfillableOnOneBranch_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -748,7 +748,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDiamondDependencyWhereMultipleReceivedPropertiesAreUnfulfillableOnOneBranch_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -806,7 +806,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithInstantiatedPropertyThatRefersToCurrentInstantiable_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -865,7 +865,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithReceivedPropertyThatRefersToCurrentInstantiable_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -924,7 +924,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableAliasedReceivedPropertyName_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -979,7 +979,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableAliasedReceivedPropertyType_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1034,7 +1034,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWhereAliasedReceivedPropertyRefersToCurrentInstantiable_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1093,7 +1093,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableReceivedPropertyOnExtendedInstantiatedType_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1129,7 +1129,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDuplicateInstantiableNames_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1158,7 +1158,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDuplicateInstantiableNamesWhereOneIsRoot_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1187,7 +1187,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtension_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1220,7 +1220,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtensionWhereDeclarationIsRoot_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1253,7 +1253,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtensionWhereExtensionIsRoot_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1286,7 +1286,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDuplicateInstantiableNamesViaExtension_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1323,7 +1323,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDuplicateInstantiableFulfillment_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1352,7 +1352,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitialized_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1394,7 +1394,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithMixOfReceivedAndInstantiated_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1434,7 +1434,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedAndReceived_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1476,7 +1476,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndReceived_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1518,7 +1518,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndOnlyIfAvailableReceived_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1560,7 +1560,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithVaryingNames_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1602,7 +1602,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularReceivedDependencies_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1646,7 +1646,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularReceivedRenamedDependencies_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1691,7 +1691,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithMultipleCircularReceivedRenamedDependencies_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1735,7 +1735,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_OnCodeWithOptionalPropertyAliasAndMarkedOnlyIfAvailableAndItIsOnlyAvialableViaCircularDependency_throws_error() async {
 		await assertThrowsError(
 			"""
@@ -1793,7 +1793,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasSingleForwardedProperty_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1875,7 +1875,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasMultipleForwardedProperty_throwsError() async {
 		await assertThrowsError(
 			"""
@@ -1961,7 +1961,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	// MARK: Argument handling error tests
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func include_throwsErrorWhenCanNotCreateEnumerator() async {
 		final class FailingFileFinder: FileFinder {
 			func enumerator(
@@ -1990,7 +1990,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func include_throwsErrorWhenNoSwiftSourcesFilePathAndNoInclude() async {
 		var tool = SafeDITool()
 		tool.swiftSourcesFilePath = nil
@@ -2009,7 +2009,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	// MARK: Manifest Validation Tests
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsError_whenManifestListsFileThatDoesNotContainRoot() async throws {
 		let swiftFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".swift")
 		try """
@@ -2045,7 +2045,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsError_whenRootExistsButNotInManifest() async throws {
 		let swiftFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".swift")
 		try """
@@ -2085,7 +2085,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithMultipleSafeDIConfigurations_throwsError() async {
 		do {
 			_ = try await executeSafeDIToolTest(

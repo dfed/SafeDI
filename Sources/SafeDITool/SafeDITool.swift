@@ -24,7 +24,7 @@ import SafeDICore
 import SwiftParser
 
 @main
-@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct SafeDITool: AsyncParsableCommand {
 	// MARK: Arguments
 
@@ -508,19 +508,19 @@ struct SafeDITool: AsyncParsableCommand {
 }
 
 extension Data {
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	fileprivate func write(toPath filePath: String) throws {
 		try write(to: filePath.asFileURL)
 	}
 }
 
 extension String {
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	fileprivate func write(toPath filePath: String) throws {
 		try Data(utf8).write(toPath: filePath)
 	}
 
-	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	fileprivate var asFileURL: URL {
 		#if os(Linux)
 			URL(fileURLWithPath: self)
