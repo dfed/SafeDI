@@ -18,8 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Collections
-
 /// A model of the scoped dependencies required for an `@Instantiable` in the reachable dependency tree.
 final class Scope: Hashable {
 	// MARK: Initialization
@@ -103,7 +101,7 @@ final class Scope: Hashable {
 
 	func createScopeGenerator(
 		for property: Property?,
-		propertyStack: OrderedSet<Property>,
+		propertyStack: [Property],
 		receivableProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,

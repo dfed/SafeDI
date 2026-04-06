@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Collections
 @preconcurrency import SwiftSyntax
 import SwiftSyntaxBuilder
 
@@ -121,7 +120,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 		let dependencyAndArgumentBinding = try createDependencyAndArgumentBinding(given: dependencies)
 
 		let initializerFulfulledDependencies = Set(dependencyAndArgumentBinding.map(\.dependency))
-		let missingArguments = OrderedSet(dependencies).subtracting(initializerFulfulledDependencies)
+		let missingArguments = dependencies.filter { !initializerFulfulledDependencies.contains($0) }
 
 		if !missingArguments.isEmpty {
 			try recordError(.missingArguments(missingArguments.map(\.property)))

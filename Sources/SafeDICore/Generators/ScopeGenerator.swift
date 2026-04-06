@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Collections
 import Foundation
 
 /// A model capable of generating code for a scope’s dependency tree.
@@ -339,7 +338,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private lazy var orderedPropertiesToGenerate: [ScopeGenerator] = {
 		var orderedPropertiesToGenerate = [ScopeGenerator]()
 		var propertyToUnfulfilledScopeMap = propertiesToGenerate
-			.reduce(into: OrderedDictionary<Property, ScopeGenerator>()) { partialResult, scope in
+			.reduce(into: [Property: ScopeGenerator]()) { partialResult, scope in
 				if let property = scope.property {
 					partialResult[property] = scope
 				}
@@ -352,13 +351,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			// Mark as fulfilled before recursing to prevent cycles.
 			propertyToUnfulfilledScopeMap[property] = nil
-			let scopeDependencies = propertyToUnfulfilledScopeMap
-				.keys
-				.intersection(
-					scope.receivedProperties
-						.union(scope.onlyIfAvailableUnwrappedReceivedProperties),
-				)
-				.compactMap { propertyToUnfulfilledScopeMap[$0] }
+			let receivedAndOnlyIfAvailable = scope.receivedProperties
+				.union(scope.onlyIfAvailableUnwrappedReceivedProperties)
+			let scopeDependencies = propertiesToGenerate
+				.compactMap { childScope -> ScopeGenerator? in
+					guard let childProperty = childScope.property,
+					      propertyToUnfulfilledScopeMap[childProperty] != nil,
+					      receivedAndOnlyIfAvailable.contains(childProperty)
+					else {
+						return nil
+					}
+					return childScope
+				}
 			// Fulfill the scopes we depend upon.
 			for dependentScope in scopeDependencies {
 				fulfill(dependentScope)

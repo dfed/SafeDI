@@ -18,8 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Collections
-
 public actor DependencyTreeGenerator {
 	// MARK: Initialization
 
@@ -446,7 +444,7 @@ public actor DependencyTreeGenerator {
 	private func validateMockRootScopeForCycles(
 		_ scope: Scope,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
-		propertyStack: OrderedSet<Property> = [],
+		propertyStack: [Property] = [],
 	) throws {
 		// Check dependencies for cycles (catches @Received references back to ancestors).
 		for dependency in scope.instantiable.dependencies {
@@ -456,7 +454,7 @@ public actor DependencyTreeGenerator {
 			}
 			let typesInCycle = (
 				[propertyForDependency]
-					+ propertyStack.elements[0...cycleIndex],
+					+ propertyStack[0...cycleIndex],
 			).map(\.typeDescription)
 			try Self.throwIfInvalidCycle(
 				typesInCycle: typesInCycle,
@@ -471,8 +469,7 @@ public actor DependencyTreeGenerator {
 			switch childPropertyToGenerate {
 			case let .instantiated(childProperty, childScope, _):
 				guard !propertyStack.contains(childProperty) else { continue }
-				var nextStack = propertyStack
-				nextStack.insert(childProperty, at: 0)
+				let nextStack = [childProperty] + propertyStack
 				try validateMockRootScopeForCycles(
 					childScope,
 					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
@@ -748,14 +745,14 @@ public actor DependencyTreeGenerator {
 			on scope: Scope,
 			receivableProperties: Set<Property>,
 			property: Property?,
-			propertyStack: OrderedSet<Property>,
+			propertyStack: [Property],
 			root: TypeDescription,
 		) throws {
 			if let property {
 				func validateNoCycleInReceivedProperties(
 					scope: Scope,
-					receivedPropertyStack: OrderedSet<Property>,
-					instantiationStack: OrderedSet<Property>,
+					receivedPropertyStack: [Property],
+					instantiationStack: [Property],
 				) throws {
 					for childProperty in scope.requiredReceivedProperties {
 						guard childProperty != property else {
@@ -769,7 +766,7 @@ public actor DependencyTreeGenerator {
 							return
 						}
 						if let cycleIndex = instantiationStack.firstIndex(of: childProperty) {
-							let instantiationProperties = Array(instantiationStack.elements[0...cycleIndex])
+							let instantiationProperties = Array(instantiationStack[0...cycleIndex])
 							let typesInCycle = (
 								[childProperty]
 									+ receivedPropertyStack.reversed()
@@ -792,8 +789,7 @@ public actor DependencyTreeGenerator {
 						}
 					}
 				}
-				var instantiationStack = propertyStack
-				instantiationStack.insert(property, at: 0)
+				let instantiationStack: [Property] = [property] + propertyStack
 				try validateNoCycleInReceivedProperties(
 					scope: scope,
 					receivedPropertyStack: [],
@@ -834,7 +830,7 @@ public actor DependencyTreeGenerator {
 				}
 				let typesInCycle = (
 					[propertyForDependency]
-						+ childPropertyStack.elements[0...cycleIndex],
+						+ childPropertyStack[0...cycleIndex],
 				).map(\.typeDescription)
 				try Self.throwIfInvalidCycle(
 					typesInCycle: typesInCycle,
