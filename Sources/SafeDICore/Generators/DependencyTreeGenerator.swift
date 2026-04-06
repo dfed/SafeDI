@@ -99,14 +99,12 @@ public actor DependencyTreeGenerator {
 
 		// Validate mock scopes for cycles. Mock-only types (generateMock: true without
 		// isRoot) bypass root validation but can still have partially-lazy cycles.
-		for scope in Set(typeDescriptionToScopeMap.values)
-			where scope.instantiable.generateMock && !scope.instantiable.isRoot
-		{
-			try validateMockScopeForCycles(
-				scope: scope,
-				typeDescriptionToScopeMap: typeDescriptionToScopeMap,
-			)
-		}
+		// Uses cyclesOnly to skip unfulfillable property checks — mock-only types
+		// have unfulfillable received properties by design (they become mock parameters).
+		try validatePropertiesAreFulfillable(
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			cyclesOnly: true,
+		)
 
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
@@ -658,7 +656,14 @@ public actor DependencyTreeGenerator {
 		return typeDescriptionToScopeMap
 	}
 
-	private func validatePropertiesAreFulfillable(typeDescriptionToScopeMap: [TypeDescription: Scope]) throws {
+	/// Validates scopes for cycles and optionally for unfulfillable properties.
+	/// When `cyclesOnly` is true, unfulfillable property collection is skipped —
+	/// used for mock-only types where unfulfillable received properties are expected
+	/// (they become required mock parameters).
+	private func validatePropertiesAreFulfillable(
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		cyclesOnly: Bool = false,
+	) throws {
 		var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
 		func validatePropertiesAreFulfillable(
 			on scope: Scope,
@@ -724,21 +729,23 @@ public actor DependencyTreeGenerator {
 				)
 			}
 
-			for receivedProperty in scope.requiredReceivedProperties {
-				let parentContainsProperty = receivableProperties.contains(receivedProperty)
-				let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
-				if !parentContainsProperty, !propertyIsCreatedAtThisScope {
-					if property != nil {
-						// This property is in a dependency tree and is unfulfillable. Record the problem.
-						unfulfillableProperties.insert(.init(
-							property: receivedProperty,
-							instantiable: scope.instantiable,
-							parentStack: propertyStack.map(\.typeDescription) + [root],
-							suggestedAlternatives: receivableProperties.filter {
-								receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
-									|| receivedProperty.label == $0.label
-							}.sorted(),
-						))
+			if !cyclesOnly {
+				for receivedProperty in scope.requiredReceivedProperties {
+					let parentContainsProperty = receivableProperties.contains(receivedProperty)
+					let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
+					if !parentContainsProperty, !propertyIsCreatedAtThisScope {
+						if property != nil {
+							// This property is in a dependency tree and is unfulfillable. Record the problem.
+							unfulfillableProperties.insert(.init(
+								property: receivedProperty,
+								instantiable: scope.instantiable,
+								parentStack: propertyStack.map(\.typeDescription) + [root],
+								suggestedAlternatives: receivableProperties.filter {
+									receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
+										|| receivedProperty.label == $0.label
+								}.sorted(),
+							))
+						}
 					}
 				}
 			}
@@ -807,6 +814,23 @@ public actor DependencyTreeGenerator {
 			)
 		}
 
+		// When checking cycles only (mock validation), also validate non-root types
+		// that have generateMock enabled — they bypass root entry points.
+		if cyclesOnly {
+			let rootInstantiableSet = Set(rootInstantiables)
+			for scope in Set(typeDescriptionToScopeMap.values)
+				where scope.instantiable.generateMock && !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
+			{
+				try validatePropertiesAreFulfillable(
+					on: scope,
+					receivableProperties: Set(scope.properties),
+					property: nil,
+					propertyStack: [],
+					root: scope.instantiable.concreteInstantiable,
+				)
+			}
+		}
+
 		if !unfulfillableProperties.isEmpty {
 			throw DependencyTreeGeneratorError.unfulfillableProperties(Array(unfulfillableProperties))
 		}
@@ -815,51 +839,6 @@ public actor DependencyTreeGenerator {
 	/// Validates a mock scope for dependency cycles only (not unfulfillable properties).
 	/// Mock-only types may have unfulfillable received properties by design (they become
 	/// required mock parameters), but cycles still generate uncompilable code.
-	/// Validates a mock scope for dependency cycles only (not unfulfillable properties).
-	/// Mock-only types may have unfulfillable received properties by design (they become
-	/// required mock parameters), but cycles still generate uncompilable code.
-	private func validateMockScopeForCycles(
-		scope: Scope,
-		typeDescriptionToScopeMap: [TypeDescription: Scope],
-		propertyStack: OrderedSet<Property> = [],
-	) throws {
-		for dependency in scope.instantiable.dependencies {
-			let propertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
-			guard let cycleIndex = propertyStack.firstIndex(of: propertyForDependency) else {
-				continue
-			}
-			let typesInCycle = (
-				[propertyForDependency]
-					+ propertyStack.elements[0...cycleIndex],
-			).map(\.typeDescription)
-			if propertyForDependency.propertyType.isConstant {
-				let hasLazyHop = typesInCycle.contains(where: { !$0.propertyType.isConstant })
-				if hasLazyHop {
-					throw DependencyTreeGeneratorError.partiallyLazyDependencyCycleDetected(typesInCycle)
-				} else {
-					throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
-				}
-			}
-		}
-
-		for childPropertyToGenerate in scope.propertiesToGenerate {
-			switch childPropertyToGenerate {
-			case let .instantiated(childProperty, childScope, _):
-				guard !propertyStack.contains(childProperty) else {
-					continue
-				}
-				var nextStack = propertyStack
-				nextStack.insert(childProperty, at: 0)
-				try validateMockScopeForCycles(
-					scope: childScope,
-					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
-					propertyStack: nextStack,
-				)
-			case .aliased:
-				break
-			}
-		}
-	}
 
 	private func validateReachableTypeDescriptions() throws {
 		for reachableTypeDescription in reachableTypeDescriptions {
