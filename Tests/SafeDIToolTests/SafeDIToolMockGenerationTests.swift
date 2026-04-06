@@ -1466,7 +1466,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let shared = __safeDI_mock_shared()
 		        func __safeDI_child() -> Child {
-		            let flag = flag()
+		            let flag = __safeDI_mock_flag()
 		            return Child(shared: shared, flag: flag)
 		        }
 		        let child: Child = __safeDI_mock_child ?? __safeDI_child()
@@ -6866,7 +6866,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        config __safeDI_mock_config: @autoclosure @escaping () -> String = "hello"
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let config = config()
+		            let config = __safeDI_mock_config()
 		            return Child(config: config)
 		        }
 		        let child: Child = __safeDI_mock_child ?? __safeDI_child()
@@ -6986,7 +6986,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
 		            func __safeDI_grandchild() -> Grandchild {
-		                let viewModel = viewModel()
+		                let viewModel = __safeDI_mock_viewModel()
 		                return Grandchild(viewModel: viewModel)
 		            }
 		            let grandchild: Grandchild = __safeDI_mock_grandchild ?? __safeDI_grandchild()
@@ -7011,7 +7011,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        viewModel __safeDI_mock_viewModel: @autoclosure @escaping () -> String = "default"
 		    ) -> Child {
 		        func __safeDI_grandchild() -> Grandchild {
-		            let viewModel = viewModel()
+		            let viewModel = __safeDI_mock_viewModel()
 		            return Grandchild(viewModel: viewModel)
 		        }
 		        let grandchild: Grandchild = __safeDI_mock_grandchild ?? __safeDI_grandchild()
@@ -7178,12 +7178,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        flagB __safeDI_mock_flagB: @autoclosure @escaping () -> Int = 42
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            let flagA = flagA()
+		            let flagA = __safeDI_mock_flagA()
 		            return ChildA(flagA: flagA)
 		        }
 		        let childA: ChildA = __safeDI_mock_childA ?? __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            let flagB = flagB()
+		            let flagB = __safeDI_mock_flagB()
 		            return ChildB(flagB: flagB)
 		        }
 		        let childB: ChildB = __safeDI_mock_childB ?? __safeDI_childB()
@@ -7229,7 +7229,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        viewModel __safeDI_mock_viewModel: @autoclosure @escaping () -> String? = nil
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let viewModel = viewModel()
+		            let viewModel = __safeDI_mock_viewModel()
 		            return Child(viewModel: viewModel)
 		        }
 		        let child: Child = __safeDI_mock_child ?? __safeDI_child()
@@ -7305,12 +7305,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        flag_String __safeDI_mock_flag_String: @autoclosure @escaping () -> String = "on"
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            let flag_Bool = flag_Bool()
+		            let flag_Bool = __safeDI_mock_flag_Bool()
 		            return ChildA(flag: flag_Bool)
 		        }
 		        let childA: ChildA = __safeDI_mock_childA ?? __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            let flag_String = flag_String()
+		            let flag_String = __safeDI_mock_flag_String()
 		            return ChildB(flag: flag_String)
 		        }
 		        let childB: ChildB = __safeDI_mock_childB ?? __safeDI_childB()
@@ -7461,7 +7461,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        values __safeDI_mock_values: @autoclosure @escaping () -> [Int] = [1, 2, 3]
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let values = values()
+		            let values = __safeDI_mock_values()
 		            return Child(values: values)
 		        }
 		        let child: Child = __safeDI_mock_child ?? __safeDI_child()
@@ -7524,7 +7524,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        extra __safeDI_mock_extra: @autoclosure @escaping () -> Bool = false
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let extra = extra()
+		            let extra = __safeDI_mock_extra()
 		            let dependency = __safeDI_mock_dependency()
 		            return Child.mock(dependency: dependency, extra: extra)
 		        }
@@ -7940,12 +7940,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        viewModel_ViewModelB __safeDI_mock_viewModel_ViewModelB: @autoclosure @escaping () -> ViewModelB = ViewModelB()
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            let viewModel_ViewModelA = viewModel_ViewModelA()
+		            let viewModel_ViewModelA = __safeDI_mock_viewModel_ViewModelA()
 		            return ChildA(viewModel: viewModel_ViewModelA)
 		        }
 		        let childA: ChildA = __safeDI_mock_childA ?? __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            let viewModel_ViewModelB = viewModel_ViewModelB()
+		            let viewModel_ViewModelB = __safeDI_mock_viewModel_ViewModelB()
 		            return ChildB(viewModel: viewModel_ViewModelB)
 		        }
 		        let childB: ChildB = __safeDI_mock_childB ?? __safeDI_childB()
@@ -8901,9 +8901,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        viewModel __safeDI_mock_viewModel: @autoclosure @escaping () -> String = "default"
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let config = config()
+		            let config = __safeDI_mock_config()
 		            func __safeDI_grandchild() -> Grandchild {
-		                let viewModel = viewModel()
+		                let viewModel = __safeDI_mock_viewModel()
 		                return Grandchild(viewModel: viewModel)
 		            }
 		            let grandchild: Grandchild = __safeDI_mock_grandchild ?? __safeDI_grandchild()
@@ -9016,7 +9016,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        child __safeDI_mock_child: Child? = nil,
 		        onDismiss __safeDI_mock_onDismiss: @escaping () -> Void = {}
 		    ) -> Root {
-		        let child = __safeDI_mock_child ?? Child(onDismiss: onDismiss)
+		        func __safeDI_child() -> Child {
+		            let onDismiss = __safeDI_mock_onDismiss
+		            return Child(onDismiss: onDismiss)
+		        }
+		        let child: Child = __safeDI_mock_child ?? __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -9106,7 +9110,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        child __safeDI_mock_child: Child? = nil,
 		        onComplete __safeDI_mock_onComplete: @escaping @Sendable () -> Void = {}
 		    ) -> Root {
-		        let child = __safeDI_mock_child ?? Child(onComplete: onComplete)
+		        func __safeDI_child() -> Child {
+		            let onComplete = __safeDI_mock_onComplete
+		            return Child(onComplete: onComplete)
+		        }
+		        let child: Child = __safeDI_mock_child ?? __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -9453,7 +9461,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        parallelModuleType __safeDI_mock_parallelModuleType: @autoclosure @escaping () -> ParallelModuleType
 		    ) -> Root {
 		        func __safeDI_dependentService() -> DependentService {
-		            let parallelModuleType = parallelModuleType()
+		            let parallelModuleType = __safeDI_mock_parallelModuleType()
 		            return DependentService(parallelModuleType: parallelModuleType)
 		        }
 		        let dependentService: DependentService = __safeDI_mock_dependentService ?? __safeDI_dependentService()
@@ -9708,7 +9716,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        service_LocalService __safeDI_mock_service_LocalService: @autoclosure @escaping () -> LocalService = LocalService()
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let service_ExternalService = service_ExternalService()
+		            let service_ExternalService = __safeDI_mock_service_ExternalService()
 		            func __safeDI_grandchild() -> Grandchild {
 		                let service_LocalService = __safeDI_mock_service_LocalService()
 		                return Grandchild(service: service_LocalService)
@@ -10287,7 +10295,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        name_String __safeDI_mock_name_String: @autoclosure @escaping () -> String = "default"
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let name_String = name_String()
+		            let name_String = __safeDI_mock_name_String()
 		            return Child(name: name_String)
 		        }
 		        let child: Child = __safeDI_mock_child ?? __safeDI_child()
@@ -10629,8 +10637,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        onAction_String_to_Void __safeDI_mock_onAction_String_to_Void: @escaping (String) -> Void = { _ in },
 		        onAction_Void_to_Void __safeDI_mock_onAction_Void_to_Void: @escaping () -> Void = {}
 		    ) -> Root {
-		        let childA = __safeDI_mock_childA ?? ChildA(onAction: onAction_Void_to_Void)
-		        let childB = __safeDI_mock_childB ?? ChildB(onAction: onAction_String_to_Void)
+		        func __safeDI_childA() -> ChildA {
+		            let onAction_Void_to_Void = __safeDI_mock_onAction_Void_to_Void
+		            return ChildA(onAction: onAction_Void_to_Void)
+		        }
+		        let childA: ChildA = __safeDI_mock_childA ?? __safeDI_childA()
+		        func __safeDI_childB() -> ChildB {
+		            let onAction_String_to_Void = __safeDI_mock_onAction_String_to_Void
+		            return ChildB(onAction: onAction_String_to_Void)
+		        }
+		        let childB: ChildB = __safeDI_mock_childB ?? __safeDI_childB()
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -11735,17 +11751,17 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        value_ServiceB __safeDI_mock_value_ServiceB: @autoclosure @escaping () -> ServiceB = ServiceB()
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            let value_ServiceA = value_ServiceA()
+		            let value_ServiceA = __safeDI_mock_value_ServiceA()
 		            return ChildA(value: value_ServiceA)
 		        }
 		        let childA: ChildA = __safeDI_mock_childA ?? __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            let value_ServiceA_Optional = value_ServiceA_Optional()
+		            let value_ServiceA_Optional = __safeDI_mock_value_ServiceA_Optional()
 		            return ChildB(value: value_ServiceA_Optional)
 		        }
 		        let childB: ChildB = __safeDI_mock_childB ?? __safeDI_childB()
 		        func __safeDI_childC() -> ChildC {
-		            let value_ServiceB = value_ServiceB()
+		            let value_ServiceB = __safeDI_mock_value_ServiceB()
 		            return ChildC(value: value_ServiceB)
 		        }
 		        let childC: ChildC = __safeDI_mock_childC ?? __safeDI_childC()
@@ -11941,7 +11957,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        isLoggingEnabled __safeDI_mock_isLoggingEnabled: @autoclosure @escaping () -> Bool = false
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let isLoggingEnabled = isLoggingEnabled()
+		            let isLoggingEnabled = __safeDI_mock_isLoggingEnabled()
 		            return Child(isLoggingEnabled: isLoggingEnabled)
 		        }
 		        let child: Child = __safeDI_mock_child ?? __safeDI_child()

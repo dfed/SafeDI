@@ -1468,14 +1468,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for argument in constructionInitializer.arguments {
 			guard argument.hasDefaultValue,
 			      !dependencyLabels.contains(argument.innerLabel),
-			      argument.label != "_",
-			      !argument.typeDescription.strippingEscaping.isClosure
+			      argument.label != "_"
 			else { continue }
 			let strippedType = argument.typeDescription.strippingEscaping
 			let identifier = MockParameterIdentifier(propertyLabel: argument.label, sourceType: strippedType.asSource)
 			guard !resolvedParameters.contains(identifier) else { continue }
 			let parameterLabel = parameterLabelMap[identifier] ?? argument.label
-			bindings.append("let \(parameterLabel) = \(parameterLabel)()")
+			let mockParameterLabel = "\(mockParameterPrefix)\(parameterLabel)"
+			if argument.typeDescription.strippingEscaping.isClosure {
+				bindings.append("let \(parameterLabel) = \(mockParameterLabel)")
+			} else {
+				bindings.append("let \(parameterLabel) = \(mockParameterLabel)()")
+			}
 		}
 		return bindings
 	}
@@ -1500,7 +1504,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let identifier = MockParameterIdentifier(propertyLabel: dependency.property.label, sourceType: dependencyType.asSource)
 			guard !resolvedParameters.contains(identifier) else { continue }
 			let parameterLabel = parameterLabelMap[identifier] ?? dependency.property.label
-			bindings.append("let \(parameterLabel) = \(parameterLabel)()")
+			bindings.append("let \(parameterLabel) = \(mockParameterPrefix)\(parameterLabel)()")
 		}
 		return bindings
 	}
