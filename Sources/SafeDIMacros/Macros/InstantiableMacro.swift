@@ -1317,14 +1317,14 @@ extension TypeDescription {
 			)
 			|| self == .attributed(
 				.simple(name: "Instantiable"),
-				specifiers: nil,
+				specifiers: [],
 				attributes: ["retroactive"],
 			)
 			|| self == .nested(
 				name: "Instantiable",
 				parentType: .attributed(
 					.simple(name: "SafeDI"),
-					specifiers: nil,
+					specifiers: [],
 					attributes: ["retroactive"],
 				),
 			)

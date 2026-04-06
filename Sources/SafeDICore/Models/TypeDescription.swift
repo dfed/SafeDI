@@ -41,7 +41,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	/// A meta type. e.g. `Int.Type` or `Equatable.Protocol`
 	indirect case metatype(TypeDescription, isType: Bool)
 	/// A type identifier with a specifier or attributes. e.g. `inout Int` or `@autoclosure () -> Void`
-	indirect case attributed(TypeDescription, specifiers: [String]?, attributes: [String]?)
+	indirect case attributed(TypeDescription, specifiers: [String], attributes: [String])
 	/// An array. e.g. [Int]
 	indirect case array(element: TypeDescription)
 	/// A dictionary. e.g. [Int: String]
@@ -128,28 +128,13 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		case let .any(type):
 			return "any \(type.wrappedIfAmbiguous.asSource)"
 		case let .attributed(type, specifiers, attributes):
-			func attributesFromList(_ attributes: [String]) -> String {
-				attributes
-					.map { "@\($0)" }
-					.joined(separator: " ")
-			}
-			return switch (specifiers, attributes) {
-			case let (.some(specifiers), .none):
-				"\(specifiers.joined(separator: " ")) \(type.asSource)"
-			case let (.none, .some(attributes)):
-				"\(attributesFromList(attributes)) \(type.asSource)"
-			case let (.some(specifiers), .some(attributes)):
-				// This case likely represents an error.
-				// We are unaware of type reference that compiles with both a specifier and attributes.
-				// The Swift reference manual specifies that attributes come before the specifier,
-				// however code that puts an attribute first does not parse as AttributedTypeSyntax.
-				// Only code where the specifier comes before the attribute parses as an AttributedTypeSyntax.
-				// As a result, we construct this source with the specifier first.
-				// Reference manual: https://docs.swift.org/swift-book/ReferenceManual/Types.html#grammar_type
-				"\(specifiers.joined(separator: " ")) \(attributesFromList(attributes)) \(type.asSource)"
-			case (.none, .none):
-				type.asSource // This case represents an error.
-			}
+			// Specifiers come before attributes per the Swift reference manual:
+			// https://docs.swift.org/swift-book/ReferenceManual/Types.html#grammar_type
+			let prefix = [
+				specifiers.isEmpty ? nil : specifiers.joined(separator: " "),
+				attributes.isEmpty ? nil : attributes.map { "@\($0)" }.joined(separator: " "),
+			].compactMap(\.self).joined(separator: " ")
+			return "\(prefix) \(type.asSource)"
 		case let .array(element):
 			return "[\(element.asSource)]"
 		case let .dictionary(key, value):
@@ -251,16 +236,12 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		     .void:
 			self
 		case .closure:
-			.attributed(self, specifiers: nil, attributes: ["escaping"])
-		case let .attributed(type, specifiers: specifiers, attributes: attributes):
-			if let attributes {
-				if attributes.contains(where: { $0 == "escaping" }) {
-					.attributed(type, specifiers: specifiers, attributes: attributes)
-				} else {
-					.attributed(type, specifiers: specifiers, attributes: ["escaping"] + attributes)
-				}
+			.attributed(self, specifiers: [], attributes: ["escaping"])
+		case let .attributed(type, specifiers, attributes):
+			if attributes.contains(where: { $0 == "escaping" }) {
+				.attributed(type, specifiers: specifiers, attributes: attributes)
 			} else {
-				.attributed(type, specifiers: specifiers, attributes: ["escaping"])
+				.attributed(type, specifiers: specifiers, attributes: ["escaping"] + attributes)
 			}
 		}
 	}
@@ -351,12 +332,9 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		case let .metatype(type, isType):
 			return "\(type.asIdentifier)_\(isType ? "Type" : "Protocol")"
 		case let .attributed(type, specifiers, attributes):
-			// .attributed always has at least one non-nil specifier or attribute
-			// (the parser sets nil-if-empty, and all programmatic constructors
-			// ensure at least one is present).
 			let prefix = [
-				specifiers?.joined(separator: "_"),
-				attributes?.joined(separator: "_"),
+				specifiers.isEmpty ? nil : specifiers.joined(separator: "_"),
+				attributes.isEmpty ? nil : attributes.joined(separator: "_"),
 			].compactMap(\.self).joined(separator: "_")
 			return "\(prefix)_\(type.asIdentifier)"
 		case let .array(element):
@@ -380,11 +358,11 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	public var strippingEscaping: TypeDescription {
 		switch self {
 		case let .attributed(type, specifiers, attributes):
-			let filtered = attributes?.filter { $0 != "escaping" }
-			if let filtered, !filtered.isEmpty {
+			let filtered = attributes.filter { $0 != "escaping" }
+			if !filtered.isEmpty {
 				return .attributed(type, specifiers: specifiers, attributes: filtered)
-			} else if let specifiers, !specifiers.isEmpty {
-				return .attributed(type, specifiers: specifiers, attributes: nil)
+			} else if !specifiers.isEmpty {
+				return .attributed(type, specifiers: specifiers, attributes: [])
 			} else {
 				return type
 			}
@@ -581,8 +559,8 @@ extension TypeSyntax {
 			}
 			return .attributed(
 				typeIdentifier.baseType.typeDescription,
-				specifiers: typeIdentifier.specifiers.textRepresentation,
-				attributes: attributes.isEmpty ? nil : attributes,
+				specifiers: typeIdentifier.specifiers.textRepresentation ?? [],
+				attributes: attributes,
 			)
 
 		} else if let typeIdentifier = ArrayTypeSyntax(self) {

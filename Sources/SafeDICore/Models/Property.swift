@@ -89,13 +89,11 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 							name: "escaping",
 							trailingTrivia: .space,
 						))
-						if let attributes {
-							for attribute in attributes {
-								AttributeSyntax(
-									attributeName: IdentifierTypeSyntax(name: .identifier(attribute)),
-									trailingTrivia: .space,
-								)
-							}
+						for attribute in attributes {
+							AttributeSyntax(
+								attributeName: IdentifierTypeSyntax(name: .identifier(attribute)),
+								trailingTrivia: .space,
+							)
 						}
 					},
 					baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource)),

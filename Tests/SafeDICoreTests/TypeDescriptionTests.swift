@@ -763,7 +763,7 @@ struct TypeDescriptionTests {
 				doesThrow: false,
 				returnType: .void(.identifier),
 			),
-			specifiers: nil,
+			specifiers: [],
 			attributes: ["autoclosure", "escaping"],
 		).asFunctionParameter == TypeDescription.attributed(
 			.closure(
@@ -772,7 +772,7 @@ struct TypeDescriptionTests {
 				doesThrow: false,
 				returnType: .void(.identifier),
 			),
-			specifiers: nil,
+			specifiers: [],
 			attributes: ["autoclosure", "escaping"],
 		))
 	}
@@ -786,7 +786,7 @@ struct TypeDescriptionTests {
 				doesThrow: false,
 				returnType: .void(.identifier),
 			),
-			specifiers: nil,
+			specifiers: [],
 			attributes: ["escaping", "autoclosure"],
 		).asFunctionParameter == TypeDescription.attributed(
 			.closure(
@@ -795,7 +795,7 @@ struct TypeDescriptionTests {
 				doesThrow: false,
 				returnType: .void(.identifier),
 			),
-			specifiers: nil,
+			specifiers: [],
 			attributes: ["escaping", "autoclosure"],
 		))
 	}
@@ -821,7 +821,7 @@ struct TypeDescriptionTests {
 				returnType: .void(.tuple),
 			),
 			specifiers: ["borrowing"],
-			attributes: nil,
+			attributes: [],
 		))
 	}
 
@@ -834,8 +834,8 @@ struct TypeDescriptionTests {
 				doesThrow: false,
 				returnType: .void(.identifier),
 			),
-			specifiers: nil,
-			attributes: nil,
+			specifiers: [],
+			attributes: [],
 		).asFunctionParameter == TypeDescription.attributed(
 			.closure(
 				arguments: [.void(.tuple)],
@@ -843,7 +843,7 @@ struct TypeDescriptionTests {
 				doesThrow: false,
 				returnType: .void(.identifier),
 			),
-			specifiers: nil,
+			specifiers: [],
 			attributes: ["escaping"],
 		))
 	}
@@ -882,13 +882,13 @@ struct TypeDescriptionTests {
 
 	@Test
 	func simplified_stripsAttributes() {
-		let type = TypeDescription.attributed(.simple(name: "Int"), specifiers: ["inout"], attributes: nil)
+		let type = TypeDescription.attributed(.simple(name: "Int"), specifiers: ["inout"], attributes: [])
 		#expect(type.simplified == .simple(name: "Int"))
 	}
 
 	@Test
 	func simplified_stripsNestedWrappers() {
-		let type = TypeDescription.optional(.attributed(.some(.simple(name: "Service")), specifiers: nil, attributes: ["Sendable"]))
+		let type = TypeDescription.optional(.attributed(.some(.simple(name: "Service")), specifiers: [], attributes: ["Sendable"]))
 		#expect(type.simplified == .simple(name: "Service"))
 	}
 
