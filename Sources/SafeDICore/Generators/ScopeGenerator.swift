@@ -702,6 +702,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				switch codeGeneration {
 				case .dependencyTree:
 					return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
+				case .mock where isPropertyCycle:
+					// Cycle reconstruction: emit inline construction without mock parameter
+					// override, matching the production code gen pattern. The cycled type
+					// is reconstructed from available scope bindings.
+					return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 				case let .mock(context):
 					let identifier = MockParameterIdentifier(
 						propertyLabel: property.label,
