@@ -473,6 +473,19 @@ struct TypeDescriptionTests {
 	}
 
 	@Test
+	func typeDescription_whenCalledOnATypeSyntaxNodeRepresentingASuppressedTypeSyntax_returnsUnknown() throws {
+		let content = """
+		var test: ~Copyable
+		"""
+
+		let visitor = SuppressedTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+		let typeDescription = try #require(visitor.suppressedTypeIdentifier)
+		#expect(typeDescription.isUnknown)
+		#expect(typeDescription.asSource == "~Copyable")
+	}
+
+	@Test
 	func typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAVoidType_findsTheType() throws {
 		let content = """
 		let type: Void.Type = Void.self
@@ -656,6 +669,18 @@ struct TypeDescriptionTests {
 	}
 
 	@Test
+	func typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAClosureTypeWithArguments_findsTheType() throws {
+		let content = """
+		let test: Any.Type = ((Int, String) -> Bool).self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
+		#expect(typeDescription.asSource == "(Int, String) -> Bool")
+	}
+
+	@Test
 	func typeDescription_whenCalledOnAExprSyntaxNodeRepresentingAThrowingClosureType_findsTheType() throws {
 		let content = """
 		let test: Any.Type = (((() throws -> ()))).self
@@ -738,7 +763,7 @@ struct TypeDescriptionTests {
 				doesThrow: false,
 				returnType: .void(.identifier),
 			),
-			specifiers: nil,
+			specifiers: [],
 			attributes: ["autoclosure", "escaping"],
 		).asFunctionParameter == TypeDescription.attributed(
 			.closure(
@@ -747,7 +772,7 @@ struct TypeDescriptionTests {
 				doesThrow: false,
 				returnType: .void(.identifier),
 			),
-			specifiers: nil,
+			specifiers: [],
 			attributes: ["autoclosure", "escaping"],
 		))
 	}
@@ -761,7 +786,7 @@ struct TypeDescriptionTests {
 				doesThrow: false,
 				returnType: .void(.identifier),
 			),
-			specifiers: nil,
+			specifiers: [],
 			attributes: ["escaping", "autoclosure"],
 		).asFunctionParameter == TypeDescription.attributed(
 			.closure(
@@ -770,7 +795,7 @@ struct TypeDescriptionTests {
 				doesThrow: false,
 				returnType: .void(.identifier),
 			),
-			specifiers: nil,
+			specifiers: [],
 			attributes: ["escaping", "autoclosure"],
 		))
 	}
@@ -796,7 +821,7 @@ struct TypeDescriptionTests {
 				returnType: .void(.tuple),
 			),
 			specifiers: ["borrowing"],
-			attributes: nil,
+			attributes: [],
 		))
 	}
 
@@ -809,8 +834,8 @@ struct TypeDescriptionTests {
 				doesThrow: false,
 				returnType: .void(.identifier),
 			),
-			specifiers: nil,
-			attributes: nil,
+			specifiers: [],
+			attributes: [],
 		).asFunctionParameter == TypeDescription.attributed(
 			.closure(
 				arguments: [.void(.tuple)],
@@ -818,7 +843,7 @@ struct TypeDescriptionTests {
 				doesThrow: false,
 				returnType: .void(.identifier),
 			),
-			specifiers: nil,
+			specifiers: [],
 			attributes: ["escaping"],
 		))
 	}
@@ -857,13 +882,13 @@ struct TypeDescriptionTests {
 
 	@Test
 	func simplified_stripsAttributes() {
-		let type = TypeDescription.attributed(.simple(name: "Int"), specifiers: ["inout"], attributes: nil)
+		let type = TypeDescription.attributed(.simple(name: "Int"), specifiers: ["inout"], attributes: [])
 		#expect(type.simplified == .simple(name: "Int"))
 	}
 
 	@Test
 	func simplified_stripsNestedWrappers() {
-		let type = TypeDescription.optional(.attributed(.some(.simple(name: "Service")), specifiers: nil, attributes: ["Sendable"]))
+		let type = TypeDescription.optional(.attributed(.some(.simple(name: "Service")), specifiers: [], attributes: ["Sendable"]))
 		#expect(type.simplified == .simple(name: "Service"))
 	}
 
@@ -1518,6 +1543,14 @@ struct TypeDescriptionTests {
 		// but there’s no way to get a TypeSyntax from an object of that type.
 		override func visit(_ node: TypeAnnotationSyntax) -> SyntaxVisitorContinueKind {
 			functionIdentifier = TypeSyntax(node.type)?.typeDescription
+			return .skipChildren
+		}
+	}
+
+	private final class SuppressedTypeSyntaxVisitor: SyntaxVisitor {
+		var suppressedTypeIdentifier: TypeDescription?
+		override func visit(_ node: SuppressedTypeSyntax) -> SyntaxVisitorContinueKind {
+			suppressedTypeIdentifier = TypeSyntax(node).typeDescription
 			return .skipChildren
 		}
 	}

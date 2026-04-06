@@ -24,6 +24,7 @@ import SafeDIRootScannerCore
 import Testing
 @testable import SafeDITool
 
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func executeSafeDIToolTest(
 	swiftFileContent: [String],
 	additionalDirectorySwiftFileContent: [String] = [],
@@ -185,6 +186,7 @@ func executeSafeDIToolTest(
 	}
 }
 
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct TestOutput {
 	let moduleInfo: SafeDITool.ModuleInfo
 	let moduleInfoOutputPath: String

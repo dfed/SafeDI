@@ -100,7 +100,7 @@ public actor DependencyTreeGenerator {
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
 		return try await withThrowingTaskGroup(
-			of: GeneratedRoot?.self,
+			of: GeneratedRoot.self,
 			returning: [GeneratedRoot].self,
 		) { taskGroup in
 			for instantiable in typeDescriptionToFulfillingInstantiableMap.values
@@ -134,7 +134,6 @@ public actor DependencyTreeGenerator {
 							mockConditionalCompilation: mockConditionalCompilation,
 						)),
 					)
-					guard !code.isEmpty else { return nil }
 					return GeneratedRoot(
 						typeDescription: instantiable.concreteInstantiable,
 						sourceFilePath: instantiable.sourceFilePath,
@@ -144,9 +143,7 @@ public actor DependencyTreeGenerator {
 			}
 			var generatedRoots = [GeneratedRoot]()
 			for try await generatedRoot in taskGroup {
-				if let generatedRoot {
-					generatedRoots.append(generatedRoot)
-				}
+				generatedRoots.append(generatedRoot)
 			}
 			return generatedRoots
 		}

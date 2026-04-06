@@ -39,6 +39,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Tests – Simple types
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForTypeWithNoDependencies() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -70,6 +71,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForExtensionBasedInstantiable() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -107,6 +109,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Tests – Types with dependencies
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForTypeWithInstantiatedDependency() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -164,6 +167,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForTypeWithReceivedDependency() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -251,6 +255,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForFullTree() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -375,6 +380,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Tests – Configuration
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_respectsMockConditionalCompilationNil() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -412,6 +418,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_respectsCustomMockConditionalCompilation() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -451,6 +458,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_typeWithDependenciesAndNilConditionalCompilation() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -512,6 +520,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_respectsMockAttributes() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -543,6 +552,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_parameterRequiredForTypeNotInTypeMap() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -582,6 +592,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_extensionBasedWithNilConditionalCompilation() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -623,6 +634,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_receivedErasedTypeAutoWraps() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -717,6 +729,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForErasedToConcreteExistential() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -782,6 +795,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Tests – Complex configurations
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForRootWithMultipleBranchesReceivingSameProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -964,6 +978,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForRootWithProtocolFulfilledByAdditionalType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1023,6 +1038,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForMultipleRootsEachGetsOwnMockFile() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1105,6 +1121,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_constructionOrderRespectsReceivedDependencies() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1217,6 +1234,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForFourLevelDeepTreeWithSharedLeaf() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1379,6 +1397,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParameterBubblesUpToRootMock() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1473,6 +1492,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForTypeWithInstantiatorDependency() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1568,6 +1588,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForTypeWithInstantiatorNoForwardedProperties() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1628,6 +1649,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForInstantiatorWithMultipleForwardedProperties() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1698,6 +1720,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForTypeWithPublishedReceivedDependency() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1769,6 +1792,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Tests – Coverage for edge cases
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForExtensionBasedTypeWithReceivedDependencies() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1858,6 +1882,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForExtensionBasedTypeInInlineConstruction() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1949,6 +1974,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForInstantiatorWithDefaultValuedBuiltTypeArg() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2046,6 +2072,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForInstantiatorWithExtensionBasedBuiltType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2138,6 +2165,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForLazySelfInstantiationCycle() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2185,6 +2213,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Tests – onlyIfAvailable and aliased properties
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForTypeWithOnlyIfAvailableReceivedProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2272,6 +2301,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForTypeWithAliasedReceivedProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2368,6 +2398,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Tests – Additional patterns
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForOnlyIfAvailableWherePropertyIsAvailable() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2457,6 +2488,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForTypeWithAnyProtocolProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2525,6 +2557,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForErasedInstantiatorType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2689,6 +2722,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForSendableInstantiatorType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2756,6 +2790,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForMultipleLayersOfInstantiators() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2864,6 +2899,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForLotsOfInterdependentDependencies() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3119,6 +3155,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForAliasedPropertyThatIsAlsoExistential() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3229,6 +3266,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForSendableErasedInstantiatorType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3351,6 +3389,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForAliasedReceivedPropertyWithErasedToConcreteExistentialFalse() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3454,6 +3493,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Tests – Disambiguation
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguatesParameters_whenInstantiatorLabelCollidesWithTypeName() async throws {
 		// Root has @Instantiated let childB: ChildB (constant).
 		// Root has @Instantiated let childA: ChildA, which has @Instantiated let childB: Instantiator<Other>.
@@ -3578,6 +3618,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Tests – Existing mock method detection
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedWithCustomMockCallThrough_whenTypeHasExistingMockMethodAndCustomMockName() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3612,6 +3653,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedWhenTypeHasExistingMockMethodWithCustomMockNameAndGenerateMock() async throws {
 		// Type has generateMock: true AND a hand-written customMock with a dependency parameter.
 		// The generated mock calls through to the hand-written .customMock(dependency:).
@@ -3675,6 +3717,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedWhenTypeHasNonStaticMockMethod() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3710,6 +3753,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_misconfiguredMockMethodEmitsComment() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3782,6 +3826,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_extensionBasedTypeUsesInstantiateInReturnStatement() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3846,6 +3891,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_nestsBuilderInsideClosureWhenForwardedTypeIsMockable() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3921,6 +3967,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_extensionBasedTypeRespectsMockAttributes() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3956,6 +4003,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_inlineConstructionRecursivelyBuildsInstantiatedDependencies() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4026,6 +4074,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_nestsConstantEntryInsideBuilderWhenItDependsOnForwardedType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4095,6 +4144,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_resolvesDependencyViaFulfillingTypeInScope() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4153,6 +4203,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_inlineConstructionWrapsInstantiatorDependenciesWithForwardedProperties() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4236,6 +4287,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Tests – Edge cases
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_sendableInstantiatorWithNoForwardedPropertiesIncludesIn() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4283,6 +4335,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_multiLevelNestingInsideBuilderClosure() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4369,6 +4422,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_aliasedReceivedDependencyResolvesToForwardedAncestor() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4434,6 +4488,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguatesParameterLabelsWhenSameInitLabelAppearsTwice() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4516,6 +4571,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_passesNilForOnlyIfAvailableProtocolDependency() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4573,6 +4629,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_threadsTransitiveDependenciesNotInParentScope() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4630,6 +4687,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_receivedNonInstantiableDependencyBecomesRequiredParameter() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4672,6 +4730,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_receivedNonInstantiableTransitiveDependencyBecomesRequiredParameter() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4724,6 +4783,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_onlyIfAvailableTransitiveDependencyBecomesOptionalParameter() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4782,6 +4842,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_onlyIfAvailableDependencyUsesVariableInReturnStatement() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4833,6 +4894,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_sendableInstantiatorDependencyClosuresAreMarkedSendable() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4891,6 +4953,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_nonSendableInstantiatorDependencyClosuresAreNotMarkedSendable() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -4952,6 +5015,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_instantiatedDependencyFromAnotherModuleGetsDefaultFromModuleInfo() async throws {
 		// First module: ExternalEngine is @Instantiable via extension in another module.
 		let externalModuleOutput = try await executeSafeDIToolTest(
@@ -5031,6 +5095,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_receivedDependencyFromAnotherModuleGetsDefaultFromModuleInfo() async throws {
 		// First module: ExternalEngine is @Instantiable via extension in another module.
 		let externalModuleOutput = try await executeSafeDIToolTest(
@@ -5105,6 +5170,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_rootUncoveredDependencyNotSuppressedByNestedDeclarationWithSameLabel() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5172,6 +5238,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_sameTypeDifferentLabelsEachGetOwnParameter() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5223,6 +5290,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_receivedConcreteExistentialWrapperConstructsUnderlyingType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5297,6 +5365,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_sharedTransitiveReceivedDependencyPromotedAtRootScope() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5367,6 +5436,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_transitiveProtocolDependencyFulfilledByExtensionIsOptional() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5434,6 +5504,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_erasedToConcreteExistentialWithChildrenWrapsInMockBinding() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5504,6 +5575,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_noRedeclarationWhenOnlyIfAvailableDependencyAppearsInMultipleChildren() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5559,6 +5631,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_noUseBeforeDeclarationWhenReceivedDependencyPromotedFromDeepTree() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5630,6 +5703,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_noRedeclarationWhenSameDependencyIsReceivedAndOnlyIfAvailable() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5689,6 +5763,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_noDuplicateBindingWhenRequiredAndOnlyIfAvailableForNonInstantiableType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -5755,6 +5830,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_instantiatedDependencyNotInScopeMapBecomesRequiredParameter() async throws {
 		// Simulates an @Instantiated dependency whose type is @Instantiable in another module
 		// but not visible to this module's scope map. The type appears in the root's
@@ -5804,6 +5880,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_instantiatedInstantiatorNotInScopeMapBecomesRequiredParameter() async throws {
 		// An Instantiator<ExternalType> where ExternalType is @Instantiable in another module
 		// but not visible here. The Instantiator property has no scope and must become a
@@ -5848,6 +5925,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_instantiatedAndForwardedWithUncoveredDependency() async throws {
 		// A type with both @Forwarded properties and an @Instantiated dependency
 		// whose type is not in the scope map. Tests the interaction of forwarded
@@ -5906,6 +5984,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_aliasedOnlyIfAvailableDependencyTracksOnlyIfAvailable() async throws {
 		// An aliased dependency with onlyIfAvailable: true should produce an optional
 		// mock parameter, not a required one. This exercises the aliased+onlyIfAvailable
@@ -5971,6 +6050,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_onlyIfAvailableTransitiveDependenciesNotPromoted() async throws {
 		// When an onlyIfAvailable dependency (e.g., ApplicationStateService?) has its own
 		// transitive dependencies (e.g., NotificationCenter), those transitive deps should
@@ -6041,6 +6121,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_closureDependencyProducesValidIdentifier() async throws {
 		// A type with a closure dependency returning Void should produce a valid
 		// identifier suffix (not `-Void` or other invalid characters).
@@ -6094,6 +6175,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_sendableClosureDependencyProducesValidIdentifier() async throws {
 		// Verify that @Sendable closure types produce valid identifier suffixes
 		// (@ symbols must not appear in generated parameter names).
@@ -6134,6 +6216,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_forwardedClosureParameterHasEscapingAnnotation() async throws {
 		// A forwarded closure parameter must be @escaping in the mock function
 		// signature, since it's passed to an init that stores it.
@@ -6181,6 +6264,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_usesExistingMockMethodInChildConstruction() async throws {
 		// When a child type has a user-defined mock() with parameters matching its
 		// dependencies, the parent's generated mock calls Child.mock(...) instead
@@ -6260,6 +6344,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_existingMockMethodCoexistsWithNonMockChildren() async throws {
 		// Some children have user-defined mocks, others don't. The generated
 		// mock uses .mock() for the former and regular init for the latter.
@@ -6320,6 +6405,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_existingMockMethodInDeepTree() async throws {
 		// Grandchild has a user-defined mock with parameters. Parent → Child → Grandchild.
 		// The construction chain should call Grandchild.mock() at the deepest level.
@@ -6394,6 +6480,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_existingMockMethodOnExtensionBasedType() async throws {
 		// An extension-based @Instantiable type with a user-defined mock method.
 		// Parent should call Child.mock() instead of Child.instantiate().
@@ -6458,6 +6545,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_existingMockMethodOnExtensionBasedTypeWithReversedSourceOrder() async throws {
 		// Same as mock_existingMockMethodOnExtensionBasedType but with mock() declared
 		// before instantiate() in source order. Verifies visit order doesn't matter.
@@ -6522,6 +6610,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_existingMockMethodWithMultipleDependencies() async throws {
 		// Child has a user-defined mock with multiple dependency parameters.
 		// All parameters are correctly threaded through the parent's mock.
@@ -6592,6 +6681,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_existingMockMethodWithReversedParameterOrder() async throws {
 		// Child's customMock has parameters in reversed order from init.
 		// The generated mock's call-through must match the custom mock's parameter order.
@@ -6652,6 +6742,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_existingMockMethodSkipsGenerationForTypeButGeneratesForParent() async throws {
 		// A type with a user-defined mock() gets no generated mock file, but its parent
 		// still gets a generated mock with parameters and inline construction.
@@ -6724,6 +6815,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParameterUsesOriginalDefaultExpression() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -6786,6 +6878,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParameterDoesNotBubbleThroughInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -6850,6 +6943,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParameterBubblesFromGrandchildToRoot() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -6946,6 +7040,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParameterOnRootType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -6990,6 +7085,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParameterDoesNotBubbleThroughSendableInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -7036,6 +7132,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_multipleDefaultValuedParametersFromDifferentChildren() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -7098,6 +7195,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParameterWithNilDefault() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -7160,6 +7258,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParameterDisambiguatedWhenLabelCollides() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -7223,6 +7322,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParameterDoesNotBubbleThroughErasedInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -7274,6 +7374,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParameterDoesNotBubbleThroughSendableErasedInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -7325,6 +7426,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParameterWithComplexDefault() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -7371,6 +7473,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParameterOnTypeWithExistingMock() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -7434,6 +7537,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_childDefaultParamDoesNotReEvaluateRootBoundLabel() async throws {
 		// Parent @Receives clientId (uncovered, no scope for String).
 		// Child has clientId as a non-dependency default-valued init param.
@@ -7484,6 +7588,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_receivedDependencyNotSuppressedByTreeChildWithSameLabelDifferentType() async throws {
 		// ChildA @Instantiates `service: LocalService` (tree child).
 		// ChildB @Receives `service: ExternalService` (different type, same label).
@@ -7564,6 +7669,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_optionalReceivedNotSuppressedByNonOptionalWithSameLabelDifferentType() async throws {
 		// ChildA @Receives `service: ExternalService` (non-optional).
 		// ChildB @Receives(onlyIfAvailable: true) `service: LocalService?` (optional, different type).
@@ -7637,6 +7743,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguationUsesSimplifiedSuffixWhenUnique() async throws {
 		// Two children have `service` with different types. One is optional.
 		// Simplified suffixes (stripping ?) are unique → use simplified.
@@ -7705,6 +7812,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguationFallsBackToFullSuffixWhenSimplifiedCollides() async throws {
 		// Two children have `service` — one is `Service` (non-optional),
 		// one is `Service?` (optional). Simplified types are both `Service` → collision.
@@ -7775,6 +7883,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguatedDefaultParamsFromDifferentChildrenDoNotCollideAtRoot() async throws {
 		// ChildA has `viewModel: ViewModelA = ViewModelA()` and ChildB has `viewModel: ViewModelB = ViewModelB()`.
 		// Both bubble to root as disambiguated autoclosure params. They must NOT both produce
@@ -7848,6 +7957,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_uncoveredDependencyEvaluatedBeforePassingToUserMock() async throws {
 		// Root @Instantiates ChildService which has a user-defined mock(engine:).
 		// engine comes from a parallel module (uncovered dep).
@@ -7914,6 +8024,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_deepNestedChildNotExposedAsRootParameter() async throws {
 		// Root → Parent (subtree) → Child (subtree) → Leaf.
 		// Only Parent is a root parameter. Child and Leaf are constructed inline
@@ -7981,6 +8092,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_siblingResolvesOptionalBeforeNestedChild() async throws {
 		// Root has widgetService (promoted) and parent. Parent receives widgetService.
 		// widgetService is resolved via ?? at root scope. Inside __safeDI_parent(),
@@ -8051,6 +8163,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_siblingResolvesOptionalBeforeDeepNestedGrandchild() async throws {
 		// Root → widgetService (promoted, subtree) + parent (subtree).
 		// Parent → grandchild (subtree). Grandchild receives widgetService.
@@ -8136,6 +8249,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_siblingInstantiatedAtGrandchildLevelUsesResolvedValue() async throws {
 		// Root → widgetService (promoted subtree) + parent (subtree).
 		// Parent → grandchild. Grandchild @Instantiates widgetService (same type).
@@ -8229,6 +8343,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_instantiatorResolvedBySiblingNotRedeclaredInNestedScope() async throws {
 		// Root has childBuilder (Instantiator) and parent. Parent also uses childBuilder.
 		// childBuilder is resolved at root via ??. Inside __safeDI_parent(),
@@ -8296,6 +8411,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguatedParamUsedInInstantiatorBuilderFunction() async throws {
 		// ChildA is built via Instantiator and @Receives presenter: PresenterA.
 		// ChildB @Receives presenter: PresenterB (same label, different type).
@@ -8375,6 +8491,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguatedInstantiatorBindingUsesDisambiguatedLocalName() async throws {
 		// Two Instantiator children share label "childBuilder" but different types.
 		// After disambiguation, the ?? binding local must use the disambiguated name.
@@ -8455,6 +8572,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguatedInstantiatorResolvedBySiblingInNestedBuilder() async throws {
 		// ChildC and ChildD both have a dep named "childBuilder" but with different generic types.
 		// At root, both are promoted → disambiguated. ChildC's builder must reference
@@ -8544,6 +8662,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguatedInstantiatorResolvedThroughIntermediateInstantiatorBuilder() async throws {
 		// Root → parentBuilder (Instantiator<Parent>) + childBuilder (Instantiator<ChildA>).
 		// Parent uses childBuilder (Instantiator<ChildA>) + also has otherBuilder (Instantiator<ChildB>)
@@ -8629,6 +8748,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguatedInstantiatorInDeepNestedBuilderUsesResolvedName() async throws {
 		// Root has two children that each receive a different-typed builder with same label.
 		// ChildA → receives builder: Instantiator<TypeA>
@@ -8735,6 +8855,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParametersFromMultipleLevelsAllAppearAtRoot() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -8797,6 +8918,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParameterFromGrandchildStopsAtInstantiatorBoundary() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -8860,6 +8982,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedClosureParameterStripsEscaping() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -8902,6 +9025,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedMainActorClosurePreservesMainActor() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -8946,6 +9070,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedSendableClosurePreservesSendable() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -8988,6 +9113,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_typeWithUserMockAndOnlyDefaultValuedParamsGeneratesCallThrough_whenCustomMockNameIsSet() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -9054,6 +9180,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_mockMethodMissingDependencyEmitsComment() async throws {
 		// Parent has a child whose mock() takes only some of its dependencies.
 		// The .mock() call emits the "incorrectly configured" comment, triggering
@@ -9127,6 +9254,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_defaultValuedParamDoesNotSuppressReceivedPropertyBinding() async throws {
 		// A child has a default-valued init param with the same label as a received
 		// dependency on another child. The default-valued declaration must NOT suppress
@@ -9196,6 +9324,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_crossModuleDependencyWithModuleInfoIsOptionalParameter() async throws {
 		// CrossModuleService is provided via .safedi — constructible, optional parameter.
 		let crossModuleOutput = try await executeSafeDIToolTest(
@@ -9268,6 +9397,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_uncoveredTransitiveDependencyFromParallelModuleSurfacesAsRequired() async throws {
 		// Simulates a dependency whose transitive dep is @Instantiable in a parallel
 		// module not available to this module. The transitive dep has no scope in the
@@ -9333,6 +9463,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_userMockDependencyIsOptionalParameterWhenFulfillableFromTree() async throws {
 		// Child has a user-defined mock() with a dep that IS constructible.
 		// The dep should be an optional parameter with tree construction as default.
@@ -9390,6 +9521,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_userMockDependencyBecomesRequiredParameterWhenNotFulfillable() async throws {
 		// Child has a user-defined mock() with a dep from a dependent module.
 		// The dep is constructible (via .safedi) but from another module.
@@ -9455,6 +9587,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_userMockOnlyIfAvailableDependencyUsesNilDefaultWhenNotFulfillable() async throws {
 		// Child has @Received(onlyIfAvailable: true) dep. The mock() has it as optional.
 		// At the root, it should be an optional parameter with nil default.
@@ -9511,6 +9644,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: - Bug fix regression tests
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_uncoveredDependencyNotSuppressedByGrandchildWithSameLabel() async throws {
 		// Child has @Instantiated service: ExternalService (NOT in scope map —
 		// @Instantiable is in a parallel module). Grandchild has a tree child
@@ -9589,6 +9723,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_userMockReturningAdditionalTypeUsedForProtocolProperty() async throws {
 		// ChildService fulfills ChildServiceProtocol. Its mock returns the protocol type
 		// and accepts a received dependency. Root's property is typed as the protocol.
@@ -9648,6 +9783,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_userMockReturningAdditionalTypeNotUsedForConcreteProperty() async throws {
 		// ChildService fulfills ChildServiceProtocol. Its mock returns the protocol type
 		// and accepts a received dependency. Root's property is typed as the concrete type.
@@ -9708,6 +9844,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_extensionUserMockReturningAdditionalTypeUsedForProtocolProperty() async throws {
 		// Extension-based ChildService fulfills ChildServiceProtocol. Its mock returns the protocol
 		// type and accepts a received dependency. Root's property is typed as the protocol.
@@ -9766,6 +9903,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_extensionUserMockReturningAdditionalTypeNotUsedForConcreteProperty() async throws {
 		// Extension-based ChildService fulfills ChildServiceProtocol. Its mock returns the protocol
 		// type and accepts a received dependency. Root's property is typed as the concrete type.
@@ -9825,6 +9963,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedMockCallsThroughToHandWrittenMock() async throws {
 		// Type has generateMock: true AND a hand-written mock with a dependency parameter.
 		// The generated mock should call through to the hand-written .mock(dependency:).
@@ -9877,6 +10016,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedMockDoesNotExposeInitDefaultsNotOnHandWrittenMock() async throws {
 		// Service has a default-valued init parameter (showDebugInfo) that the hand-written
 		// mock does NOT expose. The generated mock should NOT bubble it up — the hand-written
@@ -9958,6 +10098,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedMockExposesHandWrittenMockExtraParams() async throws {
 		// Service's hand-written mock has an extra non-dependency parameter (showDebugInfo)
 		// with a default. The generated mock SHOULD expose it since the hand-written mock
@@ -10016,6 +10157,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedMockCallsThroughToHandWrittenMockForExtension() async throws {
 		// Extension-based type has generateMock: true AND a hand-written mock with a dependency.
 		// The generated mock should call through to .mock(dependency:).
@@ -10073,6 +10215,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_parseErrorWritesErrorStubToMockOutputs() async throws {
 		// When source has parse errors, mock outputs should get the error stub too
 		// (not be left stale or missing).
@@ -10100,6 +10243,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_forwardedParamDoesNotCollideWithBubbledDefault() async throws {
 		// Root @Forwards `name: String`. Child has default-valued `name: String = "default"`.
 		// Both produce mock params with label "name". Disambiguation must handle forwarded too.
@@ -10153,6 +10297,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_instantiatorSiblingResolvedForDescendant() async throws {
 		// Root has both an Instantiator<Parent> and an @Instantiated SharedThing.
 		// Parent @Receives shared: SharedThing. Inside parentBuilder's function,
@@ -10218,6 +10363,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguatedAutoclosureEvaluatedInInstantiatorBuilder() async throws {
 		// Root has parentBuilder (Instantiator<Parent>) and childB: ChildB.
 		// Parent @Receives config: ConfigA. ChildB @Receives config: ConfigB.
@@ -10295,6 +10441,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguatedUncoveredDependencyInNestedInstantiator() async throws {
 		// Root @Instantiates parent: Parent and child: Child.
 		// Parent @Receives engine: EngineA. Child @Receives engine: EngineB.
@@ -10363,6 +10510,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_onlyIfAvailableDisambiguatedSimplifiedUnique() async throws {
 		// ChildA @Receives service: ExternalService. ChildB @Receives(onlyIfAvailable: true) service: LocalService?.
 		// Both share label "service" — disambiguated by type. Optional suffix stripped from
@@ -10430,6 +10578,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_closureTypedDefaultDisambiguated() async throws {
 		// ChildA has default-valued `onAction: @escaping () -> Void = {}`.
 		// ChildB has default-valued `onAction: @escaping (String) -> Void = { _ in }`.
@@ -10488,6 +10637,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_extensionBasedChildReceivesInstantiatorFromParentScope() async throws {
 		// Root @Instantiates childBuilder: Instantiator<Item> (generated first).
 		// Root @Instantiates wrapper: ThirdPartyWrapper (extension-based, generated second).
@@ -10555,6 +10705,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguatesAllParameters_whenThreeChildrenShareSameLabel() async throws {
 		// Three children each receive "service" with a different type.
 		// All three get disambiguated: service_ServiceA, service_ServiceB, service_ServiceC.
@@ -10637,6 +10788,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguatedInstantiatorResolvedFromRootInNestedScope() async throws {
 		// Root @Instantiates childBuilder: Instantiator<ChildA> (disambiguated).
 		// Root also @Instantiates parentBuilder: Instantiator<Parent>.
@@ -10750,6 +10902,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: - Scope and ordering tests
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_receivedDependencyGetsRootBindingWhenCreatedBySiblingInstantiator() async throws {
 		// ChildA @Instantiates shared in its subtree. ChildB @Receives it.
 		// shared is promoted to root. Root binding must exist so ChildB's
@@ -10838,6 +10991,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_ordering_constantDependencyBeforeInstantiatorGrandchild() async throws {
 		// Root has @Instantiated shared + child with Instantiator grandchild that receives shared.
 		// shared must be defined before the grandchild's Instantiator function.
@@ -10893,6 +11047,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_ordering_promotedDependencyBeforeSiblingInstantiator() async throws {
 		// Two Instantiator siblings. ChildA @Instantiates shared, ChildB @Receives it.
 		// shared is promoted to root. Must be ordered before builderB's function.
@@ -10977,6 +11132,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_ordering_promotedDependencyBeforeGrandchildInSiblingBranch() async throws {
 		// ChildA creates shared in its subtree. ChildB's grandchild receives it.
 		// shared promoted to root. Must be ordered before childB.
@@ -11068,6 +11224,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_ordering_chainedPromotedDependenciesBeforeGrandchild() async throws {
 		// Grandchild receives serviceA and serviceB. ServiceA depends on serviceB.
 		// Both promoted. serviceB must be ordered before serviceA, both before grandchild.
@@ -11157,6 +11314,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_ordering_deepNesting_greatGrandchildReceivesFromSiblingBranch() async throws {
 		// ChildB @Instantiates shared. ChildA's great-grandchild (via Instantiator) receives it.
 		// shared must be at root before childA.
@@ -11256,6 +11414,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_requiredReceivedDependencyIsNotTreatedAsOnlyIfAvailableWhenSiblingHasOnlyIfAvailableWithSameLabel() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -11325,6 +11484,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_postDisambiguationLabelDoesNotCollideWithExistingPropertyLabel() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -11423,6 +11583,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_aliasedBindingUsesDisambiguatedFulfillingPropertyLabel() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -11496,6 +11657,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguationFallsBackToFullSuffixWhenSimplifiedSuffixesCollide() async throws {
 		// Root instantiates three children. Each child has a default-valued init
 		// parameter named "value" with a different type. ServiceA and ServiceA?
@@ -11595,6 +11757,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Tests – Per-type generateMock
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForType_whenGenerateMockIsTrue() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -11626,6 +11789,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedForType_whenEnableMockGenerationIsTrue() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -11658,6 +11822,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_notGeneratedForType_whenGenerateMockIsDefault() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -11676,6 +11841,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_notGeneratedForType_whenGenerateMockIsFalse() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -11694,6 +11860,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatedOnlyForOptedInTypes_whenMixOfGenerateMockValues() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -11737,6 +11904,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_usesOuterLabel_whenDefaultValuedParameterHasUnderscoreInnerLabel() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -11799,6 +11967,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_doesNotBubbleDefaultValuedParameter_whenOuterLabelIsUnderscore() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -11853,6 +12022,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_doesNotBubbleDefaultValuedParameter_whenOnlyLabelIsUnderscore() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -11909,6 +12079,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	// MARK: Custom Mock Dependency Default Bubbling Tests
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_bubblesCustomMockDependencyDefault_whenForwardedPropertyReceivedByChild() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -11978,6 +12149,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_nearestReceiverDefaultWins_whenMultipleChildrenAtSameDepth() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -12042,6 +12214,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_forwardedPropertyDefaultBubblesAcrossThreeLevels_eachWithCustomMock() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -12125,6 +12298,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_doesNotBubbleDefault_whenNoChildHasCustomMock() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -12172,6 +12346,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_doesNotApplyDefaultFromWrongType_whenSameLabelDifferentTypes() async throws {
 		// ChildA has `value: String` with a custom mock default.
 		// ChildB has `value: Int` with no custom mock.
@@ -12255,6 +12430,64 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		}
 		#endif
 		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_crossModuleTypeWithGenerateMockIsSkipped() async throws {
+		// CrossModuleService has generateMock: true, but its source file belongs
+		// to the dependent module. The consuming module must NOT generate a mock
+		// for it — that's the dependent module's responsibility.
+		let crossModuleOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public struct CrossModuleService: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(crossModuleService: CrossModuleService) {
+				        self.crossModuleService = crossModuleService
+				    }
+				    @Instantiated let crossModuleService: CrossModuleService
+				}
+				""",
+			],
+			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// Root mock should exist.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    public static func mock(
+		        crossModuleService: @autoclosure @escaping () -> CrossModuleService = CrossModuleService()
+		    ) -> Root {
+		        let crossModuleService = crossModuleService()
+		        return Root(crossModuleService: crossModuleService)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+
+		// CrossModuleService mock must NOT be generated by this module.
+		#expect(output.mockFiles["CrossModuleService+SafeDIMock.swift"] == nil,
+		        "Cross-module type should not have a mock generated in consuming module")
 	}
 
 	// MARK: Private
