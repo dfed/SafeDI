@@ -458,20 +458,12 @@ public actor DependencyTreeGenerator {
 				[propertyForDependency]
 					+ propertyStack.elements[0...cycleIndex],
 			).map(\.typeDescription)
-			if propertyForDependency.propertyType.isConstant {
-				let hasLazyHop = typesInCycle.contains(where: { !$0.propertyType.isConstant })
-				if hasLazyHop {
-					throw DependencyTreeGeneratorError.partiallyLazyDependencyCycleDetected(typesInCycle)
-				} else {
-					throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
-				}
-			} else if dependency.source.isReceived {
-				throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
-					property: propertyForDependency,
-					directParent: scope.instantiable.concreteInstantiable,
-					cycle: typesInCycle,
-				)
-			}
+			try Self.throwIfInvalidCycle(
+				typesInCycle: typesInCycle,
+				property: propertyForDependency,
+				directParent: scope.instantiable.concreteInstantiable,
+				isReceived: dependency.source.isReceived,
+			)
 		}
 
 		// Recurse into children.
@@ -490,6 +482,32 @@ public actor DependencyTreeGenerator {
 				break
 			}
 		}
+	}
+
+	/// Throws the appropriate cycle error based on the property types in the cycle.
+	/// For fully-lazy cycles (all Instantiator hops, no constant entry point), does nothing —
+	/// those are valid and produce compilable code.
+	private static func throwIfInvalidCycle(
+		typesInCycle: [TypeDescription],
+		property: Property,
+		directParent: TypeDescription,
+		isReceived: Bool,
+	) throws {
+		if property.propertyType.isConstant {
+			let hasLazyHop = typesInCycle.contains(where: { !$0.propertyType.isConstant })
+			if hasLazyHop {
+				throw DependencyTreeGeneratorError.partiallyLazyDependencyCycleDetected(typesInCycle)
+			} else {
+				throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
+			}
+		} else if isReceived {
+			throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
+				property: property,
+				directParent: directParent,
+				cycle: typesInCycle,
+			)
+		}
+		// Fully-lazy cycle (Instantiator entry, not received) — valid, no error.
 	}
 
 	/// Mirrors ScopeGenerator's `receivedProperties` and `onlyIfAvailableUnwrappedReceivedProperties`
@@ -757,19 +775,12 @@ public actor DependencyTreeGenerator {
 									+ receivedPropertyStack.reversed()
 									+ instantiationProperties,
 							).map(\.typeDescription)
-							switch childProperty.propertyType {
-							case .instantiator,
-							     .erasedInstantiator,
-							     .sendableInstantiator,
-							     .sendableErasedInstantiator:
-								throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
-									property: childProperty,
-									directParent: scope.instantiable.concreteInstantiable,
-									cycle: typesInCycle,
-								)
-							case .constant:
-								throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
-							}
+							try Self.throwIfInvalidCycle(
+								typesInCycle: typesInCycle,
+								property: childProperty,
+								directParent: scope.instantiable.concreteInstantiable,
+								isReceived: !childProperty.propertyType.isConstant,
+							)
 						} else if let receivedPropertyScope = typeDescriptionToScopeMap[childProperty.typeDescription] {
 							var childPropertyStack = receivedPropertyStack
 							childPropertyStack.append(childProperty)
@@ -825,22 +836,12 @@ public actor DependencyTreeGenerator {
 					[propertyForDependency]
 						+ childPropertyStack.elements[0...cycleIndex],
 				).map(\.typeDescription)
-				if propertyForDependency.propertyType.isConstant {
-					let hasLazyHop = typesInCycle.contains(where: { !$0.propertyType.isConstant })
-					if hasLazyHop {
-						// Partially-lazy cycle: mix of constant and Instantiator hops.
-						// This generates forward variable references that Swift rejects.
-						throw DependencyTreeGeneratorError.partiallyLazyDependencyCycleDetected(typesInCycle)
-					} else {
-						throw DependencyTreeGeneratorError.constantDependencyCycleDetected(typesInCycle)
-					}
-				} else if dependency.source.isReceived {
-					throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
-						property: propertyForDependency,
-						directParent: scope.instantiable.concreteInstantiable,
-						cycle: typesInCycle,
-					)
-				}
+				try Self.throwIfInvalidCycle(
+					typesInCycle: typesInCycle,
+					property: propertyForDependency,
+					directParent: scope.instantiable.concreteInstantiable,
+					isReceived: dependency.source.isReceived,
+				)
 			}
 
 			for childPropertyToGenerate in scope.propertiesToGenerate {
