@@ -27,8 +27,7 @@ struct FixableInstantiableErrorTests {
 		let error = FixableInstantiableError.mockMethodMissingArguments([
 			Property(label: "service", typeDescription: .simple(name: "Service")),
 		])
-		#expect(error.description.contains("mock()"))
-		#expect(error.description.contains("must have a parameter"))
+		#expect(error.description == "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.")
 	}
 
 	@Test
@@ -36,21 +35,19 @@ struct FixableInstantiableErrorTests {
 		let error = FixableInstantiableError.mockMethodMissingArguments([
 			Property(label: "service", typeDescription: .simple(name: "Service")),
 		])
-		#expect(error.fixIt.message.contains("Add mock() arguments for"))
-		#expect(error.fixIt.message.contains("service: Service"))
+		#expect(error.fixIt.message == "Add mock() arguments for service: Service")
 	}
 
 	@Test
 	func mockMethodNotPublic_description_mentionsMockMethodVisibility() {
 		let error = FixableInstantiableError.mockMethodNotPublic
-		#expect(error.description.contains("mock()"))
-		#expect(error.description.contains("must be `public` or `open`"))
+		#expect(error.description == "@Instantiable-decorated type's `mock()` method must be `public` or `open`.")
 	}
 
 	@Test
 	func mockMethodNotPublic_fixIt_mentionsAddingPublicModifier() {
 		let error = FixableInstantiableError.mockMethodNotPublic
-		#expect(error.fixIt.message.contains("Add `public` modifier to mock() method"))
+		#expect(error.fixIt.message == "Add `public` modifier to mock() method")
 	}
 
 	@Test
@@ -78,14 +75,66 @@ struct FixableInstantiableErrorTests {
 	}
 
 	@Test
-	func mockMethodConflictsWithGenerateMock_description_mentionsBothGenerateMockAndMockMethod() {
-		let error = FixableInstantiableError.mockMethodConflictsWithGenerateMock
-		#expect(error.description == "@Instantiable-decorated type must not have both `generateMock: true` and a hand-written `mock()` method.")
+	func mockMethodNeedsCustomName_description_mentionsAmbiguousSignaturesAndCustomMockName() {
+		let error = FixableInstantiableError.mockMethodNeedsCustomName
+		#expect(error.description == "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`.")
 	}
 
 	@Test
-	func mockMethodConflictsWithGenerateMock_fixIt_mentionsRemovingGenerateMock() {
-		let error = FixableInstantiableError.mockMethodConflictsWithGenerateMock
-		#expect(error.fixIt.message == "Remove `generateMock: true`")
+	func mockMethodNeedsCustomName_fixIt_mentionsRenamingAndAddingCustomMockName() {
+		let error = FixableInstantiableError.mockMethodNeedsCustomName
+		#expect(error.fixIt.message == "Rename method to `customMock` and add `customMockName: \"customMock\"` to `@Instantiable`")
+	}
+
+	@Test
+	func mockMethodConflictsWithGeneratedMock_description_mentionsConflict() {
+		let error = FixableInstantiableError.mockMethodConflictsWithGeneratedMock
+		#expect(error.description == "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method. The generated `mock()` would conflict with this method. Remove it or rename it.")
+	}
+
+	@Test
+	func mockMethodConflictsWithGeneratedMock_fixIt_mentionsRemovingMethod() {
+		let error = FixableInstantiableError.mockMethodConflictsWithGeneratedMock
+		#expect(error.fixIt.message == "Remove this `mock()` method")
+	}
+
+	@Test
+	func customMockNameWithoutGenerateMock_description_mentionsRequiringGenerateMock() {
+		let error = FixableInstantiableError.customMockNameWithoutGenerateMock
+		#expect(error.description == "`customMockName` requires `generateMock: true`.")
+	}
+
+	@Test
+	func customMockNameWithoutGenerateMock_fixIt_mentionsAddingGenerateMock() {
+		let error = FixableInstantiableError.customMockNameWithoutGenerateMock
+		#expect(error.fixIt.message == "Add `generateMock: true` to `@Instantiable`")
+	}
+
+	@Test
+	func customMockNameMethodNotFound_description_mentionsMissingMethodName() {
+		let error = FixableInstantiableError.customMockNameMethodNotFound("customMock")
+		#expect(error.description == "No method named `customMock` found. Add a `public static func customMock(…)` method.")
+	}
+
+	@Test
+	func customMockNameMethodNotFound_fixIt_mentionsAddingMethod() {
+		let error = FixableInstantiableError.customMockNameMethodNotFound("customMock")
+		#expect(error.fixIt.message == "Add `public static func customMock(…)` method")
+	}
+
+	@Test
+	func mockMethodNonDependencyMissingDefaultValue_description_mentionsNonDependencyParameters() {
+		let error = FixableInstantiableError.mockMethodNonDependencyMissingDefaultValue([
+			Property(label: "extra", typeDescription: .simple(name: "Bool")),
+		])
+		#expect(error.description == "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.")
+	}
+
+	@Test
+	func mockMethodNonDependencyMissingDefaultValue_fixIt_mentionsAddingDefaultValues() {
+		let error = FixableInstantiableError.mockMethodNonDependencyMissingDefaultValue([
+			Property(label: "extra", typeDescription: .simple(name: "Bool")),
+		])
+		#expect(error.fixIt.message == "Add default values to mock() non-dependency parameters for extra: Bool")
 	}
 }

@@ -779,7 +779,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.sorted { $0.property < $1.property }
 
 		// Collect all declarations from the dependency tree.
-		var allDeclarations = await collectMockDeclarations()
+		var dependencyDefaults = [MockParameterIdentifier: (expression: String, depth: Int)]()
+		var allDeclarations = await collectMockDeclarations(
+			dependencyDefaults: &dependencyDefaults,
+		)
 
 		// Find dependencies not covered by the tree.
 		let coveredRootIdentifiers = Set(allDeclarations.map(\.identifier))
@@ -874,7 +877,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// Add forwarded dependencies as bare parameter declarations.
-		let forwardedDeclarations = forwardedDependencies.map { dependency in
+		var forwardedDeclarations = forwardedDependencies.map { dependency in
 			MockDeclaration(
 				propertyLabel: dependency.property.label,
 				parameterLabel: dependency.property.label,
@@ -889,11 +892,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 		}
 
-		// Collect the root type's own default-valued init parameters.
+		// Collect the root type's own default-valued non-dependency parameters.
+		// When a hand-written mock exists, use the mock's parameters as the API surface.
+		// Otherwise, use the init's parameters.
 		var rootDefaultIdentifiers = Set<MockParameterIdentifier>()
-		if let rootInitializer = instantiable.initializer {
+		let rootConstructionInitializer: Initializer? = if let mockInitializer = instantiable.mockInitializer {
+			mockInitializer
+		} else {
+			instantiable.initializer
+		}
+		if let rootConstructionInitializer {
 			let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
-			for argument in rootInitializer.arguments {
+			for argument in rootConstructionInitializer.arguments {
 				guard argument.hasDefaultValue,
 				      !dependencyLabels.contains(argument.innerLabel),
 				      argument.label != "_",
@@ -916,13 +926,70 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
+		// Apply "nearest receiver's default wins" — bubble up custom mock dependency defaults.
+		// Root's own custom mock defaults take highest priority (depth 0).
+		if let mockInitializer = instantiable.mockInitializer {
+			let rootDependencyLabels = Set(instantiable.dependencies.map(\.property.label))
+			for argument in mockInitializer.arguments {
+				guard argument.hasDefaultValue,
+				      rootDependencyLabels.contains(argument.innerLabel),
+				      let defaultExpression = argument.defaultValueExpression
+				else { continue }
+				let identifier = MockParameterIdentifier(
+					propertyLabel: argument.innerLabel,
+					sourceType: argument.typeDescription.strippingEscaping.asSource,
+				)
+				dependencyDefaults[identifier] = (expression: defaultExpression, depth: 0)
+			}
+		}
+		if !dependencyDefaults.isEmpty {
+			forwardedDeclarations = forwardedDeclarations.map { declaration in
+				guard let entry = dependencyDefaults[declaration.identifier] else { return declaration }
+				return MockDeclaration(
+					propertyLabel: declaration.propertyLabel,
+					parameterLabel: declaration.parameterLabel,
+					sourceType: declaration.sourceType,
+					isForwarded: declaration.isForwarded,
+					requiresSendable: declaration.requiresSendable,
+					defaultValueExpression: entry.expression,
+					hasSubtree: declaration.hasSubtree,
+					defaultConstruction: entry.expression,
+					sourceTypeDescription: declaration.sourceTypeDescription,
+					isClosureType: declaration.isClosureType,
+				)
+			}
+			allDeclarations = allDeclarations.map { declaration in
+				guard declaration.defaultConstruction == nil,
+				      !declaration.hasSubtree,
+				      let entry = dependencyDefaults[declaration.identifier]
+				else { return declaration }
+				return MockDeclaration(
+					propertyLabel: declaration.propertyLabel,
+					parameterLabel: declaration.parameterLabel,
+					sourceType: declaration.sourceType,
+					isForwarded: declaration.isForwarded,
+					requiresSendable: declaration.requiresSendable,
+					defaultValueExpression: entry.expression,
+					hasSubtree: declaration.hasSubtree,
+					defaultConstruction: entry.expression,
+					sourceTypeDescription: declaration.sourceTypeDescription,
+					isClosureType: declaration.isClosureType,
+				)
+			}
+		}
+
 		// If no declarations at all, generate simple mock.
 		if allDeclarations.isEmpty, forwardedDeclarations.isEmpty {
 			let argumentList = try instantiable.generateArgumentList(
 				unavailableProperties: unavailableOptionalProperties,
 				forMockGeneration: true,
 			)
-			let construction = if instantiable.declarationType.isExtension {
+			// When a hand-written mock exists (via customMockName), call through to it.
+			// Otherwise use init/instantiate directly.
+			let mockMethodName = instantiable.customMockName ?? "mock"
+			let construction = if instantiable.mockInitializer != nil {
+				"\(typeName).\(mockMethodName)(\(argumentList))"
+			} else if instantiable.declarationType.isExtension {
 				"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
 			} else {
 				"\(typeName)(\(argumentList))"
@@ -953,12 +1020,36 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// Build mock method parameters.
+		// When a custom mock exists, match its parameter order for the generated mock's signature.
+		// Parameters not in the custom mock (transitive dependencies) are appended alphabetically.
 		let indent = Self.standardIndent
 		var parameters = [String]()
 		for declaration in forwardedDeclarations {
-			parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)")
+			if let defaultExpression = declaration.defaultConstruction {
+				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType) = \(defaultExpression)")
+			} else {
+				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)")
+			}
 		}
-		for declaration in allDeclarations.sorted(by: { $0.parameterLabel < $1.parameterLabel }) {
+		let sortedDeclarations: [MockDeclaration] = if let mockInitializer = instantiable.mockInitializer {
+			{
+				let mockArgumentOrder = mockInitializer.arguments.enumerated().reduce(into: [String: Int]()) { result, pair in
+					result[pair.element.innerLabel] = pair.offset
+				}
+				let mockParameterCount = mockInitializer.arguments.count
+				return allDeclarations.sorted { first, second in
+					let firstIndex = mockArgumentOrder[first.propertyLabel] ?? mockParameterCount
+					let secondIndex = mockArgumentOrder[second.propertyLabel] ?? mockParameterCount
+					if firstIndex != secondIndex {
+						return firstIndex < secondIndex
+					}
+					return first.parameterLabel < second.parameterLabel
+				}
+			}()
+		} else {
+			allDeclarations.sorted(by: { $0.parameterLabel < $1.parameterLabel })
+		}
+		for declaration in sortedDeclarations {
 			let sendablePrefix = declaration.requiresSendable ? "@Sendable " : ""
 			if declaration.hasSubtree {
 				parameters.append("\(indent)\(indent)\(declaration.parameterLabel): \(declaration.sourceType)? = nil")
@@ -1012,7 +1103,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			forMockGeneration: true,
 			mockContext: bodyContext,
 		)
-		let construction = if instantiable.declarationType.isExtension {
+		let mockMethodName = instantiable.customMockName ?? "mock"
+		let construction = if instantiable.mockInitializer != nil {
+			"\(typeName).\(mockMethodName)(\(argumentList))"
+		} else if instantiable.declarationType.isExtension {
 			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
 		} else {
 			"\(typeName)(\(argumentList))"
@@ -1024,13 +1118,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append(parametersString)
 		lines.append("\(indent)) -> \(typeName) {")
 		// Bindings for uncovered and received dependencies (must come before child constructions).
-		for declaration in allDeclarations {
+		for declaration in sortedDeclarations {
 			guard rootBindingIdentifiers.contains(declaration.identifier) else { continue }
 			lines.append("\(bodyIndent)let \(declaration.parameterLabel) = \(declaration.parameterLabel)()")
 		}
 		// Bindings for root default-valued init params.
 		// Skip labels matching forwarded params — forwarded values take precedence.
-		for declaration in allDeclarations where declaration.defaultValueExpression != nil {
+		for declaration in sortedDeclarations where declaration.defaultValueExpression != nil {
 			guard rootDefaultIdentifiers.contains(declaration.identifier),
 			      !rootBindingIdentifiers.contains(declaration.identifier),
 			      !forwardedLabels.contains(declaration.propertyLabel),
@@ -1090,8 +1184,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Walks the tree and collects all mock declarations for the mock() parameters.
+	/// Also collects dependency-parameter defaults from custom mocks, tagged with depth,
+	/// so the caller can apply "nearest receiver's default wins" logic.
 	private func collectMockDeclarations(
 		insideSendableScope: Bool = false,
+		depth: Int = 0,
+		dependencyDefaults: inout [MockParameterIdentifier: (expression: String, depth: Int)],
 	) async -> [MockDeclaration] {
 		var declarations = [MockDeclaration]()
 
@@ -1106,6 +1204,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Recurse into children first to determine subtree status.
 			let childDeclarations = await childGenerator.collectMockDeclarations(
 				insideSendableScope: childInsideSendable,
+				depth: depth + 1,
+				dependencyDefaults: &dependencyDefaults,
 			)
 			declarations.append(contentsOf: childDeclarations)
 
@@ -1148,6 +1248,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 			declarations.append(contentsOf: childDefaultParams)
+
+			// Collect dependency-parameter defaults from custom mocks for "nearest receiver" bubbling.
+			// Skip Instantiator boundaries (non-constant children) and types that @Forward the property.
+			if !isInstantiator, let mockInitializer = childInstantiable.mockInitializer {
+				let childDependencyLabels = Set(childInstantiable.dependencies.map(\.property.label))
+				let childForwardedLabels = Set(
+					childInstantiable.dependencies
+						.filter { $0.source == .forwarded }
+						.map(\.property.label),
+				)
+				for argument in mockInitializer.arguments {
+					guard argument.hasDefaultValue,
+					      childDependencyLabels.contains(argument.innerLabel),
+					      !childForwardedLabels.contains(argument.innerLabel),
+					      let defaultExpression = argument.defaultValueExpression
+					else { continue }
+					let identifier = MockParameterIdentifier(
+						propertyLabel: argument.innerLabel,
+						sourceType: argument.typeDescription.strippingEscaping.asSource,
+					)
+					let existingDepth = dependencyDefaults[identifier]?.depth ?? Int.max
+					if depth + 1 < existingDepth {
+						dependencyDefaults[identifier] = (expression: defaultExpression, depth: depth + 1)
+					}
+				}
+			}
 
 			// Check for @Instantiated dependencies that have no tree child.
 			var childUncoveredDependencies = [MockDeclaration]()

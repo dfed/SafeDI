@@ -32,6 +32,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		generateMock: Bool = false,
 		mockInitializer: Initializer? = nil,
 		mockReturnType: TypeDescription? = nil,
+		customMockName: String? = nil,
 	) {
 		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
 		self.isRoot = isRoot
@@ -42,6 +43,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.generateMock = generateMock
 		self.mockInitializer = mockInitializer
 		self.mockReturnType = mockReturnType
+		self.customMockName = customMockName
 	}
 
 	// MARK: Public
@@ -72,6 +74,9 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// The return type of the user-defined `mock()` method, if one exists.
 	/// Used to determine whether to call `.mock` or fall through to `init` based on the property type.
 	public var mockReturnType: TypeDescription?
+	/// The name of the user's custom mock method when `generateMock` is `true`.
+	/// The generated `mock()` calls through to this method instead of `init`.
+	public let customMockName: String?
 
 	/// Whether the user-defined mock() method's return type is compatible with the given property type.
 	/// Returns `true` when the mock returns the concrete type, `Self`, or the exact property type.

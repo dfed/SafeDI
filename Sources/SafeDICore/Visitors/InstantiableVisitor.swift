@@ -151,9 +151,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	public override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
 		// Detect existing static/class func mock(...) methods.
-		if node.name.text == "mock",
-		   node.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) || $0.name.tokenKind == .keyword(.class) })
-		{
+		// When customMockName is set, detect by that name; otherwise detect "mock".
+		let mockMethodName = customMockName ?? "mock"
+		let isStaticOrClass = node.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) || $0.name.tokenKind == .keyword(.class) })
+		if node.name.text == mockMethodName, isStaticOrClass {
 			if mockFunctionSyntax != nil {
 				// Already found one mock() method — this is a duplicate.
 				duplicateMockFunctionSyntaxes.append(node)
@@ -162,6 +163,11 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				mockReturnType = node.signature.returnClause?.type.typeDescription
 				mockFunctionSyntax = node
 			}
+		}
+		// When customMockName is set, also detect a literal "mock" method — it would
+		// conflict with the generated mock().
+		if customMockName != nil, node.name.text == "mock", isStaticOrClass {
+			conflictingMockFunctionSyntax = node
 		}
 
 		guard declarationType.isExtension else {
@@ -218,6 +224,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				generateMock: generateMock,
 				mockInitializer: mockInitializer,
 				mockReturnType: mockReturnType,
+				customMockName: customMockName,
 			))
 		}
 
@@ -309,10 +316,12 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var additionalInstantiables: [TypeDescription]?
 	public private(set) var mockAttributes = ""
 	public private(set) var generateMock: Bool = false
+	public private(set) var customMockName: String?
 	public private(set) var mockInitializer: Initializer?
 	public private(set) var mockReturnType: TypeDescription?
 	public private(set) var mockFunctionSyntax: FunctionDeclSyntax?
 	public private(set) var duplicateMockFunctionSyntaxes = [FunctionDeclSyntax]()
+	public private(set) var conflictingMockFunctionSyntax: FunctionDeclSyntax?
 	public private(set) var diagnostics = [Diagnostic]()
 	public private(set) var uninitializedNonOptionalPropertyNames = [String]()
 
@@ -370,6 +379,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						generateMock: generateMock,
 						mockInitializer: mockInitializer,
 						mockReturnType: mockReturnType,
+						customMockName: customMockName,
 					),
 				]
 			} else {
@@ -458,11 +468,15 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		func processGenerateMock() {
 			generateMock = macro.generateMockValue
 		}
+		func processCustomMockName() {
+			customMockName = macro.customMockNameValue
+		}
 
 		processIsRoot()
 		processFulfillingAdditionalTypesParameter()
 		processMockAttributes()
 		processGenerateMock()
+		processCustomMockName()
 	}
 
 	private func processModifiers(_: DeclModifierListSyntax, on node: some ConcreteDeclSyntaxProtocol) {

@@ -36,7 +36,11 @@ public enum FixableInstantiableError: DiagnosticError {
 	case mockMethodNotPublic
 	case mockMethodIncorrectReturnType(typeName: String)
 	case duplicateMockMethod
-	case mockMethodConflictsWithGenerateMock
+	case mockMethodNeedsCustomName
+	case mockMethodConflictsWithGeneratedMock
+	case customMockNameWithoutGenerateMock
+	case customMockNameMethodNotFound(String)
+	case mockMethodNonDependencyMissingDefaultValue([Property])
 
 	public enum MissingInitializer: Sendable {
 		case hasOnlyInjectableProperties
@@ -89,8 +93,16 @@ public enum FixableInstantiableError: DiagnosticError {
 			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method must return `Self` or `\(typeName)`."
 		case .duplicateMockMethod:
 			"@\(InstantiableVisitor.macroName)-decorated type must have at most one `mock()` method. Remove this duplicate."
-		case .mockMethodConflictsWithGenerateMock:
-			"@\(InstantiableVisitor.macroName)-decorated type must not have both `generateMock: true` and a hand-written `mock()` method."
+		case .mockMethodNeedsCustomName:
+			"@\(InstantiableVisitor.macroName)-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@\(InstantiableVisitor.macroName)`."
+		case .mockMethodConflictsWithGeneratedMock:
+			"@\(InstantiableVisitor.macroName)-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method. The generated `mock()` would conflict with this method. Remove it or rename it."
+		case .customMockNameWithoutGenerateMock:
+			"`customMockName` requires `generateMock: true`."
+		case let .customMockNameMethodNotFound(name):
+			"No method named `\(name)` found. Add a `public static func \(name)(…)` method."
+		case .mockMethodNonDependencyMissingDefaultValue:
+			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values."
 		}
 	}
 
@@ -123,7 +135,11 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .mockMethodNotPublic,
 			     .mockMethodIncorrectReturnType,
 			     .duplicateMockMethod,
-			     .mockMethodConflictsWithGenerateMock:
+			     .mockMethodNeedsCustomName,
+			     .mockMethodConflictsWithGeneratedMock,
+			     .customMockNameWithoutGenerateMock,
+			     .customMockNameMethodNotFound,
+			     .mockMethodNonDependencyMissingDefaultValue:
 				.error
 			}
 			message = error.description
@@ -178,8 +194,16 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Change mock() return type to `\(typeName)`"
 			case .duplicateMockMethod:
 				"Remove duplicate mock() method"
-			case .mockMethodConflictsWithGenerateMock:
-				"Remove `generateMock: true`"
+			case .mockMethodNeedsCustomName:
+				"Rename method to `customMock` and add `customMockName: \"customMock\"` to `@Instantiable`"
+			case .mockMethodConflictsWithGeneratedMock:
+				"Remove this `mock()` method"
+			case .customMockNameWithoutGenerateMock:
+				"Add `generateMock: true` to `@Instantiable`"
+			case let .customMockNameMethodNotFound(name):
+				"Add `public static func \(name)(…)` method"
+			case let .mockMethodNonDependencyMissingDefaultValue(properties):
+				"Add default values to mock() non-dependency parameters for \(properties.map(\.asSource).joined(separator: ", "))"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}

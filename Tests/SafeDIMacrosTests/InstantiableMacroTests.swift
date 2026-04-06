@@ -4452,6 +4452,31 @@ import Testing
 		}
 
 		@Test
+		func throwsError_whenCustomMockNameIsNotStringLiteralOrNil() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: someVariable)
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `customMockName` must be a string literal or `nil`",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func producesDiagnostic_whenGenerateMockIsTrueAndUserDefinedMockExists() {
 			assertMacroExpansion(
 				"""
@@ -4475,28 +4500,15 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must not have both `generateMock: true` and a hand-written `mock()` method.",
+						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`."#,
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Remove `generateMock: true`"),
+							FixItSpec(message: #"Rename method to `customMock` and add `customMockName: "customMock"` to `@Instantiable`"#),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
-				applyFixIts: [
-					"Remove `generateMock: true`",
-				],
-				fixedSource: """
-				@Instantiable
-				public struct MyService: Instantiable {
-				    public init() {}
-
-				    public static func mock() -> MyService {
-				        MyService()
-				    }
-				}
-				""",
 			)
 		}
 
@@ -4525,28 +4537,15 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must not have both `generateMock: true` and a hand-written `mock()` method.",
+						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`."#,
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Remove `generateMock: true`"),
+							FixItSpec(message: #"Rename method to `customMock` and add `customMockName: "customMock"` to `@Instantiable`"#),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
-				applyFixIts: [
-					"Remove `generateMock: true`",
-				],
-				fixedSource: """
-				@MainActor @Instantiable(isRoot: true)
-				public struct MyService: Instantiable {
-				    public init() {}
-
-				    public static func mock() -> MyService {
-				        MyService()
-				    }
-				}
-				""",
 			)
 		}
 
@@ -4572,6 +4571,712 @@ import Testing
 				    }
 				}
 				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		// MARK: customMockName Tests
+
+		@Test
+		func producesDiagnostic_whenCustomMockNameIsSetWithoutGenerateMock() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(customMockName: "customMock")
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func customMock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func customMock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`customMockName` requires `generateMock: true`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `generateMock: true` to `@Instantiable`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesDiagnostic_whenCustomMockNameMethodIsNotFound() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyService: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init() {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "No method named `customMock` found. Add a `public static func customMock(…)` method.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `public static func customMock(…)` method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesDiagnostic_whenCustomMockNameMethodIsNotFoundAndTypeHasDependencies() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    @Received let dependency: Dependency
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    let dependency: Dependency
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "No method named `customMock` found. Add a `public static func customMock(…)` method.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `public static func customMock(…)` method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesDiagnostic_whenCustomMockNameMethodIsNotFoundAndTypeHasMultipleDependencies() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyService: Instantiable {
+				    public init(dependencyA: DependencyA, dependencyB: DependencyB) {
+				        self.dependencyA = dependencyA
+				        self.dependencyB = dependencyB
+				    }
+				    @Received let dependencyA: DependencyA
+				    @Received let dependencyB: DependencyB
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(dependencyA: DependencyA, dependencyB: DependencyB) {
+				        self.dependencyA = dependencyA
+				        self.dependencyB = dependencyB
+				    }
+				    let dependencyA: DependencyA
+				    let dependencyB: DependencyB
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "No method named `customMock` found. Add a `public static func customMock(…)` method.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `public static func customMock(…)` method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func noDiagnostic_whenCustomMockNameIsSetAndMethodExists() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func customMock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func customMock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_producesDiagnostic_whenCustomMockNameIsSetWithoutGenerateMock() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(customMockName: "customMock")
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func customMock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func customMock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`customMockName` requires `generateMock: true`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `generateMock: true` to `@Instantiable`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_producesDiagnostic_whenCustomMockNameMethodIsNotFound() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "No method named `customMock` found. Add a `public static func customMock(…)` method.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `public static func customMock(…)` method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_noDiagnostic_whenCustomMockNameIsSetAndMethodExists() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func customMock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func customMock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesDiagnostic_whenMockMethodExistsAlongsideCustomMockName_withRemoveFixIt() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func customMock() -> MyService {
+				        MyService()
+				    }
+
+				    public static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func customMock() -> MyService {
+				        MyService()
+				    }
+
+				    public static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method. The generated `mock()` would conflict with this method. Remove it or rename it."#,
+						line: 9,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: #"Remove this `mock()` method"#),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesDiagnostic_whenMockMethodHasNonDependencyParameterWithoutDefault_andNoDependencies() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func mock(notADependency: NotADependency) -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func mock(notADependency: NotADependency) -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add default values to mock() non-dependency parameters for notADependency: NotADependency"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		// MARK: generateMock + Hand-Written Mock Coexistence Tests
+
+		@Test
+		func mockMethodWithGenerateMockAndDependenciesProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true)
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    @Received let dependency: Dependency
+
+				    public static func mock(dependency: Dependency) -> MyService {
+				        MyService(dependency: dependency)
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    let dependency: Dependency
+
+				    public static func mock(dependency: Dependency) -> MyService {
+				        MyService(dependency: dependency)
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`."#,
+						line: 8,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: #"Rename method to `customMock` and add `customMockName: "customMock"` to `@Instantiable`"#),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func mockMethodWithGenerateMockAndDefaultOnDependencyProducesNoDiagnostic_whenCustomMockNameIsSet() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    @Received let dependency: Dependency
+
+				    public static func customMock(dependency: Dependency = Dependency()) -> MyService {
+				        MyService(dependency: dependency)
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    let dependency: Dependency
+
+				    public static func customMock(dependency: Dependency = Dependency()) -> MyService {
+				        MyService(dependency: dependency)
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func mockMethodWithGenerateMockAndDefaultOnNonDependencyProducesNoDiagnostic_whenCustomMockNameIsSet() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    @Received let dependency: Dependency
+
+				    public static func customMock(dependency: Dependency, extra: Bool = false) -> MyService {
+				        MyService(dependency: dependency)
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    let dependency: Dependency
+
+				    public static func customMock(dependency: Dependency, extra: Bool = false) -> MyService {
+				        MyService(dependency: dependency)
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func mockMethodWithNonDependencyMissingDefaultProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    @Received let dependency: Dependency
+
+				    public static func mock(dependency: Dependency, extra: Bool) -> MyService {
+				        MyService(dependency: dependency)
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    let dependency: Dependency
+
+				    public static func mock(dependency: Dependency, extra: Bool) -> MyService {
+				        MyService(dependency: dependency)
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						line: 8,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add default values to mock() non-dependency parameters for extra: Bool"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_mockMethodWithGenerateMockAndDependenciesProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true)
+				extension ExampleService: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
+
+				    public static func mock(dependency: Dependency) -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
+
+				    public static func mock(dependency: Dependency) -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`."#,
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: #"Rename method to `customMock` and add `customMockName: "customMock"` to `@Instantiable`"#),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_mockMethodWithGenerateMockAndNoDependenciesProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true)
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`."#,
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: #"Rename method to `customMock` and add `customMockName: "customMock"` to `@Instantiable`"#),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_mockMethodWithGenerateMockAndCustomMockNameProducesNoDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				extension ExampleService: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
+
+				    public static func customMock(dependency: Dependency = Dependency()) -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
+
+				    public static func customMock(dependency: Dependency = Dependency()) -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_mockMethodWithNonDependencyMissingDefaultProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
+
+				    public static func mock(dependency: Dependency, extra: Bool) -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> ExampleService { fatalError() }
+
+				    public static func mock(dependency: Dependency, extra: Bool) -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add default values to mock() non-dependency parameters for extra: Bool"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_producesDiagnostic_whenMockMethodExistsAlongsideCustomMockName() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func customMock() -> ExampleService {
+				        ExampleService()
+				    }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func customMock() -> ExampleService {
+				        ExampleService()
+				    }
+
+				    public static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method. The generated `mock()` would conflict with this method. Remove it or rename it."#,
+						line: 9,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: #"Remove this `mock()` method"#),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_secondMockOverloadWithNonDependencyMissingDefaultProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Container: Instantiable {
+				    public static func instantiate() -> Container<Bool> { fatalError() }
+
+				    public static func mock() -> Container<Bool> {
+				        fatalError()
+				    }
+
+				    public static func mock(extra: Bool) -> Container<Int> {
+				        fatalError()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension Container: Instantiable {
+				    public static func instantiate() -> Container<Bool> { fatalError() }
+
+				    public static func mock() -> Container<Bool> {
+				        fatalError()
+				    }
+
+				    public static func mock(extra: Bool) -> Container<Int> {
+				        fatalError()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						line: 9,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add default values to mock() non-dependency parameters for extra: Bool"),
+						],
+					),
+				],
 				macros: instantiableTestMacros,
 			)
 		}
@@ -5516,28 +6221,15 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must not have both `generateMock: true` and a hand-written `mock()` method.",
+						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`."#,
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Remove `generateMock: true`"),
+							FixItSpec(message: #"Rename method to `customMock` and add `customMockName: "customMock"` to `@Instantiable`"#),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
-				applyFixIts: [
-					"Remove `generateMock: true`",
-				],
-				fixedSource: """
-				@Instantiable
-				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
-
-				    public static func mock() -> ExampleService {
-				        ExampleService()
-				    }
-				}
-				""",
 			)
 		}
 

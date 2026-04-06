@@ -96,6 +96,30 @@ extension AttributeSyntax {
 		return boolLiteral.literal.tokenKind == .keyword(.true)
 	}
 
+	public var customMockName: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let firstLabeledExpression = labeledExpressionList.first(where: {
+		      	$0.label?.text == "customMockName"
+		      })
+		else {
+			return nil
+		}
+
+		return firstLabeledExpression.expression
+	}
+
+	public var customMockNameValue: String? {
+		guard let customMockName,
+		      let stringLiteral = StringLiteralExprSyntax(customMockName),
+		      stringLiteral.segments.count == 1,
+		      case let .stringSegment(segment) = stringLiteral.segments.first
+		else {
+			return nil
+		}
+		return segment.content.text
+	}
+
 	public var mockAttributesValue: String {
 		guard let mockAttributes,
 		      let stringLiteral = StringLiteralExprSyntax(mockAttributes),

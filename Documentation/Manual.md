@@ -506,9 +506,34 @@ Set `mockConditionalCompilation` to `nil` to generate mocks without conditional 
 
 ### Using generated mocks
 
-Each `@Instantiable` type gets a `mock()` static method that builds its full dependency subtree. Types with `generateMock: true` must not also contain a hand-written `mock()` method — the macro will emit an error with a fix-it to remove `generateMock: true`. If you provide your own `mock()` method (without `generateMock: true`), parent types that instantiate the child will call `ChildType.mock(...)` instead of `ChildType(...)` when constructing it, threading mock parameters through your custom method. Note that mocks defined in separate extensions are not detected; the method must be in the `@Instantiable`-decorated declaration body.
+Each `@Instantiable` type with `generateMock: true` gets a generated `mock()` static method that builds its full dependency subtree. Note that mocks defined in separate extensions are not detected; the method must be in the `@Instantiable`-decorated declaration body.
 
-Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type's `@Instantiated`, `@Received`, and `@Forwarded` dependencies. It may also accept additional parameters with default values. On concrete type declarations the return type must be `Self`, the type name, or a type listed in `fulfillingAdditionalTypes`; on extension-based `@Instantiable` types the return type must match the extended type (e.g. `-> Container<Bool>`) or a `fulfillingAdditionalTypes` entry, mirroring the corresponding `instantiate()` method. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
+When a type also has a hand-written mock method, it must have a different name from the generated `mock()` to avoid ambiguity. Use the `customMockName` parameter to specify the name of the hand-written method, and the generated `mock()` will call through to it. This is useful when you need custom logic during mock construction — for example, setting up stub behavior, configuring test doubles, or wiring delegates:
+
+```swift
+@Instantiable(generateMock: true, customMockName: "customMock")
+public struct NetworkClient: Instantiable {
+    public init(session: URLSession, logger: Logger) {
+        self.session = session
+        self.logger = logger
+    }
+    @Instantiated let session: URLSession
+    @Instantiated let logger: Logger
+
+    public static func customMock(
+        session: URLSession = .mockSession(returning: Data()),
+        logger: Logger = .noop
+    ) -> NetworkClient {
+        NetworkClient(session: session, logger: logger)
+    }
+}
+```
+
+The `customMockName` parameter requires `generateMock: true`.
+
+If you provide a mock method without `generateMock: true`, parent types that instantiate the child will call `ChildType.mock(...)` (or `ChildType.customMock(...)`) instead of `ChildType(...)` when constructing it, threading mock parameters through your custom method.
+
+Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type’s `@Instantiated`, `@Received`, and `@Forwarded` dependencies. Non-dependency parameters must have default values. On concrete type declarations the return type must be `Self`, the type name, or a type listed in `fulfillingAdditionalTypes`; on extension-based `@Instantiable` types the return type must match the extended type (e.g. `-> Container<Bool>`) or a `fulfillingAdditionalTypes` entry, mirroring the corresponding `instantiate()` method. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
 
 ```swift
 #if DEBUG
@@ -549,6 +574,15 @@ let root = Root.mock(
 ```swift
 let noteView = NoteView.mock(userName: "Preview User")
 ```
+
+However, if a child type’s custom mock provides a default for a `@Forwarded` property, that default bubbles up to the parent’s generated mock, making the parameter optional. The **nearest receiver’s default wins**:
+
+- The root type’s own custom mock default takes highest priority
+- Otherwise, the shallowest `@Received` type with a custom mock default wins
+- Types that `@Forward` the property are skipped (they're pass-through, not consumers)
+- Ties at the same depth are broken by declaration order
+
+This rule also applies to `@Received` dependencies that would otherwise be required parameters (e.g., when the dependency’s type is not in the current module).
 
 ### Default-valued init parameters in mocks
 
