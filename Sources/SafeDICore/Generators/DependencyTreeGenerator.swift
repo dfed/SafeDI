@@ -444,7 +444,7 @@ public actor DependencyTreeGenerator {
 	private func validateMockRootScopeForCycles(
 		_ scope: Scope,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
-		propertyStack: OrderedSet<Property> = [],
+		propertyStack: [Property] = [],
 	) throws {
 		// Check dependencies for cycles (catches @Received references back to ancestors).
 		for dependency in scope.instantiable.dependencies {
@@ -454,7 +454,7 @@ public actor DependencyTreeGenerator {
 			}
 			let typesInCycle = (
 				[propertyForDependency]
-					+ propertyStack.elements[0...cycleIndex],
+					+ propertyStack[0...cycleIndex],
 			).map(\.typeDescription)
 			try Self.throwIfInvalidCycle(
 				typesInCycle: typesInCycle,
@@ -469,8 +469,7 @@ public actor DependencyTreeGenerator {
 			switch childPropertyToGenerate {
 			case let .instantiated(childProperty, childScope, _):
 				guard !propertyStack.contains(childProperty) else { continue }
-				var nextStack = propertyStack
-				nextStack.insert(childProperty, at: 0)
+				let nextStack = [childProperty] + propertyStack
 				try validateMockRootScopeForCycles(
 					childScope,
 					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
