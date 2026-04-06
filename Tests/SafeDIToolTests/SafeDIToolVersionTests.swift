@@ -32,6 +32,7 @@ import Testing
 @MainActor // serialized due to changes to stdout
 struct SafeDIToolVersionTests {
 	@Test
+	@available(macOS 26.0, iOS 26.0, tvOS 26.0, watchOS 26.0, *)
 	func run_withVersionFlag_printsCurrentVersion() async throws {
 		var tool = SafeDITool()
 		tool.swiftSourcesFilePath = nil
