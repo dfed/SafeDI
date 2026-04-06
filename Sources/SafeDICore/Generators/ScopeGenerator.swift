@@ -1136,10 +1136,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for declaration in sortedDeclarations where declaration.defaultValueExpression != nil {
 			guard rootDefaultIdentifiers.contains(declaration.identifier),
 			      !rootBindingIdentifiers.contains(declaration.identifier),
-			      !forwardedLabels.contains(declaration.propertyLabel),
-			      !declaration.isClosureType
+			      !forwardedLabels.contains(declaration.propertyLabel)
 			else { continue }
-			lines.append("\(bodyIndent)let \(declaration.parameterLabel) = \(Self.mockParameterPrefix)\(declaration.parameterLabel)()")
+			if declaration.isClosureType {
+				// Closure-typed defaults use @escaping (not @autoclosure), so bind directly without ().
+				lines.append("\(bodyIndent)let \(declaration.parameterLabel) = \(Self.mockParameterPrefix)\(declaration.parameterLabel)")
+			} else {
+				lines.append("\(bodyIndent)let \(declaration.parameterLabel) = \(Self.mockParameterPrefix)\(declaration.parameterLabel)()")
+			}
 		}
 		lines.append(contentsOf: propertyLines)
 		lines.append("\(bodyIndent)return \(construction)")

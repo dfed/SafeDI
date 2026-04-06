@@ -9062,6 +9062,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        onCancel __safeDI_mock_onCancel: @escaping @MainActor (String) -> Void = { _ in },
 		        onSubmit __safeDI_mock_onSubmit: @escaping @MainActor (String) throws -> Void = { _ in }
 		    ) -> Child {
+		        let onCancel = __safeDI_mock_onCancel
+		        let onSubmit = __safeDI_mock_onSubmit
 		        return Child(onCancel: onCancel, onSubmit: onSubmit)
 		    }
 		}
