@@ -529,7 +529,7 @@ public struct NetworkClient: Instantiable {
 }
 ```
 
-The `customMockName` parameter requires `generateMock: true`. Default values on dependency parameters are allowed when using `customMockName` — the different names eliminate ambiguity, and those defaults bubble up to parent-generated mocks. If `generateMock: true` is set and a hand-written `mock()` method exists without `customMockName`, the macro will emit a fix-it suggesting you rename the method and add the parameter.
+The `customMockName` parameter requires `generateMock: true`. If `generateMock: true` is set and a hand-written `mock()` method exists without `customMockName`, the macro will emit a fix-it suggesting you rename the method and add the parameter.
 
 If you provide a mock method without `generateMock: true`, parent types that instantiate the child will call `ChildType.mock(...)` (or `ChildType.customMock(...)`) instead of `ChildType(...)` when constructing it, threading mock parameters through your custom method.
 
