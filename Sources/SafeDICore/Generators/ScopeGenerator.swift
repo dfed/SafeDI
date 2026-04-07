@@ -250,6 +250,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
+		var erasedToConcreteExistential: Bool {
+			switch self {
+			case let .property(_, _, _, erasedToConcreteExistential, _):
+				erasedToConcreteExistential
+			case let .alias(_, _, erasedToConcreteExistential, _):
+				erasedToConcreteExistential
+			case .root:
+				false
+			}
+		}
+
+		var isPropertyCycle: Bool {
+			switch self {
+			case let .property(_, _, _, _, isPropertyCycle):
+				isPropertyCycle
+			case .root, .alias:
+				false
+			}
+		}
+
 		var asDOTNode: String {
 			switch self {
 			case let .root(instantiable):
@@ -1198,6 +1218,152 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Whether the source type is a closure/function type. Closure-typed defaults use
 		/// `@escaping T = default` instead of `@autoclosure @escaping () -> T = default`.
 		let isClosureType: Bool
+	}
+
+	// MARK: MockParameterNode
+
+	/// A node in the mock parameter tree. Each node represents one property edge
+	/// in the dependency tree and carries the metadata needed to generate its
+	/// `_Configuration` struct and builder call.
+	struct MockParameterNode {
+		/// The property label on the parent type's init (e.g., "service", "childBuilder").
+		let propertyLabel: String
+		/// The full type description of the property (e.g., `Instantiator<Child>`).
+		let typeDescription: TypeDescription
+		/// The instantiated type — `typeDescription.asInstantiatedType` (e.g., `Child`).
+		/// Used for struct naming (`Child_Configuration`) and builder return type.
+		let instantiatedTypeDescription: TypeDescription
+		/// Whether this property is an Instantiator/ErasedInstantiator/Sendable variant.
+		let isInstantiator: Bool
+		/// Whether the concrete type uses extension-based `instantiate(...)` instead of `init(...)`.
+		let isExtensionBased: Bool
+		/// Whether this property requires erased-to-concrete existential wrapping.
+		let erasedToConcreteExistential: Bool
+		/// Child nodes in the dependency tree (subtree of this type's instantiated children).
+		let children: [MockParameterNode]
+		/// Non-dependency default-valued parameters from this type's init or customMock.
+		let defaultParameters: [DefaultParameter]
+		/// All arguments from the init or customMock that will be used for construction.
+		/// Determines the builder closure signature (positional unlabeled params).
+		let constructionArguments: [Initializer.Argument]
+		/// The type's declared dependencies.
+		let dependencies: [Dependency]
+		/// Whether a compatible user-defined mock method exists for this type.
+		let useMockInitializer: Bool
+		/// The custom mock method name (e.g., "customMock"), if any.
+		let customMockName: String?
+		/// The concrete type name (e.g., "ChildA").
+		let concreteTypeName: String
+		/// Forwarded properties on this type (relevant for Instantiator edges).
+		let forwardedProperties: Set<Property>
+		/// Whether this node is part of a property cycle.
+		let isPropertyCycle: Bool
+		/// Whether this parameter is captured by a @Sendable function.
+		let requiresSendable: Bool
+
+		/// The `_Configuration` struct name, based on the instantiated type.
+		var structName: String {
+			"\(instantiatedTypeDescription.asSource)_Configuration"
+		}
+
+		/// A non-dependency default-valued parameter from an init or customMock.
+		struct DefaultParameter {
+			/// The parameter label (e.g., "theme", "isPro").
+			let label: String
+			/// The type of the parameter.
+			let typeDescription: TypeDescription
+			/// The default value expression (e.g., ".light", "false").
+			let defaultExpression: String
+			/// Whether the parameter type is a closure/function type.
+			let isClosureType: Bool
+		}
+	}
+
+	/// Walks the dependency tree and builds a `[MockParameterNode]` tree representing
+	/// the direct children of the current scope. Each node recursively contains its own
+	/// subtree children, default parameters, and builder metadata.
+	private func collectMockParameterTree(
+		insideSendableScope: Bool = false,
+	) async -> [MockParameterNode] {
+		var nodes = [MockParameterNode]()
+
+		for childGenerator in orderedPropertiesToGenerate {
+			guard let childProperty = childGenerator.property,
+			      let childInstantiable = childGenerator.scopeData.instantiable
+			else { continue }
+
+			let isInstantiator = !childProperty.propertyType.isConstant
+			let childInsideSendable = insideSendableScope || childProperty.propertyType.isSendable
+
+			// Recurse into children to build the subtree.
+			let childNodes = await childGenerator.collectMockParameterTree(
+				insideSendableScope: childInsideSendable,
+			)
+
+			// Determine which initializer to use for construction arguments and defaults.
+			let useMockInitializer = childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childProperty.typeDescription)
+			let constructionInitializer: Initializer? = if useMockInitializer, let mockInitializer = childInstantiable.mockInitializer {
+				mockInitializer.arguments.isEmpty ? nil : mockInitializer
+			} else {
+				childInstantiable.initializer
+			}
+
+			// Collect non-dependency default-valued parameters.
+			// Instantiator boundaries stop bubbling — those are user-provided closures.
+			var defaultParameters = [MockParameterNode.DefaultParameter]()
+			if !isInstantiator, let constructionInitializer {
+				let dependencyLabels = Set(childInstantiable.dependencies.map(\.property.label))
+				for argument in constructionInitializer.arguments where argument.hasDefaultValue {
+					guard !dependencyLabels.contains(argument.innerLabel),
+					      argument.label != "_",
+					      let defaultExpression = argument.defaultValueExpression
+					else { continue }
+					defaultParameters.append(MockParameterNode.DefaultParameter(
+						label: argument.label,
+						typeDescription: argument.typeDescription.strippingEscaping,
+						defaultExpression: defaultExpression,
+						isClosureType: argument.typeDescription.strippingEscaping.isClosure,
+					))
+				}
+			}
+
+			// Collect forwarded properties for Instantiator edges.
+			let forwardedProperties = Set(
+				childInstantiable.dependencies
+					.filter { $0.source == .forwarded }
+					.map(\.property),
+			)
+
+			// Gather all construction arguments from the appropriate initializer.
+			let constructionArguments: [Initializer.Argument] = if let constructionInitializer {
+				constructionInitializer.arguments
+			} else if let initializer = childInstantiable.initializer {
+				initializer.arguments
+			} else {
+				[]
+			}
+
+			nodes.append(MockParameterNode(
+				propertyLabel: childProperty.label,
+				typeDescription: childProperty.typeDescription,
+				instantiatedTypeDescription: childProperty.typeDescription.asInstantiatedType,
+				isInstantiator: isInstantiator,
+				isExtensionBased: childInstantiable.declarationType.isExtension,
+				erasedToConcreteExistential: childGenerator.scopeData.erasedToConcreteExistential,
+				children: childNodes,
+				defaultParameters: defaultParameters,
+				constructionArguments: constructionArguments,
+				dependencies: childInstantiable.dependencies,
+				useMockInitializer: useMockInitializer,
+				customMockName: childInstantiable.customMockName,
+				concreteTypeName: childInstantiable.concreteInstantiable.asSource,
+				forwardedProperties: forwardedProperties,
+				isPropertyCycle: childGenerator.scopeData.isPropertyCycle,
+				requiresSendable: insideSendableScope,
+			))
+		}
+
+		return nodes
 	}
 
 	/// Walks the tree and collects all mock declarations for the mock() parameters.
