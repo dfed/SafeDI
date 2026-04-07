@@ -159,10 +159,30 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		extension Root {
+		    public struct SafeDIParameters {
+		        public struct Dependency_Configuration {
+		            public init(
+		                _ safeDIBuilder: @escaping () -> Dependency = Dependency.init
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            public let safeDIBuilder: () -> Dependency
+		        }
+
+		        public init(
+		            dependency: Dependency_Configuration = .init()
+		        ) {
+		            self.dependency = dependency
+		        }
+
+		        public let dependency: Dependency_Configuration
+		    }
+
 		    public static func mock(
-		        dependency __safeDI_mock_dependency: @autoclosure @escaping () -> Dependency = Dependency()
+		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let dependency = __safeDI_mock_dependency()
+		        let dependency = safeDIParameters.dependency.safeDIBuilder()
 		        return Root(dependency: dependency)
 		    }
 		}
@@ -466,10 +486,30 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
+		    public struct SafeDIParameters {
+		        public struct CrossModuleService_Configuration {
+		            public init(
+		                _ safeDIBuilder: @escaping () -> CrossModuleService = CrossModuleService.init
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            public let safeDIBuilder: () -> CrossModuleService
+		        }
+
+		        public init(
+		            crossModuleService: CrossModuleService_Configuration = .init()
+		        ) {
+		            self.crossModuleService = crossModuleService
+		        }
+
+		        public let crossModuleService: CrossModuleService_Configuration
+		    }
+
 		    public static func mock(
-		        crossModuleService __safeDI_mock_crossModuleService: @autoclosure @escaping () -> CrossModuleService = CrossModuleService()
+		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let crossModuleService = __safeDI_mock_crossModuleService()
+		        let crossModuleService = safeDIParameters.crossModuleService.safeDIBuilder()
 		        return Root(crossModuleService: crossModuleService)
 		    }
 		}
