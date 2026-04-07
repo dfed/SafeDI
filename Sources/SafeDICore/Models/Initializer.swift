@@ -241,7 +241,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 	/// Creates an argument list that includes ALL arguments — both dependency-matching
 	/// and default-valued non-dependency arguments. Used in mock generation where
 	/// default-valued parameters are bubbled up to the root mock method and
-	/// dependency args are fulfilled from the tree.
+	/// dependency arguments are fulfilled from the tree.
 	func createMockInitializerArgumentList(
 		given dependencies: [Dependency],
 		unavailableProperties: Set<Property>? = nil,
@@ -255,7 +255,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 				if let unavailableProperties, unavailableProperties.contains(dependency.property) {
 					parts.append("\(argument.label): nil")
 				} else if dependency.source == .forwarded {
-					// Forwarded deps use the bare parameter name — no remapping.
+					// Forwarded dependencies use the bare parameter name — no remapping.
 					parts.append("\(argument.label): \(argument.innerLabel)")
 				} else {
 					parts.append("\(argument.label): \(argument.innerLabel)")

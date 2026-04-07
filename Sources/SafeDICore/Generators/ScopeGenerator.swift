@@ -548,7 +548,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// MARK: Mock Root Code Generation
 
 	/// Generates the full mock extension code for a `.root` node in mock mode.
-	/// Uses the new SafeDIParameters tree-structured API.
 	private func generateMockRootCode(
 		instantiable: Instantiable,
 		context: MockContext,
@@ -561,9 +560,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// 1. Build the parameter tree.
 		let parameterTree = await collectMockParameterTree()
 
-		// 2. Identify flat params.
+		// 2. Identify flat parameters.
 
-		// Forwarded deps → bare required params.
+		// Forwarded dependencies → bare required parameters.
 		let forwardedDependencies = instantiable.dependencies
 			.filter { $0.source == .forwarded }
 			.sorted { $0.property < $1.property }
@@ -591,7 +590,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
-		// Non-instantiable received deps and uncovered @Instantiated deps → flat params.
+		// Non-instantiable received dependencies and uncovered @Instantiated dependencies → flat parameters.
 		let treePropertyLabels = Set(parameterTree.map(\.propertyLabel))
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
 
@@ -644,14 +643,39 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
-		// 3. Simple mock case — no tree, no flat params.
+		// Disambiguate flat received parameter labels when collisions exist.
+		// Forwarded parameters keep their original labels (must match init signature).
+		let allFlatLabels = forwardedDependencies.map(\.property.label)
+			+ rootDefaultParameters.map(\.label)
+			+ flatReceivedParameters.map(\.label)
+			+ flatUncoveredParameters.map(\.label)
+		var flatLabelCounts = [String: Int]()
+		for label in allFlatLabels {
+			flatLabelCounts[label, default: 0] += 1
+		}
+		flatReceivedParameters = flatReceivedParameters.map { parameter in
+			guard let count = flatLabelCounts[parameter.label], count > 1 else {
+				return parameter
+			}
+			let disambiguatedLabel = "\(parameter.label)_\(parameter.typeSource.replacingOccurrences(of: "?", with: ""))"
+			return (label: disambiguatedLabel, typeSource: parameter.typeSource, isOptional: parameter.isOptional)
+		}
+		flatUncoveredParameters = flatUncoveredParameters.map { parameter in
+			guard let count = flatLabelCounts[parameter.label], count > 1 else {
+				return parameter
+			}
+			let disambiguatedLabel = "\(parameter.label)_\(parameter.typeSource)"
+			return (label: disambiguatedLabel, typeSource: parameter.typeSource)
+		}
+
+		// 3. Simple mock case — no tree, no flat parameters.
 		let hasTree = !parameterTree.isEmpty
-		let hasFlatParams = !forwardedDependencies.isEmpty
+		let hasFlatParameters = !forwardedDependencies.isEmpty
 			|| !rootDefaultParameters.isEmpty
 			|| !flatReceivedParameters.isEmpty
 			|| !flatUncoveredParameters.isEmpty
 
-		if !hasTree, !hasFlatParams {
+		guard hasTree || hasFlatParameters else {
 			let argumentList = try instantiable.generateArgumentList(
 				unavailableProperties: unavailableOptionalProperties,
 				forMockGeneration: true,
@@ -790,7 +814,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Non-dependency default-valued parameters from this type's init or customMock.
 		let defaultParameters: [DefaultParameter]
 		/// All arguments from the init or customMock that will be used for construction.
-		/// Determines the builder closure signature (positional unlabeled params).
+		/// Determines the builder closure signature (positional unlabeled parameters).
 		let constructionArguments: [Initializer.Argument]
 		/// The type's declared dependencies.
 		let dependencies: [Dependency]
@@ -804,8 +828,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let forwardedProperties: Set<Property>
 		/// Whether this node is part of a property cycle.
 		let isPropertyCycle: Bool
-		/// Whether this parameter is captured by a @Sendable function.
-		let requiresSendable: Bool
 
 		/// The `_Configuration` struct name, based on the instantiated type.
 		var structName: String {
@@ -934,7 +956,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				concreteTypeName: childInstantiable.concreteInstantiable.asSource,
 				forwardedProperties: forwardedProperties,
 				isPropertyCycle: isPropertyCycle,
-				requiresSendable: insideSendableScope,
 			))
 		}
 
@@ -1112,7 +1133,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Generates the mock body bindings for the tree. Walks depth-first (children before
 	/// parent), emitting `let` bindings that call through `safeDIParameters.path.safeDIBuilder(...)`.
 	///
-	/// For constant nodes: `let {label} = safeDIParameters.{path}.safeDIBuilder({args})`
+	/// For constant nodes: `let {label} = safeDIParameters.{path}.safeDIBuilder({arguments})`
 	/// For Instantiator nodes: inner builder function + `Instantiator<T>` wrapping.
 	private static func generateMockBodyBindings(
 		nodes: [MockParameterNode],
@@ -1176,8 +1197,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return node.constructionArguments.compactMap { argument in
 			if dependencyLabels.contains(argument.innerLabel) {
 				// Dependency argument: use the local variable name (property label).
-				// For @Forwarded deps in Instantiator context, this is the inner function param.
-				// For @Received/@Instantiated deps, this is a previously-bound local variable.
+				// For @Forwarded dependencies in Instantiator context, this is the inner function parameter.
+				// For @Received/@Instantiated dependencies, this is a previously-bound local variable.
 				argument.innerLabel
 			} else if defaultParameterLabels.contains(argument.label) {
 				// Non-dependency default: reference the stored property on SafeDIParameters.
@@ -1245,7 +1266,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Emit the Instantiator/ErasedInstantiator construction.
 		let unwrappedTypeDescription = node.typeDescription.unwrapped.asSource
-		let instantiatedTypeDescription = node.typeDescription.unwrapped.asInstantiatedType.asSource
 
 		let instantiatorConstruction = if forwardedArguments.isEmpty {
 			"\(unwrappedTypeDescription)(\(functionName))"
@@ -1305,7 +1325,7 @@ extension Instantiable {
 			initializer
 		}
 		if forMockGeneration {
-			// In the simple mock case (no deps, no tree), the initializer is always present
+			// In the simple mock case (no dependencies, no tree), the initializer is always present
 			// and covers all dependencies. The SafeDIParameters pipeline handles complex cases.
 			guard let initializerToUse else { return "" }
 			return initializerToUse
