@@ -441,8 +441,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        service: ExternalService,
-		        service: LocalService? = nil,
+		        service_ExternalService: ExternalService,
+		        service_LocalService: LocalService? = nil,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let childA = safeDIParameters.childA.safeDIBuilder(service)
@@ -657,8 +657,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        presenter: PresenterA,
-		        presenter: PresenterB,
+		        presenter_PresenterA: PresenterA,
+		        presenter_PresenterB: PresenterB,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_childABuilder(name: String) -> ChildA {
@@ -1338,8 +1338,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        config: ConfigA,
-		        config: ConfigB,
+		        config_ConfigA: ConfigA,
+		        config_ConfigB: ConfigB,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_parentBuilder(name: String) -> Parent {
@@ -1442,8 +1442,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        engine: EngineA,
-		        engine: EngineB,
+		        engine_EngineA: EngineA,
+		        engine_EngineB: EngineB,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let parent = safeDIParameters.parent.safeDIBuilder(engine)
@@ -1540,8 +1540,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        service: ExternalService,
-		        service: LocalService? = nil,
+		        service_ExternalService: ExternalService,
+		        service_LocalService: LocalService? = nil,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let childA = safeDIParameters.childA.safeDIBuilder(service)
@@ -1757,9 +1757,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        service: ServiceA,
-		        service: ServiceB,
-		        service: ServiceC,
+		        service_ServiceA: ServiceA,
+		        service_ServiceB: ServiceB,
+		        service_ServiceC: ServiceC,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let childA = safeDIParameters.childA.safeDIBuilder(service)

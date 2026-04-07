@@ -8169,8 +8169,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        service: ExternalService,
-		        service: LocalService? = nil,
+		        service_ExternalService: ExternalService,
+		        service_LocalService: LocalService? = nil,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let childA = safeDIParameters.childA.safeDIBuilder(service)
