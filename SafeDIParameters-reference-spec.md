@@ -16,16 +16,14 @@ public enum Style { case compact, expanded }
 
 @Instantiable(isRoot: true, generateMock: true)
 public struct Root: Instantiable {
-    public init(service: Service, childA: ChildA, childB: ChildB, name: String) {
+    public init(service: Service, childA: ChildA, childB: ChildB) {
         self.service = service
         self.childA = childA
         self.childB = childB
-        self.name = name
     }
     @Instantiated let service: Service
     @Instantiated let childA: ChildA
     @Instantiated let childB: ChildB
-    @Forwarded let name: String
 }
 
 @Instantiable(generateMock: true)
@@ -35,55 +33,49 @@ public struct Service: Instantiable {
 
 @Instantiable(generateMock: true, customMockName: "customMock")
 public struct ChildA: Instantiable {
-    public init(grandchild: Grandchild, service: Service, name: String) {
+    public init(grandchild: Grandchild, service: Service) {
         self.grandchild = grandchild
         self.service = service
-        self.name = name
     }
     @Instantiated let grandchild: Grandchild
     @Received let service: Service
-    @Received let name: String
 
     public static func customMock(
         grandchild: Grandchild,
         service: Service,
-        name: String,
         theme: Theme = .light
     ) -> ChildA {
-        ChildA(grandchild: grandchild, service: service, name: name)
+        ChildA(grandchild: grandchild, service: service)
     }
 }
 
 @Instantiable(generateMock: true, customMockName: "customMock")
 public struct Grandchild: Instantiable {
-    public init(service: Service, name: String) {
+    public init(service: Service) {
         self.service = service
-        self.name = name
     }
     @Received let service: Service
-    @Received let name: String
 
     public static func customMock(
         service: Service,
-        name: String,
         style: Style = .compact
     ) -> Grandchild {
-        Grandchild(service: service, name: name)
+        Grandchild(service: service)
     }
 }
 
 @Instantiable(generateMock: true)
 public struct ChildB: Instantiable {
-    public init(service: Service, name: String, isPro: Bool = false) {
+    public init(service: Service, isPro: Bool = false) {
         self.service = service
-        self.name = name
     }
     @Received let service: Service
-    @Received let name: String
 }
 ```
 
 ### Expected Output: Root+SafeDIMock.swift
+
+Root has no forwarded deps and no non-dependency defaults of its own, so `mock()` has only `safeDIParameters`.
 
 ```swift
 #if DEBUG
@@ -102,21 +94,21 @@ extension Root {
         public struct Grandchild_Configuration {
             public init(
                 style: Style = .compact,
-                _ safeDIBuilder: @escaping (Service, String, Style) -> Grandchild = Grandchild.customMock(service:name:style:)
+                _ safeDIBuilder: @escaping (Service, Style) -> Grandchild = Grandchild.customMock(service:style:)
             ) {
                 self.style = style
                 self.safeDIBuilder = safeDIBuilder
             }
 
             public let style: Style
-            public let safeDIBuilder: (Service, String, Style) -> Grandchild
+            public let safeDIBuilder: (Service, Style) -> Grandchild
         }
 
         public struct ChildA_Configuration {
             public init(
                 grandchild: Grandchild_Configuration = .init(),
                 theme: Theme = .light,
-                _ safeDIBuilder: @escaping (Grandchild, Service, String, Theme) -> ChildA = ChildA.customMock(grandchild:service:name:theme:)
+                _ safeDIBuilder: @escaping (Grandchild, Service, Theme) -> ChildA = ChildA.customMock(grandchild:service:theme:)
             ) {
                 self.grandchild = grandchild
                 self.theme = theme
@@ -125,20 +117,20 @@ extension Root {
 
             public let grandchild: Grandchild_Configuration
             public let theme: Theme
-            public let safeDIBuilder: (Grandchild, Service, String, Theme) -> ChildA
+            public let safeDIBuilder: (Grandchild, Service, Theme) -> ChildA
         }
 
         public struct ChildB_Configuration {
             public init(
                 isPro: Bool = false,
-                _ safeDIBuilder: @escaping (Service, String, Bool) -> ChildB = ChildB.init(service:name:isPro:)
+                _ safeDIBuilder: @escaping (Service, Bool) -> ChildB = ChildB.init(service:isPro:)
             ) {
                 self.isPro = isPro
                 self.safeDIBuilder = safeDIBuilder
             }
 
             public let isPro: Bool
-            public let safeDIBuilder: (Service, String, Bool) -> ChildB
+            public let safeDIBuilder: (Service, Bool) -> ChildB
         }
 
         public init(
@@ -157,31 +149,26 @@ extension Root {
     }
 
     public static func mock(
-        name: String,
         safeDIParameters: SafeDIParameters = .init()
     ) -> Root {
         let service = safeDIParameters.service.safeDIBuilder()
         let grandchild = safeDIParameters.childA.grandchild.safeDIBuilder(
             service,
-            name,
             safeDIParameters.childA.grandchild.style
         )
         let childA = safeDIParameters.childA.safeDIBuilder(
             grandchild,
             service,
-            name,
             safeDIParameters.childA.theme
         )
         let childB = safeDIParameters.childB.safeDIBuilder(
             service,
-            name,
             safeDIParameters.childB.isPro
         )
         return Root(
             service: service,
             childA: childA,
-            childB: childB,
-            name: name
+            childB: childB
         )
     }
 }
@@ -202,7 +189,7 @@ extension Service {
 
 ### Expected Output: ChildA+SafeDIMock.swift
 
-ChildA is a non-root type with `generateMock: true`. Its own mock promotes received deps (Service) into SafeDIParameters. Its own non-dependency default (theme from customMock) stays flat on `mock()`.
+ChildA is a non-root type with `generateMock: true`. Its own mock promotes received dep (Service) into SafeDIParameters. Its own non-dependency default (theme from customMock) stays flat on `mock()`.
 
 ```swift
 #if DEBUG
@@ -221,14 +208,14 @@ extension ChildA {
         public struct Grandchild_Configuration {
             public init(
                 style: Style = .compact,
-                _ safeDIBuilder: @escaping (Service, String, Style) -> Grandchild = Grandchild.customMock(service:name:style:)
+                _ safeDIBuilder: @escaping (Service, Style) -> Grandchild = Grandchild.customMock(service:style:)
             ) {
                 self.style = style
                 self.safeDIBuilder = safeDIBuilder
             }
 
             public let style: Style
-            public let safeDIBuilder: (Service, String, Style) -> Grandchild
+            public let safeDIBuilder: (Service, Style) -> Grandchild
         }
 
         public init(
@@ -244,20 +231,17 @@ extension ChildA {
     }
 
     public static func mock(
-        name: String,
         theme: Theme = .light,
         safeDIParameters: SafeDIParameters = .init()
     ) -> ChildA {
         let service = safeDIParameters.service.safeDIBuilder()
         let grandchild = safeDIParameters.grandchild.safeDIBuilder(
             service,
-            name,
             safeDIParameters.grandchild.style
         )
         return ChildA.customMock(
             grandchild: grandchild,
             service: service,
-            name: name,
             theme: theme
         )
     }
@@ -267,7 +251,7 @@ extension ChildA {
 
 ### Expected Output: Grandchild+SafeDIMock.swift
 
-Grandchild has only received deps. Service is instantiable (promoted). String (name) is not instantiable (flat).
+Grandchild has only a received dep. Service is instantiable (promoted to SafeDIParameters). Grandchild's own non-dep default (style from customMock) stays flat on `mock()`.
 
 ```swift
 #if DEBUG
@@ -293,14 +277,12 @@ extension Grandchild {
     }
 
     public static func mock(
-        name: String,
         style: Style = .compact,
         safeDIParameters: SafeDIParameters = .init()
     ) -> Grandchild {
         let service = safeDIParameters.service.safeDIBuilder()
         return Grandchild.customMock(
             service: service,
-            name: name,
             style: style
         )
     }
@@ -336,14 +318,12 @@ extension ChildB {
     }
 
     public static func mock(
-        name: String,
         isPro: Bool = false,
         safeDIParameters: SafeDIParameters = .init()
     ) -> ChildB {
         let service = safeDIParameters.service.safeDIBuilder()
         return ChildB(
             service: service,
-            name: name,
             isPro: isPro
         )
     }
