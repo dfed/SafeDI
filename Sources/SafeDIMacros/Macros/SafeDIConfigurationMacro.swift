@@ -73,15 +73,15 @@ public struct SafeDIConfigurationMacro: DeclarationMacro {
 
 	private static func isStringLiteralOrNil(_ expression: ExprSyntax) -> Bool {
 		if NilLiteralExprSyntax(expression) != nil {
-			return true
-		}
-		if let stringLiteral = StringLiteralExprSyntax(expression),
-		   stringLiteral.segments.count == 1,
-		   case .stringSegment = stringLiteral.segments.first
+			true
+		} else if let stringLiteral = StringLiteralExprSyntax(expression),
+		          stringLiteral.segments.count == 1,
+		          case .stringSegment = stringLiteral.segments.first
 		{
-			return true
+			true
+		} else {
+			false
 		}
-		return false
 	}
 
 	// MARK: - SafeDIConfigurationError
