@@ -931,13 +931,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					.map(\.property),
 			)
 
-			// Gather all construction arguments from the appropriate initializer.
-			let constructionArguments: [Initializer.Argument] = if let constructionInitializer {
+			// Gather construction arguments from the appropriate initializer.
+			// For Instantiator children, exclude non-dependency defaults — they don't
+			// bubble through Instantiator boundaries, so the child init's own default
+			// handles them. Including them would create a builder closure type that
+			// expects arguments the mock body doesn't provide.
+			let dependencyLabels = Set(childInstantiable.dependencies.map(\.property.label))
+			let allArguments: [Initializer.Argument] = if let constructionInitializer {
 				constructionInitializer.arguments
 			} else if let initializer = childInstantiable.initializer {
 				initializer.arguments
 			} else {
 				[]
+			}
+			let constructionArguments: [Initializer.Argument] = if isInstantiator {
+				allArguments.filter { argument in
+					dependencyLabels.contains(argument.innerLabel) || !argument.hasDefaultValue
+				}
+			} else {
+				allArguments
 			}
 
 			nodes.append(MockParameterNode(
