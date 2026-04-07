@@ -1266,6 +1266,36 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"\(instantiatedTypeDescription.asSource)_Configuration"
 		}
 
+		/// The builder closure type as a Swift source string (unlabeled parameters).
+		/// e.g., `(Service, Style) -> Grandchild` or `() -> Service`.
+		var builderClosureType: String {
+			let parameterTypes = constructionArguments
+				.map { $0.typeDescription.asFunctionParameter.asSource }
+				.joined(separator: ", ")
+			return "(\(parameterTypes)) -> \(concreteTypeName)"
+		}
+
+		/// The default builder expression as a direct function reference.
+		/// e.g., `Grandchild.customMock(service:style:)` or `Service.init`.
+		var defaultBuilderExpression: String {
+			let methodName: String
+			if useMockInitializer, let customMockName {
+				methodName = customMockName
+			} else if isExtensionBased {
+				methodName = InstantiableVisitor.instantiateMethodName
+			} else {
+				methodName = "init"
+			}
+			if constructionArguments.isEmpty {
+				return "\(concreteTypeName).\(methodName)"
+			} else {
+				let labels = constructionArguments
+					.map { "\($0.label):" }
+					.joined()
+				return "\(concreteTypeName).\(methodName)(\(labels))"
+			}
+		}
+
 		/// A non-dependency default-valued parameter from an init or customMock.
 		struct DefaultParameter {
 			/// The parameter label (e.g., "theme", "isPro").
@@ -1364,6 +1394,133 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		return nodes
+	}
+
+	// MARK: SafeDIParameters Generation
+
+	/// Collects all unique types from the `MockParameterNode` tree, deduplicated
+	/// by `instantiatedTypeDescription`. Returns nodes in depth-first order
+	/// (children before parents) so that referenced types appear before their referrers.
+	private static func collectUniqueConfigurationTypes(
+		from nodes: [MockParameterNode],
+	) -> [MockParameterNode] {
+		var seen = Set<String>()
+		var result = [MockParameterNode]()
+
+		func walk(_ node: MockParameterNode) {
+			// Process children first (depth-first).
+			for child in node.children {
+				walk(child)
+			}
+			let key = node.instantiatedTypeDescription.asSource
+			guard seen.insert(key).inserted else { return }
+			result.append(node)
+		}
+
+		for node in nodes {
+			walk(node)
+		}
+		return result
+	}
+
+	/// Generates the full `SafeDIParameters` struct including all flat `_Configuration` siblings.
+	/// Returns the struct source code, or `nil` if the tree has no children.
+	private static func generateSafeDIParametersStruct(
+		rootChildren: [MockParameterNode],
+		indent: String,
+	) -> String? {
+		guard !rootChildren.isEmpty else { return nil }
+
+		let innerIndent = "\(indent)\(standardIndent)"
+		let memberIndent = "\(innerIndent)\(standardIndent)"
+
+		// Collect all unique types for flat _Configuration structs.
+		let uniqueTypes = collectUniqueConfigurationTypes(from: rootChildren)
+
+		var lines = [String]()
+		lines.append("\(indent)public struct SafeDIParameters {")
+
+		// Generate each _Configuration struct as a flat sibling.
+		for uniqueType in uniqueTypes {
+			lines.append(generateConfigurationStruct(
+				for: uniqueType,
+				indent: innerIndent,
+			))
+			lines.append("")
+		}
+
+		// Generate SafeDIParameters init with root-level children.
+		lines.append("\(innerIndent)public init(")
+		let initParameters = rootChildren.map { child in
+			"\(memberIndent)\(child.propertyLabel): \(child.structName) = .init()"
+		}
+		lines.append(initParameters.joined(separator: ",\n"))
+		lines.append("\(innerIndent)) {")
+		for child in rootChildren {
+			lines.append("\(memberIndent)self.\(child.propertyLabel) = \(child.propertyLabel)")
+		}
+		lines.append("\(innerIndent)}")
+
+		// Generate stored properties.
+		lines.append("")
+		for child in rootChildren {
+			lines.append("\(innerIndent)public let \(child.propertyLabel): \(child.structName)")
+		}
+
+		lines.append("\(indent)}")
+		return lines.joined(separator: "\n")
+	}
+
+	/// Generates a single `{TypeName}_Configuration` struct for a `MockParameterNode`.
+	private static func generateConfigurationStruct(
+		for node: MockParameterNode,
+		indent: String,
+	) -> String {
+		let innerIndent = "\(indent)\(standardIndent)"
+		var lines = [String]()
+
+		lines.append("\(indent)public struct \(node.structName) {")
+
+		// Build init parameters in order: children, defaults, builder (last).
+		var initParameters = [String]()
+		var assignments = [String]()
+		var storedProperties = [String]()
+
+		// Child edge parameters.
+		for child in node.children {
+			initParameters.append("\(innerIndent)\(standardIndent)\(child.propertyLabel): \(child.structName) = .init()")
+			assignments.append("\(innerIndent)\(standardIndent)self.\(child.propertyLabel) = \(child.propertyLabel)")
+			storedProperties.append("\(innerIndent)public let \(child.propertyLabel): \(child.structName)")
+		}
+
+		// Default-valued parameters.
+		for defaultParameter in node.defaultParameters {
+			let typeSource = defaultParameter.typeDescription.asSource
+			initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(typeSource) = \(defaultParameter.defaultExpression)")
+			assignments.append("\(innerIndent)\(standardIndent)self.\(defaultParameter.label) = \(defaultParameter.label)")
+			storedProperties.append("\(innerIndent)public let \(defaultParameter.label): \(typeSource)")
+		}
+
+		// Builder parameter (always last, unlabeled).
+		let closureType = node.builderClosureType
+		let defaultBuilder = node.defaultBuilderExpression
+		initParameters.append("\(innerIndent)\(standardIndent)_ safeDIBuilder: @escaping \(closureType) = \(defaultBuilder)")
+		assignments.append("\(innerIndent)\(standardIndent)self.safeDIBuilder = safeDIBuilder")
+		storedProperties.append("\(innerIndent)public let safeDIBuilder: \(closureType)")
+
+		// Emit init.
+		lines.append("\(innerIndent)public init(")
+		lines.append(initParameters.joined(separator: ",\n"))
+		lines.append("\(innerIndent)) {")
+		lines.append(contentsOf: assignments)
+		lines.append("\(innerIndent)}")
+
+		// Emit stored properties.
+		lines.append("")
+		lines.append(contentsOf: storedProperties)
+
+		lines.append("\(indent)}")
+		return lines.joined(separator: "\n")
 	}
 
 	/// Walks the tree and collects all mock declarations for the mock() parameters.
