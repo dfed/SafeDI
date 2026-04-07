@@ -12,7 +12,7 @@ There are a total of five macros in the SafeDI library:
 | [`@Instantiated`](#instantiated) | Property declaration | Instantiates an instance or value when the enclosing `@Instantiable`-decorated type is instantiated. |
 | [`@Forwarded`](#forwarded) | Property declaration | Propagates a runtime-created instance or value (e.g. a `User` object, network response, or customer input) down the dependency tree. |
 | [`@Received`](#received) | Property declaration | Receives an instance or value from an `@Instantiated` or `@Forwarded` property further up the dependency tree. |
-| [`@SafeDIConfiguration`](#enabling-mock-generation) | Enum declaration | Provides build-time configuration for SafeDI’s code generation plugin. |
+| [`@SafeDIConfiguration`](#safediconfiguration) | Enum declaration | Provides build-time configuration for SafeDI’s code generation plugin. |
 
 Let’s walk through each of these macros in detail.
 
@@ -408,6 +408,27 @@ public struct FeedView: View, Instantiable {
 }
 ```
 
+### @SafeDIConfiguration
+
+An enum decorated with [`@SafeDIConfiguration`](../Sources/SafeDI/Decorators/SafeDIConfiguration.swift) provides build-time configuration for SafeDI's code generation plugin. Each module may have at most one `@SafeDIConfiguration`-decorated enum. All properties must be initialized with literal values. If any required property is missing, the macro provides a fix-it to insert it with its default value.
+
+```swift
+@SafeDIConfiguration
+enum MyConfiguration {
+    /// The names of modules to import in the generated dependency tree.
+    /// This list is in addition to the import statements found in files that declare @Instantiable types.
+    static let additionalImportedModules: [StaticString] = []
+
+    /// Directories containing Swift files to include, relative to the executing directory.
+    /// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
+    static let additionalDirectoriesToInclude: [StaticString] = []
+
+    /// The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`).
+    /// Set to `nil` to generate mocks without conditional compilation.
+    static let mockConditionalCompilation: StaticString? = "DEBUG"
+}
+```
+
 ## Delayed instantiation
 
 When you want to instantiate a dependency after `init(…)`, you need to declare an `Instantiator<Dependency>`-typed property as `@Instantiated` or `@Received`. Deferred instantiation is useful in situations where a dependency is expensive to create or only required under certain conditions (e.g., creating a detailed view for a selected item in a list).
@@ -491,18 +512,7 @@ public final class UserService: Instantiable {
 }
 ```
 
-By default, `generateMock` is `false` and no mock is generated. Generated mocks are wrapped in `#if DEBUG` by default. To customize the conditional compilation flag, add a `@SafeDIConfiguration` enum with a `mockConditionalCompilation` property:
-
-```swift
-@SafeDIConfiguration
-enum MyConfiguration {
-    static let additionalImportedModules: [StaticString] = []
-    static let additionalDirectoriesToInclude: [StaticString] = []
-    static let mockConditionalCompilation: StaticString? = "DEBUG"
-}
-```
-
-Set `mockConditionalCompilation` to `nil` to generate mocks without conditional compilation.
+By default, `generateMock` is `false` and no mock is generated. Generated mocks are wrapped in `#if DEBUG` by default. To customize the conditional compilation flag, set the `mockConditionalCompilation` property on your module's [`@SafeDIConfiguration`](#safediconfiguration) enum.
 
 ### Using generated mocks
 
