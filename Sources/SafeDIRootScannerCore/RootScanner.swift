@@ -268,14 +268,13 @@ public struct RootScanner {
 		guard let labelRange = findArgumentLabel(named: argumentLabel, in: argumentList) else { return [] }
 
 		// Convert from sanitized-source index to original source to extract string content.
-		let labelEndOffset = sanitizedSource.distance(from: sanitizedSource.startIndex, to: labelRange.upperBound)
-		var originalIndex = source.index(source.startIndex, offsetBy: labelEndOffset)
-
-		// Skip past the `:` after the label.
-		while originalIndex < source.endIndex, source[originalIndex] != ":" {
-			originalIndex = source.index(after: originalIndex)
-		}
-		guard originalIndex < source.endIndex else { return [] }
+		// The label in a macro argument list is always immediately followed by `:`,
+		// so we can compute the offset directly.
+		let colonOffset = sanitizedSource.distance(from: sanitizedSource.startIndex, to: labelRange.upperBound)
+		guard colonOffset < source.count else { return [] }
+		var originalIndex = source.index(source.startIndex, offsetBy: colonOffset)
+		skipWhitespace(in: source, index: &originalIndex)
+		guard originalIndex < source.endIndex, source[originalIndex] == ":" else { return [] }
 		originalIndex = source.index(after: originalIndex) // skip ':'
 
 		// Find the opening bracket of the array literal.

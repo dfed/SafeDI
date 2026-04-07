@@ -85,6 +85,28 @@ struct SafeDIConfigurationVisitorTests {
 		#expect(configuration.additionalDirectoriesToInclude == ["../Other"])
 	}
 
+	@Test
+	func extractConfiguration_ignoresUnknownLabeledArguments() {
+		let configuration = extractConfiguration(from: """
+		#SafeDIConfiguration(
+		    unknownParameter: "value",
+		    additionalImportedModules: ["ModuleA"]
+		)
+		""")
+		#expect(configuration.additionalImportedModules == ["ModuleA"])
+		#expect(configuration.additionalDirectoriesToInclude == [])
+	}
+
+	@Test
+	func extractConfiguration_ignoresInterpolatedStringLiterals() {
+		let configuration = extractConfiguration(from: """
+		#SafeDIConfiguration(
+		    additionalImportedModules: ["\\(someVar)"]
+		)
+		""")
+		#expect(configuration.additionalImportedModules == [])
+	}
+
 	// MARK: Private
 
 	private func extractConfiguration(from source: String) -> SafeDIConfiguration {

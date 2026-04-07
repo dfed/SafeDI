@@ -79,13 +79,6 @@ public final class FileVisitor: SyntaxVisitor {
 		exitType()
 	}
 
-	public override func visit(_ node: MacroExpansionDeclSyntax) -> SyntaxVisitorContinueKind {
-		if parentType == nil, node.macroName.text == SafeDIConfigurationVisitor.macroName {
-			configurations.append(SafeDIConfigurationVisitor.extractConfiguration(from: node))
-		}
-		return .skipChildren
-	}
-
 	public override func visit(_ node: MacroExpansionExprSyntax) -> SyntaxVisitorContinueKind {
 		if parentType == nil, node.macroName.text == SafeDIConfigurationVisitor.macroName {
 			configurations.append(SafeDIConfigurationVisitor.extractConfiguration(from: node))

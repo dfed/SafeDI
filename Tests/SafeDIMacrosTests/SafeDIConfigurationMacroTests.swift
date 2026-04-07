@@ -251,5 +251,53 @@ import Testing
 				macros: safeDIConfigurationTestMacros,
 			)
 		}
+
+		@Test
+		func expansion_throwsError_whenUnlabeledArgumentProvided() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    ["MyModule"]
+				)
+				""",
+				expandedSource: """
+				#SafeDIConfiguration(
+				    ["MyModule"]
+				)
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "#SafeDIConfiguration does not accept unlabeled arguments",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_throwsError_whenUnknownArgumentProvided() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    unknownParameter: "value"
+				)
+				""",
+				expandedSource: """
+				#SafeDIConfiguration(
+				    unknownParameter: "value"
+				)
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "#SafeDIConfiguration does not accept an argument labeled `unknownParameter`",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
 	}
 #endif
