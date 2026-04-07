@@ -389,14 +389,32 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 		#if DEBUG
 		extension Parent {
+		    public struct SafeDIParameters {
+		        public struct Child_Configuration {
+		            public init(
+		                _ safeDIBuilder: @escaping (Unrelated?, Shared?) -> Child = Child.init(unrelated:shared:)
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            public let safeDIBuilder: (Unrelated?, Shared?) -> Child
+		        }
+
+		        public init(
+		            child: Child_Configuration = .init()
+		        ) {
+		            self.child = child
+		        }
+
+		        public let child: Child_Configuration
+		    }
+
 		    public static func mock(
-		        child __safeDI_mock_child: Child? = nil,
-		        shared __safeDI_mock_shared: @autoclosure @escaping () -> Shared? = nil,
-		        unrelated __safeDI_mock_unrelated: @autoclosure @escaping () -> Unrelated? = nil
+		        shared: Shared? = nil,
+		        unrelated: Unrelated? = nil,
+		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let shared = __safeDI_mock_shared()
-		        let unrelated = __safeDI_mock_unrelated()
-		        let child = __safeDI_mock_child ?? Child.mock(/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */)
+		        let child = safeDIParameters.child.safeDIBuilder(unrelated, shared)
 		        return Parent(child: child, shared: shared)
 		    }
 		}
@@ -460,17 +478,58 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    public static func mock(
-		        client __safeDI_mock_client: @autoclosure @escaping () -> Client = Client(),
-		        presenter __safeDI_mock_presenter: Presenter? = nil,
-		        service __safeDI_mock_service: @autoclosure @escaping () -> Service = Service()
-		    ) -> Root {
-		        func __safeDI_presenter() -> Presenter {
-		            let service = __safeDI_mock_service()
-		            let client = __safeDI_mock_client()
-		            return Presenter.mock(/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */)
+		    public struct SafeDIParameters {
+		        public struct Service_Configuration {
+		            public init(
+		                _ safeDIBuilder: @escaping () -> Service = Service.init
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            public let safeDIBuilder: () -> Service
 		        }
-		        let presenter: Presenter = __safeDI_mock_presenter ?? __safeDI_presenter()
+
+		        public struct Client_Configuration {
+		            public init(
+		                _ safeDIBuilder: @escaping () -> Client = Client.init
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            public let safeDIBuilder: () -> Client
+		        }
+
+		        public struct Presenter_Configuration {
+		            public init(
+		                service: Service_Configuration = .init(),
+		                client: Client_Configuration = .init(),
+		                _ safeDIBuilder: @escaping (Service) -> Presenter = Presenter.customMock(service:)
+		            ) {
+		                self.service = service
+		                self.client = client
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            public let service: Service_Configuration
+		            public let client: Client_Configuration
+		            public let safeDIBuilder: (Service) -> Presenter
+		        }
+
+		        public init(
+		            presenter: Presenter_Configuration = .init()
+		        ) {
+		            self.presenter = presenter
+		        }
+
+		        public let presenter: Presenter_Configuration
+		    }
+
+		    public static func mock(
+		        safeDIParameters: SafeDIParameters = .init()
+		    ) -> Root {
+		        let service = safeDIParameters.presenter.service.safeDIBuilder()
+		        let client = safeDIParameters.presenter.client.safeDIBuilder()
+		        let presenter = safeDIParameters.presenter.safeDIBuilder(service)
 		        return Root(presenter: presenter)
 		    }
 		}
