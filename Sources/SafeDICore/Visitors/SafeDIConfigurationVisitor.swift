@@ -89,15 +89,15 @@ public enum SafeDIConfigurationVisitor {
 	/// and `nil` if the expression is not a valid literal.
 	private static func extractOptionalStringLiteral(from expression: ExprSyntax) -> String?? {
 		if NilLiteralExprSyntax(expression) != nil {
-			return .some(nil)
+			.some(nil)
 		} else {
 			if let stringLiteral = StringLiteralExprSyntax(expression),
 			   stringLiteral.segments.count == 1,
 			   case let .stringSegment(segment) = stringLiteral.segments.first
 			{
-				return .some(segment.content.text)
+				.some(segment.content.text)
 			} else {
-				return nil
+				nil
 			}
 		}
 	}
