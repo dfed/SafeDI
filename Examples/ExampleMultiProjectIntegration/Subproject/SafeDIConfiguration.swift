@@ -20,14 +20,4 @@
 
 import SafeDI
 
-@SafeDIConfiguration
-enum SubprojectSafeDIConfiguration {
-	/// The names of modules to import in the generated dependency tree.
-	static let additionalImportedModules: [StaticString] = []
-
-	/// Directories containing Swift files to include, relative to the executing directory.
-	static let additionalDirectoriesToInclude: [StaticString] = []
-
-	/// The conditional compilation flag to wrap generated mock code in.
-	static let mockConditionalCompilation: StaticString? = "DEBUG"
-}
+#SafeDIConfiguration()

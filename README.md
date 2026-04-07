@@ -95,28 +95,17 @@ SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin wo
 
 If your first-party code comprises a single module in an `.xcodeproj`, once your Xcode project depends on the SafeDI package you can integrate the Swift Package Plugin simply by going to your target’s `Build Phases`, expanding the `Run Build Tool Plug-ins` drop-down, and adding the `SafeDIGenerator` as a build tool plug-in. You can see this integration in practice in the [ExampleProjectIntegration](Examples/ExampleProjectIntegration) project.
 
-If your Xcode project comprises multiple modules, follow the above steps, and then create a `@SafeDIConfiguration`-decorated enum in your root module to configure SafeDI:
+If your Xcode project comprises multiple modules, follow the above steps, and then add a `#SafeDIConfiguration` in your root module to configure SafeDI:
 
 ```swift
 import SafeDI
 
-@SafeDIConfiguration
-enum MySafeDIConfiguration {
-    /// Directories containing Swift files to include, relative to the executing directory.
-    /// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-    static let additionalDirectoriesToInclude: [StaticString] = ["Subproject"]
-
-    /// The names of modules to import in the generated dependency tree.
-    /// This list is in addition to the import statements found in files that declare @Instantiable types.
-    static let additionalImportedModules: [StaticString] = []
-
-    /// The conditional compilation flag to wrap generated mock code in.
-    /// Set to `nil` to generate mocks without conditional compilation.
-    static let mockConditionalCompilation: StaticString? = "DEBUG"
-}
+#SafeDIConfiguration(
+    additionalDirectoriesToInclude: ["Subproject"]
+)
 ```
 
-The `additionalDirectoriesToInclude` property specifies folders outside of your root module that SafeDI will scan for Swift source files. Paths must be relative to the project directory. You can see [an example of this configuration](Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) project.
+The `additionalDirectoriesToInclude` parameter specifies folders outside of your root module that SafeDI will scan for Swift source files. Paths must be relative to the project directory. You can see [an example of this configuration](Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) project.
 
 ##### Swift package
 
@@ -132,17 +121,14 @@ To also generate mocks for non-root modules, add the plugin to all first-party t
 
 You can see this integration in practice in the [Example Package Integration](Examples/Example Package Integration) package.
 
-Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may create a `@SafeDIConfiguration`-decorated enum in your root module with the additional module names:
+Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may add a `#SafeDIConfiguration` in your root module with the additional module names:
 
 ```swift
 import SafeDI
 
-@SafeDIConfiguration
-enum MySafeDIConfiguration {
-    static let additionalImportedModules: [StaticString] = ["MyModule"]
-    static let additionalDirectoriesToInclude: [StaticString] = []
-    static let mockConditionalCompilation: StaticString? = "DEBUG"
-}
+#SafeDIConfiguration(
+    additionalImportedModules: ["MyModule"]
+)
 ```
 
 ##### Unlocking faster builds with Swift Package Manager plugins
@@ -165,7 +151,7 @@ Other Swift DI libraries, like [Factory](https://github.com/hmlongco/Factory) an
 
 SafeDI 2.x requires Swift 6.3 or later and does not support CocoaPods. Projects using an earlier Swift version or CocoaPods should use SafeDI 1.x.
 
-SafeDI 2.x also removes support for CSV-based configuration files (`.safedi/configuration/include.csv` and `.safedi/configuration/additionalImportedModules.csv`). Configuration is now done via the `@SafeDIConfiguration` macro.
+SafeDI 2.x also removes support for CSV-based configuration files (`.safedi/configuration/include.csv` and `.safedi/configuration/additionalImportedModules.csv`). Configuration is now done via the `#SafeDIConfiguration` macro.
 
 ### Automated migration
 
@@ -178,15 +164,15 @@ swift package plugin safedi-v1-to-v2 --target <YourRootTarget>
 This plugin will:
 1. Verify your `swift-tools-version` is 6.3 or later
 2. Create a `SafeDIConfiguration.swift` file in your target's source directory
-3. Migrate any existing CSV configuration values into the new `@SafeDIConfiguration` enum
+3. Migrate any existing CSV configuration values into the new `#SafeDIConfiguration` macro
 4. Delete the obsolete CSV files
 
 ### Manual migration
 
 1. Update your `swift-tools-version` to 6.3 or later
 2. Update your SafeDI dependency to `from: "2.0.0"`
-3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, create a `@SafeDIConfiguration` enum in your root module with the equivalent values and delete the CSV files
-4. If you don't have CSV configuration files, create a `@SafeDIConfiguration`-decorated enum in your root module
+3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
+4. If you don't have CSV configuration files, add a `#SafeDIConfiguration()` in your root module
 
 ### Migrating prebuild scripts or custom build system integrations
 

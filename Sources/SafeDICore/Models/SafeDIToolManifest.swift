@@ -48,7 +48,7 @@ public struct SafeDIToolManifest: Codable, Sendable {
 	/// output file where the generated `mock()` extension should be written.
 	public var mockGeneration: [InputOutputMap]
 
-	/// Source file paths of `@SafeDIConfiguration` enums found in the current module.
+	/// Source file paths of `#SafeDIConfiguration` invocations found in the current module.
 	/// Used to scope configuration selection and validate at most one exists.
 	public var configurationFilePaths: [String]
 

@@ -22,95 +22,31 @@ import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-public struct SafeDIConfigurationMacro: PeerMacro {
+public struct SafeDIConfigurationMacro: DeclarationMacro {
 	public static func expansion(
-		of _: AttributeSyntax,
-		providingPeersOf declaration: some DeclSyntaxProtocol,
-		in context: some MacroExpansionContext,
+		of node: some FreestandingMacroExpansionSyntax,
+		in _: some MacroExpansionContext,
 	) throws -> [DeclSyntax] {
-		guard let enumDecl = EnumDeclSyntax(declaration) else {
-			throw SafeDIConfigurationError.decoratingNonEnum
-		}
-
-		let visitor = SafeDIConfigurationVisitor()
-		visitor.walk(enumDecl)
-
-		var hasMissingProperties = false
-
-		if !visitor.foundAdditionalImportedModules {
-			hasMissingProperties = true
-		} else if !visitor.additionalImportedModulesIsValid {
-			throw SafeDIConfigurationError.additionalImportedModulesNotStringLiteralArray
-		}
-
-		if !visitor.foundAdditionalDirectoriesToInclude {
-			hasMissingProperties = true
-		} else if !visitor.additionalDirectoriesToIncludeIsValid {
-			throw SafeDIConfigurationError.additionalDirectoriesToIncludeNotStringLiteralArray
-		}
-
-		if !visitor.foundMockConditionalCompilation {
-			hasMissingProperties = true
-		} else if !visitor.mockConditionalCompilationIsValid {
-			throw SafeDIConfigurationError.mockConditionalCompilationNotStringLiteralOrNil
-		}
-
-		if hasMissingProperties {
-			var modifiedDecl = enumDecl
-			var membersToInsert = [MemberBlockItemSyntax]()
-			if !visitor.foundAdditionalImportedModules {
-				membersToInsert.append(MemberBlockItemSyntax(
-					leadingTrivia: .newline,
-					decl: DeclSyntax("""
-					/// The names of modules to import in the generated dependency tree.
-					/// This list is in addition to the import statements found in files that declare @Instantiable types.
-					static let \(raw: SafeDIConfigurationVisitor.additionalImportedModulesPropertyName): [StaticString] = []
-					"""),
-				))
+		for argument in node.arguments {
+			guard let label = argument.label?.text else {
+				throw SafeDIConfigurationError.unexpectedUnlabeledArgument
 			}
-			if !visitor.foundAdditionalDirectoriesToInclude {
-				membersToInsert.append(MemberBlockItemSyntax(
-					leadingTrivia: .newline,
-					decl: DeclSyntax("""
-					/// Directories containing Swift files to include, relative to the executing directory.
-					/// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-					static let \(raw: SafeDIConfigurationVisitor.additionalDirectoriesToIncludePropertyName): [StaticString] = []
-					"""),
-				))
+			switch label {
+			case SafeDIConfigurationVisitor.additionalImportedModulesArgumentLabel:
+				guard isArrayOfStringLiterals(argument.expression) else {
+					throw SafeDIConfigurationError.additionalImportedModulesNotStringLiteralArray
+				}
+			case SafeDIConfigurationVisitor.additionalDirectoriesToIncludeArgumentLabel:
+				guard isArrayOfStringLiterals(argument.expression) else {
+					throw SafeDIConfigurationError.additionalDirectoriesToIncludeNotStringLiteralArray
+				}
+			case SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel:
+				guard isStringLiteralOrNil(argument.expression) else {
+					throw SafeDIConfigurationError.mockConditionalCompilationNotStringLiteralOrNil
+				}
+			case let unknownLabel:
+				throw SafeDIConfigurationError.unexpectedArgument(unknownLabel)
 			}
-			if !visitor.foundMockConditionalCompilation {
-				membersToInsert.append(MemberBlockItemSyntax(
-					leadingTrivia: .newline,
-					decl: DeclSyntax("""
-					/// The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`).
-					/// Set to `nil` to generate mocks without conditional compilation.
-					static let \(raw: SafeDIConfigurationVisitor.mockConditionalCompilationPropertyName): StaticString? = "DEBUG"
-					"""),
-				))
-			}
-			for member in membersToInsert.reversed() {
-				modifiedDecl.memberBlock.members.insert(
-					member,
-					at: modifiedDecl.memberBlock.members.startIndex,
-				)
-			}
-			let missingPropertyError: FixableSafeDIConfigurationError = if !visitor.foundAdditionalImportedModules {
-				.missingAdditionalImportedModulesProperty
-			} else if !visitor.foundAdditionalDirectoriesToInclude {
-				.missingAdditionalDirectoriesToIncludeProperty
-			} else {
-				.missingMockConditionalCompilationProperty
-			}
-			context.diagnose(Diagnostic(
-				node: Syntax(enumDecl.memberBlock),
-				error: missingPropertyError,
-				changes: [
-					.replace(
-						oldNode: Syntax(enumDecl),
-						newNode: Syntax(modifiedDecl),
-					),
-				],
-			))
 		}
 
 		// This macro purposefully does not expand.
@@ -118,24 +54,57 @@ public struct SafeDIConfigurationMacro: PeerMacro {
 		return []
 	}
 
+	// MARK: Private
+
+	private static func isArrayOfStringLiterals(_ expression: ExprSyntax) -> Bool {
+		guard let arrayExpr = ArrayExprSyntax(expression) else {
+			return false
+		}
+		for element in arrayExpr.elements {
+			guard let stringLiteral = StringLiteralExprSyntax(element.expression),
+			      stringLiteral.segments.count == 1,
+			      case .stringSegment = stringLiteral.segments.first
+			else {
+				return false
+			}
+		}
+		return true
+	}
+
+	private static func isStringLiteralOrNil(_ expression: ExprSyntax) -> Bool {
+		if NilLiteralExprSyntax(expression) != nil {
+			return true
+		}
+		if let stringLiteral = StringLiteralExprSyntax(expression),
+		   stringLiteral.segments.count == 1,
+		   case .stringSegment = stringLiteral.segments.first
+		{
+			return true
+		}
+		return false
+	}
+
 	// MARK: - SafeDIConfigurationError
 
 	private enum SafeDIConfigurationError: Error, CustomStringConvertible {
-		case decoratingNonEnum
 		case additionalImportedModulesNotStringLiteralArray
 		case additionalDirectoriesToIncludeNotStringLiteralArray
 		case mockConditionalCompilationNotStringLiteralOrNil
+		case unexpectedUnlabeledArgument
+		case unexpectedArgument(String)
 
 		var description: String {
 			switch self {
-			case .decoratingNonEnum:
-				"@\(SafeDIConfigurationVisitor.macroName) must decorate an enum"
 			case .additionalImportedModulesNotStringLiteralArray:
-				"The `\(SafeDIConfigurationVisitor.additionalImportedModulesPropertyName)` property must be initialized with an array of string literals"
+				"The `\(SafeDIConfigurationVisitor.additionalImportedModulesArgumentLabel)` argument must be an array of string literals"
 			case .additionalDirectoriesToIncludeNotStringLiteralArray:
-				"The `\(SafeDIConfigurationVisitor.additionalDirectoriesToIncludePropertyName)` property must be initialized with an array of string literals"
+				"The `\(SafeDIConfigurationVisitor.additionalDirectoriesToIncludeArgumentLabel)` argument must be an array of string literals"
 			case .mockConditionalCompilationNotStringLiteralOrNil:
-				"The `\(SafeDIConfigurationVisitor.mockConditionalCompilationPropertyName)` property must be initialized with a string literal or `nil`"
+				"The `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)` argument must be a string literal or `nil`"
+			case .unexpectedUnlabeledArgument:
+				"#\(SafeDIConfigurationVisitor.macroName) does not accept unlabeled arguments"
+			case let .unexpectedArgument(label):
+				"#\(SafeDIConfigurationVisitor.macroName) does not accept an argument labeled `\(label)`"
 			}
 		}
 	}

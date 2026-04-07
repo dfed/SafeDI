@@ -2920,7 +2920,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		)
 
 		#expect(output.dependencyTreeFiles.isEmpty)
-		// No @SafeDIConfiguration exists, so no mock output files are created.
+		// No #SafeDIConfiguration exists, so no mock output files are created.
 		#expect(output.mockFiles.isEmpty)
 	}
 
@@ -2943,7 +2943,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		)
 
 		#expect(output.dependencyTreeFiles.isEmpty)
-		// No @SafeDIConfiguration exists, so no mock output files are created.
+		// No #SafeDIConfiguration exists, so no mock output files are created.
 		#expect(output.mockFiles.isEmpty)
 	}
 
@@ -2964,7 +2964,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		)
 
 		#expect(output.dependencyTreeFiles.isEmpty)
-		// No @SafeDIConfiguration exists, so no mock output files are created.
+		// No #SafeDIConfiguration exists, so no mock output files are created.
 		#expect(output.mockFiles.isEmpty)
 	}
 
@@ -5905,7 +5905,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			}
 			""",
 		])
-		// No @SafeDIConfiguration exists, so no mock output files are created.
+		// No #SafeDIConfiguration exists, so no mock output files are created.
 		#expect(output.mockFiles.isEmpty)
 	}
 
@@ -6220,12 +6220,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@SafeDIConfiguration
-				enum MyConfiguration {
-				    static let additionalImportedModules: [StaticString] = ["Test"]
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-				}
+				#SafeDIConfiguration(
+				    additionalImportedModules: ["Test"]
+				)
 				""",
 				"""
 				@Instantiable
@@ -6249,11 +6246,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@SafeDIConfiguration
-				enum MyConfiguration {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = ["SomeDirectory"]
-				}
+				#SafeDIConfiguration(
+				    additionalDirectoriesToInclude: ["SomeDirectory"]
+				)
 				""",
 			],
 			filesToDelete: &filesToDelete,
@@ -6274,11 +6269,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@SafeDIConfiguration
-				enum MyConfiguration {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = ["$ADDITIONAL_DIRECTORY"]
-				}
+				#SafeDIConfiguration(
+				    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+				)
 				""",
 				"""
 				@Instantiable
@@ -6324,11 +6317,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@SafeDIConfiguration
-				enum MyConfiguration {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = ["$ADDITIONAL_DIRECTORY"]
-				}
+				#SafeDIConfiguration(
+				    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+				)
 				""",
 				"""
 				@Instantiable
@@ -6383,16 +6374,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_generatesOutput_whenOnlyAdditionalDirectoryHasRoots() async throws {
 		// No roots in the target, only in the additional directory.
-		// The pre-scan discovers additional directories via @SafeDIConfiguration
+		// The pre-scan discovers additional directories via #SafeDIConfiguration
 		// and includes those roots in the manifest.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@SafeDIConfiguration
-				enum MyConfiguration {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = ["$ADDITIONAL_DIRECTORY"]
-				}
+				#SafeDIConfiguration(
+				    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+				)
 				""",
 				"""
 				@Instantiable
@@ -6429,11 +6418,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@SafeDIConfiguration
-				enum MyConfiguration {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = ["$ADDITIONAL_DIRECTORY"]
-				}
+				#SafeDIConfiguration(
+				    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+				)
 				""",
 				"""
 				@Instantiable

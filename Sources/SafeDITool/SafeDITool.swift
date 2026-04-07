@@ -84,7 +84,7 @@ struct SafeDITool: AsyncParsableCommand {
 		}
 		guard currentModuleConfigurations.count <= 1 else {
 			let configPaths = currentModuleConfigurations.compactMap(\.sourceFilePath).joined(separator: "\n\t")
-			throw ValidationError("Found \(currentModuleConfigurations.count) @\(SafeDIConfigurationVisitor.macroName) declarations in this module. Each module must have at most one @\(SafeDIConfigurationVisitor.macroName). Found in:\n\t\(configPaths)")
+			throw ValidationError("Found \(currentModuleConfigurations.count) #\(SafeDIConfigurationVisitor.macroName) declarations in this module. Each module must have at most one #\(SafeDIConfigurationVisitor.macroName). Found in:\n\t\(configPaths)")
 		}
 		let sourceConfiguration: SafeDIConfiguration? = currentModuleConfigurations.first
 
@@ -393,7 +393,7 @@ struct SafeDITool: AsyncParsableCommand {
 				taskGroup.addTask {
 					let content = try String(contentsOfFile: filePath, encoding: .utf8)
 					let containsInstantiable = content.contains("@\(InstantiableVisitor.macroName)")
-					let containsConfiguration = content.contains("@\(SafeDIConfigurationVisitor.macroName)")
+					let containsConfiguration = content.contains("#\(SafeDIConfigurationVisitor.macroName)")
 					guard containsInstantiable || containsConfiguration else { return nil }
 					let fileVisitor = FileVisitor()
 					fileVisitor.walk(Parser.parse(source: content))

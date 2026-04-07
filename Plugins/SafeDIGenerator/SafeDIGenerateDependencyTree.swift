@@ -150,7 +150,7 @@ extension Target {
 			// to inspect target dependencies. As a result, this Xcode plugin
 			// only works if it is running on a single-module project, or if
 			// all `@Instantiable`-decorated types are in the target module,
-			// or if a @SafeDIConfiguration type's `additionalDirectoriesToInclude`
+			// or if a #SafeDIConfiguration's `additionalDirectoriesToInclude`
 			// directs the plugin to search additional modules for Swift files.
 			// https://github.com/apple/swift-package-manager/issues/6003
 			let inputSwiftFiles = target

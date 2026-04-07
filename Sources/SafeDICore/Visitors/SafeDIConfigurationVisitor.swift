@@ -18,115 +18,47 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import SwiftDiagnostics
 import SwiftSyntax
 
-public final class SafeDIConfigurationVisitor: SyntaxVisitor {
-	// MARK: Initialization
-
-	public init() {
-		super.init(viewMode: .sourceAccurate)
-	}
-
-	// MARK: SyntaxVisitor
-
-	public override func visit(_: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-		nestingDepth += 1
-		return .visitChildren
-	}
-
-	public override func visitPost(_: StructDeclSyntax) {
-		nestingDepth -= 1
-	}
-
-	public override func visit(_: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
-		nestingDepth += 1
-		return .visitChildren
-	}
-
-	public override func visitPost(_: ClassDeclSyntax) {
-		nestingDepth -= 1
-	}
-
-	public override func visit(_: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
-		nestingDepth += 1
-		return .visitChildren
-	}
-
-	public override func visitPost(_: EnumDeclSyntax) {
-		nestingDepth -= 1
-	}
-
-	public override func visit(_: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
-		nestingDepth += 1
-		return .visitChildren
-	}
-
-	public override func visitPost(_: ActorDeclSyntax) {
-		nestingDepth -= 1
-	}
-
-	public override func visit(_: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
-		nestingDepth += 1
-		return .visitChildren
-	}
-
-	public override func visitPost(_: ProtocolDeclSyntax) {
-		nestingDepth -= 1
-	}
-
-	public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
-		guard nestingDepth <= 1 else { return .skipChildren }
-		for binding in node.bindings {
-			guard let identifierPattern = IdentifierPatternSyntax(binding.pattern) else {
-				continue
-			}
-			let name = identifierPattern.identifier.text
-			if name == Self.additionalImportedModulesPropertyName {
-				foundAdditionalImportedModules = true
-				if let values = extractStringLiterals(from: binding) {
-					additionalImportedModules = values
-				} else {
-					additionalImportedModulesIsValid = false
-				}
-			} else if name == Self.additionalDirectoriesToIncludePropertyName {
-				foundAdditionalDirectoriesToInclude = true
-				if let values = extractStringLiterals(from: binding) {
-					additionalDirectoriesToInclude = values
-				} else {
-					additionalDirectoriesToIncludeIsValid = false
-				}
-			} else if name == Self.mockConditionalCompilationPropertyName {
-				foundMockConditionalCompilation = true
-				if let value = extractOptionalStringLiteral(from: binding) {
-					mockConditionalCompilation = value
-				} else {
-					mockConditionalCompilationIsValid = false
-				}
-			}
-		}
-		return .skipChildren
-	}
-
+/// Extracts configuration from a `#SafeDIConfiguration(...)` freestanding macro invocation.
+public enum SafeDIConfigurationVisitor {
 	// MARK: Public
 
 	public static let macroName = "SafeDIConfiguration"
-	public static let additionalImportedModulesPropertyName = "additionalImportedModules"
-	public static let additionalDirectoriesToIncludePropertyName = "additionalDirectoriesToInclude"
-	public static let mockConditionalCompilationPropertyName = "mockConditionalCompilation"
+	public static let additionalImportedModulesArgumentLabel = "additionalImportedModules"
+	public static let additionalDirectoriesToIncludeArgumentLabel = "additionalDirectoriesToInclude"
+	public static let mockConditionalCompilationArgumentLabel = "mockConditionalCompilation"
 
-	public private(set) var additionalImportedModules = [String]()
-	public private(set) var additionalDirectoriesToInclude = [String]()
-	public private(set) var mockConditionalCompilation: String? = "DEBUG"
-	public private(set) var foundAdditionalImportedModules = false
-	public private(set) var foundAdditionalDirectoriesToInclude = false
-	public private(set) var foundMockConditionalCompilation = false
-	public private(set) var additionalImportedModulesIsValid = true
-	public private(set) var additionalDirectoriesToIncludeIsValid = true
-	public private(set) var mockConditionalCompilationIsValid = true
+	/// Extracts a `SafeDIConfiguration` from a `MacroExpansionDeclSyntax` node
+	/// representing a `#SafeDIConfiguration(...)` invocation.
+	public static func extractConfiguration(from node: some FreestandingMacroExpansionSyntax) -> SafeDIConfiguration {
+		var additionalImportedModules = [String]()
+		var additionalDirectoriesToInclude = [String]()
+		var mockConditionalCompilation: String? = "DEBUG"
 
-	public var configuration: SafeDIConfiguration {
-		SafeDIConfiguration(
+		for argument in node.arguments {
+			guard let label = argument.label?.text else {
+				continue
+			}
+			switch label {
+			case additionalImportedModulesArgumentLabel:
+				if let values = extractStringLiterals(from: argument.expression) {
+					additionalImportedModules = values
+				}
+			case additionalDirectoriesToIncludeArgumentLabel:
+				if let values = extractStringLiterals(from: argument.expression) {
+					additionalDirectoriesToInclude = values
+				}
+			case mockConditionalCompilationArgumentLabel:
+				if let value = extractOptionalStringLiteral(from: argument.expression) {
+					mockConditionalCompilation = value
+				}
+			case _:
+				continue
+			}
+		}
+
+		return SafeDIConfiguration(
 			additionalImportedModules: additionalImportedModules,
 			additionalDirectoriesToInclude: additionalDirectoriesToInclude,
 			mockConditionalCompilation: mockConditionalCompilation,
@@ -135,14 +67,8 @@ public final class SafeDIConfigurationVisitor: SyntaxVisitor {
 
 	// MARK: Private
 
-	/// Tracks nesting depth to ignore variables declared inside nested types.
-	/// Starts at 0; the config enum itself bumps it to 1; nested types bump it further.
-	private var nestingDepth = 0
-
-	private func extractStringLiterals(from binding: PatternBindingSyntax) -> [String]? {
-		guard let initializer = binding.initializer,
-		      let arrayExpr = ArrayExprSyntax(initializer.value)
-		else {
+	private static func extractStringLiterals(from expression: ExprSyntax) -> [String]? {
+		guard let arrayExpr = ArrayExprSyntax(expression) else {
 			return nil
 		}
 		var values = [String]()
@@ -158,17 +84,14 @@ public final class SafeDIConfigurationVisitor: SyntaxVisitor {
 		return values
 	}
 
-	/// Extracts a `String?` from a binding initialized with a string literal or `nil`.
-	/// Returns a `.some(.some(string))` for a string literal, `.some(.none)` for `nil`,
-	/// and `nil` if the initializer is not a valid literal.
-	private func extractOptionalStringLiteral(from binding: PatternBindingSyntax) -> String?? {
-		guard let initializer = binding.initializer else {
-			return nil
-		}
-		if NilLiteralExprSyntax(initializer.value) != nil {
+	/// Extracts a `String?` from an expression that is a string literal or `nil`.
+	/// Returns `.some(.some(string))` for a string literal, `.some(.none)` for `nil`,
+	/// and `nil` if the expression is not a valid literal.
+	private static func extractOptionalStringLiteral(from expression: ExprSyntax) -> String?? {
+		if NilLiteralExprSyntax(expression) != nil {
 			return .some(nil)
 		}
-		if let stringLiteral = StringLiteralExprSyntax(initializer.value),
+		if let stringLiteral = StringLiteralExprSyntax(expression),
 		   stringLiteral.segments.count == 1,
 		   case let .stringSegment(segment) = stringLiteral.segments.first
 		{

@@ -43,7 +43,7 @@ struct RootScannerResult {
 	var additionalInputFiles: [URL]
 }
 
-/// Discovers `additionalDirectoriesToInclude` from the first `@SafeDIConfiguration`
+/// Discovers `additionalDirectoriesToInclude` from the first `#SafeDIConfiguration`
 /// found in the given Swift files. Only the current module's own files should be passed
 /// here — not dependency source files — to match `SafeDITool`'s `configurations.first`
 /// behavior.

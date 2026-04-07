@@ -2091,20 +2091,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			_ = try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
-					@SafeDIConfiguration
-					enum ConfigA {
-					    static let additionalImportedModules: [StaticString] = []
-					    static let additionalDirectoriesToInclude: [StaticString] = []
-						    static let mockConditionalCompilation: StaticString? = "DEBUG"
-					}
+					#SafeDIConfiguration()
 					""",
 					"""
-					@SafeDIConfiguration
-					enum ConfigB {
-					    static let additionalImportedModules: [StaticString] = []
-					    static let additionalDirectoriesToInclude: [StaticString] = []
-						    static let mockConditionalCompilation: StaticString? = nil
-					}
+					#SafeDIConfiguration(
+					    mockConditionalCompilation: nil
+					)
 					""",
 					"""
 					@Instantiable
@@ -2119,9 +2111,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			Issue.record("Did not throw error!")
 		} catch {
 			let errorMessage = "\(error)"
-			#expect(errorMessage.hasPrefix("Found 2 @SafeDIConfiguration declarations in this module. Each module must have at most one @SafeDIConfiguration. Found in:"))
-			#expect(errorMessage.contains("ConfigA.swift"))
-			#expect(errorMessage.contains("ConfigB.swift"))
+			#expect(errorMessage.hasPrefix("Found 2 #SafeDIConfiguration declarations in this module. Each module must have at most one #SafeDIConfiguration. Found in:"))
+			#expect(errorMessage.contains("File.swift"))
+			#expect(errorMessage.contains("File_2.swift"))
 		}
 	}
 
