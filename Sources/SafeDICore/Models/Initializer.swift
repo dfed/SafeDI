@@ -228,11 +228,11 @@ public struct Initializer: Codable, Hashable, Sendable {
 		try createDependencyAndArgumentBinding(given: dependencies)
 			.map {
 				if let unavailableProperties, unavailableProperties.contains($0.dependency.property) {
-					return "\($0.argument.label): nil"
+					"\($0.argument.label): nil"
 				} else if $0.dependency.source == .forwarded {
-					return "\($0.argument.label): \($0.argument.innerLabel)"
+					"\($0.argument.label): \($0.argument.innerLabel)"
 				} else {
-					return "\($0.argument.label): \($0.argument.innerLabel)"
+					"\($0.argument.label): \($0.argument.innerLabel)"
 				}
 			}
 			.joined(separator: ", ")

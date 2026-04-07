@@ -616,7 +616,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				rootDefaultParameters.append((
 					label: argument.label,
 					typeSource: argument.typeDescription.strippingEscaping.asSource,
-					defaultExpression: defaultExpression
+					defaultExpression: defaultExpression,
 				))
 			}
 		}
@@ -800,7 +800,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return parts.joined(separator: ", ")
 	}
 
-
 	// MARK: MockParameterNode
 
 	/// A node in the mock parameter tree. Each node represents one property edge
@@ -851,7 +850,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// e.g., `(Service, Style) -> Grandchild` or `() -> Service`.
 		var builderClosureType: String {
 			let parameterTypes = constructionArguments
-				.map { $0.typeDescription.asFunctionParameter.asSource }
+				.map(\.typeDescription.asFunctionParameter.asSource)
 				.joined(separator: ", ")
 			return "(\(parameterTypes)) -> \(concreteTypeName)"
 		}
@@ -859,13 +858,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The default builder expression as a direct function reference.
 		/// e.g., `Grandchild.customMock(service:style:)` or `Service.init`.
 		var defaultBuilderExpression: String {
-			let methodName: String
-			if useMockInitializer, let customMockName {
-				methodName = customMockName
+			let methodName: String = if useMockInitializer, let customMockName {
+				customMockName
 			} else if isExtensionBased {
-				methodName = InstantiableVisitor.instantiateMethodName
+				InstantiableVisitor.instantiateMethodName
 			} else {
-				methodName = "init"
+				"init"
 			}
 			if constructionArguments.isEmpty {
 				return "\(concreteTypeName).\(methodName)"
@@ -1240,17 +1238,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let unwrappedTypeDescription = node.typeDescription.unwrapped.asSource
 		let instantiatedTypeDescription = node.typeDescription.unwrapped.asInstantiatedType.asSource
 
-		let instantiatorConstruction: String
-		if forwardedArguments.isEmpty, !node.erasedToConcreteExistential {
-			instantiatorConstruction = "\(unwrappedTypeDescription)(\(functionName))"
+		let instantiatorConstruction = if forwardedArguments.isEmpty, !node.erasedToConcreteExistential {
+			"\(unwrappedTypeDescription)(\(functionName))"
 		} else if node.erasedToConcreteExistential {
-			instantiatorConstruction = """
+			"""
 			\(unwrappedTypeDescription) {
 			\(indent)\(standardIndent)\(instantiatedTypeDescription)(\(functionName)(\(forwardedArguments)))
 			\(indent)}
 			"""
 		} else {
-			instantiatorConstruction = """
+			"""
 			\(unwrappedTypeDescription) {
 			\(indent)\(standardIndent)\(functionName)(\(forwardedArguments))
 			\(indent)}
@@ -1261,7 +1258,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		return lines
 	}
-
 
 	private func wrapInConditionalCompilation(
 		_ code: String,
