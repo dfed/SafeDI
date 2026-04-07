@@ -53,7 +53,7 @@ public enum SafeDIConfigurationVisitor {
 				if let value = extractOptionalStringLiteral(from: argument.expression) {
 					mockConditionalCompilation = value
 				}
-			case _:
+			default:
 				continue
 			}
 		}
@@ -90,13 +90,15 @@ public enum SafeDIConfigurationVisitor {
 	private static func extractOptionalStringLiteral(from expression: ExprSyntax) -> String?? {
 		if NilLiteralExprSyntax(expression) != nil {
 			return .some(nil)
+		} else {
+			if let stringLiteral = StringLiteralExprSyntax(expression),
+			   stringLiteral.segments.count == 1,
+			   case let .stringSegment(segment) = stringLiteral.segments.first
+			{
+				return .some(segment.content.text)
+			} else {
+				return nil
+			}
 		}
-		if let stringLiteral = StringLiteralExprSyntax(expression),
-		   stringLiteral.segments.count == 1,
-		   case let .stringSegment(segment) = stringLiteral.segments.first
-		{
-			return .some(segment.content.text)
-		}
-		return nil
 	}
 }
