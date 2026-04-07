@@ -1020,6 +1020,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return result
 	}
 
+	/// Returns `true` when any node in the tree is a sendable Instantiator variant.
+	/// When this is `true`, `SafeDIParameters` must be `Sendable`, so every stored
+	/// closure (`safeDIBuilder` and closure-typed defaults) must be `@Sendable`.
+	private static func treeContainsSendableInstantiator(
+		_ nodes: [MockParameterNode],
+	) -> Bool {
+		nodes.contains { node in
+			node.typeDescription.propertyType.isSendable
+				|| treeContainsSendableInstantiator(node.children)
+		}
+	}
+
 	/// Generates the full `SafeDIParameters` struct including all flat `_Configuration` siblings.
 	/// Returns the struct source code, or `nil` if the tree has no children.
 	private static func generateSafeDIParametersStruct(
@@ -1028,6 +1040,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) -> String? {
 		guard !rootChildren.isEmpty else { return nil }
 
+		let requiresSendableClosures = treeContainsSendableInstantiator(rootChildren)
 		let innerIndent = "\(indent)\(standardIndent)"
 		let memberIndent = "\(innerIndent)\(standardIndent)"
 
@@ -1042,6 +1055,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.append(generateConfigurationStruct(
 				for: uniqueType,
 				indent: innerIndent,
+				requiresSendableClosures: requiresSendableClosures,
 			))
 			lines.append("")
 		}
@@ -1075,11 +1089,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Generates a single `{TypeName}_Configuration` struct for a `MockParameterNode`.
+	/// When `requiresSendableClosures` is `true`, all stored closures are marked `@Sendable`
+	/// so the enclosing `SafeDIParameters` struct is `Sendable` (required when any node in
+	/// the tree uses a `SendableInstantiator` or `SendableErasedInstantiator`).
 	private static func generateConfigurationStruct(
 		for node: MockParameterNode,
 		indent: String,
+		requiresSendableClosures: Bool,
 	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
+		let sendableAnnotation = requiresSendableClosures ? "@Sendable " : ""
 		var lines = [String]()
 
 		lines.append("\(indent)public struct \(node.structName) {")
@@ -1101,17 +1120,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Default-valued parameters.
 		for defaultParameter in node.defaultParameters {
 			let typeSource = defaultParameter.typeDescription.asSource
-			initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(typeSource) = \(defaultParameter.defaultExpression)")
+			if defaultParameter.isClosureType {
+				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(sendableAnnotation)@escaping \(typeSource) = \(defaultParameter.defaultExpression)")
+				storedProperties.append("\(innerIndent)public let \(defaultParameter.label): \(sendableAnnotation)\(typeSource)")
+			} else {
+				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(typeSource) = \(defaultParameter.defaultExpression)")
+				storedProperties.append("\(innerIndent)public let \(defaultParameter.label): \(typeSource)")
+			}
 			assignments.append("\(innerIndent)\(standardIndent)self.\(defaultParameter.label) = \(defaultParameter.label)")
-			storedProperties.append("\(innerIndent)public let \(defaultParameter.label): \(typeSource)")
 		}
 
-		// Builder parameter (always last, unlabeled).
+		// Builder parameter (always last, unlabeled). Optional with nil default so that
+		// the default function reference (which may be @MainActor) is resolved in mock()
+		// rather than in this nonisolated init.
 		let closureType = node.builderClosureType
-		let defaultBuilder = node.defaultBuilderExpression
-		initParameters.append("\(innerIndent)\(standardIndent)_ safeDIBuilder: @escaping \(closureType) = \(defaultBuilder)")
+		initParameters.append("\(innerIndent)\(standardIndent)_ safeDIBuilder: (\(sendableAnnotation)\(closureType))? = nil")
 		assignments.append("\(innerIndent)\(standardIndent)self.safeDIBuilder = safeDIBuilder")
-		storedProperties.append("\(innerIndent)public let safeDIBuilder: \(closureType)")
+		storedProperties.append("\(innerIndent)public let safeDIBuilder: (\(sendableAnnotation)\(closureType))?")
 
 		// Emit init.
 		lines.append("\(innerIndent)public init(")
@@ -1164,19 +1189,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 			let argumentList = arguments.joined(separator: ", ")
 
+			let defaultBuilder = node.defaultBuilderExpression
+			let builderExpression = "(\(nodePath).safeDIBuilder ?? \(defaultBuilder))"
+
 			if node.isInstantiator {
 				lines.append(contentsOf: generateInstantiatorBinding(
 					for: node,
 					nodePath: nodePath,
+					builderExpression: builderExpression,
 					arguments: arguments,
 					indent: indent,
 				))
 			} else if node.erasedToConcreteExistential {
 				// Erased-to-concrete existential: wrap the builder call.
 				let protocolType = node.typeDescription.asSource
-				lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(protocolType)(\(nodePath).safeDIBuilder(\(argumentList)))")
+				lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(protocolType)(\(builderExpression)(\(argumentList)))")
 			} else {
-				lines.append("\(indent)let \(node.propertyLabel) = \(nodePath).safeDIBuilder(\(argumentList))")
+				lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)(\(argumentList))")
 			}
 		}
 
@@ -1218,7 +1247,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Produces: inner builder function + `let {label} = Instantiator<T>(...)`.
 	private static func generateInstantiatorBinding(
 		for node: MockParameterNode,
-		nodePath: String,
+		nodePath _: String,
+		builderExpression: String,
 		arguments: [String],
 		indent: String,
 	) -> [String] {
@@ -1260,15 +1290,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Emit the inner builder function (unless it's a property cycle).
 		if !node.isPropertyCycle {
 			lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {")
-			lines.append("\(indent)\(standardIndent)\(nodePath).safeDIBuilder(\(builderCallArguments))")
+			lines.append("\(indent)\(standardIndent)\(builderExpression)(\(builderCallArguments))")
 			lines.append("\(indent)}")
 		}
 
 		// Emit the Instantiator/ErasedInstantiator construction.
 		let unwrappedTypeDescription = node.typeDescription.unwrapped.asSource
+		let instantiatedTypeDescription = node.instantiatedTypeDescription.asSource
 
-		let instantiatorConstruction = if forwardedArguments.isEmpty {
+		let instantiatorConstruction = if forwardedArguments.isEmpty, !node.erasedToConcreteExistential {
 			"\(unwrappedTypeDescription)(\(functionName))"
+		} else if node.erasedToConcreteExistential {
+			"""
+			\(unwrappedTypeDescription) {
+			\(indent)\(standardIndent)\(instantiatedTypeDescription)(\(functionName)(\(forwardedArguments)))
+			\(indent)}
+			"""
 		} else {
 			"""
 			\(unwrappedTypeDescription) {

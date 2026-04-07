@@ -162,12 +162,12 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Dependency_Configuration {
 		            public init(
-		                _ safeDIBuilder: @escaping () -> Dependency = Dependency.init
+		                _ safeDIBuilder: (() -> Dependency)? = nil
 		            ) {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let safeDIBuilder: () -> Dependency
+		            public let safeDIBuilder: (() -> Dependency)?
 		        }
 
 		        public init(
@@ -182,7 +182,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let dependency = safeDIParameters.dependency.safeDIBuilder()
+		        let dependency = (safeDIParameters.dependency.safeDIBuilder ?? Dependency.init)()
 		        return Root(dependency: dependency)
 		    }
 		}
@@ -489,12 +489,12 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct CrossModuleService_Configuration {
 		            public init(
-		                _ safeDIBuilder: @escaping () -> CrossModuleService = CrossModuleService.init
+		                _ safeDIBuilder: (() -> CrossModuleService)? = nil
 		            ) {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let safeDIBuilder: () -> CrossModuleService
+		            public let safeDIBuilder: (() -> CrossModuleService)?
 		        }
 
 		        public init(
@@ -509,7 +509,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let crossModuleService = safeDIParameters.crossModuleService.safeDIBuilder()
+		        let crossModuleService = (safeDIParameters.crossModuleService.safeDIBuilder ?? CrossModuleService.init)()
 		        return Root(crossModuleService: crossModuleService)
 		    }
 		}

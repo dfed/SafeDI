@@ -85,12 +85,12 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Shared_Configuration {
 		            public init(
-		                _ safeDIBuilder: @escaping () -> Shared = Shared.init
+		                _ safeDIBuilder: (() -> Shared)? = nil
 		            ) {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let safeDIBuilder: () -> Shared
+		            public let safeDIBuilder: (() -> Shared)?
 		        }
 
 		        public init(
@@ -106,7 +106,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        flag: Bool = false,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Child {
-		        let shared = safeDIParameters.shared.safeDIBuilder()
+		        let shared = (safeDIParameters.shared.safeDIBuilder ?? Shared.init)()
 		        return Child(shared: shared, flag: flag)
 		    }
 		}
@@ -123,25 +123,25 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Shared_Configuration {
 		            public init(
-		                _ safeDIBuilder: @escaping () -> Shared = Shared.init
+		                _ safeDIBuilder: (() -> Shared)? = nil
 		            ) {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let safeDIBuilder: () -> Shared
+		            public let safeDIBuilder: (() -> Shared)?
 		        }
 
 		        public struct Child_Configuration {
 		            public init(
 		                flag: Bool = false,
-		                _ safeDIBuilder: @escaping (Shared, Bool) -> Child = Child.init(shared:flag:)
+		                _ safeDIBuilder: ((Shared, Bool) -> Child)? = nil
 		            ) {
 		                self.flag = flag
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let flag: Bool
-		            public let safeDIBuilder: (Shared, Bool) -> Child
+		            public let safeDIBuilder: ((Shared, Bool) -> Child)?
 		        }
 
 		        public init(
@@ -159,8 +159,8 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let shared = safeDIParameters.shared.safeDIBuilder()
-		        let child = safeDIParameters.child.safeDIBuilder(shared, safeDIParameters.child.flag)
+		        let shared = (safeDIParameters.shared.safeDIBuilder ?? Shared.init)()
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(shared:flag:))(shared, safeDIParameters.child.flag)
 		        return Root(child: child, shared: shared)
 		    }
 		}
@@ -232,14 +232,14 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        public struct Child_Configuration {
 		            public init(
 		                config: String = "hello",
-		                _ safeDIBuilder: @escaping (String) -> Child = Child.init(config:)
+		                _ safeDIBuilder: ((String) -> Child)? = nil
 		            ) {
 		                self.config = config
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let config: String
-		            public let safeDIBuilder: (String) -> Child
+		            public let safeDIBuilder: ((String) -> Child)?
 		        }
 
 		        public init(
@@ -254,7 +254,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = safeDIParameters.child.safeDIBuilder(safeDIParameters.child.config)
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(config:))(safeDIParameters.child.config)
 		        return Root(child: child)
 		    }
 		}
@@ -296,12 +296,12 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Child_Configuration {
 		            public init(
-		                _ safeDIBuilder: @escaping (String, Bool) -> Child = Child.init(name:flag:)
+		                _ safeDIBuilder: ((String, Bool) -> Child)? = nil
 		            ) {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let safeDIBuilder: (String, Bool) -> Child
+		            public let safeDIBuilder: ((String, Bool) -> Child)?
 		        }
 
 		        public init(
@@ -317,7 +317,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_childBuilder(name: String) -> Child {
-		            safeDIParameters.childBuilder.safeDIBuilder(name)
+		            (safeDIParameters.childBuilder.safeDIBuilder ?? Child.init(name:flag:))(name)
 		        }
 		        let childBuilder = Instantiator<Child> {
 		            __safeDI_childBuilder(name: $0)
@@ -387,27 +387,27 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        public struct Grandchild_Configuration {
 		            public init(
 		                viewModel: String = "default",
-		                _ safeDIBuilder: @escaping (String) -> Grandchild = Grandchild.init(viewModel:)
+		                _ safeDIBuilder: ((String) -> Grandchild)? = nil
 		            ) {
 		                self.viewModel = viewModel
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let viewModel: String
-		            public let safeDIBuilder: (String) -> Grandchild
+		            public let safeDIBuilder: ((String) -> Grandchild)?
 		        }
 
 		        public struct Child_Configuration {
 		            public init(
 		                grandchild: Grandchild_Configuration = .init(),
-		                _ safeDIBuilder: @escaping (Grandchild) -> Child = Child.init(grandchild:)
+		                _ safeDIBuilder: ((Grandchild) -> Child)? = nil
 		            ) {
 		                self.grandchild = grandchild
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let grandchild: Grandchild_Configuration
-		            public let safeDIBuilder: (Grandchild) -> Child
+		            public let safeDIBuilder: ((Grandchild) -> Child)?
 		        }
 
 		        public init(
@@ -422,8 +422,8 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let grandchild = safeDIParameters.child.grandchild.safeDIBuilder(safeDIParameters.child.grandchild.viewModel)
-		        let child = safeDIParameters.child.safeDIBuilder(grandchild)
+		        let grandchild = (safeDIParameters.child.grandchild.safeDIBuilder ?? Grandchild.init(viewModel:))(safeDIParameters.child.grandchild.viewModel)
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(grandchild:))(grandchild)
 		        return Root(child: child)
 		    }
 		}
@@ -441,14 +441,14 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        public struct Grandchild_Configuration {
 		            public init(
 		                viewModel: String = "default",
-		                _ safeDIBuilder: @escaping (String) -> Grandchild = Grandchild.init(viewModel:)
+		                _ safeDIBuilder: ((String) -> Grandchild)? = nil
 		            ) {
 		                self.viewModel = viewModel
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let viewModel: String
-		            public let safeDIBuilder: (String) -> Grandchild
+		            public let safeDIBuilder: ((String) -> Grandchild)?
 		        }
 
 		        public init(
@@ -463,7 +463,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Child {
-		        let grandchild = safeDIParameters.grandchild.safeDIBuilder(safeDIParameters.grandchild.viewModel)
+		        let grandchild = (safeDIParameters.grandchild.safeDIBuilder ?? Grandchild.init(viewModel:))(safeDIParameters.grandchild.viewModel)
 		        return Child(grandchild: grandchild)
 		    }
 		}
@@ -522,12 +522,12 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Child_Configuration {
 		            public init(
-		                _ safeDIBuilder: @escaping () -> Child = Child.init
+		                _ safeDIBuilder: (() -> Child)? = nil
 		            ) {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let safeDIBuilder: () -> Child
+		            public let safeDIBuilder: (() -> Child)?
 		        }
 
 		        public init(
@@ -543,7 +543,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        debug: Bool = false,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = safeDIParameters.child.safeDIBuilder()
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init)()
 		        return Root(child: child, debug: debug)
 		    }
 		}
@@ -585,12 +585,12 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Child_Configuration {
 		            public init(
-		                _ safeDIBuilder: @escaping (String, Bool) -> Child = Child.init(name:flag:)
+		                _ safeDIBuilder: (@Sendable (String, Bool) -> Child)? = nil
 		            ) {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let safeDIBuilder: (String, Bool) -> Child
+		            public let safeDIBuilder: (@Sendable (String, Bool) -> Child)?
 		        }
 
 		        public init(
@@ -606,7 +606,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        @Sendable func __safeDI_childBuilder(name: String) -> Child {
-		            safeDIParameters.childBuilder.safeDIBuilder(name)
+		            (safeDIParameters.childBuilder.safeDIBuilder ?? Child.init(name:flag:))(name)
 		        }
 		        let childBuilder = SendableInstantiator<Child> {
 		            __safeDI_childBuilder(name: $0)
@@ -662,27 +662,27 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        public struct ChildA_Configuration {
 		            public init(
 		                flagA: Bool = true,
-		                _ safeDIBuilder: @escaping (Bool) -> ChildA = ChildA.init(flagA:)
+		                _ safeDIBuilder: ((Bool) -> ChildA)? = nil
 		            ) {
 		                self.flagA = flagA
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let flagA: Bool
-		            public let safeDIBuilder: (Bool) -> ChildA
+		            public let safeDIBuilder: ((Bool) -> ChildA)?
 		        }
 
 		        public struct ChildB_Configuration {
 		            public init(
 		                flagB: Int = 42,
-		                _ safeDIBuilder: @escaping (Int) -> ChildB = ChildB.init(flagB:)
+		                _ safeDIBuilder: ((Int) -> ChildB)? = nil
 		            ) {
 		                self.flagB = flagB
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let flagB: Int
-		            public let safeDIBuilder: (Int) -> ChildB
+		            public let safeDIBuilder: ((Int) -> ChildB)?
 		        }
 
 		        public init(
@@ -700,8 +700,8 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let childA = safeDIParameters.childA.safeDIBuilder(safeDIParameters.childA.flagA)
-		        let childB = safeDIParameters.childB.safeDIBuilder(safeDIParameters.childB.flagB)
+		        let childA = (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(flagA:))(safeDIParameters.childA.flagA)
+		        let childB = (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(flagB:))(safeDIParameters.childB.flagB)
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -743,14 +743,14 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        public struct Child_Configuration {
 		            public init(
 		                viewModel: String? = nil,
-		                _ safeDIBuilder: @escaping (String?) -> Child = Child.init(viewModel:)
+		                _ safeDIBuilder: ((String?) -> Child)? = nil
 		            ) {
 		                self.viewModel = viewModel
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let viewModel: String?
-		            public let safeDIBuilder: (String?) -> Child
+		            public let safeDIBuilder: ((String?) -> Child)?
 		        }
 
 		        public init(
@@ -765,7 +765,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = safeDIParameters.child.safeDIBuilder(safeDIParameters.child.viewModel)
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(viewModel:))(safeDIParameters.child.viewModel)
 		        return Root(child: child)
 		    }
 		}
@@ -834,27 +834,27 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        public struct ChildA_Configuration {
 		            public init(
 		                flag: Bool = true,
-		                _ safeDIBuilder: @escaping (Bool) -> ChildA = ChildA.init(flag:)
+		                _ safeDIBuilder: ((Bool) -> ChildA)? = nil
 		            ) {
 		                self.flag = flag
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let flag: Bool
-		            public let safeDIBuilder: (Bool) -> ChildA
+		            public let safeDIBuilder: ((Bool) -> ChildA)?
 		        }
 
 		        public struct ChildB_Configuration {
 		            public init(
 		                flag: String = "on",
-		                _ safeDIBuilder: @escaping (String) -> ChildB = ChildB.init(flag:)
+		                _ safeDIBuilder: ((String) -> ChildB)? = nil
 		            ) {
 		                self.flag = flag
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let flag: String
-		            public let safeDIBuilder: (String) -> ChildB
+		            public let safeDIBuilder: ((String) -> ChildB)?
 		        }
 
 		        public init(
@@ -872,8 +872,8 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let childA = safeDIParameters.childA.safeDIBuilder(safeDIParameters.childA.flag)
-		        let childB = safeDIParameters.childB.safeDIBuilder(safeDIParameters.childB.flag)
+		        let childA = (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(flag:))(safeDIParameters.childA.flag)
+		        let childB = (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(flag:))(safeDIParameters.childB.flag)
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -920,12 +920,12 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Child_Configuration {
 		            public init(
-		                _ safeDIBuilder: @escaping (String, Bool) -> Child = Child.init(name:flag:)
+		                _ safeDIBuilder: ((String, Bool) -> Child)? = nil
 		            ) {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let safeDIBuilder: (String, Bool) -> Child
+		            public let safeDIBuilder: ((String, Bool) -> Child)?
 		        }
 
 		        public init(
@@ -941,7 +941,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_childBuilder(name: String) -> Child {
-		            safeDIParameters.childBuilder.safeDIBuilder(name)
+		            (safeDIParameters.childBuilder.safeDIBuilder ?? Child.init(name:flag:))(name)
 		        }
 		        let childBuilder = ErasedInstantiator<String, Child> {
 		            __safeDI_childBuilder(name: $0)
@@ -992,12 +992,12 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Child_Configuration {
 		            public init(
-		                _ safeDIBuilder: @escaping (String, Bool) -> Child = Child.init(name:flag:)
+		                _ safeDIBuilder: (@Sendable (String, Bool) -> Child)? = nil
 		            ) {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let safeDIBuilder: (String, Bool) -> Child
+		            public let safeDIBuilder: (@Sendable (String, Bool) -> Child)?
 		        }
 
 		        public init(
@@ -1013,7 +1013,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        @Sendable func __safeDI_childBuilder(name: String) -> Child {
-		            safeDIParameters.childBuilder.safeDIBuilder(name)
+		            (safeDIParameters.childBuilder.safeDIBuilder ?? Child.init(name:flag:))(name)
 		        }
 		        let childBuilder = SendableErasedInstantiator<String, Child> {
 		            __safeDI_childBuilder(name: $0)
@@ -1060,14 +1060,14 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        public struct Child_Configuration {
 		            public init(
 		                values: [Int] = [1, 2, 3],
-		                _ safeDIBuilder: @escaping ([Int]) -> Child = Child.init(values:)
+		                _ safeDIBuilder: (([Int]) -> Child)? = nil
 		            ) {
 		                self.values = values
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let values: [Int]
-		            public let safeDIBuilder: ([Int]) -> Child
+		            public let safeDIBuilder: (([Int]) -> Child)?
 		        }
 
 		        public init(
@@ -1082,7 +1082,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = safeDIParameters.child.safeDIBuilder(safeDIParameters.child.values)
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(values:))(safeDIParameters.child.values)
 		        return Root(child: child)
 		    }
 		}
@@ -1132,14 +1132,14 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        public struct Child_Configuration {
 		            public init(
 		                clientId: String = "default",
-		                _ safeDIBuilder: @escaping (String) -> Child = Child.init(clientId:)
+		                _ safeDIBuilder: ((String) -> Child)? = nil
 		            ) {
 		                self.clientId = clientId
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let clientId: String
-		            public let safeDIBuilder: (String) -> Child
+		            public let safeDIBuilder: ((String) -> Child)?
 		        }
 
 		        public init(
@@ -1155,7 +1155,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        clientId: String,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let child = safeDIParameters.child.safeDIBuilder(safeDIParameters.child.clientId)
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(clientId:))(safeDIParameters.child.clientId)
 		        return Parent(clientId: clientId, child: child)
 		    }
 		}
@@ -1218,27 +1218,27 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        public struct ChildA_Configuration {
 		            public init(
 		                viewModel: ViewModelA = ViewModelA(),
-		                _ safeDIBuilder: @escaping (ViewModelA) -> ChildA = ChildA.init(viewModel:)
+		                _ safeDIBuilder: ((ViewModelA) -> ChildA)? = nil
 		            ) {
 		                self.viewModel = viewModel
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let viewModel: ViewModelA
-		            public let safeDIBuilder: (ViewModelA) -> ChildA
+		            public let safeDIBuilder: ((ViewModelA) -> ChildA)?
 		        }
 
 		        public struct ChildB_Configuration {
 		            public init(
 		                viewModel: ViewModelB = ViewModelB(),
-		                _ safeDIBuilder: @escaping (ViewModelB) -> ChildB = ChildB.init(viewModel:)
+		                _ safeDIBuilder: ((ViewModelB) -> ChildB)? = nil
 		            ) {
 		                self.viewModel = viewModel
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let viewModel: ViewModelB
-		            public let safeDIBuilder: (ViewModelB) -> ChildB
+		            public let safeDIBuilder: ((ViewModelB) -> ChildB)?
 		        }
 
 		        public init(
@@ -1256,8 +1256,8 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let childA = safeDIParameters.childA.safeDIBuilder(safeDIParameters.childA.viewModel)
-		        let childB = safeDIParameters.childB.safeDIBuilder(safeDIParameters.childB.viewModel)
+		        let childA = (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(viewModel:))(safeDIParameters.childA.viewModel)
+		        let childB = (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(viewModel:))(safeDIParameters.childB.viewModel)
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -1309,21 +1309,21 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        public struct Grandchild_Configuration {
 		            public init(
 		                viewModel: String = "default",
-		                _ safeDIBuilder: @escaping (String) -> Grandchild = Grandchild.init(viewModel:)
+		                _ safeDIBuilder: ((String) -> Grandchild)? = nil
 		            ) {
 		                self.viewModel = viewModel
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let viewModel: String
-		            public let safeDIBuilder: (String) -> Grandchild
+		            public let safeDIBuilder: ((String) -> Grandchild)?
 		        }
 
 		        public struct Child_Configuration {
 		            public init(
 		                grandchild: Grandchild_Configuration = .init(),
 		                config: String = "dev",
-		                _ safeDIBuilder: @escaping (Grandchild, String) -> Child = Child.init(grandchild:config:)
+		                _ safeDIBuilder: ((Grandchild, String) -> Child)? = nil
 		            ) {
 		                self.grandchild = grandchild
 		                self.config = config
@@ -1332,7 +1332,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 
 		            public let grandchild: Grandchild_Configuration
 		            public let config: String
-		            public let safeDIBuilder: (Grandchild, String) -> Child
+		            public let safeDIBuilder: ((Grandchild, String) -> Child)?
 		        }
 
 		        public init(
@@ -1347,8 +1347,8 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let grandchild = safeDIParameters.child.grandchild.safeDIBuilder(safeDIParameters.child.grandchild.viewModel)
-		        let child = safeDIParameters.child.safeDIBuilder(grandchild, safeDIParameters.child.config)
+		        let grandchild = (safeDIParameters.child.grandchild.safeDIBuilder ?? Grandchild.init(viewModel:))(safeDIParameters.child.grandchild.viewModel)
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(grandchild:config:))(grandchild, safeDIParameters.child.config)
 		        return Root(child: child)
 		    }
 		}
@@ -1402,25 +1402,25 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Grandchild_Configuration {
 		            public init(
-		                _ safeDIBuilder: @escaping (String, String) -> Grandchild = Grandchild.init(name:viewModel:)
+		                _ safeDIBuilder: ((String, String) -> Grandchild)? = nil
 		            ) {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let safeDIBuilder: (String, String) -> Grandchild
+		            public let safeDIBuilder: ((String, String) -> Grandchild)?
 		        }
 
 		        public struct Child_Configuration {
 		            public init(
 		                grandchildBuilder: Grandchild_Configuration = .init(),
-		                _ safeDIBuilder: @escaping (Instantiator<Grandchild>) -> Child = Child.init(grandchildBuilder:)
+		                _ safeDIBuilder: ((Instantiator<Grandchild>) -> Child)? = nil
 		            ) {
 		                self.grandchildBuilder = grandchildBuilder
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let grandchildBuilder: Grandchild_Configuration
-		            public let safeDIBuilder: (Instantiator<Grandchild>) -> Child
+		            public let safeDIBuilder: ((Instantiator<Grandchild>) -> Child)?
 		        }
 
 		        public init(
@@ -1436,12 +1436,12 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_grandchildBuilder(name: String) -> Grandchild {
-		            safeDIParameters.child.grandchildBuilder.safeDIBuilder(name)
+		            (safeDIParameters.child.grandchildBuilder.safeDIBuilder ?? Grandchild.init(name:viewModel:))(name)
 		        }
 		        let grandchildBuilder = Instantiator<Grandchild> {
 		            __safeDI_grandchildBuilder(name: $0)
 		        }
-		        let child = safeDIParameters.child.safeDIBuilder(grandchildBuilder)
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(grandchildBuilder:))(grandchildBuilder)
 		        return Root(child: child)
 		    }
 		}
@@ -1483,15 +1483,15 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Child_Configuration {
 		            public init(
-		                onDismiss: () -> Void = {},
-		                _ safeDIBuilder: @escaping (@escaping () -> Void) -> Child = Child.init(onDismiss:)
+		                onDismiss: @escaping () -> Void = {},
+		                _ safeDIBuilder: ((@escaping () -> Void) -> Child)? = nil
 		            ) {
 		                self.onDismiss = onDismiss
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let onDismiss: () -> Void
-		            public let safeDIBuilder: (@escaping () -> Void) -> Child
+		            public let safeDIBuilder: ((@escaping () -> Void) -> Child)?
 		        }
 
 		        public init(
@@ -1506,7 +1506,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = safeDIParameters.child.safeDIBuilder(safeDIParameters.child.onDismiss)
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(onDismiss:))(safeDIParameters.child.onDismiss)
 		        return Root(child: child)
 		    }
 		}
@@ -1593,15 +1593,15 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Child_Configuration {
 		            public init(
-		                onComplete: @Sendable () -> Void = {},
-		                _ safeDIBuilder: @escaping (@escaping @Sendable () -> Void) -> Child = Child.init(onComplete:)
+		                onComplete: @escaping @Sendable () -> Void = {},
+		                _ safeDIBuilder: ((@escaping @Sendable () -> Void) -> Child)? = nil
 		            ) {
 		                self.onComplete = onComplete
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let onComplete: @Sendable () -> Void
-		            public let safeDIBuilder: (@escaping @Sendable () -> Void) -> Child
+		            public let safeDIBuilder: ((@escaping @Sendable () -> Void) -> Child)?
 		        }
 
 		        public init(
@@ -1616,7 +1616,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = safeDIParameters.child.safeDIBuilder(safeDIParameters.child.onComplete)
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(onComplete:))(safeDIParameters.child.onComplete)
 		        return Root(child: child)
 		    }
 		}
@@ -1682,25 +1682,25 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct ChildA_Configuration {
 		            public init(
-		                _ safeDIBuilder: @escaping (Service?) -> ChildA = ChildA.init(service:)
+		                _ safeDIBuilder: ((Service?) -> ChildA)? = nil
 		            ) {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let safeDIBuilder: (Service?) -> ChildA
+		            public let safeDIBuilder: ((Service?) -> ChildA)?
 		        }
 
 		        public struct ChildB_Configuration {
 		            public init(
 		                service: Service? = nil,
-		                _ safeDIBuilder: @escaping (Service?) -> ChildB = ChildB.init(service:)
+		                _ safeDIBuilder: ((Service?) -> ChildB)? = nil
 		            ) {
 		                self.service = service
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let service: Service?
-		            public let safeDIBuilder: (Service?) -> ChildB
+		            public let safeDIBuilder: ((Service?) -> ChildB)?
 		        }
 
 		        public init(
@@ -1719,8 +1719,8 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        service: Service? = nil,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let childA = safeDIParameters.childA.safeDIBuilder(service)
-		        let childB = safeDIParameters.childB.safeDIBuilder(safeDIParameters.childB.service)
+		        let childA = (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(service:))(service)
+		        let childB = (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(service:))(safeDIParameters.childB.service)
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -1769,14 +1769,14 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        public struct Child_Configuration {
 		            public init(
 		                name: String = "default",
-		                _ safeDIBuilder: @escaping (String) -> Child = Child.init(name:)
+		                _ safeDIBuilder: ((String) -> Child)? = nil
 		            ) {
 		                self.name = name
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let name: String
-		            public let safeDIBuilder: (String) -> Child
+		            public let safeDIBuilder: ((String) -> Child)?
 		        }
 
 		        public init(
@@ -1792,7 +1792,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        name: String,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = safeDIParameters.child.safeDIBuilder(safeDIParameters.child.name)
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(name:))(safeDIParameters.child.name)
 		        return Root(name: name, child: child)
 		    }
 		}
@@ -1835,14 +1835,14 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        public struct Child_Configuration {
 		            public init(
 		                isLoggingEnabled: Bool = false,
-		                _ safeDIBuilder: @escaping (Bool) -> Child = Child.init(isLoggingEnabled:)
+		                _ safeDIBuilder: ((Bool) -> Child)? = nil
 		            ) {
 		                self.isLoggingEnabled = isLoggingEnabled
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
 		            public let isLoggingEnabled: Bool
-		            public let safeDIBuilder: (Bool) -> Child
+		            public let safeDIBuilder: ((Bool) -> Child)?
 		        }
 
 		        public init(
@@ -1857,7 +1857,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = safeDIParameters.child.safeDIBuilder(safeDIParameters.child.isLoggingEnabled)
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(isLoggingEnabled:))(safeDIParameters.child.isLoggingEnabled)
 		        return Root(child: child)
 		    }
 		}
@@ -1914,12 +1914,12 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Child_Configuration {
 		            public init(
-		                _ safeDIBuilder: @escaping (Bool) -> Child = Child.init(_:)
+		                _ safeDIBuilder: ((Bool) -> Child)? = nil
 		            ) {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let safeDIBuilder: (Bool) -> Child
+		            public let safeDIBuilder: ((Bool) -> Child)?
 		        }
 
 		        public init(
@@ -1934,7 +1934,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = safeDIParameters.child.safeDIBuilder(isLoggingEnabled)
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(_:))(isLoggingEnabled)
 		        return Root(child: child)
 		    }
 		}
@@ -1989,12 +1989,12 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Child_Configuration {
 		            public init(
-		                _ safeDIBuilder: @escaping (Bool) -> Child = Child.init(_:)
+		                _ safeDIBuilder: ((Bool) -> Child)? = nil
 		            ) {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let safeDIBuilder: (Bool) -> Child
+		            public let safeDIBuilder: ((Bool) -> Child)?
 		        }
 
 		        public init(
@@ -2009,7 +2009,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = safeDIParameters.child.safeDIBuilder(_)
+		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(_:))(_)
 		        return Root(child: child)
 		    }
 		}

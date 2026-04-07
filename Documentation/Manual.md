@@ -550,72 +550,157 @@ Your user-defined `mock()` method must be `public` (or `open`) and must accept p
 #endif
 ```
 
-Every dependency in the tree can be overridden via parameters:
+### The `SafeDIParameters` struct
+
+When a type has `@Instantiated` dependencies with their own subtrees, the generated `mock()` accepts a `safeDIParameters` argument that provides tree-structured control over every dependency in the graph. SafeDI generates a nested `SafeDIParameters` struct inside the type’s extension, containing one `_Configuration` struct per `@Instantiable` type in the dependency tree.
+
+Each `_Configuration` struct has:
+- **Stored properties** for child dependencies (as their own `_Configuration` types)
+- **Stored properties** for non-dependency default-valued init parameters
+- **A `safeDIBuilder` closure** (always last, unlabeled) that constructs the type. Its default is a direct function reference to the type’s `init` (or custom mock method).
+
+For example, given:
 
 ```swift
-let view = MyView.mock(
-    sharedThing: CustomSharedThing()
-)
+@Instantiable(isRoot: true, generateMock: true)
+public struct Root: Instantiable {
+    public init(service: Service, child: Child) { ... }
+    @Instantiated let service: Service
+    @Instantiated let child: Child
+}
+
+@Instantiable(generateMock: true)
+public struct Child: Instantiable {
+    public init(service: Service, theme: Theme = .light) { ... }
+    @Received let service: Service
+}
 ```
 
-Dependencies that require inline construction (e.g., types with their own subtrees) use optional parameters:
+SafeDI generates:
 
 ```swift
-let root = Root.mock(
-    child: CustomChild()  // Override entire child with a pre-built instance
-)
+extension Root {
+    public struct SafeDIParameters {
+        public struct Service_Configuration {
+            public init(
+                _ safeDIBuilder: (() -> Service)? = nil
+            ) {
+                self.safeDIBuilder = safeDIBuilder
+            }
+            public let safeDIBuilder: (() -> Service)?
+        }
+
+        public struct Child_Configuration {
+            public init(
+                theme: Theme = .light,
+                _ safeDIBuilder: ((Service, Theme) -> Child)? = nil
+            ) {
+                self.theme = theme
+                self.safeDIBuilder = safeDIBuilder
+            }
+            public let theme: Theme
+            public let safeDIBuilder: ((Service, Theme) -> Child)?
+        }
+
+        public init(
+            service: Service_Configuration = .init(),
+            child: Child_Configuration = .init()
+        ) { ... }
+        public let service: Service_Configuration
+        public let child: Child_Configuration
+    }
+
+    public static func mock(
+        safeDIParameters: SafeDIParameters = .init()
+    ) -> Root {
+        let service = (safeDIParameters.service.safeDIBuilder ?? Service.init)()
+        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(service:theme:))(
+            service,
+            safeDIParameters.child.theme
+        )
+        return Root(service: service, child: child)
+    }
+}
 ```
 
-Leaf dependencies use `@autoclosure` parameters with a default construction:
+The `safeDIBuilder` closure is optional so that `_Configuration` structs can be created without referencing any type's initializer directly. The default function reference is resolved inside `mock()`, which inherits the root type's actor isolation (e.g., `@MainActor`).
+
+#### Overriding dependencies
+
+Override a child’s default-valued parameter:
 
 ```swift
-let root = Root.mock(
-    cache: Cache(size: 200)  // Override the default Cache()
-)
+Root.mock(safeDIParameters: .init(
+    child: .init(theme: .dark)
+))
 ```
+
+Replace an entire type’s construction with a trailing closure:
+
+```swift
+Root.mock(safeDIParameters: .init(
+    child: .init { service, theme in
+        CustomChild(service: service)
+    }
+))
+```
+
+Combine defaults and a custom builder:
+
+```swift
+Root.mock(safeDIParameters: .init(
+    child: .init(theme: .dark) { service, theme in
+        CustomChild(service: service, theme: theme)
+    }
+))
+```
+
+Override a leaf dependency:
+
+```swift
+Root.mock(safeDIParameters: .init(
+    service: .init { MockService() }
+))
+```
+
+#### When `SafeDIParameters` is omitted
+
+`SafeDIParameters` is not generated when the dependency tree has no children to represent — for example, a type with no `@Instantiated` dependencies or only `@Received` dependencies without scopes. In that case, `mock()` uses only flat parameters.
 
 ### @Forwarded properties in mocks
 
-`@Forwarded` properties become required parameters on the mock method (no default value), since they represent runtime input:
+`@Forwarded` properties become required parameters on the `mock()` method (no default value), since they represent runtime input:
 
 ```swift
 let noteView = NoteView.mock(userName: "Preview User")
 ```
 
-However, if a child type’s custom mock provides a default for a `@Forwarded` property, that default bubbles up to the parent’s generated mock, making the parameter optional. The **nearest receiver’s default wins**:
-
-- The root type’s own custom mock default takes highest priority
-- Otherwise, the shallowest `@Received` type with a custom mock default wins
-- Types that `@Forward` the property are skipped (they're pass-through, not consumers)
-- Ties at the same depth are broken by declaration order
-
-This rule also applies to `@Received` dependencies that would otherwise be required parameters (e.g., when the dependency’s type is not in the current module).
-
 ### Default-valued init parameters in mocks
 
-If an `@Instantiable` type's initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are automatically exposed in the generated `mock()` method. This lets you override values like feature flags or optional view models in tests while keeping the original defaults for production code.
+If an `@Instantiable` type’s initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are exposed in the generated mock:
+
+- **Root type’s own defaults** appear as flat parameters on `mock()` with their original default values
+- **Child type’s defaults** appear as stored properties on the child’s `_Configuration` struct, and are passed to the `safeDIBuilder` closure
 
 ```swift
-@Instantiable
+@Instantiable(generateMock: true)
 public struct ProfileView: Instantiable {
-    public init(user: User, showDebugInfo: Bool = false) {
-        self.user = user
-    }
+    public init(user: User, showDebugInfo: Bool = false) { ... }
     @Received let user: User
 }
 ```
 
-The generated mock for a parent that instantiates `ProfileView` will include `showDebugInfo` as an `@autoclosure` parameter with the original default:
+When `ProfileView` is instantiated by a parent, the generated `ProfileView_Configuration` includes `showDebugInfo` as a stored property:
 
 ```swift
-let root = Root.mock(
-    showDebugInfo: true  // Override the default
-)
+Root.mock(safeDIParameters: .init(
+    profileView: .init(showDebugInfo: true)
+))
 ```
 
 When no override is provided, the original default expression (`false`) is used.
 
-Default-valued parameters with [argument labels](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/functions/#Function-Argument-Labels-and-Parameter-Names) bubble transitively through the dependency tree — a grandchild's default parameter will appear at the root mock level. However, they do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
+Default-valued parameters do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
 
 ### The `mockAttributes` parameter
 
