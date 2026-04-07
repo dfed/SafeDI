@@ -158,7 +158,7 @@ public struct RootScanner {
 
 	public static func containsConfiguration(in source: String) -> Bool {
 		let sanitizedSource = sanitize(source: source)
-		let macroName = "@SafeDIConfiguration"
+		let macroName = "#SafeDIConfiguration"
 		var searchStart = sanitizedSource.startIndex
 		while let range = sanitizedSource[searchStart...].range(of: macroName) {
 			let afterMacro = range.upperBound
@@ -236,11 +236,11 @@ public struct RootScanner {
 	}
 
 	/// Extracts `additionalDirectoriesToInclude` paths from a source file
-	/// containing `@SafeDIConfiguration`. Uses text-based scanning (no SwiftSyntax).
+	/// containing `#SafeDIConfiguration`. Uses text-based scanning (no SwiftSyntax).
 	/// Returns an empty array if the file does not contain a configuration.
 	public static func extractAdditionalDirectoriesToInclude(in source: String) -> [String] {
 		let sanitizedSource = sanitize(source: source)
-		let macroName = "@SafeDIConfiguration"
+		let macroName = "#SafeDIConfiguration"
 		var macroSearchStart = sanitizedSource.startIndex
 		var configRange: Range<String.Index>?
 		while let candidateRange = sanitizedSource[macroSearchStart...].range(of: macroName) {
@@ -254,46 +254,45 @@ public struct RootScanner {
 		}
 		guard let configRange else { return [] }
 
-		// Find the opening brace of the config body, then the matching close.
-		guard let bodyOpen = sanitizedSource[configRange.upperBound...].firstIndex(of: "{"),
-		      let bodyClose = matchingBraceIndex(in: sanitizedSource, openingBraceIndex: bodyOpen)
+		// Find the opening parenthesis of the macro call.
+		var index = configRange.upperBound
+		skipWhitespace(in: sanitizedSource, index: &index)
+		guard index < sanitizedSource.endIndex,
+		      sanitizedSource[index] == "(",
+		      let closingParenIndex = matchingParenIndex(in: sanitizedSource, openingParenIndex: index)
 		else { return [] }
-		let configBody = sanitizedSource[bodyOpen...bodyClose]
 
-		// Search for the property only at the top level of the config body
-		// (brace depth 1). Nested types at depth 2+ are ignored.
-		let propertyName = "additionalDirectoriesToInclude"
-		guard let propRange = rangeOfTopLevelProperty(named: propertyName, in: configBody) else { return [] }
+		// Search for the `additionalDirectoriesToInclude:` label in the argument list.
+		let argumentList = sanitizedSource[sanitizedSource.index(after: index)..<closingParenIndex]
+		let argumentLabel = "additionalDirectoriesToInclude"
+		guard let labelRange = findArgumentLabel(named: argumentLabel, in: argumentList) else { return [] }
 
-		// Convert the sanitized-source index to an index in the original source.
-		// The sanitizer preserves character count, so offsets are equivalent.
-		let offset = sanitizedSource.distance(from: sanitizedSource.startIndex, to: propRange.upperBound)
-		var index = source.index(source.startIndex, offsetBy: offset)
-
-		// Skip past the type annotation (e.g., `: [StaticString]`) to the `=` sign.
-		while index < source.endIndex, source[index] != "=" {
-			index = source.index(after: index)
-		}
-		guard index < source.endIndex else { return [] }
-		index = source.index(after: index) // skip '='
+		// Convert from sanitized-source index to original source to extract string content.
+		// The label in a macro argument list is always immediately followed by `:`,
+		// so we can compute the offset directly.
+		let colonOffset = sanitizedSource.distance(from: sanitizedSource.startIndex, to: labelRange.upperBound)
+		guard colonOffset < source.count else { return [] }
+		var originalIndex = source.index(source.startIndex, offsetBy: colonOffset)
+		skipWhitespace(in: source, index: &originalIndex)
+		guard originalIndex < source.endIndex, source[originalIndex] == ":" else { return [] }
+		originalIndex = source.index(after: originalIndex) // skip ':'
 
 		// Find the opening bracket of the array literal.
-		while index < source.endIndex, source[index] != "[" {
-			index = source.index(after: index)
+		while originalIndex < source.endIndex, source[originalIndex] != "[" {
+			originalIndex = source.index(after: originalIndex)
 		}
-		guard index < source.endIndex else { return [] }
+		guard originalIndex < source.endIndex else { return [] }
 
 		// Find the matching closing bracket.
 		var depth = 0
-		var closingIndex = index
+		var closingIndex = originalIndex
 		while closingIndex < source.endIndex {
 			switch source[closingIndex] {
 			case "[": depth += 1
 			case "]":
 				depth -= 1
 				if depth == 0 {
-					// Extract string literals from the array content.
-					let arrayContent = source[source.index(after: index)..<closingIndex]
+					let arrayContent = source[source.index(after: originalIndex)..<closingIndex]
 					return extractStringLiterals(from: arrayContent)
 				}
 			default: break
@@ -301,6 +300,37 @@ public struct RootScanner {
 			closingIndex = source.index(after: closingIndex)
 		}
 		return []
+	}
+
+	/// Finds a labeled argument at the top level of a macro argument list.
+	/// Returns the range of the label name if found, or `nil` if not present.
+	private static func findArgumentLabel(named label: String, in argumentList: Substring) -> Range<String.Index>? {
+		var parenthesisDepth = 0
+		var bracketDepth = 0
+		var braceDepth = 0
+		var searchStart = argumentList.startIndex
+
+		while searchStart < argumentList.endIndex {
+			switch argumentList[searchStart] {
+			case "(": parenthesisDepth += 1
+			case ")": parenthesisDepth -= 1
+			case "[": bracketDepth += 1
+			case "]": bracketDepth -= 1
+			case "{": braceDepth += 1
+			case "}": braceDepth -= 1
+			case _ where parenthesisDepth == 0 && bracketDepth == 0 && braceDepth == 0:
+				if argumentList[searchStart...].hasPrefix(label) {
+					let end = argumentList.index(searchStart, offsetBy: label.count)
+					if end >= argumentList.endIndex || !isIdentifierContinuation(argumentList[end]) {
+						return searchStart..<end
+					}
+				}
+			default:
+				break
+			}
+			searchStart = argumentList.index(after: searchStart)
+		}
+		return nil
 	}
 
 	/// Detects `@Instantiable(... generateMock: true ...)` in source text.
@@ -408,36 +438,6 @@ public struct RootScanner {
 
 		skipWhitespace(in: trimmedClause, index: &index)
 		return index == trimmedClause.endIndex
-	}
-
-	/// Finds the range of a property name that appears at brace depth 1 in a config body.
-	/// Ignores occurrences inside nested types (depth 2+).
-	private static func rangeOfTopLevelProperty(named propertyName: String, in body: Substring) -> Range<String.Index>? {
-		var depth = 0
-		var searchStart = body.startIndex
-		while searchStart < body.endIndex {
-			let character = body[searchStart]
-			if character == "{" {
-				depth += 1
-			} else if character == "}" {
-				depth -= 1
-			}
-			// Only match at depth 1 (inside the config enum, outside nested types).
-			// Check identifier boundary to avoid prefix-matching longer names.
-			if depth == 1,
-			   body[searchStart...].hasPrefix(propertyName),
-			   {
-			   	let end = body.index(searchStart, offsetBy: propertyName.count)
-			   	return end >= body.endIndex || !isIdentifierContinuation(body[end])
-			   }()
-			{
-				let end = body.index(searchStart, offsetBy: propertyName.count)
-				return searchStart..<end
-			} else {
-				searchStart = body.index(after: searchStart)
-			}
-		}
-		return nil
 	}
 
 	/// Extracts quoted string literal values from the interior of an array expression.
@@ -602,31 +602,6 @@ public struct RootScanner {
 			case "(":
 				depth += 1
 			case ")":
-				depth -= 1
-				if depth == 0 {
-					return index
-				}
-			default:
-				break
-			}
-			index = source.index(after: index)
-		}
-
-		return nil
-	}
-
-	private static func matchingBraceIndex(
-		in source: String,
-		openingBraceIndex: String.Index,
-	) -> String.Index? {
-		var depth = 0
-		var index = openingBraceIndex
-
-		while index < source.endIndex {
-			switch source[index] {
-			case "{":
-				depth += 1
-			case "}":
 				depth -= 1
 				if depth == 0 {
 					return index

@@ -44,12 +44,9 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@SafeDIConfiguration
-				enum Config {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let mockConditionalCompilation: StaticString? = nil
-				}
+				#SafeDIConfiguration(
+				    mockConditionalCompilation: nil
+				)
 				""",
 				"""
 				@Instantiable(generateMock: true)
@@ -82,12 +79,9 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@SafeDIConfiguration
-				enum Config {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let mockConditionalCompilation: StaticString? = "TESTING"
-				}
+				#SafeDIConfiguration(
+				    mockConditionalCompilation: "TESTING"
+				)
 				""",
 				"""
 				@Instantiable(generateMock: true)
@@ -122,12 +116,9 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@SafeDIConfiguration
-				enum Config {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let mockConditionalCompilation: StaticString? = nil
-				}
+				#SafeDIConfiguration(
+				    mockConditionalCompilation: nil
+				)
 				""",
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
@@ -216,12 +207,9 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@SafeDIConfiguration
-				enum Config {
-				    static let additionalImportedModules: [StaticString] = []
-				    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let mockConditionalCompilation: StaticString? = nil
-				}
+				#SafeDIConfiguration(
+				    mockConditionalCompilation: nil
+				)
 				""",
 				"""
 				public class ThirdParty {}

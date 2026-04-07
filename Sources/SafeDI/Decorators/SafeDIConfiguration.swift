@@ -18,32 +18,25 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// Marks an enum as providing SafeDI configuration.
+/// Provides build-time configuration for SafeDI's code generation plugin.
 ///
-/// An enum decorated with `@SafeDIConfiguration` provides build-time configuration for SafeDI's code generation plugin.
-/// The decorated enum must declare the following static properties:
+/// `#SafeDIConfiguration` is a freestanding declaration macro that must appear at the top level of a Swift file (not nested inside a type).
+/// Each module may have at most one `#SafeDIConfiguration` invocation. All arguments must be literal values.
 ///
-/// - `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types. Type: `[StaticString]`.
-/// - `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project. Type: `[StaticString]`.
-/// - `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Type: `StaticString?`. Default: `"DEBUG"`.
-///
-/// All properties must be initialized with literal values.
+/// - Parameters:
+///   - additionalImportedModules: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types.
+///   - additionalDirectoriesToInclude: Directories containing Swift files to include, relative to the executing directory. This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
+///   - mockConditionalCompilation: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation.
 ///
 /// Example:
 ///
-///     @SafeDIConfiguration
-///     enum MyConfiguration {
-///         /// The names of modules to import in the generated dependency tree.
-///         /// This list is in addition to the import statements found in files that declare @Instantiable types.
-///         static let additionalImportedModules: [StaticString] = ["MyModule", "OtherModule"]
-///
-///         /// Directories containing Swift files to include, relative to the executing directory.
-///         /// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-///         static let additionalDirectoriesToInclude: [StaticString] = ["Sources/OtherModule"]
-///
-///         /// The conditional compilation flag to wrap generated mock code in.
-///         /// Set to `nil` to generate mocks without conditional compilation.
-///         static let mockConditionalCompilation: StaticString? = "DEBUG"
-///     }
-@attached(peer)
-public macro SafeDIConfiguration() = #externalMacro(module: "SafeDIMacros", type: "SafeDIConfigurationMacro")
+///     #SafeDIConfiguration(
+///         additionalImportedModules: ["MyModule", "OtherModule"],
+///         additionalDirectoriesToInclude: ["Sources/OtherModule"]
+///     )
+@freestanding(declaration)
+public macro SafeDIConfiguration(
+	additionalImportedModules: [StaticString] = [],
+	additionalDirectoriesToInclude: [StaticString] = [],
+	mockConditionalCompilation: StaticString? = "DEBUG",
+) = #externalMacro(module: "SafeDIMacros", type: "SafeDIConfigurationMacro")

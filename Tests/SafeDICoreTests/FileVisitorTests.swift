@@ -25,126 +25,97 @@ import Testing
 
 struct SafeDIConfigurationVisitorTests {
 	@Test
-	func nestedStructWithMatchingPropertyNameDoesNotOverrideOuterConfig() {
-		let visitor = SafeDIConfigurationVisitor()
-		visitor.walk(Parser.parse(source: """
-		enum MyConfig {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let mockConditionalCompilation: StaticString? = "DEBUG"
-
-		    struct Helper {
-		        static let mockConditionalCompilation: StaticString? = "TESTING"
-		    }
-		}
-		"""))
-
-		#expect(visitor.mockConditionalCompilation == "DEBUG")
-	}
-
-	@Test
-	func nestedClassWithMatchingPropertyNameDoesNotOverrideOuterConfig() {
-		let visitor = SafeDIConfigurationVisitor()
-		visitor.walk(Parser.parse(source: """
-		enum MyConfig {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let mockConditionalCompilation: StaticString? = "DEBUG"
-
-		    class Helper {
-		        static let mockConditionalCompilation: StaticString? = "TESTING"
-		    }
-		}
-		"""))
-
-		#expect(visitor.mockConditionalCompilation == "DEBUG")
-	}
-
-	@Test
-	func nestedEnumWithMatchingPropertyNameDoesNotOverrideOuterConfig() {
-		let visitor = SafeDIConfigurationVisitor()
-		visitor.walk(Parser.parse(source: """
-		enum MyConfig {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let mockConditionalCompilation: StaticString? = "DEBUG"
-
-		    enum Helper {
-		        static let mockConditionalCompilation: StaticString? = "TESTING"
-		    }
-		}
-		"""))
-
-		#expect(visitor.mockConditionalCompilation == "DEBUG")
-	}
-
-	@Test
-	func configurationPropertyReturnsCorrectValues() {
-		let visitor = SafeDIConfigurationVisitor()
-		visitor.walk(Parser.parse(source: """
-		enum MyConfig {
-		    static let additionalImportedModules: [StaticString] = ["ModuleA", "ModuleB"]
-		    static let additionalDirectoriesToInclude: [StaticString] = ["../Other"]
-		    static let mockConditionalCompilation: StaticString? = "TESTING"
-		}
-		"""))
-
-		let configuration = visitor.configuration
+	func extractConfiguration_returnsCorrectValues() {
+		let configuration = extractConfiguration(from: """
+		#SafeDIConfiguration(
+		    additionalImportedModules: ["ModuleA", "ModuleB"],
+		    additionalDirectoriesToInclude: ["../Other"],
+		    mockConditionalCompilation: "TESTING"
+		)
+		""")
 		#expect(configuration.additionalImportedModules == ["ModuleA", "ModuleB"])
 		#expect(configuration.additionalDirectoriesToInclude == ["../Other"])
 		#expect(configuration.mockConditionalCompilation == "TESTING")
 	}
 
 	@Test
-	func mockConditionalCompilationNilLiteral() {
-		let visitor = SafeDIConfigurationVisitor()
-		visitor.walk(Parser.parse(source: """
-		enum MyConfig {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let mockConditionalCompilation: StaticString? = nil
-		}
-		"""))
-
-		#expect(visitor.mockConditionalCompilation == nil)
+	func extractConfiguration_returnsDefaults_whenNoArguments() {
+		let configuration = extractConfiguration(from: """
+		#SafeDIConfiguration()
+		""")
+		#expect(configuration.additionalImportedModules == [])
+		#expect(configuration.additionalDirectoriesToInclude == [])
+		#expect(configuration.mockConditionalCompilation == "DEBUG")
 	}
 
 	@Test
-	func nestedProtocolWithMatchingPropertyNameDoesNotSetFoundFlag() {
-		let visitor = SafeDIConfigurationVisitor()
-		visitor.walk(Parser.parse(source: """
-		enum MyConfig {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let mockConditionalCompilation: StaticString? = "DEBUG"
-
-		    protocol Helper {
-		        static var mockConditionalCompilation: StaticString? { get }
-		    }
-		}
-		"""))
-
-		#expect(visitor.mockConditionalCompilation == "DEBUG")
-		// The protocol's requirement must not affect the isValid flag.
-		#expect(visitor.mockConditionalCompilationIsValid == true)
+	func extractConfiguration_returnsMockConditionalCompilationNil() {
+		let configuration = extractConfiguration(from: """
+		#SafeDIConfiguration(
+		    mockConditionalCompilation: nil
+		)
+		""")
+		#expect(configuration.mockConditionalCompilation == nil)
 	}
 
 	@Test
-	func nestedActorWithMatchingPropertyNameDoesNotOverrideOuterConfig() {
-		let visitor = SafeDIConfigurationVisitor()
-		visitor.walk(Parser.parse(source: """
-		enum MyConfig {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		    static let mockConditionalCompilation: StaticString? = "DEBUG"
+	func extractConfiguration_ignoresNonLiteralArguments() {
+		let configuration = extractConfiguration(from: """
+		#SafeDIConfiguration(
+		    additionalImportedModules: someVariable,
+		    additionalDirectoriesToInclude: anotherVariable,
+		    mockConditionalCompilation: yetAnother
+		)
+		""")
+		#expect(configuration.additionalImportedModules == [])
+		#expect(configuration.additionalDirectoriesToInclude == [])
+		#expect(configuration.mockConditionalCompilation == "DEBUG")
+	}
 
-		    actor Helper {
-		        static let mockConditionalCompilation: StaticString? = "TESTING"
-		    }
-		}
-		"""))
+	@Test
+	func extractConfiguration_ignoresUnlabeledArguments() {
+		let configuration = extractConfiguration(from: """
+		#SafeDIConfiguration(
+		    ["ModuleA"],
+		    additionalDirectoriesToInclude: ["../Other"]
+		)
+		""")
+		// Unlabeled argument is skipped; labeled argument is extracted.
+		#expect(configuration.additionalImportedModules == [])
+		#expect(configuration.additionalDirectoriesToInclude == ["../Other"])
+	}
 
-		#expect(visitor.mockConditionalCompilation == "DEBUG")
+	@Test
+	func extractConfiguration_ignoresUnknownLabeledArguments() {
+		let configuration = extractConfiguration(from: """
+		#SafeDIConfiguration(
+		    unknownParameter: "value",
+		    additionalImportedModules: ["ModuleA"]
+		)
+		""")
+		#expect(configuration.additionalImportedModules == ["ModuleA"])
+		#expect(configuration.additionalDirectoriesToInclude == [])
+	}
+
+	@Test
+	func extractConfiguration_ignoresInterpolatedStringLiterals() {
+		let configuration = extractConfiguration(from: """
+		#SafeDIConfiguration(
+		    additionalImportedModules: ["\\(someVar)"]
+		)
+		""")
+		#expect(configuration.additionalImportedModules == [])
+	}
+
+	// MARK: Private
+
+	private func extractConfiguration(from source: String) -> SafeDIConfiguration {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: source))
+		return fileVisitor.configurations.first ?? SafeDIConfiguration(
+			additionalImportedModules: [],
+			additionalDirectoriesToInclude: [],
+		)
 	}
 }
 
@@ -430,11 +401,10 @@ struct FileVisitorTests {
 	func walk_findsSafeDIConfiguration() {
 		let fileVisitor = FileVisitor()
 		fileVisitor.walk(Parser.parse(source: """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalImportedModules: [StaticString] = ["ModuleA", "ModuleB"]
-		    static let additionalDirectoriesToInclude: [StaticString] = ["DirA"]
-		}
+		#SafeDIConfiguration(
+		    additionalImportedModules: ["ModuleA", "ModuleB"],
+		    additionalDirectoriesToInclude: ["DirA"]
+		)
 		"""))
 		#expect(fileVisitor.configurations == [
 			SafeDIConfiguration(
@@ -446,14 +416,27 @@ struct FileVisitorTests {
 	}
 
 	@Test
+	func walk_findsSafeDIConfigurationWithNoArguments() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		#SafeDIConfiguration()
+		"""))
+		#expect(fileVisitor.configurations == [
+			SafeDIConfiguration(
+				additionalImportedModules: [],
+				additionalDirectoriesToInclude: [],
+			),
+		])
+	}
+
+	@Test
 	func walk_findsSafeDIConfigurationWithEmptyArrays() {
 		let fileVisitor = FileVisitor()
 		fileVisitor.walk(Parser.parse(source: """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		}
+		#SafeDIConfiguration(
+		    additionalImportedModules: [],
+		    additionalDirectoriesToInclude: []
+		)
 		"""))
 		#expect(fileVisitor.configurations == [
 			SafeDIConfiguration(
@@ -464,33 +447,13 @@ struct FileVisitorTests {
 	}
 
 	@Test
-	func walk_findsSafeDIConfigurationWithTupleBinding() {
+	func walk_findsSafeDIConfigurationWithNonLiteralValues() {
 		let fileVisitor = FileVisitor()
 		fileVisitor.walk(Parser.parse(source: """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let (a, b) = (1, 2)
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		}
-		"""))
-		#expect(fileVisitor.configurations == [
-			SafeDIConfiguration(
-				additionalImportedModules: [],
-				additionalDirectoriesToInclude: [],
-			),
-		])
-	}
-
-	@Test
-	func walk_findsSafeDIConfigurationWithInvalidValues() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalImportedModules: [StaticString] = someVariable
-		    static let additionalDirectoriesToInclude: [StaticString] = anotherVariable
-		}
+		#SafeDIConfiguration(
+		    additionalImportedModules: someVariable,
+		    additionalDirectoriesToInclude: anotherVariable
+		)
 		"""))
 		#expect(fileVisitor.configurations == [
 			SafeDIConfiguration(
@@ -504,11 +467,9 @@ struct FileVisitorTests {
 	func walk_findsSafeDIConfigurationAlongsideInstantiable() {
 		let fileVisitor = FileVisitor()
 		fileVisitor.walk(Parser.parse(source: """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalImportedModules: [StaticString] = ["ModuleA"]
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		}
+		#SafeDIConfiguration(
+		    additionalImportedModules: ["ModuleA"]
+		)
 
 		@Instantiable
 		public struct SomeService {
@@ -531,6 +492,19 @@ struct FileVisitorTests {
 				declarationType: .structType,
 			),
 		])
+	}
+
+	@Test
+	func walk_ignoresSafeDIConfigurationInsideType() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		struct Outer {
+		    #SafeDIConfiguration(
+		        additionalImportedModules: ["ModuleA"]
+		    )
+		}
+		"""))
+		#expect(fileVisitor.configurations.isEmpty)
 	}
 
 	@Test

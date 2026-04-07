@@ -99,7 +99,7 @@ func executeSafeDIToolTest(
 
 	return try await SafeDITool.$fileFinder.withValue(fileFinder) {
 		// Build the manifest by scanning for roots. Discover additional
-		// directory files from the target module's own @SafeDIConfiguration
+		// directory files from the target module's own #SafeDIConfiguration
 		// only, matching real plugin behavior (discoverAdditionalDirectorySwiftFiles
 		// scans only the current module's files, not dependencies).
 		var manifestPath: String?

@@ -48,15 +48,6 @@ extension AttributeListSyntax {
 		return AttributeSyntax(attribute)
 	}
 
-	public var safeDIConfigurationMacro: AttributeSyntax? {
-		guard let attribute = first(where: { element in
-			element.safeDIConfigurationMacro != nil
-		}) else {
-			return nil
-		}
-		return AttributeSyntax(attribute)
-	}
-
 	public var dependencySources: [(source: Dependency.Source, node: AttributeListSyntax.Element)] {
 		compactMap {
 			switch $0 {

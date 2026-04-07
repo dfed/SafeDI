@@ -37,10 +37,6 @@ extension AttributeListSyntax.Element {
 		attributeIfNameEquals(Dependency.Source.forwardedRawValue)
 	}
 
-	var safeDIConfigurationMacro: AttributeSyntax? {
-		attributeIfNameEquals(SafeDIConfigurationVisitor.macroName)
-	}
-
 	private func attributeIfNameEquals(_ expectedName: String) -> AttributeSyntax? {
 		if case let .attribute(attribute) = self,
 		   let identifier = IdentifierTypeSyntax(attribute.attributeName),

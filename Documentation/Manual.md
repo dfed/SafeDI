@@ -12,7 +12,7 @@ There are a total of five macros in the SafeDI library:
 | [`@Instantiated`](#instantiated) | Property declaration | Instantiates an instance or value when the enclosing `@Instantiable`-decorated type is instantiated. |
 | [`@Forwarded`](#forwarded) | Property declaration | Propagates a runtime-created instance or value (e.g. a `User` object, network response, or customer input) down the dependency tree. |
 | [`@Received`](#received) | Property declaration | Receives an instance or value from an `@Instantiated` or `@Forwarded` property further up the dependency tree. |
-| [`@SafeDIConfiguration`](#safediconfiguration) | Enum declaration | Provides build-time configuration for SafeDI’s code generation plugin. |
+| [`#SafeDIConfiguration`](#safediconfiguration) | Freestanding declaration | Provides build-time configuration for SafeDI’s code generation plugin. |
 
 Let’s walk through each of these macros in detail.
 
@@ -408,26 +408,23 @@ public struct FeedView: View, Instantiable {
 }
 ```
 
-### @SafeDIConfiguration
+### #SafeDIConfiguration
 
-An enum decorated with [`@SafeDIConfiguration`](../Sources/SafeDI/Decorators/SafeDIConfiguration.swift) provides build-time configuration for SafeDI's code generation plugin. Each module may have at most one `@SafeDIConfiguration`-decorated enum. All properties must be initialized with literal values. If any required property is missing, the macro provides a fix-it to insert it with its default value.
+[`#SafeDIConfiguration`](../Sources/SafeDI/Decorators/SafeDIConfiguration.swift) is a freestanding declaration macro that provides build-time configuration for SafeDI's code generation plugin. Each module may have at most one `#SafeDIConfiguration` invocation. It must appear at the top level of a Swift file (not nested inside a type). All arguments must be literal values. All parameters have defaults, so the simplest valid invocation is `#SafeDIConfiguration()`.
 
 ```swift
-@SafeDIConfiguration
-enum MyConfiguration {
-    /// The names of modules to import in the generated dependency tree.
-    /// This list is in addition to the import statements found in files that declare @Instantiable types.
-    static let additionalImportedModules: [StaticString] = []
-
-    /// Directories containing Swift files to include, relative to the executing directory.
-    /// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-    static let additionalDirectoriesToInclude: [StaticString] = []
-
-    /// The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`).
-    /// Set to `nil` to generate mocks without conditional compilation.
-    static let mockConditionalCompilation: StaticString? = "DEBUG"
-}
+#SafeDIConfiguration(
+    additionalImportedModules: ["MyModule", "OtherModule"],
+    additionalDirectoriesToInclude: ["Sources/OtherModule"],
+    mockConditionalCompilation: "DEBUG"
+)
 ```
+
+**Parameters:**
+
+- `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types. Default: `[]`.
+- `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. This parameter only applies to SafeDI repos that utilize the SPM plugin via an Xcode project. Default: `[]`.
+- `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Default: `"DEBUG"`.
 
 ## Delayed instantiation
 
@@ -512,7 +509,7 @@ public final class UserService: Instantiable {
 }
 ```
 
-By default, `generateMock` is `false` and no mock is generated. Generated mocks are wrapped in `#if DEBUG` by default. To customize the conditional compilation flag, set the `mockConditionalCompilation` property on your module's [`@SafeDIConfiguration`](#safediconfiguration) enum.
+By default, `generateMock` is `false` and no mock is generated. Generated mocks are wrapped in `#if DEBUG` by default. To customize the conditional compilation flag, set the `mockConditionalCompilation` parameter in your module’s [`#SafeDIConfiguration`](#safediconfiguration).
 
 ### Using generated mocks
 

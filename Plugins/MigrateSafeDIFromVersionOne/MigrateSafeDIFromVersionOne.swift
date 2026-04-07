@@ -63,7 +63,7 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 		let safediFolder = context.package.directoryURL.appending(component: ".safedi")
 		let configurationFolder = safediFolder.appending(component: "configuration")
 
-		// Check for existing @SafeDIConfiguration in target sources.
+		// Check for existing #SafeDIConfiguration in target sources.
 		let existingConfigurationFile = findExistingSafeDIConfiguration(in: targetDirectoryURL)
 
 		// Read CSV files if they exist.
@@ -74,9 +74,9 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 
 		// Create SafeDIConfiguration.swift if one doesn't already exist.
 		if let existingConfigurationFile {
-			Diagnostics.warning("@SafeDIConfiguration already exists at \(existingConfigurationFile.path(percentEncoded: false)). Skipping file creation.")
+			Diagnostics.warning("#SafeDIConfiguration already exists at \(existingConfigurationFile.path(percentEncoded: false)). Skipping file creation.")
 			if includeValues != nil || additionalImportedModulesValues != nil {
-				Diagnostics.warning("CSV configuration files were found but a @SafeDIConfiguration file already exists. Please manually migrate CSV values into your existing @SafeDIConfiguration and delete the CSV files.")
+				Diagnostics.warning("CSV configuration files were found but a #SafeDIConfiguration file already exists. Please manually migrate CSV values into your existing #SafeDIConfiguration and delete the CSV files.")
 			}
 		} else {
 			let configurationFileContent = generateSafeDIConfigurationFile(
@@ -92,7 +92,7 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 			Diagnostics.remark("Created \(outputURL.path(percentEncoded: false))")
 
 			// Only delete CSV files when we successfully created the new configuration file.
-			// If an existing @SafeDIConfiguration was found, the user must manually migrate
+			// If an existing #SafeDIConfiguration was found, the user must manually migrate
 			// and delete the CSV files themselves.
 			var deletedCSVFiles = [String]()
 			if includeValues != nil {
@@ -122,7 +122,7 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 		for case let fileURL as URL in enumerator {
 			guard fileURL.pathExtension == "swift" else { continue }
 			guard let contents = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
-			if contents.contains("@SafeDIConfiguration") {
+			if contents.contains("#SafeDIConfiguration") || contents.contains("@SafeDIConfiguration") {
 				return fileURL
 			}
 		}
@@ -145,32 +145,29 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 		additionalImportedModules: [String],
 		additionalDirectoriesToInclude: [String],
 	) -> String {
-		let importedModulesArray = formatStringArray(additionalImportedModules)
-		let directoriesToIncludeArray = formatStringArray(additionalDirectoriesToInclude)
-		return """
-		import SafeDI
-
-		@SafeDIConfiguration
-		enum SafeDIConfiguration {
-		\t/// The names of modules to import in the generated dependency tree.
-		\t/// This list is in addition to the import statements found in files that declare @Instantiable types.
-		\tstatic let additionalImportedModules: [StaticString] = \(importedModulesArray)
-
-		\t/// Directories containing Swift files to include, relative to the executing directory.
-		\t/// This property only applies to SafeDI repos that utilize the SPM plugin via an Xcode project.
-		\tstatic let additionalDirectoriesToInclude: [StaticString] = \(directoriesToIncludeArray)
-
-		\t/// The conditional compilation flag to wrap generated mock code in.
-		\t/// Set to `nil` to generate mocks without conditional compilation.
-		\tstatic let mockConditionalCompilation: StaticString? = "DEBUG"
+		var arguments = [String]()
+		if !additionalImportedModules.isEmpty {
+			let formatted = additionalImportedModules.map { "\"\($0)\"" }.joined(separator: ", ")
+			arguments.append("\tadditionalImportedModules: [\(formatted)]")
 		}
-		"""
-	}
-
-	private func formatStringArray(_ values: [String]) -> String {
-		if values.isEmpty {
-			return "[]"
+		if !additionalDirectoriesToInclude.isEmpty {
+			let formatted = additionalDirectoriesToInclude.map { "\"\($0)\"" }.joined(separator: ", ")
+			arguments.append("\tadditionalDirectoriesToInclude: [\(formatted)]")
 		}
-		return "[\(values.map { "\"\($0)\"" }.joined(separator: ", "))]"
+		if arguments.isEmpty {
+			return """
+			import SafeDI
+
+			#SafeDIConfiguration()
+			"""
+		} else {
+			return """
+			import SafeDI
+
+			#SafeDIConfiguration(
+			\(arguments.joined(separator: ",\n"))
+			)
+			"""
+		}
 	}
 }

@@ -45,12 +45,12 @@ SafeDI is a compile-time dependency injection framework for Swift. It uses Swift
 - `TypeDescription.asIdentifier` produces identifier-safe disambiguation suffixes
 - `TypeDescription.simplified` strips wrappers for cleaner suffixes, with fallback on collision
 - Closure-typed defaults use `@escaping T = default` (not `@autoclosure`)
-- `@SafeDIConfiguration` is always read from the current module only, never dependent modules
+- `#SafeDIConfiguration` is always read from the current module only, never dependent modules
 
 ## Code Style
 
 - **No abbreviations.** Use `dependency` not `dep`, `parameter` not `param`, `declaration` not `decl`. Everywhere: variables, functions, tests, comments, commits.
-- **No `default` in switch statements.** Enumerate all cases explicitly for compile-time safety.
+- **No `default` or `case _` in switch statements when all cases are knowable.** Enumerate all cases explicitly for compile-time safety.
 - **Use `for ... where` for simple boolean filters** instead of `guard ... else { continue }` inside the loop body.
 - **Use `guard` for early exits**, not `if condition { continue/return }`.
 - **No early return from bare `if`.** If an `if` branch returns, the non-returning path must be in an explicit `else` clause. Never fall through after `if { return }`.

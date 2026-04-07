@@ -198,7 +198,7 @@ struct RootScannerTests {
 				outputFilePath: outputDirectory.appendingPathComponent("ActualRoot+SafeDI.swift").path,
 			),
 		])
-		// No @SafeDIConfiguration exists, so no mock entries are created.
+		// No #SafeDIConfiguration exists, so no mock entries are created.
 		#expect(result.manifest.mockGeneration.isEmpty)
 		#expect(try RootScanner.fileContainsRoot(at: actualRoot))
 	}
@@ -250,7 +250,7 @@ struct RootScannerTests {
 				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
 			),
 		])
-		// No @SafeDIConfiguration exists, so no mock entries are created.
+		// No #SafeDIConfiguration exists, so no mock entries are created.
 		#expect(result.manifest.mockGeneration.isEmpty)
 	}
 
@@ -355,11 +355,9 @@ struct RootScannerTests {
 	@Test
 	func extractAdditionalDirectoriesToInclude_extractsDirectoryPaths() {
 		let source = """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = ["../OtherModule/Sources", "/absolute/path"]
-		}
+		#SafeDIConfiguration(
+		    additionalDirectoriesToInclude: ["../OtherModule/Sources", "/absolute/path"]
+		)
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../OtherModule/Sources", "/absolute/path"])
 	}
@@ -378,11 +376,9 @@ struct RootScannerTests {
 	@Test
 	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenEmptyArray() {
 		let source = """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		}
+		#SafeDIConfiguration(
+		    additionalDirectoriesToInclude: []
+		)
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
@@ -390,41 +386,37 @@ struct RootScannerTests {
 	@Test
 	func extractAdditionalDirectoriesToInclude_ignoresCommentedOutConfig() {
 		let source = """
-		// @SafeDIConfiguration
-		// enum MyConfiguration {
-		//     static let additionalDirectoriesToInclude: [StaticString] = ["should/not/match"]
-		// }
+		// #SafeDIConfiguration(
+		//     additionalDirectoriesToInclude: ["should/not/match"]
+		// )
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
-	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenConfigHasNoDirectoriesProperty() {
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenConfigHasNoDirectoriesArgument() {
 		let source = """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalImportedModules: [StaticString] = ["SomeModule"]
-		}
+		#SafeDIConfiguration(
+		    additionalImportedModules: ["SomeModule"]
+		)
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
-	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenTruncatedBeforeEquals() {
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenTruncatedBeforeColon() {
 		let source = """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalDirectoriesToInclude
+		#SafeDIConfiguration(
+		    additionalDirectoriesToInclude
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
-	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenTruncatedBeforeBracket() {
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenTruncatedBeforeArrayLiteral() {
 		let source = """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalDirectoriesToInclude: [StaticString] =
+		#SafeDIConfiguration(
+		    additionalDirectoriesToInclude:
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
@@ -432,35 +424,29 @@ struct RootScannerTests {
 	@Test
 	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenUnmatchedBracket() {
 		let source = """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalDirectoriesToInclude: [StaticString] = ["unclosed
+		#SafeDIConfiguration(
+		    additionalDirectoriesToInclude: ["unclosed
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
 	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenMalformedStringLiteral() {
-		// The unclosed string literal causes the sanitizer to consume the
-		// closing brace, so the config body can't be delimited.
+		// The unclosed string literal means the array value cannot be properly extracted.
 		let source = """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalDirectoriesToInclude: [StaticString] = ["good", "unclosed]
-		}
+		#SafeDIConfiguration(
+		    additionalDirectoriesToInclude: ["good", "unclosed]
+		)
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
-	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenBracketIsUnmatchedInsideValidConfig() {
-		// The config body is properly delimited, the property is found, the opening
-		// bracket is found, but no closing bracket exists — reaches the final `return []`.
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenBracketIsUnmatchedInsideMacroCall() {
 		let source = """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalDirectoriesToInclude: [StaticString] = [
-		}
+		#SafeDIConfiguration(
+		    additionalDirectoriesToInclude: [
+		)
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
@@ -469,61 +455,42 @@ struct RootScannerTests {
 	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenArrayHasNoStringLiterals() {
 		// Brackets matched but content has no quotes at all.
 		let source = """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalDirectoriesToInclude: [StaticString] = [someVariable]
-		}
+		#SafeDIConfiguration(
+		    additionalDirectoriesToInclude: [someVariable]
+		)
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
-	func extractAdditionalDirectoriesToInclude_ignoresPropertyOnNonConfigType() {
-		// A helper type in the same file has a property named additionalDirectoriesToInclude.
-		// The extractor must only look inside the @SafeDIConfiguration body.
+	func extractAdditionalDirectoriesToInclude_ignoresNonMacroText() {
+		// Text containing "additionalDirectoriesToInclude" outside the macro call is ignored.
 		let source = """
-		struct Helper {
-		    static let additionalDirectoriesToInclude: [StaticString] = ["../Wrong/Path"]
-		}
+		let additionalDirectoriesToInclude = ["../Wrong/Path"]
 
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
-		}
+		#SafeDIConfiguration(
+		    additionalDirectoriesToInclude: ["../Correct/Path"]
+		)
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
 	}
 
 	@Test
-	func extractAdditionalDirectoriesToInclude_ignoresPropertyAfterConfigBody() {
-		// Property with matching name appears AFTER the config body.
+	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenNoDirectoriesArgument() {
 		let source = """
-		@SafeDIConfiguration
-		enum MyConfiguration {
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = []
-		}
-
-		struct Unrelated {
-		    static let additionalDirectoriesToInclude: [StaticString] = ["../Should/Ignore"]
-		}
+		#SafeDIConfiguration()
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
-	func extractAdditionalDirectoriesToInclude_ignoresNestedTypeWithMatchingPropertyName() {
+	func extractAdditionalDirectoriesToInclude_extractsDirectoryPaths_whenOtherArgumentsPresent() {
 		let source = """
-		@SafeDIConfiguration
-		enum MyConfig {
-		    struct Helper {
-		        static let additionalDirectoriesToInclude: [StaticString] = ["../Wrong/Path"]
-		    }
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
-		    static let mockConditionalCompilation: StaticString? = "DEBUG"
-		}
+		#SafeDIConfiguration(
+		    additionalImportedModules: ["SomeModule"],
+		    additionalDirectoriesToInclude: ["../Correct/Path"],
+		    mockConditionalCompilation: "DEBUG"
+		)
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
 	}
@@ -531,24 +498,20 @@ struct RootScannerTests {
 	@Test
 	func extractAdditionalDirectoriesToInclude_returnsEmpty_whenMacroNameIsPrefixOfLongerName() {
 		let source = """
-		@SafeDIConfigurationHelper
-		enum NotAConfig {
-		    static let additionalDirectoriesToInclude: [StaticString] = ["../Wrong/Path"]
-		}
+		#SafeDIConfigurationHelper(
+		    additionalDirectoriesToInclude: ["../Wrong/Path"]
+		)
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
-	func extractAdditionalDirectoriesToInclude_doesNotMatchPropertyNamePrefix() {
+	func extractAdditionalDirectoriesToInclude_doesNotMatchArgumentLabelPrefix() {
 		let source = """
-		@SafeDIConfiguration
-		enum MyConfig {
-		    static let additionalDirectoriesToIncludeHelper: [StaticString] = ["../Wrong/Path"]
-		    static let additionalImportedModules: [StaticString] = []
-		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
-		    static let mockConditionalCompilation: StaticString? = "DEBUG"
-		}
+		#SafeDIConfiguration(
+		    additionalDirectoriesToIncludeHelper: ["../Wrong/Path"],
+		    additionalDirectoriesToInclude: ["../Correct/Path"]
+		)
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
 	}
@@ -812,15 +775,14 @@ struct RootScannerTests {
 	@Test
 	func containsConfiguration_returnsTrue_whenConfigExistsOutsideComment() {
 		#expect(RootScanner.containsConfiguration(in: """
-		@SafeDIConfiguration
-		enum Config {}
+		#SafeDIConfiguration()
 		"""))
 	}
 
 	@Test
 	func containsConfiguration_returnsFalse_whenConfigIsOnlyInComment() {
 		#expect(!RootScanner.containsConfiguration(in: """
-		// @SafeDIConfiguration
+		// #SafeDIConfiguration()
 		struct NotAConfig {}
 		"""))
 	}
@@ -828,32 +790,27 @@ struct RootScannerTests {
 	@Test
 	func containsConfiguration_returnsFalse_whenMacroNameIsPrefixOfLongerName() {
 		#expect(!RootScanner.containsConfiguration(in: """
-		@SafeDIConfigurationHelper
-		struct NotAConfig {}
+		#SafeDIConfigurationHelper()
 		"""))
 	}
 
 	@Test
 	func containsConfiguration_returnsTrue_whenRealConfigAppearsAfterPrefixMatch() {
 		#expect(RootScanner.containsConfiguration(in: """
-		@SafeDIConfigurationHelper
-		struct Helper {}
+		#SafeDIConfigurationHelper()
 
-		@SafeDIConfiguration
-		enum Config {}
+		#SafeDIConfiguration()
 		"""))
 	}
 
 	@Test
 	func extractAdditionalDirectoriesToInclude_findsConfigAfterPrefixMatch() {
 		let source = """
-		@SafeDIConfigurationHelper
-		struct Helper {}
+		#SafeDIConfigurationHelper()
 
-		@SafeDIConfiguration
-		enum Config {
-		    static let additionalDirectoriesToInclude: [StaticString] = ["../Correct/Path"]
-		}
+		#SafeDIConfiguration(
+		    additionalDirectoriesToInclude: ["../Correct/Path"]
+		)
 		"""
 		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
 	}
@@ -875,7 +832,7 @@ struct RootScannerTests {
 		let file = try fixture.writeFile(
 			relativePath: "CommentOnly.swift",
 			content: """
-			// @SafeDIConfiguration
+			// #SafeDIConfiguration
 			// This file references the config but doesn't declare one.
 			struct NotAConfig {}
 			""",
@@ -891,12 +848,7 @@ struct RootScannerTests {
 		let configFile = try fixture.writeFile(
 			relativePath: "SafeDIConfiguration.swift",
 			content: """
-			@SafeDIConfiguration
-			enum Config {
-			    static let additionalImportedModules: [StaticString] = []
-			    static let additionalDirectoriesToInclude: [StaticString] = []
-				    static let mockConditionalCompilation: StaticString? = "DEBUG"
-			}
+			#SafeDIConfiguration()
 			""",
 		)
 		let rootFile = try fixture.writeFile(
@@ -965,7 +917,7 @@ struct RootScannerTests {
 				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
 			),
 		])
-		// No @SafeDIConfiguration exists, so no mock entries are created.
+		// No #SafeDIConfiguration exists, so no mock entries are created.
 		#expect(result.manifest.mockGeneration.isEmpty)
 	}
 
@@ -994,7 +946,7 @@ struct RootScannerTests {
 				outputFilePath: outputDirectory.appendingPathComponent("Root+SafeDI.swift").path,
 			),
 		])
-		// No @SafeDIConfiguration exists, so no mock entries are created.
+		// No #SafeDIConfiguration exists, so no mock entries are created.
 		#expect(result.manifest.mockGeneration.isEmpty)
 	}
 
@@ -1024,7 +976,7 @@ struct RootScannerTests {
 		#expect(manifestContent.contains("\"dependencyTreeGeneration\""))
 		#expect(manifestContent.contains("\"mockGeneration\""))
 		#expect(manifestContent.contains("Root+SafeDI.swift"))
-		// No @SafeDIConfiguration exists, so no mock entries are created.
+		// No #SafeDIConfiguration exists, so no mock entries are created.
 		#expect(!manifestContent.contains("Root+SafeDIMock.swift"))
 	}
 }
