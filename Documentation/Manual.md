@@ -509,7 +509,7 @@ public final class UserService: Instantiable {
 }
 ```
 
-By default, `generateMock` is `false` and no mock is generated. Generated mocks are wrapped in `#if DEBUG` by default. To customize the conditional compilation flag, set the `mockConditionalCompilation` parameter in your module's [`#SafeDIConfiguration`](#safediconfiguration).
+By default, `generateMock` is `false` and no mock is generated. Generated mocks are wrapped in `#if DEBUG` by default. To customize the conditional compilation flag, set the `mockConditionalCompilation` parameter in your module’s [`#SafeDIConfiguration`](#safediconfiguration).
 
 ### Using generated mocks
 
