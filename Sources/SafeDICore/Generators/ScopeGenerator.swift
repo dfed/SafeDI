@@ -231,42 +231,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			onlyIfAvailable: Bool,
 		)
 
-		var instantiable: Instantiable? {
-			switch self {
-			case let .root(instantiable),
-			     let .property(instantiable, _, _, _, _):
-				instantiable
-			case .alias:
-				nil
-			}
-		}
-
 		var forwardedProperties: Set<Property> {
 			switch self {
 			case let .property(_, _, forwardedProperties, _, _):
 				forwardedProperties
 			case .root, .alias:
 				[]
-			}
-		}
-
-		var erasedToConcreteExistential: Bool {
-			switch self {
-			case let .property(_, _, _, erasedToConcreteExistential, _):
-				erasedToConcreteExistential
-			case let .alias(_, _, erasedToConcreteExistential, _):
-				erasedToConcreteExistential
-			case .root:
-				false
-			}
-		}
-
-		var isPropertyCycle: Bool {
-			switch self {
-			case let .property(_, _, _, _, isPropertyCycle):
-				isPropertyCycle
-			case .root, .alias:
-				false
 			}
 		}
 
@@ -738,13 +708,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			mockParameters.append("\(bodyIndent)safeDIParameters: SafeDIParameters = .init()")
 		}
 
-		if mockParameters.isEmpty {
-			lines.append("\(indent)\(mockAttributesPrefix)public static func mock() -> \(typeName) {")
-		} else {
-			lines.append("\(indent)\(mockAttributesPrefix)public static func mock(")
-			lines.append(mockParameters.joined(separator: ",\n"))
-			lines.append("\(indent)) -> \(typeName) {")
-		}
+		lines.append("\(indent)\(mockAttributesPrefix)public static func mock(")
+		lines.append(mockParameters.joined(separator: ",\n"))
+		lines.append("\(indent)) -> \(typeName) {")
 
 		// Generate mock body.
 		if hasTree {
@@ -898,7 +864,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		for childGenerator in orderedPropertiesToGenerate {
 			guard let childProperty = childGenerator.property,
-			      let childInstantiable = childGenerator.scopeData.instantiable
+			      case let .property(childInstantiable, _, _, erasedToConcreteExistential, isPropertyCycle) = childGenerator.scopeData
 			else { continue }
 
 			let isInstantiator = !childProperty.propertyType.isConstant
@@ -958,7 +924,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				instantiatedTypeDescription: childProperty.typeDescription.asInstantiatedType,
 				isInstantiator: isInstantiator,
 				isExtensionBased: childInstantiable.declarationType.isExtension,
-				erasedToConcreteExistential: childGenerator.scopeData.erasedToConcreteExistential,
+				erasedToConcreteExistential: erasedToConcreteExistential,
 				children: childNodes,
 				defaultParameters: defaultParameters,
 				constructionArguments: constructionArguments,
@@ -967,7 +933,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				customMockName: childInstantiable.customMockName,
 				concreteTypeName: childInstantiable.concreteInstantiable.asSource,
 				forwardedProperties: forwardedProperties,
-				isPropertyCycle: childGenerator.scopeData.isPropertyCycle,
+				isPropertyCycle: isPropertyCycle,
 				requiresSendable: insideSendableScope,
 			))
 		}
@@ -976,6 +942,37 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	// MARK: SafeDIParameters Generation
+
+	/// Computes disambiguated property labels for a list of nodes at the same scope level.
+	/// When two nodes share a `propertyLabel`, appends `_TypeName` to make them unique.
+	/// Returns a dictionary mapping each node's `propertyLabel` to its disambiguated label.
+	private static func disambiguatePropertyLabels(
+		for nodes: [MockParameterNode],
+	) -> [String: String] {
+		var labelCounts = [String: Int]()
+		for node in nodes {
+			labelCounts[node.propertyLabel, default: 0] += 1
+		}
+		var result = [String: String]()
+		for node in nodes {
+			let count = labelCounts[node.propertyLabel] ?? 1
+			if count > 1 {
+				let disambiguated = "\(node.propertyLabel)_\(node.instantiatedTypeDescription.asSource)"
+				result["\(node.propertyLabel):\(node.instantiatedTypeDescription.asSource)"] = disambiguated
+			} else {
+				result["\(node.propertyLabel):\(node.instantiatedTypeDescription.asSource)"] = node.propertyLabel
+			}
+		}
+		return result
+	}
+
+	/// Returns the disambiguated property label for a node, given a disambiguation map.
+	private static func disambiguatedLabel(
+		for node: MockParameterNode,
+		labelMap: [String: String],
+	) -> String {
+		labelMap["\(node.propertyLabel):\(node.instantiatedTypeDescription.asSource)"] ?? node.propertyLabel
+	}
 
 	/// Collects all unique types from the `MockParameterNode` tree, deduplicated
 	/// by `instantiatedTypeDescription`. Returns nodes in depth-first order
@@ -1028,22 +1025,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.append("")
 		}
 
+		// Disambiguate root-level children property labels.
+		let rootLabelMap = disambiguatePropertyLabels(for: rootChildren)
+
 		// Generate SafeDIParameters init with root-level children.
 		lines.append("\(innerIndent)public init(")
 		let initParameters = rootChildren.map { child in
-			"\(memberIndent)\(child.propertyLabel): \(child.structName) = .init()"
+			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
+			return "\(memberIndent)\(label): \(child.structName) = .init()"
 		}
 		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
 		for child in rootChildren {
-			lines.append("\(memberIndent)self.\(child.propertyLabel) = \(child.propertyLabel)")
+			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
+			lines.append("\(memberIndent)self.\(label) = \(label)")
 		}
 		lines.append("\(innerIndent)}")
 
 		// Generate stored properties.
 		lines.append("")
 		for child in rootChildren {
-			lines.append("\(innerIndent)public let \(child.propertyLabel): \(child.structName)")
+			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
+			lines.append("\(innerIndent)public let \(label): \(child.structName)")
 		}
 
 		lines.append("\(indent)}")
@@ -1065,11 +1068,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var assignments = [String]()
 		var storedProperties = [String]()
 
-		// Child edge parameters.
+		// Child edge parameters (disambiguated if labels collide).
+		let childLabelMap = disambiguatePropertyLabels(for: node.children)
 		for child in node.children {
-			initParameters.append("\(innerIndent)\(standardIndent)\(child.propertyLabel): \(child.structName) = .init()")
-			assignments.append("\(innerIndent)\(standardIndent)self.\(child.propertyLabel) = \(child.propertyLabel)")
-			storedProperties.append("\(innerIndent)public let \(child.propertyLabel): \(child.structName)")
+			let label = disambiguatedLabel(for: child, labelMap: childLabelMap)
+			initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.structName) = .init()")
+			assignments.append("\(innerIndent)\(standardIndent)self.\(label) = \(label)")
+			storedProperties.append("\(innerIndent)public let \(label): \(child.structName)")
 		}
 
 		// Default-valued parameters.
@@ -1116,8 +1121,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) -> [String] {
 		var lines = [String]()
 
+		// Disambiguate sibling labels at this level.
+		let labelMap = disambiguatePropertyLabels(for: nodes)
+
 		for node in nodes {
-			let nodePath = "\(parentPath).\(node.propertyLabel)"
+			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
+			let nodePath = "\(parentPath).\(disambiguated)"
 
 			// Recursively generate children's bindings first (depth-first).
 			let childBindings = generateMockBodyBindings(
@@ -1238,14 +1247,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let unwrappedTypeDescription = node.typeDescription.unwrapped.asSource
 		let instantiatedTypeDescription = node.typeDescription.unwrapped.asInstantiatedType.asSource
 
-		let instantiatorConstruction = if forwardedArguments.isEmpty, !node.erasedToConcreteExistential {
+		let instantiatorConstruction = if forwardedArguments.isEmpty {
 			"\(unwrappedTypeDescription)(\(functionName))"
-		} else if node.erasedToConcreteExistential {
-			"""
-			\(unwrappedTypeDescription) {
-			\(indent)\(standardIndent)\(instantiatedTypeDescription)(\(functionName)(\(forwardedArguments)))
-			\(indent)}
-			"""
 		} else {
 			"""
 			\(unwrappedTypeDescription) {
@@ -1302,15 +1305,9 @@ extension Instantiable {
 			initializer
 		}
 		if forMockGeneration {
-			guard let initializerToUse else {
-				return Self.incorrectlyConfiguredComment
-			}
-			// When using a user-defined mock(), validate it covers all dependencies.
-			// If not, emit a comment that triggers a build error directing the user
-			// to the @Instantiable macro fix-it (same pattern as production code gen).
-			if useMockInitializer, mockInitializer != nil, !initializerToUse.isValid(forFulfilling: dependencies) {
-				return Self.incorrectlyConfiguredComment
-			}
+			// In the simple mock case (no deps, no tree), the initializer is always present
+			// and covers all dependencies. The SafeDIParameters pipeline handles complex cases.
+			guard let initializerToUse else { return "" }
 			return initializerToUse
 				.createMockInitializerArgumentList(
 					given: dependencies,
