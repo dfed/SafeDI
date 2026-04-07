@@ -194,7 +194,7 @@ If you invoke `SafeDITool` directly (not via the provided SPM plugin), the `--de
 
 Before (1.x):
 ```bash
-safedi-tool input.csv --dependency-tree-output ./generated/SafeDI.swift
+safeditool input.csv --dependency-tree-output ./generated/SafeDI.swift
 ```
 
 After (2.x):
@@ -210,7 +210,7 @@ cat > manifest.json << 'EOF'
   ]
 }
 EOF
-safedi-tool input.csv --swift-manifest manifest.json
+safeditool input.csv --swift-manifest manifest.json
 ```
 
 ## Contributing

@@ -27,7 +27,7 @@ else
 fi
 
 # Run the tool.
-SOURCE_DIR="$PROJECT_DIR/ExampleCocoaPodsIntegration"
+SOURCE_DIR="$PROJECT_DIR/Sources"
 SAFEDI_OUTPUT_DIR="$PROJECT_DIR/SafeDIOutput"
 mkdir -p "$SAFEDI_OUTPUT_DIR"
 
