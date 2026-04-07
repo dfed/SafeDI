@@ -1523,6 +1523,164 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return lines.joined(separator: "\n")
 	}
 
+	// MARK: Mock Body Generation
+
+	/// Generates the mock body bindings for the tree. Walks depth-first (children before
+	/// parent), emitting `let` bindings that call through `safeDIParameters.path.safeDIBuilder(...)`.
+	///
+	/// For constant nodes: `let {label} = safeDIParameters.{path}.safeDIBuilder({args})`
+	/// For Instantiator nodes: inner builder function + `Instantiator<T>` wrapping.
+	private static func generateMockBodyBindings(
+		nodes: [MockParameterNode],
+		parentPath: String,
+		indent: String,
+	) -> [String] {
+		var lines = [String]()
+
+		for node in nodes {
+			let nodePath = "\(parentPath).\(node.propertyLabel)"
+
+			// Recursively generate children's bindings first (depth-first).
+			let childBindings = generateMockBodyBindings(
+				nodes: node.children,
+				parentPath: nodePath,
+				indent: indent,
+			)
+			lines.append(contentsOf: childBindings)
+
+			// Generate this node's binding.
+			let arguments = resolveBuilderArguments(
+				for: node,
+				nodePath: nodePath,
+			)
+			let argumentList = arguments.joined(separator: ", ")
+
+			if node.isInstantiator {
+				lines.append(contentsOf: generateInstantiatorBinding(
+					for: node,
+					nodePath: nodePath,
+					arguments: arguments,
+					indent: indent,
+				))
+			} else if node.erasedToConcreteExistential {
+				// Erased-to-concrete existential: wrap the builder call.
+				let protocolType = node.typeDescription.asSource
+				lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(protocolType)(\(nodePath).safeDIBuilder(\(argumentList)))")
+			} else {
+				lines.append("\(indent)let \(node.propertyLabel) = \(nodePath).safeDIBuilder(\(argumentList))")
+			}
+		}
+
+		return lines
+	}
+
+	/// Resolves the positional arguments for a builder call.
+	/// Each argument comes from one of:
+	/// - A local variable (previously built dep or flat mock param)
+	/// - A stored default on SafeDIParameters (`{nodePath}.{label}`)
+	private static func resolveBuilderArguments(
+		for node: MockParameterNode,
+		nodePath: String,
+	) -> [String] {
+		let dependencyLabels = Set(node.dependencies.map(\.property.label))
+		let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
+
+		return node.constructionArguments.compactMap { argument in
+			if dependencyLabels.contains(argument.innerLabel) {
+				// Dependency argument: use the local variable name (property label).
+				// For @Forwarded deps in Instantiator context, this is the inner function param.
+				// For @Received/@Instantiated deps, this is a previously-bound local variable.
+				argument.innerLabel
+			} else if defaultParameterLabels.contains(argument.label) {
+				// Non-dependency default: reference the stored property on SafeDIParameters.
+				"\(nodePath).\(argument.label)"
+			} else if argument.hasDefaultValue, argument.label != "_" {
+				// Default argument not in our defaultParameters list — skip.
+				// This can happen for arguments we don't track.
+				nil
+			} else {
+				// Unknown argument — use the label as a local variable reference.
+				argument.innerLabel
+			}
+		}
+	}
+
+	/// Generates the Instantiator wrapping bindings for an Instantiator node.
+	/// Produces: inner builder function + `let {label} = Instantiator<T>(...)`.
+	private static func generateInstantiatorBinding(
+		for node: MockParameterNode,
+		nodePath: String,
+		arguments: [String],
+		indent: String,
+	) -> [String] {
+		let functionName = "__safeDI_\(node.propertyLabel)"
+		let concreteTypeName = node.concreteTypeName
+		let forwardedProperties = node.forwardedProperties.sorted()
+		let propertyType = node.typeDescription.propertyType
+
+		// Build the inner function parameter list (forwarded properties).
+		let functionArguments = if forwardedProperties.isEmpty {
+			""
+		} else {
+			forwardedProperties.initializerFunctionParameters.map(\.description).joined()
+		}
+
+		// Build the forwarded arguments for the Instantiator closure call.
+		let forwardedPropertiesHaveLabels = forwardedProperties.count > 1
+		let forwardedArguments = forwardedProperties
+			.map {
+				if forwardedPropertiesHaveLabels {
+					"\($0.label): $0.\($0.label)"
+				} else {
+					"\($0.label): $0"
+				}
+			}
+			.joined(separator: ", ")
+
+		// Build the builder call arguments for the inner function body.
+		let builderCallArguments = arguments.joined(separator: ", ")
+
+		let functionDecorator = if propertyType.isSendable {
+			"@Sendable "
+		} else {
+			""
+		}
+
+		var lines = [String]()
+
+		// Emit the inner builder function (unless it's a property cycle).
+		if !node.isPropertyCycle {
+			lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {")
+			lines.append("\(indent)\(standardIndent)\(nodePath).safeDIBuilder(\(builderCallArguments))")
+			lines.append("\(indent)}")
+		}
+
+		// Emit the Instantiator/ErasedInstantiator construction.
+		let unwrappedTypeDescription = node.typeDescription.unwrapped.asSource
+		let instantiatedTypeDescription = node.typeDescription.unwrapped.asInstantiatedType.asSource
+
+		let instantiatorConstruction: String
+		if forwardedArguments.isEmpty, !node.erasedToConcreteExistential {
+			instantiatorConstruction = "\(unwrappedTypeDescription)(\(functionName))"
+		} else if node.erasedToConcreteExistential {
+			instantiatorConstruction = """
+			\(unwrappedTypeDescription) {
+			\(indent)\(standardIndent)\(instantiatedTypeDescription)(\(functionName)(\(forwardedArguments)))
+			\(indent)}
+			"""
+		} else {
+			instantiatorConstruction = """
+			\(unwrappedTypeDescription) {
+			\(indent)\(standardIndent)\(functionName)(\(forwardedArguments))
+			\(indent)}
+			"""
+		}
+
+		lines.append("\(indent)let \(node.propertyLabel) = \(instantiatorConstruction)")
+
+		return lines
+	}
+
 	/// Walks the tree and collects all mock declarations for the mock() parameters.
 	/// Also collects dependency-parameter defaults from custom mocks, tagged with depth,
 	/// so the caller can apply "nearest receiver's default wins" logic.
