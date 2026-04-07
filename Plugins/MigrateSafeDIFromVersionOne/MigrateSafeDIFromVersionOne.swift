@@ -160,13 +160,14 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 
 			#SafeDIConfiguration()
 			"""
-		}
-		return """
-		import SafeDI
+		} else {
+			return """
+			import SafeDI
 
-		#SafeDIConfiguration(
-		\(arguments.joined(separator: ",\n"))
-		)
-		"""
+			#SafeDIConfiguration(
+			\(arguments.joined(separator: ",\n"))
+			)
+			"""
+		}
 	}
 }
