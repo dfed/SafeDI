@@ -798,26 +798,236 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// MARK: Mock Root Code Generation
 
 	/// Generates the full mock extension code for a `.root` node in mock mode.
+	/// Uses the new SafeDIParameters tree-structured API.
 	private func generateMockRootCode(
 		instantiable: Instantiable,
 		context: MockContext,
 	) async throws -> String {
 		let typeName = instantiable.concreteInstantiable.asSource
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
+		let indent = Self.standardIndent
+		let bodyIndent = "\(indent)\(indent)"
 
-		// Collect forwarded properties — these become bare (non-closure) parameters.
+		// 1. Build the parameter tree.
+		let parameterTree = await collectMockParameterTree()
+
+		// 2. Identify flat params.
+
+		// Forwarded deps → bare required params.
 		let forwardedDependencies = instantiable.dependencies
 			.filter { $0.source == .forwarded }
 			.sorted { $0.property < $1.property }
 
-		// Collect all declarations from the dependency tree.
-		var dependencyDefaults = [MockParameterIdentifier: (expression: String, depth: Int)]()
-		var allDeclarations = await collectMockDeclarations(
-			dependencyDefaults: &dependencyDefaults,
-		)
+		// Root type's own non-dependency defaults (from init or customMock).
+		let rootConstructionInitializer: Initializer? = if let mockInitializer = instantiable.mockInitializer {
+			mockInitializer
+		} else {
+			instantiable.initializer
+		}
+		let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
+		var rootDefaultParameters = [(label: String, typeSource: String, defaultExpression: String)]()
+		if let rootConstructionInitializer {
+			for argument in rootConstructionInitializer.arguments {
+				guard argument.hasDefaultValue,
+				      !dependencyLabels.contains(argument.innerLabel),
+				      argument.label != "_",
+				      let defaultExpression = argument.defaultValueExpression
+				else { continue }
+				rootDefaultParameters.append((
+					label: argument.label,
+					typeSource: argument.typeDescription.strippingEscaping.asSource,
+					defaultExpression: defaultExpression
+				))
+			}
+		}
 
-		// Find dependencies not covered by the tree.
-		let coveredRootIdentifiers = Set(allDeclarations.map(\.identifier))
+		// Non-instantiable received deps and uncovered @Instantiated deps → flat params.
+		let treePropertyLabels = Set(parameterTree.map(\.propertyLabel))
+		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
+
+		let unwrappedOptionalCounterparts = Set(
+			receivedProperties
+				.filter(\.typeDescription.isOptional)
+				.map(\.asUnwrappedProperty),
+		)
+		let receivedNonOptionalProperties = Set(
+			receivedProperties
+				.filter { !$0.typeDescription.isOptional },
+		)
+		var flatReceivedParameters = [(label: String, typeSource: String, isOptional: Bool)]()
+		for receivedProperty in receivedProperties.sorted() {
+			guard !treePropertyLabels.contains(receivedProperty.label),
+			      !forwardedPropertySet.contains(receivedProperty)
+			else { continue }
+			guard !receivedProperty.typeDescription.isOptional
+				|| !receivedNonOptionalProperties.contains(receivedProperty.asUnwrappedProperty)
+			else { continue }
+			let isOnlyIfAvailable = (receivedProperty.typeDescription.isOptional
+				&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty))
+				|| (!receivedProperty.typeDescription.isOptional
+					&& !unwrappedOptionalCounterparts.contains(receivedProperty)
+					&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty))
+				|| unavailableOptionalProperties.contains(receivedProperty)
+			let typeSource: String = if isOnlyIfAvailable, !receivedProperty.typeDescription.isOptional {
+				"\(receivedProperty.typeDescription.asSource)?"
+			} else {
+				receivedProperty.typeDescription.asSource
+			}
+			flatReceivedParameters.append((
+				label: receivedProperty.label,
+				typeSource: typeSource,
+				isOptional: isOnlyIfAvailable,
+			))
+		}
+
+		var flatUncoveredParameters = [(label: String, typeSource: String)]()
+		for dependency in instantiable.dependencies {
+			switch dependency.source {
+			case .instantiated:
+				guard !treePropertyLabels.contains(dependency.property.label) else { continue }
+				let sourceType = dependency.property.propertyType.isConstant
+					? dependency.property.typeDescription.asInstantiatedType.asSource
+					: dependency.property.typeDescription.asSource
+				flatUncoveredParameters.append((label: dependency.property.label, typeSource: sourceType))
+			case .received, .aliased, .forwarded:
+				break
+			}
+		}
+
+		// 3. Simple mock case — no tree, no flat params.
+		let hasTree = !parameterTree.isEmpty
+		let hasFlatParams = !forwardedDependencies.isEmpty
+			|| !rootDefaultParameters.isEmpty
+			|| !flatReceivedParameters.isEmpty
+			|| !flatUncoveredParameters.isEmpty
+
+		if !hasTree, !hasFlatParams {
+			let argumentList = try instantiable.generateArgumentList(
+				unavailableProperties: unavailableOptionalProperties,
+				forMockGeneration: true,
+			)
+			let mockMethodName = instantiable.customMockName ?? "mock"
+			let construction = if instantiable.mockInitializer != nil {
+				"\(typeName).\(mockMethodName)(\(argumentList))"
+			} else if instantiable.declarationType.isExtension {
+				"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
+			} else {
+				"\(typeName)(\(argumentList))"
+			}
+			let code = """
+			extension \(typeName) {
+			    \(mockAttributesPrefix)public static func mock() -> \(typeName) {
+			        \(construction)
+			    }
+			}
+			"""
+			return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
+		}
+
+		// 4. Build the mock method.
+		var lines = [String]()
+		lines.append("extension \(typeName) {")
+
+		if hasTree, let safeDIParametersStruct = Self.generateSafeDIParametersStruct(
+			rootChildren: parameterTree,
+			indent: indent,
+		) {
+			lines.append(safeDIParametersStruct)
+			lines.append("")
+		}
+
+		// Build mock() signature.
+		var mockParameters = [String]()
+		for dependency in forwardedDependencies {
+			mockParameters.append("\(bodyIndent)\(dependency.property.label): \(dependency.property.typeDescription.asFunctionParameter.asSource)")
+		}
+		for rootDefault in rootDefaultParameters {
+			mockParameters.append("\(bodyIndent)\(rootDefault.label): \(rootDefault.typeSource) = \(rootDefault.defaultExpression)")
+		}
+		for flatReceived in flatReceivedParameters {
+			if flatReceived.isOptional {
+				mockParameters.append("\(bodyIndent)\(flatReceived.label): \(flatReceived.typeSource) = nil")
+			} else {
+				mockParameters.append("\(bodyIndent)\(flatReceived.label): \(flatReceived.typeSource)")
+			}
+		}
+		for flatUncovered in flatUncoveredParameters {
+			mockParameters.append("\(bodyIndent)\(flatUncovered.label): \(flatUncovered.typeSource)")
+		}
+		if hasTree {
+			mockParameters.append("\(bodyIndent)safeDIParameters: SafeDIParameters = .init()")
+		}
+
+		if mockParameters.isEmpty {
+			lines.append("\(indent)\(mockAttributesPrefix)public static func mock() -> \(typeName) {")
+		} else {
+			lines.append("\(indent)\(mockAttributesPrefix)public static func mock(")
+			lines.append(mockParameters.joined(separator: ",\n"))
+			lines.append("\(indent)) -> \(typeName) {")
+		}
+
+		// Generate mock body.
+		if hasTree {
+			let bodyBindings = Self.generateMockBodyBindings(
+				nodes: parameterTree,
+				parentPath: "safeDIParameters",
+				indent: bodyIndent,
+			)
+			lines.append(contentsOf: bodyBindings)
+		}
+
+		// Generate return statement.
+		let returnArgumentList = try generateReturnArgumentList(
+			instantiable: instantiable,
+		)
+		let mockMethodName = instantiable.customMockName ?? "mock"
+		let returnConstruction = if instantiable.mockInitializer != nil {
+			"\(typeName).\(mockMethodName)(\(returnArgumentList))"
+		} else if instantiable.declarationType.isExtension {
+			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(returnArgumentList))"
+		} else {
+			"\(typeName)(\(returnArgumentList))"
+		}
+		lines.append("\(bodyIndent)return \(returnConstruction)")
+		lines.append("\(indent)}")
+		lines.append("}")
+
+		let code = lines.joined(separator: "\n")
+		return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
+	}
+
+	/// Generates the labeled argument list for the return statement in the mock body.
+	private func generateReturnArgumentList(
+		instantiable: Instantiable,
+	) throws -> String {
+		let constructionInitializer: Initializer? = if let mockInitializer = instantiable.mockInitializer {
+			mockInitializer
+		} else {
+			instantiable.initializer
+		}
+		guard let constructionInitializer else {
+			return Instantiable.incorrectlyConfiguredComment
+		}
+		let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
+		var parts = [String]()
+		for argument in constructionInitializer.arguments {
+			if dependencyLabels.contains(argument.innerLabel) {
+				parts.append("\(argument.label): \(argument.innerLabel)")
+			} else if argument.hasDefaultValue, argument.label != "_" {
+				parts.append("\(argument.label): \(argument.label)")
+			}
+		}
+		return parts.joined(separator: ", ")
+	}
+
+	// NOTE: Old mock generation helper methods (collectMockDeclarations,
+	// disambiguateParameterLabels, defaultValueBindings, uncoveredDependencyBindings)
+	// and types (MockDeclaration, MockParameterIdentifier) are retained below as dead
+	// code during transition. They will be removed after all tests pass (Phase 6).
+
+	private func _legacyPlaceholder() { /* removed old method body */ }
+	/* --- Old generateMockRootCode body removed. Old helper methods retained below. ---
+		let coveredRootIdentifiers = Set<MockParameterIdentifier>()
 		// Identifiers of declarations needing root-level `let x = x()` bindings.
 		// These are uncovered and received dependencies NOT handled by generatePropertyCode.
 		var rootBindingIdentifiers = Set<MockParameterIdentifier>()
@@ -1176,7 +1386,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		let code = lines.joined(separator: "\n")
 		return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
-	}
+	--- End of old method body (block comment) */
 
 	/// Identifies a mock parameter by its property label and source type.
 	/// Used to track disambiguation, subtree status, and root-bound state
