@@ -506,6 +506,40 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		#expect(rootMock.contains("#error"), "Mock output should have #error. Output:\n\(rootMock)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenNonRootInstantiatedPropertyHasForwardedArgument() async {
+		// Parent is NOT a root — only generateMock: true. Child has @Forwarded.
+		// Production validation never sees this graph (no root entry point),
+		// but mock generation must still catch the forwarded-property error.
+		await assertThrowsError(
+			"""
+			Property `child: Child` on Parent has at least one @Forwarded property. Property should instead be of type `Instantiator<Child>`.
+			""",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Parent: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct Child: Instantiable {
+					    public init(name: String) { self.name = name }
+					    @Forwarded let name: String
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

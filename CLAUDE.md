@@ -38,6 +38,7 @@ SafeDI is a compile-time dependency injection framework for Swift. It uses Swift
 
 ### Mock generation specifics
 
+- **Share logic between production and mock paths where possible.** Validation, scope population, and other shared concerns should live in common helpers rather than being duplicated between `createTypeDescriptionToScopeMapping` and `createMockTypeDescriptionToScopeMapping`. When adding validation to one path, check whether the other path needs it too.
 - `MockParameterIdentifier` (propertyLabel + sourceType) is the key type for tracking parameters throughout mock gen
 - `resolvedParameters` tracks which deps are already bound — prevents duplicate bindings across scopes
 - `parameterLabelMap` maps identifiers to disambiguated parameter names

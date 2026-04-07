@@ -129,6 +129,19 @@ public actor DependencyTreeGenerator {
 					else { continue }
 				}
 
+				// Validate that this type's constant @Instantiated children have no @Forwarded properties.
+				for dependency in scope.instantiable.dependencies {
+					guard case .instantiated = dependency.source else { continue }
+					let instantiatedType = dependency.asInstantiatedType
+					if let childInstantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType] {
+						try validateNoForwardedProperties(
+							for: dependency,
+							instantiable: childInstantiable,
+							parent: scope.instantiable,
+						)
+					}
+				}
+
 				let mockRoot = try createMockRootScopeGenerator(
 					for: instantiable,
 					scope: scope,
@@ -700,17 +713,11 @@ public actor DependencyTreeGenerator {
 					if let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType],
 					   let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
 					{
-						let type = dependency.property.propertyType
-						if type.isConstant {
-							guard instantiable.dependencies.filter(\.isForwarded).isEmpty else {
-								throw DependencyTreeGeneratorError
-									.instantiableHasForwardedProperty(
-										property: dependency.property,
-										instantiableWithForwardedProperty: instantiable,
-										parent: scope.instantiable,
-									)
-							}
-						}
+						try validateNoForwardedProperties(
+							for: dependency,
+							instantiable: instantiable,
+							parent: scope.instantiable,
+						)
 						scope.propertiesToGenerate.append(.instantiated(
 							dependency.property,
 							instantiatedScope,
@@ -730,6 +737,24 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		return typeDescriptionToScopeMap
+	}
+
+	/// Validates that a constant `@Instantiated` dependency has no `@Forwarded` properties.
+	private func validateNoForwardedProperties(
+		for dependency: Dependency,
+		instantiable: Instantiable,
+		parent: Instantiable,
+	) throws {
+		if dependency.property.propertyType.isConstant {
+			guard instantiable.dependencies.filter(\.isForwarded).isEmpty else {
+				throw DependencyTreeGeneratorError
+					.instantiableHasForwardedProperty(
+						property: dependency.property,
+						instantiableWithForwardedProperty: instantiable,
+						parent: parent,
+					)
+			}
+		}
 	}
 
 	/// Validates scopes for cycles and optionally for unfulfillable properties.
