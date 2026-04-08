@@ -278,10 +278,10 @@ struct SafeDITool: AsyncParsableCommand {
 					}
 
 					// Write shared mock configuration file.
-					if let mockConfigurationOutputFilePath = manifest.mockConfigurationOutputFilePath,
-					   let mockConfigurationCode = mockResult.mockConfigurationCode
-					{
-						let code = fileHeader + mockConfigurationCode
+					// Always write the file when the path is set, even if empty,
+					// because the build system expects the declared output to exist.
+					if let mockConfigurationOutputFilePath = manifest.mockConfigurationOutputFilePath {
+						let code = fileHeader + (mockResult.mockConfigurationCode ?? "")
 						let existingContent = try? String(contentsOfFile: mockConfigurationOutputFilePath, encoding: .utf8)
 						if existingContent != code {
 							try code.write(toPath: mockConfigurationOutputFilePath)
