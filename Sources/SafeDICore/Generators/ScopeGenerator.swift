@@ -916,6 +916,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
 				let forwardedLabels = Set(node.forwardedProperties.map(\.label))
 
+				// Mark child labels as seen so deeper nodes don't re-add them
+				// as external deps. Children are built internally by the build method.
+				for childLabel in childLabels {
+					seen.insert(childLabel)
+				}
+
 				for argument in node.constructionArguments {
 					let label = argument.innerLabel
 					if dependencyLabels.contains(label),

@@ -2701,7 +2701,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        selfBuilder: Instantiator<Root>,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Root {
 		        let selfBuilder = Instantiator<Root>(__safeDI_selfBuilder)
@@ -2787,7 +2786,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        } else {
 		            service = Service()
 		        }
-		        let child = Child.__safeDI_mockBuild(service: service, selfBuilder: selfBuilder, safeDIMockConfiguration: safeDIParameters.child)
+		        let child = Child.__safeDI_mockBuild(service: service, safeDIMockConfiguration: safeDIParameters.child)
 		        return Root(child: child, service: service)
 		    }
 		}
@@ -2813,7 +2812,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        service: Service,
-		        selfBuilder: Instantiator<Child>,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Child {
 		        let selfBuilder = Instantiator<Child>(__safeDI_selfBuilder)
@@ -11206,7 +11204,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        cBuilder: Instantiator<C>,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> B {
 		        func __safeDI_cBuilder() -> C {
@@ -11326,7 +11323,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        aBuilder: Instantiator<A>,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> A {
 		        let aBuilder = Instantiator<A> {
