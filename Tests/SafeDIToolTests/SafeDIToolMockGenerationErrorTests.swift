@@ -404,7 +404,12 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		        unrelated: Unrelated? = nil,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let child = (safeDIParameters.child ?? Child.mock(unrelated:shared:))(unrelated, shared)
+		        let child: Child
+		        if let safeDIBuilder = safeDIParameters.child {
+		            child = safeDIBuilder(unrelated, shared)
+		        } else {
+		            child = Child.mock(unrelated: unrelated, shared: shared)
+		        }
 		        return Parent(child: child, shared: shared)
 		    }
 		}
@@ -482,9 +487,23 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_presenter() -> Presenter {
-		            let service = (safeDIParameters.presenter.service ?? Service.init)()
-		            let client = (safeDIParameters.presenter.client ?? Client.init)()
-		            return (safeDIParameters.presenter.safeDIBuilder ?? Presenter.customMock(service:))(service)
+		            let service: Service
+		            if let safeDIBuilder = safeDIParameters.presenter.service {
+		                service = safeDIBuilder()
+		            } else {
+		                service = Service()
+		            }
+		            let client: Client
+		            if let safeDIBuilder = safeDIParameters.presenter.client {
+		                client = safeDIBuilder()
+		            } else {
+		                client = Client()
+		            }
+		            if let safeDIBuilder = safeDIParameters.presenter.safeDIBuilder {
+		                return safeDIBuilder(service)
+		            } else {
+		                return Presenter.customMock(service: service)
+		            }
 		        }
 		        let presenter = __safeDI_presenter()
 		        return Root(presenter: presenter)

@@ -172,7 +172,12 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let dependency = (safeDIParameters.dependency ?? Dependency.init)()
+		        let dependency: Dependency
+		        if let safeDIBuilder = safeDIParameters.dependency {
+		            dependency = safeDIBuilder()
+		        } else {
+		            dependency = Dependency()
+		        }
 		        return Root(dependency: dependency)
 		    }
 		}
@@ -489,7 +494,12 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let crossModuleService = (safeDIParameters.crossModuleService ?? CrossModuleService.init)()
+		        let crossModuleService: CrossModuleService
+		        if let safeDIBuilder = safeDIParameters.crossModuleService {
+		            crossModuleService = safeDIBuilder()
+		        } else {
+		            crossModuleService = CrossModuleService()
+		        }
 		        return Root(crossModuleService: crossModuleService)
 		    }
 		}
@@ -561,8 +571,17 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let leaf = (safeDIParameters.child.leaf ?? Leaf.init)()
-		            return (safeDIParameters.child.safeDIBuilder ?? Child.init(leaf:))(leaf)
+		            let leaf: Leaf
+		            if let safeDIBuilder = safeDIParameters.child.leaf {
+		                leaf = safeDIBuilder()
+		            } else {
+		                leaf = Leaf()
+		            }
+		            if let safeDIBuilder = safeDIParameters.child.safeDIBuilder {
+		                return safeDIBuilder(leaf)
+		            } else {
+		                return Child(leaf: leaf)
+		            }
 		        }
 		        let child = __safeDI_child()
 		        return Root(child: child)
