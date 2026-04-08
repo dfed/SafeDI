@@ -1060,9 +1060,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 
 			// Collect non-dependency default-valued parameters.
-			// Instantiator boundaries stop bubbling — those are user-provided closures.
 			var defaultParameters = [MockParameterNode.DefaultParameter]()
-			if !isInstantiator, let constructionInitializer {
+			if let constructionInitializer {
 				let dependencyLabels = Set(childInstantiable.dependencies.map(\.property.label))
 				for argument in constructionInitializer.arguments where argument.hasDefaultValue {
 					guard !dependencyLabels.contains(argument.innerLabel),
@@ -1400,6 +1399,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		parentPath: String,
 		parentTypeDescription: TypeDescription,
 		indent: String,
+		ancestorTypes: Set<String> = [],
 	) -> [String] {
 		var lines = [String]()
 		let labelMap = disambiguatePropertyLabels(for: nodes)
@@ -1437,6 +1437,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					optionalBuilderPath = nodePath
 					builderExpression = "(\(nodePath) ?? \(node.defaultBuilderExpression))"
 				}
+				var childAncestors = ancestorTypes
+				childAncestors.insert(parentTypeDescription.asSource)
 				lines.append(contentsOf: generateInstantiatorBinding(
 					for: node,
 					nodePath: nodePath,
@@ -1445,6 +1447,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					arguments: arguments,
 					defaultDirectCall: node.defaultDirectCall(resolvedArguments: arguments),
 					indent: indent,
+					ancestorTypes: childAncestors,
 				))
 			} else if node.needsConfigurationStruct {
 				// Non-leaf constant child: call its __safeDI_mockBuild() method.

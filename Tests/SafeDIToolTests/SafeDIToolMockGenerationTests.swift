@@ -2445,14 +2445,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    struct SafeDIParameters {
 		        init(
 		            shared: (() -> Shared)? = nil,
-		            childBuilder: ((String, Shared, Bool) -> Child)? = nil
+		            childBuilder: Child.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.shared = shared
 		            self.childBuilder = childBuilder
 		        }
 
 		        let shared: (() -> Shared)?
-		        let childBuilder: ((String, Shared, Bool) -> Child)?
+		        let childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -2465,10 +2465,10 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            shared = Shared()
 		        }
 		        func __safeDI_childBuilder(name: String) -> Child {
-		            if let safeDIBuilder = safeDIParameters.childBuilder {
-		                return safeDIBuilder(name, shared, false)
+		            if let safeDIBuilder = safeDIParameters.childBuilder.safeDIBuilder {
+		                return safeDIBuilder(name, shared, safeDIParameters.childBuilder.flag)
 		            } else {
-		                return Child(name: name, shared: shared, flag: false)
+		                return Child(name: name, shared: shared, flag: safeDIParameters.childBuilder.flag)
 		            }
 		        }
 		        let childBuilder = Instantiator<Child> {
