@@ -3010,6 +3010,58 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_noRedeclarationWhenChildAndGrandchildSharePropertyLabel() async throws {
+		// Root has a `presenter` child and a `child` that also has a `presenter`.
+		// The inner `presenter` binding is at a different scope (inside child's
+		// construction) so it should not collide.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(presenter: RootPresenter, child: Child) {
+				        self.presenter = presenter
+				        self.child = child
+				    }
+				    @Instantiated let presenter: RootPresenter
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Child: Instantiable {
+				    public init(presenter: ChildPresenter) {
+				        self.presenter = presenter
+				    }
+				    @Instantiated let presenter: ChildPresenter
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct RootPresenter: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct ChildPresenter: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// Both `presenter` locals must have distinct names to avoid redeclaration.
+		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
+		// Should not contain two `let presenter =` at the same scope level
+		let presenterBindings = rootMock.components(separatedBy: "let presenter =")
+		#expect(presenterBindings.count <= 2, "Found duplicate 'let presenter =' bindings: \(rootMock)")
+	}
+
 	// MARK: Tests – onlyIfAvailable and aliased properties
 
 	@Test
