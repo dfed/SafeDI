@@ -910,11 +910,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			var result = [(label: String, typeSource: String)]()
 			var seen = Set<String>()
 
-			func collect(from node: MockParameterNode) {
+			func collect(from node: MockParameterNode, isRoot: Bool) {
 				let childLabels = Set(node.children.map(\.propertyLabel))
 				let dependencyLabels = Set(node.dependencies.map(\.property.label))
 				let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
-				let forwardedLabels = Set(node.forwardedProperties.map(\.label))
+				// Forwarded properties on CHILD nodes are runtime Instantiator closure
+				// parameters — they don't need to be threaded through the parent's
+				// build method. But the ROOT node's own forwarded properties DO need
+				// to be parameters (they're provided by the caller).
+				let forwardedLabels: Set<String> = if isRoot {
+					[]
+				} else {
+					Set(node.forwardedProperties.map(\.label))
+				}
 
 				// Mark child labels as seen so deeper nodes don't re-add them
 				// as external deps. Children are built internally by the build method.
@@ -935,14 +943,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 
 				// Recurse into children to collect transitive external dependencies.
-				// Forwarded properties are excluded above — they're runtime parameters
-				// of the Instantiator closure, not parent-scope dependencies.
 				for child in node.children {
-					collect(from: child)
+					collect(from: child, isRoot: false)
 				}
 			}
 
-			collect(from: self)
+			collect(from: self, isRoot: true)
 			return result
 		}
 

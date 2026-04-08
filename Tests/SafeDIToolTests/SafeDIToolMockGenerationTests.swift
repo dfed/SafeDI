@@ -3852,6 +3852,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
+		        name: String,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Child {
 		        func __safeDI_grandchildBuilder(age: Int) -> Grandchild {
@@ -4313,9 +4314,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
+		        userManager: UserManager,
 		        userNetworkService: NetworkService,
 		        userVendor: UserVendor,
-		        userManager: UserManager,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> LoggedInViewController {
 		        func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
@@ -4504,6 +4505,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
+		        iterator: IndexingIterator<Array<Element>>,
 		        anyIterator: AnyIterator,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Child {
@@ -6777,6 +6779,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
+		        name: String,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Child {
 		        let service: Service
@@ -10063,6 +10066,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
+		        name: String,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> ChildA {
 		        let shared: Shared
@@ -10352,6 +10356,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
+		        name: String,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> ChildA {
 		        let shared: Shared
@@ -11323,6 +11328,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
+		        context: String,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> A {
 		        let aBuilder = Instantiator<A> {
