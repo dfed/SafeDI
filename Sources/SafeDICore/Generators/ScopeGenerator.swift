@@ -660,14 +660,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let disambiguatedLabel = "\(parameter.label)_\(parameter.typeSource.replacingOccurrences(of: "?", with: ""))"
 			return (label: disambiguatedLabel, typeSource: parameter.typeSource, isOptional: parameter.isOptional)
 		}
-		flatUncoveredParameters = flatUncoveredParameters.map { parameter in
-			guard let count = flatLabelCounts[parameter.label], count > 1 else {
-				return parameter
-			}
-			let disambiguatedLabel = "\(parameter.label)_\(parameter.typeSource)"
-			return (label: disambiguatedLabel, typeSource: parameter.typeSource)
-		}
-
 		// 3. Simple mock case — no tree, no flat parameters.
 		let hasTree = !parameterTree.isEmpty
 		let hasFlatParameters = !forwardedDependencies.isEmpty
