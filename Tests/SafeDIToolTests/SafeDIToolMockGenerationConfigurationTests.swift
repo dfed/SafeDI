@@ -596,7 +596,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Child {
 		        let leaf: Leaf
 		        if let safeDIBuilder = safeDIMockConfiguration.leaf {

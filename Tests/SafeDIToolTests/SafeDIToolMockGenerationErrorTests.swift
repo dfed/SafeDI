@@ -517,7 +517,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Presenter {
 		        let service: Service
 		        if let safeDIBuilder = safeDIMockConfiguration.service {

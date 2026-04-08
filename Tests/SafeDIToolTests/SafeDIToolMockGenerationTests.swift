@@ -499,7 +499,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        shared: SharedThing,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> ChildA {
 		        let grandchild: Grandchild
 		        if let safeDIBuilder = safeDIMockConfiguration.grandchild {
@@ -1069,7 +1069,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        shared: Shared,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> ChildA {
 		        let grandchildAA: GrandchildAA
 		        if let safeDIBuilder = safeDIMockConfiguration.grandchildAA {
@@ -1680,7 +1680,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        leaf: Leaf,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Grandchild {
 		        let greatGrandchild: GreatGrandchild
 		        if let safeDIBuilder = safeDIMockConfiguration.greatGrandchild {
@@ -1712,7 +1712,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        leaf: Leaf,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Child {
 		        let grandchild = Grandchild.__safeDI_mockBuild(leaf: leaf, safeDIMockConfiguration: safeDIMockConfiguration.grandchild)
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
@@ -2908,7 +2908,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Child {
 		        let presenter: ChildPresenter
 		        if let safeDIBuilder = safeDIMockConfiguration.presenter {
@@ -4733,7 +4733,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        renamedNetworkService: NetworkService,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> DefaultAuthService {
 		        let networkService: DefaultNetworkService
 		        if let safeDIBuilder = safeDIMockConfiguration.networkService {
@@ -5054,7 +5054,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        receivedValue: ReceivedValue,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Service {
 		        let database: Database
 		        if let safeDIBuilder = safeDIMockConfiguration.database {
@@ -5377,7 +5377,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        shared: Shared,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Service {
 		        func __safeDI_channelBuilder(key: String) -> Channel {
 		            if let safeDIBuilder = safeDIMockConfiguration.channelBuilder {
@@ -5583,7 +5583,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        token: Token,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Child {
 		        let grandchild: Grandchild
 		        if let safeDIBuilder = safeDIMockConfiguration.grandchild {
@@ -6315,7 +6315,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Handler {
 		        let logger: Logger
 		        if let safeDIBuilder = safeDIMockConfiguration.logger {
@@ -6854,7 +6854,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Child {
 		        let service: InternalService
 		        if let safeDIBuilder = safeDIMockConfiguration.service {
@@ -7153,7 +7153,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> ChildB {
 		        let shared: SharedThing
 		        if let safeDIBuilder = safeDIMockConfiguration.shared {
@@ -7359,7 +7359,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> ConcreteService {
 		        let helper: Helper
 		        if let safeDIBuilder = safeDIMockConfiguration.helper {
@@ -7629,7 +7629,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Engine {
 		        let stateService: StateService
 		        if let safeDIBuilder = safeDIMockConfiguration.stateService {
@@ -8376,7 +8376,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> ChildA {
 		        let service: LocalService
 		        if let safeDIBuilder = safeDIMockConfiguration.service {
@@ -8578,7 +8578,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Child {
 		        let leaf: Leaf
 		        if let safeDIBuilder = safeDIMockConfiguration.leaf {
@@ -8609,7 +8609,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Parent {
 		        let child = Child.__safeDI_mockBuild(safeDIMockConfiguration: safeDIMockConfiguration.child)
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
@@ -8727,7 +8727,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> WidgetService {
 		        let config: Config
 		        if let safeDIBuilder = safeDIMockConfiguration.config {
@@ -8855,7 +8855,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> WidgetService {
 		        let config: Config
 		        if let safeDIBuilder = safeDIMockConfiguration.config {
@@ -8887,7 +8887,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        widgetService: WidgetService,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Parent {
 		        let grandchild: Grandchild
 		        if let safeDIBuilder = safeDIMockConfiguration.grandchild {
@@ -9015,7 +9015,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> WidgetService {
 		        let config: Config
 		        if let safeDIBuilder = safeDIMockConfiguration.config {
@@ -9046,7 +9046,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Grandchild {
 		        let widgetService = WidgetService.__safeDI_mockBuild(safeDIMockConfiguration: safeDIMockConfiguration.widgetService)
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
@@ -9072,7 +9072,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Parent {
 		        let grandchild = Grandchild.__safeDI_mockBuild(safeDIMockConfiguration: safeDIMockConfiguration.grandchild)
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
@@ -9275,7 +9275,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Child {
 		        let localService: LocalService
 		        if let safeDIBuilder = safeDIMockConfiguration.localService {
@@ -9478,7 +9478,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Grandchild {
 		        let service: LocalService
 		        if let safeDIBuilder = safeDIMockConfiguration.service {
@@ -9510,7 +9510,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        service: ExternalService,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Child {
 		        let grandchild = Grandchild.__safeDI_mockBuild(safeDIMockConfiguration: safeDIMockConfiguration.grandchild)
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
@@ -9956,7 +9956,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        shared: Shared,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Child {
 		        func __safeDI_grandchildBuilder(name: String) -> Grandchild {
 		            if let safeDIBuilder = safeDIMockConfiguration.grandchildBuilder {
@@ -10238,7 +10238,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> ChildA {
 		        let shared: Shared
 		        if let safeDIBuilder = safeDIMockConfiguration.shared {
@@ -10270,7 +10270,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        shared: Shared,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> ChildB {
 		        func __safeDI_grandchildBuilder(name: String) -> Grandchild {
 		            if let safeDIBuilder = safeDIMockConfiguration.grandchildBuilder {
@@ -10409,7 +10409,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> ServiceA {
 		        let serviceB: ServiceB
 		        if let safeDIBuilder = safeDIMockConfiguration.serviceB {
@@ -10442,7 +10442,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    static func __safeDI_mockBuild(
 		        serviceA: ServiceA,
 		        serviceB: ServiceB,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Child {
 		        func __safeDI_grandchildBuilder(name: String) -> Grandchild {
 		            if let safeDIBuilder = safeDIMockConfiguration.grandchildBuilder {
@@ -10591,7 +10591,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        shared: Shared,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Grandchild {
 		        func __safeDI_greatGrandchildBuilder(name: String) -> GreatGrandchild {
 		            if let safeDIBuilder = safeDIMockConfiguration.greatGrandchildBuilder {
@@ -10627,7 +10627,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        shared: Shared,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> ChildA {
 		        let grandchild = Grandchild.__safeDI_mockBuild(shared: shared, safeDIMockConfiguration: safeDIMockConfiguration.grandchild)
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
@@ -10653,7 +10653,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
+		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> ChildB {
 		        let shared: Shared
 		        if let safeDIBuilder = safeDIMockConfiguration.shared {
