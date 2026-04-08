@@ -1721,17 +1721,6 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        let viewModel: String
 		        let safeDIBuilder: ((String, String) -> Grandchild)?
 		    }
-
-		    static func __safeDI_mockBuild(
-		        name: String,
-		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
-		    ) -> Grandchild {
-		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
-		            return safeDIBuilder(name, safeDIMockConfiguration.viewModel)
-		        } else {
-		            return Grandchild(name: name, viewModel: safeDIMockConfiguration.viewModel)
-		        }
-		    }
 		}
 
 		extension Child {

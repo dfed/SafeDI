@@ -1033,18 +1033,57 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Collects all unique configuration types from this scope's mock parameter tree.
-	/// Returns tuples with the struct code and the build method code (emitted separately in the extension).
-	func collectConfigurationTypes() async -> [(typeName: String, structCode: String, buildMethodCode: String)] {
+	/// Returns tuples with the struct code and optional build method code.
+	/// The build method is only generated for types that appear as constant
+	/// (non-Instantiator) children — Instantiator-only types use inline code.
+	func collectConfigurationTypes() async -> [(typeName: String, structCode: String, buildMethodCode: String?)] {
 		let parameterTree = await collectMockParameterTree()
 		let uniqueTypes = Self.collectUniqueConfigurationTypes(from: parameterTree)
+		let typesUsedAsConstantChildren = Self.collectTypesUsedAsConstantChildren(from: parameterTree)
 		let indent = Self.standardIndent
 		return uniqueTypes.map { node in
-			(
-				typeName: node.instantiatedTypeDescription.asSource,
+			let typeName = node.instantiatedTypeDescription.asSource
+			let needsBuildMethod = typesUsedAsConstantChildren.contains(typeName)
+			return (
+				typeName: typeName,
 				structCode: Self.generateConfigurationStruct(for: node, indent: indent),
-				buildMethodCode: Self.generateBuildMethod(for: node, indent: indent).joined(separator: "\n"),
+				buildMethodCode: needsBuildMethod
+					? Self.generateBuildMethod(for: node, indent: indent).joined(separator: "\n")
+					: nil,
 			)
 		}
+	}
+
+	/// Collects type names that appear as constant (non-Instantiator) children
+	/// with `needsConfigurationStruct` anywhere in the tree. These types need
+	/// a `__safeDI_mockBuild` method because the mock body calls it.
+	/// The root's direct children are included because the root's `mock()` method
+	/// calls `__safeDI_mockBuild` on its constant children.
+	private static func collectTypesUsedAsConstantChildren(
+		from nodes: [MockParameterNode],
+	) -> Set<String> {
+		var result = Set<String>()
+
+		func walk(_ node: MockParameterNode) {
+			for child in node.children {
+				if !child.isInstantiator, child.needsConfigurationStruct {
+					result.insert(child.instantiatedTypeDescription.asSource)
+				}
+				walk(child)
+			}
+		}
+
+		// Include the root's direct children that are constant and need a
+		// configuration struct, since the root's mock() method calls their
+		// __safeDI_mockBuild() method.
+		for node in nodes where !node.isInstantiator && node.needsConfigurationStruct {
+			result.insert(node.instantiatedTypeDescription.asSource)
+		}
+
+		for node in nodes {
+			walk(node)
+		}
+		return result
 	}
 
 	/// Walks the dependency tree and builds a `[MockParameterNode]` tree representing
