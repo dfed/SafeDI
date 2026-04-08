@@ -184,13 +184,23 @@ public actor DependencyTreeGenerator {
 		}
 
 		// Deduplicate configuration types by typeName across all roots.
+		// Only include types that belong to the current module to avoid
+		// generating duplicate extensions for imported types.
 		var seenTypeNames = Set<String>()
 		var allConfigurationExtensions = [(typeName: String, mockAttributes: String, code: String)]()
 		for result in generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription }) {
 			for configType in result.configurationTypes {
-				if seenTypeNames.insert(configType.typeName).inserted {
-					allConfigurationExtensions.append(configType)
+				guard seenTypeNames.insert(configType.typeName).inserted else { continue }
+				// Skip types from other modules — their own module generates their configuration.
+				if let currentModuleSourceFilePaths,
+				   let instantiable = typeDescriptionToFulfillingInstantiableMap.values
+				   .first(where: { $0.concreteInstantiable.asSource == configType.typeName }),
+				   let sourceFilePath = instantiable.sourceFilePath,
+				   !currentModuleSourceFilePaths.contains(sourceFilePath)
+				{
+					continue
 				}
+				allConfigurationExtensions.append(configType)
 			}
 		}
 
