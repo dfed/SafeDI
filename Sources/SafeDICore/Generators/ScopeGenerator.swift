@@ -1341,6 +1341,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let childBindings = generateBuildBodyBindings(
 			nodes: node.children,
 			parentPath: configurationParameterName,
+			parentTypeDescription: node.instantiatedTypeDescription,
 			indent: innerIndent,
 		)
 		lines.append(contentsOf: childBindings)
@@ -1365,6 +1366,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func generateBuildBodyBindings(
 		nodes: [MockParameterNode],
 		parentPath: String,
+		parentTypeDescription: TypeDescription,
 		indent: String,
 	) -> [String] {
 		var lines = [String]()
@@ -1373,8 +1375,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for node in nodes {
 			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			let nodePath = "\(parentPath).\(disambiguated)"
+			// Detect cycles: the child's instantiated type matches the parent type
+			// (e.g., UnityContainerViewController instantiates Instantiator<UnityContainerViewController>).
+			let isCycleInBuildBody = node.instantiatedTypeDescription == parentTypeDescription
 
-			if node.isInstantiator, node.isPropertyCycle {
+			if node.isInstantiator, node.isPropertyCycle || isCycleInBuildBody {
 				// Self-referencing Instantiator cycle: create an Instantiator that
 				// recursively calls __safeDI_mockBuild. The cycle node's configuration
 				// property was excluded from the struct to avoid infinite value types.
