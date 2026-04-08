@@ -517,7 +517,8 @@ public actor DependencyTreeGenerator {
 		propertyStack: [Property] = [],
 	) throws {
 		// Check dependencies for cycles (catches @Received references back to ancestors).
-		for dependency in scope.instantiable.dependencies {
+		// Skip forwarded dependencies — they're runtime Instantiator closure parameters.
+		for dependency in scope.instantiable.dependencies where dependency.source != .forwarded {
 			let propertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
 			guard let cycleIndex = propertyStack.firstIndex(of: propertyForDependency) else {
 				continue
@@ -901,11 +902,13 @@ public actor DependencyTreeGenerator {
 			}
 
 			// Check children for cycles.
+			// Skip forwarded dependencies — they're runtime parameters passed through
+			// the Instantiator closure, not scope-level dependencies that create cycles.
 			var childPropertyStack = propertyStack
 			if let property {
 				childPropertyStack.insert(property, at: 0)
 			}
-			for dependency in scope.instantiable.dependencies {
+			for dependency in scope.instantiable.dependencies where dependency.source != .forwarded {
 				let propertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
 				guard let cycleIndex = childPropertyStack.firstIndex(of: propertyForDependency) else {
 					continue

@@ -11822,6 +11822,52 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_parentChildLazyCycleWhereChildForwardsParent() async throws {
+		// Root provides Player. Player has Instantiator<CachedPlayer>.
+		// CachedPlayer @Forwards Player (passed through the Instantiator closure).
+		// This is valid in production. Mock generation should NOT reject it.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(player: Player) {
+				        self.player = player
+				    }
+				    @Instantiated let player: Player
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Player: Instantiable {
+				    public init(cachedPlayerBuilder: Instantiator<CachedPlayer>) {
+				        self.cachedPlayerBuilder = cachedPlayerBuilder
+				    }
+				    @Instantiated let cachedPlayerBuilder: Instantiator<CachedPlayer>
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct CachedPlayer: Instantiable {
+				    public init(player: Player) {
+				        self.player = player
+				    }
+				    @Forwarded let player: Player
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// Should generate mocks without error. The cycle is valid in production.
+		#expect(output.mockFiles.count == 3)
+		#expect(output.mockFiles["Player+SafeDIMock.swift"] != nil, "Player mock should be generated")
+		#expect(output.mockFiles["CachedPlayer+SafeDIMock.swift"] != nil, "CachedPlayer mock should be generated")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_instantiatorGrandchildDependingOnForwardedPropertyIsNestedInsideBuilderFunction() async throws {
 		// Presenter depends on `configuration` which is a @Forwarded property of the
 		// Instantiator child. The presenter must be built INSIDE the __safeDI_ function
