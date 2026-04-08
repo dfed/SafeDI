@@ -89,6 +89,7 @@ struct RootScannerTests {
 		// Verify outputFiles includes only DI tree outputs (no mock outputs without config).
 		#expect(result.outputFiles.count == 2)
 		#expect(result.outputFiles.contains(URL(fileURLWithPath: featureAOutputPath)))
+		#expect(result.manifest.mockConfigurationOutputFilePath == nil)
 
 		let manifestData = try JSONEncoder().encode(result.manifest)
 		let decodedManifest = try JSONDecoder().decode(SafeDIToolManifest.self, from: manifestData)
@@ -770,6 +771,13 @@ struct RootScannerTests {
 		// No config exists. Only the opted-in type gets a mock entry.
 		#expect(result.manifest.mockGeneration.count == 1)
 		#expect(result.manifest.mockGeneration.first?.inputFilePath == "OptedIn.swift")
+
+		// When mock generation entries exist, the config output file path is set.
+		let expectedConfigPath = outputDirectory.appendingPathComponent("SafeDIMockConfiguration.swift").path
+		#expect(result.manifest.mockConfigurationOutputFilePath == expectedConfigPath)
+
+		// outputFiles includes mock files AND the configuration file.
+		#expect(result.outputFiles.contains(URL(fileURLWithPath: expectedConfigPath)))
 	}
 
 	@Test
