@@ -2878,11 +2878,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Root_Configuration {
 		            public init(
+		                selfBuilder: Root_Configuration = .init(),
 		                _ safeDIBuilder: ((Instantiator<Root>) -> Root)? = nil
 		            ) {
+		                self.selfBuilder = selfBuilder
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
+		            public let selfBuilder: Root_Configuration
 		            public let safeDIBuilder: ((Instantiator<Root>) -> Root)?
 		        }
 
@@ -2914,9 +2917,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_lazySelfInstantiationCycleAsChildOfAnotherType() async throws {
-		// Container has a constant child (UnityVC) that itself has a self-referencing
-		// Instantiator<UnityVC>. The cycle node should NOT create a _Configuration
-		// child entry. The builder call should use the forward-declared function.
+		// A constant child (Child) has a self-referencing Instantiator<Child>.
+		// The cycle node gets a recursive Child_Configuration child entry.
+		// The recursive struct type works because safeDIBuilder is optional.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2972,11 +2975,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		        public struct Child_Configuration {
 		            public init(
+		                selfBuilder: Child_Configuration = .init(),
 		                _ safeDIBuilder: ((Service, Instantiator<Child>) -> Child)? = nil
 		            ) {
+		                self.selfBuilder = selfBuilder
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
+		            public let selfBuilder: Child_Configuration
 		            public let safeDIBuilder: ((Service, Instantiator<Child>) -> Child)?
 		        }
 
@@ -2999,7 +3005,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let service = (safeDIParameters.service.safeDIBuilder ?? Service.init)()
 		        func __safeDI_selfBuilder() -> Child {
 		            let selfBuilder = Instantiator<Child>(__safeDI_selfBuilder)
-		            return (safeDIParameters.child.safeDIBuilder ?? Child.init(service:selfBuilder:))(service, selfBuilder)
+		            return (safeDIParameters.child.selfBuilder.safeDIBuilder ?? Child.init(service:selfBuilder:))(service, selfBuilder)
 		        }
 		        let selfBuilder = Instantiator<Child>(__safeDI_selfBuilder)
 		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(service:selfBuilder:))(service, selfBuilder)
@@ -10422,16 +10428,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    public struct SafeDIParameters {
-		        public struct A_Configuration {
-		            public init(
-		                _ safeDIBuilder: ((Instantiator<B>) -> A)? = nil
-		            ) {
-		                self.safeDIBuilder = safeDIBuilder
-		            }
-
-		            public let safeDIBuilder: ((Instantiator<B>) -> A)?
-		        }
-
 		        public struct C_Configuration {
 		            public init(
 		                aBuilder: A_Configuration = .init(),
@@ -10456,6 +10452,19 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		            public let cBuilder: C_Configuration
 		            public let safeDIBuilder: ((Instantiator<C>) -> B)?
+		        }
+
+		        public struct A_Configuration {
+		            public init(
+		                bBuilder: B_Configuration = .init(),
+		                _ safeDIBuilder: ((Instantiator<B>) -> A)? = nil
+		            ) {
+		                self.bBuilder = bBuilder
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            public let bBuilder: B_Configuration
+		            public let safeDIBuilder: ((Instantiator<B>) -> A)?
 		        }
 
 		        public init(
@@ -10532,11 +10541,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct A_Configuration {
 		            public init(
+		                aBuilder: A_Configuration = .init(),
 		                _ safeDIBuilder: ((Instantiator<A>, String) -> A)? = nil
 		            ) {
+		                self.aBuilder = aBuilder
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
+		            public let aBuilder: A_Configuration
 		            public let safeDIBuilder: ((Instantiator<A>, String) -> A)?
 		        }
 
