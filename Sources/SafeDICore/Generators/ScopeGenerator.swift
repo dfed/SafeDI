@@ -1166,38 +1166,40 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			let nodePath = "\(parentPath).\(disambiguated)"
 
-			// Recursively generate children's bindings first (depth-first).
-			let childBindings = generateMockBodyBindings(
-				nodes: node.children,
-				parentPath: nodePath,
-				indent: indent,
-			)
-			lines.append(contentsOf: childBindings)
-
-			// Generate this node's binding.
-			let arguments = resolveBuilderArguments(
-				for: node,
-				nodePath: nodePath,
-			)
-			let argumentList = arguments.joined(separator: ", ")
-
 			let defaultBuilder = node.defaultBuilderExpression
 			let builderExpression = "(\(nodePath).safeDIBuilder ?? \(defaultBuilder))"
 
 			if node.isInstantiator {
+				// For Instantiator nodes, children are generated INSIDE the builder
+				// function because they may depend on forwarded properties that are
+				// only available as function parameters. This mirrors the production
+				// code which builds the entire subtree inside the builder function.
 				lines.append(contentsOf: generateInstantiatorBinding(
 					for: node,
 					nodePath: nodePath,
 					builderExpression: builderExpression,
-					arguments: arguments,
+					arguments: resolveBuilderArguments(for: node, nodePath: nodePath),
 					indent: indent,
 				))
-			} else if node.erasedToConcreteExistential {
-				// Erased-to-concrete existential: wrap the builder call.
-				let protocolType = node.typeDescription.asSource
-				lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(protocolType)(\(builderExpression)(\(argumentList)))")
 			} else {
-				lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)(\(argumentList))")
+				// For constant nodes, children are generated before the parent
+				// at the same scope level (depth-first ordering).
+				let childBindings = generateMockBodyBindings(
+					nodes: node.children,
+					parentPath: nodePath,
+					indent: indent,
+				)
+				lines.append(contentsOf: childBindings)
+
+				let arguments = resolveBuilderArguments(for: node, nodePath: nodePath)
+				let argumentList = arguments.joined(separator: ", ")
+
+				if node.erasedToConcreteExistential {
+					let protocolType = node.typeDescription.asSource
+					lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(protocolType)(\(builderExpression)(\(argumentList)))")
+				} else {
+					lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)(\(argumentList))")
+				}
 			}
 		}
 
@@ -1243,7 +1245,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Produces: inner builder function + `let {label} = Instantiator<T>(...)`.
 	private static func generateInstantiatorBinding(
 		for node: MockParameterNode,
-		nodePath _: String,
+		nodePath: String,
 		builderExpression: String,
 		arguments: [String],
 		indent: String,
@@ -1252,6 +1254,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let concreteTypeName = node.concreteTypeName
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let propertyType = node.typeDescription.propertyType
+		let innerIndent = "\(indent)\(standardIndent)"
 
 		// Build the inner function parameter list (forwarded properties).
 		let functionArguments = if forwardedProperties.isEmpty {
@@ -1284,9 +1287,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var lines = [String]()
 
 		// Emit the inner builder function (unless it's a property cycle).
+		// Children are generated INSIDE the function body because they may
+		// depend on forwarded properties that are only available as parameters.
 		if !node.isPropertyCycle {
 			lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {")
-			lines.append("\(indent)\(standardIndent)\(builderExpression)(\(builderCallArguments))")
+
+			// Generate children's bindings inside the function body.
+			let childBindings = generateMockBodyBindings(
+				nodes: node.children,
+				parentPath: nodePath,
+				indent: innerIndent,
+			)
+			lines.append(contentsOf: childBindings)
+
+			if childBindings.isEmpty {
+				lines.append("\(innerIndent)\(builderExpression)(\(builderCallArguments))")
+			} else {
+				lines.append("\(innerIndent)return \(builderExpression)(\(builderCallArguments))")
+			}
 			lines.append("\(indent)}")
 		}
 
