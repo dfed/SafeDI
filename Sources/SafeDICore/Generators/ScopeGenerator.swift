@@ -985,8 +985,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					: dependency.property.typeDescription.asSource
 				flatUncoveredParameters.append((label: dependency.property.label, typeSource: sourceType))
 			}
+			// Skip recursion into property cycle children — they're self-references
+			// whose deps would incorrectly surface as uncovered.
+			let nonCycleChildren = node.children.filter { !$0.isPropertyCycle }
 			collectUncoveredDependenciesFromTree(
-				node.children,
+				nonCycleChildren,
 				into: &flatUncoveredParameters,
 			)
 		}
@@ -1201,11 +1204,70 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// For constant nodes: `let {label} = safeDIParameters.{path}.safeDIBuilder({arguments})`
 	/// For Instantiator nodes: inner builder function + `Instantiator<T>` wrapping.
+	/// Collects all `safeDIParameters` references that would appear inside a
+	/// `@Sendable func`, so they can be extracted and resolved outside the function.
+	/// Each extraction is a `(localName, expression)` pair.
+	private static func collectSendableExtractions(
+		nodes: [MockParameterNode],
+		parentPath: String,
+		functionName: String,
+		ancestorTypes: Set<String>,
+		into extractions: inout [(localName: String, expression: String)],
+	) {
+		let labelMap = disambiguatePropertyLabels(for: nodes)
+		for node in nodes {
+			let nodeTypeKey = node.instantiatedTypeDescription.asSource
+			let isCycleNode = ancestorTypes.contains(nodeTypeKey)
+			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
+			let nodePath = "\(parentPath).\(disambiguated)"
+			// Convert nodePath to a local name: replace dots with underscores,
+			// strip the "safeDIParameters." prefix.
+			let relativePath = nodePath
+				.replacingOccurrences(of: "safeDIParameters.", with: "")
+				.replacingOccurrences(of: ".", with: "_")
+
+			if !isCycleNode {
+				// Extract the safeDIBuilder (nil-coalesced with default).
+				let defaultBuilder = node.defaultBuilderExpression
+				extractions.append((
+					localName: "\(functionName)__\(relativePath)_safeDIBuilder",
+					expression: "\(nodePath).safeDIBuilder ?? \(defaultBuilder)",
+				))
+			}
+
+			// Extract default parameter references.
+			let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
+			for defaultParameter in node.defaultParameters {
+				extractions.append((
+					localName: "\(functionName)__\(relativePath)_\(defaultParameter.label)",
+					expression: "\(nodePath).\(defaultParameter.label)",
+				))
+			}
+
+			// Recurse into children (for constant node children inside the sendable function).
+			if !node.isInstantiator {
+				var childAncestors = ancestorTypes
+				childAncestors.insert(nodeTypeKey)
+				collectSendableExtractions(
+					nodes: node.children,
+					parentPath: nodePath,
+					functionName: functionName,
+					ancestorTypes: childAncestors,
+					into: &extractions,
+				)
+			}
+			// Instantiator children inside a sendable function would have their own
+			// extraction scope — handled recursively when generateInstantiatorBinding
+			// is called for the nested Instantiator.
+		}
+	}
+
 	private static func generateMockBodyBindings(
 		nodes: [MockParameterNode],
 		parentPath: String,
 		indent: String,
 		ancestorTypes: Set<String> = [],
+		sendableExtractionPrefix: String? = nil,
 	) -> [String] {
 		var lines = [String]()
 
@@ -1220,11 +1282,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let nodePath = "\(parentPath).\(disambiguated)"
 
 			let defaultBuilder = node.defaultBuilderExpression
-			// Cycle nodes have no _Configuration entry — use the default directly.
-			let builderExpression = if isCycleNode {
-				defaultBuilder
+			let relativePath = nodePath
+				.replacingOccurrences(of: "safeDIParameters.", with: "")
+				.replacingOccurrences(of: ".", with: "_")
+
+			// When inside a sendable extraction, use extracted locals instead of
+			// safeDIParameters paths.
+			let builderExpression: String
+			let argumentNodePath: String
+			if isCycleNode {
+				builderExpression = defaultBuilder
+				argumentNodePath = nodePath
+			} else if let sendableExtractionPrefix {
+				let extractedName = "\(sendableExtractionPrefix)__\(relativePath)_safeDIBuilder"
+				builderExpression = extractedName
+				argumentNodePath = nodePath // Used for resolveBuilderArguments
 			} else {
-				"(\(nodePath).safeDIBuilder ?? \(defaultBuilder))"
+				builderExpression = "(\(nodePath).safeDIBuilder ?? \(defaultBuilder))"
+				argumentNodePath = nodePath
 			}
 
 			if node.isInstantiator {
@@ -1238,12 +1313,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					for: node,
 					nodePath: nodePath,
 					builderExpression: builderExpression,
-					arguments: resolveBuilderArguments(for: node, nodePath: nodePath),
+					arguments: resolveBuilderArguments(
+						for: node,
+						nodePath: argumentNodePath,
+						sendableExtractionPrefix: sendableExtractionPrefix,
+					),
 					indent: indent,
 					ancestorTypes: childAncestors,
 				))
 			} else {
-				let arguments = resolveBuilderArguments(for: node, nodePath: nodePath)
+				let arguments = resolveBuilderArguments(
+					for: node,
+					nodePath: argumentNodePath,
+					sendableExtractionPrefix: sendableExtractionPrefix,
+				)
 				let argumentList = arguments.joined(separator: ", ")
 
 				if node.children.isEmpty {
@@ -1272,6 +1355,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						parentPath: nodePath,
 						indent: innerIndent,
 						ancestorTypes: childAncestors,
+						sendableExtractionPrefix: sendableExtractionPrefix,
 					)
 					lines.append(contentsOf: childBindings)
 
@@ -1303,19 +1387,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func resolveBuilderArguments(
 		for node: MockParameterNode,
 		nodePath: String,
+		sendableExtractionPrefix: String? = nil,
 	) -> [String] {
 		let dependencyLabels = Set(node.dependencies.map(\.property.label))
 		let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
 
+		let relativePath = nodePath
+			.replacingOccurrences(of: "safeDIParameters.", with: "")
+			.replacingOccurrences(of: ".", with: "_")
+
 		return node.constructionArguments.compactMap { argument in
 			if dependencyLabels.contains(argument.innerLabel) {
-				// Dependency argument: use the local variable name (property label).
-				// For @Forwarded dependencies in Instantiator context, this is the inner function parameter.
-				// For @Received/@Instantiated dependencies, this is a previously-bound local variable.
 				argument.innerLabel
 			} else if defaultParameterLabels.contains(argument.label) {
-				// Non-dependency default: reference the stored property on SafeDIParameters.
-				"\(nodePath).\(argument.label)"
+				if let sendableExtractionPrefix {
+					"\(sendableExtractionPrefix)__\(relativePath)_\(argument.label)"
+				} else {
+					"\(nodePath).\(argument.label)"
+				}
 			} else if argument.hasDefaultValue, argument.label != "_",
 			          let defaultExpression = argument.defaultValueExpression
 			{
@@ -1381,23 +1470,67 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Children are generated INSIDE the function body because they may
 		// depend on forwarded properties that are only available as parameters.
 		if !node.isPropertyCycle {
-			lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {")
+			if propertyType.isSendable {
+				// For @Sendable functions, extract all safeDIParameters references
+				// OUTSIDE the function and resolve nil-coalescing here (in the
+				// @MainActor mock() context). This avoids capturing the non-Sendable
+				// SafeDIParameters struct inside the @Sendable function.
+				var extractions = [(localName: String, expression: String)]()
+				collectSendableExtractions(
+					nodes: node.children,
+					parentPath: nodePath,
+					functionName: functionName,
+					ancestorTypes: ancestorTypes,
+					into: &extractions,
+				)
+				// Extract the node's own safeDIBuilder.
+				extractions.append((
+					localName: "\(functionName)__safeDIBuilder",
+					expression: "\(builderExpression)",
+				))
 
-			// Generate children's bindings inside the function body.
-			let childBindings = generateMockBodyBindings(
-				nodes: node.children,
-				parentPath: nodePath,
-				indent: innerIndent,
-				ancestorTypes: ancestorTypes,
-			)
-			lines.append(contentsOf: childBindings)
+				for extraction in extractions {
+					lines.append("\(indent)let \(extraction.localName) = \(extraction.expression)")
+				}
 
-			if childBindings.isEmpty {
-				lines.append("\(innerIndent)\(builderExpression)(\(builderCallArguments))")
+				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {")
+
+				// Generate children using extracted locals.
+				let childBindings = generateMockBodyBindings(
+					nodes: node.children,
+					parentPath: nodePath,
+					indent: innerIndent,
+					ancestorTypes: ancestorTypes,
+					sendableExtractionPrefix: functionName,
+				)
+				lines.append(contentsOf: childBindings)
+
+				let extractedBuilderName = "\(functionName)__safeDIBuilder"
+				if childBindings.isEmpty {
+					lines.append("\(innerIndent)\(extractedBuilderName)(\(builderCallArguments))")
+				} else {
+					lines.append("\(innerIndent)return \(extractedBuilderName)(\(builderCallArguments))")
+				}
+				lines.append("\(indent)}")
 			} else {
-				lines.append("\(innerIndent)return \(builderExpression)(\(builderCallArguments))")
+				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {")
+
+				// Generate children's bindings inside the function body.
+				let childBindings = generateMockBodyBindings(
+					nodes: node.children,
+					parentPath: nodePath,
+					indent: innerIndent,
+					ancestorTypes: ancestorTypes,
+				)
+				lines.append(contentsOf: childBindings)
+
+				if childBindings.isEmpty {
+					lines.append("\(innerIndent)\(builderExpression)(\(builderCallArguments))")
+				} else {
+					lines.append("\(innerIndent)return \(builderExpression)(\(builderCallArguments))")
+				}
+				lines.append("\(indent)}")
 			}
-			lines.append("\(indent)}")
 		}
 
 		// Emit the Instantiator/ErasedInstantiator construction.

@@ -2911,7 +2911,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        selfBuilder: Instantiator<Root>,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_selfBuilder() -> Root {
@@ -3008,7 +3007,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        selfBuilder: Instantiator<Child>,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let service = (safeDIParameters.service.safeDIBuilder ?? Service.init)()
@@ -3942,8 +3940,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
+		        let __safeDI_childBuilder__safeDIBuilder = (safeDIParameters.childBuilder.safeDIBuilder ?? Child.init(name:))
 		        @Sendable func __safeDI_childBuilder(name: String) -> Child {
-		            (safeDIParameters.childBuilder.safeDIBuilder ?? Child.init(name:))(name)
+		            __safeDI_childBuilder__safeDIBuilder(name)
 		        }
 		        let childBuilder = SendableInstantiator<Child> {
 		            __safeDI_childBuilder(name: $0)
@@ -4918,8 +4917,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
+		        let __safeDI_childABuilder__safeDIBuilder = (safeDIParameters.childABuilder.safeDIBuilder ?? ChildA.init(recreated:))
 		        @Sendable func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
-		            (safeDIParameters.childABuilder.safeDIBuilder ?? ChildA.init(recreated:))(recreated)
+		            __safeDI_childABuilder__safeDIBuilder(recreated)
 		        }
 		        let childABuilder = SendableErasedInstantiator<Recreated, ChildAProtocol> {
 		            __safeDI_childABuilder(recreated: $0)
@@ -5775,8 +5775,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
+		        let __safeDI_childBuilder__safeDIBuilder = (safeDIParameters.childBuilder.safeDIBuilder ?? Child.init)
 		        @Sendable func __safeDI_childBuilder() -> Child {
-		            (safeDIParameters.childBuilder.safeDIBuilder ?? Child.init)()
+		            __safeDI_childBuilder__safeDIBuilder()
 		        }
 		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
@@ -6502,9 +6503,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
+		        let __safeDI_interceptorBuilder__interceptorBuilder_loggingService_safeDIBuilder = safeDIParameters.interceptorBuilder.loggingService.safeDIBuilder ?? LoggingService.init
+		        let __safeDI_interceptorBuilder__safeDIBuilder = (safeDIParameters.interceptorBuilder.safeDIBuilder ?? Interceptor.init(loggingService:))
 		        @Sendable func __safeDI_interceptorBuilder() -> Interceptor {
-		            let loggingService = (safeDIParameters.interceptorBuilder.loggingService.safeDIBuilder ?? LoggingService.init)()
-		            return (safeDIParameters.interceptorBuilder.safeDIBuilder ?? Interceptor.init(loggingService:))(loggingService)
+		            let loggingService = __safeDI_interceptorBuilder__interceptorBuilder_loggingService_safeDIBuilder()
+		            return __safeDI_interceptorBuilder__safeDIBuilder(loggingService)
 		        }
 		        let interceptorBuilder = SendableInstantiator<Interceptor>(__safeDI_interceptorBuilder)
 		        return Root(interceptorBuilder: interceptorBuilder)
@@ -10689,7 +10692,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        bBuilder: Instantiator<B>,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_aBuilder() -> A {
@@ -10771,7 +10773,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        aBuilder: Instantiator<A>,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_aBuilder(context: String) -> A {

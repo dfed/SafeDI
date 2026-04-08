@@ -608,8 +608,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
+		        let __safeDI_childBuilder__safeDIBuilder = (safeDIParameters.childBuilder.safeDIBuilder ?? Child.init(name:flag:))
 		        @Sendable func __safeDI_childBuilder(name: String) -> Child {
-		            (safeDIParameters.childBuilder.safeDIBuilder ?? Child.init(name:flag:))(name, false)
+		            __safeDI_childBuilder__safeDIBuilder(name, false)
 		        }
 		        let childBuilder = SendableInstantiator<Child> {
 		            __safeDI_childBuilder(name: $0)
@@ -1015,8 +1016,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
+		        let __safeDI_childBuilder__safeDIBuilder = (safeDIParameters.childBuilder.safeDIBuilder ?? Child.init(name:flag:))
 		        @Sendable func __safeDI_childBuilder(name: String) -> Child {
-		            (safeDIParameters.childBuilder.safeDIBuilder ?? Child.init(name:flag:))(name, false)
+		            __safeDI_childBuilder__safeDIBuilder(name, false)
 		        }
 		        let childBuilder = SendableErasedInstantiator<String, Child> {
 		            __safeDI_childBuilder(name: $0)
