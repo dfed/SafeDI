@@ -160,29 +160,19 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 
 		extension Root {
 		    public struct SafeDIParameters {
-		        public struct Dependency_Configuration {
-		            public init(
-		                _ safeDIBuilder: (() -> Dependency)? = nil
-		            ) {
-		                self.safeDIBuilder = safeDIBuilder
-		            }
-
-		            public let safeDIBuilder: (() -> Dependency)?
-		        }
-
 		        public init(
-		            dependency: Dependency_Configuration = .init()
+		            dependency: (() -> Dependency)? = nil
 		        ) {
 		            self.dependency = dependency
 		        }
 
-		        public let dependency: Dependency_Configuration
+		        public let dependency: (() -> Dependency)?
 		    }
 
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let dependency = (safeDIParameters.dependency.safeDIBuilder ?? Dependency.init)()
+		        let dependency = (safeDIParameters.dependency ?? Dependency.init)()
 		        return Root(dependency: dependency)
 		    }
 		}
@@ -487,29 +477,19 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    public struct SafeDIParameters {
-		        public struct CrossModuleService_Configuration {
-		            public init(
-		                _ safeDIBuilder: (() -> CrossModuleService)? = nil
-		            ) {
-		                self.safeDIBuilder = safeDIBuilder
-		            }
-
-		            public let safeDIBuilder: (() -> CrossModuleService)?
-		        }
-
 		        public init(
-		            crossModuleService: CrossModuleService_Configuration = .init()
+		            crossModuleService: (() -> CrossModuleService)? = nil
 		        ) {
 		            self.crossModuleService = crossModuleService
 		        }
 
-		        public let crossModuleService: CrossModuleService_Configuration
+		        public let crossModuleService: (() -> CrossModuleService)?
 		    }
 
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let crossModuleService = (safeDIParameters.crossModuleService.safeDIBuilder ?? CrossModuleService.init)()
+		        let crossModuleService = (safeDIParameters.crossModuleService ?? CrossModuleService.init)()
 		        return Root(crossModuleService: crossModuleService)
 		    }
 		}

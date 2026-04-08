@@ -833,6 +833,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// When `true`, the `safeDIBuilder` closure on `_Configuration` is `@Sendable`.
 		let requiresSendable: Bool
 
+		/// Whether this node needs a full `_Configuration` struct or can be inlined
+		/// as an optional closure on the parent. A node needs a struct when it has
+		/// children (subtree customization), non-dependency defaults, or is a property
+		/// cycle (the struct may exist from a non-cycle instance of the same type).
+		var needsConfigurationStruct: Bool {
+			!children.isEmpty || !defaultParameters.isEmpty || isPropertyCycle
+		}
+
 		/// The `_Configuration` struct name, based on the instantiated type.
 		var structName: String {
 			"\(instantiatedTypeDescription.asSource)_Configuration"
@@ -1051,6 +1059,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for child in node.children {
 				walk(child, ancestorTypes: childAncestors)
 			}
+			// Skip leaf nodes that don't need a _Configuration struct.
+			guard node.needsConfigurationStruct else { return }
 			guard seen.insert(key).inserted else { return }
 			result.append(node)
 		}
@@ -1094,7 +1104,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(innerIndent)public init(")
 		let initParameters = rootChildren.map { child in
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			return "\(memberIndent)\(label): \(child.structName) = .init()"
+			if child.needsConfigurationStruct {
+				return "\(memberIndent)\(label): \(child.structName) = .init()"
+			} else {
+				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
+				return "\(memberIndent)\(label): (\(sendableAnnotation)\(child.builderClosureType))? = nil"
+			}
 		}
 		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
@@ -1108,7 +1123,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("")
 		for child in rootChildren {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			lines.append("\(innerIndent)public let \(label): \(child.structName)")
+			if child.needsConfigurationStruct {
+				lines.append("\(innerIndent)public let \(label): \(child.structName)")
+			} else {
+				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
+				lines.append("\(innerIndent)public let \(label): (\(sendableAnnotation)\(child.builderClosureType))?")
+			}
 		}
 
 		lines.append("\(indent)}")
@@ -1142,9 +1162,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
 		for child in nonCycleChildren {
 			let label = disambiguatedLabel(for: child, labelMap: childLabelMap)
-			initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.structName) = .init()")
+			if child.needsConfigurationStruct {
+				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.structName) = .init()")
+				storedProperties.append("\(innerIndent)public let \(label): \(child.structName)")
+			} else {
+				let childSendable = child.requiresSendable ? "@Sendable " : ""
+				initParameters.append("\(innerIndent)\(standardIndent)\(label): (\(childSendable)\(child.builderClosureType))? = nil")
+				storedProperties.append("\(innerIndent)public let \(label): (\(childSendable)\(child.builderClosureType))?")
+			}
 			assignments.append("\(innerIndent)\(standardIndent)self.\(label) = \(label)")
-			storedProperties.append("\(innerIndent)public let \(label): \(child.structName)")
 		}
 
 		// Default-valued parameters.
@@ -1215,12 +1241,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.replacingOccurrences(of: ".", with: "_")
 
 			if !isCycleNode {
-				// Extract the safeDIBuilder (nil-coalesced with default).
+				// Extract the builder closure (nil-coalesced with default).
 				let defaultBuilder = node.defaultBuilderExpression
-				extractions.append((
-					localName: "\(functionName)__\(relativePath)_safeDIBuilder",
-					expression: "\(nodePath).safeDIBuilder ?? \(defaultBuilder)",
-				))
+				if node.needsConfigurationStruct {
+					extractions.append((
+						localName: "\(functionName)__\(relativePath)_safeDIBuilder",
+						expression: "\(nodePath).safeDIBuilder ?? \(defaultBuilder)",
+					))
+				} else {
+					// Leaf builder — inline optional closure, no .safeDIBuilder path.
+					extractions.append((
+						localName: "\(functionName)__\(relativePath)_safeDIBuilder",
+						expression: "\(nodePath) ?? \(defaultBuilder)",
+					))
+				}
 			}
 
 			// Extract default parameter references.
@@ -1284,9 +1318,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else if let sendableExtractionPrefix {
 				let extractedName = "\(sendableExtractionPrefix)__\(relativePath)_safeDIBuilder"
 				builderExpression = extractedName
-				argumentNodePath = nodePath // Used for resolveBuilderArguments
-			} else {
+				argumentNodePath = nodePath
+			} else if node.needsConfigurationStruct {
 				builderExpression = "(\(nodePath).safeDIBuilder ?? \(defaultBuilder))"
+				argumentNodePath = nodePath
+			} else {
+				// Leaf builder — inline optional closure, no .safeDIBuilder path.
+				builderExpression = "(\(nodePath) ?? \(defaultBuilder))"
 				argumentNodePath = nodePath
 			}
 
