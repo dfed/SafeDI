@@ -2878,14 +2878,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct Root_Configuration {
 		            public init(
-		                selfBuilder: Root_Configuration? = nil,
 		                _ safeDIBuilder: ((Instantiator<Root>) -> Root)? = nil
 		            ) {
-		                self.selfBuilder = selfBuilder
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let selfBuilder: Root_Configuration?
 		            public let safeDIBuilder: ((Instantiator<Root>) -> Root)?
 		        }
 
@@ -2975,14 +2972,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		        public struct Child_Configuration {
 		            public init(
-		                selfBuilder: Child_Configuration? = nil,
 		                _ safeDIBuilder: ((Service, Instantiator<Child>) -> Child)? = nil
 		            ) {
-		                self.selfBuilder = selfBuilder
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let selfBuilder: Child_Configuration?
 		            public let safeDIBuilder: ((Service, Instantiator<Child>) -> Child)?
 		        }
 
@@ -3005,7 +2999,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let service = (safeDIParameters.service.safeDIBuilder ?? Service.init)()
 		        func __safeDI_selfBuilder() -> Child {
 		            let selfBuilder = Instantiator<Child>(__safeDI_selfBuilder)
-		            return (safeDIParameters.child.selfBuilder.safeDIBuilder ?? Child.init(service:selfBuilder:))(service, selfBuilder)
+		            return Child.init(service:selfBuilder:)(service, selfBuilder)
 		        }
 		        let selfBuilder = Instantiator<Child>(__safeDI_selfBuilder)
 		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(service:selfBuilder:))(service, selfBuilder)
@@ -10430,14 +10424,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct C_Configuration {
 		            public init(
-		                aBuilder: A_Configuration? = nil,
+		                aBuilder: A_Configuration = .init(),
 		                _ safeDIBuilder: ((Instantiator<A>) -> C)? = nil
 		            ) {
 		                self.aBuilder = aBuilder
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let aBuilder: A_Configuration?
+		            public let aBuilder: A_Configuration
 		            public let safeDIBuilder: ((Instantiator<A>) -> C)?
 		        }
 
@@ -10541,14 +10535,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public struct A_Configuration {
 		            public init(
-		                aBuilder: A_Configuration? = nil,
 		                _ safeDIBuilder: ((Instantiator<A>, String) -> A)? = nil
 		            ) {
-		                self.aBuilder = aBuilder
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            public let aBuilder: A_Configuration?
 		            public let safeDIBuilder: ((Instantiator<A>, String) -> A)?
 		        }
 

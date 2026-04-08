@@ -1034,17 +1034,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var seen = Set<String>()
 		var result = [MockParameterNode]()
 
-		func walk(_ node: MockParameterNode) {
+		func walk(_ node: MockParameterNode, ancestorTypes: Set<String> = []) {
+			let key = node.instantiatedTypeDescription.asSource
+			// Skip nodes whose type matches an ancestor — self-referencing cycle.
+			guard !ancestorTypes.contains(key) else { return }
+			var childAncestors = ancestorTypes
+			childAncestors.insert(key)
 			// Process children first (depth-first).
 			for child in node.children {
-				walk(child)
-			}
-			let key = node.instantiatedTypeDescription.asSource
-			if node.isPropertyCycle {
-				// Property cycle nodes are self-references with the same type as
-				// their parent. Skip them so the non-cycle node (which has the
-				// full set of children) becomes the canonical representative.
-				return
+				walk(child, ancestorTypes: childAncestors)
 			}
 			guard seen.insert(key).inserted else { return }
 			result.append(node)
@@ -1145,19 +1143,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var storedProperties = [String]()
 
 		// Child edge parameters (disambiguated if labels collide).
-		let childLabelMap = disambiguatePropertyLabels(for: node.children)
-		for child in node.children {
+		// Exclude children whose type matches this node — they'd create a recursive
+		// value type. These are self-referencing Instantiators (lazy cycles).
+		let nonCycleChildren = node.children.filter {
+			$0.instantiatedTypeDescription != node.instantiatedTypeDescription
+		}
+		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
+		for child in nonCycleChildren {
 			let label = disambiguatedLabel(for: child, labelMap: childLabelMap)
-			if child.isPropertyCycle {
-				// Property cycle children reference the same type as their parent.
-				// Use optional to break the recursive value type.
-				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.structName)? = nil")
-				storedProperties.append("\(innerIndent)public let \(label): \(child.structName)?")
-			} else {
-				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.structName) = .init()")
-				storedProperties.append("\(innerIndent)public let \(label): \(child.structName)")
-			}
+			initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.structName) = .init()")
 			assignments.append("\(innerIndent)\(standardIndent)self.\(label) = \(label)")
+			storedProperties.append("\(innerIndent)public let \(label): \(child.structName)")
 		}
 
 		// Default-valued parameters.
@@ -1207,6 +1203,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		nodes: [MockParameterNode],
 		parentPath: String,
 		indent: String,
+		ancestorTypes: Set<String> = [],
 	) -> [String] {
 		var lines = [String]()
 
@@ -1214,32 +1211,45 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let labelMap = disambiguatePropertyLabels(for: nodes)
 
 		for node in nodes {
+			let nodeTypeKey = node.instantiatedTypeDescription.asSource
+			let isCycleNode = ancestorTypes.contains(nodeTypeKey)
+
 			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			let nodePath = "\(parentPath).\(disambiguated)"
 
 			let defaultBuilder = node.defaultBuilderExpression
-			let optionalChain = node.isPropertyCycle ? "?" : ""
-			let builderExpression = "(\(nodePath)\(optionalChain).safeDIBuilder ?? \(defaultBuilder))"
+			// Cycle nodes have no _Configuration entry — use the default directly.
+			let builderExpression = if isCycleNode {
+				defaultBuilder
+			} else {
+				"(\(nodePath).safeDIBuilder ?? \(defaultBuilder))"
+			}
 
 			if node.isInstantiator {
 				// For Instantiator nodes, children are generated INSIDE the builder
 				// function because they may depend on forwarded properties that are
 				// only available as function parameters. This mirrors the production
 				// code which builds the entire subtree inside the builder function.
+				var childAncestors = ancestorTypes
+				childAncestors.insert(nodeTypeKey)
 				lines.append(contentsOf: generateInstantiatorBinding(
 					for: node,
 					nodePath: nodePath,
 					builderExpression: builderExpression,
 					arguments: resolveBuilderArguments(for: node, nodePath: nodePath),
 					indent: indent,
+					ancestorTypes: childAncestors,
 				))
 			} else {
 				// For constant nodes, children are generated before the parent
 				// at the same scope level (depth-first ordering).
+				var childAncestors = ancestorTypes
+				childAncestors.insert(nodeTypeKey)
 				let childBindings = generateMockBodyBindings(
 					nodes: node.children,
 					parentPath: nodePath,
 					indent: indent,
+					ancestorTypes: childAncestors,
 				)
 				lines.append(contentsOf: childBindings)
 
@@ -1301,6 +1311,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builderExpression: String,
 		arguments: [String],
 		indent: String,
+		ancestorTypes: Set<String> = [],
 	) -> [String] {
 		let functionName = "__safeDI_\(node.propertyLabel)"
 		let concreteTypeName = node.concreteTypeName
@@ -1349,6 +1360,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				nodes: node.children,
 				parentPath: nodePath,
 				indent: innerIndent,
+				ancestorTypes: ancestorTypes,
 			)
 			lines.append(contentsOf: childBindings)
 
