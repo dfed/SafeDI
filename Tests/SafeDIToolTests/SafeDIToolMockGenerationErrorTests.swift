@@ -486,26 +486,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        func __safeDI_presenter() -> Presenter {
-		            let service: Service
-		            if let safeDIBuilder = safeDIParameters.presenter.service {
-		                service = safeDIBuilder()
-		            } else {
-		                service = Service()
-		            }
-		            let client: Client
-		            if let safeDIBuilder = safeDIParameters.presenter.client {
-		                client = safeDIBuilder()
-		            } else {
-		                client = Client()
-		            }
-		            if let safeDIBuilder = safeDIParameters.presenter.safeDIBuilder {
-		                return safeDIBuilder(service)
-		            } else {
-		                return Presenter.customMock(service: service)
-		            }
-		        }
-		        let presenter = __safeDI_presenter()
+		        let presenter = SafeDIMockConfiguration.Presenter_Configuration.build(configuration: safeDIParameters.presenter)
 		        return Root(presenter: presenter)
 		    }
 		}
@@ -533,6 +514,28 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		        public let service: (() -> Service)?
 		        public let client: (() -> Client)?
 		        public let safeDIBuilder: ((Service) -> Presenter)?
+
+		        public static func build(
+		            configuration: Presenter_Configuration = .init()
+		        ) -> Presenter {
+		            let service: Service
+		            if let safeDIBuilder = configuration.service {
+		                service = safeDIBuilder()
+		            } else {
+		                service = Service()
+		            }
+		            let client: Client
+		            if let safeDIBuilder = configuration.client {
+		                client = safeDIBuilder()
+		            } else {
+		                client = Client()
+		            }
+		            if let safeDIBuilder = configuration.safeDIBuilder {
+		                return safeDIBuilder(service)
+		            } else {
+		                return Presenter.customMock(service: service)
+		            }
+		        }
 		    }
 		}
 		#endif
