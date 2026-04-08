@@ -448,14 +448,14 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    public struct SafeDIParameters {
 		        public init(
 		            service: (() -> Service)? = nil,
-		            child: Child.SafeDIConfiguration = .init()
+		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.service = service
 		            self.child = child
 		        }
 
 		        public let service: (() -> Service)?
-		        public let child: Child.SafeDIConfiguration
+		        public let child: Child.SafeDIMockConfiguration
 		    }
 
 		    public static func mock(
@@ -494,7 +494,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 
 		#if DEBUG
 		extension Child {
-		    public struct SafeDIConfiguration {
+		    public struct SafeDIMockConfiguration {
 		        public init(
 		            grandchild: ((Service) -> Grandchild)? = nil,
 		            _ safeDIBuilder: ((Grandchild) -> Child)? = nil
@@ -1003,12 +1003,12 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    public struct SafeDIParameters {
 		        public init(
-		            child: Child.SafeDIConfiguration = .init()
+		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.child = child
 		        }
 
-		        public let child: Child.SafeDIConfiguration
+		        public let child: Child.SafeDIMockConfiguration
 		    }
 
 		    public static func mock(
@@ -1041,7 +1041,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 
 		#if DEBUG
 		extension Child {
-		    public struct SafeDIConfiguration {
+		    public struct SafeDIMockConfiguration {
 		        public init(
 		            dependency: (() -> Dependency)? = nil,
 		            extra: Bool = false,
@@ -1115,12 +1115,12 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    public struct SafeDIParameters {
 		        public init(
-		            childService: ChildService.SafeDIConfiguration = .init()
+		            childService: ChildService.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.childService = childService
 		        }
 
-		        public let childService: ChildService.SafeDIConfiguration
+		        public let childService: ChildService.SafeDIMockConfiguration
 		    }
 
 		    public static func mock(
@@ -1153,7 +1153,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 
 		#if DEBUG
 		extension ChildService {
-		    public struct SafeDIConfiguration {
+		    public struct SafeDIMockConfiguration {
 		        public init(
 		            engine: (() -> Engine)? = nil,
 		            _ safeDIBuilder: ((Engine) -> ChildService)? = nil
@@ -1297,12 +1297,12 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    public struct SafeDIParameters {
 		        public init(
-		            child: Child.SafeDIConfiguration = .init()
+		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.child = child
 		        }
 
-		        public let child: Child.SafeDIConfiguration
+		        public let child: Child.SafeDIMockConfiguration
 		    }
 
 		    public static func mock(
@@ -1335,7 +1335,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 
 		#if DEBUG
 		extension Child {
-		    public struct SafeDIConfiguration {
+		    public struct SafeDIMockConfiguration {
 		        public init(
 		            service: (() -> Service)? = nil,
 		            _ safeDIBuilder: ((Service) -> Child)? = nil
@@ -1405,12 +1405,12 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    public struct SafeDIParameters {
 		        public init(
-		            child: Child.SafeDIConfiguration = .init()
+		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.child = child
 		        }
 
-		        public let child: Child.SafeDIConfiguration
+		        public let child: Child.SafeDIMockConfiguration
 		    }
 
 		    public static func mock(
@@ -1443,7 +1443,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 
 		#if DEBUG
 		extension Child {
-		    public struct SafeDIConfiguration {
+		    public struct SafeDIMockConfiguration {
 		        public init(
 		            externalService: (() -> ExternalService)? = nil,
 		            _ safeDIBuilder: ((ExternalService) -> Child)? = nil
@@ -2009,12 +2009,12 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    public struct SafeDIParameters {
 		        public init(
-		            service: Service.SafeDIConfiguration = .init()
+		            service: Service.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.service = service
 		        }
 
-		        public let service: Service.SafeDIConfiguration
+		        public let service: Service.SafeDIMockConfiguration
 		    }
 
 		    public static func mock(
@@ -2047,7 +2047,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 
 		#if DEBUG
 		extension Service {
-		    public struct SafeDIConfiguration {
+		    public struct SafeDIMockConfiguration {
 		        public init(
 		            engine: (() -> Engine)? = nil,
 		            _ safeDIBuilder: ((Engine) -> Service)? = nil
@@ -2449,14 +2449,14 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    public struct SafeDIParameters {
 		        public init(
-		            childA: ChildA.SafeDIConfiguration = .init(),
+		            childA: ChildA.SafeDIMockConfiguration = .init(),
 		            childB: ((String) -> ChildB)? = nil
 		        ) {
 		            self.childA = childA
 		            self.childB = childB
 		        }
 
-		        public let childA: ChildA.SafeDIConfiguration
+		        public let childA: ChildA.SafeDIMockConfiguration
 		        public let childB: ((String) -> ChildB)?
 		    }
 
@@ -2497,7 +2497,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 
 		#if DEBUG
 		extension ChildA {
-		    public struct SafeDIConfiguration {
+		    public struct SafeDIMockConfiguration {
 		        public init(
 		            grandchild: ((String) -> Grandchild)? = nil,
 		            _ safeDIBuilder: ((Grandchild, String) -> ChildA)? = nil
@@ -2644,15 +2644,15 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    public struct SafeDIParameters {
 		        public init(
-		            childA: ChildA.SafeDIConfiguration = .init(),
-		            childB: ChildB.SafeDIConfiguration = .init()
+		            childA: ChildA.SafeDIMockConfiguration = .init(),
+		            childB: ChildB.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.childA = childA
 		            self.childB = childB
 		        }
 
-		        public let childA: ChildA.SafeDIConfiguration
-		        public let childB: ChildB.SafeDIConfiguration
+		        public let childA: ChildA.SafeDIMockConfiguration
+		        public let childB: ChildB.SafeDIMockConfiguration
 		    }
 
 		    public static func mock(
@@ -2699,7 +2699,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 
 		#if DEBUG
 		extension ChildA {
-		    public struct SafeDIConfiguration {
+		    public struct SafeDIMockConfiguration {
 		        public init(
 		            value: (() -> String)? = nil,
 		            _ safeDIBuilder: ((String) -> ChildA)? = nil
@@ -2714,7 +2714,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		}
 
 		extension ChildB {
-		    public struct SafeDIConfiguration {
+		    public struct SafeDIMockConfiguration {
 		        public init(
 		            value: (() -> Int)? = nil,
 		            _ safeDIBuilder: ((Int) -> ChildB)? = nil
@@ -2780,12 +2780,12 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    public struct SafeDIParameters {
 		        public init(
-		            child: Child.SafeDIConfiguration = .init()
+		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.child = child
 		        }
 
-		        public let child: Child.SafeDIConfiguration
+		        public let child: Child.SafeDIMockConfiguration
 		    }
 
 		    public static func mock(
@@ -2811,7 +2811,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 
 		#if DEBUG
 		extension Child {
-		    public struct SafeDIConfiguration {
+		    public struct SafeDIMockConfiguration {
 		        public init(
 		            name: String = "default",
 		            _ safeDIBuilder: ((Engine, String) -> Child)? = nil

@@ -475,12 +475,12 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		extension Root {
 		    public struct SafeDIParameters {
 		        public init(
-		            presenter: Presenter.SafeDIConfiguration = .init()
+		            presenter: Presenter.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.presenter = presenter
 		        }
 
-		        public let presenter: Presenter.SafeDIConfiguration
+		        public let presenter: Presenter.SafeDIMockConfiguration
 		    }
 
 		    public static func mock(
@@ -519,7 +519,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 		#if DEBUG
 		extension Presenter {
-		    public struct SafeDIConfiguration {
+		    public struct SafeDIMockConfiguration {
 		        public init(
 		            service: (() -> Service)? = nil,
 		            client: (() -> Client)? = nil,

@@ -559,12 +559,12 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		extension Root {
 		    public struct SafeDIParameters {
 		        public init(
-		            child: Child.SafeDIConfiguration = .init()
+		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.child = child
 		        }
 
-		        public let child: Child.SafeDIConfiguration
+		        public let child: Child.SafeDIMockConfiguration
 		    }
 
 		    public static func mock(
@@ -595,7 +595,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		extension Child {
-		    public struct SafeDIConfiguration {
+		    public struct SafeDIMockConfiguration {
 		        public init(
 		            leaf: (() -> Leaf)? = nil,
 		            _ safeDIBuilder: ((Leaf) -> Child)? = nil

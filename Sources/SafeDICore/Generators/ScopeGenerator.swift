@@ -843,10 +843,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			!children.isEmpty || !defaultParameters.isEmpty || isPropertyCycle
 		}
 
-		/// The `SafeDIConfiguration` struct name (used in struct definitions).
-		static let configurationStructName = "SafeDIConfiguration"
+		/// The `SafeDIMockConfiguration` struct name (used in struct definitions).
+		static let configurationStructName = "SafeDIMockConfiguration"
 
-		/// The qualified configuration type name for references (e.g., `ChildA.SafeDIConfiguration`).
+		/// The qualified configuration type name for references (e.g., `ChildA.SafeDIMockConfiguration`).
 		var configurationTypeName: String {
 			"\(instantiatedTypeDescription.asSource).\(Self.configurationStructName)"
 		}
