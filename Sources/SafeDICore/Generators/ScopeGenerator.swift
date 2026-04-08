@@ -950,16 +950,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Collects all unique configuration types from this scope's mock parameter tree.
-	/// Returns `(typeName, mockAttributes, code)` tuples for each type that needs a `SafeDIMockConfiguration` struct.
-	func collectConfigurationTypes() async -> [(typeName: String, mockAttributes: String, code: String)] {
+	/// Returns tuples with the struct code and the build method code (emitted separately in the extension).
+	func collectConfigurationTypes() async -> [(typeName: String, structCode: String, buildMethodCode: String)] {
 		let parameterTree = await collectMockParameterTree()
 		let uniqueTypes = Self.collectUniqueConfigurationTypes(from: parameterTree)
 		let indent = Self.standardIndent
 		return uniqueTypes.map { node in
 			(
 				typeName: node.instantiatedTypeDescription.asSource,
-				mockAttributes: node.mockAttributes,
-				code: Self.generateConfigurationStruct(for: node, indent: indent),
+				structCode: Self.generateConfigurationStruct(for: node, indent: indent),
+				buildMethodCode: Self.generateBuildMethod(for: node, indent: indent).joined(separator: "\n"),
 			)
 		}
 	}
@@ -1273,25 +1273,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("")
 		lines.append(contentsOf: storedProperties)
 
-		// Emit build() method.
-		lines.append("")
-		lines.append(contentsOf: generateBuildMethod(for: node, indent: innerIndent))
-
 		lines.append("\(indent)}")
 		return lines.joined(separator: "\n")
 	}
 
-	/// Generates the `build()` static method for a `_Configuration` struct.
+	/// Generates the `__safeDI_mockBuild()` static method for a type's extension.
 	/// The method takes external dependencies as explicit parameters and the
 	/// configuration as a defaulted parameter. It builds children internally
-	/// (calling child `build()` methods or leaf closures) and returns the type.
+	/// (calling child build methods or leaf closures) and returns the type.
+	/// Actor isolation is inherited from the extension's parent type.
 	private static func generateBuildMethod(
 		for node: MockParameterNode,
 		indent: String,
 	) -> [String] {
 		let innerIndent = "\(indent)\(standardIndent)"
 		let bodyIndent = "\(innerIndent)\(standardIndent)"
-		let mockAttributesPrefix = node.mockAttributes.isEmpty ? "" : "\(node.mockAttributes) "
 
 		// Build the parameter list: external dependencies + configuration.
 		var parameters = [String]()
@@ -1301,7 +1297,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		parameters.append("\(innerIndent)configuration: \(MockParameterNode.configurationStructName) = .init()")
 
 		var lines = [String]()
-		lines.append("\(indent)\(mockAttributesPrefix)static func build(")
+		lines.append("\(indent)static func __safeDI_mockBuild(")
 		lines.append(parameters.joined(separator: ",\n"))
 		lines.append("\(indent)) -> \(node.concreteTypeName) {")
 
@@ -1343,13 +1339,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let nodePath = "\(parentPath).\(disambiguated)"
 
 			if node.needsConfigurationStruct {
-				// Non-leaf child: call its build() method.
+				// Non-leaf child: call its __safeDI_mockBuild() method.
+				let typeName = node.instantiatedTypeDescription.asSource
 				var buildArgs = [String]()
 				for externalDependency in node.externalDependencyParameters {
 					buildArgs.append("\(externalDependency.label): \(externalDependency.label)")
 				}
 				buildArgs.append("configuration: \(nodePath)")
-				let buildCall = "\(node.configurationTypeName).build(\(buildArgs.joined(separator: ", ")))"
+				let buildCall = "\(typeName).__safeDI_mockBuild(\(buildArgs.joined(separator: ", ")))"
 
 				if node.erasedToConcreteExistential {
 					let protocolType = node.typeDescription.asSource
@@ -1599,15 +1596,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)(\(argumentList))")
 					}
 				} else {
-					// Constant node with children — call its build() method.
-					let qualifiedConfigName = node.configurationTypeName
+					// Constant node with children — call its __safeDI_mockBuild() method.
+					let typeName = node.instantiatedTypeDescription.asSource
 					var buildArgs = [String]()
 					for externalDependency in node.externalDependencyParameters {
 						buildArgs.append("\(externalDependency.label): \(externalDependency.label)")
 					}
 					let disambiguated = disambiguatedLabel(for: node, labelMap: disambiguatePropertyLabels(for: nodes))
 					buildArgs.append("configuration: \(parentPath).\(disambiguated)")
-					let buildCall = "\(qualifiedConfigName).build(\(buildArgs.joined(separator: ", ")))"
+					let buildCall = "\(typeName).__safeDI_mockBuild(\(buildArgs.joined(separator: ", ")))"
 
 					if node.erasedToConcreteExistential {
 						let protocolType = node.typeDescription.asSource
