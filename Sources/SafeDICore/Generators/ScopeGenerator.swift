@@ -1148,9 +1148,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let childLabelMap = disambiguatePropertyLabels(for: node.children)
 		for child in node.children {
 			let label = disambiguatedLabel(for: child, labelMap: childLabelMap)
-			initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.structName) = .init()")
+			if child.isPropertyCycle {
+				// Property cycle children reference the same type as their parent.
+				// Use optional to break the recursive value type.
+				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.structName)? = nil")
+				storedProperties.append("\(innerIndent)public let \(label): \(child.structName)?")
+			} else {
+				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.structName) = .init()")
+				storedProperties.append("\(innerIndent)public let \(label): \(child.structName)")
+			}
 			assignments.append("\(innerIndent)\(standardIndent)self.\(label) = \(label)")
-			storedProperties.append("\(innerIndent)public let \(label): \(child.structName)")
 		}
 
 		// Default-valued parameters.
@@ -1211,7 +1218,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let nodePath = "\(parentPath).\(disambiguated)"
 
 			let defaultBuilder = node.defaultBuilderExpression
-			let builderExpression = "(\(nodePath).safeDIBuilder ?? \(defaultBuilder))"
+			let optionalChain = node.isPropertyCycle ? "?" : ""
+			let builderExpression = "(\(nodePath)\(optionalChain).safeDIBuilder ?? \(defaultBuilder))"
 
 			if node.isInstantiator {
 				// For Instantiator nodes, children are generated INSIDE the builder
