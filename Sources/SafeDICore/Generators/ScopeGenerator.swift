@@ -1374,17 +1374,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			let nodePath = "\(parentPath).\(disambiguated)"
 
-			if node.isInstantiator {
+			if node.isInstantiator, node.isPropertyCycle {
+				// Self-referencing Instantiator cycle: create an Instantiator that
+				// recursively calls __safeDI_mockBuild. The cycle node's configuration
+				// property was excluded from the struct to avoid infinite value types.
+				let typeName = node.instantiatedTypeDescription.asSource
+				let unwrappedTypeDescription = node.typeDescription.unwrapped.asSource
+				lines.append("\(indent)let \(node.propertyLabel) = \(unwrappedTypeDescription)(\(typeName).__safeDI_mockBuild)")
+			} else if node.isInstantiator {
 				// Instantiator child: use generateInstantiatorBinding with build body paths.
 				let arguments = resolveBuildArguments(for: node, configurationPath: nodePath)
-				// Cycle nodes use the default builder directly — their configuration
-				// property was excluded from the struct to avoid infinite value types.
 				let optionalBuilderPath: String?
 				let builderExpression: String
-				if node.isPropertyCycle {
-					optionalBuilderPath = nil
-					builderExpression = node.defaultBuilderExpression
-				} else if node.needsConfigurationStruct {
+				if node.needsConfigurationStruct {
 					optionalBuilderPath = "\(nodePath).safeDIBuilder"
 					builderExpression = "(\(nodePath).safeDIBuilder ?? \(node.defaultBuilderExpression))"
 				} else {
