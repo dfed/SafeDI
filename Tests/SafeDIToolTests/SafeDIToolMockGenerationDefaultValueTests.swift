@@ -1695,7 +1695,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = Child.__safeDI_mockBuild(name: name, safeDIMockConfiguration: safeDIParameters.child)
+		        let child = Child.__safeDI_mockBuild(safeDIMockConfiguration: safeDIParameters.child)
 		        return Root(child: child)
 		    }
 		}
@@ -1723,7 +1723,6 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        name: String,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Child {
 		        let grandchildBuilder: Grandchild

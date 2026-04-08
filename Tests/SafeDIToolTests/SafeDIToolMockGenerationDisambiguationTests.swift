@@ -759,7 +759,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let parent = Parent.__safeDI_mockBuild(name: name, safeDIMockConfiguration: safeDIParameters.parent)
+		        let parent = Parent.__safeDI_mockBuild(safeDIMockConfiguration: safeDIParameters.parent)
 		        func __safeDI_childBuilder(name: String) -> ChildA {
 		            if let safeDIBuilder = safeDIParameters.childBuilder {
 		                return safeDIBuilder(name)
@@ -797,7 +797,6 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        name: String,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Parent {
 		        let childBuilder: ChildB
@@ -1072,7 +1071,6 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		    static func __safeDI_mockBuild(
 		        childBuilder: Instantiator<ChildA>,
-		        name: String,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Parent {
 		        let otherBuilder: ChildB
@@ -1919,7 +1917,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            }
 		        }
 		        let parentBuilder = Instantiator<Parent>(__safeDI_parentBuilder)
-		        let other = Other.__safeDI_mockBuild(name: name, safeDIMockConfiguration: safeDIParameters.other)
+		        let other = Other.__safeDI_mockBuild(safeDIMockConfiguration: safeDIParameters.other)
 		        return Root(childBuilder: childBuilder, parentBuilder: parentBuilder, other: other)
 		    }
 		}
@@ -1947,7 +1945,6 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        name: String,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Parent {
 		        let childBuilder: ChildA
@@ -1979,7 +1976,6 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func __safeDI_mockBuild(
-		        name: String,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Other {
 		        let childBuilder: ChildB

@@ -914,12 +914,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let childLabels = Set(node.children.map(\.propertyLabel))
 				let dependencyLabels = Set(node.dependencies.map(\.property.label))
 				let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
+				let forwardedLabels = Set(node.forwardedProperties.map(\.label))
 
 				for argument in node.constructionArguments {
 					let label = argument.innerLabel
 					if dependencyLabels.contains(label),
 					   !childLabels.contains(label),
 					   !defaultParameterLabels.contains(argument.label),
+					   !forwardedLabels.contains(label),
 					   seen.insert(label).inserted
 					{
 						result.append((label: label, typeSource: argument.typeDescription.asFunctionParameter.asSource))
@@ -927,6 +929,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 
 				// Recurse into children to collect transitive external dependencies.
+				// Forwarded properties are excluded above — they're runtime parameters
+				// of the Instantiator closure, not parent-scope dependencies.
 				for child in node.children {
 					collect(from: child)
 				}
