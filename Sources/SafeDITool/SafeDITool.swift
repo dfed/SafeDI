@@ -256,13 +256,13 @@ struct SafeDITool: AsyncParsableCommand {
 						"DEBUG"
 					}
 					let currentModuleSourceFilePaths = Set(manifest.mockGeneration.map(\.inputFilePath))
-					let generatedMocks = try await generator.generateMockCode(
+					let mockResult = try await generator.generateMockCode(
 						mockConditionalCompilation: mockConditionalCompilation,
 						currentModuleSourceFilePaths: currentModuleSourceFilePaths,
 					)
 
 					var sourceFileToMockExtensions = [String: [String]]()
-					for mock in generatedMocks {
+					for mock in mockResult.generatedRoots {
 						if let sourceFilePath = mock.sourceFilePath {
 							sourceFileToMockExtensions[sourceFilePath, default: []].append(mock.code)
 						}
@@ -274,6 +274,17 @@ struct SafeDITool: AsyncParsableCommand {
 						let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
 						if existingContent != code {
 							try code.write(toPath: entry.outputFilePath)
+						}
+					}
+
+					// Write shared mock configuration file.
+					if let mockConfigurationOutputFilePath = manifest.mockConfigurationOutputFilePath,
+					   let mockConfigurationCode = mockResult.mockConfigurationCode
+					{
+						let code = fileHeader + mockConfigurationCode
+						let existingContent = try? String(contentsOfFile: mockConfigurationOutputFilePath, encoding: .utf8)
+						if existingContent != code {
+							try code.write(toPath: mockConfigurationOutputFilePath)
 						}
 					}
 				}

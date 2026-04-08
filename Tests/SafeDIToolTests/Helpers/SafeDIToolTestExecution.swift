@@ -200,6 +200,10 @@ struct TestOutput {
 	var mockFiles: [String: String] {
 		generatedFiles?.filter { $0.key.hasSuffix("+SafeDIMock.swift") } ?? [:]
 	}
+
+	var mockConfigurationFile: String? {
+		generatedFiles?["SafeDIMockConfiguration.swift"]
+	}
 }
 
 extension URL {

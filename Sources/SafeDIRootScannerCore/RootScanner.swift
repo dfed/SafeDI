@@ -36,11 +36,18 @@ public struct RootScanner {
 		public var dependencyTreeGeneration: [InputOutputMap]
 		public var mockGeneration: [InputOutputMap]
 		public var configurationFilePaths: [String]
+		public var mockConfigurationOutputFilePath: String?
 
-		public init(dependencyTreeGeneration: [InputOutputMap], mockGeneration: [InputOutputMap], configurationFilePaths: [String] = []) {
+		public init(
+			dependencyTreeGeneration: [InputOutputMap],
+			mockGeneration: [InputOutputMap],
+			configurationFilePaths: [String] = [],
+			mockConfigurationOutputFilePath: String? = nil,
+		) {
 			self.dependencyTreeGeneration = dependencyTreeGeneration
 			self.mockGeneration = mockGeneration
 			self.configurationFilePaths = configurationFilePaths
+			self.mockConfigurationOutputFilePath = mockConfigurationOutputFilePath
 		}
 	}
 
@@ -52,9 +59,13 @@ public struct RootScanner {
 		public let manifest: Manifest
 
 		public var outputFiles: [URL] {
-			(manifest.dependencyTreeGeneration + manifest.mockGeneration).map {
+			var files = (manifest.dependencyTreeGeneration + manifest.mockGeneration).map {
 				URL(fileURLWithPath: $0.outputFilePath)
 			}
+			if let mockConfigurationOutputFilePath = manifest.mockConfigurationOutputFilePath {
+				files.append(URL(fileURLWithPath: mockConfigurationOutputFilePath))
+			}
+			return files
 		}
 
 		public func writeManifest(to manifestURL: URL) throws {
@@ -119,6 +130,14 @@ public struct RootScanner {
 		}
 		let mockOutputFileNames = Self.mockOutputFileNames(for: instantiableFiles, relativeTo: baseURL)
 
+		let mockConfigurationOutputFilePath: String? = if !instantiableFiles.isEmpty {
+			outputDirectory
+				.appendingPathComponent("SafeDIMockConfiguration.swift")
+				.path
+		} else {
+			nil
+		}
+
 		return Result(
 			manifest: Manifest(
 				dependencyTreeGeneration: zip(rootFiles, rootOutputFileNames).map { inputURL, outputFileName in
@@ -138,6 +157,7 @@ public struct RootScanner {
 					)
 				},
 				configurationFilePaths: configurationFilePaths,
+				mockConfigurationOutputFilePath: mockConfigurationOutputFilePath,
 			),
 		)
 	}

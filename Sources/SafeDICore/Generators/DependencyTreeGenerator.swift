@@ -38,6 +38,11 @@ public actor DependencyTreeGenerator {
 		public let code: String
 	}
 
+	public struct MockGenerationResult: Sendable {
+		public let generatedRoots: [GeneratedRoot]
+		public let mockConfigurationCode: String?
+	}
+
 	/// The file header to prepend to each generated output file.
 	public var fileHeader: String {
 		let importsWhitespace = imports.isEmpty ? "" : "\n"
@@ -75,7 +80,7 @@ public actor DependencyTreeGenerator {
 	public func generateMockCode(
 		mockConditionalCompilation: String?,
 		currentModuleSourceFilePaths: Set<String>? = nil,
-	) async throws -> [GeneratedRoot] {
+	) async throws -> MockGenerationResult {
 		// Build a map of erased wrapper types → concrete fulfilling types.
 		// This lets mocks construct types like AnyUserService(DefaultUserService())
 		// even when the erased type isn't directly @Instantiable.
@@ -106,66 +111,114 @@ public actor DependencyTreeGenerator {
 
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
-		return try await withThrowingTaskGroup(
-			of: GeneratedRoot.self,
-			returning: [GeneratedRoot].self,
-		) { taskGroup in
-			for instantiable in typeDescriptionToFulfillingInstantiableMap.values
-				.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
-			{
-				// Skip types where generateMock is not enabled, duplicates,
-				// types not in the scope map, and types from dependent modules
-				// (their module generates their own mocks).
-				// When generateMock is true and a hand-written mock exists,
-				// the generated mock calls through to the hand-written one
-				// (which has a different name specified by customMockName).
-				guard instantiable.generateMock,
-				      seen.insert(instantiable.concreteInstantiable).inserted,
-				      let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable]
+		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
+			.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
+		{
+			// Skip types where generateMock is not enabled, duplicates,
+			// types not in the scope map, and types from dependent modules
+			// (their module generates their own mocks).
+			// When generateMock is true and a hand-written mock exists,
+			// the generated mock calls through to the hand-written one
+			// (which has a different name specified by customMockName).
+			guard instantiable.generateMock,
+			      seen.insert(instantiable.concreteInstantiable).inserted,
+			      let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable]
+			else { continue }
+			if let currentModuleSourceFilePaths {
+				guard let sourceFilePath = instantiable.sourceFilePath,
+				      currentModuleSourceFilePaths.contains(sourceFilePath)
 				else { continue }
-				if let currentModuleSourceFilePaths {
-					guard let sourceFilePath = instantiable.sourceFilePath,
-					      currentModuleSourceFilePaths.contains(sourceFilePath)
-					else { continue }
-				}
+			}
 
-				// Validate that this type's constant @Instantiated children have no @Forwarded properties.
-				for dependency in scope.instantiable.dependencies {
-					guard case .instantiated = dependency.source else { continue }
-					let instantiatedType = dependency.asInstantiatedType
-					if let childInstantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType] {
-						try validateNoForwardedProperties(
-							for: dependency,
-							instantiable: childInstantiable,
-							parent: scope.instantiable,
-						)
-					}
+			// Validate that this type's constant @Instantiated children have no @Forwarded properties.
+			for dependency in scope.instantiable.dependencies {
+				guard case .instantiated = dependency.source else { continue }
+				let instantiatedType = dependency.asInstantiatedType
+				if let childInstantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType] {
+					try validateNoForwardedProperties(
+						for: dependency,
+						instantiable: childInstantiable,
+						parent: scope.instantiable,
+					)
 				}
+			}
 
-				let mockRoot = try createMockRootScopeGenerator(
-					for: instantiable,
-					scope: scope,
-					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
-					erasedToConcreteTypeMap: erasedToConcreteTypeMap,
-				)
+			let mockRoot = try createMockRootScopeGenerator(
+				for: instantiable,
+				scope: scope,
+				typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+				erasedToConcreteTypeMap: erasedToConcreteTypeMap,
+			)
+			mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
+		}
+
+		// Generate mock code and collect configuration types in parallel.
+		let generatedRoots = try await withThrowingTaskGroup(
+			of: (root: GeneratedRoot, configurationTypes: [(structName: String, code: String)]).self,
+			returning: [(root: GeneratedRoot, configurationTypes: [(structName: String, code: String)])].self,
+		) { taskGroup in
+			for (instantiable, mockRoot) in mockRoots {
 				taskGroup.addTask {
-					let code = try await mockRoot.generateCode(
+					async let code = mockRoot.generateCode(
 						codeGeneration: .mock(ScopeGenerator.MockContext(
 							mockConditionalCompilation: mockConditionalCompilation,
 						)),
 					)
-					return GeneratedRoot(
-						typeDescription: instantiable.concreteInstantiable,
-						sourceFilePath: instantiable.sourceFilePath,
-						code: code,
+					async let configurationTypes = mockRoot.collectConfigurationTypes()
+					return try await (
+						root: GeneratedRoot(
+							typeDescription: instantiable.concreteInstantiable,
+							sourceFilePath: instantiable.sourceFilePath,
+							code: code,
+						),
+						configurationTypes: configurationTypes,
 					)
 				}
 			}
-			var generatedRoots = [GeneratedRoot]()
-			for try await generatedRoot in taskGroup {
-				generatedRoots.append(generatedRoot)
+			var results = [(root: GeneratedRoot, configurationTypes: [(structName: String, code: String)])]()
+			for try await result in taskGroup {
+				results.append(result)
 			}
-			return generatedRoots
+			return results
+		}
+
+		// Deduplicate configuration types by structName across all roots.
+		var seenStructNames = Set<String>()
+		var allConfigurationStructs = [String]()
+		for result in generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription }) {
+			for configType in result.configurationTypes {
+				if seenStructNames.insert(configType.structName).inserted {
+					allConfigurationStructs.append(configType.code)
+				}
+			}
+		}
+
+		let mockConfigurationCode: String? = if allConfigurationStructs.isEmpty {
+			nil
+		} else {
+			generateMockConfigurationCode(
+				configurationStructs: allConfigurationStructs,
+				mockConditionalCompilation: mockConditionalCompilation,
+			)
+		}
+
+		return MockGenerationResult(
+			generatedRoots: generatedRoots.map(\.root),
+			mockConfigurationCode: mockConfigurationCode,
+		)
+	}
+
+	private func generateMockConfigurationCode(
+		configurationStructs: [String],
+		mockConditionalCompilation: String?,
+	) -> String {
+		let body = configurationStructs.joined(separator: "\n\n")
+		let structCode = "public struct \(ScopeGenerator.mockConfigurationStructName) {\n\(body)\n}"
+		if let mockConditionalCompilation {
+			return "#if \(mockConditionalCompilation)\n\(structCode)\n#endif\n"
+		} else {
+			return "\(structCode)\n"
 		}
 	}
 

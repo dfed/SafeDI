@@ -52,13 +52,20 @@ public struct SafeDIToolManifest: Codable, Sendable {
 	/// Used to scope configuration selection and validate at most one exists.
 	public var configurationFilePaths: [String]
 
+	/// The output file path for the shared `SafeDIMockConfiguration` struct.
+	/// When set, all `_Configuration` structs are generated into this single file
+	/// instead of being duplicated inside each root's `SafeDIParameters`.
+	public var mockConfigurationOutputFilePath: String?
+
 	public init(
 		dependencyTreeGeneration: [InputOutputMap],
 		mockGeneration: [InputOutputMap] = [],
 		configurationFilePaths: [String] = [],
+		mockConfigurationOutputFilePath: String? = nil,
 	) {
 		self.dependencyTreeGeneration = dependencyTreeGeneration
 		self.mockGeneration = mockGeneration
 		self.configurationFilePaths = configurationFilePaths
+		self.mockConfigurationOutputFilePath = mockConfigurationOutputFilePath
 	}
 }

@@ -342,6 +342,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		"__safeDI_\(property.label)"
 	}
 
+	static let mockConfigurationStructName = "SafeDIMockConfiguration"
 	private static let standardIndent = "    "
 
 	// MARK: Code Generation
@@ -888,6 +889,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// Collects all unique `_Configuration` types from this scope's mock parameter tree.
+	/// Returns `(structName, code)` pairs for each type that needs a `_Configuration` struct.
+	func collectConfigurationTypes() async -> [(structName: String, code: String)] {
+		let parameterTree = await collectMockParameterTree()
+		let uniqueTypes = Self.collectUniqueConfigurationTypes(from: parameterTree)
+		let indent = Self.standardIndent
+		return uniqueTypes.map { node in
+			(structName: node.structName, code: Self.generateConfigurationStruct(for: node, indent: indent))
+		}
+	}
+
 	/// Walks the dependency tree and builds a `[MockParameterNode]` tree representing
 	/// the direct children of the current scope. Each node recursively contains its own
 	/// subtree children, default parameters, and builder metadata.
@@ -1071,7 +1083,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return result
 	}
 
-	/// Generates the full `SafeDIParameters` struct including all flat `_Configuration` siblings.
+	/// Generates the full `SafeDIParameters` struct. `_Configuration` type references
+	/// are prefixed with `SafeDIMockConfiguration.` since the structs live in a shared file.
 	/// Returns the struct source code, or `nil` if the tree has no children.
 	private static func generateSafeDIParametersStruct(
 		rootChildren: [MockParameterNode],
@@ -1082,20 +1095,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let innerIndent = "\(indent)\(standardIndent)"
 		let memberIndent = "\(innerIndent)\(standardIndent)"
 
-		// Collect all unique types for flat _Configuration structs.
-		let uniqueTypes = collectUniqueConfigurationTypes(from: rootChildren)
-
 		var lines = [String]()
 		lines.append("\(indent)public struct SafeDIParameters {")
-
-		// Generate each _Configuration struct as a flat sibling.
-		for uniqueType in uniqueTypes {
-			lines.append(generateConfigurationStruct(
-				for: uniqueType,
-				indent: innerIndent,
-			))
-			lines.append("")
-		}
 
 		// Disambiguate root-level children property labels.
 		let rootLabelMap = disambiguatePropertyLabels(for: rootChildren)
@@ -1105,7 +1106,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let initParameters = rootChildren.map { child in
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
 			if child.needsConfigurationStruct {
-				return "\(memberIndent)\(label): \(child.structName) = .init()"
+				return "\(memberIndent)\(label): \(mockConfigurationStructName).\(child.structName) = .init()"
 			} else {
 				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
 				return "\(memberIndent)\(label): (\(sendableAnnotation)\(child.builderClosureType))? = nil"
@@ -1124,7 +1125,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for child in rootChildren {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
 			if child.needsConfigurationStruct {
-				lines.append("\(innerIndent)public let \(label): \(child.structName)")
+				lines.append("\(innerIndent)public let \(label): \(mockConfigurationStructName).\(child.structName)")
 			} else {
 				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
 				lines.append("\(innerIndent)public let \(label): (\(sendableAnnotation)\(child.builderClosureType))?")
