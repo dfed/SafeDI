@@ -967,16 +967,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					if dependencyLabels.contains(label),
 					   !childLabels.contains(label),
 					   !defaultParameterLabels.contains(argument.label),
-					   !forwardedLabels.contains(label),
-					   seen.insert(label).inserted
+					   !forwardedLabels.contains(label)
 					{
 						var typeSource = argument.typeDescription.asFunctionParameter.asSource
-						// Promote to optional for onlyIfAvailable dependencies — the mock
-						// body provides these as optional values (defaulting to nil).
+						// Promote to optional for exclusively-onlyIfAvailable dependencies.
 						if allOnlyIfAvailableLabels.contains(label), !argument.typeDescription.isOptional {
 							typeSource += "?"
 						}
-						result.append((label: label, typeSource: typeSource))
+						// Demote to non-optional if the label is required somewhere
+						// but this particular argument has it as optional.
+						if !allOnlyIfAvailableLabels.contains(label), argument.typeDescription.isOptional {
+							typeSource = argument.typeDescription.unwrapped.asFunctionParameter.asSource
+						}
+						if seen.insert(label).inserted {
+							result.append((label: label, typeSource: typeSource))
+						} else if !allOnlyIfAvailableLabels.contains(label) {
+							// Re-encountered with required status: upgrade existing entry to non-optional.
+							if let existingIndex = result.firstIndex(where: { $0.label == label }),
+							   result[existingIndex].typeSource.hasSuffix("?")
+							{
+								result[existingIndex].typeSource = typeSource
+							}
+						}
 					}
 				}
 
@@ -1353,15 +1365,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		parameters.append("\(innerIndent)\(configurationParameterName): \(MockParameterNode.configurationStructName) = .init()")
 
 		var lines = [String]()
-		// Debug: show optionality decision in generated code
-		let debugOnlyIfAvailable = node.externalDependencyParameters.filter { $0.typeSource.hasSuffix("?") }.map(\.label)
-		if !debugOnlyIfAvailable.isEmpty {
-			lines.append("\(indent)// DEBUG: optional params: \(debugOnlyIfAvailable)")
-			// Count children recursively
-			func countNodes(_ n: MockParameterNode) -> Int { 1 + n.children.reduce(0) { $0 + countNodes($1) } }
-			let totalNodes = node.children.reduce(0) { $0 + countNodes($1) }
-			lines.append("\(indent)// DEBUG: \(node.concreteTypeName) has \(node.children.count) direct children, \(totalNodes) total nodes in subtree")
-		}
 		lines.append("\(indent)\(mockAttributesPrefix)static func __safeDI_mockBuild(")
 		lines.append(parameters.joined(separator: ",\n"))
 		lines.append("\(indent)) -> \(node.concreteTypeName) {")
