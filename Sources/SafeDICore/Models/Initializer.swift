@@ -254,9 +254,6 @@ public struct Initializer: Codable, Hashable, Sendable {
 			}) {
 				if let unavailableProperties, unavailableProperties.contains(dependency.property) {
 					parts.append("\(argument.label): nil")
-				} else if dependency.source == .forwarded {
-					// Forwarded dependencies use the bare parameter name — no remapping.
-					parts.append("\(argument.label): \(argument.innerLabel)")
 				} else {
 					parts.append("\(argument.label): \(argument.innerLabel)")
 				}
