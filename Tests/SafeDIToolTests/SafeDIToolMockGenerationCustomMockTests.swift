@@ -2821,12 +2821,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        engine: Engine,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child: Child
-		        if let safeDIBuilder = safeDIParameters.child.safeDIBuilder {
-		            child = safeDIBuilder(engine, safeDIParameters.child.name)
-		        } else {
-		            child = Child.mock(engine: engine, name: safeDIParameters.child.name)
-		        }
+		        let child = Child.__safeDI_mockBuild(engine: engine, safeDIMockConfiguration: safeDIParameters.child)
 		        return Root(child: child)
 		    }
 		}

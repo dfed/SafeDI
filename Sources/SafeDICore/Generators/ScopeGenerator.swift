@@ -1736,7 +1736,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let argumentList = arguments.joined(separator: ", ")
 				let defaultDirectCall = node.defaultDirectCall(resolvedArguments: arguments)
 
-				if node.children.isEmpty {
+				if !node.needsConfigurationStruct {
 					// Leaf constant node — flat binding, no scoping needed.
 					if let optionalBuilderPath {
 						let innerIndent = "\(indent)\(standardIndent)"

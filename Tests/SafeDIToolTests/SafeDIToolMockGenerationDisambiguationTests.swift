@@ -1582,18 +1582,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let childA: ChildA
-		        if let safeDIBuilder = safeDIParameters.childA.safeDIBuilder {
-		            childA = safeDIBuilder(safeDIParameters.childA.onAction)
-		        } else {
-		            childA = ChildA(onAction: safeDIParameters.childA.onAction)
-		        }
-		        let childB: ChildB
-		        if let safeDIBuilder = safeDIParameters.childB.safeDIBuilder {
-		            childB = safeDIBuilder(safeDIParameters.childB.onAction)
-		        } else {
-		            childB = ChildB(onAction: safeDIParameters.childB.onAction)
-		        }
+		        let childA = ChildA.__safeDI_mockBuild(safeDIMockConfiguration: safeDIParameters.childA)
+		        let childB = ChildB.__safeDI_mockBuild(safeDIMockConfiguration: safeDIParameters.childB)
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -2327,24 +2317,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let childA: ChildA
-		        if let safeDIBuilder = safeDIParameters.childA.safeDIBuilder {
-		            childA = safeDIBuilder(safeDIParameters.childA.value)
-		        } else {
-		            childA = ChildA(value: safeDIParameters.childA.value)
-		        }
-		        let childB: ChildB
-		        if let safeDIBuilder = safeDIParameters.childB.safeDIBuilder {
-		            childB = safeDIBuilder(safeDIParameters.childB.value)
-		        } else {
-		            childB = ChildB(value: safeDIParameters.childB.value)
-		        }
-		        let childC: ChildC
-		        if let safeDIBuilder = safeDIParameters.childC.safeDIBuilder {
-		            childC = safeDIBuilder(safeDIParameters.childC.value)
-		        } else {
-		            childC = ChildC(value: safeDIParameters.childC.value)
-		        }
+		        let childA = ChildA.__safeDI_mockBuild(safeDIMockConfiguration: safeDIParameters.childA)
+		        let childB = ChildB.__safeDI_mockBuild(safeDIMockConfiguration: safeDIParameters.childB)
+		        let childC = ChildC.__safeDI_mockBuild(safeDIMockConfiguration: safeDIParameters.childC)
 		        return Root(childA: childA, childB: childB, childC: childC)
 		    }
 		}
