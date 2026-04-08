@@ -838,8 +838,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The default builder expression as a direct function reference.
 		/// e.g., `Grandchild.customMock(service:style:)` or `Service.init`.
 		var defaultBuilderExpression: String {
-			let methodName: String = if useMockInitializer, let customMockName {
-				customMockName
+			let methodName: String = if useMockInitializer {
+				customMockName ?? "mock"
 			} else if isExtensionBased {
 				InstantiableVisitor.instantiateMethodName
 			} else {
