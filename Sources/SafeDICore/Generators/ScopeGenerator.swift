@@ -1475,12 +1475,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let unwrappedTypeDescription = node.typeDescription.unwrapped.asSource
 				// Build the external dep args for the recursive call.
 				let externalDeps = node.externalDependencyParameters
-				if externalDeps.isEmpty {
-					lines.append("\(indent)let \(node.propertyLabel) = \(unwrappedTypeDescription)(\(typeName).__safeDI_mockBuild)")
-				} else {
-					let argList = externalDeps.map { "\($0.label): \($0.label)" }.joined(separator: ", ")
-					lines.append("\(indent)let \(node.propertyLabel) = \(unwrappedTypeDescription) { \(typeName).__safeDI_mockBuild(\(argList)) }")
-				}
+				var argList = externalDeps.map { "\($0.label): \($0.label)" }
+				argList.append("safeDIMockConfiguration: .init()")
+				lines.append("\(indent)let \(node.propertyLabel) = \(unwrappedTypeDescription) { \(typeName).__safeDI_mockBuild(\(argList.joined(separator: ", "))) }")
 			} else if node.isInstantiator {
 				// Instantiator child: use generateInstantiatorBinding with build body paths.
 				let arguments = resolveBuildArguments(for: node, configurationPath: nodePath)
