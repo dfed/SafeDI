@@ -692,7 +692,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			let code = """
 			extension \(typeName) {
-			    \(mockAttributesPrefix)public static func mock() -> \(typeName) {
+			    \(mockAttributesPrefix)static func mock() -> \(typeName) {
 			        \(construction)
 			    }
 			}
@@ -734,7 +734,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			mockParameters.append("\(bodyIndent)safeDIParameters: SafeDIParameters = .init()")
 		}
 
-		lines.append("\(indent)\(mockAttributesPrefix)public static func mock(")
+		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
 		lines.append(mockParameters.joined(separator: ",\n"))
 		lines.append("\(indent)) -> \(typeName) {")
 
@@ -844,7 +844,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			!children.isEmpty || !defaultParameters.isEmpty || isPropertyCycle
 		}
 
+		/// The nested configuration struct name (used in struct definitions).
+		static let configurationStructName = "SafeDIMockConfiguration"
+
+		/// The qualified configuration type name for references (e.g., `ChildA.SafeDIMockConfiguration`).
+		var configurationTypeName: String {
+			"\(instantiatedTypeDescription.asSource).\(Self.configurationStructName)"
+		}
+
 		/// The `_Configuration` struct name, based on the instantiated type.
+		/// Used as the deduplication key when collecting unique configuration types.
 		var structName: String {
 			"\(instantiatedTypeDescription.asSource)_Configuration"
 		}
@@ -940,14 +949,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// Collects all unique `_Configuration` types from this scope's mock parameter tree.
-	/// Returns `(structName, code)` pairs for each type that needs a `_Configuration` struct.
-	func collectConfigurationTypes() async -> [(structName: String, code: String)] {
+	/// Collects all unique configuration types from this scope's mock parameter tree.
+	/// Returns `(typeName, mockAttributes, code)` tuples for each type that needs a `SafeDIMockConfiguration` struct.
+	func collectConfigurationTypes() async -> [(typeName: String, mockAttributes: String, code: String)] {
 		let parameterTree = await collectMockParameterTree()
 		let uniqueTypes = Self.collectUniqueConfigurationTypes(from: parameterTree)
 		let indent = Self.standardIndent
 		return uniqueTypes.map { node in
-			(structName: node.structName, code: Self.generateConfigurationStruct(for: node, indent: indent))
+			(
+				typeName: node.instantiatedTypeDescription.asSource,
+				mockAttributes: node.mockAttributes,
+				code: Self.generateConfigurationStruct(for: node, indent: indent),
+			)
 		}
 	}
 
@@ -1135,8 +1148,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return result
 	}
 
-	/// Generates the full `SafeDIParameters` struct. `_Configuration` type references
-	/// are prefixed with `SafeDIMockConfiguration.` since the structs live in a shared file.
+	/// Generates the `SafeDIParameters` struct. Configuration type references
+	/// use qualified names (e.g., `ChildA.SafeDIMockConfiguration`).
 	/// Returns the struct source code, or `nil` if the tree has no children.
 	private static func generateSafeDIParametersStruct(
 		rootChildren: [MockParameterNode],
@@ -1148,17 +1161,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let memberIndent = "\(innerIndent)\(standardIndent)"
 
 		var lines = [String]()
-		lines.append("\(indent)public struct SafeDIParameters {")
+		lines.append("\(indent)struct SafeDIParameters {")
 
 		// Disambiguate root-level children property labels.
 		let rootLabelMap = disambiguatePropertyLabels(for: rootChildren)
 
 		// Generate SafeDIParameters init with root-level children.
-		lines.append("\(innerIndent)public init(")
+		lines.append("\(innerIndent)init(")
 		let initParameters = rootChildren.map { child in
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
 			if child.needsConfigurationStruct {
-				return "\(memberIndent)\(label): \(mockConfigurationStructName).\(child.structName) = .init()"
+				return "\(memberIndent)\(label): \(child.configurationTypeName) = .init()"
 			} else {
 				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
 				return "\(memberIndent)\(label): (\(sendableAnnotation)\(child.builderClosureType))? = nil"
@@ -1177,10 +1190,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for child in rootChildren {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
 			if child.needsConfigurationStruct {
-				lines.append("\(innerIndent)public let \(label): \(mockConfigurationStructName).\(child.structName)")
+				lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
 			} else {
 				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
-				lines.append("\(innerIndent)public let \(label): (\(sendableAnnotation)\(child.builderClosureType))?")
+				lines.append("\(innerIndent)let \(label): (\(sendableAnnotation)\(child.builderClosureType))?")
 			}
 		}
 
@@ -1188,7 +1201,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return lines.joined(separator: "\n")
 	}
 
-	/// Generates a single `{TypeName}_Configuration` struct for a `MockParameterNode`.
+	/// Generates a single `SafeDIMockConfiguration` struct for a `MockParameterNode`.
 	/// When `node.requiresSendable` is `true`, the `safeDIBuilder` closure is marked
 	/// `@Sendable` (the node is inside a `SendableInstantiator` scope).
 	private static func generateConfigurationStruct(
@@ -1199,7 +1212,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let sendableAnnotation = node.requiresSendable ? "@Sendable " : ""
 		var lines = [String]()
 
-		lines.append("\(indent)public struct \(node.structName) {")
+		lines.append("\(indent)struct \(MockParameterNode.configurationStructName) {")
 
 		// Build init parameters in order: children, defaults, builder (last).
 		var initParameters = [String]()
@@ -1216,12 +1229,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for child in nonCycleChildren {
 			let label = disambiguatedLabel(for: child, labelMap: childLabelMap)
 			if child.needsConfigurationStruct {
-				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.structName) = .init()")
-				storedProperties.append("\(innerIndent)public let \(label): \(child.structName)")
+				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.configurationTypeName) = .init()")
+				storedProperties.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
 			} else {
 				let childSendable = child.requiresSendable ? "@Sendable " : ""
 				initParameters.append("\(innerIndent)\(standardIndent)\(label): (\(childSendable)\(child.builderClosureType))? = nil")
-				storedProperties.append("\(innerIndent)public let \(label): (\(childSendable)\(child.builderClosureType))?")
+				storedProperties.append("\(innerIndent)let \(label): (\(childSendable)\(child.builderClosureType))?")
 			}
 			assignments.append("\(innerIndent)\(standardIndent)self.\(label) = \(label)")
 		}
@@ -1233,24 +1246,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let closureSendable = (node.requiresSendable && !typeSource.contains("@Sendable")) ? "@Sendable " : ""
 			if defaultParameter.isClosureType {
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(closureSendable)@escaping \(typeSource) = \(defaultParameter.defaultExpression)")
-				storedProperties.append("\(innerIndent)public let \(defaultParameter.label): \(closureSendable)\(typeSource)")
+				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(closureSendable)\(typeSource)")
 			} else {
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(typeSource) = \(defaultParameter.defaultExpression)")
-				storedProperties.append("\(innerIndent)public let \(defaultParameter.label): \(typeSource)")
+				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(typeSource)")
 			}
 			assignments.append("\(innerIndent)\(standardIndent)self.\(defaultParameter.label) = \(defaultParameter.label)")
 		}
 
 		// Builder parameter (always last, unlabeled). Optional with nil default so that
-		// the default function reference (which may be @MainActor) is resolved in mock()
+		// the default function reference (which may be @MainActor) is resolved in build()
 		// rather than in this nonisolated init.
 		let closureType = node.builderClosureType
 		initParameters.append("\(innerIndent)\(standardIndent)_ safeDIBuilder: (\(sendableAnnotation)\(closureType))? = nil")
 		assignments.append("\(innerIndent)\(standardIndent)self.safeDIBuilder = safeDIBuilder")
-		storedProperties.append("\(innerIndent)public let safeDIBuilder: (\(sendableAnnotation)\(closureType))?")
+		storedProperties.append("\(innerIndent)let safeDIBuilder: (\(sendableAnnotation)\(closureType))?")
 
 		// Emit init.
-		lines.append("\(innerIndent)public init(")
+		lines.append("\(innerIndent)init(")
 		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
 		lines.append(contentsOf: assignments)
@@ -1278,7 +1291,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) -> [String] {
 		let innerIndent = "\(indent)\(standardIndent)"
 		let bodyIndent = "\(innerIndent)\(standardIndent)"
-		let structName = "\(node.instantiatedTypeDescription.asSource)_Configuration"
 		let mockAttributesPrefix = node.mockAttributes.isEmpty ? "" : "\(node.mockAttributes) "
 
 		// Build the parameter list: external dependencies + configuration.
@@ -1286,10 +1298,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for externalDependency in node.externalDependencyParameters {
 			parameters.append("\(innerIndent)\(externalDependency.label): \(externalDependency.typeSource)")
 		}
-		parameters.append("\(innerIndent)configuration: \(structName) = .init()")
+		parameters.append("\(innerIndent)configuration: \(MockParameterNode.configurationStructName) = .init()")
 
 		var lines = [String]()
-		lines.append("\(indent)\(mockAttributesPrefix)public static func build(")
+		lines.append("\(indent)\(mockAttributesPrefix)static func build(")
 		lines.append(parameters.joined(separator: ",\n"))
 		lines.append("\(indent)) -> \(node.concreteTypeName) {")
 
@@ -1332,13 +1344,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 			if node.needsConfigurationStruct {
 				// Non-leaf child: call its build() method.
-				let qualifiedConfigName = "SafeDIMockConfiguration.\(node.instantiatedTypeDescription.asSource)_Configuration"
 				var buildArgs = [String]()
 				for externalDependency in node.externalDependencyParameters {
 					buildArgs.append("\(externalDependency.label): \(externalDependency.label)")
 				}
 				buildArgs.append("configuration: \(nodePath)")
-				let buildCall = "\(qualifiedConfigName).build(\(buildArgs.joined(separator: ", ")))"
+				let buildCall = "\(node.configurationTypeName).build(\(buildArgs.joined(separator: ", ")))"
 
 				if node.erasedToConcreteExistential {
 					let protocolType = node.typeDescription.asSource
@@ -1589,7 +1600,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				} else {
 					// Constant node with children — call its build() method.
-					let qualifiedConfigName = "SafeDIMockConfiguration.\(node.instantiatedTypeDescription.asSource)_Configuration"
+					let qualifiedConfigName = node.configurationTypeName
 					var buildArgs = [String]()
 					for externalDependency in node.externalDependencyParameters {
 						buildArgs.append("\(externalDependency.label): \(externalDependency.label)")
