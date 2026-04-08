@@ -1870,11 +1870,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {")
 
 				// Generate children using extracted locals.
+				// Include this node's type in ancestors for cycle detection.
+				var functionAncestors = ancestorTypes
+				functionAncestors.insert(node.instantiatedTypeDescription.asSource)
 				let childBindings = generateMockBodyBindings(
 					nodes: node.children,
 					parentPath: nodePath,
 					indent: innerIndent,
-					ancestorTypes: ancestorTypes,
+					ancestorTypes: functionAncestors,
 					sendableExtractionPrefix: functionName,
 				)
 				lines.append(contentsOf: childBindings)
@@ -1890,11 +1893,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {")
 
 				// Generate children's bindings inside the function body.
+				// Include this node's type in ancestors so self-referencing
+				// cycles (e.g., Instantiator<Self>) are detected.
+				var functionAncestors = ancestorTypes
+				functionAncestors.insert(node.instantiatedTypeDescription.asSource)
 				let childBindings = generateMockBodyBindings(
 					nodes: node.children,
 					parentPath: nodePath,
 					indent: innerIndent,
-					ancestorTypes: ancestorTypes,
+					ancestorTypes: functionAncestors,
 				)
 				lines.append(contentsOf: childBindings)
 
