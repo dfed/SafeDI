@@ -931,25 +931,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					.map(\.property),
 			)
 
-			// Gather construction arguments from the appropriate initializer.
-			// For Instantiator children, exclude non-dependency defaults — they don't
-			// bubble through Instantiator boundaries, so the child init's own default
-			// handles them. Including them would create a builder closure type that
-			// expects arguments the mock body doesn't provide.
-			let dependencyLabels = Set(childInstantiable.dependencies.map(\.property.label))
-			let allArguments: [Initializer.Argument] = if let constructionInitializer {
+			// Gather all construction arguments from the appropriate initializer.
+			let constructionArguments: [Initializer.Argument] = if let constructionInitializer {
 				constructionInitializer.arguments
 			} else if let initializer = childInstantiable.initializer {
 				initializer.arguments
 			} else {
 				[]
-			}
-			let constructionArguments: [Initializer.Argument] = if isInstantiator {
-				allArguments.filter { argument in
-					dependencyLabels.contains(argument.innerLabel) || !argument.hasDefaultValue
-				}
-			} else {
-				allArguments
 			}
 
 			nodes.append(MockParameterNode(
@@ -1244,10 +1232,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else if defaultParameterLabels.contains(argument.label) {
 				// Non-dependency default: reference the stored property on SafeDIParameters.
 				"\(nodePath).\(argument.label)"
-			} else if argument.hasDefaultValue, argument.label != "_" {
-				// Default argument not in our defaultParameters list — skip.
-				// This can happen for arguments we don't track.
-				nil
+			} else if argument.hasDefaultValue, argument.label != "_",
+			          let defaultExpression = argument.defaultValueExpression
+			{
+				// Non-dependency default not tracked on the _Configuration struct
+				// (e.g., Instantiator children where defaults don't bubble).
+				// Pass the default expression inline so the builder call has
+				// the correct arity for the function reference.
+				defaultExpression
 			} else {
 				// Unknown argument — use the label as a local variable reference.
 				argument.innerLabel

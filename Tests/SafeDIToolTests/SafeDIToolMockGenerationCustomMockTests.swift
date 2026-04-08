@@ -1296,7 +1296,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let service = (safeDIParameters.service.safeDIBuilder ?? Service.customMock(onCancel:onSubmit:))()
+		        let service = (safeDIParameters.service.safeDIBuilder ?? Service.customMock(onCancel:onSubmit:))({ _ in }, { _ in })
 		        return Root(service: service)
 		    }
 		}
