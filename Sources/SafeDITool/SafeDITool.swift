@@ -259,17 +259,26 @@ struct SafeDITool: AsyncParsableCommand {
 					let mockResult = try await generator.generateMockCode(
 						mockConditionalCompilation: mockConditionalCompilation,
 						currentModuleSourceFilePaths: currentModuleSourceFilePaths,
+						additionalMocksToGenerate: Set(manifest.additionalMocksToGenerate),
 					)
 
 					var sourceFileToMockExtensions = [String: [String]]()
+					var typeNameToMockExtensions = [String: [String]]()
 					for mock in mockResult.generatedRoots {
 						if let sourceFilePath = mock.sourceFilePath {
 							sourceFileToMockExtensions[sourceFilePath, default: []].append(mock.code)
 						}
+						typeNameToMockExtensions[mock.typeDescription.asSource, default: []].append(mock.code)
 					}
 
+					let additionalMockTypeNames = Set(manifest.additionalMocksToGenerate)
 					for entry in manifest.mockGeneration {
-						let extensions = sourceFileToMockExtensions[entry.inputFilePath]
+						let extensions: [String]? = if additionalMockTypeNames.contains(entry.inputFilePath) {
+							// Additional mock: inputFilePath is the type name.
+							typeNameToMockExtensions[entry.inputFilePath]
+						} else {
+							sourceFileToMockExtensions[entry.inputFilePath]
+						}
 						let code = fileHeader + (extensions?.sorted().joined(separator: "\n\n") ?? "")
 						let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
 						if existingContent != code {

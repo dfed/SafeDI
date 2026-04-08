@@ -37,17 +37,20 @@ public struct RootScanner {
 		public var mockGeneration: [InputOutputMap]
 		public var configurationFilePaths: [String]
 		public var mockConfigurationOutputFilePath: String?
+		public var additionalMocksToGenerate: [String]
 
 		public init(
 			dependencyTreeGeneration: [InputOutputMap],
 			mockGeneration: [InputOutputMap],
 			configurationFilePaths: [String] = [],
 			mockConfigurationOutputFilePath: String? = nil,
+			additionalMocksToGenerate: [String] = [],
 		) {
 			self.dependencyTreeGeneration = dependencyTreeGeneration
 			self.mockGeneration = mockGeneration
 			self.configurationFilePaths = configurationFilePaths
 			self.mockConfigurationOutputFilePath = mockConfigurationOutputFilePath
+			self.additionalMocksToGenerate = additionalMocksToGenerate
 		}
 	}
 
@@ -130,7 +133,29 @@ public struct RootScanner {
 		}
 		let mockOutputFileNames = Self.mockOutputFileNames(for: instantiableFiles, relativeTo: baseURL)
 
-		let mockConfigurationOutputFilePath: String? = if !instantiableFiles.isEmpty {
+		// Extract additionalMocksToGenerate from the config file (if any).
+		let additionalMocksToGenerate: [String] = {
+			for fileURL in filesForMockScan {
+				guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
+				let mocks = Self.extractAdditionalMocksToGenerate(in: content)
+				guard !mocks.isEmpty else { continue }
+				return mocks
+			}
+			return []
+		}()
+
+		// Generate mock output entries for additional mock types.
+		let additionalMockOutputEntries: [Manifest.InputOutputMap] = additionalMocksToGenerate.map { typeName in
+			.init(
+				inputFilePath: typeName,
+				outputFilePath: outputDirectory
+					.appendingPathComponent("\(typeName)+SafeDIMock.swift")
+					.path,
+			)
+		}
+
+		let hasMockEntries = !instantiableFiles.isEmpty || !additionalMockOutputEntries.isEmpty
+		let mockConfigurationOutputFilePath: String? = if hasMockEntries {
 			outputDirectory
 				.appendingPathComponent("SafeDIMockConfiguration.swift")
 				.path
@@ -155,9 +180,10 @@ public struct RootScanner {
 							.appendingPathComponent(outputFileName)
 							.path,
 					)
-				},
+				} + additionalMockOutputEntries,
 				configurationFilePaths: configurationFilePaths,
 				mockConfigurationOutputFilePath: mockConfigurationOutputFilePath,
+				additionalMocksToGenerate: additionalMocksToGenerate,
 			),
 		)
 	}
@@ -255,10 +281,24 @@ public struct RootScanner {
 		outputFileNames(for: inputURLs, relativeTo: baseURL, suffix: "+SafeDIMock.swift")
 	}
 
+	/// Extracts `additionalMocksToGenerate` type names from a source file
+	/// containing `#SafeDIConfiguration`. Uses text-based scanning (no SwiftSyntax).
+	/// Returns an empty array if the file does not contain a configuration.
+	public static func extractAdditionalMocksToGenerate(in source: String) -> [String] {
+		extractStringArrayArgument(named: "additionalMocksToGenerate", in: source)
+	}
+
 	/// Extracts `additionalDirectoriesToInclude` paths from a source file
 	/// containing `#SafeDIConfiguration`. Uses text-based scanning (no SwiftSyntax).
 	/// Returns an empty array if the file does not contain a configuration.
 	public static func extractAdditionalDirectoriesToInclude(in source: String) -> [String] {
+		extractStringArrayArgument(named: "additionalDirectoriesToInclude", in: source)
+	}
+
+	/// Extracts a string array argument value from a `#SafeDIConfiguration(...)` invocation.
+	/// Uses text-based scanning (no SwiftSyntax).
+	/// Returns an empty array if the argument is not found.
+	private static func extractStringArrayArgument(named argumentLabel: String, in source: String) -> [String] {
 		let sanitizedSource = sanitize(source: source)
 		let macroName = "#SafeDIConfiguration"
 		var macroSearchStart = sanitizedSource.startIndex
@@ -282,14 +322,11 @@ public struct RootScanner {
 		      let closingParenIndex = matchingParenIndex(in: sanitizedSource, openingParenIndex: index)
 		else { return [] }
 
-		// Search for the `additionalDirectoriesToInclude:` label in the argument list.
+		// Search for the argument label in the argument list.
 		let argumentList = sanitizedSource[sanitizedSource.index(after: index)..<closingParenIndex]
-		let argumentLabel = "additionalDirectoriesToInclude"
 		guard let labelRange = findArgumentLabel(named: argumentLabel, in: argumentList) else { return [] }
 
 		// Convert from sanitized-source index to original source to extract string content.
-		// The label in a macro argument list is always immediately followed by `:`,
-		// so we can compute the offset directly.
 		let colonOffset = sanitizedSource.distance(from: sanitizedSource.startIndex, to: labelRange.upperBound)
 		guard colonOffset < source.count else { return [] }
 		var originalIndex = source.index(source.startIndex, offsetBy: colonOffset)

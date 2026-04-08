@@ -21,6 +21,9 @@
 public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 	public let additionalImportedModules: [String]
 	public let additionalDirectoriesToInclude: [String]
+	/// Type names of `@Instantiable` types from other modules to generate mocks for.
+	/// The types must be known to the dependency tree (i.e., imported via module info).
+	public let additionalMocksToGenerate: [String]
 	public let mockConditionalCompilation: String?
 	/// The source file path where this configuration was declared.
 	/// Set during parsing to scope configuration to the current module.
@@ -29,10 +32,12 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 	public init(
 		additionalImportedModules: [String],
 		additionalDirectoriesToInclude: [String],
+		additionalMocksToGenerate: [String] = [],
 		mockConditionalCompilation: String? = "DEBUG",
 	) {
 		self.additionalImportedModules = additionalImportedModules
 		self.additionalDirectoriesToInclude = additionalDirectoriesToInclude
+		self.additionalMocksToGenerate = additionalMocksToGenerate
 		self.mockConditionalCompilation = mockConditionalCompilation
 	}
 }

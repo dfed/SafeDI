@@ -80,6 +80,7 @@ public actor DependencyTreeGenerator {
 	public func generateMockCode(
 		mockConditionalCompilation: String?,
 		currentModuleSourceFilePaths: Set<String>? = nil,
+		additionalMocksToGenerate: Set<String> = [],
 	) async throws -> MockGenerationResult {
 		// Build a map of erased wrapper types → concrete fulfilling types.
 		// This lets mocks construct types like AnyUserService(DefaultUserService())
@@ -115,17 +116,18 @@ public actor DependencyTreeGenerator {
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
 			.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
 		{
-			// Skip types where generateMock is not enabled, duplicates,
-			// types not in the scope map, and types from dependent modules
-			// (their module generates their own mocks).
-			// When generateMock is true and a hand-written mock exists,
-			// the generated mock calls through to the hand-written one
+			let isAdditionalMock = additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource)
+			// Skip types where generateMock is not enabled (unless explicitly listed
+			// in additionalMocksToGenerate), duplicates, and types not in the scope map.
+			// Types from dependent modules are skipped unless they appear in
+			// additionalMocksToGenerate. When generateMock is true and a hand-written
+			// mock exists, the generated mock calls through to the hand-written one
 			// (which has a different name specified by customMockName).
-			guard instantiable.generateMock,
+			guard instantiable.generateMock || isAdditionalMock,
 			      seen.insert(instantiable.concreteInstantiable).inserted,
 			      let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable]
 			else { continue }
-			if let currentModuleSourceFilePaths {
+			if let currentModuleSourceFilePaths, !isAdditionalMock {
 				guard let sourceFilePath = instantiable.sourceFilePath,
 				      currentModuleSourceFilePaths.contains(sourceFilePath)
 				else { continue }

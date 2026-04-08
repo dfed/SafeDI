@@ -38,5 +38,6 @@
 public macro SafeDIConfiguration(
 	additionalImportedModules: [StaticString] = [],
 	additionalDirectoriesToInclude: [StaticString] = [],
+	additionalMocksToGenerate: [StaticString] = [],
 	mockConditionalCompilation: StaticString? = "DEBUG",
 ) = #externalMacro(module: "SafeDIMacros", type: "SafeDIConfigurationMacro")
