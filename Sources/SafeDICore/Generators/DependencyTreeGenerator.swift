@@ -155,8 +155,8 @@ public actor DependencyTreeGenerator {
 
 		// Generate mock code and collect configuration types in parallel.
 		let generatedRoots = try await withThrowingTaskGroup(
-			of: (root: GeneratedRoot, configurationTypes: [(typeName: String, mockAttributes: String, code: String)]).self,
-			returning: [(root: GeneratedRoot, configurationTypes: [(typeName: String, mockAttributes: String, code: String)])].self,
+			of: (root: GeneratedRoot, configurationTypes: [(structName: String, code: String)]).self,
+			returning: [(root: GeneratedRoot, configurationTypes: [(structName: String, code: String)])].self,
 		) { taskGroup in
 			for (instantiable, mockRoot) in mockRoots {
 				taskGroup.addTask {
@@ -176,39 +176,29 @@ public actor DependencyTreeGenerator {
 					)
 				}
 			}
-			var results = [(root: GeneratedRoot, configurationTypes: [(typeName: String, mockAttributes: String, code: String)])]()
+			var results = [(root: GeneratedRoot, configurationTypes: [(structName: String, code: String)])]()
 			for try await result in taskGroup {
 				results.append(result)
 			}
 			return results
 		}
 
-		// Deduplicate configuration types by typeName across all roots.
-		// Only include types that belong to the current module to avoid
-		// generating duplicate extensions for imported types.
-		var seenTypeNames = Set<String>()
-		var allConfigurationExtensions = [(typeName: String, mockAttributes: String, code: String)]()
+		// Deduplicate configuration types by structName across all roots.
+		var seenStructNames = Set<String>()
+		var allConfigurationStructs = [String]()
 		for result in generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription }) {
 			for configType in result.configurationTypes {
-				guard seenTypeNames.insert(configType.typeName).inserted else { continue }
-				// Skip types from other modules — their own module generates their configuration.
-				if let currentModuleSourceFilePaths,
-				   let instantiable = typeDescriptionToFulfillingInstantiableMap.values
-				   .first(where: { $0.concreteInstantiable.asSource == configType.typeName }),
-				   let sourceFilePath = instantiable.sourceFilePath,
-				   !currentModuleSourceFilePaths.contains(sourceFilePath)
-				{
-					continue
+				if seenStructNames.insert(configType.structName).inserted {
+					allConfigurationStructs.append(configType.code)
 				}
-				allConfigurationExtensions.append(configType)
 			}
 		}
 
-		let mockConfigurationCode: String? = if allConfigurationExtensions.isEmpty {
+		let mockConfigurationCode: String? = if allConfigurationStructs.isEmpty {
 			nil
 		} else {
 			generateMockConfigurationCode(
-				configurationExtensions: allConfigurationExtensions,
+				configurationStructs: allConfigurationStructs,
 				mockConditionalCompilation: mockConditionalCompilation,
 			)
 		}
@@ -220,18 +210,15 @@ public actor DependencyTreeGenerator {
 	}
 
 	private func generateMockConfigurationCode(
-		configurationExtensions: [(typeName: String, mockAttributes: String, code: String)],
+		configurationStructs: [String],
 		mockConditionalCompilation: String?,
 	) -> String {
-		let extensions = configurationExtensions.map { extension_ in
-			let attributePrefix = extension_.mockAttributes.isEmpty ? "" : "\(extension_.mockAttributes)\n"
-			return "\(attributePrefix)extension \(extension_.typeName) {\n\(extension_.code)\n}"
-		}
-		let body = extensions.joined(separator: "\n\n")
+		let body = configurationStructs.joined(separator: "\n\n")
+		let structCode = "public struct \(ScopeGenerator.mockConfigurationStructName) {\n\(body)\n}"
 		if let mockConditionalCompilation {
-			return "#if \(mockConditionalCompilation)\n\(body)\n#endif\n"
+			return "#if \(mockConditionalCompilation)\n\(structCode)\n#endif\n"
 		} else {
-			return "\(body)\n"
+			return "\(structCode)\n"
 		}
 	}
 
