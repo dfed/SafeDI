@@ -930,6 +930,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					seen.insert(childLabel)
 				}
 
+				// Build a set of onlyIfAvailable dependency labels for optional type promotion.
+				let onlyIfAvailableLabels = Set(node.dependencies.compactMap { dependency -> String? in
+					switch dependency.source {
+					case let .received(onlyIfAvailable):
+						onlyIfAvailable ? dependency.property.label : nil
+					case let .aliased(_, _, onlyIfAvailable):
+						onlyIfAvailable ? dependency.property.label : nil
+					case .instantiated, .forwarded:
+						nil
+					}
+				})
+
 				for argument in node.constructionArguments {
 					let label = argument.innerLabel
 					if dependencyLabels.contains(label),
@@ -938,7 +950,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					   !forwardedLabels.contains(label),
 					   seen.insert(label).inserted
 					{
-						result.append((label: label, typeSource: argument.typeDescription.asFunctionParameter.asSource))
+						var typeSource = argument.typeDescription.asFunctionParameter.asSource
+						// Promote to optional for onlyIfAvailable dependencies — the mock
+						// body provides these as optional values (defaulting to nil).
+						if onlyIfAvailableLabels.contains(label), !argument.typeDescription.isOptional {
+							typeSource += "?"
+						}
+						result.append((label: label, typeSource: typeSource))
 					}
 				}
 
@@ -1359,15 +1377,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if node.isInstantiator {
 				// Instantiator child: use generateInstantiatorBinding with build body paths.
 				let arguments = resolveBuildArguments(for: node, configurationPath: nodePath)
-				let optionalBuilderPath: String? = if node.needsConfigurationStruct {
-					"\(nodePath).safeDIBuilder"
+				// Cycle nodes use the default builder directly — their configuration
+				// property was excluded from the struct to avoid infinite value types.
+				let optionalBuilderPath: String?
+				let builderExpression: String
+				if node.isPropertyCycle {
+					optionalBuilderPath = nil
+					builderExpression = node.defaultBuilderExpression
+				} else if node.needsConfigurationStruct {
+					optionalBuilderPath = "\(nodePath).safeDIBuilder"
+					builderExpression = "(\(nodePath).safeDIBuilder ?? \(node.defaultBuilderExpression))"
 				} else {
-					nodePath
+					optionalBuilderPath = nodePath
+					builderExpression = "(\(nodePath) ?? \(node.defaultBuilderExpression))"
 				}
 				lines.append(contentsOf: generateInstantiatorBinding(
 					for: node,
 					nodePath: nodePath,
-					builderExpression: "(\(nodePath).safeDIBuilder ?? \(node.defaultBuilderExpression))",
+					builderExpression: builderExpression,
 					optionalBuilderPath: optionalBuilderPath,
 					arguments: arguments,
 					defaultDirectCall: node.defaultDirectCall(resolvedArguments: arguments),
