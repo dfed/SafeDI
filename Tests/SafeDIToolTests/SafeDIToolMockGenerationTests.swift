@@ -2896,6 +2896,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        selfBuilder: Instantiator<Root>,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_selfBuilder() -> Root {
@@ -9046,6 +9047,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        parallelModuleType: ParallelModuleType,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let dependentService = (safeDIParameters.dependentService.safeDIBuilder ?? DependentService.init(parallelModuleType:))(parallelModuleType)
@@ -9161,6 +9163,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        service: ExternalService,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let service = (safeDIParameters.child.grandchild.service.safeDIBuilder ?? LocalService.init)()
@@ -10366,6 +10369,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        bBuilder: Instantiator<B>,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_aBuilder() -> A {
@@ -10447,6 +10451,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        aBuilder: Instantiator<A>,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_aBuilder(context: String) -> A {

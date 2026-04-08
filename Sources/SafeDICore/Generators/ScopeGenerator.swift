@@ -630,6 +630,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		var flatUncoveredParameters = [(label: String, typeSource: String)]()
+		// Collect uncovered @Instantiated deps from the root type.
 		for dependency in instantiable.dependencies {
 			switch dependency.source {
 			case .instantiated:
@@ -642,6 +643,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				break
 			}
 		}
+		// Also collect uncovered @Instantiated deps from child types in the tree.
+		// When a child has a custom mock method, its @Instantiated deps that aren't
+		// in the scope map become builder arguments. These must surface as flat params
+		// so the mock body can pass them.
+		Self.collectUncoveredDependenciesFromTree(
+			parameterTree,
+			into: &flatUncoveredParameters,
+		)
 
 		// Disambiguate flat received parameter labels when collisions exist.
 		// Forwarded parameters keep their original labels (must match init signature).
@@ -952,6 +961,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		return nodes
+	}
+
+	/// Walks the parameter tree and collects `@Instantiated` dependencies from child
+	/// types that aren't fulfilled by their own child nodes. These are deps that
+	/// surface through builder arguments (especially via custom mock methods) but aren't
+	/// fulfilled by any type in the scope map.
+	private static func collectUncoveredDependenciesFromTree(
+		_ nodes: [MockParameterNode],
+		into flatUncoveredParameters: inout [(label: String, typeSource: String)],
+	) {
+		for node in nodes {
+			let childLabels = Set(node.children.map(\.propertyLabel))
+			let collectedLabels = Set(flatUncoveredParameters.map(\.label))
+			for dependency in node.dependencies {
+				guard case .instantiated = dependency.source else { continue }
+				// Skip deps that are covered by a child node in the tree.
+				guard !childLabels.contains(dependency.property.label) else { continue }
+				// Skip deps already collected.
+				guard !collectedLabels.contains(dependency.property.label) else { continue }
+				let sourceType = dependency.property.propertyType.isConstant
+					? dependency.property.typeDescription.asInstantiatedType.asSource
+					: dependency.property.typeDescription.asSource
+				flatUncoveredParameters.append((label: dependency.property.label, typeSource: sourceType))
+			}
+			collectUncoveredDependenciesFromTree(
+				node.children,
+				into: &flatUncoveredParameters,
+			)
+		}
 	}
 
 	// MARK: SafeDIParameters Generation
