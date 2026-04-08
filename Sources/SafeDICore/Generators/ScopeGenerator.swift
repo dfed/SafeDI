@@ -829,6 +829,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let forwardedProperties: Set<Property>
 		/// Whether this node is part of a property cycle.
 		let isPropertyCycle: Bool
+		/// Whether this node is inside a sendable scope (descendant of SendableInstantiator).
+		/// When `true`, the `safeDIBuilder` closure on `_Configuration` is `@Sendable`.
+		let requiresSendable: Bool
 
 		/// The `_Configuration` struct name, based on the instantiated type.
 		var structName: String {
@@ -957,6 +960,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				concreteTypeName: childInstantiable.concreteInstantiable.asSource,
 				forwardedProperties: forwardedProperties,
 				isPropertyCycle: isPropertyCycle,
+				requiresSendable: childInsideSendable,
 			))
 		}
 
@@ -1057,18 +1061,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return result
 	}
 
-	/// Returns `true` when any node in the tree is a sendable Instantiator variant.
-	/// When this is `true`, `SafeDIParameters` must be `Sendable`, so every stored
-	/// closure (`safeDIBuilder` and closure-typed defaults) must be `@Sendable`.
-	private static func treeContainsSendableInstantiator(
-		_ nodes: [MockParameterNode],
-	) -> Bool {
-		nodes.contains { node in
-			node.typeDescription.propertyType.isSendable
-				|| treeContainsSendableInstantiator(node.children)
-		}
-	}
-
 	/// Generates the full `SafeDIParameters` struct including all flat `_Configuration` siblings.
 	/// Returns the struct source code, or `nil` if the tree has no children.
 	private static func generateSafeDIParametersStruct(
@@ -1077,7 +1069,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) -> String? {
 		guard !rootChildren.isEmpty else { return nil }
 
-		let requiresSendableClosures = treeContainsSendableInstantiator(rootChildren)
 		let innerIndent = "\(indent)\(standardIndent)"
 		let memberIndent = "\(innerIndent)\(standardIndent)"
 
@@ -1092,7 +1083,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.append(generateConfigurationStruct(
 				for: uniqueType,
 				indent: innerIndent,
-				requiresSendableClosures: requiresSendableClosures,
 			))
 			lines.append("")
 		}
@@ -1126,16 +1116,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Generates a single `{TypeName}_Configuration` struct for a `MockParameterNode`.
-	/// When `requiresSendableClosures` is `true`, all stored closures are marked `@Sendable`
-	/// so the enclosing `SafeDIParameters` struct is `Sendable` (required when any node in
-	/// the tree uses a `SendableInstantiator` or `SendableErasedInstantiator`).
+	/// When `node.requiresSendable` is `true`, the `safeDIBuilder` closure is marked
+	/// `@Sendable` (the node is inside a `SendableInstantiator` scope).
 	private static func generateConfigurationStruct(
 		for node: MockParameterNode,
 		indent: String,
-		requiresSendableClosures: Bool,
 	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
-		let sendableAnnotation = requiresSendableClosures ? "@Sendable " : ""
+		let sendableAnnotation = node.requiresSendable ? "@Sendable " : ""
 		var lines = [String]()
 
 		lines.append("\(indent)public struct \(node.structName) {")
@@ -1163,7 +1151,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for defaultParameter in node.defaultParameters {
 			let typeSource = defaultParameter.typeDescription.asSource
 			// Only add @Sendable if the type doesn't already have it.
-			let closureSendable = (requiresSendableClosures && !typeSource.contains("@Sendable")) ? "@Sendable " : ""
+			let closureSendable = (node.requiresSendable && !typeSource.contains("@Sendable")) ? "@Sendable " : ""
 			if defaultParameter.isClosureType {
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(closureSendable)@escaping \(typeSource) = \(defaultParameter.defaultExpression)")
 				storedProperties.append("\(innerIndent)public let \(defaultParameter.label): \(closureSendable)\(typeSource)")
