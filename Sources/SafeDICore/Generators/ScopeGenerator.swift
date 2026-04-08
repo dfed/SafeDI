@@ -1344,8 +1344,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			let nodePath = "\(parentPath).\(disambiguated)"
 
-			if node.needsConfigurationStruct {
-				// Non-leaf child: call its __safeDI_mockBuild() method.
+			if node.isInstantiator {
+				// Instantiator child: use generateInstantiatorBinding with build body paths.
+				let arguments = resolveBuildArguments(for: node, configurationPath: nodePath)
+				let optionalBuilderPath: String? = if node.needsConfigurationStruct {
+					"\(nodePath).safeDIBuilder"
+				} else {
+					nodePath
+				}
+				lines.append(contentsOf: generateInstantiatorBinding(
+					for: node,
+					nodePath: nodePath,
+					builderExpression: "(\(nodePath).safeDIBuilder ?? \(node.defaultBuilderExpression))",
+					optionalBuilderPath: optionalBuilderPath,
+					arguments: arguments,
+					defaultDirectCall: node.defaultDirectCall(resolvedArguments: arguments),
+					indent: indent,
+				))
+			} else if node.needsConfigurationStruct {
+				// Non-leaf constant child: call its __safeDI_mockBuild() method.
 				let typeName = node.instantiatedTypeDescription.asSource
 				var buildArgs = [String]()
 				for externalDependency in node.externalDependencyParameters {
@@ -1361,7 +1378,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					lines.append("\(indent)let \(node.propertyLabel) = \(buildCall)")
 				}
 			} else {
-				// Leaf child: use if-let pattern.
+				// Leaf constant child: use if-let pattern.
 				let arguments = resolveBuildArguments(for: node, configurationPath: nodePath)
 				let argumentList = arguments.joined(separator: ", ")
 				let defaultDirectCall = node.defaultDirectCall(resolvedArguments: arguments)

@@ -206,12 +206,14 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func __safeDI_mockBuild(
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> ChildA {
-		        let childB: Other
-		        if let safeDIBuilder = safeDIMockConfiguration.childB {
-		            childB = safeDIBuilder()
-		        } else {
-		            childB = Other()
+		        func __safeDI_childB() -> Other {
+		            if let safeDIBuilder = safeDIMockConfiguration.childB {
+		                return safeDIBuilder()
+		            } else {
+		                return Other()
+		            }
 		        }
+		        let childB = Instantiator<Other>(__safeDI_childB)
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
 		            return safeDIBuilder(childB)
 		        } else {
@@ -799,11 +801,15 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func __safeDI_mockBuild(
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Parent {
-		        let childBuilder: ChildB
-		        if let safeDIBuilder = safeDIMockConfiguration.childBuilder {
-		            childBuilder = safeDIBuilder(name)
-		        } else {
-		            childBuilder = ChildB(name: name)
+		        func __safeDI_childBuilder(name: String) -> ChildB {
+		            if let safeDIBuilder = safeDIMockConfiguration.childBuilder {
+		                return safeDIBuilder(name)
+		            } else {
+		                return ChildB(name: name)
+		            }
+		        }
+		        let childBuilder = Instantiator<ChildB> {
+		            __safeDI_childBuilder(name: $0)
 		        }
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
 		            return safeDIBuilder(childBuilder)
@@ -1073,11 +1079,15 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        childBuilder: Instantiator<ChildA>,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Parent {
-		        let otherBuilder: ChildB
-		        if let safeDIBuilder = safeDIMockConfiguration.otherBuilder {
-		            otherBuilder = safeDIBuilder(name)
-		        } else {
-		            otherBuilder = ChildB(name: name)
+		        func __safeDI_otherBuilder(name: String) -> ChildB {
+		            if let safeDIBuilder = safeDIMockConfiguration.otherBuilder {
+		                return safeDIBuilder(name)
+		            } else {
+		                return ChildB(name: name)
+		            }
+		        }
+		        let otherBuilder = Instantiator<ChildB> {
+		            __safeDI_otherBuilder(name: $0)
 		        }
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
 		            return safeDIBuilder(childBuilder, otherBuilder)
@@ -1947,11 +1957,15 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func __safeDI_mockBuild(
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Parent {
-		        let childBuilder: ChildA
-		        if let safeDIBuilder = safeDIMockConfiguration.childBuilder {
-		            childBuilder = safeDIBuilder(name)
-		        } else {
-		            childBuilder = ChildA(name: name)
+		        func __safeDI_childBuilder(name: String) -> ChildA {
+		            if let safeDIBuilder = safeDIMockConfiguration.childBuilder {
+		                return safeDIBuilder(name)
+		            } else {
+		                return ChildA(name: name)
+		            }
+		        }
+		        let childBuilder = Instantiator<ChildA> {
+		            __safeDI_childBuilder(name: $0)
 		        }
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
 		            return safeDIBuilder(childBuilder)
@@ -1978,11 +1992,15 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func __safeDI_mockBuild(
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Other {
-		        let childBuilder: ChildB
-		        if let safeDIBuilder = safeDIMockConfiguration.childBuilder {
-		            childBuilder = safeDIBuilder(name)
-		        } else {
-		            childBuilder = ChildB(name: name)
+		        func __safeDI_childBuilder(name: String) -> ChildB {
+		            if let safeDIBuilder = safeDIMockConfiguration.childBuilder {
+		                return safeDIBuilder(name)
+		            } else {
+		                return ChildB(name: name)
+		            }
+		        }
+		        let childBuilder = Instantiator<ChildB> {
+		            __safeDI_childBuilder(name: $0)
 		        }
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
 		            return safeDIBuilder(childBuilder)
