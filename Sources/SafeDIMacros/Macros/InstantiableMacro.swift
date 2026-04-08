@@ -429,11 +429,16 @@ public struct InstantiableMacro: MemberMacro {
 			// Validate customMockName: requires generateMock: true.
 			if let instantiableMacro = declaration.attributes.instantiableMacro {
 				let customMockNameValue = instantiableMacro.customMockNameValue
-				if customMockNameValue != nil, !instantiableMacro.generateMockValue {
+				if customMockNameValue != nil,
+				   !instantiableMacro.generateMockValue,
+				   let macroArguments = instantiableMacro.arguments,
+				   let arguments = LabeledExprListSyntax(macroArguments),
+				   let customMockNameIndex = arguments.firstIndex(where: { $0.label?.text == "customMockName" })
+				{
 					context.diagnose(Diagnostic(
 						node: Syntax(instantiableMacro),
 						error: FixableInstantiableError.customMockNameWithoutGenerateMock,
-						changes: Self.addGenerateMockArgument(to: instantiableMacro, on: declaration),
+						changes: Self.addGenerateMockArgument(to: instantiableMacro, arguments: arguments, customMockNameOffset: arguments.distance(from: arguments.startIndex, to: customMockNameIndex), on: declaration),
 					))
 				}
 				// When generateMock: true and a method named "mock" exists (not custom-named), it must be renamed.
@@ -702,11 +707,16 @@ public struct InstantiableMacro: MemberMacro {
 			// Validate customMockName: requires generateMock: true.
 			if let instantiableMacro = declaration.attributes.instantiableMacro {
 				let customMockNameValue = instantiableMacro.customMockNameValue
-				if customMockNameValue != nil, !instantiableMacro.generateMockValue {
+				if customMockNameValue != nil,
+				   !instantiableMacro.generateMockValue,
+				   let macroArguments = instantiableMacro.arguments,
+				   let arguments = LabeledExprListSyntax(macroArguments),
+				   let customMockNameIndex = arguments.firstIndex(where: { $0.label?.text == "customMockName" })
+				{
 					context.diagnose(Diagnostic(
 						node: Syntax(instantiableMacro),
 						error: FixableInstantiableError.customMockNameWithoutGenerateMock,
-						changes: Self.addGenerateMockArgument(to: instantiableMacro, on: declaration),
+						changes: Self.addGenerateMockArgument(to: instantiableMacro, arguments: arguments, customMockNameOffset: arguments.distance(from: arguments.startIndex, to: customMockNameIndex), on: declaration),
 					))
 				}
 				// When generateMock: true and a method named "mock" exists (not custom-named), it must be renamed.
@@ -1108,6 +1118,8 @@ public struct InstantiableMacro: MemberMacro {
 	/// Builds fix-it changes that add `generateMock: true` to an existing `@Instantiable` attribute.
 	private static func addGenerateMockArgument(
 		to attribute: AttributeSyntax,
+		arguments: LabeledExprListSyntax,
+		customMockNameOffset: Int,
 		on declaration: some SyntaxProtocol,
 	) -> [FixIt.Change] {
 		var fixedAttribute = attribute
@@ -1115,14 +1127,11 @@ public struct InstantiableMacro: MemberMacro {
 			label: .identifier("generateMock"),
 			colon: .colonToken(trailingTrivia: .space),
 			expression: BooleanLiteralExprSyntax(booleanLiteral: true),
+			trailingComma: .commaToken(trailingTrivia: .space),
 		)
-		let labeledExpressionList = LabeledExprListSyntax(attribute.arguments!)!
-		var newArguments = Array(labeledExpressionList)
 		// Insert generateMock: true before customMockName to preserve parameter order.
-		let customMockNameIndex = newArguments.firstIndex(where: { $0.label?.text == "customMockName" })!
-		var generateMockWithComma = generateMockArgument
-		generateMockWithComma.trailingComma = .commaToken(trailingTrivia: .space)
-		newArguments.insert(generateMockWithComma, at: customMockNameIndex)
+		var newArguments = Array(arguments)
+		newArguments.insert(generateMockArgument, at: customMockNameOffset)
 		fixedAttribute.arguments = .argumentList(LabeledExprListSyntax(newArguments))
 		let rewriter = AttributeRewriter(oldID: attribute.id, replacement: fixedAttribute)
 		let fixedDeclaration = rewriter.rewrite(Syntax(declaration))
