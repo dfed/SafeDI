@@ -713,9 +713,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// Build mock() signature.
+		// Build a lookup of default values from the construction initializer
+		// so forwarded deps with defaults on customMock preserve them.
+		let constructionDefaults: [String: String] = {
+			guard let rootConstructionInitializer else { return [:] }
+			var defaults = [String: String]()
+			for argument in rootConstructionInitializer.arguments {
+				if let defaultExpression = argument.defaultValueExpression {
+					defaults[argument.innerLabel] = defaultExpression
+				}
+			}
+			return defaults
+		}()
 		var mockParameters = [String]()
 		for dependency in forwardedDependencies {
-			mockParameters.append("\(bodyIndent)\(dependency.property.label): \(dependency.property.typeDescription.asFunctionParameter.asSource)")
+			let typeSource = dependency.property.typeDescription.asFunctionParameter.asSource
+			if let defaultExpression = constructionDefaults[dependency.property.label] {
+				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(defaultExpression)")
+			} else {
+				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource)")
+			}
 		}
 		for rootDefault in rootDefaultParameters {
 			mockParameters.append("\(bodyIndent)\(rootDefault.label): \(rootDefault.typeSource) = \(rootDefault.defaultExpression)")
