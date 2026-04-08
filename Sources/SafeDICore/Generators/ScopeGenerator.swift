@@ -1357,6 +1357,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let debugOnlyIfAvailable = node.externalDependencyParameters.filter { $0.typeSource.hasSuffix("?") }.map(\.label)
 		if !debugOnlyIfAvailable.isEmpty {
 			lines.append("\(indent)// DEBUG: optional params: \(debugOnlyIfAvailable)")
+			// Count children recursively
+			func countNodes(_ n: MockParameterNode) -> Int { 1 + n.children.reduce(0) { $0 + countNodes($1) } }
+			let totalNodes = node.children.reduce(0) { $0 + countNodes($1) }
+			lines.append("\(indent)// DEBUG: \(node.concreteTypeName) has \(node.children.count) direct children, \(totalNodes) total nodes in subtree")
 		}
 		lines.append("\(indent)\(mockAttributesPrefix)static func __safeDI_mockBuild(")
 		lines.append(parameters.joined(separator: ",\n"))
