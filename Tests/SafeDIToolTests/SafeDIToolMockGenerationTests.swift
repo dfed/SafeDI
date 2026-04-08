@@ -519,8 +519,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let shared = (safeDIParameters.shared.safeDIBuilder ?? SharedThing.init)()
-		        let grandchild = (safeDIParameters.childA.grandchild.safeDIBuilder ?? Grandchild.init(shared:))(shared)
-		        let childA = (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(shared:grandchild:))(shared, grandchild)
+		        func __safeDI_childA() -> ChildA {
+		            let grandchild = (safeDIParameters.childA.grandchild.safeDIBuilder ?? Grandchild.init(shared:))(shared)
+		            return (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(shared:grandchild:))(shared, grandchild)
+		        }
+		        let childA = __safeDI_childA()
 		        return Root(childA: childA, shared: shared)
 		    }
 		}
@@ -1141,9 +1144,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let shared = (safeDIParameters.shared.safeDIBuilder ?? Shared.init)()
-		        let grandchildAA = (safeDIParameters.childA.grandchildAA.safeDIBuilder ?? GrandchildAA.init(shared:))(shared)
-		        let grandchildAB = (safeDIParameters.childA.grandchildAB.safeDIBuilder ?? GrandchildAB.init(shared:))(shared)
-		        let childA = (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(grandchildAA:grandchildAB:))(grandchildAA, grandchildAB)
+		        func __safeDI_childA() -> ChildA {
+		            let grandchildAA = (safeDIParameters.childA.grandchildAA.safeDIBuilder ?? GrandchildAA.init(shared:))(shared)
+		            let grandchildAB = (safeDIParameters.childA.grandchildAB.safeDIBuilder ?? GrandchildAB.init(shared:))(shared)
+		            return (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(grandchildAA:grandchildAB:))(grandchildAA, grandchildAB)
+		        }
+		        let childA = __safeDI_childA()
 		        let childB = (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(shared:))(shared)
 		        return Root(childA: childA, childB: childB, shared: shared)
 		    }
@@ -1662,8 +1668,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Child {
 		        let leaf = (safeDIParameters.leaf.safeDIBuilder ?? Leaf.init)()
-		        let greatGrandchild = (safeDIParameters.grandchild.greatGrandchild.safeDIBuilder ?? GreatGrandchild.init(leaf:))(leaf)
-		        let grandchild = (safeDIParameters.grandchild.safeDIBuilder ?? Grandchild.init(greatGrandchild:leaf:))(greatGrandchild, leaf)
+		        func __safeDI_grandchild() -> Grandchild {
+		            let greatGrandchild = (safeDIParameters.grandchild.greatGrandchild.safeDIBuilder ?? GreatGrandchild.init(leaf:))(leaf)
+		            return (safeDIParameters.grandchild.safeDIBuilder ?? Grandchild.init(greatGrandchild:leaf:))(greatGrandchild, leaf)
+		        }
+		        let grandchild = __safeDI_grandchild()
 		        return Child(grandchild: grandchild, leaf: leaf)
 		    }
 		}
@@ -1842,9 +1851,15 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let leaf = (safeDIParameters.leaf.safeDIBuilder ?? Leaf.init)()
-		        let greatGrandchild = (safeDIParameters.child.grandchild.greatGrandchild.safeDIBuilder ?? GreatGrandchild.init(leaf:))(leaf)
-		        let grandchild = (safeDIParameters.child.grandchild.safeDIBuilder ?? Grandchild.init(greatGrandchild:leaf:))(greatGrandchild, leaf)
-		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(grandchild:leaf:))(grandchild, leaf)
+		        func __safeDI_child() -> Child {
+		            func __safeDI_grandchild() -> Grandchild {
+		                let greatGrandchild = (safeDIParameters.child.grandchild.greatGrandchild.safeDIBuilder ?? GreatGrandchild.init(leaf:))(leaf)
+		                return (safeDIParameters.child.grandchild.safeDIBuilder ?? Grandchild.init(greatGrandchild:leaf:))(greatGrandchild, leaf)
+		            }
+		            let grandchild = __safeDI_grandchild()
+		            return (safeDIParameters.child.safeDIBuilder ?? Child.init(grandchild:leaf:))(grandchild, leaf)
+		        }
+		        let child = __safeDI_child()
 		        return Root(child: child, leaf: leaf)
 		    }
 		}
@@ -2997,12 +3012,15 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let service = (safeDIParameters.service.safeDIBuilder ?? Service.init)()
-		        func __safeDI_selfBuilder() -> Child {
+		        func __safeDI_child() -> Child {
+		            func __safeDI_selfBuilder() -> Child {
+		                let selfBuilder = Instantiator<Child>(__safeDI_selfBuilder)
+		                return Child.init(service:selfBuilder:)(service, selfBuilder)
+		            }
 		            let selfBuilder = Instantiator<Child>(__safeDI_selfBuilder)
-		            return Child.init(service:selfBuilder:)(service, selfBuilder)
+		            return (safeDIParameters.child.safeDIBuilder ?? Child.init(service:selfBuilder:))(service, selfBuilder)
 		        }
-		        let selfBuilder = Instantiator<Child>(__safeDI_selfBuilder)
-		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(service:selfBuilder:))(service, selfBuilder)
+		        let child = __safeDI_child()
 		        return Root(child: child, service: service)
 		    }
 		}
@@ -3055,11 +3073,75 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		// Both `presenter` locals must have distinct names to avoid redeclaration.
-		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
-		// Should not contain two `let presenter =` at the same scope level
-		let presenterBindings = rootMock.components(separatedBy: "let presenter =")
-		#expect(presenterBindings.count <= 2, "Found duplicate 'let presenter =' bindings: \(rootMock)")
+		// Child's `presenter` is scoped inside __safeDI_child to avoid
+		// colliding with Root's `presenter` at the outer scope.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    public struct SafeDIParameters {
+		        public struct RootPresenter_Configuration {
+		            public init(
+		                _ safeDIBuilder: (() -> RootPresenter)? = nil
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            public let safeDIBuilder: (() -> RootPresenter)?
+		        }
+
+		        public struct ChildPresenter_Configuration {
+		            public init(
+		                _ safeDIBuilder: (() -> ChildPresenter)? = nil
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            public let safeDIBuilder: (() -> ChildPresenter)?
+		        }
+
+		        public struct Child_Configuration {
+		            public init(
+		                presenter: ChildPresenter_Configuration = .init(),
+		                _ safeDIBuilder: ((ChildPresenter) -> Child)? = nil
+		            ) {
+		                self.presenter = presenter
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            public let presenter: ChildPresenter_Configuration
+		            public let safeDIBuilder: ((ChildPresenter) -> Child)?
+		        }
+
+		        public init(
+		            presenter: RootPresenter_Configuration = .init(),
+		            child: Child_Configuration = .init()
+		        ) {
+		            self.presenter = presenter
+		            self.child = child
+		        }
+
+		        public let presenter: RootPresenter_Configuration
+		        public let child: Child_Configuration
+		    }
+
+		    public static func mock(
+		        safeDIParameters: SafeDIParameters = .init()
+		    ) -> Root {
+		        let presenter = (safeDIParameters.presenter.safeDIBuilder ?? RootPresenter.init)()
+		        func __safeDI_child() -> Child {
+		            let presenter = (safeDIParameters.child.presenter.safeDIBuilder ?? ChildPresenter.init)()
+		            return (safeDIParameters.child.safeDIBuilder ?? Child.init(presenter:))(presenter)
+		        }
+		        let child = __safeDI_child()
+		        return Root(presenter: presenter, child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
 	}
 
 	// MARK: Tests – onlyIfAvailable and aliased properties
@@ -4995,8 +5077,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> RootViewController {
 		        let networkService = (safeDIParameters.networkService.safeDIBuilder ?? DefaultNetworkService.init)()
-		        let networkService = (safeDIParameters.authService.networkService.safeDIBuilder ?? DefaultNetworkService.init)()
-		        let authService = (safeDIParameters.authService.safeDIBuilder ?? DefaultAuthService.init(networkService:renamedNetworkService:))(networkService, renamedNetworkService)
+		        func __safeDI_authService() -> DefaultAuthService {
+		            let networkService = (safeDIParameters.authService.networkService.safeDIBuilder ?? DefaultNetworkService.init)()
+		            return (safeDIParameters.authService.safeDIBuilder ?? DefaultAuthService.init(networkService:renamedNetworkService:))(networkService, renamedNetworkService)
+		        }
+		        let authService = __safeDI_authService()
 		        return RootViewController(authService: authService)
 		    }
 		}
@@ -5300,8 +5385,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let receivedValue = (safeDIParameters.receivedValue.safeDIBuilder ?? ReceivedValue.init)()
-		        let database = (safeDIParameters.service.database.safeDIBuilder ?? Database.init)()
-		        let service = (safeDIParameters.service.safeDIBuilder ?? Service.init(database:receivedValue:))(database, receivedValue)
+		        func __safeDI_service() -> Service {
+		            let database = (safeDIParameters.service.database.safeDIBuilder ?? Database.init)()
+		            return (safeDIParameters.service.safeDIBuilder ?? Service.init(database:receivedValue:))(database, receivedValue)
+		        }
+		        let service = __safeDI_service()
 		        return Root(receivedValue: receivedValue, service: service)
 		    }
 		}
@@ -5611,13 +5699,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let shared = (safeDIParameters.shared.safeDIBuilder ?? Shared.init)()
-		        func __safeDI_channelBuilder(key: String) -> Channel {
-		            (safeDIParameters.service.channelBuilder.safeDIBuilder ?? Channel.init(key:shared:))(key, shared)
+		        func __safeDI_service() -> Service {
+		            func __safeDI_channelBuilder(key: String) -> Channel {
+		                (safeDIParameters.service.channelBuilder.safeDIBuilder ?? Channel.init(key:shared:))(key, shared)
+		            }
+		            let channelBuilder = Instantiator<Channel> {
+		                __safeDI_channelBuilder(key: $0)
+		            }
+		            return (safeDIParameters.service.safeDIBuilder ?? Service.init(channelBuilder:shared:))(channelBuilder, shared)
 		        }
-		        let channelBuilder = Instantiator<Channel> {
-		            __safeDI_channelBuilder(key: $0)
-		        }
-		        let service = (safeDIParameters.service.safeDIBuilder ?? Service.init(channelBuilder:shared:))(channelBuilder, shared)
+		        let service = __safeDI_service()
 		        return Root(shared: shared, service: service)
 		    }
 		}
@@ -5809,8 +5900,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_parentBuilder(token: Token) -> Parent {
-		            let grandchild = (safeDIParameters.parentBuilder.child.grandchild.safeDIBuilder ?? Grandchild.init(token:))(token)
-		            let child = (safeDIParameters.parentBuilder.child.safeDIBuilder ?? Child.init(token:grandchild:))(token, grandchild)
+		            func __safeDI_child() -> Child {
+		                let grandchild = (safeDIParameters.parentBuilder.child.grandchild.safeDIBuilder ?? Grandchild.init(token:))(token)
+		                return (safeDIParameters.parentBuilder.child.safeDIBuilder ?? Child.init(token:grandchild:))(token, grandchild)
+		            }
+		            let child = __safeDI_child()
 		            return (safeDIParameters.parentBuilder.safeDIBuilder ?? Parent.init(token:child:))(token, child)
 		        }
 		        let parentBuilder = Instantiator<Parent> {
@@ -6795,8 +6889,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        service: ExternalService,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let service = (safeDIParameters.child.service.safeDIBuilder ?? InternalService.init)()
-		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(service:))(service)
+		        func __safeDI_child() -> Child {
+		            let service = (safeDIParameters.child.service.safeDIBuilder ?? InternalService.init)()
+		            return (safeDIParameters.child.safeDIBuilder ?? Child.init(service:))(service)
+		        }
+		        let child = __safeDI_child()
 		        return Parent(service: service, child: child)
 		    }
 		}
@@ -7083,8 +7180,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Parent {
 		        let shared = (safeDIParameters.shared.safeDIBuilder ?? SharedThing.init)()
 		        let childA = (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(shared:))(shared)
-		        let shared = (safeDIParameters.childB.shared.safeDIBuilder ?? SharedThing.init)()
-		        let childB = (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(shared:))(shared)
+		        func __safeDI_childB() -> ChildB {
+		            let shared = (safeDIParameters.childB.shared.safeDIBuilder ?? SharedThing.init)()
+		            return (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(shared:))(shared)
+		        }
+		        let childB = __safeDI_childB()
 		        return Parent(childA: childA, childB: childB)
 		    }
 		}
@@ -7283,8 +7383,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let helper = (safeDIParameters.service.helper.safeDIBuilder ?? Helper.init)()
-		        let service: AnyService = AnyService((safeDIParameters.service.safeDIBuilder ?? ConcreteService.init(helper:))(helper))
+		        func __safeDI_service() -> ConcreteService {
+		            let helper = (safeDIParameters.service.helper.safeDIBuilder ?? Helper.init)()
+		            return AnyService((safeDIParameters.service.safeDIBuilder ?? ConcreteService.init(helper:))(helper))
+		        }
+		        let service: AnyService = __safeDI_service()
 		        return Root(service: service)
 		    }
 		}
@@ -7543,8 +7646,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Container {
 		        let stateService = (safeDIParameters.stateService.safeDIBuilder ?? StateService.init)()
 		        let imageLoader = (safeDIParameters.imageLoader.safeDIBuilder ?? ImageLoader.init(stateService:))(stateService)
-		        let stateService = (safeDIParameters.engine.stateService.safeDIBuilder ?? StateService.init)()
-		        let engine = (safeDIParameters.engine.safeDIBuilder ?? Engine.init(stateService:))(stateService)
+		        func __safeDI_engine() -> Engine {
+		            let stateService = (safeDIParameters.engine.stateService.safeDIBuilder ?? StateService.init)()
+		            return (safeDIParameters.engine.safeDIBuilder ?? Engine.init(stateService:))(stateService)
+		        }
+		        let engine = __safeDI_engine()
 		        return Container(imageLoader: imageLoader, engine: engine)
 		    }
 		}
@@ -8304,8 +8410,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        service: ExternalService,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let service = (safeDIParameters.childA.service.safeDIBuilder ?? LocalService.init)()
-		        let childA = (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(service:))(service)
+		        func __safeDI_childA() -> ChildA {
+		            let service = (safeDIParameters.childA.service.safeDIBuilder ?? LocalService.init)()
+		            return (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(service:))(service)
+		        }
+		        let childA = __safeDI_childA()
 		        let childB = (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(service:))(service)
 		        return Root(childA: childA, childB: childB)
 		    }
@@ -8514,9 +8623,15 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let leaf = (safeDIParameters.parent.child.leaf.safeDIBuilder ?? Leaf.init)()
-		        let child = (safeDIParameters.parent.child.safeDIBuilder ?? Child.init(leaf:))(leaf)
-		        let parent = (safeDIParameters.parent.safeDIBuilder ?? Parent.init(child:))(child)
+		        func __safeDI_parent() -> Parent {
+		            func __safeDI_child() -> Child {
+		                let leaf = (safeDIParameters.parent.child.leaf.safeDIBuilder ?? Leaf.init)()
+		                return (safeDIParameters.parent.child.safeDIBuilder ?? Child.init(leaf:))(leaf)
+		            }
+		            let child = __safeDI_child()
+		            return (safeDIParameters.parent.safeDIBuilder ?? Parent.init(child:))(child)
+		        }
+		        let parent = __safeDI_parent()
 		        return Root(parent: parent)
 		    }
 		}
@@ -8626,8 +8741,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let config = (safeDIParameters.widgetService.config.safeDIBuilder ?? Config.init)()
-		        let widgetService = (safeDIParameters.widgetService.safeDIBuilder ?? WidgetService.init(config:))(config)
+		        func __safeDI_widgetService() -> WidgetService {
+		            let config = (safeDIParameters.widgetService.config.safeDIBuilder ?? Config.init)()
+		            return (safeDIParameters.widgetService.safeDIBuilder ?? WidgetService.init(config:))(config)
+		        }
+		        let widgetService = __safeDI_widgetService()
 		        let parent = (safeDIParameters.parent.safeDIBuilder ?? Parent.init(widgetService:))(widgetService)
 		        return Root(parent: parent, widgetService: widgetService)
 		    }
@@ -8761,10 +8879,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let config = (safeDIParameters.widgetService.config.safeDIBuilder ?? Config.init)()
-		        let widgetService = (safeDIParameters.widgetService.safeDIBuilder ?? WidgetService.init(config:))(config)
-		        let grandchild = (safeDIParameters.parent.grandchild.safeDIBuilder ?? Grandchild.init(widgetService:))(widgetService)
-		        let parent = (safeDIParameters.parent.safeDIBuilder ?? Parent.init(grandchild:))(grandchild)
+		        func __safeDI_widgetService() -> WidgetService {
+		            let config = (safeDIParameters.widgetService.config.safeDIBuilder ?? Config.init)()
+		            return (safeDIParameters.widgetService.safeDIBuilder ?? WidgetService.init(config:))(config)
+		        }
+		        let widgetService = __safeDI_widgetService()
+		        func __safeDI_parent() -> Parent {
+		            let grandchild = (safeDIParameters.parent.grandchild.safeDIBuilder ?? Grandchild.init(widgetService:))(widgetService)
+		            return (safeDIParameters.parent.safeDIBuilder ?? Parent.init(grandchild:))(grandchild)
+		        }
+		        let parent = __safeDI_parent()
 		        return Root(parent: parent, widgetService: widgetService)
 		    }
 		}
@@ -8900,12 +9024,24 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let config = (safeDIParameters.parent.grandchild.widgetService.config.safeDIBuilder ?? Config.init)()
-		        let widgetService = (safeDIParameters.parent.grandchild.widgetService.safeDIBuilder ?? WidgetService.init(config:))(config)
-		        let grandchild = (safeDIParameters.parent.grandchild.safeDIBuilder ?? Grandchild.init(widgetService:))(widgetService)
-		        let parent = (safeDIParameters.parent.safeDIBuilder ?? Parent.init(grandchild:))(grandchild)
-		        let config = (safeDIParameters.widgetService.config.safeDIBuilder ?? Config.init)()
-		        let widgetService = (safeDIParameters.widgetService.safeDIBuilder ?? WidgetService.init(config:))(config)
+		        func __safeDI_parent() -> Parent {
+		            func __safeDI_grandchild() -> Grandchild {
+		                func __safeDI_widgetService() -> WidgetService {
+		                    let config = (safeDIParameters.parent.grandchild.widgetService.config.safeDIBuilder ?? Config.init)()
+		                    return (safeDIParameters.parent.grandchild.widgetService.safeDIBuilder ?? WidgetService.init(config:))(config)
+		                }
+		                let widgetService = __safeDI_widgetService()
+		                return (safeDIParameters.parent.grandchild.safeDIBuilder ?? Grandchild.init(widgetService:))(widgetService)
+		            }
+		            let grandchild = __safeDI_grandchild()
+		            return (safeDIParameters.parent.safeDIBuilder ?? Parent.init(grandchild:))(grandchild)
+		        }
+		        let parent = __safeDI_parent()
+		        func __safeDI_widgetService() -> WidgetService {
+		            let config = (safeDIParameters.widgetService.config.safeDIBuilder ?? Config.init)()
+		            return (safeDIParameters.widgetService.safeDIBuilder ?? WidgetService.init(config:))(config)
+		        }
+		        let widgetService = __safeDI_widgetService()
 		        return Root(parent: parent, widgetService: widgetService)
 		    }
 		}
@@ -9117,9 +9253,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let localService = (safeDIParameters.child.localService.safeDIBuilder ?? LocalService.init)()
-		        let crossModuleService = (safeDIParameters.child.crossModuleService.safeDIBuilder ?? CrossModuleService.init)()
-		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(localService:crossModuleService:))(localService, crossModuleService)
+		        func __safeDI_child() -> Child {
+		            let localService = (safeDIParameters.child.localService.safeDIBuilder ?? LocalService.init)()
+		            let crossModuleService = (safeDIParameters.child.crossModuleService.safeDIBuilder ?? CrossModuleService.init)()
+		            return (safeDIParameters.child.safeDIBuilder ?? Child.init(localService:crossModuleService:))(localService, crossModuleService)
+		        }
+		        let child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -9317,9 +9456,15 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        service: ExternalService,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let service = (safeDIParameters.child.grandchild.service.safeDIBuilder ?? LocalService.init)()
-		        let grandchild = (safeDIParameters.child.grandchild.safeDIBuilder ?? Grandchild.init(service:))(service)
-		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(grandchild:service:))(grandchild, service)
+		        func __safeDI_child() -> Child {
+		            func __safeDI_grandchild() -> Grandchild {
+		                let service = (safeDIParameters.child.grandchild.service.safeDIBuilder ?? LocalService.init)()
+		                return (safeDIParameters.child.grandchild.safeDIBuilder ?? Grandchild.init(service:))(service)
+		            }
+		            let grandchild = __safeDI_grandchild()
+		            return (safeDIParameters.child.safeDIBuilder ?? Child.init(grandchild:service:))(grandchild, service)
+		        }
+		        let child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -9715,7 +9860,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
 		// shared must appear before the child construction that uses it
 		let sharedIndex = try #require(mock.range(of: "let shared = (safeDIParameters.shared.safeDIBuilder ?? Shared.init)()")?.lowerBound)
-		let childIndex = try #require(mock.range(of: "let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(grandchildBuilder:))(")?.lowerBound)
+		let childIndex = try #require(mock.range(of: "let child = __safeDI_child()")?.lowerBound)
 		#expect(sharedIndex < childIndex, "shared must be ordered before child. Output:\n\(mock)")
 	}
 
@@ -9979,16 +10124,22 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let shared = (safeDIParameters.childA.shared.safeDIBuilder ?? Shared.init)()
-		        let childA = (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(shared:))(shared)
+		        func __safeDI_childA() -> ChildA {
+		            let shared = (safeDIParameters.childA.shared.safeDIBuilder ?? Shared.init)()
+		            return (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(shared:))(shared)
+		        }
+		        let childA = __safeDI_childA()
 		        let shared = (safeDIParameters.shared.safeDIBuilder ?? Shared.init)()
-		        func __safeDI_grandchildBuilder(name: String) -> Grandchild {
-		            (safeDIParameters.childB.grandchildBuilder.safeDIBuilder ?? Grandchild.init(shared:name:))(shared, name)
+		        func __safeDI_childB() -> ChildB {
+		            func __safeDI_grandchildBuilder(name: String) -> Grandchild {
+		                (safeDIParameters.childB.grandchildBuilder.safeDIBuilder ?? Grandchild.init(shared:name:))(shared, name)
+		            }
+		            let grandchildBuilder = Instantiator<Grandchild> {
+		                __safeDI_grandchildBuilder(name: $0)
+		            }
+		            return (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(grandchildBuilder:))(grandchildBuilder)
 		        }
-		        let grandchildBuilder = Instantiator<Grandchild> {
-		            __safeDI_grandchildBuilder(name: $0)
-		        }
-		        let childB = (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(grandchildBuilder:))(grandchildBuilder)
+		        let childB = __safeDI_childB()
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -10122,16 +10273,22 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let serviceB = (safeDIParameters.serviceA.serviceB.safeDIBuilder ?? ServiceB.init)()
-		        let serviceA = (safeDIParameters.serviceA.safeDIBuilder ?? ServiceA.init(serviceB:))(serviceB)
+		        func __safeDI_serviceA() -> ServiceA {
+		            let serviceB = (safeDIParameters.serviceA.serviceB.safeDIBuilder ?? ServiceB.init)()
+		            return (safeDIParameters.serviceA.safeDIBuilder ?? ServiceA.init(serviceB:))(serviceB)
+		        }
+		        let serviceA = __safeDI_serviceA()
 		        let serviceB = (safeDIParameters.serviceB.safeDIBuilder ?? ServiceB.init)()
-		        func __safeDI_grandchildBuilder(name: String) -> Grandchild {
-		            (safeDIParameters.child.grandchildBuilder.safeDIBuilder ?? Grandchild.init(serviceA:serviceB:name:))(serviceA, serviceB, name)
+		        func __safeDI_child() -> Child {
+		            func __safeDI_grandchildBuilder(name: String) -> Grandchild {
+		                (safeDIParameters.child.grandchildBuilder.safeDIBuilder ?? Grandchild.init(serviceA:serviceB:name:))(serviceA, serviceB, name)
+		            }
+		            let grandchildBuilder = Instantiator<Grandchild> {
+		                __safeDI_grandchildBuilder(name: $0)
+		            }
+		            return (safeDIParameters.child.safeDIBuilder ?? Child.init(grandchildBuilder:))(grandchildBuilder)
 		        }
-		        let grandchildBuilder = Instantiator<Grandchild> {
-		            __safeDI_grandchildBuilder(name: $0)
-		        }
-		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(grandchildBuilder:))(grandchildBuilder)
+		        let child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -10288,16 +10445,25 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        let shared = (safeDIParameters.shared.safeDIBuilder ?? Shared.init)()
-		        func __safeDI_greatGrandchildBuilder(name: String) -> GreatGrandchild {
-		            (safeDIParameters.childA.grandchild.greatGrandchildBuilder.safeDIBuilder ?? GreatGrandchild.init(shared:name:))(shared, name)
+		        func __safeDI_childA() -> ChildA {
+		            func __safeDI_grandchild() -> Grandchild {
+		                func __safeDI_greatGrandchildBuilder(name: String) -> GreatGrandchild {
+		                    (safeDIParameters.childA.grandchild.greatGrandchildBuilder.safeDIBuilder ?? GreatGrandchild.init(shared:name:))(shared, name)
+		                }
+		                let greatGrandchildBuilder = Instantiator<GreatGrandchild> {
+		                    __safeDI_greatGrandchildBuilder(name: $0)
+		                }
+		                return (safeDIParameters.childA.grandchild.safeDIBuilder ?? Grandchild.init(greatGrandchildBuilder:))(greatGrandchildBuilder)
+		            }
+		            let grandchild = __safeDI_grandchild()
+		            return (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(grandchild:))(grandchild)
 		        }
-		        let greatGrandchildBuilder = Instantiator<GreatGrandchild> {
-		            __safeDI_greatGrandchildBuilder(name: $0)
+		        let childA = __safeDI_childA()
+		        func __safeDI_childB() -> ChildB {
+		            let shared = (safeDIParameters.childB.shared.safeDIBuilder ?? Shared.init)()
+		            return (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(shared:))(shared)
 		        }
-		        let grandchild = (safeDIParameters.childA.grandchild.safeDIBuilder ?? Grandchild.init(greatGrandchildBuilder:))(greatGrandchildBuilder)
-		        let childA = (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(grandchild:))(grandchild)
-		        let shared = (safeDIParameters.childB.shared.safeDIBuilder ?? Shared.init)()
-		        let childB = (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(shared:))(shared)
+		        let childB = __safeDI_childB()
 		        return Root(childA: childA, childB: childB)
 		    }
 		}

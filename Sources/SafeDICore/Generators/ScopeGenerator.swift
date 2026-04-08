@@ -1241,26 +1241,52 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					ancestorTypes: childAncestors,
 				))
 			} else {
-				// For constant nodes, children are generated before the parent
-				// at the same scope level (depth-first ordering).
-				var childAncestors = ancestorTypes
-				childAncestors.insert(nodeTypeKey)
-				let childBindings = generateMockBodyBindings(
-					nodes: node.children,
-					parentPath: nodePath,
-					indent: indent,
-					ancestorTypes: childAncestors,
-				)
-				lines.append(contentsOf: childBindings)
-
 				let arguments = resolveBuilderArguments(for: node, nodePath: nodePath)
 				let argumentList = arguments.joined(separator: ", ")
 
-				if node.erasedToConcreteExistential {
-					let protocolType = node.typeDescription.asSource
-					lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(protocolType)(\(builderExpression)(\(argumentList)))")
+				if node.children.isEmpty {
+					// Leaf constant node — flat binding, no scoping needed.
+					if node.erasedToConcreteExistential {
+						let protocolType = node.typeDescription.asSource
+						lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(protocolType)(\(builderExpression)(\(argumentList)))")
+					} else {
+						lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)(\(argumentList))")
+					}
 				} else {
-					lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)(\(argumentList))")
+					// Constant node with children — wrap in a function scope to
+					// avoid variable name collisions with sibling bindings.
+					// Mirrors the production code which uses named functions.
+					let functionName = "__safeDI_\(node.propertyLabel)"
+					let concreteTypeName = node.concreteTypeName
+					let innerIndent = "\(indent)\(standardIndent)"
+
+					var childAncestors = ancestorTypes
+					childAncestors.insert(nodeTypeKey)
+
+					lines.append("\(indent)func \(functionName)() -> \(concreteTypeName) {")
+
+					let childBindings = generateMockBodyBindings(
+						nodes: node.children,
+						parentPath: nodePath,
+						indent: innerIndent,
+						ancestorTypes: childAncestors,
+					)
+					lines.append(contentsOf: childBindings)
+
+					if node.erasedToConcreteExistential {
+						let protocolType = node.typeDescription.asSource
+						lines.append("\(innerIndent)return \(protocolType)(\(builderExpression)(\(argumentList)))")
+					} else {
+						lines.append("\(innerIndent)return \(builderExpression)(\(argumentList))")
+					}
+					lines.append("\(indent)}")
+
+					if node.erasedToConcreteExistential {
+						let protocolType = node.typeDescription.asSource
+						lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(functionName)()")
+					} else {
+						lines.append("\(indent)let \(node.propertyLabel) = \(functionName)()")
+					}
 				}
 			}
 		}
