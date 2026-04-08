@@ -1159,9 +1159,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Default-valued parameters.
 		for defaultParameter in node.defaultParameters {
 			let typeSource = defaultParameter.typeDescription.asSource
+			// Only add @Sendable if the type doesn't already have it.
+			let closureSendable = (requiresSendableClosures && !typeSource.contains("@Sendable")) ? "@Sendable " : ""
 			if defaultParameter.isClosureType {
-				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(sendableAnnotation)@escaping \(typeSource) = \(defaultParameter.defaultExpression)")
-				storedProperties.append("\(innerIndent)public let \(defaultParameter.label): \(sendableAnnotation)\(typeSource)")
+				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(closureSendable)@escaping \(typeSource) = \(defaultParameter.defaultExpression)")
+				storedProperties.append("\(innerIndent)public let \(defaultParameter.label): \(closureSendable)\(typeSource)")
 			} else {
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(typeSource) = \(defaultParameter.defaultExpression)")
 				storedProperties.append("\(innerIndent)public let \(defaultParameter.label): \(typeSource)")
