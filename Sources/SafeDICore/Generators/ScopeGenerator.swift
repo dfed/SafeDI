@@ -1291,11 +1291,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let mockAttributesPrefix = node.mockAttributes.isEmpty ? "" : "\(node.mockAttributes) "
 
 		// Build the parameter list: external dependencies + configuration.
+		let configurationParameterName = "safeDIMockConfiguration"
 		var parameters = [String]()
 		for externalDependency in node.externalDependencyParameters {
 			parameters.append("\(innerIndent)\(externalDependency.label): \(externalDependency.typeSource)")
 		}
-		parameters.append("\(innerIndent)configuration: \(MockParameterNode.configurationStructName) = .init()")
+		parameters.append("\(innerIndent)\(configurationParameterName): \(MockParameterNode.configurationStructName) = .init()")
 
 		var lines = [String]()
 		lines.append("\(indent)\(mockAttributesPrefix)static func __safeDI_mockBuild(")
@@ -1305,17 +1306,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Generate child bindings.
 		let childBindings = generateBuildBodyBindings(
 			nodes: node.children,
-			parentPath: "configuration",
+			parentPath: configurationParameterName,
 			indent: innerIndent,
 		)
 		lines.append(contentsOf: childBindings)
 
 		// Generate the return statement using the main builder.
-		let arguments = resolveBuildArguments(for: node, configurationPath: "configuration")
+		let arguments = resolveBuildArguments(for: node, configurationPath: configurationParameterName)
 		let argumentList = arguments.joined(separator: ", ")
 		let defaultDirectCall = node.defaultDirectCall(resolvedArguments: arguments)
 
-		lines.append("\(innerIndent)if let safeDIBuilder = configuration.safeDIBuilder {")
+		lines.append("\(innerIndent)if let safeDIBuilder = \(configurationParameterName).safeDIBuilder {")
 		lines.append("\(bodyIndent)return safeDIBuilder(\(argumentList))")
 		lines.append("\(innerIndent)} else {")
 		lines.append("\(bodyIndent)return \(defaultDirectCall)")
@@ -1346,7 +1347,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				for externalDependency in node.externalDependencyParameters {
 					buildArgs.append("\(externalDependency.label): \(externalDependency.label)")
 				}
-				buildArgs.append("configuration: \(nodePath)")
+				buildArgs.append("safeDIMockConfiguration: \(nodePath)")
 				let buildCall = "\(typeName).__safeDI_mockBuild(\(buildArgs.joined(separator: ", ")))"
 
 				if node.erasedToConcreteExistential {
@@ -1604,7 +1605,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						buildArgs.append("\(externalDependency.label): \(externalDependency.label)")
 					}
 					let disambiguated = disambiguatedLabel(for: node, labelMap: disambiguatePropertyLabels(for: nodes))
-					buildArgs.append("configuration: \(parentPath).\(disambiguated)")
+					buildArgs.append("safeDIMockConfiguration: \(parentPath).\(disambiguated)")
 					let buildCall = "\(typeName).__safeDI_mockBuild(\(buildArgs.joined(separator: ", ")))"
 
 					if node.erasedToConcreteExistential {
