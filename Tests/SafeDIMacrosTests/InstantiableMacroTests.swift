@@ -4609,6 +4609,62 @@ import Testing
 					),
 				],
 				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func customMock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func fixItInsertsGenerateMockBeforeCustomMockName_whenOtherArgumentsArePresent() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, customMockName: "customMock")
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func customMock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func customMock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`customMockName` requires `generateMock: true`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `generateMock: true` to `@Instantiable`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(isRoot: true, generateMock: true, customMockName: "customMock")
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func customMock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
 			)
 		}
 
@@ -4771,6 +4827,16 @@ import Testing
 					),
 				],
 				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func customMock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
 			)
 		}
 

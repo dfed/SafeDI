@@ -1118,12 +1118,15 @@ public struct InstantiableMacro: MemberMacro {
 		)
 		let labeledExpressionList = LabeledExprListSyntax(attribute.arguments!)!
 		var newArguments = Array(labeledExpressionList)
-		// Add trailing comma to the current last argument.
-		if var lastArgument = newArguments.last {
-			lastArgument.trailingComma = .commaToken(trailingTrivia: .space)
-			newArguments[newArguments.count - 1] = lastArgument
+		// Insert generateMock: true before customMockName to preserve parameter order.
+		let customMockNameIndex = newArguments.firstIndex(where: { $0.label?.text == "customMockName" })!
+		var generateMockWithComma = generateMockArgument
+		generateMockWithComma.trailingComma = .commaToken(trailingTrivia: .space)
+		newArguments.insert(generateMockWithComma, at: customMockNameIndex)
+		// Ensure the argument before the insertion point has a trailing comma.
+		if customMockNameIndex > 0, newArguments[customMockNameIndex - 1].trailingComma == nil {
+			newArguments[customMockNameIndex - 1].trailingComma = .commaToken(trailingTrivia: .space)
 		}
-		newArguments.append(generateMockArgument)
 		fixedAttribute.arguments = .argumentList(LabeledExprListSyntax(newArguments))
 		let rewriter = AttributeRewriter(oldID: attribute.id, replacement: fixedAttribute)
 		let fixedDeclaration = rewriter.rewrite(Syntax(declaration))
