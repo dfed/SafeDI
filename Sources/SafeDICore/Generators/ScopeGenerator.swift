@@ -1288,6 +1288,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) -> [String] {
 		let innerIndent = "\(indent)\(standardIndent)"
 		let bodyIndent = "\(innerIndent)\(standardIndent)"
+		let mockAttributesPrefix = node.mockAttributes.isEmpty ? "" : "\(node.mockAttributes) "
 
 		// Build the parameter list: external dependencies + configuration.
 		var parameters = [String]()
@@ -1297,7 +1298,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		parameters.append("\(innerIndent)configuration: \(MockParameterNode.configurationStructName) = .init()")
 
 		var lines = [String]()
-		lines.append("\(indent)static func __safeDI_mockBuild(")
+		lines.append("\(indent)\(mockAttributesPrefix)static func __safeDI_mockBuild(")
 		lines.append(parameters.joined(separator: ",\n"))
 		lines.append("\(indent)) -> \(node.concreteTypeName) {")
 
