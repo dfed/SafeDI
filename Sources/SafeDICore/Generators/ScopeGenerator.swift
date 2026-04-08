@@ -910,26 +910,37 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			var result = [(label: String, typeSource: String)]()
 			var seen = Set<String>()
 
-			// Pre-collect all onlyIfAvailable labels from the entire tree.
-			// This ensures that if ANY path receives a dep as onlyIfAvailable,
-			// the build method parameter is optional.
-			var allOnlyIfAvailableLabels = Set<String>()
-			func collectOnlyIfAvailable(from node: MockParameterNode) {
+			// Pre-collect dependency optionality from the entire tree.
+			// A label is optional only if ALL usages are onlyIfAvailable.
+			// If even one path requires it (non-optional), the build method
+			// parameter is non-optional — optional receivers accept non-optional values.
+			var onlyIfAvailableLabels = Set<String>()
+			var requiredLabels = Set<String>()
+			func collectDependencyOptionality(from node: MockParameterNode) {
 				for dependency in node.dependencies {
 					switch dependency.source {
 					case let .received(onlyIfAvailable):
-						if onlyIfAvailable { allOnlyIfAvailableLabels.insert(dependency.property.label) }
+						if onlyIfAvailable {
+							onlyIfAvailableLabels.insert(dependency.property.label)
+						} else {
+							requiredLabels.insert(dependency.property.label)
+						}
 					case let .aliased(_, _, onlyIfAvailable):
-						if onlyIfAvailable { allOnlyIfAvailableLabels.insert(dependency.property.label) }
+						if onlyIfAvailable {
+							onlyIfAvailableLabels.insert(dependency.property.label)
+						} else {
+							requiredLabels.insert(dependency.property.label)
+						}
 					case .instantiated, .forwarded:
 						break
 					}
 				}
 				for child in node.children {
-					collectOnlyIfAvailable(from: child)
+					collectDependencyOptionality(from: child)
 				}
 			}
-			collectOnlyIfAvailable(from: self)
+			collectDependencyOptionality(from: self)
+			let allOnlyIfAvailableLabels = onlyIfAvailableLabels.subtracting(requiredLabels)
 
 			func collect(from node: MockParameterNode, isRoot: Bool) {
 				let childLabels = Set(node.children.map(\.propertyLabel))
