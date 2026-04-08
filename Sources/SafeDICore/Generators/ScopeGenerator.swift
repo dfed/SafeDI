@@ -973,11 +973,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) {
 		for node in nodes {
 			let childLabels = Set(node.children.map(\.propertyLabel))
+			let cycleLabels = Set(node.children.filter(\.isPropertyCycle).map(\.propertyLabel))
 			let collectedLabels = Set(flatUncoveredParameters.map(\.label))
 			for dependency in node.dependencies {
 				guard case .instantiated = dependency.source else { continue }
 				// Skip deps that are covered by a child node in the tree.
 				guard !childLabels.contains(dependency.property.label) else { continue }
+				// Skip deps that are property cycles (self-referencing Instantiators).
+				guard !cycleLabels.contains(dependency.property.label) else { continue }
 				// Skip deps already collected.
 				guard !collectedLabels.contains(dependency.property.label) else { continue }
 				let sourceType = dependency.property.propertyType.isConstant
@@ -1035,6 +1038,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var result = [MockParameterNode]()
 
 		func walk(_ node: MockParameterNode) {
+			// Skip property cycle nodes — they're self-references, not distinct types.
+			guard !node.isPropertyCycle else { return }
 			// Process children first (depth-first).
 			for child in node.children {
 				walk(child)
@@ -1139,8 +1144,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var storedProperties = [String]()
 
 		// Child edge parameters (disambiguated if labels collide).
-		let childLabelMap = disambiguatePropertyLabels(for: node.children)
-		for child in node.children {
+		// Skip property cycle children — they're self-referencing and don't
+		// have their own _Configuration entry.
+		let nonCycleChildren = node.children.filter { !$0.isPropertyCycle }
+		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
+		for child in nonCycleChildren {
 			let label = disambiguatedLabel(for: child, labelMap: childLabelMap)
 			initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.structName) = .init()")
 			assignments.append("\(innerIndent)\(standardIndent)self.\(label) = \(label)")
@@ -1201,6 +1209,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let labelMap = disambiguatePropertyLabels(for: nodes)
 
 		for node in nodes {
+			// Property cycle nodes are self-references handled by forward-declared
+			// functions. They don't have _Configuration entries and their binding
+			// is emitted directly as part of the Instantiator construction.
+			guard !node.isPropertyCycle else {
+				let unwrappedTypeDescription = node.typeDescription.unwrapped.asSource
+				let functionName = "__safeDI_\(node.propertyLabel)"
+				lines.append("\(indent)let \(node.propertyLabel) = \(unwrappedTypeDescription)(\(functionName))")
+				continue
+			}
+
 			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			let nodePath = "\(parentPath).\(disambiguated)"
 
