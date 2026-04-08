@@ -1417,7 +1417,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for externalDependency in node.externalDependencyParameters {
 			parameters.append("\(innerIndent)\(externalDependency.label): \(externalDependency.typeSource)")
 		}
-		parameters.append("\(innerIndent)\(configurationParameterName): \(MockParameterNode.configurationStructName) = .init()")
+		parameters.append("\(innerIndent)\(configurationParameterName): \(MockParameterNode.configurationStructName)")
 
 		var lines = [String]()
 		lines.append("\(indent)\(mockAttributesPrefix)static func __safeDI_mockBuild(")
