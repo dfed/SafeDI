@@ -11186,6 +11186,75 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildMethodRootReceivesRequired_grandchildOnlyIfAvailable() async throws {
+		// Matches apple FriendProgressionFlowViewController: the type itself @Receives
+		// service as required, but an Instantiator grandchild receives it onlyIfAvailable.
+		// Build method parameter should be non-optional.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(service: Service, flowVC: FlowVC) {
+				        self.service = service
+				        self.flowVC = flowVC
+				    }
+				    @Instantiated let service: Service
+				    @Instantiated let flowVC: FlowVC
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct FlowVC: Instantiable {
+				    public init(service: Service, childBuilder: Instantiator<Child>, presenter: Presenter) {
+				        self.service = service
+				        self.childBuilder = childBuilder
+				        self.presenter = presenter
+				    }
+				    @Received let service: Service
+				    @Instantiated let childBuilder: Instantiator<Child>
+				    @Instantiated let presenter: Presenter
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Child: Instantiable {
+				    public init(service: Service?, name: String) {
+				        self.service = service
+				        self.name = name
+				    }
+				    @Received(onlyIfAvailable: true) let service: Service?
+				    @Forwarded let name: String
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Presenter: Instantiable {
+				    public init(service: Service) {
+				        self.service = service
+				    }
+				    @Received let service: Service
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Service: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// FlowVC itself @Receives service as required AND its Presenter child also requires it.
+		// The Instantiator child's grandchild has it as onlyIfAvailable.
+		// Build method for FlowVC should have non-optional service.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == "PLACEHOLDER", "Actual: \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildMethodTreatsOnlyIfAvailableAsRequired_whenRequiredUsageIsBehindInstantiator() async throws {
 		// Parent has a non-leaf child (ChildA) that has an Instantiator child (GrandchildBuilder)
 		// where the grandchild requires `service`. Another child (ChildB) receives it onlyIfAvailable.

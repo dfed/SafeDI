@@ -1353,6 +1353,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		parameters.append("\(innerIndent)\(configurationParameterName): \(MockParameterNode.configurationStructName) = .init()")
 
 		var lines = [String]()
+		// Debug: show optionality decision in generated code
+		let debugOnlyIfAvailable = node.externalDependencyParameters.filter { $0.typeSource.hasSuffix("?") }.map(\.label)
+		if !debugOnlyIfAvailable.isEmpty {
+			lines.append("\(indent)// DEBUG: optional params: \(debugOnlyIfAvailable)")
+		}
 		lines.append("\(indent)\(mockAttributesPrefix)static func __safeDI_mockBuild(")
 		lines.append(parameters.joined(separator: ",\n"))
 		lines.append("\(indent)) -> \(node.concreteTypeName) {")
