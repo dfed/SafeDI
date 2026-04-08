@@ -1123,10 +1123,6 @@ public struct InstantiableMacro: MemberMacro {
 		var generateMockWithComma = generateMockArgument
 		generateMockWithComma.trailingComma = .commaToken(trailingTrivia: .space)
 		newArguments.insert(generateMockWithComma, at: customMockNameIndex)
-		// Ensure the argument before the insertion point has a trailing comma.
-		if customMockNameIndex > 0, newArguments[customMockNameIndex - 1].trailingComma == nil {
-			newArguments[customMockNameIndex - 1].trailingComma = .commaToken(trailingTrivia: .space)
-		}
 		fixedAttribute.arguments = .argumentList(LabeledExprListSyntax(newArguments))
 		let rewriter = AttributeRewriter(oldID: attribute.id, replacement: fixedAttribute)
 		let fixedDeclaration = rewriter.rewrite(Syntax(declaration))

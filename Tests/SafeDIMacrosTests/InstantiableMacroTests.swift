@@ -4841,6 +4841,52 @@ import Testing
 		}
 
 		@Test
+		func extension_fixItInsertsGenerateMockBeforeCustomMockName_whenOtherArgumentsArePresent() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, customMockName: "customMock")
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func customMock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func customMock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`customMockName` requires `generateMock: true`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `generateMock: true` to `@Instantiable`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(isRoot: true, generateMock: true, customMockName: "customMock")
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+
+				    public static func customMock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
 		func extension_producesDiagnostic_whenCustomMockNameMethodIsNotFound() {
 			assertMacroExpansion(
 				"""
