@@ -910,6 +910,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			var result = [(label: String, typeSource: String)]()
 			var seen = Set<String>()
 
+			// Pre-collect all onlyIfAvailable labels from the entire tree.
+			// This ensures that if ANY path receives a dep as onlyIfAvailable,
+			// the build method parameter is optional.
+			var allOnlyIfAvailableLabels = Set<String>()
+			func collectOnlyIfAvailable(from node: MockParameterNode) {
+				for dependency in node.dependencies {
+					switch dependency.source {
+					case let .received(onlyIfAvailable):
+						if onlyIfAvailable { allOnlyIfAvailableLabels.insert(dependency.property.label) }
+					case let .aliased(_, _, onlyIfAvailable):
+						if onlyIfAvailable { allOnlyIfAvailableLabels.insert(dependency.property.label) }
+					case .instantiated, .forwarded:
+						break
+					}
+				}
+				for child in node.children {
+					collectOnlyIfAvailable(from: child)
+				}
+			}
+			collectOnlyIfAvailable(from: self)
+
 			func collect(from node: MockParameterNode, isRoot: Bool) {
 				let childLabels = Set(node.children.map(\.propertyLabel))
 				let dependencyLabels = Set(node.dependencies.map(\.property.label))
@@ -930,18 +951,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					seen.insert(childLabel)
 				}
 
-				// Build a set of onlyIfAvailable dependency labels for optional type promotion.
-				let onlyIfAvailableLabels = Set(node.dependencies.compactMap { dependency -> String? in
-					switch dependency.source {
-					case let .received(onlyIfAvailable):
-						onlyIfAvailable ? dependency.property.label : nil
-					case let .aliased(_, _, onlyIfAvailable):
-						onlyIfAvailable ? dependency.property.label : nil
-					case .instantiated, .forwarded:
-						nil
-					}
-				})
-
 				for argument in node.constructionArguments {
 					let label = argument.innerLabel
 					if dependencyLabels.contains(label),
@@ -953,7 +962,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						var typeSource = argument.typeDescription.asFunctionParameter.asSource
 						// Promote to optional for onlyIfAvailable dependencies — the mock
 						// body provides these as optional values (defaulting to nil).
-						if onlyIfAvailableLabels.contains(label), !argument.typeDescription.isOptional {
+						if allOnlyIfAvailableLabels.contains(label), !argument.typeDescription.isOptional {
 							typeSource += "?"
 						}
 						result.append((label: label, typeSource: typeSource))
@@ -1385,7 +1394,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// property was excluded from the struct to avoid infinite value types.
 				let typeName = node.instantiatedTypeDescription.asSource
 				let unwrappedTypeDescription = node.typeDescription.unwrapped.asSource
-				lines.append("\(indent)let \(node.propertyLabel) = \(unwrappedTypeDescription)(\(typeName).__safeDI_mockBuild)")
+				// Build the external dep args for the recursive call.
+				let externalDeps = node.externalDependencyParameters
+				if externalDeps.isEmpty {
+					lines.append("\(indent)let \(node.propertyLabel) = \(unwrappedTypeDescription)(\(typeName).__safeDI_mockBuild)")
+				} else {
+					let argList = externalDeps.map { "\($0.label): \($0.label)" }.joined(separator: ", ")
+					lines.append("\(indent)let \(node.propertyLabel) = \(unwrappedTypeDescription) { \(typeName).__safeDI_mockBuild(\(argList)) }")
+				}
 			} else if node.isInstantiator {
 				// Instantiator child: use generateInstantiatorBinding with build body paths.
 				let arguments = resolveBuildArguments(for: node, configurationPath: nodePath)

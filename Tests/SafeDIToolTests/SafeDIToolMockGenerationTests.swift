@@ -2703,7 +2703,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    static func __safeDI_mockBuild(
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Root {
-		        let selfBuilder = Instantiator<Root>(Root.__safeDI_mockBuild)
+		        let selfBuilder = Instantiator<Root> { Root.__safeDI_mockBuild(selfBuilder: selfBuilder) }
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
 		            return safeDIBuilder(selfBuilder)
 		        } else {
@@ -2814,7 +2814,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        service: Service,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> Child {
-		        let selfBuilder = Instantiator<Child>(Child.__safeDI_mockBuild)
+		        let selfBuilder = Instantiator<Child> { Child.__safeDI_mockBuild(service: service, selfBuilder: selfBuilder) }
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
 		            return safeDIBuilder(service, selfBuilder)
 		        } else {
@@ -11150,7 +11150,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        cBuilder: Instantiator<C>,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> A {
-		        let bBuilder = Instantiator<B>(B.__safeDI_mockBuild)
+		        let bBuilder = Instantiator<B> { B.__safeDI_mockBuild(cBuilder: cBuilder) }
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
 		            return safeDIBuilder(bBuilder)
 		        } else {
@@ -11331,7 +11331,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        context: String,
 		        safeDIMockConfiguration: SafeDIMockConfiguration = .init()
 		    ) -> A {
-		        let aBuilder = Instantiator<A>(A.__safeDI_mockBuild)
+		        let aBuilder = Instantiator<A> { A.__safeDI_mockBuild(aBuilder: aBuilder, context: context) }
 		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
 		            return safeDIBuilder(aBuilder, context)
 		        } else {
