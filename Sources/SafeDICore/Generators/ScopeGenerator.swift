@@ -1237,13 +1237,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// For Instantiator nodes: inner builder function + `Instantiator<T>` wrapping.
 	/// Collects all `safeDIParameters` references that would appear inside a
 	/// `@Sendable func`, so they can be extracted and resolved outside the function.
-	/// Each extraction is a `(localName, expression)` pair.
+	/// Each extraction is a `(localName, optionalPath, defaultExpression, closureType)` tuple.
+	/// When `optionalPath` is non-nil, the extraction resolves an optional builder via if-let.
+	/// When nil (default parameter references), it's a direct assignment.
 	private static func collectSendableExtractions(
 		nodes: [MockParameterNode],
 		parentPath: String,
 		functionName: String,
 		ancestorTypes: Set<String>,
-		into extractions: inout [(localName: String, expression: String)],
+		into extractions: inout [(localName: String, optionalPath: String?, defaultExpression: String, closureType: String?)],
 	) {
 		let labelMap = disambiguatePropertyLabels(for: nodes)
 		for node in nodes {
@@ -1258,28 +1260,34 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.replacingOccurrences(of: ".", with: "_")
 
 			if !isCycleNode {
-				// Extract the builder closure (nil-coalesced with default).
 				let defaultBuilder = node.defaultBuilderExpression
+				let sendableAnnotation = node.requiresSendable ? "@Sendable " : ""
+				let closureType = "\(sendableAnnotation)\(node.builderClosureType)"
 				if node.needsConfigurationStruct {
 					extractions.append((
 						localName: "\(functionName)__\(relativePath)_safeDIBuilder",
-						expression: "\(nodePath).safeDIBuilder ?? \(defaultBuilder)",
+						optionalPath: "\(nodePath).safeDIBuilder",
+						defaultExpression: defaultBuilder,
+						closureType: closureType,
 					))
 				} else {
 					// Leaf builder — inline optional closure, no .safeDIBuilder path.
 					extractions.append((
 						localName: "\(functionName)__\(relativePath)_safeDIBuilder",
-						expression: "\(nodePath) ?? \(defaultBuilder)",
+						optionalPath: nodePath,
+						defaultExpression: defaultBuilder,
+						closureType: closureType,
 					))
 				}
 			}
 
-			// Extract default parameter references.
-			let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
+			// Extract default parameter references — direct assignment, no optional.
 			for defaultParameter in node.defaultParameters {
 				extractions.append((
 					localName: "\(functionName)__\(relativePath)_\(defaultParameter.label)",
-					expression: "\(nodePath).\(defaultParameter.label)",
+					optionalPath: nil,
+					defaultExpression: "\(nodePath).\(defaultParameter.label)",
+					closureType: nil,
 				))
 			}
 
@@ -1563,7 +1571,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// OUTSIDE the function and resolve nil-coalescing here (in the
 				// @MainActor mock() context). This avoids capturing the non-Sendable
 				// SafeDIParameters struct inside the @Sendable function.
-				var extractions = [(localName: String, expression: String)]()
+				var extractions = [(localName: String, optionalPath: String?, defaultExpression: String, closureType: String?)]()
 				collectSendableExtractions(
 					nodes: node.children,
 					parentPath: nodePath,
@@ -1572,13 +1580,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					into: &extractions,
 				)
 				// Extract the node's own safeDIBuilder.
-				extractions.append((
-					localName: "\(functionName)__safeDIBuilder",
-					expression: "\(builderExpression)",
-				))
+				let sendableAnnotation = node.requiresSendable ? "@Sendable " : ""
+				if let optionalBuilderPath {
+					extractions.append((
+						localName: "\(functionName)__safeDIBuilder",
+						optionalPath: optionalBuilderPath,
+						defaultExpression: node.defaultBuilderExpression,
+						closureType: "\(sendableAnnotation)\(node.builderClosureType)",
+					))
+				} else {
+					extractions.append((
+						localName: "\(functionName)__safeDIBuilder",
+						optionalPath: nil,
+						defaultExpression: builderExpression,
+						closureType: nil,
+					))
+				}
 
+				let extractionIndent = "\(indent)\(standardIndent)"
 				for extraction in extractions {
-					lines.append("\(indent)let \(extraction.localName) = \(extraction.expression)")
+					if let optionalPath = extraction.optionalPath, let closureType = extraction.closureType {
+						lines.append("\(indent)let \(extraction.localName): \(closureType)")
+						lines.append("\(indent)if let safeDIBuilder = \(optionalPath) {")
+						lines.append("\(extractionIndent)\(extraction.localName) = safeDIBuilder")
+						lines.append("\(indent)} else {")
+						lines.append("\(extractionIndent)\(extraction.localName) = \(extraction.defaultExpression)")
+						lines.append("\(indent)}")
+					} else {
+						lines.append("\(indent)let \(extraction.localName) = \(extraction.defaultExpression)")
+					}
 				}
 
 				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {")

@@ -621,7 +621,12 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let __safeDI_childBuilder__safeDIBuilder = (safeDIParameters.childBuilder ?? Child.init(name:flag:))
+		        let __safeDI_childBuilder__safeDIBuilder: @Sendable (String, Bool) -> Child
+		        if let safeDIBuilder = safeDIParameters.childBuilder {
+		            __safeDI_childBuilder__safeDIBuilder = safeDIBuilder
+		        } else {
+		            __safeDI_childBuilder__safeDIBuilder = Child.init(name:flag:)
+		        }
 		        @Sendable func __safeDI_childBuilder(name: String) -> Child {
 		            __safeDI_childBuilder__safeDIBuilder(name, false)
 		        }
@@ -1071,7 +1076,12 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let __safeDI_childBuilder__safeDIBuilder = (safeDIParameters.childBuilder ?? Child.init(name:flag:))
+		        let __safeDI_childBuilder__safeDIBuilder: @Sendable (String, Bool) -> Child
+		        if let safeDIBuilder = safeDIParameters.childBuilder {
+		            __safeDI_childBuilder__safeDIBuilder = safeDIBuilder
+		        } else {
+		            __safeDI_childBuilder__safeDIBuilder = Child.init(name:flag:)
+		        }
 		        @Sendable func __safeDI_childBuilder(name: String) -> Child {
 		            __safeDI_childBuilder__safeDIBuilder(name, false)
 		        }

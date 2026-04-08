@@ -3654,7 +3654,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let __safeDI_childBuilder__safeDIBuilder = (safeDIParameters.childBuilder ?? Child.init(name:))
+		        let __safeDI_childBuilder__safeDIBuilder: @Sendable (String) -> Child
+		        if let safeDIBuilder = safeDIParameters.childBuilder {
+		            __safeDI_childBuilder__safeDIBuilder = safeDIBuilder
+		        } else {
+		            __safeDI_childBuilder__safeDIBuilder = Child.init(name:)
+		        }
 		        @Sendable func __safeDI_childBuilder(name: String) -> Child {
 		            __safeDI_childBuilder__safeDIBuilder(name)
 		        }
@@ -4549,7 +4554,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let __safeDI_childABuilder__safeDIBuilder = (safeDIParameters.childABuilder ?? ChildA.init(recreated:))
+		        let __safeDI_childABuilder__safeDIBuilder: @Sendable (Recreated) -> ChildA
+		        if let safeDIBuilder = safeDIParameters.childABuilder {
+		            __safeDI_childABuilder__safeDIBuilder = safeDIBuilder
+		        } else {
+		            __safeDI_childABuilder__safeDIBuilder = ChildA.init(recreated:)
+		        }
 		        @Sendable func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
 		            __safeDI_childABuilder__safeDIBuilder(recreated)
 		        }
@@ -5430,7 +5440,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let __safeDI_childBuilder__safeDIBuilder = (safeDIParameters.childBuilder ?? Child.init)
+		        let __safeDI_childBuilder__safeDIBuilder: @Sendable () -> Child
+		        if let safeDIBuilder = safeDIParameters.childBuilder {
+		            __safeDI_childBuilder__safeDIBuilder = safeDIBuilder
+		        } else {
+		            __safeDI_childBuilder__safeDIBuilder = Child.init
+		        }
 		        @Sendable func __safeDI_childBuilder() -> Child {
 		            __safeDI_childBuilder__safeDIBuilder()
 		        }
@@ -6113,8 +6128,18 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let __safeDI_interceptorBuilder__interceptorBuilder_loggingService_safeDIBuilder = safeDIParameters.interceptorBuilder.loggingService ?? LoggingService.init
-		        let __safeDI_interceptorBuilder__safeDIBuilder = (safeDIParameters.interceptorBuilder.safeDIBuilder ?? Interceptor.init(loggingService:))
+		        let __safeDI_interceptorBuilder__interceptorBuilder_loggingService_safeDIBuilder: @Sendable () -> LoggingService
+		        if let safeDIBuilder = safeDIParameters.interceptorBuilder.loggingService {
+		            __safeDI_interceptorBuilder__interceptorBuilder_loggingService_safeDIBuilder = safeDIBuilder
+		        } else {
+		            __safeDI_interceptorBuilder__interceptorBuilder_loggingService_safeDIBuilder = LoggingService.init
+		        }
+		        let __safeDI_interceptorBuilder__safeDIBuilder: @Sendable (LoggingService) -> Interceptor
+		        if let safeDIBuilder = safeDIParameters.interceptorBuilder.safeDIBuilder {
+		            __safeDI_interceptorBuilder__safeDIBuilder = safeDIBuilder
+		        } else {
+		            __safeDI_interceptorBuilder__safeDIBuilder = Interceptor.init(loggingService:)
+		        }
 		        @Sendable func __safeDI_interceptorBuilder() -> Interceptor {
 		            let loggingService = __safeDI_interceptorBuilder__interceptorBuilder_loggingService_safeDIBuilder()
 		            return __safeDI_interceptorBuilder__safeDIBuilder(loggingService)
@@ -6220,10 +6245,25 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    public static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let __safeDI_interceptorBuilder__interceptorBuilder_handler_safeDIBuilder = safeDIParameters.interceptorBuilder.handler.safeDIBuilder ?? Handler.init(logger:logLevel:)
+		        let __safeDI_interceptorBuilder__interceptorBuilder_handler_safeDIBuilder: @Sendable (Logger, Int) -> Handler
+		        if let safeDIBuilder = safeDIParameters.interceptorBuilder.handler.safeDIBuilder {
+		            __safeDI_interceptorBuilder__interceptorBuilder_handler_safeDIBuilder = safeDIBuilder
+		        } else {
+		            __safeDI_interceptorBuilder__interceptorBuilder_handler_safeDIBuilder = Handler.init(logger:logLevel:)
+		        }
 		        let __safeDI_interceptorBuilder__interceptorBuilder_handler_logLevel = safeDIParameters.interceptorBuilder.handler.logLevel
-		        let __safeDI_interceptorBuilder__interceptorBuilder_handler_logger_safeDIBuilder = safeDIParameters.interceptorBuilder.handler.logger ?? Logger.init
-		        let __safeDI_interceptorBuilder__safeDIBuilder = (safeDIParameters.interceptorBuilder.safeDIBuilder ?? Interceptor.init(handler:))
+		        let __safeDI_interceptorBuilder__interceptorBuilder_handler_logger_safeDIBuilder: @Sendable () -> Logger
+		        if let safeDIBuilder = safeDIParameters.interceptorBuilder.handler.logger {
+		            __safeDI_interceptorBuilder__interceptorBuilder_handler_logger_safeDIBuilder = safeDIBuilder
+		        } else {
+		            __safeDI_interceptorBuilder__interceptorBuilder_handler_logger_safeDIBuilder = Logger.init
+		        }
+		        let __safeDI_interceptorBuilder__safeDIBuilder: @Sendable (Handler) -> Interceptor
+		        if let safeDIBuilder = safeDIParameters.interceptorBuilder.safeDIBuilder {
+		            __safeDI_interceptorBuilder__safeDIBuilder = safeDIBuilder
+		        } else {
+		            __safeDI_interceptorBuilder__safeDIBuilder = Interceptor.init(handler:)
+		        }
 		        @Sendable func __safeDI_interceptorBuilder() -> Interceptor {
 		            func __safeDI_handler() -> Handler {
 		                let logger = __safeDI_interceptorBuilder__interceptorBuilder_handler_logger_safeDIBuilder()
@@ -6356,8 +6396,18 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        } else {
 		            service = Service()
 		        }
-		        let __safeDI_interceptorBuilder__interceptorBuilder_logger_safeDIBuilder = safeDIParameters.interceptorBuilder.logger ?? Logger.init
-		        let __safeDI_interceptorBuilder__safeDIBuilder = (safeDIParameters.interceptorBuilder.safeDIBuilder ?? Interceptor.init(logger:))
+		        let __safeDI_interceptorBuilder__interceptorBuilder_logger_safeDIBuilder: @Sendable () -> Logger
+		        if let safeDIBuilder = safeDIParameters.interceptorBuilder.logger {
+		            __safeDI_interceptorBuilder__interceptorBuilder_logger_safeDIBuilder = safeDIBuilder
+		        } else {
+		            __safeDI_interceptorBuilder__interceptorBuilder_logger_safeDIBuilder = Logger.init
+		        }
+		        let __safeDI_interceptorBuilder__safeDIBuilder: @Sendable (Logger) -> Interceptor
+		        if let safeDIBuilder = safeDIParameters.interceptorBuilder.safeDIBuilder {
+		            __safeDI_interceptorBuilder__safeDIBuilder = safeDIBuilder
+		        } else {
+		            __safeDI_interceptorBuilder__safeDIBuilder = Interceptor.init(logger:)
+		        }
 		        @Sendable func __safeDI_interceptorBuilder() -> Interceptor {
 		            let logger = __safeDI_interceptorBuilder__interceptorBuilder_logger_safeDIBuilder()
 		            return __safeDI_interceptorBuilder__safeDIBuilder(logger)
