@@ -1549,8 +1549,8 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		#if DEBUG
 		extension Child {
 		    public static func mock(
-		        onCancel: @MainActor (String) -> Void = { _ in },
-		        onSubmit: @MainActor (String) throws -> Void = { _ in }
+		        onCancel: @escaping @MainActor (String) -> Void = { _ in },
+		        onSubmit: @escaping @MainActor (String) throws -> Void = { _ in }
 		    ) -> Child {
 		        return Child(onCancel: onCancel, onSubmit: onSubmit)
 		    }

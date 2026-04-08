@@ -584,7 +584,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				else { continue }
 				rootDefaultParameters.append((
 					label: argument.label,
-					typeSource: argument.typeDescription.strippingEscaping.asSource,
+					typeSource: argument.typeDescription.asFunctionParameter.asSource,
 					defaultExpression: defaultExpression,
 				))
 			}
