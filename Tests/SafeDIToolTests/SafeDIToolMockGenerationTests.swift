@@ -11029,6 +11029,234 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildMethodTreatsOnlyIfAvailableAsRequired_whenSiblingRequiresIt() async throws {
+		// Parent has a non-leaf child (ChildA with grandchild) that requires `service`,
+		// and another child (ChildB) that receives it onlyIfAvailable.
+		// The build method parameter for `service` should be non-optional because
+		// ChildA's subtree requires it.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Parent: Instantiable {
+				    public init(service: Service, childA: ChildA, childB: ChildB) {
+				        self.service = service
+				        self.childA = childA
+				        self.childB = childB
+				    }
+				    @Instantiated let service: Service
+				    @Instantiated let childA: ChildA
+				    @Instantiated let childB: ChildB
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct ChildA: Instantiable {
+				    public init(service: Service, grandchild: Grandchild) {
+				        self.service = service
+				        self.grandchild = grandchild
+				    }
+				    @Received let service: Service
+				    @Instantiated let grandchild: Grandchild
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Grandchild: Instantiable {
+				    public init(service: Service) {
+				        self.service = service
+				    }
+				    @Received let service: Service
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct ChildB: Instantiable {
+				    public init(service: Service?) {
+				        self.service = service
+				    }
+				    @Received(onlyIfAvailable: true) let service: Service?
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Service: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// The build method for ChildA should have `service: Service` (non-optional).
+		// ChildA's subtree always requires service, even though ChildB (a sibling at root)
+		// receives it as onlyIfAvailable.
+		let configFile = try #require(output.mockConfigurationFile)
+		#expect(configFile.contains("service: Service,"), "Build method parameter should be non-optional Service, not Service?. Config:\n\(configFile)")
+		#expect(!configFile.contains("service: Service?,"), "Build method parameter should NOT be optional. Config:\n\(configFile)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildMethodOnlyIfAvailableGrandchildDoesNotMakeRequiredSiblingOptional() async throws {
+		// Matches the apple TolanChatFlowViewController pattern:
+		// ViewController has Instantiator<MultimodalChatVC> (grandchild has onlyIfAvailable service)
+		// and constant Presenter child (requires service).
+		// The build method for ViewController should have service as NON-optional.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(service: Service, viewController: ViewController) {
+				        self.service = service
+				        self.viewController = viewController
+				    }
+				    @Instantiated let service: Service
+				    @Instantiated let viewController: ViewController
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct ViewController: Instantiable {
+				    public init(multimodalBuilder: Instantiator<MultimodalVC>, presenter: Presenter) {
+				        self.multimodalBuilder = multimodalBuilder
+				        self.presenter = presenter
+				    }
+				    @Instantiated let multimodalBuilder: Instantiator<MultimodalVC>
+				    @Instantiated let presenter: Presenter
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct MultimodalVC: Instantiable {
+				    public init(multimodalPresenter: MultimodalPresenter, name: String) {
+				        self.multimodalPresenter = multimodalPresenter
+				        self.name = name
+				    }
+				    @Instantiated let multimodalPresenter: MultimodalPresenter
+				    @Forwarded let name: String
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct MultimodalPresenter: Instantiable {
+				    public init(service: Service?) {
+				        self.service = service
+				    }
+				    @Received(onlyIfAvailable: true) let service: Service?
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Presenter: Instantiable {
+				    public init(service: Service) {
+				        self.service = service
+				    }
+				    @Received let service: Service
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Service: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// ViewController's build method should have `service: Service` (non-optional).
+		// Even though MultimodalPresenter has onlyIfAvailable, Presenter requires it.
+		let configFile = try #require(output.mockConfigurationFile)
+		// Find ViewController's build method specifically (not MultimodalVC's)
+		let viewControllerBuild = try #require(
+			configFile.range(of: "-> ViewController {").map { configFile[$0.lowerBound...] },
+			"Should contain ViewController build method",
+		)
+		let viewControllerSection = String(viewControllerBuild.prefix(200))
+		// MultimodalVC's build method should have Service? (only onlyIfAvailable in its subtree)
+		#expect(configFile.contains("service: Service?,"), "MultimodalVC build method should have optional Service")
+		// ViewController's section should NOT have optional service (Presenter requires it)
+		#expect(!viewControllerSection.contains("Service?"), "ViewController build method should NOT have optional Service. Got:\n\(viewControllerSection)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildMethodTreatsOnlyIfAvailableAsRequired_whenRequiredUsageIsBehindInstantiator() async throws {
+		// Parent has a non-leaf child (ChildA) that has an Instantiator child (GrandchildBuilder)
+		// where the grandchild requires `service`. Another child (ChildB) receives it onlyIfAvailable.
+		// The build method parameter for `service` on Parent should be non-optional because
+		// the grandchild's subtree requires it, even though the path crosses an Instantiator boundary.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Parent: Instantiable {
+				    public init(service: Service, childA: ChildA, childB: ChildB) {
+				        self.service = service
+				        self.childA = childA
+				        self.childB = childB
+				    }
+				    @Instantiated let service: Service
+				    @Instantiated let childA: ChildA
+				    @Instantiated let childB: ChildB
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct ChildA: Instantiable {
+				    public init(service: Service, grandchildBuilder: Instantiator<Grandchild>) {
+				        self.service = service
+				        self.grandchildBuilder = grandchildBuilder
+				    }
+				    @Received let service: Service
+				    @Instantiated let grandchildBuilder: Instantiator<Grandchild>
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Grandchild: Instantiable {
+				    public init(service: Service, name: String) {
+				        self.service = service
+				        self.name = name
+				    }
+				    @Received let service: Service
+				    @Forwarded let name: String
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct ChildB: Instantiable {
+				    public init(service: Service?) {
+				        self.service = service
+				    }
+				    @Received(onlyIfAvailable: true) let service: Service?
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Service: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// ChildA's build method should have `service: Service` (non-optional) even though
+		// ChildB receives it as onlyIfAvailable, because ChildA's own subtree requires it.
+		// The Grandchild behind the Instantiator boundary also requires it.
+		let configFile = try #require(output.mockConfigurationFile)
+		// ChildA's build method should have non-optional service
+		#expect(configFile.contains("service: Service,\n"), "ChildA build method should have non-optional Service parameter. Config:\n\(configFile)")
+	}
+
+	@Test
 	mutating func mock_generatedForFullyLazyInstantiationCycle() async throws {
 		// A → Instantiator<B> → B → Instantiator<C> → C → Instantiator<A> (all lazy).
 		let output = try await executeSafeDIToolTest(

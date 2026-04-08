@@ -916,7 +916,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// parameter is non-optional — optional receivers accept non-optional values.
 			var onlyIfAvailableLabels = Set<String>()
 			var requiredLabels = Set<String>()
-			func collectDependencyOptionality(from node: MockParameterNode) {
+			func collectDependencyOptionality(from node: MockParameterNode, depth: Int = 0) {
 				for dependency in node.dependencies {
 					switch dependency.source {
 					case let .received(onlyIfAvailable):
@@ -936,7 +936,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				}
 				for child in node.children {
-					collectDependencyOptionality(from: child)
+					collectDependencyOptionality(from: child, depth: depth + 1)
 				}
 			}
 			collectDependencyOptionality(from: self)
