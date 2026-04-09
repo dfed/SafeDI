@@ -228,6 +228,16 @@ jobs:
           git add Package.swift Sources/SafeDITool/SafeDITool.swift Plugins/Shared.swift
           git commit -m "Release ${{ inputs.version }}"
 
+      - name: Upload release commit patch (dry run)
+        if: inputs.dry-run
+        run: git format-patch -1 HEAD -o /tmp/patch
+      - name: Upload release commit patch artifact (dry run)
+        if: inputs.dry-run
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-commit
+          path: /tmp/patch/*.patch
+
       - name: Tag and push
         if: ${{ !inputs.dry-run }}
         run: |
