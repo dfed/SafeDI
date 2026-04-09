@@ -18,6 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#if prebuilt && sourceBuild
+	#error("The 'prebuilt' and 'sourceBuild' Package Traits are mutually exclusive. Enable only one.")
+#endif
+
 /// Provides build-time configuration for SafeDI's code generation plugin.
 ///
 /// `#SafeDIConfiguration` is a freestanding declaration macro that must appear at the top level of a Swift file (not nested inside a type).

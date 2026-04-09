@@ -68,7 +68,7 @@ SafeDI utilizes both Swift macros and a code generation plugin to read your code
 1. [Integrate SafeDI’s code generation into your build](#generating-your-dependency-tree)
 1. [Create your dependency tree using SafeDI’s macros](Documentation/Manual.md)
 
-You can see sample integrations in the [Examples folder](Examples/). If you are migrating an existing project to SafeDI, follow our [migration guide](Documentation/Manual.md#migrating-to-safedi).
+You can see sample integrations in the [Examples folder](Examples/). Note that the example projects use the `sourceBuild` trait to build SafeDITool from source — this is needed for local development and unreleased versions. Consumers using a published release should omit the `traits` parameter to use the faster prebuilt binary. If you are migrating an existing project to SafeDI, follow our [migration guide](Documentation/Manual.md#migrating-to-safedi).
 
 ### Adding SafeDI as a Dependency
 

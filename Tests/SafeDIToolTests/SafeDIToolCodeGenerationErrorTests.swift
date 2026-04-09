@@ -1991,6 +1991,19 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func generate_throwsError_whenOutputDirectoryProvidedWithoutCSV() async throws {
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		var tool = try Generate.parse([
+			"--include", "SomeDir",
+			"--output-directory", outputDirectory.path,
+		])
+		await assertThrowsError("--output-directory requires 'swift-sources-file-path'.") {
+			try await tool.run()
+		}
+	}
+
 	// MARK: Manifest Validation Tests
 
 	@Test

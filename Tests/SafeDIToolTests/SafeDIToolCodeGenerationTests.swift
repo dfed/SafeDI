@@ -6686,6 +6686,89 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		#expect(generatedFiles["AdditionalRoot+SafeDI.swift"]?.contains("SharedDep()") == true)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_withOutputDirectory_scansAndGeneratesInOnePass() async throws {
+		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
+
+		let rootFile = rootDirectory.appendingPathComponent("Root.swift")
+		try """
+		@Instantiable(isRoot: true)
+		public struct Root {
+		    public init(dep: Dep) {
+		        self.dep = dep
+		    }
+		    @Instantiated let dep: Dep
+		}
+		@Instantiable
+		public struct Dep {
+		    public init() {}
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try rootFile.relativePath
+			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+
+		let moduleInfoOutput = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".safedi")
+
+		filesToDelete += [rootDirectory, swiftFileCSV, outputDirectory, moduleInfoOutput]
+
+		// Use --output-directory without --swift-manifest to trigger the auto-scan path.
+		var tool = try Generate.parse([
+			swiftFileCSV.relativePath,
+			"--module-info-output", moduleInfoOutput.relativePath,
+			"--output-directory", outputDirectory.path,
+		])
+		try await tool.run()
+
+		let generatedFile = outputDirectory.appendingPathComponent("Root+SafeDI.swift")
+		let content = try String(contentsOf: generatedFile, encoding: .utf8)
+		#expect(content.contains("extension Root"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func scan_run_producesManifest() async throws {
+		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
+
+		let rootFile = rootDirectory.appendingPathComponent("Root.swift")
+		try """
+		@Instantiable(isRoot: true)
+		public struct Root {
+		    public init() {}
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try rootFile.relativePath
+			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+
+		filesToDelete += [rootDirectory, swiftFileCSV, outputDirectory, manifestFile]
+
+		// Exercise Scan.run() directly via parse.
+		var scan = try Scan.parse([
+			"--input-sources-file", swiftFileCSV.relativePath,
+			"--project-root", rootDirectory.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+		])
+		try await scan.run()
+
+		let manifestData = try Data(contentsOf: manifestFile)
+		let manifest = try JSONDecoder().decode(SafeDIToolManifest.self, from: manifestData)
+		#expect(manifest.dependencyTreeGeneration.count == 1)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

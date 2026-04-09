@@ -68,11 +68,7 @@ func performScan(
 		.components(separatedBy: CharacterSet(arrayLiteral: ","))
 		.removingEmpty()
 
-	let directoryBaseURL = if projectRootURL.hasDirectoryPath {
-		projectRootURL
-	} else {
-		projectRootURL.appendingPathComponent("", isDirectory: true)
-	}
+	let directoryBaseURL = projectRootURL.appendingPathComponent("", isDirectory: true)
 
 	let allSwiftFiles = inputFilePaths.map {
 		URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL
