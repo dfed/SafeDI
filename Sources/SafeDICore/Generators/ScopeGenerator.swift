@@ -904,22 +904,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
-		/// Generates a direct labeled call to the default init/mock/instantiate method.
-		/// e.g., `ChildA(shared: shared, grandchild: grandchild)` or `ChildA.mock(shared: shared)`.
-		func defaultDirectCall(resolvedArguments: [String]) -> String {
-			let callTarget: String = if useMockInitializer {
-				"\(concreteTypeName).\(customMockName ?? "mock")"
-			} else if isExtensionBased {
-				"\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
-			} else {
-				concreteTypeName
-			}
-			let labeledArguments = zip(constructionArguments, resolvedArguments)
-				.map { "\($0.label): \($1)" }
-				.joined(separator: ", ")
-			return "\(callTarget)(\(labeledArguments))"
-		}
-
 		/// External dependencies that must be passed as parameters to `build()`.
 		/// These are construction arguments that are dependencies but not fulfilled by
 		/// child nodes or defaults, collected transitively through the subtree.
@@ -1408,7 +1392,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 	) -> [String] {
 		let innerIndent = "\(indent)\(standardIndent)"
-		let bodyIndent = "\(innerIndent)\(standardIndent)"
 		let mockAttributesPrefix = node.mockAttributes.isEmpty ? "" : "\(node.mockAttributes) "
 
 		// Build the parameter list: external dependencies + configuration.
@@ -1436,13 +1419,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Generate the return statement using the main builder.
 		let arguments = resolveBuildArguments(for: node, configurationPath: configurationParameterName)
 		let argumentList = arguments.joined(separator: ", ")
-		let defaultDirectCall = node.defaultDirectCall(resolvedArguments: arguments)
 
-		lines.append("\(innerIndent)if let safeDIBuilder = \(configurationParameterName).safeDIBuilder {")
-		lines.append("\(bodyIndent)return safeDIBuilder(\(argumentList))")
-		lines.append("\(innerIndent)} else {")
-		lines.append("\(bodyIndent)return \(defaultDirectCall)")
-		lines.append("\(innerIndent)}")
+		let builderExpression = "(\(configurationParameterName).safeDIBuilder ?? \(node.defaultBuilderExpression))"
+		lines.append("\(innerIndent)return \(builderExpression)(\(argumentList))")
 
 		lines.append("\(indent)}")
 		return lines
@@ -1498,7 +1477,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					builderExpression: builderExpression,
 					optionalBuilderPath: optionalBuilderPath,
 					arguments: arguments,
-					defaultDirectCall: node.defaultDirectCall(resolvedArguments: arguments),
+
 					indent: indent,
 					ancestorTypes: childAncestors,
 				))
@@ -1519,27 +1498,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					lines.append("\(indent)let \(node.propertyLabel) = \(buildCall)")
 				}
 			} else {
-				// Leaf constant child: use if-let pattern.
+				// Leaf constant child: nil-coalescing binding.
 				let arguments = resolveBuildArguments(for: node, configurationPath: nodePath)
 				let argumentList = arguments.joined(separator: ", ")
-				let defaultDirectCall = node.defaultDirectCall(resolvedArguments: arguments)
-				let innerIndent = "\(indent)\(standardIndent)"
+				let builderExpression = "(\(nodePath) ?? \(node.defaultBuilderExpression))"
 
 				if node.erasedToConcreteExistential {
 					let protocolType = node.typeDescription.asSource
-					lines.append("\(indent)let \(node.propertyLabel): \(protocolType)")
-					lines.append("\(indent)if let safeDIBuilder = \(nodePath) {")
-					lines.append("\(innerIndent)\(node.propertyLabel) = \(protocolType)(safeDIBuilder(\(argumentList)))")
-					lines.append("\(indent)} else {")
-					lines.append("\(innerIndent)\(node.propertyLabel) = \(protocolType)(\(defaultDirectCall))")
-					lines.append("\(indent)}")
+					lines.append("\(indent)let \(node.propertyLabel) = \(protocolType)(\(builderExpression)(\(argumentList)))")
 				} else {
-					lines.append("\(indent)let \(node.propertyLabel): \(node.concreteTypeName)")
-					lines.append("\(indent)if let safeDIBuilder = \(nodePath) {")
-					lines.append("\(innerIndent)\(node.propertyLabel) = safeDIBuilder(\(argumentList))")
-					lines.append("\(indent)} else {")
-					lines.append("\(innerIndent)\(node.propertyLabel) = \(defaultDirectCall)")
-					lines.append("\(indent)}")
+					lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)(\(argumentList))")
 				}
 			}
 		}
@@ -1720,7 +1688,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					builderExpression: builderExpression,
 					optionalBuilderPath: optionalBuilderPath,
 					arguments: arguments,
-					defaultDirectCall: node.defaultDirectCall(resolvedArguments: arguments),
+
 					indent: indent,
 					ancestorTypes: childAncestors,
 				))
@@ -1731,27 +1699,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					sendableExtractionPrefix: sendableExtractionPrefix,
 				)
 				let argumentList = arguments.joined(separator: ", ")
-				let defaultDirectCall = node.defaultDirectCall(resolvedArguments: arguments)
 
 				if !node.needsConfigurationStruct {
 					// Leaf constant node — flat binding, no scoping needed.
 					if let optionalBuilderPath {
-						let innerIndent = "\(indent)\(standardIndent)"
+						let leafBuilderExpression = "(\(optionalBuilderPath) ?? \(node.defaultBuilderExpression))"
 						if node.erasedToConcreteExistential {
 							let protocolType = node.typeDescription.asSource
-							lines.append("\(indent)let \(node.propertyLabel): \(protocolType)")
-							lines.append("\(indent)if let safeDIBuilder = \(optionalBuilderPath) {")
-							lines.append("\(innerIndent)\(node.propertyLabel) = \(protocolType)(safeDIBuilder(\(argumentList)))")
-							lines.append("\(indent)} else {")
-							lines.append("\(innerIndent)\(node.propertyLabel) = \(protocolType)(\(defaultDirectCall))")
-							lines.append("\(indent)}")
+							lines.append("\(indent)let \(node.propertyLabel) = \(protocolType)(\(leafBuilderExpression)(\(argumentList)))")
 						} else {
-							lines.append("\(indent)let \(node.propertyLabel): \(node.concreteTypeName)")
-							lines.append("\(indent)if let safeDIBuilder = \(optionalBuilderPath) {")
-							lines.append("\(innerIndent)\(node.propertyLabel) = safeDIBuilder(\(argumentList))")
-							lines.append("\(indent)} else {")
-							lines.append("\(innerIndent)\(node.propertyLabel) = \(defaultDirectCall)")
-							lines.append("\(indent)}")
+							lines.append("\(indent)let \(node.propertyLabel) = \(leafBuilderExpression)(\(argumentList))")
 						}
 					} else if node.erasedToConcreteExistential {
 						let protocolType = node.typeDescription.asSource
@@ -1831,7 +1788,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builderExpression: String,
 		optionalBuilderPath: String?,
 		arguments: [String],
-		defaultDirectCall: String,
 		indent: String,
 		ancestorTypes: Set<String> = [],
 	) -> [String] {
@@ -1906,15 +1862,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					))
 				}
 
-				let extractionIndent = "\(indent)\(standardIndent)"
 				for extraction in extractions {
-					if let optionalPath = extraction.optionalPath, let closureType = extraction.closureType {
-						lines.append("\(indent)let \(extraction.localName): \(closureType)")
-						lines.append("\(indent)if let safeDIBuilder = \(optionalPath) {")
-						lines.append("\(extractionIndent)\(extraction.localName) = safeDIBuilder")
-						lines.append("\(indent)} else {")
-						lines.append("\(extractionIndent)\(extraction.localName) = \(extraction.defaultExpression)")
-						lines.append("\(indent)}")
+					if let optionalPath = extraction.optionalPath {
+						lines.append("\(indent)let \(extraction.localName) = \(optionalPath) ?? \(extraction.defaultExpression)")
 					} else {
 						lines.append("\(indent)let \(extraction.localName) = \(extraction.defaultExpression)")
 					}
@@ -1959,12 +1909,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				lines.append(contentsOf: childBindings)
 
 				if let optionalBuilderPath {
-					let bodyIndent = "\(innerIndent)\(standardIndent)"
-					lines.append("\(innerIndent)if let safeDIBuilder = \(optionalBuilderPath) {")
-					lines.append("\(bodyIndent)return safeDIBuilder(\(builderCallArguments))")
-					lines.append("\(innerIndent)} else {")
-					lines.append("\(bodyIndent)return \(defaultDirectCall)")
-					lines.append("\(innerIndent)}")
+					let nilCoalescingExpression = "(\(optionalBuilderPath) ?? \(node.defaultBuilderExpression))"
+					if childBindings.isEmpty {
+						lines.append("\(innerIndent)\(nilCoalescingExpression)(\(builderCallArguments))")
+					} else {
+						lines.append("\(innerIndent)return \(nilCoalescingExpression)(\(builderCallArguments))")
+					}
 				} else if childBindings.isEmpty {
 					lines.append("\(innerIndent)\(builderExpression)(\(builderCallArguments))")
 				} else {

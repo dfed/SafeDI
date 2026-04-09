@@ -172,12 +172,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let dependency: Dependency
-		        if let safeDIBuilder = safeDIParameters.dependency {
-		            dependency = safeDIBuilder()
-		        } else {
-		            dependency = Dependency()
-		        }
+		        let dependency = (safeDIParameters.dependency ?? Dependency.init)()
 		        return Root(dependency: dependency)
 		    }
 		}
@@ -494,12 +489,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let crossModuleService: CrossModuleService
-		        if let safeDIBuilder = safeDIParameters.crossModuleService {
-		            crossModuleService = safeDIBuilder()
-		        } else {
-		            crossModuleService = CrossModuleService()
-		        }
+		        let crossModuleService = (safeDIParameters.crossModuleService ?? CrossModuleService.init)()
 		        return Root(crossModuleService: crossModuleService)
 		    }
 		}
@@ -598,17 +588,8 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    static func __safeDI_mockBuild(
 		        safeDIMockConfiguration: SafeDIMockConfiguration
 		    ) -> Child {
-		        let leaf: Leaf
-		        if let safeDIBuilder = safeDIMockConfiguration.leaf {
-		            leaf = safeDIBuilder()
-		        } else {
-		            leaf = Leaf()
-		        }
-		        if let safeDIBuilder = safeDIMockConfiguration.safeDIBuilder {
-		            return safeDIBuilder(leaf)
-		        } else {
-		            return Child(leaf: leaf)
-		        }
+		        let leaf = (safeDIMockConfiguration.leaf ?? Leaf.init)()
+		        return (safeDIMockConfiguration.safeDIBuilder ?? Child.init(leaf:))(leaf)
 		    }
 		}
 
