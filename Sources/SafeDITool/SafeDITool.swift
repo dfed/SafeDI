@@ -32,7 +32,7 @@ struct SafeDITool: AsyncParsableCommand {
 	)
 
 	static var currentVersion: String {
-		"2.0.0"
+		"2.0.0-alpha-11"
 	}
 
 	@TaskLocal static var fileFinder: FileFinder = FileManager.default
