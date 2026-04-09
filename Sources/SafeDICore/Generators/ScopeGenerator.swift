@@ -857,8 +857,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		static let configurationStructName = "SafeDIMockConfiguration"
 
 		/// The qualified configuration type name for references (e.g., `ChildA.SafeDIMockConfiguration`).
+		/// Uses the concrete fulfilling type so the configuration can be nested in a
+		/// concrete type extension even when the dependency is typed as a protocol.
 		var configurationTypeName: String {
-			"\(instantiatedTypeDescription.asSource).\(Self.configurationStructName)"
+			"\(concreteType.asSource).\(Self.configurationStructName)"
 		}
 
 		/// The builder closure type as a Swift source string (unlabeled parameters).
@@ -910,7 +912,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let indent = Self.standardIndent
 		return uniqueTypes.map { node in
 			(
-				typeName: node.instantiatedTypeDescription.asSource,
+				typeName: node.concreteType.asSource,
 				structCode: Self.generateConfigurationStruct(for: node, indent: indent),
 			)
 		}
@@ -1093,7 +1095,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var result = [MockParameterNode]()
 
 		func walk(_ node: MockParameterNode, ancestorTypes: Set<String> = []) {
-			let key = node.instantiatedTypeDescription.asSource
+			let key = node.concreteType.asSource
 			// Skip nodes whose type matches an ancestor — self-referencing cycle.
 			guard !ancestorTypes.contains(key) else { return }
 			var childAncestors = ancestorTypes
@@ -1107,7 +1109,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// replace it — @Sendable closures are compatible in both contexts.
 				if node.requiresSendable,
 				   let existingIndex = result.firstIndex(where: {
-				   	$0.instantiatedTypeDescription.asSource == key && !$0.requiresSendable
+				   	$0.concreteType.asSource == key && !$0.requiresSendable
 				   })
 				{
 					result[existingIndex] = node
@@ -1185,9 +1187,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Child edge parameters (disambiguated if labels collide).
 		// Exclude children whose type matches this node — they'd create a recursive
 		// value type. These are self-referencing Instantiators (lazy cycles).
-		let nonCycleChildren = node.children.filter {
-			$0.instantiatedTypeDescription != node.instantiatedTypeDescription
-		}
+		let nonCycleChildren = node.children.filter { $0.concreteType != node.concreteType }
 		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
 		for child in nonCycleChildren {
 			let label = disambiguatedLabel(for: child, labelMap: childLabelMap)
