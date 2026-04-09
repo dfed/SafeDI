@@ -593,14 +593,7 @@ To use a mock from another module in your tests, see [Cross-module mock generati
 let noteView = NoteView.mock(userName: "Preview User")
 ```
 
-However, if a child type’s custom mock provides a default for a `@Forwarded` property, that default bubbles up to the parent’s generated mock, making the parameter optional. The **nearest receiver’s default wins**:
-
-- The root type’s own custom mock default takes highest priority
-- Otherwise, the shallowest `@Received` type with a custom mock default wins
-- Types that `@Forward` the property are skipped (they’re pass-through, not consumers)
-- Ties at the same depth are broken by declaration order
-
-This rule also applies to `@Received` dependencies that would otherwise be required parameters (e.g., when the dependency’s type is not in the current module).
+If the root type’s own initializer or custom mock provides a default for a `@Forwarded` property, the generated root `mock()` preserves that default and the parameter becomes optional.
 
 ### Default-valued init parameters in mocks
 
