@@ -21,7 +21,10 @@ let package = Package(
 		),
 	],
 	dependencies: [
-		.package(path: "../../"),
+		// The "sourceBuild" trait builds SafeDITool from source. This is used for local
+		// development and adopting unreleased versions. Consumers using a published release
+		// should omit the traits parameter to use the faster prebuilt binary.
+		.package(path: "../../", traits: ["sourceBuild"]),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.

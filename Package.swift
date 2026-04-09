@@ -31,22 +31,18 @@ let package = Package(
 			name: "SafeDIGenerator",
 			targets: ["SafeDIGenerator"],
 		),
-		/// A SafeDI plugin that must be run on the root source module in a project that does not build SwiftSyntax from source.
-		.plugin(
-			name: "SafeDIPrebuiltGenerator",
-			targets: ["SafeDIPrebuiltGenerator"],
-		),
-		.plugin(
-			name: "InstallSafeDITool",
-			targets: ["InstallSafeDITool"],
-		),
 		.plugin(
 			name: "MigrateSafeDIFromVersionOne",
 			targets: ["MigrateSafeDIFromVersionOne"],
 		),
 	],
+	traits: [
+		.default(enabledTraits: ["prebuilt"]),
+		.trait(name: "prebuilt", description: "Use a prebuilt SafeDITool binary from the artifact bundle (default)."),
+		.trait(name: "sourceBuild", description: "Build SafeDITool from source. Mutually exclusive with 'prebuilt'."),
+	],
 	dependencies: [
-		.package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.0"),
+		.package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.4.0"),
 		.package(url: "https://github.com/swiftlang/swift-syntax.git", "603.0.0"..<"605.0.0"),
 	],
 	targets: [
@@ -91,21 +87,6 @@ let package = Package(
 
 		// Plugins
 		.plugin(
-			name: "InstallSafeDITool",
-			capability: .command(
-				intent: .custom(
-					verb: "safedi-release-install",
-					description: "Installs a release version of the SafeDITool build plugin executable.",
-				),
-				permissions: [
-					.writeToPackageDirectory(reason: "Downloads the SafeDI release build plugin executable into your project directory."),
-					.allowNetworkConnections(scope: .all(ports: []), reason: "Downloads the SafeDI release build plugin executable from GitHub."),
-				],
-			),
-			dependencies: [],
-		),
-
-		.plugin(
 			name: "MigrateSafeDIFromVersionOne",
 			capability: .command(
 				intent: .custom(
@@ -123,41 +104,14 @@ let package = Package(
 			name: "SafeDIGenerator",
 			capability: .buildTool(),
 			dependencies: [
-				"SafeDITool",
+				.target(name: "SafeDIToolBinary", condition: .when(traits: ["prebuilt"])),
+				.target(name: "SafeDITool", condition: .when(traits: ["sourceBuild"])),
 			],
 		),
-		// A lightweight library containing root scanning and output file naming logic.
-		// Used by SafeDIScanner (executable), SafeDITool, and plugins (via symlinks).
-		.target(
-			name: "SafeDIScannerCore",
-			swiftSettings: [
-				.swiftLanguageMode(.v6),
-			],
-		),
-		// A lightweight executable that performs lexical root discovery without SwiftSyntax.
-		// SPM plugins run this in-process via symlinked sources.
-		// This target exists as a standalone executable for non-SPM build systems (e.g. Buck, Bazel)
-		// that need to invoke root scanning as a separate process.
-		.executableTarget(
-			name: "SafeDIScanner",
-			dependencies: [
-				.product(name: "ArgumentParser", package: "swift-argument-parser"),
-				"SafeDIScannerCore",
-			],
-			swiftSettings: [
-				.swiftLanguageMode(.v6),
-			],
-		),
-		.testTarget(
-			name: "SafeDIScannerTests",
-			dependencies: [
-				"SafeDICore",
-				"SafeDIScanner",
-				"SafeDIScannerCore",
-			],
-			swiftSettings: [
-				.swiftLanguageMode(.v6),
-			],
+		.binaryTarget(
+			name: "SafeDIToolBinary",
+			url: "https://github.com/dfed/SafeDI/releases/download/2.0.0-alpha-13/SafeDITool.artifactbundle.zip",
+			checksum: "b7cbb5b7b2a835cc929e0415dff6e14f4a1676c829fe25b4ba32ee0404e10c13",
 		),
 		.executableTarget(
 			name: "SafeDITool",
@@ -174,18 +128,11 @@ let package = Package(
 			name: "SafeDIToolTests",
 			dependencies: [
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
-				"SafeDIScannerCore",
 				"SafeDITool",
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
 			],
-		),
-
-		.plugin(
-			name: "SafeDIPrebuiltGenerator",
-			capability: .buildTool(),
-			dependencies: [],
 		),
 
 		// Core

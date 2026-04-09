@@ -60,17 +60,24 @@ public struct SafeDIToolManifest: Codable, Sendable {
 	/// These types must be known to the dependency tree via module info.
 	public var additionalMocksToGenerate: [String]
 
+	/// Swift file paths discovered from `additionalDirectoriesToInclude` in `#SafeDIConfiguration`.
+	/// The plugin uses these as additional build inputs so edits trigger rebuilds.
+	/// Only populated by the `scan` subcommand; ignored by `generate`.
+	public var additionalInputFiles: [String]
+
 	public init(
 		dependencyTreeGeneration: [InputOutputMap],
 		mockGeneration: [InputOutputMap] = [],
 		configurationFilePaths: [String] = [],
 		mockConfigurationOutputFilePath: String? = nil,
 		additionalMocksToGenerate: [String] = [],
+		additionalInputFiles: [String] = [],
 	) {
 		self.dependencyTreeGeneration = dependencyTreeGeneration
 		self.mockGeneration = mockGeneration
 		self.configurationFilePaths = configurationFilePaths
 		self.mockConfigurationOutputFilePath = mockConfigurationOutputFilePath
 		self.additionalMocksToGenerate = additionalMocksToGenerate
+		self.additionalInputFiles = additionalInputFiles
 	}
 }

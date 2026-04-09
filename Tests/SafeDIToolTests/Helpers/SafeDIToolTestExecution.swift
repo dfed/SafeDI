@@ -20,7 +20,6 @@
 
 import Foundation
 import SafeDICore
-import SafeDIScannerCore
 import Testing
 @testable import SafeDITool
 
@@ -98,54 +97,50 @@ func executeSafeDIToolTest(
 	}
 
 	return try await SafeDITool.$fileFinder.withValue(fileFinder) {
-		// Build the manifest by scanning for roots. Discover additional
-		// directory files from the target module's own #SafeDIConfiguration
-		// only, matching real plugin behavior (discoverAdditionalDirectorySwiftFiles
-		// scans only the current module's files, not dependencies).
+		// Build the manifest by scanning for roots using the Scan subcommand.
 		var manifestPath: String?
 		if buildSwiftOutputDirectory {
 			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 			let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 
-			// Only scan target files (swiftFiles) for config — not dependency files.
-			// Stop after the first config found, matching configurations.first.
-			let additionalScanFiles: [URL] = {
-				for swiftFile in swiftFiles {
-					guard let content = try? String(contentsOf: swiftFile, encoding: .utf8) else { continue }
-					let directories = SafeDIScanner.extractAdditionalDirectoriesToInclude(in: content)
-					guard !directories.isEmpty else { continue }
-					return directories.flatMap { directory -> [URL] in
-						let directoryURL = URL(fileURLWithPath: directory)
-						guard let enumerator = FileManager.default.enumerator(
-							at: directoryURL,
-							includingPropertiesForKeys: nil,
-							options: [.skipsHiddenFiles],
-						) else { return [] }
-						return enumerator.compactMap { ($0 as? URL).flatMap { $0.pathExtension == "swift" ? $0 : nil } }
-					}
-				}
-				return []
-			}()
-			let allSwiftFilesForScan = swiftFiles + additionalScanFiles
+			// Write the input sources CSV for the scan command.
+			let allScanFiles = swiftFiles + additionalDirectoryFiles
+			let scanCSV = URL.temporaryFile
+			try allScanFiles
+				.map(\.relativePath)
+				.joined(separator: ",")
+				.write(to: scanCSV, atomically: true, encoding: .utf8)
 
-			let scanResult = try SafeDIScanner().scan(
-				swiftFiles: allSwiftFilesForScan,
-				relativeTo: projectRoot,
-				outputDirectory: outputDirectory,
+			try await performScan(
+				inputSourcesFile: scanCSV.relativePath,
+				projectRoot: projectRoot.path,
+				outputDirectory: outputDirectory.path,
+				manifestFile: manifestFile.relativePath,
+				mockScopedFiles: swiftFiles.map(\.relativePath),
 			)
-			try scanResult.writeManifest(to: manifestFile)
 			manifestPath = manifestFile.relativePath
+
+			filesToDelete.append(scanCSV)
 		}
 
-		var tool = SafeDITool()
-		tool.swiftSourcesFilePath = swiftFileCSV.relativePath
-		tool.showVersion = false
-		tool.include = includeFolders
-		tool.additionalImportedModules = additionalImportedModules
-		tool.moduleInfoOutput = moduleInfoOutput.relativePath
-		tool.dependentModuleInfoFilePath = dependentModuleInfoPaths.isEmpty ? nil : dependentModuleInfoFileCSV.relativePath
-		tool.swiftManifest = manifestPath
-		tool.dotFileOutput = buildDOTFileOutput ? dotTreeOutput.relativePath : nil
+		var generateArguments = [swiftFileCSV.relativePath]
+		for folder in includeFolders {
+			generateArguments += ["--include", folder]
+		}
+		for module in additionalImportedModules {
+			generateArguments += ["--additional-imported-modules", module]
+		}
+		generateArguments += ["--module-info-output", moduleInfoOutput.relativePath]
+		if !dependentModuleInfoPaths.isEmpty {
+			generateArguments += ["--dependent-module-info-file-path", dependentModuleInfoFileCSV.relativePath]
+		}
+		if let manifestPath {
+			generateArguments += ["--swift-manifest", manifestPath]
+		}
+		if buildDOTFileOutput {
+			generateArguments += ["--dot-file-output", dotTreeOutput.relativePath]
+		}
+		var tool = try Generate.parse(generateArguments)
 		try await tool.run()
 
 		filesToDelete.append(swiftFileCSV)
@@ -178,7 +173,7 @@ func executeSafeDIToolTest(
 		}
 
 		return try TestOutput(
-			moduleInfo: JSONDecoder().decode(SafeDITool.ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
+			moduleInfo: JSONDecoder().decode(ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
 			moduleInfoOutputPath: moduleInfoOutput.relativePath,
 			generatedFiles: generatedFiles,
 			dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil,
@@ -188,7 +183,7 @@ func executeSafeDIToolTest(
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct TestOutput {
-	let moduleInfo: SafeDITool.ModuleInfo
+	let moduleInfo: ModuleInfo
 	let moduleInfoOutputPath: String
 	let generatedFiles: [String: String]?
 	let dotTree: String?

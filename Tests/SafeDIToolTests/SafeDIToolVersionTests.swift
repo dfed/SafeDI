@@ -18,51 +18,22 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
 import Testing
-
-#if os(Linux)
-	import Glibc
-#else
-	import Darwin
-#endif
-
 @testable import SafeDITool
 
-@MainActor // serialized due to changes to stdout
 struct SafeDIToolVersionTests {
 	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func run_withVersionFlag_printsCurrentVersion() async throws {
-		var tool = SafeDITool()
-		tool.swiftSourcesFilePath = nil
-		tool.showVersion = true
-		tool.include = []
-		tool.additionalImportedModules = []
-		tool.moduleInfoOutput = nil
-		tool.dependentModuleInfoFilePath = nil
-		tool.swiftManifest = nil
-		tool.dotFileOutput = nil
-
-		let output = try await captureStandardOutput {
-			try await tool.run()
-		}
-
-		let trimmedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
-		#expect(trimmedOutput == SafeDITool.currentVersion)
+	func currentVersion_isNotEmpty() {
+		#expect(!SafeDITool.currentVersion.isEmpty)
 	}
 
-	private func captureStandardOutput(_ block: () async throws -> Void) async throws -> String {
-		let pipe = Pipe()
-		let originalStdout = dup(STDOUT_FILENO)
-		dup2(pipe.fileHandleForWriting.fileDescriptor, STDOUT_FILENO)
+	@Test
+	func configuration_exposesVersion() {
+		#expect(SafeDITool.configuration.version == SafeDITool.currentVersion)
+	}
 
-		try await block()
-
-		pipe.fileHandleForWriting.closeFile()
-		dup2(originalStdout, STDOUT_FILENO)
-		close(originalStdout)
-
-		return String(data: pipe.fileHandleForReading.availableData, encoding: .utf8) ?? ""
+	@Test
+	func configuration_hasGenerateAsDefaultSubcommand() {
+		#expect(SafeDITool.configuration.defaultSubcommand == Generate.self)
 	}
 }

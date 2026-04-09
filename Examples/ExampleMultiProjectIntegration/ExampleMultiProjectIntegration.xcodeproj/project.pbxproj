@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 60;
+	objectVersion = 100;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -18,9 +18,9 @@
 		3289B4082BF955720053F2E4 /* Subproject.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3289B4012BF955710053F2E4 /* Subproject.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3289B40D2BF955A10053F2E4 /* StringStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECC2B314DB20001AC0C /* StringStorage.swift */; };
 		3289B40F2BF955A10053F2E4 /* UserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ECA2B314D8D0001AC0C /* UserService.swift */; };
-		BB000003BBBBBBBB00000001 /* SafeDIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000004BBBBBBBB00000001 /* SafeDIConfiguration.swift */; };
 		32B72E192D39763900F5EB6F /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 32B72E182D39763900F5EB6F /* SafeDI */; };
 		32B72E1B2D39764200F5EB6F /* SafeDI in Frameworks */ = {isa = PBXBuildFile; productRef = 32B72E1A2D39764200F5EB6F /* SafeDI */; };
+		BB000003BBBBBBBB00000001 /* SafeDIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000004BBBBBBBB00000001 /* SafeDIConfiguration.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,14 +36,12 @@
 /* Begin PBXCopyFilesBuildPhase section */
 		3289B40C2BF955720053F2E4 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
 			dstPath = "";
-			dstSubfolderSpec = 10;
+			dstSubfolder = Frameworks;
 			files = (
 				3289B4082BF955720053F2E4 /* Subproject.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
 
@@ -66,20 +64,16 @@
 /* Begin PBXFrameworksBuildPhase section */
 		32756FDF2B24C042006BDD24 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 				32B72E192D39763900F5EB6F /* SafeDI in Frameworks */,
 				3289B4072BF955720053F2E4 /* Subproject.framework in Frameworks */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 		3289B3FE2BF955710053F2E4 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 				32B72E1B2D39764200F5EB6F /* SafeDI in Frameworks */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
@@ -156,11 +150,9 @@
 /* Begin PBXHeadersBuildPhase section */
 		3289B3FC2BF955710053F2E4 /* Headers */ = {
 			isa = PBXHeadersBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 				3289B4042BF955720053F2E4 /* Subproject.h in Headers */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXHeadersBuildPhase section */
 
@@ -229,7 +221,6 @@
 				};
 			};
 			buildConfigurationList = 32756FDD2B24C042006BDD24 /* Build configuration list for PBXProject "ExampleMultiProjectIntegration" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -240,6 +231,7 @@
 			packageReferences = (
 				32B72E172D39763900F5EB6F /* XCLocalSwiftPackageReference "../../../SafeDI" */,
 			);
+			preferredProjectObjectVersion = 56;
 			productRefGroup = 32756FE32B24C042006BDD24 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -253,43 +245,35 @@
 /* Begin PBXResourcesBuildPhase section */
 		32756FE02B24C042006BDD24 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 				32756FEE2B24C044006BDD24 /* Preview Assets.xcassets in Resources */,
 				32756FEA2B24C044006BDD24 /* Assets.xcassets in Resources */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 		3289B3FF2BF955710053F2E4 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		32756FDE2B24C042006BDD24 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 				324F1EC02B314E030001AC0C /* SafeDIConfiguration.swift in Sources */,
 				324F1ECF2B314E030001AC0C /* NameEntryView.swift in Sources */,
 				324F1ED22B3150480001AC0C /* NoteView.swift in Sources */,
 				32756FE62B24C042006BDD24 /* ExampleApp.swift in Sources */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 		3289B3FD2BF955710053F2E4 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 				BB000003BBBBBBBB00000001 /* SafeDIConfiguration.swift in Sources */,
 				3289B40D2BF955A10053F2E4 /* StringStorage.swift in Sources */,
 				3289B40F2BF955A10053F2E4 /* UserService.swift in Sources */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
@@ -310,7 +294,7 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		32756FEF2B24C044006BDD24 /* Debug */ = {
+		32756FEF2B24C044006BDD24 /* Debug configuration for PBXProject "ExampleMultiProjectIntegration" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -373,7 +357,7 @@
 			};
 			name = Debug;
 		};
-		32756FF02B24C044006BDD24 /* Release */ = {
+		32756FF02B24C044006BDD24 /* Release configuration for PBXProject "ExampleMultiProjectIntegration" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -428,7 +412,7 @@
 			};
 			name = Release;
 		};
-		32756FF22B24C044006BDD24 /* Debug */ = {
+		32756FF22B24C044006BDD24 /* Debug configuration for PBXNativeTarget "ExampleMultiProjectIntegration" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -465,7 +449,7 @@
 			};
 			name = Debug;
 		};
-		32756FF32B24C044006BDD24 /* Release */ = {
+		32756FF32B24C044006BDD24 /* Release configuration for PBXNativeTarget "ExampleMultiProjectIntegration" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -502,7 +486,7 @@
 			};
 			name = Release;
 		};
-		3289B40A2BF955720053F2E4 /* Debug */ = {
+		3289B40A2BF955720053F2E4 /* Debug configuration for PBXNativeTarget "Subproject" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
@@ -543,7 +527,7 @@
 			};
 			name = Debug;
 		};
-		3289B40B2BF955720053F2E4 /* Release */ = {
+		3289B40B2BF955720053F2E4 /* Release configuration for PBXNativeTarget "Subproject" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
@@ -590,28 +574,25 @@
 		32756FDD2B24C042006BDD24 /* Build configuration list for PBXProject "ExampleMultiProjectIntegration" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				32756FEF2B24C044006BDD24 /* Debug */,
-				32756FF02B24C044006BDD24 /* Release */,
+				32756FEF2B24C044006BDD24 /* Debug configuration for PBXProject "ExampleMultiProjectIntegration" */,
+				32756FF02B24C044006BDD24 /* Release configuration for PBXProject "ExampleMultiProjectIntegration" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		32756FF12B24C044006BDD24 /* Build configuration list for PBXNativeTarget "ExampleMultiProjectIntegration" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				32756FF22B24C044006BDD24 /* Debug */,
-				32756FF32B24C044006BDD24 /* Release */,
+				32756FF22B24C044006BDD24 /* Debug configuration for PBXNativeTarget "ExampleMultiProjectIntegration" */,
+				32756FF32B24C044006BDD24 /* Release configuration for PBXNativeTarget "ExampleMultiProjectIntegration" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		3289B4092BF955720053F2E4 /* Build configuration list for PBXNativeTarget "Subproject" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				3289B40A2BF955720053F2E4 /* Debug */,
-				3289B40B2BF955720053F2E4 /* Release */,
+				3289B40A2BF955720053F2E4 /* Debug configuration for PBXNativeTarget "Subproject" */,
+				3289B40B2BF955720053F2E4 /* Release configuration for PBXNativeTarget "Subproject" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
@@ -620,6 +601,9 @@
 		32B72E172D39763900F5EB6F /* XCLocalSwiftPackageReference "../../../SafeDI" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../../SafeDI;
+			traits = (
+				sourceBuild,
+			);
 		};
 /* End XCLocalSwiftPackageReference section */
 

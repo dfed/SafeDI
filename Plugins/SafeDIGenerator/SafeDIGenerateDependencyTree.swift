@@ -31,13 +31,8 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			return []
 		}
 
+		let tool = try context.tool(named: "SafeDITool").url
 		let outputDirectory = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutput")
-		// Swift Package Plugins did not (as of Swift 5.9) allow for
-		// creating dependencies between plugin output at the time of writing.
-		// Since our current build system did not support depending on the
-		// output of other plugins, we must forgo searching for `.safeDI` files
-		// and instead parse the entire project at once.
-		// TODO: https://github.com/dfed/SafeDI/issues/92
 		let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.url)
 		let dependenciesSourceFiles = sourceTarget
 			.sourceModuleRecursiveDependencies
@@ -56,56 +51,47 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			to: inputSourcesFile,
 		)
 
-		// Discover additional directories from the current module's config only.
-		let additionalSwiftFiles = discoverAdditionalDirectorySwiftFiles(
-			in: targetSwiftFiles,
-			relativeTo: packageRoot,
-		)
-
 		let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
-		let scanResult = try runSafeDIScanner(
-			inputSourcesFile: inputSourcesFile,
-			projectRoot: packageRoot,
-			outputDirectory: outputDirectory,
-			manifestFile: manifestFile,
-			additionalSwiftFiles: additionalSwiftFiles,
-			mockScopedSwiftFiles: targetSwiftFiles,
+
+		// Shell out to SafeDITool scan to build the manifest.
+		try runSafeDITool(
+			at: tool,
+			arguments: [
+				"scan",
+				"--input-sources-file", inputSourcesFile.path(percentEncoded: false),
+				"--project-root", packageRoot.path(percentEncoded: false),
+				"--output-directory", outputDirectory.path(percentEncoded: false),
+				"--manifest-file", manifestFile.path(percentEncoded: false),
+				"--mock-scoped-files",
+			] + targetSwiftFiles.map { $0.path(percentEncoded: false) },
 		)
-		guard !scanResult.outputFiles.isEmpty else {
+
+		let manifest = try JSONDecoder().decode(
+			ScanManifest.self,
+			from: Data(contentsOf: manifestFile),
+		)
+
+		let outputFiles = (manifest.dependencyTreeGeneration + manifest.mockGeneration)
+			.map { URL(fileURLWithPath: $0.outputFilePath) }
+			+ (manifest.mockConfigurationOutputFilePath.map { [URL(fileURLWithPath: $0)] } ?? [])
+		let additionalInputFiles = manifest.additionalInputFiles.map { URL(fileURLWithPath: $0) }
+
+		guard !outputFiles.isEmpty else {
 			return []
-		}
-
-		let arguments = [
-			inputSourcesFile.path(percentEncoded: false),
-			"--swift-manifest",
-			manifestFile.path(percentEncoded: false),
-		]
-
-		let downloadedToolLocation = context.downloadedToolLocation
-		let safeDIVersion = context.safeDIVersion
-		if downloadedToolLocation == nil, let safeDIVersion {
-			Diagnostics.warning("""
-			Using a debug SafeDITool binary, which is 15x slower than the release version.
-
-			To install the release SafeDITool binary for version \(safeDIVersion), run:
-			\tswift package --package-path "\(context.package.directoryURL.path(percentEncoded: false))" --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
-			""")
-		}
-
-		let toolLocation = if let downloadedToolLocation {
-			downloadedToolLocation
-		} else {
-			try context.tool(named: "SafeDITool").url
 		}
 
 		return [
 			.buildCommand(
 				displayName: "SafeDIGenerateDependencyTree",
-				executable: toolLocation,
-				arguments: arguments,
+				executable: tool,
+				arguments: [
+					inputSourcesFile.path(percentEncoded: false),
+					"--swift-manifest",
+					manifestFile.path(percentEncoded: false),
+				],
 				environment: [:],
-				inputFiles: allSwiftFiles + scanResult.additionalInputFiles,
-				outputFiles: scanResult.outputFiles,
+				inputFiles: allSwiftFiles + additionalInputFiles,
+				outputFiles: outputFiles,
 			),
 		]
 	}
@@ -146,19 +132,12 @@ extension Target {
 			context: XcodeProjectPlugin.XcodePluginContext,
 			target: XcodeProjectPlugin.XcodeTarget,
 		) throws -> [PackagePlugin.Command] {
-			// As of Xcode 15.0.1, Swift Package Plugins in Xcode are unable
-			// to inspect target dependencies. As a result, this Xcode plugin
-			// only works if it is running on a single-module project, or if
-			// all `@Instantiable`-decorated types are in the target module,
-			// or if a #SafeDIConfiguration's `additionalDirectoriesToInclude`
-			// directs the plugin to search additional modules for Swift files.
-			// https://github.com/apple/swift-package-manager/issues/6003
+			let tool = try context.tool(named: "SafeDITool").url
 			let inputSwiftFiles = target
 				.inputFiles
 				.filter { $0.url.pathExtension == "swift" }
 				.map(\.url)
 			guard !inputSwiftFiles.isEmpty else {
-				// There are no Swift files in this module!
 				return []
 			}
 
@@ -171,50 +150,32 @@ extension Target {
 				to: inputSourcesFile,
 			)
 
-			// Discover additional directories from the current target's config only.
-			let additionalSwiftFiles = discoverAdditionalDirectorySwiftFiles(
-				in: inputSwiftFiles,
+			// In Xcode, context.tool(named:) returns paths with unresolved build
+			// variables that are only resolved at build-command execution time.
+			// We cannot shell out via Process during createBuildCommands. Instead,
+			// use a lightweight in-process scan to discover output files, then
+			// return a .buildCommand that does the full scan+generate at build time
+			// via the --output-directory flag.
+			let scanResult = PluginScanner.scan(
+				swiftFiles: inputSwiftFiles,
+				mockScopedSwiftFiles: inputSwiftFiles,
 				relativeTo: projectRoot,
+				outputDirectory: outputDirectory,
 			)
 
-			let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
-			let scanResult = try runSafeDIScanner(
-				inputSourcesFile: inputSourcesFile,
-				projectRoot: projectRoot,
-				outputDirectory: outputDirectory,
-				manifestFile: manifestFile,
-				additionalSwiftFiles: additionalSwiftFiles,
-				mockScopedSwiftFiles: inputSwiftFiles,
-			)
 			guard !scanResult.outputFiles.isEmpty else {
 				return []
-			}
-
-			let arguments = [
-				inputSourcesFile.path(percentEncoded: false),
-				"--swift-manifest",
-				manifestFile.path(percentEncoded: false),
-			]
-
-			let downloadedToolLocation = context.downloadedToolLocation
-			if downloadedToolLocation == nil {
-				Diagnostics.warning("""
-				Using a debug SafeDITool binary, which is 15x slower than the release version.
-
-				To install the release SafeDITool binary for this version, run the `InstallSafeDITool` command plugin.
-				""")
-			}
-			let toolLocation = if let downloadedToolLocation {
-				downloadedToolLocation
-			} else {
-				try context.tool(named: "SafeDITool").url
 			}
 
 			return [
 				.buildCommand(
 					displayName: "SafeDIGenerateDependencyTree",
-					executable: toolLocation,
-					arguments: arguments,
+					executable: tool,
+					arguments: [
+						inputSourcesFile.path(percentEncoded: false),
+						"--output-directory", outputDirectory.path(percentEncoded: false),
+						"--mock-scoped-files",
+					] + inputSwiftFiles.map { $0.path(percentEncoded: false) },
 					environment: [:],
 					inputFiles: inputSwiftFiles + scanResult.additionalInputFiles,
 					outputFiles: scanResult.outputFiles,

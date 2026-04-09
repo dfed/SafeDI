@@ -18,18 +18,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import GrandchildrenModule
-import SafeDI
-import SharedModule
+import Foundation
 
-@Instantiable
-public final class ChildC: Instantiable {
-	public init(shared: SharedThing, grandchildC: GrandchildC) {
-		self.shared = shared
-		self.grandchildC = grandchildC
+/// Compute a path string relative to a base directory, for use in the CSV and manifest.
+/// Falls back to the absolute path if the URL is not under the base directory.
+public func relativePath(for url: URL, relativeTo base: URL) -> String {
+	let urlPath = url.standardizedFileURL.path
+	let standardizedBasePath = base.standardizedFileURL.path
+	let basePath = standardizedBasePath.hasSuffix("/")
+		? standardizedBasePath
+		: standardizedBasePath + "/"
+
+	if urlPath.hasPrefix(basePath) {
+		return String(urlPath.dropFirst(basePath.count))
+	} else {
+		return urlPath
 	}
-
-	@Received let shared: SharedThing
-
-	@Instantiated let grandchildC: GrandchildC
 }

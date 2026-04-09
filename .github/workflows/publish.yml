@@ -6,11 +6,6 @@ on:
         description: 'Version tag to create (e.g. 2.0.0)'
         type: string
         required: true
-      branch:
-        description: 'Branch to build from and commit to'
-        type: string
-        required: true
-        default: 'main'
       prerelease:
         description: 'Mark the GitHub release as a prerelease'
         type: boolean
@@ -24,7 +19,7 @@ on:
 
 jobs:
   build-macos:
-    name: Build macOS Universal Binary
+    name: Build macOS
     runs-on: macos-26
     strategy:
       matrix:
@@ -36,11 +31,15 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ github.ref_name }}
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+      - name: Stamp version
+        run: sed -i '' 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
-        run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }}
+        run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }} -Xswiftc -Osize -Xlinker -dead_strip
+      - name: Strip binary
+        run: strip -rSTx .build/*/release/SafeDITool
       - name: Give SafeDITool executable permissions
         run: chmod +x .build/*/release/SafeDITool
       - name: Make codesigning folder
@@ -49,36 +48,24 @@ jobs:
           cp .build/*/release/SafeDITool codesign/
       - name: Codesign
         run: |
-          # Decode the p12 certificate
           echo "${{ secrets.BASE_64_ENCODED_P12 }}" | base64 --decode > codesign/certificate.p12
-          # Create a new keychain
           security create-keychain -p "" build.keychain
-          # Import the p12 into the keychain
           security import codesign/certificate.p12 -k build.keychain -P "${{ secrets.P12_PASSWORD }}" -T /usr/bin/codesign
-          # Add the new keychain to the list of keychains to search
           security list-keychains -s build.keychain
-          # Make the new keychain the default keychain
           security default-keychain -s build.keychain
-          # Unlock the keychain so it can be used
           security unlock-keychain -p "" build.keychain
-          # Allows codesign access to the keys in the keychain without user interaction
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
-          # Codesign
           codesign --force --options runtime --timestamp --sign "${{ secrets.DEVELOPER_ID_CERTIFICATE }}" codesign/SafeDITool
       - name: Notarize
         run: |
-          # Create zip
           pushd codesign && zip -r SafeDITool.zip SafeDITool && popd
-          # Delete original, unsigned tool
           rm codesign/SafeDITool
-          # Create p8 file
           echo "${{ secrets.NOTARY_P8 }}" > codesign/AuthKey_${{ secrets.NOTARY_KEY_ID }}.p8
-          # Notarize
-          xcrun notarytool submit codesign/SafeDITool.zip --key codesign/AuthKey_${{ secrets.NOTARY_KEY_ID }}.p8 --key-id ${{ secrets.NOTARY_KEY_ID }} --issuer ${{ secrets.NOTARY_ISSUER_ID }}
+          xcrun notarytool submit codesign/SafeDITool.zip --key codesign/AuthKey_${{ secrets.NOTARY_KEY_ID }}.p8 --key-id ${{ secrets.NOTARY_KEY_ID }} --issuer ${{ secrets.NOTARY_ISSUER_ID }} --wait
       - name: Unzip notarized tool
         run: pushd codesign && unzip SafeDITool.zip && popd
       - name: Upload SafeDITool artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SafeDITool-macos-${{ matrix.architecture }}
           path: codesign/SafeDITool
@@ -98,11 +85,15 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ github.ref_name }}
+      - name: Stamp version
+        run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
-        run: swift build -c release --product SafeDITool --static-swift-stdlib
+        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
+      - name: Strip binary
+        run: strip -s .build/release/SafeDITool
       - name: Upload SafeDITool artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SafeDITool-linux-x86_64
           path: .build/release/SafeDITool
@@ -117,11 +108,15 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ github.ref_name }}
+      - name: Stamp version
+        run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
-        run: swift build -c release --product SafeDITool --static-swift-stdlib
+        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
+      - name: Strip binary
+        run: strip -s .build/release/SafeDITool
       - name: Upload SafeDITool artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SafeDITool-linux-arm64
           path: .build/release/SafeDITool
@@ -136,7 +131,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ github.ref_name }}
           token: ${{ secrets.RELEASE_UPLOADER }}
 
       - name: Select Xcode Version
@@ -147,26 +142,19 @@ jobs:
         with:
           path: artifacts
 
-      - name: Create macOS universal binary
-        run: |
-          lipo -create \
-            artifacts/SafeDITool-macos-arm64/SafeDITool \
-            artifacts/SafeDITool-macos-x86_64/SafeDITool \
-            -output SafeDITool-macos-universal
-          chmod +x SafeDITool-macos-universal
-
       - name: Assemble artifact bundle
         run: |
-          mkdir -p SafeDITool.artifactbundle/SafeDITool-macos/bin
+          mkdir -p SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin
+          mkdir -p SafeDITool.artifactbundle/SafeDITool-macos-x86_64/bin
           mkdir -p SafeDITool.artifactbundle/SafeDITool-linux-x86_64/bin
           mkdir -p SafeDITool.artifactbundle/SafeDITool-linux-arm64/bin
 
-          cp SafeDITool-macos-universal SafeDITool.artifactbundle/SafeDITool-macos/bin/SafeDITool
+          cp artifacts/SafeDITool-macos-arm64/SafeDITool SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool
+          cp artifacts/SafeDITool-macos-x86_64/SafeDITool SafeDITool.artifactbundle/SafeDITool-macos-x86_64/bin/SafeDITool
           cp artifacts/SafeDITool-linux-x86_64/SafeDITool SafeDITool.artifactbundle/SafeDITool-linux-x86_64/bin/SafeDITool
           cp artifacts/SafeDITool-linux-arm64/SafeDITool SafeDITool.artifactbundle/SafeDITool-linux-arm64/bin/SafeDITool
 
-          chmod +x SafeDITool.artifactbundle/SafeDITool-linux-x86_64/bin/SafeDITool
-          chmod +x SafeDITool.artifactbundle/SafeDITool-linux-arm64/bin/SafeDITool
+          chmod +x SafeDITool.artifactbundle/*/bin/SafeDITool
 
           cat > SafeDITool.artifactbundle/info.json << 'INFOJSON'
           {
@@ -177,8 +165,12 @@ jobs:
                 "type": "executable",
                 "variants": [
                   {
-                    "path": "SafeDITool-macos/bin/SafeDITool",
-                    "supportedTriples": ["x86_64-apple-macosx", "arm64-apple-macosx"]
+                    "path": "SafeDITool-macos-arm64/bin/SafeDITool",
+                    "supportedTriples": ["arm64-apple-macosx"]
+                  },
+                  {
+                    "path": "SafeDITool-macos-x86_64/bin/SafeDITool",
+                    "supportedTriples": ["x86_64-apple-macosx"]
                   },
                   {
                     "path": "SafeDITool-linux-x86_64/bin/SafeDITool",
@@ -195,7 +187,7 @@ jobs:
           INFOJSON
 
       - name: Zip artifact bundle
-        run: zip -r SafeDITool.artifactbundle.zip SafeDITool.artifactbundle/
+        run: zip -9 -r SafeDITool.artifactbundle.zip SafeDITool.artifactbundle/
 
       - name: Compute checksum
         id: checksum
@@ -204,19 +196,17 @@ jobs:
           echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
           echo "Computed checksum: $CHECKSUM"
 
-      - name: Update version and checksum
+      - name: Update Package.swift
         run: ./Scripts/update-version.sh "${{ inputs.version }}" "${{ steps.checksum.outputs.checksum }}"
 
       - name: Show changes
         run: |
           echo "=== Package.swift changes ==="
           git diff Package.swift
-          echo "=== Version string changes ==="
-          git diff Sources/SafeDITool/SafeDITool.swift Plugins/Shared.swift
           echo "=== Checksum: ${{ steps.checksum.outputs.checksum }} ==="
 
       - name: Upload artifact bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SafeDITool-artifactbundle
           path: SafeDITool.artifactbundle.zip
@@ -225,14 +215,29 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Package.swift Sources/SafeDITool/SafeDITool.swift Plugins/Shared.swift
+          git add Package.swift
           git commit -m "Release ${{ inputs.version }}"
+
+      - name: Upload release commit patch (dry run)
+        if: inputs.dry-run
+        run: git format-patch -1 HEAD -o /tmp/patch
+      - name: Upload release commit patch artifact (dry run)
+        if: inputs.dry-run
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-commit
+          path: /tmp/patch/*.patch
+
+      - name: Prepare release assets
+        run: |
+          cp artifacts/SafeDITool-macos-arm64/SafeDITool SafeDITool-arm64
+          cp artifacts/SafeDITool-macos-x86_64/SafeDITool SafeDITool-x86_64
 
       - name: Tag and push
         if: ${{ !inputs.dry-run }}
         run: |
           git tag "${{ inputs.version }}"
-          git push origin "${{ inputs.branch }}" --tags
+          git push origin "${{ github.ref_name }}" --tags
 
       - name: Create GitHub Release
         if: ${{ !inputs.dry-run }}
@@ -244,6 +249,5 @@ jobs:
             --generate-notes \
             ${{ inputs.prerelease && '--prerelease' || '' }} \
             SafeDITool.artifactbundle.zip \
-            SafeDITool-macos-universal#SafeDITool-universal \
-            artifacts/SafeDITool-macos-arm64/SafeDITool#SafeDITool-arm64 \
-            artifacts/SafeDITool-macos-x86_64/SafeDITool#SafeDITool-x86_64
+            SafeDITool-arm64 \
+            SafeDITool-x86_64

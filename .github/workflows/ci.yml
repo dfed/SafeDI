@@ -10,16 +10,20 @@ on:
   pull_request:
 
 jobs:
-  version-check:
-    name: Version Consistency Check
-    runs-on: ubuntu-latest
+  update-version-check:
+    name: Update Version Script Check
+    runs-on: macos-26
     permissions:
       contents: read
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
-      - name: Check version consistency
-        run: ./Scripts/check-version-consistency.sh
+      - name: Run update-version script
+        run: ./Scripts/update-version.sh 99.99.99-test abc123testchecksum456
+      - name: Verify URL was updated
+        run: grep -q 'releases/download/99.99.99-test/SafeDITool.artifactbundle.zip' Package.swift
+      - name: Verify checksum was updated
+        run: grep -q 'checksum:.*abc123testchecksum456' Package.swift
 
   xcodebuild:
     name: Build with xcodebuild on Xcode 26
@@ -63,21 +67,6 @@ jobs:
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Build Package Integration
         run: xcrun swift build --package-path "Examples/Example Package Integration"
-
-  spm-prebuilt-package-integration:
-    name: Build Prebuilt Package Integration on Xcode 26
-    runs-on: macos-26
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-      - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
-      - name: Build Package Integration
-        run: |
-          xcrun swift package --package-path Examples/ExamplePrebuiltPackageIntegration --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
-          xcrun swift build --package-path Examples/ExamplePrebuiltPackageIntegration
 
   spm-project-integration:
     name: Build Project Integration on Xcode 26
@@ -124,7 +113,7 @@ jobs:
       - name: Build and Test Framework
         run: |
           for i in {1..5}; do # Run tests a few times to ensure code-gen is stable.
-            xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing
+            xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild
           done
       - name: Prepare Coverage Reports
         run: ./Scripts/prepare-coverage-reports.sh
@@ -146,7 +135,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Build and Test Framework
-        run: swift test -c release --enable-code-coverage -Xswiftc -enable-testing
+        run: swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild
       - name: Install curl for Codecov
         run: |
           apt-get update

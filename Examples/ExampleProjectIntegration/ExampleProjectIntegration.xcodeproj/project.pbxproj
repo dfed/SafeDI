@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 60;
+	objectVersion = 100;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -34,11 +34,9 @@
 /* Begin PBXFrameworksBuildPhase section */
 		32756FDF2B24C042006BDD24 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 				320A3ECF2D39655700D8EC2E /* SafeDI in Frameworks */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
@@ -147,7 +145,6 @@
 				};
 			};
 			buildConfigurationList = 32756FDD2B24C042006BDD24 /* Build configuration list for PBXProject "ExampleProjectIntegration" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -158,6 +155,7 @@
 			packageReferences = (
 				320A3ECD2D39655700D8EC2E /* XCLocalSwiftPackageReference "../../../SafeDI" */,
 			);
+			preferredProjectObjectVersion = 56;
 			productRefGroup = 32756FE32B24C042006BDD24 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -170,19 +168,16 @@
 /* Begin PBXResourcesBuildPhase section */
 		32756FE02B24C042006BDD24 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 				32756FEE2B24C044006BDD24 /* Preview Assets.xcassets in Resources */,
 				32756FEA2B24C044006BDD24 /* Assets.xcassets in Resources */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		32756FDE2B24C042006BDD24 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 				324F1ECF2B314E030001AC0C /* NameEntryView.swift in Sources */,
 				324F1ED22B3150480001AC0C /* NoteView.swift in Sources */,
@@ -191,7 +186,6 @@
 				324F1ECB2B314D8D0001AC0C /* UserService.swift in Sources */,
 				AA000001AAAAAAAA00000001 /* SafeDIConfiguration.swift in Sources */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
@@ -203,7 +197,7 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		32756FEF2B24C044006BDD24 /* Debug */ = {
+		32756FEF2B24C044006BDD24 /* Debug configuration for PBXProject "ExampleProjectIntegration" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -266,7 +260,7 @@
 			};
 			name = Debug;
 		};
-		32756FF02B24C044006BDD24 /* Release */ = {
+		32756FF02B24C044006BDD24 /* Release configuration for PBXProject "ExampleProjectIntegration" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -321,7 +315,7 @@
 			};
 			name = Release;
 		};
-		32756FF22B24C044006BDD24 /* Debug */ = {
+		32756FF22B24C044006BDD24 /* Debug configuration for PBXNativeTarget "ExampleProjectIntegration" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -357,7 +351,7 @@
 			};
 			name = Debug;
 		};
-		32756FF32B24C044006BDD24 /* Release */ = {
+		32756FF32B24C044006BDD24 /* Release configuration for PBXNativeTarget "ExampleProjectIntegration" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -399,19 +393,17 @@
 		32756FDD2B24C042006BDD24 /* Build configuration list for PBXProject "ExampleProjectIntegration" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				32756FEF2B24C044006BDD24 /* Debug */,
-				32756FF02B24C044006BDD24 /* Release */,
+				32756FEF2B24C044006BDD24 /* Debug configuration for PBXProject "ExampleProjectIntegration" */,
+				32756FF02B24C044006BDD24 /* Release configuration for PBXProject "ExampleProjectIntegration" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		32756FF12B24C044006BDD24 /* Build configuration list for PBXNativeTarget "ExampleProjectIntegration" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				32756FF22B24C044006BDD24 /* Debug */,
-				32756FF32B24C044006BDD24 /* Release */,
+				32756FF22B24C044006BDD24 /* Debug configuration for PBXNativeTarget "ExampleProjectIntegration" */,
+				32756FF32B24C044006BDD24 /* Release configuration for PBXNativeTarget "ExampleProjectIntegration" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
@@ -420,6 +412,9 @@
 		320A3ECD2D39655700D8EC2E /* XCLocalSwiftPackageReference "../../../SafeDI" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../../SafeDI;
+			traits = (
+				sourceBuild,
+			);
 		};
 /* End XCLocalSwiftPackageReference section */
 
