@@ -1093,6 +1093,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Collects all unique types from the `MockParameterNode` tree, deduplicated
 	/// by `instantiatedTypeDescription`. Returns nodes in depth-first order
 	/// (children before parents) so that referenced types appear before their referrers.
+	/// When the same type appears in both sendable and non-sendable contexts,
+	/// the sendable version is preferred (`@Sendable` closures work in both contexts).
 	private static func collectUniqueConfigurationTypes(
 		from nodes: [MockParameterNode],
 	) -> [MockParameterNode] {
@@ -1111,7 +1113,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			// Skip leaf nodes that don't need a _Configuration struct.
 			guard node.needsConfigurationStruct else { return }
-			guard seen.insert(key).inserted else { return }
+			if seen.contains(key) {
+				// If this node requires sendable and the existing one doesn't,
+				// replace it — @Sendable closures are compatible in both contexts.
+				if node.requiresSendable,
+				   let existingIndex = result.firstIndex(where: {
+				   	$0.instantiatedTypeDescription.asSource == key && !$0.requiresSendable
+				   })
+				{
+					result[existingIndex] = node
+				}
+				return
+			}
+			seen.insert(key)
 			result.append(node)
 		}
 
