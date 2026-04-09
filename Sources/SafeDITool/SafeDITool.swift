@@ -25,7 +25,7 @@ import Foundation
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct SafeDITool: AsyncParsableCommand {
 	static let configuration = CommandConfiguration(
-		commandName: "SafeDITool",
+		commandName: "safeditool",
 		version: currentVersion,
 		subcommands: [Generate.self, Scan.self],
 		defaultSubcommand: Generate.self,
