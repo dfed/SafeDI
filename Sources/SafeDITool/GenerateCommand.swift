@@ -42,6 +42,10 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(help: "A path to a JSON manifest file describing the desired Swift output files. The manifest maps input file paths to output file paths. See SafeDIToolManifest for the expected format.") var swiftManifest: String?
 
+	@Option(help: "The directory where generated output files will be written. When provided without --swift-manifest, the tool scans for roots and mocks, generates a manifest internally, and writes all output files.") var outputDirectory: String?
+
+	@Option(parsing: .upToNextOption, help: "Swift file paths scoped to the current target for mock generation. Only used when --output-directory is provided without --swift-manifest.") var mockScopedFiles: [String] = []
+
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project's root module.") var dotFileOutput: String?
 
 	// MARK: Internal
@@ -49,6 +53,23 @@ struct Generate: AsyncParsableCommand {
 	func run() async throws {
 		if swiftSourcesFilePath == nil, include.isEmpty {
 			throw ValidationError("Must provide 'swift-sources-file-path' or '--include'.")
+		}
+
+		// When --output-directory is provided without --swift-manifest, run an
+		// inline scan to discover roots/mocks and build the manifest automatically.
+		if swiftManifest == nil, let outputDirectory {
+			var scan = Scan()
+			guard let swiftSourcesFilePath else {
+				throw ValidationError("--output-directory requires 'swift-sources-file-path'.")
+			}
+			scan.inputSourcesFile = swiftSourcesFilePath
+			scan.projectRoot = FileManager.default.currentDirectoryPath
+			scan.outputDirectory = outputDirectory
+			let manifestPath = (outputDirectory as NSString).appendingPathComponent("SafeDIManifest.json")
+			scan.manifestFile = manifestPath
+			scan.mockScopedFiles = mockScopedFiles
+			try await scan.run()
+			swiftManifest = manifestPath
 		}
 
 		let (dependentModuleInfo, initialModule) = try await (

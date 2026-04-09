@@ -150,47 +150,21 @@ extension Target {
 				to: inputSourcesFile,
 			)
 
-			let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
-
-			// Shell out to SafeDITool scan to build the manifest.
-			try runSafeDITool(
-				at: tool,
-				arguments: [
-					"scan",
-					"--input-sources-file", inputSourcesFile.path(percentEncoded: false),
-					"--project-root", projectRoot.path(percentEncoded: false),
-					"--output-directory", outputDirectory.path(percentEncoded: false),
-					"--manifest-file", manifestFile.path(percentEncoded: false),
-					"--mock-scoped-files",
-				] + inputSwiftFiles.map { $0.path(percentEncoded: false) },
-			)
-
-			let manifest = try JSONDecoder().decode(
-				ScanManifest.self,
-				from: Data(contentsOf: manifestFile),
-			)
-
-			let outputFiles = (manifest.dependencyTreeGeneration + manifest.mockGeneration)
-				.map { URL(fileURLWithPath: $0.outputFilePath) }
-				+ (manifest.mockConfigurationOutputFilePath.map { [URL(fileURLWithPath: $0)] } ?? [])
-			let additionalInputFiles = manifest.additionalInputFiles.map { URL(fileURLWithPath: $0) }
-
-			guard !outputFiles.isEmpty else {
-				return []
-			}
-
+			// In Xcode, context.tool(named:) returns paths with unresolved build
+			// variables (e.g. ${BUILD_DIR}/${CONFIGURATION}/SafeDITool) that are only
+			// valid at build-command execution time, not during createBuildCommands.
+			// Use a single prebuild command that lets SafeDITool scan and generate
+			// in one pass via the --output-directory flag.
 			return [
-				.buildCommand(
+				.prebuildCommand(
 					displayName: "SafeDIGenerateDependencyTree",
 					executable: tool,
 					arguments: [
 						inputSourcesFile.path(percentEncoded: false),
-						"--swift-manifest",
-						manifestFile.path(percentEncoded: false),
-					],
-					environment: [:],
-					inputFiles: inputSwiftFiles + additionalInputFiles,
-					outputFiles: outputFiles,
+						"--output-directory", outputDirectory.path(percentEncoded: false),
+						"--mock-scoped-files",
+					] + inputSwiftFiles.map { $0.path(percentEncoded: false) },
+					outputFilesDirectory: outputDirectory,
 				),
 			]
 		}
