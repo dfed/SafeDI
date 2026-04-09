@@ -564,7 +564,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            let leaf = (safeDIParameters.child.leaf ?? Leaf.init)()
 		            return (safeDIParameters.child.safeDIBuilder ?? Child.init(leaf:))(leaf)
 		        }
-		        let child = __safeDI_child()
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}

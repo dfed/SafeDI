@@ -486,7 +486,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		            let client = (safeDIParameters.presenter.client ?? Client.init)()
 		            return (safeDIParameters.presenter.safeDIBuilder ?? Presenter.customMock(service:))(service)
 		        }
-		        let presenter = __safeDI_presenter()
+		        let presenter: Presenter = __safeDI_presenter()
 		        return Root(presenter: presenter)
 		    }
 		}

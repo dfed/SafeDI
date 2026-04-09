@@ -1432,7 +1432,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						let protocolType = node.typeDescription.asSource
 						lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(protocolType)(\(functionName)())")
 					} else {
-						lines.append("\(indent)let \(node.propertyLabel) = \(functionName)()")
+						lines.append("\(indent)let \(node.propertyLabel): \(concreteTypeName) = \(functionName)()")
 					}
 				}
 			}
