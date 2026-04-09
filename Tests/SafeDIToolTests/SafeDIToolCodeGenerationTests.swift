@@ -6089,6 +6089,53 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func scan_producesCorrectOutputFileName_whenRootFileIsAtProjectRoot() async throws {
+		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
+
+		let rootFile = rootDirectory.appendingPathComponent("Root.swift")
+		try """
+		@Instantiable(isRoot: true)
+		public struct Root {
+		    public init(dep: Dep) {
+		        self.dep = dep
+		    }
+		    @Instantiated let dep: Dep
+		}
+		@Instantiable
+		public struct Dep {
+		    public init() {}
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try rootFile.relativePath
+			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+
+		filesToDelete += [rootDirectory, swiftFileCSV, outputDirectory, manifestFile]
+
+		try await performScan(
+			inputSourcesFile: swiftFileCSV.relativePath,
+			projectRoot: rootDirectory.path,
+			outputDirectory: outputDirectory.path,
+			manifestFile: manifestFile.path,
+		)
+
+		let manifestData = try Data(contentsOf: manifestFile)
+		let manifest = try JSONDecoder().decode(SafeDIToolManifest.self, from: manifestData)
+
+		let outputNames = manifest.dependencyTreeGeneration.map {
+			URL(fileURLWithPath: $0.outputFilePath).lastPathComponent
+		}
+		#expect(outputNames == ["Root+SafeDI.swift"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func scan_disambiguatesOutputFileNames_whenRootFilesShareTheSameBasename() async throws {
 		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
 		let featureADirectory = rootDirectory.appendingPathComponent("FeatureA")
