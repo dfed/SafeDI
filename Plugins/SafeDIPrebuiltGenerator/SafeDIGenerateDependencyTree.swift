@@ -62,7 +62,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		)
 
 		let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
-		let scanResult = try runRootScanner(
+		let scanResult = try runSafeDIScanner(
 			inputSourcesFile: inputSourcesFile,
 			projectRoot: packageRoot,
 			outputDirectory: outputDirectory,
@@ -186,7 +186,7 @@ extension Target {
 			)
 
 			let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
-			let scanResult = try runRootScanner(
+			let scanResult = try runSafeDIScanner(
 				inputSourcesFile: inputSourcesFile,
 				projectRoot: projectRoot,
 				outputDirectory: outputDirectory,

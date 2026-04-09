@@ -26,12 +26,12 @@ SafeDI is a compile-time dependency injection framework for Swift. It uses Swift
 | `SafeDICore` | Models (`TypeDescription`, `Property`, `Instantiable`, `Dependency`), visitors (`FileVisitor`, `InstantiableVisitor`), generators (`ScopeGenerator`, `DependencyTreeGenerator`) |
 | `SafeDIMacros` | Swift macro implementations (`@Instantiable`, `@Received`, etc.) |
 | `SafeDITool` | CLI entry point — parses Swift files, builds dependency tree, generates output |
-| `SafeDIRootScannerCore` | Pre-scan for roots and `@Instantiable` types (used by plugins, no SwiftSyntax) |
+| `SafeDIScannerCore` | Pre-scan for roots and `@Instantiable` types (used by plugins, no SwiftSyntax) |
 | Plugins (`SafeDIGenerator`, `SafeDIPrebuiltGenerator`) | SPM build tool plugins that wire the tool into the build |
 
 ### Code generation flow
 
-1. **Plugin** writes CSV of swift files → runs `RootScanner` to build manifest → invokes `SafeDITool`
+1. **Plugin** writes CSV of swift files → runs `SafeDIScanner` to build manifest → invokes `SafeDITool`
 2. **SafeDITool** parses all files via `FileVisitor` → builds `DependencyTreeGenerator` → generates per-root code + mock code
 3. **DependencyTreeGenerator** creates `ScopeGenerator` trees → each generates its code via `generatePropertyCode`
 4. **Mock generation** (`generateMockCode`) creates `mock()` static methods with `@autoclosure @escaping` parameters, `T? = nil` subtree parameters, and `MockContext` for disambiguation

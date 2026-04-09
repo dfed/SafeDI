@@ -20,7 +20,7 @@
 
 import Foundation
 
-public struct RootScanner {
+public struct SafeDIScanner {
 	public struct Manifest: Codable, Equatable {
 		public struct InputOutputMap: Codable, Equatable {
 			// These field names must stay in sync with SafeDIToolManifest.InputOutputMap.

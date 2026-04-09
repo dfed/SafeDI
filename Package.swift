@@ -127,9 +127,9 @@ let package = Package(
 			],
 		),
 		// A lightweight library containing root scanning and output file naming logic.
-		// Used by SafeDIRootScanner (executable), SafeDITool, and plugins (via symlinks).
+		// Used by SafeDIScanner (executable), SafeDITool, and plugins (via symlinks).
 		.target(
-			name: "SafeDIRootScannerCore",
+			name: "SafeDIScannerCore",
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
 			],
@@ -139,21 +139,21 @@ let package = Package(
 		// This target exists as a standalone executable for non-SPM build systems (e.g. Buck, Bazel)
 		// that need to invoke root scanning as a separate process.
 		.executableTarget(
-			name: "SafeDIRootScanner",
+			name: "SafeDIScanner",
 			dependencies: [
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
-				"SafeDIRootScannerCore",
+				"SafeDIScannerCore",
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
 			],
 		),
 		.testTarget(
-			name: "SafeDIRootScannerTests",
+			name: "SafeDIScannerTests",
 			dependencies: [
 				"SafeDICore",
-				"SafeDIRootScanner",
-				"SafeDIRootScannerCore",
+				"SafeDIScanner",
+				"SafeDIScannerCore",
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
@@ -174,7 +174,7 @@ let package = Package(
 			name: "SafeDIToolTests",
 			dependencies: [
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
-				"SafeDIRootScannerCore",
+				"SafeDIScannerCore",
 				"SafeDITool",
 			],
 			swiftSettings: [

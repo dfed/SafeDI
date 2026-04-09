@@ -20,11 +20,11 @@
 
 import Foundation
 import SafeDICore
-import SafeDIRootScannerCore
+import SafeDIScannerCore
 import Testing
-@testable import SafeDIRootScanner
+@testable import SafeDIScanner
 
-struct RootScannerTests {
+struct SafeDIScannerTests {
 	@Test
 	func scan_writesExactManifestAndOutputList_forDuplicateBasenamesInDifferentDirectories() throws {
 		let fixture = try ScannerFixture()
@@ -66,19 +66,19 @@ struct RootScannerTests {
 		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
 		let featureAOutputPath = outputDirectory.appendingPathComponent("FeatureA_Root+SafeDI.swift").path
 		let featureBOutputPath = outputDirectory.appendingPathComponent("FeatureB_Root+SafeDI.swift").path
-		let result = try RootScanner().scan(
+		let result = try SafeDIScanner().scan(
 			swiftFiles: [rootB, rootA],
 			relativeTo: fixture.rootDirectory,
 			outputDirectory: outputDirectory,
 		)
 
-		#expect(result.manifest == RootScanner.Manifest(
+		#expect(result.manifest == SafeDIScanner.Manifest(
 			dependencyTreeGeneration: [
-				RootScanner.Manifest.InputOutputMap(
+				SafeDIScanner.Manifest.InputOutputMap(
 					inputFilePath: "Sources/FeatureA/Root.swift",
 					outputFilePath: featureAOutputPath,
 				),
-				RootScanner.Manifest.InputOutputMap(
+				SafeDIScanner.Manifest.InputOutputMap(
 					inputFilePath: "Sources/FeatureB/Root.swift",
 					outputFilePath: featureBOutputPath,
 				),
@@ -187,21 +187,21 @@ struct RootScannerTests {
 		)
 
 		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
-		let result = try RootScanner().scan(
+		let result = try SafeDIScanner().scan(
 			swiftFiles: fixture.swiftFiles.shuffled(),
 			relativeTo: fixture.rootDirectory,
 			outputDirectory: outputDirectory,
 		)
 
 		#expect(result.manifest.dependencyTreeGeneration == [
-			RootScanner.Manifest.InputOutputMap(
+			SafeDIScanner.Manifest.InputOutputMap(
 				inputFilePath: "Sources/ActualRoot.swift",
 				outputFilePath: outputDirectory.appendingPathComponent("ActualRoot+SafeDI.swift").path,
 			),
 		])
 		// No #SafeDIConfiguration exists, so no mock entries are created.
 		#expect(result.manifest.mockGeneration.isEmpty)
-		#expect(try RootScanner.fileContainsRoot(at: actualRoot))
+		#expect(try SafeDIScanner.fileContainsRoot(at: actualRoot))
 	}
 
 	@Test
@@ -230,8 +230,8 @@ struct RootScannerTests {
 		)
 
 		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
-		let inputFilePaths = try RootScanner.inputFilePaths(from: csvURL)
-		let result = try RootScanner().scan(
+		let inputFilePaths = try SafeDIScanner.inputFilePaths(from: csvURL)
+		let result = try SafeDIScanner().scan(
 			inputFilePaths: inputFilePaths,
 			relativeTo: fixture.rootDirectory,
 			outputDirectory: outputDirectory,
@@ -257,26 +257,26 @@ struct RootScannerTests {
 
 	@Test
 	func containsInstantiable_detectsInstantiableAttribute() {
-		#expect(RootScanner.containsInstantiable(in: """
+		#expect(SafeDIScanner.containsInstantiable(in: """
 		@Instantiable
 		struct MyType {}
 		"""))
-		#expect(RootScanner.containsInstantiable(in: """
+		#expect(SafeDIScanner.containsInstantiable(in: """
 		@Instantiable(isRoot: true)
 		struct MyRoot {}
 		"""))
-		#expect(!RootScanner.containsInstantiable(in: """
+		#expect(!SafeDIScanner.containsInstantiable(in: """
 		struct NotInstantiable {}
 		"""))
-		#expect(!RootScanner.containsInstantiable(in: """
+		#expect(!SafeDIScanner.containsInstantiable(in: """
 		// @Instantiable
 		struct CommentedOut {}
 		"""))
-		#expect(!RootScanner.containsInstantiable(in: """
+		#expect(!SafeDIScanner.containsInstantiable(in: """
 		let docs = "@Instantiable"
 		struct StringOnly {}
 		"""))
-		#expect(!RootScanner.containsInstantiable(in: """
+		#expect(!SafeDIScanner.containsInstantiable(in: """
 		@InstantiableFactory
 		struct WrongName {}
 		"""))
@@ -284,31 +284,31 @@ struct RootScannerTests {
 
 	@Test
 	func containsRoot_handlesMalformedAttributesAndNestedArguments() {
-		#expect(!RootScanner.containsRoot(in: """
+		#expect(!SafeDIScanner.containsRoot(in: """
 		@InstantiableFactory(isRoot: true)
 		struct NotARoot {}
 		"""))
-		#expect(!RootScanner.containsRoot(in: """
+		#expect(!SafeDIScanner.containsRoot(in: """
 		@Instantiable
 		struct NotARoot {}
 		"""))
-		#expect(!RootScanner.containsRoot(in: """
+		#expect(!SafeDIScanner.containsRoot(in: """
 		@Instantiable(isRoot true)
 		struct NotARoot {}
 		"""))
-		#expect(!RootScanner.containsRoot(in: """
+		#expect(!SafeDIScanner.containsRoot(in: """
 		@Instantiable(isRooted: true)
 		struct NotARoot {}
 		"""))
-		#expect(!RootScanner.containsRoot(in: """
+		#expect(!SafeDIScanner.containsRoot(in: """
 		@Instantiable(isRoot: trueish)
 		struct NotARoot {}
 		"""))
-		#expect(!RootScanner.containsRoot(in: """
+		#expect(!SafeDIScanner.containsRoot(in: """
 		@Instantiable(isRoot: true
 		struct NotARoot {}
 		"""))
-		#expect(RootScanner.containsRoot(in: """
+		#expect(SafeDIScanner.containsRoot(in: """
 		@Instantiable(
 		    makeDependency: { value in Dependency.make(value) },
 		    options: ["primary": { true }],
@@ -316,7 +316,7 @@ struct RootScannerTests {
 		)
 		struct ActualRoot {}
 		"""))
-		#expect(RootScanner.containsRoot(in: """
+		#expect(SafeDIScanner.containsRoot(in: """
 		@Instantiable(
 		    isRoot: true,
 		    scope: .shared
@@ -350,7 +350,7 @@ struct RootScannerTests {
 			"struct ActualRoot {}",
 		].joined(separator: "\n")
 
-		#expect(RootScanner.containsRoot(in: source))
+		#expect(SafeDIScanner.containsRoot(in: source))
 	}
 
 	@Test
@@ -360,7 +360,7 @@ struct RootScannerTests {
 		    additionalDirectoriesToInclude: ["../OtherModule/Sources", "/absolute/path"]
 		)
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../OtherModule/Sources", "/absolute/path"])
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../OtherModule/Sources", "/absolute/path"])
 	}
 
 	@Test
@@ -371,7 +371,7 @@ struct RootScannerTests {
 		    init() {}
 		}
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
@@ -381,7 +381,7 @@ struct RootScannerTests {
 		    additionalDirectoriesToInclude: []
 		)
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
@@ -391,7 +391,7 @@ struct RootScannerTests {
 		//     additionalDirectoriesToInclude: ["should/not/match"]
 		// )
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
@@ -401,7 +401,7 @@ struct RootScannerTests {
 		    additionalImportedModules: ["SomeModule"]
 		)
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
@@ -410,7 +410,7 @@ struct RootScannerTests {
 		#SafeDIConfiguration(
 		    additionalDirectoriesToInclude
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
@@ -419,7 +419,7 @@ struct RootScannerTests {
 		#SafeDIConfiguration(
 		    additionalDirectoriesToInclude:
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
@@ -428,7 +428,7 @@ struct RootScannerTests {
 		#SafeDIConfiguration(
 		    additionalDirectoriesToInclude: ["unclosed
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
@@ -439,7 +439,7 @@ struct RootScannerTests {
 		    additionalDirectoriesToInclude: ["good", "unclosed]
 		)
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
@@ -449,7 +449,7 @@ struct RootScannerTests {
 		    additionalDirectoriesToInclude: [
 		)
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
@@ -460,7 +460,7 @@ struct RootScannerTests {
 		    additionalDirectoriesToInclude: [someVariable]
 		)
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
@@ -473,7 +473,7 @@ struct RootScannerTests {
 		    additionalDirectoriesToInclude: ["../Correct/Path"]
 		)
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
 	}
 
 	@Test
@@ -481,7 +481,7 @@ struct RootScannerTests {
 		let source = """
 		#SafeDIConfiguration()
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
@@ -493,7 +493,7 @@ struct RootScannerTests {
 		    mockConditionalCompilation: "DEBUG"
 		)
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
 	}
 
 	@Test
@@ -503,7 +503,7 @@ struct RootScannerTests {
 		    additionalDirectoriesToInclude: ["../Wrong/Path"]
 		)
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source).isEmpty)
 	}
 
 	@Test
@@ -514,12 +514,12 @@ struct RootScannerTests {
 		    additionalDirectoriesToInclude: ["../Correct/Path"]
 		)
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
 	}
 
 	@Test
 	func containsGenerateMockTrue_detectsGenerateMockArgument() {
-		#expect(RootScanner.containsGenerateMockTrue(in: """
+		#expect(SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable(generateMock: true)
 		struct MyType {}
 		"""))
@@ -527,7 +527,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_returnsFalse_whenGenerateMockIsFalse() {
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable(generateMock: false)
 		struct MyType {}
 		"""))
@@ -535,7 +535,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_returnsFalse_whenNoGenerateMockArgument() {
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable
 		struct MyType {}
 		"""))
@@ -543,11 +543,11 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_ignoresCommentsAndStrings() {
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		// @Instantiable(generateMock: true)
 		struct MyType {}
 		"""))
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		let docs = "@Instantiable(generateMock: true)"
 		struct MyType {}
 		"""))
@@ -555,11 +555,11 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_ignoresSimilarNames() {
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		@InstantiableFactory(generateMock: true)
 		struct MyType {}
 		"""))
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable(generateMockery: true)
 		struct MyType {}
 		"""))
@@ -567,7 +567,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_returnsFalse_whenValueIsTrueish() {
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable(generateMock: trueish)
 		struct MyType {}
 		"""))
@@ -575,7 +575,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_handlesClosureBracesInArguments() {
-		#expect(RootScanner.containsGenerateMockTrue(in: """
+		#expect(SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable(
 		    someArg: { value in value },
 		    generateMock: true
@@ -587,7 +587,7 @@ struct RootScannerTests {
 	@Test
 	func containsGenerateMockTrue_returnsFalse_whenLabelHasNoColon() {
 		// "generateMock true" without a colon separator.
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable(generateMock true)
 		struct MyType {}
 		"""))
@@ -595,7 +595,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_detectsWhenNotLastArgument() {
-		#expect(RootScanner.containsGenerateMockTrue(in: """
+		#expect(SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable(generateMock: true, isRoot: true)
 		struct MyType {}
 		"""))
@@ -603,7 +603,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_handlesNoSpaceAfterColon() {
-		#expect(RootScanner.containsGenerateMockTrue(in: """
+		#expect(SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable(generateMock:true)
 		struct MyType {}
 		"""))
@@ -611,7 +611,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_returnsFalse_whenValueIsTypeName() {
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable(generateMock: Bool)
 		struct MyType {}
 		"""))
@@ -619,7 +619,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_returnsFalse_whenEqualsUsedInsteadOfColon() {
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable(generateMock = true)
 		struct MyType {}
 		"""))
@@ -627,7 +627,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_returnsFalse_whenClauseIsJustLabel() {
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable(generateMock)
 		struct MyType {}
 		"""))
@@ -635,7 +635,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_detectsMultilineArguments() {
-		#expect(RootScanner.containsGenerateMockTrue(in: """
+		#expect(SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable(
 		    generateMock: true
 		)
@@ -645,7 +645,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_detectsMultilineWithOtherArguments() {
-		#expect(RootScanner.containsGenerateMockTrue(in: """
+		#expect(SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable(
 		    fulfillingAdditionalTypes: [Foo.self],
 		    generateMock: true,
@@ -657,7 +657,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_handlesWhitespaceInsideParens() {
-		#expect(RootScanner.containsGenerateMockTrue(in: """
+		#expect(SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable( generateMock: true )
 		struct MyType {}
 		"""))
@@ -665,12 +665,12 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_handlesTabSeparator() {
-		#expect(RootScanner.containsGenerateMockTrue(in: "@Instantiable(generateMock:\ttrue)\nstruct MyType {}"))
+		#expect(SafeDIScanner.containsGenerateMockTrue(in: "@Instantiable(generateMock:\ttrue)\nstruct MyType {}"))
 	}
 
 	@Test
 	func containsGenerateMockTrue_detectsInFileWithMultipleInstantiables() {
-		#expect(RootScanner.containsGenerateMockTrue(in: """
+		#expect(SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable
 		struct TypeA {}
 		@Instantiable(generateMock: true)
@@ -680,7 +680,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_returnsFalse_whenOnlyOtherInstantiablesExist() {
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		@Instantiable
 		struct TypeA {}
 		@Instantiable(isRoot: true)
@@ -690,7 +690,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_ignoresCommentedGenerateMockNextToRealInstantiable() {
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		// @Instantiable(generateMock: true)
 		@Instantiable
 		struct MyType {}
@@ -699,7 +699,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_detectsRealOneAfterCommentedOne() {
-		#expect(RootScanner.containsGenerateMockTrue(in: """
+		#expect(SafeDIScanner.containsGenerateMockTrue(in: """
 		// @Instantiable(generateMock: true)
 		@Instantiable(generateMock: true)
 		struct MyType {}
@@ -708,7 +708,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_ignoresStringLiteralContainingGenerateMock() {
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		let docs = "@Instantiable(generateMock: true)"
 		@Instantiable
 		struct MyType {}
@@ -717,7 +717,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_detectsAfterBlockComment() {
-		#expect(RootScanner.containsGenerateMockTrue(in: """
+		#expect(SafeDIScanner.containsGenerateMockTrue(in: """
 		/*
 		@Instantiable(generateMock: true)
 		*/
@@ -728,7 +728,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsGenerateMockTrue_returnsFalse_whenOnlyInBlockComment() {
-		#expect(!RootScanner.containsGenerateMockTrue(in: """
+		#expect(!SafeDIScanner.containsGenerateMockTrue(in: """
 		/*
 		@Instantiable(generateMock: true)
 		*/
@@ -762,7 +762,7 @@ struct RootScannerTests {
 		)
 
 		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
-		let result = try RootScanner().scan(
+		let result = try SafeDIScanner().scan(
 			swiftFiles: fixture.swiftFiles,
 			relativeTo: fixture.rootDirectory,
 			outputDirectory: outputDirectory,
@@ -782,14 +782,14 @@ struct RootScannerTests {
 
 	@Test
 	func containsConfiguration_returnsTrue_whenConfigExistsOutsideComment() {
-		#expect(RootScanner.containsConfiguration(in: """
+		#expect(SafeDIScanner.containsConfiguration(in: """
 		#SafeDIConfiguration()
 		"""))
 	}
 
 	@Test
 	func containsConfiguration_returnsFalse_whenConfigIsOnlyInComment() {
-		#expect(!RootScanner.containsConfiguration(in: """
+		#expect(!SafeDIScanner.containsConfiguration(in: """
 		// #SafeDIConfiguration()
 		struct NotAConfig {}
 		"""))
@@ -797,14 +797,14 @@ struct RootScannerTests {
 
 	@Test
 	func containsConfiguration_returnsFalse_whenMacroNameIsPrefixOfLongerName() {
-		#expect(!RootScanner.containsConfiguration(in: """
+		#expect(!SafeDIScanner.containsConfiguration(in: """
 		#SafeDIConfigurationHelper()
 		"""))
 	}
 
 	@Test
 	func containsConfiguration_returnsTrue_whenRealConfigAppearsAfterPrefixMatch() {
-		#expect(RootScanner.containsConfiguration(in: """
+		#expect(SafeDIScanner.containsConfiguration(in: """
 		#SafeDIConfigurationHelper()
 
 		#SafeDIConfiguration()
@@ -820,12 +820,12 @@ struct RootScannerTests {
 		    additionalDirectoriesToInclude: ["../Correct/Path"]
 		)
 		"""
-		#expect(RootScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
+		#expect(SafeDIScanner.extractAdditionalDirectoriesToInclude(in: source) == ["../Correct/Path"])
 	}
 
 	@Test
 	func containsConfiguration_returnsFalse_whenNoConfigExists() {
-		#expect(!RootScanner.containsConfiguration(in: """
+		#expect(!SafeDIScanner.containsConfiguration(in: """
 		@Instantiable
 		public struct MyType: Instantiable {
 		    public init() {}
@@ -845,7 +845,7 @@ struct RootScannerTests {
 			struct NotAConfig {}
 			""",
 		)
-		#expect(try !RootScanner.fileContainsConfiguration(at: file))
+		#expect(try !SafeDIScanner.fileContainsConfiguration(at: file))
 	}
 
 	@Test
@@ -865,7 +865,7 @@ struct RootScannerTests {
 		)
 
 		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
-		let result = try RootScanner().scan(
+		let result = try SafeDIScanner().scan(
 			swiftFiles: [configFile, rootFile],
 			relativeTo: fixture.rootDirectory,
 			outputDirectory: outputDirectory,
@@ -876,7 +876,7 @@ struct RootScannerTests {
 
 	@Test
 	func containsRoot_returnsFalse_whenParenIsUnmatched() {
-		#expect(!RootScanner.containsRoot(in: "@Instantiable(isRoot: true"))
+		#expect(!SafeDIScanner.containsRoot(in: "@Instantiable(isRoot: true"))
 	}
 
 	@Test
@@ -895,7 +895,7 @@ struct RootScannerTests {
 		// not fileURLWithPath which auto-detects directories on disk).
 		let nonDirectoryBaseURL = try #require(URL(string: "file://\(fixture.rootDirectory.path)"))
 		#expect(!nonDirectoryBaseURL.hasDirectoryPath)
-		let result = try RootScanner().scan(
+		let result = try SafeDIScanner().scan(
 			inputFilePaths: ["Root.swift"],
 			relativeTo: nonDirectoryBaseURL,
 			outputDirectory: outputDirectory,
@@ -913,7 +913,7 @@ struct RootScannerTests {
 			content: rootSource(typeName: "NestedRoot"),
 		)
 		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
-		let result = try RootScanner().scan(
+		let result = try SafeDIScanner().scan(
 			swiftFiles: [rootFile],
 			relativeTo: URL(fileURLWithPath: "/"),
 			outputDirectory: outputDirectory,
@@ -942,7 +942,7 @@ struct RootScannerTests {
 			.deletingLastPathComponent()
 			.appendingPathComponent("Unrelated")
 		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
-		let result = try RootScanner().scan(
+		let result = try SafeDIScanner().scan(
 			swiftFiles: [rootFile],
 			relativeTo: unrelatedBase,
 			outputDirectory: outputDirectory,
@@ -973,7 +973,7 @@ struct RootScannerTests {
 		let outputDirectory = fixture.rootDirectory.appendingPathComponent("Output")
 		let manifestFile = fixture.rootDirectory.appendingPathComponent("SafeDIManifest.json")
 
-		var command = SafeDIRootScannerCommand()
+		var command = SafeDIScannerCommand()
 		command.inputSourcesFile = inputSourcesFile.path
 		command.projectRoot = fixture.rootDirectory.path
 		command.outputDirectory = outputDirectory.path
