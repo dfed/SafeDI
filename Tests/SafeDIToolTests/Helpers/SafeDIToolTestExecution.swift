@@ -20,7 +20,7 @@
 
 import Foundation
 import SafeDICore
-import SafeDIRootScannerCore
+import SafeDIScannerCore
 import Testing
 @testable import SafeDITool
 
@@ -112,7 +112,7 @@ func executeSafeDIToolTest(
 			let additionalScanFiles: [URL] = {
 				for swiftFile in swiftFiles {
 					guard let content = try? String(contentsOf: swiftFile, encoding: .utf8) else { continue }
-					let directories = RootScanner.extractAdditionalDirectoriesToInclude(in: content)
+					let directories = SafeDIScanner.extractAdditionalDirectoriesToInclude(in: content)
 					guard !directories.isEmpty else { continue }
 					return directories.flatMap { directory -> [URL] in
 						let directoryURL = URL(fileURLWithPath: directory)
@@ -128,7 +128,7 @@ func executeSafeDIToolTest(
 			}()
 			let allSwiftFilesForScan = swiftFiles + additionalScanFiles
 
-			let scanResult = try RootScanner().scan(
+			let scanResult = try SafeDIScanner().scan(
 				swiftFiles: allSwiftFilesForScan,
 				relativeTo: projectRoot,
 				outputDirectory: outputDirectory,
@@ -199,6 +199,10 @@ struct TestOutput {
 
 	var mockFiles: [String: String] {
 		generatedFiles?.filter { $0.key.hasSuffix("+SafeDIMock.swift") } ?? [:]
+	}
+
+	var mockConfigurationFile: String? {
+		generatedFiles?["SafeDIMockConfiguration.swift"]
 	}
 }
 

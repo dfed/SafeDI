@@ -256,24 +256,44 @@ struct SafeDITool: AsyncParsableCommand {
 						"DEBUG"
 					}
 					let currentModuleSourceFilePaths = Set(manifest.mockGeneration.map(\.inputFilePath))
-					let generatedMocks = try await generator.generateMockCode(
+					let mockResult = try await generator.generateMockCode(
 						mockConditionalCompilation: mockConditionalCompilation,
 						currentModuleSourceFilePaths: currentModuleSourceFilePaths,
+						additionalMocksToGenerate: Set(manifest.additionalMocksToGenerate),
 					)
 
 					var sourceFileToMockExtensions = [String: [String]]()
-					for mock in generatedMocks {
+					var typeNameToMockExtensions = [String: [String]]()
+					for mock in mockResult.generatedRoots {
 						if let sourceFilePath = mock.sourceFilePath {
 							sourceFileToMockExtensions[sourceFilePath, default: []].append(mock.code)
 						}
+						typeNameToMockExtensions[mock.typeDescription.asSource, default: []].append(mock.code)
 					}
 
+					let additionalMockTypeNames = Set(manifest.additionalMocksToGenerate)
 					for entry in manifest.mockGeneration {
-						let extensions = sourceFileToMockExtensions[entry.inputFilePath]
+						let extensions: [String]? = if additionalMockTypeNames.contains(entry.inputFilePath) {
+							// Additional mock: inputFilePath is the type name.
+							typeNameToMockExtensions[entry.inputFilePath]
+						} else {
+							sourceFileToMockExtensions[entry.inputFilePath]
+						}
 						let code = fileHeader + (extensions?.sorted().joined(separator: "\n\n") ?? "")
 						let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
 						if existingContent != code {
 							try code.write(toPath: entry.outputFilePath)
+						}
+					}
+
+					// Write shared mock configuration file.
+					// Always write the file when the path is set, even if empty,
+					// because the build system expects the declared output to exist.
+					if let mockConfigurationOutputFilePath = manifest.mockConfigurationOutputFilePath {
+						let code = fileHeader + (mockResult.mockConfigurationCode ?? "")
+						let existingContent = try? String(contentsOfFile: mockConfigurationOutputFilePath, encoding: .utf8)
+						if existingContent != code {
+							try code.write(toPath: mockConfigurationOutputFilePath)
 						}
 					}
 				}

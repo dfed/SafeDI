@@ -40,6 +40,10 @@ public struct SafeDIConfigurationMacro: DeclarationMacro {
 				guard isArrayOfStringLiterals(argument.expression) else {
 					throw SafeDIConfigurationError.additionalDirectoriesToIncludeNotStringLiteralArray
 				}
+			case SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel:
+				guard isArrayOfStringLiterals(argument.expression) else {
+					throw SafeDIConfigurationError.additionalMocksToGenerateNotStringLiteralArray
+				}
 			case SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel:
 				guard isStringLiteralOrNil(argument.expression) else {
 					throw SafeDIConfigurationError.mockConditionalCompilationNotStringLiteralOrNil
@@ -89,6 +93,7 @@ public struct SafeDIConfigurationMacro: DeclarationMacro {
 	private enum SafeDIConfigurationError: Error, CustomStringConvertible {
 		case additionalImportedModulesNotStringLiteralArray
 		case additionalDirectoriesToIncludeNotStringLiteralArray
+		case additionalMocksToGenerateNotStringLiteralArray
 		case mockConditionalCompilationNotStringLiteralOrNil
 		case unexpectedUnlabeledArgument
 		case unexpectedArgument(String)
@@ -99,6 +104,8 @@ public struct SafeDIConfigurationMacro: DeclarationMacro {
 				"The `\(SafeDIConfigurationVisitor.additionalImportedModulesArgumentLabel)` argument must be an array of string literals"
 			case .additionalDirectoriesToIncludeNotStringLiteralArray:
 				"The `\(SafeDIConfigurationVisitor.additionalDirectoriesToIncludeArgumentLabel)` argument must be an array of string literals"
+			case .additionalMocksToGenerateNotStringLiteralArray:
+				"The `\(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel)` argument must be an array of string literals"
 			case .mockConditionalCompilationNotStringLiteralOrNil:
 				"The `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)` argument must be a string literal or `nil`"
 			case .unexpectedUnlabeledArgument:

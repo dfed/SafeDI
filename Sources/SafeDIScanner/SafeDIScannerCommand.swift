@@ -20,10 +20,10 @@
 
 import ArgumentParser
 import Foundation
-import SafeDIRootScannerCore
+import SafeDIScannerCore
 
 @main
-struct SafeDIRootScannerCommand: ParsableCommand {
+struct SafeDIScannerCommand: ParsableCommand {
 	@Option(help: "A path to a CSV file containing paths of Swift files to scan.") var inputSourcesFile: String
 
 	@Option(help: "The root directory of the project, used to compute relative paths.") var projectRoot: String
@@ -33,12 +33,12 @@ struct SafeDIRootScannerCommand: ParsableCommand {
 	@Option(help: "The path where the manifest JSON file will be written.") var manifestFile: String
 
 	func run() throws {
-		let scanner = RootScanner()
+		let scanner = SafeDIScanner()
 		let inputSourcesFileURL = URL(fileURLWithPath: inputSourcesFile)
 		let projectRootURL = URL(fileURLWithPath: projectRoot)
 		let outputDirectoryURL = URL(fileURLWithPath: outputDirectory)
 		let manifestFileURL = URL(fileURLWithPath: manifestFile)
-		let inputFilePaths = try RootScanner.inputFilePaths(from: inputSourcesFileURL)
+		let inputFilePaths = try SafeDIScanner.inputFilePaths(from: inputSourcesFileURL)
 		let result = try scanner.scan(
 			inputFilePaths: inputFilePaths,
 			relativeTo: projectRootURL,

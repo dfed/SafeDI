@@ -416,6 +416,7 @@ public struct FeedView: View, Instantiable {
 #SafeDIConfiguration(
     additionalImportedModules: ["MyModule", "OtherModule"],
     additionalDirectoriesToInclude: ["Sources/OtherModule"],
+    additionalMocksToGenerate: ["LoggingService"],
     mockConditionalCompilation: "DEBUG"
 )
 ```
@@ -424,6 +425,7 @@ public struct FeedView: View, Instantiable {
 
 - `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types. Default: `[]`.
 - `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. This parameter only applies to SafeDI repos that utilize the SPM plugin via an Xcode project. Default: `[]`.
+- `additionalMocksToGenerate`: Type names from dependent modules to generate `mock()` methods for in this module. The types must be `@Instantiable` in their home module. See [Cross-module mock generation](#cross-module-mock-generation). Default: `[]`.
 - `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Default: `"DEBUG"`.
 
 ## Delayed instantiation
@@ -550,29 +552,38 @@ Your user-defined `mock()` method must be `public` (or `open`) and must accept p
 #endif
 ```
 
-Every dependency in the tree can be overridden via parameters:
+### Overriding dependencies
+
+When a type has `@Instantiated` dependencies with their own subtrees, the generated `mock()` accepts a `safeDIParameters` argument that provides tree-structured control over every dependency in the graph:
 
 ```swift
-let view = MyView.mock(
-    sharedThing: CustomSharedThing()
-)
+// Override a child’s default-valued parameter:
+Root.mock(safeDIParameters: .init(
+    child: .init(theme: .dark)
+))
+
+// Replace an entire type’s construction with a trailing closure:
+Root.mock(safeDIParameters: .init(
+    child: .init { service, theme in
+        CustomChild(service: service, theme: theme)
+    }
+))
+
+// Override a leaf dependency:
+Root.mock(safeDIParameters: .init(
+    service: .init { MockService() }
+))
 ```
 
-Dependencies that require inline construction (e.g., types with their own subtrees) use optional parameters:
+Each child dependency in the tree has a configuration type that accepts optional overrides for its own children and a trailing `safeDIBuilder` closure to replace its construction entirely. When no overrides are provided, the generated mock uses the type’s real initializer (or custom mock method).
 
-```swift
-let root = Root.mock(
-    child: CustomChild()  // Override entire child with a pre-built instance
-)
-```
+Types with no `@Instantiated` subtree — for example, types with only `@Received` dependencies — do not generate a `SafeDIParameters` struct. Their `mock()` method uses flat parameters instead.
 
-Leaf dependencies use `@autoclosure` parameters with a default construction:
+### Mock visibility
 
-```swift
-let root = Root.mock(
-    cache: Cache(size: 200)  // Override the default Cache()
-)
-```
+Generated mocks have `internal` visibility. They are accessible within the module where they are generated but not from other modules. This avoids cross-module extension conflicts when multiple modules generate mocks for the same types.
+
+To use a mock from another module in your tests, see [Cross-module mock generation](#cross-module-mock-generation).
 
 ### @Forwarded properties in mocks
 
@@ -586,40 +597,38 @@ However, if a child type’s custom mock provides a default for a `@Forwarded` p
 
 - The root type’s own custom mock default takes highest priority
 - Otherwise, the shallowest `@Received` type with a custom mock default wins
-- Types that `@Forward` the property are skipped (they're pass-through, not consumers)
+- Types that `@Forward` the property are skipped (they’re pass-through, not consumers)
 - Ties at the same depth are broken by declaration order
 
 This rule also applies to `@Received` dependencies that would otherwise be required parameters (e.g., when the dependency’s type is not in the current module).
 
 ### Default-valued init parameters in mocks
 
-If an `@Instantiable` type's initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are automatically exposed in the generated `mock()` method. This lets you override values like feature flags or optional view models in tests while keeping the original defaults for production code.
+If an `@Instantiable` type’s initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are automatically exposed in the generated mock. This lets you override values like feature flags or optional view models in tests while keeping the original defaults for production code.
 
 ```swift
-@Instantiable
+@Instantiable(generateMock: true)
 public struct ProfileView: Instantiable {
-    public init(user: User, showDebugInfo: Bool = false) {
-        self.user = user
-    }
+    public init(user: User, showDebugInfo: Bool = false) { ... }
     @Received let user: User
 }
 ```
 
-The generated mock for a parent that instantiates `ProfileView` will include `showDebugInfo` as an `@autoclosure` parameter with the original default:
+Override the default:
 
 ```swift
-let root = Root.mock(
-    showDebugInfo: true  // Override the default
-)
+Root.mock(safeDIParameters: .init(
+    profileView: .init(showDebugInfo: true)
+))
 ```
 
 When no override is provided, the original default expression (`false`) is used.
 
-Default-valued parameters with [argument labels](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/functions/#Function-Argument-Labels-and-Parameter-Names) bubble transitively through the dependency tree — a grandchild's default parameter will appear at the root mock level. However, they do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
+Default-valued parameters do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
 
 ### The `mockAttributes` parameter
 
-When a type's initializer is bound to a global actor that the plugin cannot detect (e.g. inherited `@MainActor`), use `mockAttributes` to annotate the generated mock:
+When a type’s initializer is bound to a global actor that the plugin cannot detect (e.g. inherited `@MainActor`), use `mockAttributes` to annotate the generated mock:
 
 ```swift
 @Instantiable(mockAttributes: "@MainActor")
@@ -628,9 +637,26 @@ public final class MyPresenter: Instantiable { ... }
 
 ### Multi-module mock generation
 
-To generate mocks for non-root modules, add the `SafeDIGenerator` plugin to all first-party targets in your `Package.swift`. Each module's mocks are scoped to its own types to avoid duplicates.
+To generate mocks for non-root modules, add the `SafeDIGenerator` plugin to all first-party targets in your `Package.swift`. Each module’s mocks are scoped to its own types to avoid duplicates.
 
 Each type that should have a mock must be decorated with `@Instantiable(generateMock: true)`.
+
+**Note:** Mock generation only creates mocks for types defined in the current module. Types from dependent modules are not mocked by default — each module must have its own `SafeDIGenerator` plugin to generate mocks for its types.
+
+### Cross-module mock generation
+
+When a module needs to use the generated `mock()` method of a type defined in a dependent module, use the `additionalMocksToGenerate` parameter on [`#SafeDIConfiguration`](#safediconfiguration):
+
+```swift
+#SafeDIConfiguration(
+    additionalMocksToGenerate: [
+        "LoggingService",
+        "UserStorageService",
+    ]
+)
+```
+
+This generates a `mock()` method for each listed type in the current module, even though the type is defined elsewhere. The type must be `@Instantiable` in its home module (though `generateMock: true` is not required there).
 
 **Note:** Mock generation only creates mocks for types defined in the current module. Types from dependent modules or `additionalDirectoriesToInclude` are not mocked — each module must have its own `SafeDIGenerator` plugin to generate mocks for its types.
 

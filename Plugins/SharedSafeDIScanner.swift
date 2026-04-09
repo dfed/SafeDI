@@ -35,7 +35,7 @@ func writeInputSwiftFilesCSV(
 		)
 }
 
-struct RootScannerResult {
+struct SafeDIScannerResult {
 	/// Output files that the build command will generate.
 	var outputFiles: [URL]
 	/// Swift files discovered from additionalDirectoriesToInclude that should
@@ -53,12 +53,12 @@ func discoverAdditionalDirectorySwiftFiles(
 ) -> [URL] {
 	for swiftFile in moduleSwiftFiles {
 		guard let content = try? String(contentsOf: swiftFile, encoding: .utf8),
-		      RootScanner.containsConfiguration(in: content)
+		      SafeDIScanner.containsConfiguration(in: content)
 		else { continue }
 
 		// Use only the first configuration found. If this config has no
 		// additional directories, return empty — don't fall through to later configs.
-		let directories = RootScanner.extractAdditionalDirectoriesToInclude(in: content)
+		let directories = SafeDIScanner.extractAdditionalDirectoriesToInclude(in: content)
 		guard !directories.isEmpty else { return [] }
 
 		var additionalSwiftFiles = [URL]()
@@ -81,15 +81,15 @@ func discoverAdditionalDirectorySwiftFiles(
 	return []
 }
 
-func runRootScanner(
+func runSafeDIScanner(
 	inputSourcesFile: URL,
 	projectRoot: URL,
 	outputDirectory: URL,
 	manifestFile: URL,
 	additionalSwiftFiles: [URL] = [],
 	mockScopedSwiftFiles: [URL]? = nil,
-) throws -> RootScannerResult {
-	let inputFilePaths = try RootScanner.inputFilePaths(from: inputSourcesFile)
+) throws -> SafeDIScannerResult {
+	let inputFilePaths = try SafeDIScanner.inputFilePaths(from: inputSourcesFile)
 
 	let directoryBaseURL = projectRoot.hasDirectoryPath
 		? projectRoot
@@ -98,14 +98,14 @@ func runRootScanner(
 		URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL
 	}
 	let allSwiftFiles = csvSwiftFiles + additionalSwiftFiles
-	let result = try RootScanner().scan(
+	let result = try SafeDIScanner().scan(
 		swiftFiles: allSwiftFiles,
 		targetSwiftFiles: mockScopedSwiftFiles,
 		relativeTo: projectRoot,
 		outputDirectory: outputDirectory,
 	)
 	try result.writeManifest(to: manifestFile)
-	return RootScannerResult(
+	return SafeDIScannerResult(
 		outputFiles: result.outputFiles,
 		additionalInputFiles: additionalSwiftFiles,
 	)

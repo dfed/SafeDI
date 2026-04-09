@@ -27,6 +27,7 @@ public enum SafeDIConfigurationVisitor {
 	public static let macroName = "SafeDIConfiguration"
 	public static let additionalImportedModulesArgumentLabel = "additionalImportedModules"
 	public static let additionalDirectoriesToIncludeArgumentLabel = "additionalDirectoriesToInclude"
+	public static let additionalMocksToGenerateArgumentLabel = "additionalMocksToGenerate"
 	public static let mockConditionalCompilationArgumentLabel = "mockConditionalCompilation"
 
 	/// Extracts a `SafeDIConfiguration` from a `MacroExpansionDeclSyntax` node
@@ -34,6 +35,7 @@ public enum SafeDIConfigurationVisitor {
 	public static func extractConfiguration(from node: some FreestandingMacroExpansionSyntax) -> SafeDIConfiguration {
 		var additionalImportedModules = [String]()
 		var additionalDirectoriesToInclude = [String]()
+		var additionalMocksToGenerate = [String]()
 		var mockConditionalCompilation: String? = "DEBUG"
 
 		for argument in node.arguments {
@@ -49,6 +51,10 @@ public enum SafeDIConfigurationVisitor {
 				if let values = extractStringLiterals(from: argument.expression) {
 					additionalDirectoriesToInclude = values
 				}
+			case additionalMocksToGenerateArgumentLabel:
+				if let values = extractStringLiterals(from: argument.expression) {
+					additionalMocksToGenerate = values
+				}
 			case mockConditionalCompilationArgumentLabel:
 				if let value = extractOptionalStringLiteral(from: argument.expression) {
 					mockConditionalCompilation = value
@@ -61,6 +67,7 @@ public enum SafeDIConfigurationVisitor {
 		return SafeDIConfiguration(
 			additionalImportedModules: additionalImportedModules,
 			additionalDirectoriesToInclude: additionalDirectoriesToInclude,
+			additionalMocksToGenerate: additionalMocksToGenerate,
 			mockConditionalCompilation: mockConditionalCompilation,
 		)
 	}

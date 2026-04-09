@@ -224,20 +224,15 @@ public struct Initializer: Codable, Hashable, Sendable {
 	func createInitializerArgumentList(
 		given dependencies: [Dependency],
 		unavailableProperties: Set<Property>? = nil,
-		mockContext: ScopeGenerator.MockContext? = nil,
 	) throws(GenerationError) -> String {
 		try createDependencyAndArgumentBinding(given: dependencies)
 			.map {
 				if let unavailableProperties, unavailableProperties.contains($0.dependency.property) {
-					return "\($0.argument.label): nil"
+					"\($0.argument.label): nil"
 				} else if $0.dependency.source == .forwarded {
-					return "\($0.argument.label): \($0.argument.innerLabel)"
+					"\($0.argument.label): \($0.argument.innerLabel)"
 				} else {
-					let variableName = mockContext?.disambiguatedLabel(
-						forPropertyLabel: $0.argument.innerLabel,
-						typeDescription: $0.argument.typeDescription,
-					) ?? $0.argument.innerLabel
-					return "\($0.argument.label): \(variableName)"
+					"\($0.argument.label): \($0.argument.innerLabel)"
 				}
 			}
 			.joined(separator: ", ")
@@ -246,14 +241,10 @@ public struct Initializer: Codable, Hashable, Sendable {
 	/// Creates an argument list that includes ALL arguments — both dependency-matching
 	/// and default-valued non-dependency arguments. Used in mock generation where
 	/// default-valued parameters are bubbled up to the root mock method and
-	/// dependency args are fulfilled from the tree.
-	/// When a mock parameter was renamed (e.g., `service` → `service_ExternalService`),
-	/// the argument reference must use the disambiguated name. The `mockContext`
-	/// resolves ambiguity using both the label and type.
+	/// dependency arguments are fulfilled from the tree.
 	func createMockInitializerArgumentList(
 		given dependencies: [Dependency],
 		unavailableProperties: Set<Property>? = nil,
-		mockContext: ScopeGenerator.MockContext? = nil,
 	) -> String {
 		var parts = [String]()
 		for argument in arguments {
@@ -263,22 +254,11 @@ public struct Initializer: Codable, Hashable, Sendable {
 			}) {
 				if let unavailableProperties, unavailableProperties.contains(dependency.property) {
 					parts.append("\(argument.label): nil")
-				} else if dependency.source == .forwarded {
-					// Forwarded deps use the bare parameter name — no remapping.
-					parts.append("\(argument.label): \(argument.innerLabel)")
 				} else {
-					let variableName = mockContext?.disambiguatedLabel(
-						forPropertyLabel: argument.innerLabel,
-						typeDescription: argument.typeDescription,
-					) ?? argument.innerLabel
-					parts.append("\(argument.label): \(variableName)")
+					parts.append("\(argument.label): \(argument.innerLabel)")
 				}
 			} else if argument.hasDefaultValue, argument.label != "_" {
-				let variableName = mockContext?.disambiguatedLabel(
-					forPropertyLabel: argument.label,
-					typeDescription: argument.typeDescription,
-				) ?? argument.label
-				parts.append("\(argument.label): \(variableName)")
+				parts.append("\(argument.label): \(argument.label)")
 			}
 			// Arguments that don't match a dependency and have no default are
 			// caught by validate(fulfilling:) before mock code gen runs.
