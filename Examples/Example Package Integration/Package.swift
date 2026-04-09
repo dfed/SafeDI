@@ -21,7 +21,7 @@ let package = Package(
 		),
 	],
 	dependencies: [
-		.package(path: "../../"),
+		.package(path: "../../", traits: ["sourceBuild"]),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.

@@ -4,131 +4,11 @@
 import CompilerPluginSupport
 import PackageDescription
 
-// Set to `true` by the publish workflow after computing the artifact bundle checksum.
-// When `true`, SafeDIGenerator uses a prebuilt binary and does not compile SafeDITool from source.
-// When `false`, SafeDIGenerator compiles SafeDITool from source (slower but works for local development).
-let usePrebuiltBinary = false
-
 let safeDICoreDependencies: [PackageDescription.Target.Dependency] = [
 	.product(name: "SwiftDiagnostics", package: "swift-syntax"),
 	.product(name: "SwiftSyntax", package: "swift-syntax"),
 	.product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
 ]
-
-let safeDIGeneratorDependencies: [PackageDescription.Target.Dependency] = if usePrebuiltBinary {
-	[.target(name: "SafeDIToolBinary")]
-} else {
-	[.target(name: "SafeDITool")]
-}
-
-var targets: [PackageDescription.Target] = [
-	// Macros
-	.target(
-		name: "SafeDI",
-		dependencies: ["SafeDIMacros"],
-		swiftSettings: [
-			.swiftLanguageMode(.v6),
-		],
-	),
-	.testTarget(
-		name: "SafeDITests",
-		dependencies: [
-			"SafeDI",
-			"SafeDICore",
-		],
-		swiftSettings: [
-			.swiftLanguageMode(.v6),
-		],
-	),
-	.macro(
-		name: "SafeDIMacros",
-		dependencies: [
-			.product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
-			.product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-		] + safeDICoreDependencies,
-		swiftSettings: [
-			.swiftLanguageMode(.v6),
-		],
-	),
-	.testTarget(
-		name: "SafeDIMacrosTests",
-		dependencies: [
-			"SafeDIMacros",
-			.product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
-		],
-		swiftSettings: [
-			.swiftLanguageMode(.v6),
-		],
-	),
-
-	// Plugins
-	.plugin(
-		name: "MigrateSafeDIFromVersionOne",
-		capability: .command(
-			intent: .custom(
-				verb: "safedi-v1-to-v2",
-				description: "Migrates a project from SafeDI 1.x to 2.x.",
-			),
-			permissions: [
-				.writeToPackageDirectory(reason: "Creates a SafeDIConfiguration.swift file and removes obsolete CSV configuration files."),
-			],
-		),
-		dependencies: [],
-	),
-
-	.plugin(
-		name: "SafeDIGenerator",
-		capability: .buildTool(),
-		dependencies: safeDIGeneratorDependencies,
-	),
-	.executableTarget(
-		name: "SafeDITool",
-		dependencies: [
-			.product(name: "ArgumentParser", package: "swift-argument-parser"),
-			.product(name: "SwiftParser", package: "swift-syntax"),
-			"SafeDICore",
-		],
-		swiftSettings: [
-			.swiftLanguageMode(.v6),
-		],
-	),
-	.testTarget(
-		name: "SafeDIToolTests",
-		dependencies: [
-			.product(name: "ArgumentParser", package: "swift-argument-parser"),
-			"SafeDITool",
-		],
-		swiftSettings: [
-			.swiftLanguageMode(.v6),
-		],
-	),
-
-	// Core
-	.target(
-		name: "SafeDICore",
-		dependencies: safeDICoreDependencies,
-		swiftSettings: [
-			.swiftLanguageMode(.v6),
-		],
-	),
-	.testTarget(
-		name: "SafeDICoreTests",
-		dependencies: ["SafeDICore"],
-		swiftSettings: [
-			.swiftLanguageMode(.v6),
-		],
-	),
-]
-
-if usePrebuiltBinary {
-	targets.append(
-		.binaryTarget(
-			name: "SafeDIToolBinary",
-			url: "https://github.com/dfed/SafeDI/releases/download/2.0.0/SafeDITool.artifactbundle.zip",
-			checksum: "PLACEHOLDER_CHECKSUM_UPDATED_BY_PUBLISH_WORKFLOW",
-		),
-	)
-}
 
 let package = Package(
 	name: "SafeDI",
@@ -156,9 +36,119 @@ let package = Package(
 			targets: ["MigrateSafeDIFromVersionOne"],
 		),
 	],
+	traits: [
+		.default(enabledTraits: ["prebuilt"]),
+		.trait(name: "prebuilt", description: "Use a prebuilt SafeDITool binary from the artifact bundle (default)."),
+		.trait(name: "sourceBuild", description: "Build SafeDITool from source. Mutually exclusive with 'prebuilt'."),
+	],
 	dependencies: [
 		.package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.4.0"),
 		.package(url: "https://github.com/swiftlang/swift-syntax.git", "603.0.0"..<"605.0.0"),
 	],
-	targets: targets,
+	targets: [
+		// Macros
+		.target(
+			name: "SafeDI",
+			dependencies: ["SafeDIMacros"],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDITests",
+			dependencies: [
+				"SafeDI",
+				"SafeDICore",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.macro(
+			name: "SafeDIMacros",
+			dependencies: [
+				.product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+				.product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+			] + safeDICoreDependencies,
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDIMacrosTests",
+			dependencies: [
+				"SafeDIMacros",
+				.product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+
+		// Plugins
+		.plugin(
+			name: "MigrateSafeDIFromVersionOne",
+			capability: .command(
+				intent: .custom(
+					verb: "safedi-v1-to-v2",
+					description: "Migrates a project from SafeDI 1.x to 2.x.",
+				),
+				permissions: [
+					.writeToPackageDirectory(reason: "Creates a SafeDIConfiguration.swift file and removes obsolete CSV configuration files."),
+				],
+			),
+			dependencies: [],
+		),
+
+		.plugin(
+			name: "SafeDIGenerator",
+			capability: .buildTool(),
+			dependencies: [
+				.target(name: "SafeDIToolBinary", condition: .when(traits: ["prebuilt"])),
+				.target(name: "SafeDITool", condition: .when(traits: ["sourceBuild"])),
+			],
+		),
+		.binaryTarget(
+			name: "SafeDIToolBinary",
+			url: "https://github.com/dfed/SafeDI/releases/download/2.0.0-alpha-10/SafeDITool.artifactbundle.zip",
+			checksum: "bd607444776ba7cd781a4bfd4bf8630cae16106bf471ca3b4b8bf262f1714e46",
+		),
+		.executableTarget(
+			name: "SafeDITool",
+			dependencies: [
+				.product(name: "ArgumentParser", package: "swift-argument-parser"),
+				.product(name: "SwiftParser", package: "swift-syntax"),
+				"SafeDICore",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDIToolTests",
+			dependencies: [
+				.product(name: "ArgumentParser", package: "swift-argument-parser"),
+				"SafeDITool",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+
+		// Core
+		.target(
+			name: "SafeDICore",
+			dependencies: safeDICoreDependencies,
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDICoreTests",
+			dependencies: ["SafeDICore"],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+	],
 )
