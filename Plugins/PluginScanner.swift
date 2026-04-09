@@ -20,10 +20,15 @@
 
 import Foundation
 
-/// Lightweight text-based scanner used by the plugin to discover output files
-/// without needing SwiftSyntax. This runs in the plugin process during
+/// Lightweight text-based scanner used by the Xcode plugin to discover output
+/// files without needing SwiftSyntax. This runs in the plugin process during
 /// `createBuildCommands` and only determines what output files will be generated.
 /// The actual code generation is done by SafeDITool at build time.
+///
+/// This scanner intentionally over-matches (may declare outputs that SafeDITool
+/// won't actually write). SafeDITool creates empty files for declared outputs it
+/// doesn't need, so over-matching is safe. Under-matching would cause Xcode to
+/// skip compiling generated files, which is worse.
 enum PluginScanner {
 	struct ScanResult {
 		var outputFiles: [URL]
@@ -36,33 +41,16 @@ enum PluginScanner {
 		relativeTo projectRoot: URL,
 		outputDirectory: URL,
 	) -> ScanResult {
-		let sortedSwiftFiles = swiftFiles.sorted {
-			relativePath(for: $0, relativeTo: projectRoot) < relativePath(for: $1, relativeTo: projectRoot)
-		}
-		let rootFiles = sortedSwiftFiles.filter { fileContainsRoot(at: $0) }
-		let rootOutputFileNames = outputFileNames(for: rootFiles, relativeTo: projectRoot)
-
-		let sortedMockFiles = mockScopedSwiftFiles.sorted {
-			relativePath(for: $0, relativeTo: projectRoot) < relativePath(for: $1, relativeTo: projectRoot)
-		}
-		let mockFiles = sortedMockFiles.filter { fileContainsGenerateMockTrue(at: $0) }
-		let mockOutputFileNames = outputFileNames(for: mockFiles, relativeTo: projectRoot, suffix: "+SafeDIMock.swift")
-
-		var outputFiles = rootOutputFileNames.map { outputDirectory.appendingPathComponent($0) }
-			+ mockOutputFileNames.map { outputDirectory.appendingPathComponent($0) }
-
-		if !mockFiles.isEmpty {
-			outputFiles.append(outputDirectory.appendingPathComponent("SafeDIMockConfiguration.swift"))
-		}
-
-		// Discover additional directories from configuration.
+		// Discover additional directories from configuration first,
+		// so roots in those directories are included in output discovery.
 		var additionalInputFiles = [URL]()
+		var additionalMocksToGenerate = [String]()
 		for swiftFile in mockScopedSwiftFiles {
 			guard let content = try? String(contentsOf: swiftFile, encoding: .utf8),
 			      content.contains("#SafeDIConfiguration")
 			else { continue }
 			let directories = extractArrayArgument(named: "additionalDirectoriesToInclude", in: content)
-			guard !directories.isEmpty else { break }
+			additionalMocksToGenerate = extractArrayArgument(named: "additionalMocksToGenerate", in: content)
 			let directoryBaseURL = projectRoot.hasDirectoryPath
 				? projectRoot
 				: projectRoot.appendingPathComponent("", isDirectory: true)
@@ -77,7 +65,37 @@ enum PluginScanner {
 					additionalInputFiles.append(fileURL)
 				}
 			}
+			// Use only the first configuration found.
 			break
+		}
+
+		// Include additional directory files when scanning for roots.
+		let allSwiftFiles = swiftFiles + additionalInputFiles
+		let sortedSwiftFiles = allSwiftFiles.sorted {
+			relativePath(for: $0, relativeTo: projectRoot) < relativePath(for: $1, relativeTo: projectRoot)
+		}
+		let rootFiles = sortedSwiftFiles.filter { fileContainsRoot(at: $0) }
+		let rootOutputFileNames = outputFileNames(for: rootFiles, relativeTo: projectRoot)
+
+		let sortedMockFiles = mockScopedSwiftFiles.sorted {
+			relativePath(for: $0, relativeTo: projectRoot) < relativePath(for: $1, relativeTo: projectRoot)
+		}
+		let mockFiles = sortedMockFiles.filter { fileContainsGenerateMockTrue(at: $0) }
+		let mockOutputFileNames = outputFileNames(for: mockFiles, relativeTo: projectRoot, suffix: "+SafeDIMock.swift")
+
+		// Build additional mock output entries from additionalMocksToGenerate.
+		let additionalMockOutputFiles = additionalMocksToGenerate.map {
+			outputDirectory.appendingPathComponent("\($0)+SafeDIMock.swift")
+		}
+
+		var outputFiles = rootOutputFileNames.map { outputDirectory.appendingPathComponent($0) }
+			+ mockOutputFileNames.map { outputDirectory.appendingPathComponent($0) }
+			+ additionalMockOutputFiles
+
+		// Add mock configuration file when any mock entries exist.
+		let hasMockEntries = !mockFiles.isEmpty || !additionalMocksToGenerate.isEmpty
+		if hasMockEntries {
+			outputFiles.append(outputDirectory.appendingPathComponent("SafeDIMockConfiguration.swift"))
 		}
 
 		return ScanResult(outputFiles: outputFiles, additionalInputFiles: additionalInputFiles)
@@ -85,14 +103,23 @@ enum PluginScanner {
 
 	// MARK: - Private
 
+	/// Checks whether a file likely contains `@Instantiable(isRoot: true)`.
+	/// Uses regex to reduce false positives from comments or strings compared
+	/// to raw `contains()` checks. The real parser in SafeDITool is authoritative;
+	/// this is only used to predict which output files will be generated.
 	private static func fileContainsRoot(at fileURL: URL) -> Bool {
-		guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { return false }
-		return content.contains("@Instantiable") && content.contains("isRoot") && content.contains("true")
+		guard let content = try? String(contentsOf: fileURL, encoding: .utf8),
+		      content.contains("@Instantiable")
+		else { return false }
+		return content.range(of: #"@Instantiable\s*\([^)]*isRoot\s*:\s*true[^)]*\)"#, options: .regularExpression) != nil
 	}
 
+	/// Checks whether a file likely contains `@Instantiable(generateMock: true)`.
 	private static func fileContainsGenerateMockTrue(at fileURL: URL) -> Bool {
-		guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { return false }
-		return content.contains("@Instantiable") && content.contains("generateMock") && content.contains("true")
+		guard let content = try? String(contentsOf: fileURL, encoding: .utf8),
+		      content.contains("@Instantiable")
+		else { return false }
+		return content.range(of: #"@Instantiable\s*\([^)]*generateMock\s*:\s*true[^)]*\)"#, options: .regularExpression) != nil
 	}
 
 	private static func outputFileNames(
