@@ -107,11 +107,14 @@ enum PluginScanner {
 	/// Uses regex to reduce false positives from comments or strings compared
 	/// to raw `contains()` checks. The real parser in SafeDITool is authoritative;
 	/// this is only used to predict which output files will be generated.
+	///
+	/// The regex uses `(.|\n)*?` instead of `[^)]*` to handle parentheses inside
+	/// string literal arguments (e.g. `mockAttributes: "@available(iOS 17, *)"`).
 	private static func fileContainsRoot(at fileURL: URL) -> Bool {
 		guard let content = try? String(contentsOf: fileURL, encoding: .utf8),
 		      content.contains("@Instantiable")
 		else { return false }
-		return content.range(of: #"@Instantiable\s*\([^)]*isRoot\s*:\s*true[^)]*\)"#, options: .regularExpression) != nil
+		return content.range(of: #"@Instantiable\s*\((.|\n)*?isRoot\s*:\s*true"#, options: .regularExpression) != nil
 	}
 
 	/// Checks whether a file likely contains `@Instantiable(generateMock: true)`.
@@ -119,7 +122,7 @@ enum PluginScanner {
 		guard let content = try? String(contentsOf: fileURL, encoding: .utf8),
 		      content.contains("@Instantiable")
 		else { return false }
-		return content.range(of: #"@Instantiable\s*\([^)]*generateMock\s*:\s*true[^)]*\)"#, options: .regularExpression) != nil
+		return content.range(of: #"@Instantiable\s*\((.|\n)*?generateMock\s*:\s*true"#, options: .regularExpression) != nil
 	}
 
 	private static func outputFileNames(
