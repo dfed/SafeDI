@@ -706,15 +706,27 @@ We’ve tied everything together with an example multi-user notes application ba
 
 ## Under the hood
 
-SafeDI has a `SafeDITool` executable that the `SafeDIGenerator` plugin utilizes to read code and generate a dependency tree. The tool utilizes Apple’s [SwiftSyntax](https://github.com/apple/swift-syntax) library to parse your code and find your `@Instantiable` types’ initializers and dependencies. With this information, SafeDI generates a graph of your project’s dependencies, validates it during `SafeDITool` execution, and provides clear, human-readable error messages if the graph is invalid. Source code is only generated if the dependency graph is valid.
+SafeDI has a `SafeDITool` executable that the `SafeDIGenerator` plugin utilizes to read code and generate a dependency tree. The tool has two subcommands:
+
+- **`generate`** (default): Parses Swift source files, builds a dependency graph, validates it, and generates per-root output files and mock code. This is the subcommand used when invoking `SafeDITool` without an explicit subcommand, making it backward compatible with existing prebuild scripts.
+- **`scan`**: Scans Swift source files and produces a manifest JSON describing the `@Instantiable` types found. This manifest is used by the `SafeDIGenerator` plugin to coordinate builds across modules.
+
+Both subcommands utilize Apple’s [SwiftSyntax](https://github.com/apple/swift-syntax) library to parse your code and find your `@Instantiable` types’ initializers and dependencies. With this information, SafeDI generates a graph of your project’s dependencies, validates it during `SafeDITool` execution, and provides clear, human-readable error messages if the graph is invalid. Source code is only generated if the dependency graph is valid.
 
 The executable heavily utilizes asynchronous processing to avoid `SafeDITool` becoming a bottleneck in your build. Additionally, we only parse a Swift file with `SwiftSyntax` when the file contains the string `Instantiable`.
 
-Due to limitations in Apple’s [Swift Package Manager Plugins](https://github.com/swiftlang/swift-package-manager/blob/main/Sources/PackageManagerDocs/Documentation.docc/Plugins.md), the `SafeDIGenerator` plugin parses all of your first-party Swift files in a single pass. Projects that utilize `SafeDITool` directly can process Swift files on a per-module basis to further reduce the build-time bottleneck.
+The `SafeDIGenerator` plugin is the only build tool plugin and uses a prebuilt binary by default for fast builds without compiling SwiftSyntax. Due to limitations in Apple’s [Swift Package Manager Plugins](https://github.com/swiftlang/swift-package-manager/blob/main/Sources/PackageManagerDocs/Documentation.docc/Plugins.md), the plugin parses all of your first-party Swift files in a single pass. Projects that utilize `SafeDITool` directly can process Swift files on a per-module basis to further reduce the build-time bottleneck.
 
 ### Custom build system integration
 
-If you are integrating SafeDI with a build system other than SPM (e.g. Bazel, Buck, or a prebuild script), you can invoke `SafeDITool` directly with a JSON manifest file that describes the desired outputs. The manifest uses the [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) format, mapping input Swift files containing `@Instantiable(isRoot: true)` to output file paths. Paths are relative to the working directory. See the [example prebuild script](../Examples/PrebuildScript/safeditool.sh) for a working example.
+If you are integrating SafeDI with a build system other than SPM (e.g. Bazel, Buck, or a prebuild script), you can invoke `SafeDITool` directly. The tool has two subcommands:
+
+- **`SafeDITool scan`**: Scans Swift source files and produces a manifest JSON describing the `@Instantiable` types found. This is useful for per-module scanning in multi-module builds.
+- **`SafeDITool generate`** (default): Takes a JSON manifest file that describes the desired outputs. The manifest uses the [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) format, mapping input Swift files containing `@Instantiable(isRoot: true)` to output file paths. Paths are relative to the working directory.
+
+Since `generate` is the default subcommand, existing prebuild scripts that invoke `SafeDITool` without a subcommand continue to work. See the [example prebuild script](../Examples/PrebuildScript/safeditool.sh) for a working example.
+
+Run `swift run SafeDITool --help`, `swift run SafeDITool scan --help`, or `swift run SafeDITool generate --help` to see documentation of all supported arguments.
 
 ## Introspecting a SafeDI tree
 

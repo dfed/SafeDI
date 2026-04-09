@@ -64,20 +64,21 @@ jobs:
       - name: Build Package Integration
         run: xcrun swift build --package-path "Examples/Example Package Integration"
 
-  spm-prebuilt-package-integration:
-    name: Build Prebuilt Package Integration on Xcode 26
-    runs-on: macos-26
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-      - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
-      - name: Build Package Integration
-        run: |
-          xcrun swift package --package-path Examples/ExamplePrebuiltPackageIntegration --allow-network-connections all --allow-writing-to-package-directory safedi-release-install
-          xcrun swift build --package-path Examples/ExamplePrebuiltPackageIntegration
+  # Disabled: The prebuilt package integration depends on a published artifact
+  # bundle, which does not exist yet. Re-enable once a release with the artifact
+  # bundle has been published.
+  # spm-prebuilt-package-integration:
+  #   name: Build Prebuilt Package Integration on Xcode 26
+  #   runs-on: macos-26
+  #   permissions:
+  #     contents: read
+  #   steps:
+  #     - name: Checkout Repo
+  #       uses: actions/checkout@v6
+  #     - name: Select Xcode Version
+  #       run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+  #     - name: Build Package Integration
+  #       run: xcrun swift build --package-path Examples/ExamplePrebuiltPackageIntegration
 
   spm-project-integration:
     name: Build Project Integration on Xcode 26

@@ -39,7 +39,7 @@ let package = Package(
 				.swiftLanguageMode(.v6),
 			],
 			plugins: [
-				.plugin(name: "SafeDIPrebuiltGenerator", package: "SafeDI"),
+				.plugin(name: "SafeDIGenerator", package: "SafeDI"),
 			],
 		),
 		.target(
@@ -53,7 +53,7 @@ let package = Package(
 				.swiftLanguageMode(.v6),
 			],
 			plugins: [
-				.plugin(name: "SafeDIPrebuiltGenerator", package: "SafeDI"),
+				.plugin(name: "SafeDIGenerator", package: "SafeDI"),
 			],
 		),
 		.target(
@@ -67,7 +67,7 @@ let package = Package(
 				.swiftLanguageMode(.v6),
 			],
 			plugins: [
-				.plugin(name: "SafeDIPrebuiltGenerator", package: "SafeDI"),
+				.plugin(name: "SafeDIGenerator", package: "SafeDI"),
 			],
 		),
 		.target(
@@ -81,7 +81,7 @@ let package = Package(
 				.swiftLanguageMode(.v6),
 			],
 			plugins: [
-				.plugin(name: "SafeDIPrebuiltGenerator", package: "SafeDI"),
+				.plugin(name: "SafeDIGenerator", package: "SafeDI"),
 			],
 		),
 		.target(
@@ -94,7 +94,7 @@ let package = Package(
 				.swiftLanguageMode(.v6),
 			],
 			plugins: [
-				.plugin(name: "SafeDIPrebuiltGenerator", package: "SafeDI"),
+				.plugin(name: "SafeDIGenerator", package: "SafeDI"),
 			],
 		),
 		.target(
@@ -104,7 +104,7 @@ let package = Package(
 				.swiftLanguageMode(.v6),
 			],
 			plugins: [
-				.plugin(name: "SafeDIPrebuiltGenerator", package: "SafeDI"),
+				.plugin(name: "SafeDIGenerator", package: "SafeDI"),
 			],
 		),
 	],

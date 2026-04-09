@@ -1974,9 +1974,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			}
 		}
 		await SafeDITool.$fileFinder.withValue(FailingFileFinder()) {
-			var tool = SafeDITool()
+			var tool = Generate()
 			tool.swiftSourcesFilePath = nil
-			tool.showVersion = false
 			tool.include = ["Fake"]
 			tool.additionalImportedModules = []
 			tool.moduleInfoOutput = nil
@@ -1992,9 +1991,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func include_throwsErrorWhenNoSwiftSourcesFilePathAndNoInclude() async {
-		var tool = SafeDITool()
+		var tool = Generate()
 		tool.swiftSourcesFilePath = nil
-		tool.showVersion = false
 		tool.include = []
 		tool.additionalImportedModules = []
 		tool.moduleInfoOutput = nil
@@ -2031,9 +2029,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"Manifest lists '\(swiftFile.relativePath)' as containing a dependency tree root, but no @Instantiable(isRoot: true) was found in that file.",
 		) {
-			var tool = SafeDITool()
+			var tool = Generate()
 			tool.swiftSourcesFilePath = swiftFileCSV.relativePath
-			tool.showVersion = false
 			tool.include = []
 			tool.additionalImportedModules = []
 			tool.moduleInfoOutput = moduleInfoOutput.relativePath
@@ -2071,9 +2068,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"Found @Instantiable(isRoot: true) in '\(swiftFile.relativePath)', but this file is not listed in the manifest's dependencyTreeGeneration. Add it to the manifest or remove the isRoot annotation.",
 		) {
-			var tool = SafeDITool()
+			var tool = Generate()
 			tool.swiftSourcesFilePath = swiftFileCSV.relativePath
-			tool.showVersion = false
 			tool.include = []
 			tool.additionalImportedModules = []
 			tool.moduleInfoOutput = moduleInfoOutput.relativePath

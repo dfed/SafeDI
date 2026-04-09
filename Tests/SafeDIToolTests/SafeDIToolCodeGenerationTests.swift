@@ -6054,9 +6054,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			moduleInfoOutput,
 		]
 
-		var tool = SafeDITool()
+		var tool = Generate()
 		tool.swiftSourcesFilePath = swiftFileCSV.relativePath
-		tool.showVersion = false
 		tool.include = []
 		tool.additionalImportedModules = []
 		tool.moduleInfoOutput = moduleInfoOutput.relativePath
@@ -6127,9 +6126,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		filesToDelete += [swiftFileCSV, swiftFile, manifestFile, moduleInfoOutput, outputDirectory]
 
 		func runTool() async throws {
-			var tool = SafeDITool()
+			var tool = Generate()
 			tool.swiftSourcesFilePath = swiftFileCSV.relativePath
-			tool.showVersion = false
 			tool.include = []
 			tool.additionalImportedModules = []
 			tool.moduleInfoOutput = moduleInfoOutput.relativePath

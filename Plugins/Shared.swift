@@ -19,7 +19,6 @@
 // SOFTWARE.
 
 import Foundation
-import PackagePlugin
 
 #if canImport(XcodeProjectPlugin)
 	import XcodeProjectPlugin
@@ -31,84 +30,93 @@ import PackagePlugin
 			// Unlike SPM plugins, Xcode plugins can not determine the current version number, so we must hardcode it.
 			"2.0.0"
 		}
-
-		var safeDIOrigin: URL {
-			// As of Xcode 15.0, Xcode command plugins have no way to read the package manifest, therefore we must hardcode the package.
-			// This means that forks of this repository must update this URL manually to ensure their own release binary is downloaded by this tool.
-			URL(string: "https://github.com/dfed/SafeDI")!
-		}
-
-		var safediFolder: URL {
-			xcodeProject.directoryURL.appending(
-				component: ".safedi",
-			)
-		}
-
-		var expectedToolFolder: URL {
-			safediFolder.appending(
-				component: safeDIVersion,
-			)
-		}
-
-		var expectedToolLocation: URL {
-			expectedToolFolder.appending(
-				component: "safeditool",
-			)
-		}
-
-		var downloadedToolLocation: URL? {
-			guard FileManager.default.fileExists(atPath: expectedToolLocation.path(percentEncoded: false)) else { return nil }
-			return expectedToolLocation
-		}
 	}
 #endif
 
-extension PackagePlugin.PluginContext {
-	var safeDIVersion: String? {
-		guard let safeDIOrigin = package.dependencies.first(where: { $0.package.displayName == "SafeDI" })?.package.origin else {
-			return nil
+// MARK: - CSV Writing
+
+func writeInputSwiftFilesCSV(
+	_ swiftFiles: [URL],
+	relativeTo base: URL,
+	to inputSourcesFile: URL,
+) throws {
+	try swiftFiles
+		.map { relativePath(for: $0, relativeTo: base) }
+		.joined(separator: ",")
+		.write(
+			to: inputSourcesFile,
+			atomically: true,
+			encoding: .utf8,
+		)
+}
+
+// MARK: - Relative Path
+
+/// Compute a path string relative to a base directory.
+/// Falls back to the absolute path if the URL is not under the base directory.
+func relativePath(for url: URL, relativeTo base: URL) -> String {
+	let urlPath = url.standardizedFileURL.path
+	let standardizedBasePath = base.standardizedFileURL.path
+	let basePath = standardizedBasePath.hasSuffix("/")
+		? standardizedBasePath
+		: standardizedBasePath + "/"
+
+	if urlPath.hasPrefix(basePath) {
+		return String(urlPath.dropFirst(basePath.count))
+	}
+	return urlPath
+}
+
+// MARK: - Scan Manifest
+
+/// A Codable struct matching the JSON output of `SafeDITool scan`.
+/// Plugins cannot import SafeDICore, so this is defined locally.
+struct ScanManifest: Codable {
+	struct InputOutputMap: Codable {
+		var inputFilePath: String
+		var outputFilePath: String
+	}
+
+	var dependencyTreeGeneration: [InputOutputMap]
+	var mockGeneration: [InputOutputMap]
+	var configurationFilePaths: [String]
+	var mockConfigurationOutputFilePath: String?
+	var additionalMocksToGenerate: [String]
+	var additionalInputFiles: [String]
+}
+
+// MARK: - Process Runner
+
+struct SafeDIToolProcessError: Error, CustomStringConvertible {
+	let terminationStatus: Int32
+	let standardError: String
+
+	var description: String {
+		if standardError.isEmpty {
+			"SafeDITool exited with status \(terminationStatus)"
+		} else {
+			"SafeDITool exited with status \(terminationStatus): \(standardError)"
 		}
-		switch safeDIOrigin {
-		case let .repository(_, displayVersion, _):
-			// As of Xcode 16.0 Beta 6, the display version is of the form "Optional(version)".
-			// This regular expression is duplicated by SafeDIGenerateDependencyTree since plugins can not share code.
-			guard let versionMatch = try? /Optional\((.*?)\)|^(.*?)$/.firstMatch(in: displayVersion),
-			      let version = versionMatch.output.1 ?? versionMatch.output.2
-			else {
-				return nil
-			}
-			return String(version)
-		case .registry, .root, .local:
-			fallthrough
-		@unknown default:
-			return nil
-		}
 	}
+}
 
-	var safediFolder: URL {
-		package.directoryURL.appending(
-			component: ".safedi",
+func runSafeDITool(
+	at toolURL: URL,
+	arguments: [String],
+) throws {
+	let process = Process()
+	process.executableURL = toolURL
+	process.arguments = arguments
+	let errorPipe = Pipe()
+	process.standardError = errorPipe
+	try process.run()
+	process.waitUntilExit()
+	guard process.terminationStatus == 0 else {
+		let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+		let errorString = String(data: errorData, encoding: .utf8) ?? ""
+		throw SafeDIToolProcessError(
+			terminationStatus: process.terminationStatus,
+			standardError: errorString,
 		)
-	}
-
-	var expectedToolFolder: URL? {
-		guard let safeDIVersion else { return nil }
-		return safediFolder.appending(
-			component: safeDIVersion,
-		)
-	}
-
-	var expectedToolLocation: URL? {
-		guard let expectedToolFolder else { return nil }
-		return expectedToolFolder.appending(
-			component: "safeditool",
-		)
-	}
-
-	var downloadedToolLocation: URL? {
-		guard let expectedToolLocation,
-		      FileManager.default.fileExists(atPath: expectedToolLocation.path(percentEncoded: false))
-		else { return nil }
-		return expectedToolLocation
 	}
 }

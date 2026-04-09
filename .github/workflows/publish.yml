@@ -1,25 +1,37 @@
 name: Publish
 on:
-  push:
-    tags:
-      - '*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to create (e.g. 2.0.0)'
+        type: string
+        required: true
+      branch:
+        description: 'Branch to build from and commit to'
+        type: string
+        required: true
+        default: 'main'
+      dry-run:
+        description: 'Build and assemble without publishing (no commit/tag/release)'
+        type: boolean
+        required: false
+        default: false
 
 jobs:
-  build-release-cli:
-    name: Build Release CLI
+  build-macos:
+    name: Build macOS Universal Binary
     runs-on: macos-26
     strategy:
       matrix:
-        architecture: [
-          'x86_64',
-          'arm64',
-        ]
+        architecture: ['x86_64', 'arm64']
       fail-fast: false
     permissions:
       contents: write
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch }}
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Build SafeDITool
@@ -27,7 +39,7 @@ jobs:
       - name: Give SafeDITool executable permissions
         run: chmod +x .build/*/release/SafeDITool
       - name: Make codesigning folder
-        run:  |
+        run: |
           mkdir codesign
           cp .build/*/release/SafeDITool codesign/
       - name: Codesign
@@ -63,18 +75,180 @@ jobs:
       - name: Upload SafeDITool artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SafeDITool-${{ matrix.architecture }}
+          name: SafeDITool-macos-${{ matrix.architecture }}
           path: codesign/SafeDITool
-      - name: Upload SafeDITool as release binary
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.RELEASE_UPLOADER }}
-          file: codesign/SafeDITool
-          tag: ${{ github.ref }}
-          asset_name: SafeDITool-${{ matrix.architecture }}
-          overwrite: false
       - name: Cleanup
-        if: always() # This ensures that the cleanup step runs even if earlier steps fail
+        if: always()
         run: |
           security delete-keychain build.keychain
           rm -rf codesign
+
+  build-linux-x86_64:
+    name: Build Linux x86_64
+    runs-on: ubuntu-latest
+    container: swift:6.3
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch }}
+      - name: Build SafeDITool
+        run: swift build -c release --product SafeDITool --static-swift-stdlib
+      - name: Upload SafeDITool artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SafeDITool-linux-x86_64
+          path: .build/release/SafeDITool
+
+  build-linux-arm64:
+    name: Build Linux arm64
+    runs-on: ubuntu-24.04-arm
+    container: swift:6.3
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch }}
+      - name: Build SafeDITool
+        run: swift build -c release --product SafeDITool --static-swift-stdlib
+      - name: Upload SafeDITool artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SafeDITool-linux-arm64
+          path: .build/release/SafeDITool
+
+  assemble-and-publish:
+    name: Assemble Artifact Bundle and Publish
+    needs: [build-macos, build-linux-x86_64, build-linux-arm64]
+    runs-on: macos-26
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create macOS universal binary
+        run: |
+          lipo -create \
+            artifacts/SafeDITool-macos-arm64/SafeDITool \
+            artifacts/SafeDITool-macos-x86_64/SafeDITool \
+            -output SafeDITool-macos-universal
+          chmod +x SafeDITool-macos-universal
+
+      - name: Assemble artifact bundle
+        run: |
+          mkdir -p SafeDITool.artifactbundle/SafeDITool-macos/bin
+          mkdir -p SafeDITool.artifactbundle/SafeDITool-linux-x86_64/bin
+          mkdir -p SafeDITool.artifactbundle/SafeDITool-linux-arm64/bin
+
+          cp SafeDITool-macos-universal SafeDITool.artifactbundle/SafeDITool-macos/bin/SafeDITool
+          cp artifacts/SafeDITool-linux-x86_64/SafeDITool SafeDITool.artifactbundle/SafeDITool-linux-x86_64/bin/SafeDITool
+          cp artifacts/SafeDITool-linux-arm64/SafeDITool SafeDITool.artifactbundle/SafeDITool-linux-arm64/bin/SafeDITool
+
+          chmod +x SafeDITool.artifactbundle/SafeDITool-linux-x86_64/bin/SafeDITool
+          chmod +x SafeDITool.artifactbundle/SafeDITool-linux-arm64/bin/SafeDITool
+
+          cat > SafeDITool.artifactbundle/info.json << 'INFOJSON'
+          {
+            "schemaVersion": "1.0",
+            "artifacts": {
+              "SafeDITool": {
+                "version": "${{ inputs.version }}",
+                "type": "executable",
+                "variants": [
+                  {
+                    "path": "SafeDITool-macos/bin/SafeDITool",
+                    "supportedTriples": ["x86_64-apple-macosx", "arm64-apple-macosx"]
+                  },
+                  {
+                    "path": "SafeDITool-linux-x86_64/bin/SafeDITool",
+                    "supportedTriples": ["x86_64-unknown-linux-gnu", "amd64-unknown-linux-gnu"]
+                  },
+                  {
+                    "path": "SafeDITool-linux-arm64/bin/SafeDITool",
+                    "supportedTriples": ["aarch64-unknown-linux-gnu", "arm64-unknown-linux-gnu"]
+                  }
+                ]
+              }
+            }
+          }
+          INFOJSON
+
+      - name: Zip artifact bundle
+        run: zip -r SafeDITool.artifactbundle.zip SafeDITool.artifactbundle/
+
+      - name: Compute checksum
+        id: checksum
+        run: |
+          CHECKSUM=$(swift package compute-checksum SafeDITool.artifactbundle.zip)
+          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+          echo "Computed checksum: $CHECKSUM"
+
+      - name: Update Package.swift
+        run: |
+          # Update the binary target URL
+          sed -i '' "s|https://github.com/dfed/SafeDI/releases/download/[^\"]*|https://github.com/dfed/SafeDI/releases/download/${{ inputs.version }}/SafeDITool.artifactbundle.zip|" Package.swift
+          # Update the checksum
+          sed -i '' "s|checksum: \"[^\"]*\"|checksum: \"${{ steps.checksum.outputs.checksum }}\"|" Package.swift
+          # Enable the prebuilt binary flag
+          sed -i '' "s|let usePrebuiltBinary = false|let usePrebuiltBinary = true|" Package.swift
+
+      - name: Update version strings
+        run: |
+          # Update SafeDITool.currentVersion
+          sed -i '' 's|"[0-9]*\.[0-9]*\.[0-9]*"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
+          # Update Plugins/Shared.swift Xcode version
+          sed -i '' '/var safeDIVersion: String/,/}/{s|"[0-9]*\.[0-9]*\.[0-9]*"|"${{ inputs.version }}"|;}' Plugins/Shared.swift
+
+      - name: Show changes (dry run)
+        if: inputs.dry-run
+        run: |
+          echo "=== Package.swift changes ==="
+          git diff Package.swift
+          echo "=== Version string changes ==="
+          git diff Sources/SafeDITool/SafeDITool.swift Plugins/Shared.swift
+          echo "=== Checksum: ${{ steps.checksum.outputs.checksum }} ==="
+
+      - name: Upload artifact bundle (dry run)
+        if: inputs.dry-run
+        uses: actions/upload-artifact@v4
+        with:
+          name: SafeDITool-artifactbundle
+          path: SafeDITool.artifactbundle.zip
+
+      - name: Commit, tag, and push
+        if: ${{ !inputs.dry-run }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Package.swift Sources/SafeDITool/SafeDITool.swift Plugins/Shared.swift
+          git commit -m "Release ${{ inputs.version }}"
+          git tag "${{ inputs.version }}"
+          git push origin "${{ inputs.branch }}" --tags
+
+      - name: Create GitHub Release
+        if: ${{ !inputs.dry-run }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_UPLOADER }}
+        run: |
+          gh release create "${{ inputs.version }}" \
+            --title "${{ inputs.version }}" \
+            --generate-notes \
+            SafeDITool.artifactbundle.zip \
+            SafeDITool-macos-universal#SafeDITool-universal \
+            artifacts/SafeDITool-macos-arm64/SafeDITool#SafeDITool-arm64 \
+            artifacts/SafeDITool-macos-x86_64/SafeDITool#SafeDITool-x86_64
