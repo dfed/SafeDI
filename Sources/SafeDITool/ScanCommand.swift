@@ -74,25 +74,31 @@ func performScan(
 		URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL
 	}
 
-	// Parse all files to find roots.
+	// Parse all files once to find roots, mocks, and configurations.
 	let allFilePaths = Set(allSwiftFiles.map(\.relativePath))
 	let allModuleInfo = try await parseSwiftFiles(allFilePaths)
 
 	// Determine which files are scoped for mock scanning.
-	let filesForMockScan: [URL] = if mockScopedFiles.isEmpty {
-		allSwiftFiles
+	let mockScopedFilePaths: Set<String> = if mockScopedFiles.isEmpty {
+		allFilePaths
 	} else {
-		mockScopedFiles.map {
-			URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL
-		}
+		Set(mockScopedFiles.map {
+			URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL.relativePath
+		})
 	}
-	let mockScopedFilePaths = Set(filesForMockScan.map(\.relativePath))
 
-	// Parse mock-scoped files for configuration and mock info.
-	let mockScopedModuleInfo = try await parseSwiftFiles(mockScopedFilePaths)
+	// Filter the already-parsed results to the mock-scoped subset.
+	let mockScopedInstantiables = allModuleInfo.instantiables.filter { instantiable in
+		guard let sourceFilePath = instantiable.sourceFilePath else { return false }
+		return mockScopedFilePaths.contains(sourceFilePath)
+	}
+	let mockScopedConfigurations = allModuleInfo.configurations.filter { configuration in
+		guard let sourceFilePath = configuration.sourceFilePath else { return false }
+		return mockScopedFilePaths.contains(sourceFilePath)
+	}
 
 	// Find configuration from the scoped files (first one only, matching current behavior).
-	let configuration = mockScopedModuleInfo.configurations.first
+	let configuration = mockScopedConfigurations.first
 
 	// Discover additional directories from configuration.
 	var additionalInputFiles = [String]()
@@ -133,7 +139,7 @@ func performScan(
 	let rootOutputNames = outputFileNames(for: uniqueRootFileURLs, relativeTo: projectRootURL)
 
 	// Collect mock files (only from scoped files) and compute output file names.
-	let mockInstantiables = mockScopedModuleInfo.instantiables.filter(\.generateMock)
+	let mockInstantiables = mockScopedInstantiables.filter(\.generateMock)
 	let mockFileURLs = mockInstantiables.compactMap { instantiable -> URL? in
 		guard let sourceFilePath = instantiable.sourceFilePath else { return nil }
 		return URL(fileURLWithPath: sourceFilePath, relativeTo: directoryBaseURL).standardizedFileURL
@@ -162,7 +168,7 @@ func performScan(
 	}
 
 	// Compute configuration file paths (relative to project root, matching Generate's expectations).
-	let configurationFilePaths = mockScopedModuleInfo.configurations.compactMap(\.sourceFilePath).map { path in
+	let configurationFilePaths = mockScopedConfigurations.compactMap(\.sourceFilePath).map { path in
 		relativePath(for: URL(fileURLWithPath: path, relativeTo: directoryBaseURL).standardizedFileURL, relativeTo: projectRootURL)
 	}
 
