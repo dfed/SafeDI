@@ -242,28 +242,27 @@ jobs:
           name: release-commit
           path: /tmp/patch/*.patch
 
+      - name: Prepare release assets
+        run: |
+          cp artifacts/SafeDITool-macos-arm64/SafeDITool SafeDITool-arm64
+          cp artifacts/SafeDITool-macos-x86_64/SafeDITool SafeDITool-x86_64
+
       - name: Tag and push
         if: ${{ !inputs.dry-run }}
         run: |
           git tag "${{ inputs.version }}"
           git push origin "${{ github.ref_name }}" --tags
-          sleep 5
 
       - name: Create GitHub Release
         if: ${{ !inputs.dry-run }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_UPLOADER }}
         run: |
-          for attempt in 1 2 3; do
-            gh release create "${{ inputs.version }}" \
-              --title "${{ inputs.version }}" \
-              --generate-notes \
-              ${{ inputs.prerelease && '--prerelease' || '' }} \
-              SafeDITool.artifactbundle.zip \
-              SafeDITool-macos-universal#SafeDITool-universal \
-              artifacts/SafeDITool-macos-arm64/SafeDITool#SafeDITool-arm64 \
-              artifacts/SafeDITool-macos-x86_64/SafeDITool#SafeDITool-x86_64 \
-              && break
-            echo "Attempt $attempt failed, retrying in 10s..."
-            sleep 10
-          done
+          gh release create "${{ inputs.version }}" \
+            --title "${{ inputs.version }}" \
+            --generate-notes \
+            ${{ inputs.prerelease && '--prerelease' || '' }} \
+            SafeDITool.artifactbundle.zip \
+            SafeDITool-macos-universal \
+            SafeDITool-arm64 \
+            SafeDITool-x86_64
