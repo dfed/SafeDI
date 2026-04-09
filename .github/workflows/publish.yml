@@ -11,6 +11,11 @@ on:
         type: string
         required: true
         default: 'main'
+      prerelease:
+        description: 'Mark the GitHub release as a prerelease'
+        type: boolean
+        required: false
+        default: false
       dry-run:
         description: 'Build and assemble without publishing (no commit/tag/release)'
         type: boolean
@@ -244,6 +249,7 @@ jobs:
           gh release create "${{ inputs.version }}" \
             --title "${{ inputs.version }}" \
             --generate-notes \
+            ${{ inputs.prerelease && '--prerelease' || '' }} \
             SafeDITool.artifactbundle.zip \
             SafeDITool-macos-universal#SafeDITool-universal \
             artifacts/SafeDITool-macos-arm64/SafeDITool#SafeDITool-arm64 \
