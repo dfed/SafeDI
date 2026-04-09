@@ -869,12 +869,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"\(instantiatedTypeDescription.asSource).\(Self.configurationStructName)"
 		}
 
-		/// The `_Configuration` struct name, based on the instantiated type.
-		/// Used as the deduplication key when collecting unique configuration types.
-		var structName: String {
-			"\(instantiatedTypeDescription.asSource)_Configuration"
-		}
-
 		/// The builder closure type as a Swift source string (unlabeled parameters).
 		/// e.g., `(Service, Style) -> Grandchild` or `() -> Service`.
 		var builderClosureType: String {
