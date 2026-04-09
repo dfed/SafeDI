@@ -13,7 +13,7 @@ extract_version() {
     local quote_char="$4"
 
     local version
-    version=$(grep -A"$context_lines" "$pattern" "$file" | grep -o "${quote_char}[0-9]*\.[0-9]*\.[0-9]*${quote_char}" | tr -d "$quote_char")
+    version=$(grep -A"$context_lines" "$pattern" "$file" | grep -o "${quote_char}[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*[^${quote_char}]*${quote_char}" | tr -d "$quote_char")
 
     local count
     count=$(echo "$version" | grep -c . || true)
