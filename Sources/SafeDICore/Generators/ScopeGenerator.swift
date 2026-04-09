@@ -898,105 +898,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
-		/// External dependencies that must be passed as parameters to `build()`.
-		/// These are construction arguments that are dependencies but not fulfilled by
-		/// child nodes or defaults, collected transitively through the subtree.
-		var externalDependencyParameters: [(label: String, typeSource: String)] {
-			var result = [(label: String, typeSource: String)]()
-			var seen = Set<String>()
-
-			// Pre-collect dependency optionality from the entire tree.
-			// A label is optional only if ALL usages are onlyIfAvailable.
-			// If even one path requires it (non-optional), the build method
-			// parameter is non-optional — optional receivers accept non-optional values.
-			var onlyIfAvailableLabels = Set<String>()
-			var requiredLabels = Set<String>()
-			func collectDependencyOptionality(from node: MockParameterNode, depth: Int = 0) {
-				for dependency in node.dependencies {
-					switch dependency.source {
-					case let .received(onlyIfAvailable):
-						if onlyIfAvailable {
-							onlyIfAvailableLabels.insert(dependency.property.label)
-						} else {
-							requiredLabels.insert(dependency.property.label)
-						}
-					case let .aliased(_, _, onlyIfAvailable):
-						if onlyIfAvailable {
-							onlyIfAvailableLabels.insert(dependency.property.label)
-						} else {
-							requiredLabels.insert(dependency.property.label)
-						}
-					case .instantiated, .forwarded:
-						break
-					}
-				}
-				for child in node.children {
-					collectDependencyOptionality(from: child, depth: depth + 1)
-				}
-			}
-			collectDependencyOptionality(from: self)
-			let allOnlyIfAvailableLabels = onlyIfAvailableLabels.subtracting(requiredLabels)
-
-			func collect(from node: MockParameterNode, isRoot: Bool) {
-				let childLabels = Set(node.children.map(\.propertyLabel))
-				let dependencyLabels = Set(node.dependencies.map(\.property.label))
-				let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
-				// Forwarded properties on CHILD nodes are runtime Instantiator closure
-				// parameters — they don't need to be threaded through the parent's
-				// build method. But the ROOT node's own forwarded properties DO need
-				// to be parameters (they're provided by the caller).
-				let forwardedLabels: Set<String> = if isRoot {
-					[]
-				} else {
-					Set(node.forwardedProperties.map(\.label))
-				}
-
-				// Mark child labels as seen so deeper nodes don't re-add them
-				// as external deps. Children are built internally by the build method.
-				for childLabel in childLabels {
-					seen.insert(childLabel)
-				}
-
-				for argument in node.constructionArguments {
-					let label = argument.innerLabel
-					if dependencyLabels.contains(label),
-					   !childLabels.contains(label),
-					   !defaultParameterLabels.contains(argument.label),
-					   !forwardedLabels.contains(label)
-					{
-						var typeSource = argument.typeDescription.asFunctionParameter.asSource
-						// Promote to optional for exclusively-onlyIfAvailable dependencies.
-						if allOnlyIfAvailableLabels.contains(label), !argument.typeDescription.isOptional {
-							typeSource += "?"
-						}
-						// Demote to non-optional if the label is required somewhere
-						// but this particular argument has it as optional.
-						if !allOnlyIfAvailableLabels.contains(label), argument.typeDescription.isOptional {
-							typeSource = argument.typeDescription.unwrapped.asFunctionParameter.asSource
-						}
-						if seen.insert(label).inserted {
-							result.append((label: label, typeSource: typeSource))
-						} else if !allOnlyIfAvailableLabels.contains(label) {
-							// Re-encountered with required status: upgrade existing entry to non-optional.
-							if let existingIndex = result.firstIndex(where: { $0.label == label }),
-							   result[existingIndex].typeSource.hasSuffix("?")
-							{
-								result[existingIndex].typeSource = typeSource
-							}
-						}
-					}
-				}
-
-				// Recurse into children to collect transitive external dependencies.
-				for child in node.children {
-					collect(from: child, isRoot: false)
-				}
-			}
-
-			collect(from: self, isRoot: true)
-			return result
-		}
-
 		/// A non-dependency default-valued parameter from an init or customMock.
 		struct DefaultParameter {
 			/// The parameter label (e.g., "theme", "isPro").
@@ -1011,57 +912,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Collects all unique configuration types from this scope's mock parameter tree.
-	/// Returns tuples with the struct code and optional build method code.
-	/// The build method is only generated for types that appear as constant
-	/// (non-Instantiator) children — Instantiator-only types use inline code.
-	func collectConfigurationTypes() async -> [(typeName: String, structCode: String, buildMethodCode: String?)] {
+	func collectConfigurationTypes() async -> [(typeName: String, structCode: String)] {
 		let parameterTree = await collectMockParameterTree()
 		let uniqueTypes = Self.collectUniqueConfigurationTypes(from: parameterTree)
-		let typesUsedAsConstantChildren = Self.collectTypesUsedAsConstantChildren(from: parameterTree)
 		let indent = Self.standardIndent
 		return uniqueTypes.map { node in
-			let typeName = node.instantiatedTypeDescription.asSource
-			let needsBuildMethod = typesUsedAsConstantChildren.contains(typeName)
-			return (
-				typeName: typeName,
+			(
+				typeName: node.instantiatedTypeDescription.asSource,
 				structCode: Self.generateConfigurationStruct(for: node, indent: indent),
-				buildMethodCode: needsBuildMethod
-					? Self.generateBuildMethod(for: node, indent: indent).joined(separator: "\n")
-					: nil,
 			)
 		}
-	}
-
-	/// Collects type names that appear as constant (non-Instantiator) children
-	/// with `needsConfigurationStruct` anywhere in the tree. These types need
-	/// a `__safeDI_mockBuild` method because the mock body calls it.
-	/// The root's direct children are included because the root's `mock()` method
-	/// calls `__safeDI_mockBuild` on its constant children.
-	private static func collectTypesUsedAsConstantChildren(
-		from nodes: [MockParameterNode],
-	) -> Set<String> {
-		var result = Set<String>()
-
-		func walk(_ node: MockParameterNode) {
-			for child in node.children {
-				if !child.isInstantiator, child.needsConfigurationStruct {
-					result.insert(child.instantiatedTypeDescription.asSource)
-				}
-				walk(child)
-			}
-		}
-
-		// Include the root's direct children that are constant and need a
-		// configuration struct, since the root's mock() method calls their
-		// __safeDI_mockBuild() method.
-		for node in nodes where !node.isInstantiator && node.needsConfigurationStruct {
-			result.insert(node.instantiatedTypeDescription.asSource)
-		}
-
-		for node in nodes {
-			walk(node)
-		}
-		return result
 	}
 
 	/// Walks the dependency tree and builds a `[MockParameterNode]` tree representing
@@ -1374,164 +1234,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return lines.joined(separator: "\n")
 	}
 
-	/// Generates the `__safeDI_mockBuild()` static method for a type's extension.
-	/// The method takes external dependencies as explicit parameters and the
-	/// configuration as a defaulted parameter. It builds children internally
-	/// (calling child build methods or leaf closures) and returns the type.
-	/// Actor isolation is inherited from the extension's parent type.
-	private static func generateBuildMethod(
-		for node: MockParameterNode,
-		indent: String,
-	) -> [String] {
-		let innerIndent = "\(indent)\(standardIndent)"
-		let mockAttributesPrefix = node.mockAttributes.isEmpty ? "" : "\(node.mockAttributes) "
-
-		// Build the parameter list: external dependencies + configuration.
-		let configurationParameterName = "safeDIMockConfiguration"
-		var parameters = [String]()
-		for externalDependency in node.externalDependencyParameters {
-			parameters.append("\(innerIndent)\(externalDependency.label): \(externalDependency.typeSource)")
-		}
-		parameters.append("\(innerIndent)\(configurationParameterName): \(MockParameterNode.configurationStructName)")
-
-		var lines = [String]()
-		lines.append("\(indent)\(mockAttributesPrefix)static func __safeDI_mockBuild(")
-		lines.append(parameters.joined(separator: ",\n"))
-		lines.append("\(indent)) -> \(node.concreteTypeName) {")
-
-		// Generate child bindings.
-		let childBindings = generateBuildBodyBindings(
-			nodes: node.children,
-			parentPath: configurationParameterName,
-			parentTypeDescription: node.instantiatedTypeDescription,
-			indent: innerIndent,
-		)
-		lines.append(contentsOf: childBindings)
-
-		// Generate the return statement using the main builder.
-		let arguments = resolveBuildArguments(for: node, configurationPath: configurationParameterName)
-		let argumentList = arguments.joined(separator: ", ")
-
-		let builderExpression = "(\(configurationParameterName).safeDIBuilder ?? \(node.defaultBuilderExpression))"
-		lines.append("\(innerIndent)return \(builderExpression)(\(argumentList))")
-
-		lines.append("\(indent)}")
-		return lines
-	}
-
-	/// Generates bindings inside a `build()` method body. For non-leaf children,
-	/// calls the child's `build()` method. For leaf children, uses if-let.
-	private static func generateBuildBodyBindings(
-		nodes: [MockParameterNode],
-		parentPath: String,
-		parentTypeDescription: TypeDescription,
-		indent: String,
-		ancestorTypes: Set<String> = [],
-	) -> [String] {
-		var lines = [String]()
-		let labelMap = disambiguatePropertyLabels(for: nodes)
-
-		for node in nodes {
-			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
-			let nodePath = "\(parentPath).\(disambiguated)"
-			// Detect cycles: the child's instantiated type matches the parent type
-			// (e.g., UnityContainerViewController instantiates Instantiator<UnityContainerViewController>).
-			let isCycleInBuildBody = node.instantiatedTypeDescription == parentTypeDescription
-
-			if node.isInstantiator, node.isPropertyCycle || isCycleInBuildBody {
-				// Self-referencing Instantiator cycle: create an Instantiator that
-				// recursively calls __safeDI_mockBuild. The cycle node's configuration
-				// property was excluded from the struct to avoid infinite value types.
-				let typeName = node.instantiatedTypeDescription.asSource
-				let unwrappedTypeDescription = node.typeDescription.unwrapped.asSource
-				// Build the external dep args for the recursive call.
-				let externalDeps = node.externalDependencyParameters
-				var argList = externalDeps.map { "\($0.label): \($0.label)" }
-				argList.append("safeDIMockConfiguration: .init()")
-				lines.append("\(indent)let \(node.propertyLabel) = \(unwrappedTypeDescription) { \(typeName).__safeDI_mockBuild(\(argList.joined(separator: ", "))) }")
-			} else if node.isInstantiator {
-				// Instantiator child: use generateInstantiatorBinding with build body paths.
-				let arguments = resolveBuildArguments(for: node, configurationPath: nodePath)
-				let optionalBuilderPath: String?
-				let builderExpression: String
-				if node.needsConfigurationStruct {
-					optionalBuilderPath = "\(nodePath).safeDIBuilder"
-					builderExpression = "(\(nodePath).safeDIBuilder ?? \(node.defaultBuilderExpression))"
-				} else {
-					optionalBuilderPath = nodePath
-					builderExpression = "(\(nodePath) ?? \(node.defaultBuilderExpression))"
-				}
-				var childAncestors = ancestorTypes
-				childAncestors.insert(parentTypeDescription.asSource)
-				lines.append(contentsOf: generateInstantiatorBinding(
-					for: node,
-					nodePath: nodePath,
-					builderExpression: builderExpression,
-					optionalBuilderPath: optionalBuilderPath,
-					arguments: arguments,
-
-					indent: indent,
-					ancestorTypes: childAncestors,
-				))
-			} else if node.needsConfigurationStruct {
-				// Non-leaf constant child: call its __safeDI_mockBuild() method.
-				let typeName = node.instantiatedTypeDescription.asSource
-				var buildArgs = [String]()
-				for externalDependency in node.externalDependencyParameters {
-					buildArgs.append("\(externalDependency.label): \(externalDependency.label)")
-				}
-				buildArgs.append("safeDIMockConfiguration: \(nodePath)")
-				let buildCall = "\(typeName).__safeDI_mockBuild(\(buildArgs.joined(separator: ", ")))"
-
-				if node.erasedToConcreteExistential {
-					let protocolType = node.typeDescription.asSource
-					lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(protocolType)(\(buildCall))")
-				} else {
-					lines.append("\(indent)let \(node.propertyLabel) = \(buildCall)")
-				}
-			} else {
-				// Leaf constant child: nil-coalescing binding.
-				let arguments = resolveBuildArguments(for: node, configurationPath: nodePath)
-				let argumentList = arguments.joined(separator: ", ")
-				let builderExpression = "(\(nodePath) ?? \(node.defaultBuilderExpression))"
-
-				if node.erasedToConcreteExistential {
-					let protocolType = node.typeDescription.asSource
-					lines.append("\(indent)let \(node.propertyLabel) = \(protocolType)(\(builderExpression)(\(argumentList)))")
-				} else {
-					lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)(\(argumentList))")
-				}
-			}
-		}
-
-		return lines
-	}
-
-	/// Resolves arguments for a builder call inside a `build()` method.
-	/// External dependencies reference local parameter names directly.
-	/// Defaults reference the configuration path.
-	private static func resolveBuildArguments(
-		for node: MockParameterNode,
-		configurationPath: String,
-	) -> [String] {
-		let dependencyLabels = Set(node.dependencies.map(\.property.label))
-		let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
-
-		return node.constructionArguments.compactMap { argument in
-			if dependencyLabels.contains(argument.innerLabel) {
-				argument.innerLabel
-			} else if defaultParameterLabels.contains(argument.label) {
-				"\(configurationPath).\(argument.label)"
-			} else if argument.hasDefaultValue, argument.label != "_",
-			          let defaultExpression = argument.defaultValueExpression
-			{
-				defaultExpression
-			} else {
-				argument.innerLabel
-			}
-		}
-	}
-
 	// MARK: Mock Body Generation
 
 	/// Generates the mock body bindings for the tree. Walks depth-first (children before
@@ -1704,21 +1406,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)(\(argumentList))")
 					}
 				} else {
-					// Constant node with children — call its __safeDI_mockBuild() method.
-					let typeName = node.instantiatedTypeDescription.asSource
-					var buildArgs = [String]()
-					for externalDependency in node.externalDependencyParameters {
-						buildArgs.append("\(externalDependency.label): \(externalDependency.label)")
-					}
-					let disambiguated = disambiguatedLabel(for: node, labelMap: disambiguatePropertyLabels(for: nodes))
-					buildArgs.append("safeDIMockConfiguration: \(parentPath).\(disambiguated)")
-					let buildCall = "\(typeName).__safeDI_mockBuild(\(buildArgs.joined(separator: ", ")))"
+					// Constant node with children — scoped construction via helper function.
+					// A function scope prevents child bindings from colliding with
+					// siblings' child bindings that share the same property label.
+					let functionName = "__safeDI_\(node.propertyLabel)"
+					let concreteTypeName = node.concreteTypeName
+					let innerIndent = "\(indent)\(standardIndent)"
+
+					lines.append("\(indent)func \(functionName)() -> \(concreteTypeName) {")
+					var childAncestors = ancestorTypes
+					childAncestors.insert(nodeTypeKey)
+					let childBindings = generateMockBodyBindings(
+						nodes: node.children,
+						parentPath: nodePath,
+						indent: innerIndent,
+						ancestorTypes: childAncestors,
+						sendableExtractionPrefix: sendableExtractionPrefix,
+					)
+					lines.append(contentsOf: childBindings)
+					lines.append("\(innerIndent)return \(builderExpression)(\(argumentList))")
+					lines.append("\(indent)}")
 
 					if node.erasedToConcreteExistential {
 						let protocolType = node.typeDescription.asSource
-						lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(protocolType)(\(buildCall))")
+						lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(protocolType)(\(functionName)())")
 					} else {
-						lines.append("\(indent)let \(node.propertyLabel) = \(buildCall)")
+						lines.append("\(indent)let \(node.propertyLabel) = \(functionName)()")
 					}
 				}
 			}

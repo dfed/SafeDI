@@ -157,8 +157,8 @@ public actor DependencyTreeGenerator {
 
 		// Generate mock code and collect configuration types in parallel.
 		let generatedRoots = try await withThrowingTaskGroup(
-			of: (root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String, buildMethodCode: String?)]).self,
-			returning: [(root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String, buildMethodCode: String?)])].self,
+			of: (root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)]).self,
+			returning: [(root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)])].self,
 		) { taskGroup in
 			for (instantiable, mockRoot) in mockRoots {
 				taskGroup.addTask {
@@ -178,7 +178,7 @@ public actor DependencyTreeGenerator {
 					)
 				}
 			}
-			var results = [(root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String, buildMethodCode: String?)])]()
+			var results = [(root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)])]()
 			for try await result in taskGroup {
 				results.append(result)
 			}
@@ -187,7 +187,7 @@ public actor DependencyTreeGenerator {
 
 		// Deduplicate configuration types by type name across all roots.
 		var seenTypeNames = Set<String>()
-		var allConfigurationExtensions = [(typeName: String, structCode: String, buildMethodCode: String?)]()
+		var allConfigurationExtensions = [(typeName: String, structCode: String)]()
 		for result in generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription }) {
 			for configType in result.configurationTypes {
 				if seenTypeNames.insert(configType.typeName).inserted {
@@ -212,15 +212,11 @@ public actor DependencyTreeGenerator {
 	}
 
 	private func generateMockConfigurationCode(
-		configurationExtensions: [(typeName: String, structCode: String, buildMethodCode: String?)],
+		configurationExtensions: [(typeName: String, structCode: String)],
 		mockConditionalCompilation: String?,
 	) -> String {
 		let extensions = configurationExtensions.map { configurationExtension in
-			if let buildMethodCode = configurationExtension.buildMethodCode {
-				"extension \(configurationExtension.typeName) {\n\(configurationExtension.structCode)\n\n\(buildMethodCode)\n}"
-			} else {
-				"extension \(configurationExtension.typeName) {\n\(configurationExtension.structCode)\n}"
-			}
+			"extension \(configurationExtension.typeName) {\n\(configurationExtension.structCode)\n}"
 		}
 		let body = extensions.joined(separator: "\n\n")
 		if let mockConditionalCompilation {

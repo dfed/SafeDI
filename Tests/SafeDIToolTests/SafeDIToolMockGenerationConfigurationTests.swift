@@ -560,7 +560,11 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = Child.__safeDI_mockBuild(safeDIMockConfiguration: safeDIParameters.child)
+		        func __safeDI_child() -> Child {
+		            let leaf = (safeDIParameters.child.leaf ?? Leaf.init)()
+		            return (safeDIParameters.child.safeDIBuilder ?? Child.init(leaf:))(leaf)
+		        }
+		        let child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -583,13 +587,6 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 
 		        let leaf: (() -> Leaf)?
 		        let safeDIBuilder: ((Leaf) -> Child)?
-		    }
-
-		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration
-		    ) -> Child {
-		        let leaf = (safeDIMockConfiguration.leaf ?? Leaf.init)()
-		        return (safeDIMockConfiguration.safeDIBuilder ?? Child.init(leaf:))(leaf)
 		    }
 		}
 

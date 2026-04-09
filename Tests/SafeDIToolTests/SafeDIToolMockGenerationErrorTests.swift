@@ -481,7 +481,12 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let presenter = Presenter.__safeDI_mockBuild(safeDIMockConfiguration: safeDIParameters.presenter)
+		        func __safeDI_presenter() -> Presenter {
+		            let service = (safeDIParameters.presenter.service ?? Service.init)()
+		            let client = (safeDIParameters.presenter.client ?? Client.init)()
+		            return (safeDIParameters.presenter.safeDIBuilder ?? Presenter.customMock(service:))(service)
+		        }
+		        let presenter = __safeDI_presenter()
 		        return Root(presenter: presenter)
 		    }
 		}
@@ -509,14 +514,6 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		        let service: (() -> Service)?
 		        let client: (() -> Client)?
 		        let safeDIBuilder: ((Service) -> Presenter)?
-		    }
-
-		    static func __safeDI_mockBuild(
-		        safeDIMockConfiguration: SafeDIMockConfiguration
-		    ) -> Presenter {
-		        let service = (safeDIMockConfiguration.service ?? Service.init)()
-		        let client = (safeDIMockConfiguration.client ?? Client.init)()
-		        return (safeDIMockConfiguration.safeDIBuilder ?? Presenter.customMock(service:))(service)
 		    }
 		}
 		#endif
