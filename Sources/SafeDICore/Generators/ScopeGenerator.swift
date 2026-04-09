@@ -704,11 +704,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var lines = [String]()
 		lines.append("extension \(typeName) {")
 
-		if hasTree, let safeDIParametersStruct = Self.generateSafeDIParametersStruct(
-			rootChildren: parameterTree,
-			indent: indent,
-		) {
-			lines.append(safeDIParametersStruct)
+		if hasTree {
+			lines.append(Self.generateSafeDIParametersStruct(
+				rootChildren: parameterTree,
+				indent: indent,
+			))
 			lines.append("")
 		}
 
@@ -1197,7 +1197,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		var result = [String: String]()
 		for node in nodes {
-			let count = labelCounts[node.propertyLabel] ?? 1
+			let count = labelCounts[node.propertyLabel]!
 			if count > 1 {
 				let disambiguated = "\(node.propertyLabel)_\(node.instantiatedTypeDescription.asSource)"
 				result["\(node.propertyLabel):\(node.instantiatedTypeDescription.asSource)"] = disambiguated
@@ -1213,7 +1213,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for node: MockParameterNode,
 		labelMap: [String: String],
 	) -> String {
-		labelMap["\(node.propertyLabel):\(node.instantiatedTypeDescription.asSource)"] ?? node.propertyLabel
+		labelMap["\(node.propertyLabel):\(node.instantiatedTypeDescription.asSource)"]!
 	}
 
 	/// Collects all unique types from the `MockParameterNode` tree, deduplicated
@@ -1253,9 +1253,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func generateSafeDIParametersStruct(
 		rootChildren: [MockParameterNode],
 		indent: String,
-	) -> String? {
-		guard !rootChildren.isEmpty else { return nil }
-
+	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
 		let memberIndent = "\(innerIndent)\(standardIndent)"
 
@@ -1543,15 +1541,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// For Instantiator nodes: inner builder function + `Instantiator<T>` wrapping.
 	/// Collects all `safeDIParameters` references that would appear inside a
 	/// `@Sendable func`, so they can be extracted and resolved outside the function.
-	/// Each extraction is a `(localName, optionalPath, defaultExpression, closureType)` tuple.
-	/// When `optionalPath` is non-nil, the extraction resolves an optional builder via if-let.
+	/// Each extraction is a `(localName, optionalPath, defaultExpression)` tuple.
+	/// When `optionalPath` is non-nil, the extraction resolves an optional builder via nil-coalescing.
 	/// When nil (default parameter references), it's a direct assignment.
 	private static func collectSendableExtractions(
 		nodes: [MockParameterNode],
 		parentPath: String,
 		functionName: String,
 		ancestorTypes: Set<String>,
-		into extractions: inout [(localName: String, optionalPath: String?, defaultExpression: String, closureType: String?)],
+		into extractions: inout [(localName: String, optionalPath: String?, defaultExpression: String)],
 	) {
 		let labelMap = disambiguatePropertyLabels(for: nodes)
 		for node in nodes {
@@ -1567,14 +1565,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 			if !isCycleNode {
 				let defaultBuilder = node.defaultBuilderExpression
-				let sendableAnnotation = node.requiresSendable ? "@Sendable " : ""
-				let closureType = "\(sendableAnnotation)\(node.builderClosureType)"
 				if node.needsConfigurationStruct {
 					extractions.append((
 						localName: "\(functionName)__\(relativePath)_safeDIBuilder",
 						optionalPath: "\(nodePath).safeDIBuilder",
 						defaultExpression: defaultBuilder,
-						closureType: closureType,
 					))
 				} else {
 					// Leaf builder — inline optional closure, no .safeDIBuilder path.
@@ -1582,7 +1577,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						localName: "\(functionName)__\(relativePath)_safeDIBuilder",
 						optionalPath: nodePath,
 						defaultExpression: defaultBuilder,
-						closureType: closureType,
 					))
 				}
 			}
@@ -1593,7 +1587,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					localName: "\(functionName)__\(relativePath)_\(defaultParameter.label)",
 					optionalPath: nil,
 					defaultExpression: "\(nodePath).\(defaultParameter.label)",
-					closureType: nil,
 				))
 			}
 
@@ -1830,7 +1823,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// OUTSIDE the function and resolve nil-coalescing here (in the
 				// @MainActor mock() context). This avoids capturing the non-Sendable
 				// SafeDIParameters struct inside the @Sendable function.
-				var extractions = [(localName: String, optionalPath: String?, defaultExpression: String, closureType: String?)]()
+				var extractions = [(localName: String, optionalPath: String?, defaultExpression: String)]()
 				collectSendableExtractions(
 					nodes: node.children,
 					parentPath: nodePath,
@@ -1839,20 +1832,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					into: &extractions,
 				)
 				// Extract the node's own safeDIBuilder.
-				let sendableAnnotation = node.requiresSendable ? "@Sendable " : ""
 				if let optionalBuilderPath {
 					extractions.append((
 						localName: "\(functionName)__safeDIBuilder",
 						optionalPath: optionalBuilderPath,
 						defaultExpression: node.defaultBuilderExpression,
-						closureType: "\(sendableAnnotation)\(node.builderClosureType)",
 					))
 				} else {
 					extractions.append((
 						localName: "\(functionName)__safeDIBuilder",
 						optionalPath: nil,
 						defaultExpression: builderExpression,
-						closureType: nil,
 					))
 				}
 
