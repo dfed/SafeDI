@@ -37,7 +37,7 @@ jobs:
       - name: Stamp version
         run: sed -i '' 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
-        run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }}
+        run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }} -Xswiftc -Osize -Xlinker -dead_strip
       - name: Give SafeDITool executable permissions
         run: chmod +x .build/*/release/SafeDITool
       - name: Make codesigning folder
@@ -99,7 +99,9 @@ jobs:
       - name: Stamp version
         run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
-        run: swift build -c release --product SafeDITool --static-swift-stdlib
+        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
+      - name: Strip binary
+        run: strip -s .build/release/SafeDITool
       - name: Upload SafeDITool artifact
         uses: actions/upload-artifact@v7
         with:
@@ -120,7 +122,9 @@ jobs:
       - name: Stamp version
         run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
-        run: swift build -c release --product SafeDITool --static-swift-stdlib
+        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
+      - name: Strip binary
+        run: strip -s .build/release/SafeDITool
       - name: Upload SafeDITool artifact
         uses: actions/upload-artifact@v7
         with:
@@ -154,6 +158,7 @@ jobs:
             artifacts/SafeDITool-macos-arm64/SafeDITool \
             artifacts/SafeDITool-macos-x86_64/SafeDITool \
             -output SafeDITool-macos-universal
+          strip -rSTx SafeDITool-macos-universal
           chmod +x SafeDITool-macos-universal
 
       - name: Assemble artifact bundle
@@ -196,7 +201,7 @@ jobs:
           INFOJSON
 
       - name: Zip artifact bundle
-        run: zip -r SafeDITool.artifactbundle.zip SafeDITool.artifactbundle/
+        run: zip -9 -r SafeDITool.artifactbundle.zip SafeDITool.artifactbundle/
 
       - name: Compute checksum
         id: checksum
