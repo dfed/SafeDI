@@ -1048,7 +1048,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Computes disambiguated property labels for a list of nodes at the same scope level.
 	/// When two nodes share a `propertyLabel`, appends `_TypeName` to make them unique.
-	/// Returns a dictionary mapping each node's `propertyLabel` to its disambiguated label.
+	/// If the disambiguated name collides with another node's original label, appends
+	/// additional underscores until unique.
+	/// Returns a dictionary mapping each node's key to its disambiguated label.
 	private static func disambiguatePropertyLabels(
 		for nodes: [MockParameterNode],
 	) -> [String: String] {
@@ -1056,14 +1058,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for node in nodes {
 			labelCounts[node.propertyLabel, default: 0] += 1
 		}
+		// Collect labels that don't need disambiguation (unique labels) as reserved.
+		var reservedLabels = Set<String>()
+		for node in nodes where labelCounts[node.propertyLabel]! == 1 {
+			reservedLabels.insert(node.propertyLabel)
+		}
 		var result = [String: String]()
 		for node in nodes {
+			let key = "\(node.propertyLabel):\(node.instantiatedTypeDescription.asSource)"
 			let count = labelCounts[node.propertyLabel]!
 			if count > 1 {
-				let disambiguated = "\(node.propertyLabel)_\(node.instantiatedTypeDescription.asSource)"
-				result["\(node.propertyLabel):\(node.instantiatedTypeDescription.asSource)"] = disambiguated
+				var disambiguated = "\(node.propertyLabel)_\(node.instantiatedTypeDescription.asSource)"
+				while reservedLabels.contains(disambiguated) {
+					disambiguated += "_"
+				}
+				reservedLabels.insert(disambiguated)
+				result[key] = disambiguated
 			} else {
-				result["\(node.propertyLabel):\(node.instantiatedTypeDescription.asSource)"] = node.propertyLabel
+				result[key] = node.propertyLabel
 			}
 		}
 		return result
