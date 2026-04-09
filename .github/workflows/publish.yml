@@ -40,7 +40,7 @@ jobs:
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Build SafeDITool
-        run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }}
+        run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }} --traits sourceBuild
       - name: Give SafeDITool executable permissions
         run: chmod +x .build/*/release/SafeDITool
       - name: Make codesigning folder
@@ -100,7 +100,7 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
       - name: Build SafeDITool
-        run: swift build -c release --product SafeDITool --static-swift-stdlib
+        run: swift build -c release --product SafeDITool --static-swift-stdlib --traits sourceBuild
       - name: Upload SafeDITool artifact
         uses: actions/upload-artifact@v4
         with:
@@ -119,7 +119,7 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
       - name: Build SafeDITool
-        run: swift build -c release --product SafeDITool --static-swift-stdlib
+        run: swift build -c release --product SafeDITool --static-swift-stdlib --traits sourceBuild
       - name: Upload SafeDITool artifact
         uses: actions/upload-artifact@v4
         with:
