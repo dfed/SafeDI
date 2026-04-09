@@ -841,8 +841,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let useMockInitializer: Bool
 		/// The custom mock method name (e.g., "customMock"), if any.
 		let customMockName: String?
-		/// The concrete type name (e.g., "ChildA").
-		let concreteTypeName: String
+		/// The concrete type (e.g., `ConcreteService`), which may differ from `instantiatedTypeDescription`
+		/// when the property uses an existential wrapper (e.g., `AnyService` fulfilled by `ConcreteService`).
+		let concreteType: TypeDescription
 		/// Forwarded properties on this type (relevant for Instantiator edges).
 		let forwardedProperties: Set<Property>
 		/// Whether this node is part of a property cycle.
@@ -875,7 +876,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let parameterTypes = constructionArguments
 				.map(\.typeDescription.asFunctionParameter.asSource)
 				.joined(separator: ", ")
-			return "(\(parameterTypes)) -> \(concreteTypeName)"
+			return "(\(parameterTypes)) -> \(concreteType.asSource)"
 		}
 
 		/// The default builder expression as a direct function reference.
@@ -889,12 +890,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				"init"
 			}
 			if constructionArguments.isEmpty {
-				return "\(concreteTypeName).\(methodName)"
+				return "\(concreteType.asSource).\(methodName)"
 			} else {
 				let labels = constructionArguments
 					.map { "\($0.label):" }
 					.joined()
-				return "\(concreteTypeName).\(methodName)(\(labels))"
+				return "\(concreteType.asSource).\(methodName)(\(labels))"
 			}
 		}
 
@@ -1000,7 +1001,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				dependencies: childInstantiable.dependencies,
 				useMockInitializer: useMockInitializer,
 				customMockName: childInstantiable.customMockName,
-				concreteTypeName: childInstantiable.concreteInstantiable.asSource,
+				concreteType: childInstantiable.concreteInstantiable,
 				forwardedProperties: forwardedProperties,
 				isPropertyCycle: isPropertyCycle,
 				requiresSendable: childInsideSendable,
@@ -1410,7 +1411,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// A function scope prevents child bindings from colliding with
 					// siblings' child bindings that share the same property label.
 					let functionName = "__safeDI_\(node.propertyLabel)"
-					let concreteTypeName = node.concreteTypeName
+					let concreteTypeName = node.concreteType.asSource
 					let innerIndent = "\(indent)\(standardIndent)"
 
 					lines.append("\(indent)func \(functionName)() -> \(concreteTypeName) {")
@@ -1492,7 +1493,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ancestorTypes: Set<String> = [],
 	) -> [String] {
 		let functionName = "__safeDI_\(node.propertyLabel)"
-		let concreteTypeName = node.concreteTypeName
+		let concreteTypeName = node.concreteType.asSource
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let propertyType = node.typeDescription.propertyType
 		let innerIndent = "\(indent)\(standardIndent)"
