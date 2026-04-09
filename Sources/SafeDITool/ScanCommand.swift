@@ -39,152 +39,172 @@ struct Scan: AsyncParsableCommand {
 	@Option(parsing: .upToNextOption, help: "Swift file paths scoped to the current target for mock generation. When provided, only these files are scanned for generateMock and #SafeDIConfiguration.") var mockScopedFiles: [String] = []
 
 	func run() async throws {
-		let projectRootURL = projectRoot.asFileURL
-		let outputDirectoryURL = outputDirectory.asFileURL
+		try await performScan(
+			inputSourcesFile: inputSourcesFile,
+			projectRoot: projectRoot,
+			outputDirectory: outputDirectory,
+			manifestFile: manifestFile,
+			mockScopedFiles: mockScopedFiles,
+		)
+	}
+}
 
-		// Read CSV and resolve file paths relative to project root.
-		let inputFilePaths = try String(contentsOfFile: inputSourcesFile, encoding: .utf8)
-			.components(separatedBy: CharacterSet(arrayLiteral: ","))
-			.removingEmpty()
+/// Performs the scan operation, producing a manifest JSON file.
+/// Shared by the `scan` subcommand and the `generate` subcommand's
+/// `--output-directory` auto-scan mode.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+func performScan(
+	inputSourcesFile: String,
+	projectRoot: String,
+	outputDirectory: String,
+	manifestFile: String,
+	mockScopedFiles: [String] = [],
+) async throws {
+	let projectRootURL = projectRoot.asFileURL
+	let outputDirectoryURL = outputDirectory.asFileURL
 
-		let directoryBaseURL = if projectRootURL.hasDirectoryPath {
-			projectRootURL
-		} else {
-			projectRootURL.appendingPathComponent("", isDirectory: true)
-		}
+	// Read CSV and resolve file paths relative to project root.
+	let inputFilePaths = try String(contentsOfFile: inputSourcesFile, encoding: .utf8)
+		.components(separatedBy: CharacterSet(arrayLiteral: ","))
+		.removingEmpty()
 
-		let allSwiftFiles = inputFilePaths.map {
+	let directoryBaseURL = if projectRootURL.hasDirectoryPath {
+		projectRootURL
+	} else {
+		projectRootURL.appendingPathComponent("", isDirectory: true)
+	}
+
+	let allSwiftFiles = inputFilePaths.map {
+		URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL
+	}
+
+	// Parse all files to find roots.
+	let allFilePaths = Set(allSwiftFiles.map(\.relativePath))
+	let allModuleInfo = try await parseSwiftFiles(allFilePaths)
+
+	// Determine which files are scoped for mock scanning.
+	let filesForMockScan: [URL] = if mockScopedFiles.isEmpty {
+		allSwiftFiles
+	} else {
+		mockScopedFiles.map {
 			URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL
 		}
+	}
+	let mockScopedFilePaths = Set(filesForMockScan.map(\.relativePath))
 
-		// Parse all files to find roots.
-		let allFilePaths = Set(allSwiftFiles.map(\.relativePath))
-		let allModuleInfo = try await parseSwiftFiles(allFilePaths)
+	// Parse mock-scoped files for configuration and mock info.
+	let mockScopedModuleInfo = try await parseSwiftFiles(mockScopedFilePaths)
 
-		// Determine which files are scoped for mock scanning.
-		let filesForMockScan: [URL] = if mockScopedFiles.isEmpty {
-			allSwiftFiles
-		} else {
-			mockScopedFiles.map {
-				URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL
-			}
-		}
-		let mockScopedFilePaths = Set(filesForMockScan.map(\.relativePath))
+	// Find configuration from the scoped files (first one only, matching current behavior).
+	let configuration = mockScopedModuleInfo.configurations.first
 
-		// Parse mock-scoped files for configuration and mock info.
-		let mockScopedModuleInfo = try await parseSwiftFiles(mockScopedFilePaths)
+	// Discover additional directories from configuration.
+	var additionalInputFiles = [String]()
+	var combinedModuleInfo = allModuleInfo
+	if let configuration, !configuration.additionalDirectoriesToInclude.isEmpty {
+		let additionalFiles = try await findSwiftFiles(inDirectories: configuration.additionalDirectoriesToInclude)
+		let additionalModuleInfo = try await parseSwiftFiles(additionalFiles)
 
-		// Find configuration from the scoped files (first one only, matching current behavior).
-		let configuration = mockScopedModuleInfo.configurations.first
-
-		// Discover additional directories from configuration.
-		var additionalInputFiles = [String]()
-		var combinedModuleInfo = allModuleInfo
-		if let configuration, !configuration.additionalDirectoriesToInclude.isEmpty {
-			let additionalFiles = try await findSwiftFiles(inDirectories: configuration.additionalDirectoriesToInclude)
-			let additionalModuleInfo = try await parseSwiftFiles(additionalFiles)
-
-			// Record the additional files for the plugin to use as build inputs.
-			additionalInputFiles = additionalFiles.sorted().map { filePath in
-				URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path
-			}
-
-			// Merge additional roots/mocks into the combined results.
-			combinedModuleInfo = ModuleInfo(
-				imports: allModuleInfo.imports + additionalModuleInfo.imports,
-				instantiables: allModuleInfo.instantiables + additionalModuleInfo.instantiables,
-				configurations: allModuleInfo.configurations,
-				filesWithUnexpectedNodes: allModuleInfo.filesWithUnexpectedNodes.map { $0 + (additionalModuleInfo.filesWithUnexpectedNodes ?? []) } ?? additionalModuleInfo.filesWithUnexpectedNodes,
-			)
+		// Record the additional files for the plugin to use as build inputs.
+		additionalInputFiles = additionalFiles.sorted().map { filePath in
+			URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path
 		}
 
-		// Collect root files and compute output file names.
-		let rootInstantiables = combinedModuleInfo.instantiables.filter(\.isRoot)
-		let rootFileURLs = rootInstantiables.compactMap { instantiable -> URL? in
-			guard let sourceFilePath = instantiable.sourceFilePath else { return nil }
-			return URL(fileURLWithPath: sourceFilePath, relativeTo: directoryBaseURL).standardizedFileURL
-		}
-		let sortedRootFileURLs = rootFileURLs.sorted {
-			relativePath(for: $0, relativeTo: projectRootURL) < relativePath(for: $1, relativeTo: projectRootURL)
-		}
-		// Deduplicate: multiple roots in the same file should only produce one output entry.
-		let uniqueRootFileURLs = sortedRootFileURLs.reduce(into: [URL]()) { result, url in
-			if result.last != url {
-				result.append(url)
-			}
-		}
-		let rootOutputNames = outputFileNames(for: uniqueRootFileURLs, relativeTo: projectRootURL)
+		// Merge additional roots/mocks into the combined results.
+		combinedModuleInfo = ModuleInfo(
+			imports: allModuleInfo.imports + additionalModuleInfo.imports,
+			instantiables: allModuleInfo.instantiables + additionalModuleInfo.instantiables,
+			configurations: allModuleInfo.configurations,
+			filesWithUnexpectedNodes: allModuleInfo.filesWithUnexpectedNodes.map { $0 + (additionalModuleInfo.filesWithUnexpectedNodes ?? []) } ?? additionalModuleInfo.filesWithUnexpectedNodes,
+		)
+	}
 
-		// Collect mock files (only from scoped files) and compute output file names.
-		let mockInstantiables = mockScopedModuleInfo.instantiables.filter(\.generateMock)
-		let mockFileURLs = mockInstantiables.compactMap { instantiable -> URL? in
-			guard let sourceFilePath = instantiable.sourceFilePath else { return nil }
-			return URL(fileURLWithPath: sourceFilePath, relativeTo: directoryBaseURL).standardizedFileURL
+	// Collect root files and compute output file names.
+	let rootInstantiables = combinedModuleInfo.instantiables.filter(\.isRoot)
+	let rootFileURLs = rootInstantiables.compactMap { instantiable -> URL? in
+		guard let sourceFilePath = instantiable.sourceFilePath else { return nil }
+		return URL(fileURLWithPath: sourceFilePath, relativeTo: directoryBaseURL).standardizedFileURL
+	}
+	let sortedRootFileURLs = rootFileURLs.sorted {
+		relativePath(for: $0, relativeTo: projectRootURL) < relativePath(for: $1, relativeTo: projectRootURL)
+	}
+	// Deduplicate: multiple roots in the same file should only produce one output entry.
+	let uniqueRootFileURLs = sortedRootFileURLs.reduce(into: [URL]()) { result, url in
+		if result.last != url {
+			result.append(url)
 		}
-		let sortedMockFileURLs = mockFileURLs.sorted {
-			relativePath(for: $0, relativeTo: projectRootURL) < relativePath(for: $1, relativeTo: projectRootURL)
-		}
-		let uniqueMockFileURLs = sortedMockFileURLs.reduce(into: [URL]()) { result, url in
-			if result.last != url {
-				result.append(url)
-			}
-		}
-		let mockOutputNames = mockOutputFileNames(for: uniqueMockFileURLs, relativeTo: projectRootURL)
+	}
+	let rootOutputNames = outputFileNames(for: uniqueRootFileURLs, relativeTo: projectRootURL)
 
-		// Extract additional mocks to generate from configuration.
-		let additionalMocksToGenerate = configuration?.additionalMocksToGenerate ?? []
+	// Collect mock files (only from scoped files) and compute output file names.
+	let mockInstantiables = mockScopedModuleInfo.instantiables.filter(\.generateMock)
+	let mockFileURLs = mockInstantiables.compactMap { instantiable -> URL? in
+		guard let sourceFilePath = instantiable.sourceFilePath else { return nil }
+		return URL(fileURLWithPath: sourceFilePath, relativeTo: directoryBaseURL).standardizedFileURL
+	}
+	let sortedMockFileURLs = mockFileURLs.sorted {
+		relativePath(for: $0, relativeTo: projectRootURL) < relativePath(for: $1, relativeTo: projectRootURL)
+	}
+	let uniqueMockFileURLs = sortedMockFileURLs.reduce(into: [URL]()) { result, url in
+		if result.last != url {
+			result.append(url)
+		}
+	}
+	let mockOutputNames = mockOutputFileNames(for: uniqueMockFileURLs, relativeTo: projectRootURL)
 
-		// Build additional mock output entries.
-		let additionalMockEntries: [SafeDIToolManifest.InputOutputMap] = additionalMocksToGenerate.map { typeName in
+	// Extract additional mocks to generate from configuration.
+	let additionalMocksToGenerate = configuration?.additionalMocksToGenerate ?? []
+
+	// Build additional mock output entries.
+	let additionalMockEntries: [SafeDIToolManifest.InputOutputMap] = additionalMocksToGenerate.map { typeName in
+		.init(
+			inputFilePath: typeName,
+			outputFilePath: outputDirectoryURL
+				.appendingPathComponent("\(typeName)+SafeDIMock.swift")
+				.path,
+		)
+	}
+
+	// Compute configuration file paths (relative to project root, matching Generate's expectations).
+	let configurationFilePaths = mockScopedModuleInfo.configurations.compactMap(\.sourceFilePath).map { path in
+		relativePath(for: URL(fileURLWithPath: path, relativeTo: directoryBaseURL).standardizedFileURL, relativeTo: projectRootURL)
+	}
+
+	// Determine mock configuration output file path.
+	let hasMockEntries = !uniqueMockFileURLs.isEmpty || !additionalMockEntries.isEmpty
+	let mockConfigurationOutputFilePath: String? = if hasMockEntries {
+		outputDirectoryURL
+			.appendingPathComponent("SafeDIMockConfiguration.swift")
+			.path
+	} else {
+		nil
+	}
+
+	// Build and write the manifest.
+	let manifest = SafeDIToolManifest(
+		dependencyTreeGeneration: zip(uniqueRootFileURLs, rootOutputNames).map { inputURL, outputFileName in
 			.init(
-				inputFilePath: typeName,
+				inputFilePath: relativePath(for: inputURL, relativeTo: projectRootURL),
 				outputFilePath: outputDirectoryURL
-					.appendingPathComponent("\(typeName)+SafeDIMock.swift")
+					.appendingPathComponent(outputFileName)
 					.path,
 			)
-		}
+		},
+		mockGeneration: zip(uniqueMockFileURLs, mockOutputNames).map { inputURL, outputFileName in
+			.init(
+				inputFilePath: relativePath(for: inputURL, relativeTo: projectRootURL),
+				outputFilePath: outputDirectoryURL
+					.appendingPathComponent(outputFileName)
+					.path,
+			)
+		} + additionalMockEntries,
+		configurationFilePaths: configurationFilePaths,
+		mockConfigurationOutputFilePath: mockConfigurationOutputFilePath,
+		additionalMocksToGenerate: additionalMocksToGenerate,
+		additionalInputFiles: additionalInputFiles,
+	)
 
-		// Compute configuration file paths (relative to project root, matching Generate's expectations).
-		let configurationFilePaths = mockScopedModuleInfo.configurations.compactMap(\.sourceFilePath).map { path in
-			relativePath(for: URL(fileURLWithPath: path, relativeTo: directoryBaseURL).standardizedFileURL, relativeTo: projectRootURL)
-		}
-
-		// Determine mock configuration output file path.
-		let hasMockEntries = !uniqueMockFileURLs.isEmpty || !additionalMockEntries.isEmpty
-		let mockConfigurationOutputFilePath: String? = if hasMockEntries {
-			outputDirectoryURL
-				.appendingPathComponent("SafeDIMockConfiguration.swift")
-				.path
-		} else {
-			nil
-		}
-
-		// Build and write the manifest.
-		let manifest = SafeDIToolManifest(
-			dependencyTreeGeneration: zip(uniqueRootFileURLs, rootOutputNames).map { inputURL, outputFileName in
-				.init(
-					inputFilePath: relativePath(for: inputURL, relativeTo: projectRootURL),
-					outputFilePath: outputDirectoryURL
-						.appendingPathComponent(outputFileName)
-						.path,
-				)
-			},
-			mockGeneration: zip(uniqueMockFileURLs, mockOutputNames).map { inputURL, outputFileName in
-				.init(
-					inputFilePath: relativePath(for: inputURL, relativeTo: projectRootURL),
-					outputFilePath: outputDirectoryURL
-						.appendingPathComponent(outputFileName)
-						.path,
-				)
-			} + additionalMockEntries,
-			configurationFilePaths: configurationFilePaths,
-			mockConfigurationOutputFilePath: mockConfigurationOutputFilePath,
-			additionalMocksToGenerate: additionalMocksToGenerate,
-			additionalInputFiles: additionalInputFiles,
-		)
-
-		let encoder = JSONEncoder()
-		encoder.outputFormatting = [.sortedKeys]
-		try encoder.encode(manifest).write(to: manifestFile.asFileURL)
-	}
+	let encoder = JSONEncoder()
+	encoder.outputFormatting = [.sortedKeys]
+	try encoder.encode(manifest).write(to: manifestFile.asFileURL)
 }

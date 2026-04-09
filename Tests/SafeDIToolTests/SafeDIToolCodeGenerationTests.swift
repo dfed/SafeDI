@@ -6054,14 +6054,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			moduleInfoOutput,
 		]
 
-		var tool = Generate()
-		tool.swiftSourcesFilePath = swiftFileCSV.relativePath
-		tool.include = []
-		tool.additionalImportedModules = []
-		tool.moduleInfoOutput = moduleInfoOutput.relativePath
-		tool.dependentModuleInfoFilePath = nil
-		tool.swiftManifest = manifestFile.relativePath
-		tool.dotFileOutput = nil
+		var tool = try Generate.parse([
+			swiftFileCSV.relativePath,
+			"--module-info-output", moduleInfoOutput.relativePath,
+			"--swift-manifest", manifestFile.relativePath,
+		])
 		try await tool.run()
 
 		#expect(try String(contentsOf: featureAOutput, encoding: .utf8) == """
@@ -6126,14 +6123,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		filesToDelete += [swiftFileCSV, swiftFile, manifestFile, moduleInfoOutput, outputDirectory]
 
 		func runTool() async throws {
-			var tool = Generate()
-			tool.swiftSourcesFilePath = swiftFileCSV.relativePath
-			tool.include = []
-			tool.additionalImportedModules = []
-			tool.moduleInfoOutput = moduleInfoOutput.relativePath
-			tool.dependentModuleInfoFilePath = nil
-			tool.swiftManifest = manifestFile.relativePath
-			tool.dotFileOutput = nil
+			var tool = try Generate.parse([
+				swiftFileCSV.relativePath,
+				"--module-info-output", moduleInfoOutput.relativePath,
+				"--swift-manifest", manifestFile.relativePath,
+			])
 			try await tool.run()
 		}
 

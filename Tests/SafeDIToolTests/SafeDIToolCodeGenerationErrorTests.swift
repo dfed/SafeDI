@@ -1962,7 +1962,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func include_throwsErrorWhenCanNotCreateEnumerator() async {
+	func include_throwsErrorWhenCanNotCreateEnumerator() async throws {
 		final class FailingFileFinder: FileFinder {
 			func enumerator(
 				at _: URL,
@@ -1973,32 +1973,19 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				nil
 			}
 		}
+		let tool = try Generate.parse(["--include", "Fake"])
 		await SafeDITool.$fileFinder.withValue(FailingFileFinder()) {
-			var tool = Generate()
-			tool.swiftSourcesFilePath = nil
-			tool.include = ["Fake"]
-			tool.additionalImportedModules = []
-			tool.moduleInfoOutput = nil
-			tool.dependentModuleInfoFilePath = nil
-			tool.swiftManifest = nil
-			tool.dotFileOutput = nil
 			await assertThrowsError("Could not create file enumerator for directory 'Fake'") {
-				try await tool.run()
+				var mutableTool = tool
+				try await mutableTool.run()
 			}
 		}
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func include_throwsErrorWhenNoSwiftSourcesFilePathAndNoInclude() async {
-		var tool = Generate()
-		tool.swiftSourcesFilePath = nil
-		tool.include = []
-		tool.additionalImportedModules = []
-		tool.moduleInfoOutput = nil
-		tool.dependentModuleInfoFilePath = nil
-		tool.swiftManifest = nil
-		tool.dotFileOutput = nil
+	func include_throwsErrorWhenNoSwiftSourcesFilePathAndNoInclude() async throws {
+		var tool = try Generate.parse([])
 		await assertThrowsError("Must provide 'swift-sources-file-path' or '--include'.") {
 			try await tool.run()
 		}
@@ -2029,14 +2016,11 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"Manifest lists '\(swiftFile.relativePath)' as containing a dependency tree root, but no @Instantiable(isRoot: true) was found in that file.",
 		) {
-			var tool = Generate()
-			tool.swiftSourcesFilePath = swiftFileCSV.relativePath
-			tool.include = []
-			tool.additionalImportedModules = []
-			tool.moduleInfoOutput = moduleInfoOutput.relativePath
-			tool.dependentModuleInfoFilePath = nil
-			tool.swiftManifest = manifestFile.relativePath
-			tool.dotFileOutput = nil
+			var tool = try Generate.parse([
+				swiftFileCSV.relativePath,
+				"--module-info-output", moduleInfoOutput.relativePath,
+				"--swift-manifest", manifestFile.relativePath,
+			])
 			try await tool.run()
 		}
 	}
@@ -2068,14 +2052,11 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"Found @Instantiable(isRoot: true) in '\(swiftFile.relativePath)', but this file is not listed in the manifest's dependencyTreeGeneration. Add it to the manifest or remove the isRoot annotation.",
 		) {
-			var tool = Generate()
-			tool.swiftSourcesFilePath = swiftFileCSV.relativePath
-			tool.include = []
-			tool.additionalImportedModules = []
-			tool.moduleInfoOutput = moduleInfoOutput.relativePath
-			tool.dependentModuleInfoFilePath = nil
-			tool.swiftManifest = manifestFile.relativePath
-			tool.dotFileOutput = nil
+			var tool = try Generate.parse([
+				swiftFileCSV.relativePath,
+				"--module-info-output", moduleInfoOutput.relativePath,
+				"--swift-manifest", manifestFile.relativePath,
+			])
 			try await tool.run()
 		}
 	}

@@ -57,19 +57,20 @@ struct Generate: AsyncParsableCommand {
 
 		// When --output-directory is provided without --swift-manifest, run an
 		// inline scan to discover roots/mocks and build the manifest automatically.
-		if swiftManifest == nil, let outputDirectory {
-			var scan = Scan()
+		var resolvedSwiftManifest = swiftManifest
+		if resolvedSwiftManifest == nil, let outputDirectory {
 			guard let swiftSourcesFilePath else {
 				throw ValidationError("--output-directory requires 'swift-sources-file-path'.")
 			}
-			scan.inputSourcesFile = swiftSourcesFilePath
-			scan.projectRoot = FileManager.default.currentDirectoryPath
-			scan.outputDirectory = outputDirectory
 			let manifestPath = (outputDirectory as NSString).appendingPathComponent("SafeDIManifest.json")
-			scan.manifestFile = manifestPath
-			scan.mockScopedFiles = mockScopedFiles
-			try await scan.run()
-			swiftManifest = manifestPath
+			try await performScan(
+				inputSourcesFile: swiftSourcesFilePath,
+				projectRoot: FileManager.default.currentDirectoryPath,
+				outputDirectory: outputDirectory,
+				manifestFile: manifestPath,
+				mockScopedFiles: mockScopedFiles,
+			)
+			resolvedSwiftManifest = manifestPath
 		}
 
 		let (dependentModuleInfo, initialModule) = try await (
@@ -81,10 +82,10 @@ struct Generate: AsyncParsableCommand {
 		// configs may be present. Scope to the current module using the manifest's
 		// configurationFilePaths (which lists only this target's own config files).
 		let currentModuleConfigurations: [SafeDIConfiguration]
-		if let swiftManifest {
+		if let resolvedSwiftManifest {
 			let manifest = try JSONDecoder().decode(
 				SafeDIToolManifest.self,
-				from: Data(contentsOf: swiftManifest.asFileURL),
+				from: Data(contentsOf: resolvedSwiftManifest.asFileURL),
 			)
 			let configurationFilePaths = Set(manifest.configurationFilePaths)
 			currentModuleConfigurations = initialModule.configurations.filter { configuration in
@@ -189,10 +190,10 @@ struct Generate: AsyncParsableCommand {
 			try JSONEncoder().encode(module).write(toPath: moduleInfoOutput)
 		}
 
-		if let swiftManifest {
+		if let resolvedSwiftManifest {
 			let manifest = try JSONDecoder().decode(
 				SafeDIToolManifest.self,
-				from: Data(contentsOf: swiftManifest.asFileURL),
+				from: Data(contentsOf: resolvedSwiftManifest.asFileURL),
 			)
 
 			let filesWithUnexpectedNodes = dependentModuleInfo.compactMap(\.filesWithUnexpectedNodes).flatMap(\.self) + (module.filesWithUnexpectedNodes ?? [])

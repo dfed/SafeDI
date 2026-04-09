@@ -111,26 +111,36 @@ func executeSafeDIToolTest(
 				.joined(separator: ",")
 				.write(to: scanCSV, atomically: true, encoding: .utf8)
 
-			var scan = Scan()
-			scan.inputSourcesFile = scanCSV.relativePath
-			scan.projectRoot = projectRoot.path
-			scan.outputDirectory = outputDirectory.path
-			scan.manifestFile = manifestFile.relativePath
-			scan.mockScopedFiles = swiftFiles.map(\.relativePath)
-			try await scan.run()
+			try await performScan(
+				inputSourcesFile: scanCSV.relativePath,
+				projectRoot: projectRoot.path,
+				outputDirectory: outputDirectory.path,
+				manifestFile: manifestFile.relativePath,
+				mockScopedFiles: swiftFiles.map(\.relativePath),
+			)
 			manifestPath = manifestFile.relativePath
 
 			filesToDelete.append(scanCSV)
 		}
 
-		var tool = Generate()
-		tool.swiftSourcesFilePath = swiftFileCSV.relativePath
-		tool.include = includeFolders
-		tool.additionalImportedModules = additionalImportedModules
-		tool.moduleInfoOutput = moduleInfoOutput.relativePath
-		tool.dependentModuleInfoFilePath = dependentModuleInfoPaths.isEmpty ? nil : dependentModuleInfoFileCSV.relativePath
-		tool.swiftManifest = manifestPath
-		tool.dotFileOutput = buildDOTFileOutput ? dotTreeOutput.relativePath : nil
+		var generateArguments = [swiftFileCSV.relativePath]
+		for folder in includeFolders {
+			generateArguments += ["--include", folder]
+		}
+		for module in additionalImportedModules {
+			generateArguments += ["--additional-imported-modules", module]
+		}
+		generateArguments += ["--module-info-output", moduleInfoOutput.relativePath]
+		if !dependentModuleInfoPaths.isEmpty {
+			generateArguments += ["--dependent-module-info-file-path", dependentModuleInfoFileCSV.relativePath]
+		}
+		if let manifestPath {
+			generateArguments += ["--swift-manifest", manifestPath]
+		}
+		if buildDOTFileOutput {
+			generateArguments += ["--dot-file-output", dotTreeOutput.relativePath]
+		}
+		var tool = try Generate.parse(generateArguments)
 		try await tool.run()
 
 		filesToDelete.append(swiftFileCSV)
