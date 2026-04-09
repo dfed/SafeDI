@@ -23,13 +23,8 @@ import Testing
 
 struct SafeDIToolVersionTests {
 	@Test
-	func currentVersion_isSemver() {
-		let version = SafeDITool.currentVersion
-		let components = version.split(separator: ".")
-		#expect(components.count == 3)
-		for component in components {
-			#expect(Int(component) != nil)
-		}
+	func currentVersion_isNotEmpty() {
+		#expect(!SafeDITool.currentVersion.isEmpty)
 	}
 
 	@Test

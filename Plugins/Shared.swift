@@ -20,19 +20,6 @@
 
 import Foundation
 
-#if canImport(XcodeProjectPlugin)
-	import XcodeProjectPlugin
-
-	extension XcodeProjectPlugin.XcodePluginContext {
-		var safeDIVersion: String {
-			// As of Xcode 15.0, Xcode command plugins have no way to read the package manifest, therefore we must hardcode the version number.
-			// It is okay for this number to be behind the most current release if the inputs and outputs to SafeDITool have not changed.
-			// Unlike SPM plugins, Xcode plugins can not determine the current version number, so we must hardcode it.
-			"2.0.0"
-		}
-	}
-#endif
-
 // MARK: - CSV Writing
 
 func writeInputSwiftFilesCSV(
@@ -63,8 +50,9 @@ func relativePath(for url: URL, relativeTo base: URL) -> String {
 
 	if urlPath.hasPrefix(basePath) {
 		return String(urlPath.dropFirst(basePath.count))
+	} else {
+		return urlPath
 	}
-	return urlPath
 }
 
 // MARK: - Scan Manifest

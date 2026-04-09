@@ -31,6 +31,7 @@ public func relativePath(for url: URL, relativeTo base: URL) -> String {
 
 	if urlPath.hasPrefix(basePath) {
 		return String(urlPath.dropFirst(basePath.count))
+	} else {
+		return urlPath
 	}
-	return urlPath
 }

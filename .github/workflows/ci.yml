@@ -10,17 +10,6 @@ on:
   pull_request:
 
 jobs:
-  version-check:
-    name: Version Consistency Check
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-      - name: Check version consistency
-        run: ./Scripts/check-version-consistency.sh
-
   update-version-check:
     name: Update Version Script Check
     runs-on: macos-26
@@ -37,10 +26,6 @@ jobs:
         run: grep -q 'checksum:.*abc123testchecksum456' Package.swift
       - name: Verify SafeDITool version was updated
         run: grep -q '99.99.99-test' Sources/SafeDITool/SafeDITool.swift
-      - name: Verify Shared.swift version was updated
-        run: grep -q '99.99.99-test' Plugins/Shared.swift
-      - name: Verify version consistency after update
-        run: ./Scripts/check-version-consistency.sh
 
   xcodebuild:
     name: Build with xcodebuild on Xcode 26
