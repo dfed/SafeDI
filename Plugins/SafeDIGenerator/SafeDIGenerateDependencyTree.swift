@@ -151,12 +151,24 @@ extension Target {
 			)
 
 			// In Xcode, context.tool(named:) returns paths with unresolved build
-			// variables (e.g. ${BUILD_DIR}/${CONFIGURATION}/SafeDITool) that are only
-			// valid at build-command execution time, not during createBuildCommands.
-			// Use a single prebuild command that lets SafeDITool scan and generate
-			// in one pass via the --output-directory flag.
+			// variables that are only resolved at build-command execution time.
+			// We cannot shell out via Process during createBuildCommands. Instead,
+			// use a lightweight in-process scan to discover output files, then
+			// return a .buildCommand that does the full scan+generate at build time
+			// via the --output-directory flag.
+			let scanResult = PluginScanner.scan(
+				swiftFiles: inputSwiftFiles,
+				mockScopedSwiftFiles: inputSwiftFiles,
+				relativeTo: projectRoot,
+				outputDirectory: outputDirectory,
+			)
+
+			guard !scanResult.outputFiles.isEmpty else {
+				return []
+			}
+
 			return [
-				.prebuildCommand(
+				.buildCommand(
 					displayName: "SafeDIGenerateDependencyTree",
 					executable: tool,
 					arguments: [
@@ -164,7 +176,9 @@ extension Target {
 						"--output-directory", outputDirectory.path(percentEncoded: false),
 						"--mock-scoped-files",
 					] + inputSwiftFiles.map { $0.path(percentEncoded: false) },
-					outputFilesDirectory: outputDirectory,
+					environment: [:],
+					inputFiles: inputSwiftFiles + scanResult.additionalInputFiles,
+					outputFiles: scanResult.outputFiles,
 				),
 			]
 		}
