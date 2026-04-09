@@ -55,6 +55,7 @@ import Testing
 				#SafeDIConfiguration(
 				    additionalImportedModules: ["MyModule"],
 				    additionalDirectoriesToInclude: ["DirA"],
+				    additionalMocksToGenerate: ["SomeService"],
 				    mockConditionalCompilation: "DEBUG"
 				)
 				""",
@@ -196,6 +197,30 @@ import Testing
 				diagnostics: [
 					DiagnosticSpec(
 						message: "The `additionalImportedModules` argument must be an array of string literals",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_throwsError_whenAdditionalMocksToGenerateHasNonLiteralValue() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    additionalMocksToGenerate: someVariable
+				)
+				""",
+				expandedSource: """
+				#SafeDIConfiguration(
+				    additionalMocksToGenerate: someVariable
+				)
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The `additionalMocksToGenerate` argument must be an array of string literals",
 						line: 1,
 						column: 1,
 					),
