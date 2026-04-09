@@ -7,11 +7,13 @@ The core documentation is `Documentation/Manual.md`. Read it before making chang
 ## Build & Test
 
 ```bash
-swift build              # Build all targets
-swift test               # Run all tests
-./CLI/lint.sh            # SwiftFormat — must pass before every push
-swift test --enable-code-coverage  # Coverage report
+swift build --traits sourceBuild   # Build all targets
+swift test --traits sourceBuild    # Run all tests
+./CLI/lint.sh                      # SwiftFormat — must pass before every push
+swift test --traits sourceBuild --enable-code-coverage  # Coverage report
 ```
+
+The `sourceBuild` trait is required for local development to compile SafeDITool from source. Without it, the default `prebuilt` trait downloads a prebuilt binary from the artifact bundle.
 
 Always lint before pushing. Always run the full test suite after changes — don't rely on filtered runs alone.
 

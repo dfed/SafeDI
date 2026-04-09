@@ -28,14 +28,12 @@ public func outputFileNames(
 	suffix: String = "+SafeDI.swift",
 ) -> [String] {
 	struct FileInfo {
-		let relativePath: String
 		let baseName: String
 		let parentComponents: [String]
 	}
 
 	let fileInfo = inputURLs.map { inputURL in
-		let relPath = relativePath(for: inputURL, relativeTo: baseURL)
-		let relativeDirectory = (relPath as NSString).deletingLastPathComponent
+		let relativeDirectory = (relativePath(for: inputURL, relativeTo: baseURL) as NSString).deletingLastPathComponent
 		let parentComponents: [String] = if relativeDirectory.isEmpty || relativeDirectory == "." {
 			[]
 		} else {
@@ -44,7 +42,6 @@ public func outputFileNames(
 				.map(String.init)
 		}
 		return FileInfo(
-			relativePath: relPath,
 			baseName: inputURL.deletingPathExtension().lastPathComponent,
 			parentComponents: parentComponents,
 		)

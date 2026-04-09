@@ -87,7 +87,7 @@ To install the SafeDI framework into an Xcode project with Swift Package Manager
 
 ### Generating your dependency tree
 
-SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin uses a prebuilt binary by default for fast builds without compiling SwiftSyntax. For local development or source builds, set `usePrebuiltBinary = false` in your `Package.swift`. This plugin works out of the box on most project configurations. If your project uses a custom build system, you can configure your build to utilize the `SafeDITool` command-line executable directly.
+SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin uses a prebuilt binary by default for fast builds without compiling SwiftSyntax. To build SafeDITool from source instead, enable the `sourceBuild` trait on your SafeDI dependency: `.package(url: "...", from: "2.0.0", traits: ["sourceBuild"])`. This plugin works out of the box on most project configurations. If your project uses a custom build system, you can configure your build to utilize the `SafeDITool` command-line executable directly.
 
 #### Swift package manager
 
