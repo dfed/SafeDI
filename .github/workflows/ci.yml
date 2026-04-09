@@ -80,37 +80,41 @@ jobs:
   #     - name: Build Package Integration
   #       run: xcrun swift build --package-path Examples/ExamplePrebuiltPackageIntegration
 
-  spm-project-integration:
-    name: Build Project Integration on Xcode 26
-    runs-on: macos-26
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-      - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
-      - name: Replace 'main' branch with the current branch
-        if: github.event.pull_request.head.repo.full_name == github.repository # Only do this if the branch is from our repo.
-        run: sed -i '' "s#branch = main;#branch = ${{ github.head_ref || github.ref_name }};#" "Examples/ExampleProjectIntegration/ExampleProjectIntegration.xcodeproj/project.pbxproj"
-      - name: Build Project Integration
-        run: pushd Examples/ExampleProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration; popd
+  # Disabled: Xcode project integrations use the default prebuilt trait, which
+  # resolves the artifact bundle. The current artifact bundle contains an older
+  # SafeDITool that doesn't support the new --output-directory flag. Re-enable
+  # once a release with the new SafeDITool is published.
+  # spm-project-integration:
+  #   name: Build Project Integration on Xcode 26
+  #   runs-on: macos-26
+  #   permissions:
+  #     contents: read
+  #   steps:
+  #     - name: Checkout Repo
+  #       uses: actions/checkout@v6
+  #     - name: Select Xcode Version
+  #       run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+  #     - name: Replace 'main' branch with the current branch
+  #       if: github.event.pull_request.head.repo.full_name == github.repository # Only do this if the branch is from our repo.
+  #       run: sed -i '' "s#branch = main;#branch = ${{ github.head_ref || github.ref_name }};#" "Examples/ExampleProjectIntegration/ExampleProjectIntegration.xcodeproj/project.pbxproj"
+  #     - name: Build Project Integration
+  #       run: pushd Examples/ExampleProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration; popd
 
-  spm-multi-project-integration:
-    name: Build Multi Project Integration on Xcode 26
-    runs-on: macos-26
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-      - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
-      - name: Replace 'main' branch with the current branch
-        if: github.event.pull_request.head.repo.full_name == github.repository # Only do this if the branch is from our repo.
-        run: sed -i '' "s#branch = main;#branch = ${{ github.head_ref || github.ref_name }};#" "Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration.xcodeproj/project.pbxproj"
-      - name: Build Project Integration
-        run: pushd Examples/ExampleMultiProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration; popd
+  # spm-multi-project-integration:
+  #   name: Build Multi Project Integration on Xcode 26
+  #   runs-on: macos-26
+  #   permissions:
+  #     contents: read
+  #   steps:
+  #     - name: Checkout Repo
+  #       uses: actions/checkout@v6
+  #     - name: Select Xcode Version
+  #       run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+  #     - name: Replace 'main' branch with the current branch
+  #       if: github.event.pull_request.head.repo.full_name == github.repository # Only do this if the branch is from our repo.
+  #       run: sed -i '' "s#branch = main;#branch = ${{ github.head_ref || github.ref_name }};#" "Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration.xcodeproj/project.pbxproj"
+  #     - name: Build Project Integration
+  #       run: pushd Examples/ExampleMultiProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration; popd
 
   spm:
     name: Build and Test on Xcode 26
@@ -125,7 +129,7 @@ jobs:
       - name: Build and Test Framework
         run: |
           for i in {1..5}; do # Run tests a few times to ensure code-gen is stable.
-            xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing
+            xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild
           done
       - name: Prepare Coverage Reports
         run: ./Scripts/prepare-coverage-reports.sh
@@ -147,7 +151,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Build and Test Framework
-        run: swift test -c release --enable-code-coverage -Xswiftc -enable-testing
+        run: swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild
       - name: Install curl for Codecov
         run: |
           apt-get update
