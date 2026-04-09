@@ -6,11 +6,6 @@ on:
         description: 'Version tag to create (e.g. 2.0.0)'
         type: string
         required: true
-      branch:
-        description: 'Branch to build from and commit to'
-        type: string
-        required: true
-        default: 'main'
       prerelease:
         description: 'Mark the GitHub release as a prerelease'
         type: boolean
@@ -36,7 +31,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ github.ref_name }}
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Stamp version
@@ -100,7 +95,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ github.ref_name }}
       - name: Stamp version
         run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
@@ -121,7 +116,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ github.ref_name }}
       - name: Stamp version
         run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
@@ -142,7 +137,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ github.ref_name }}
           token: ${{ secrets.RELEASE_UPLOADER }}
 
       - name: Select Xcode Version
@@ -246,7 +241,7 @@ jobs:
         if: ${{ !inputs.dry-run }}
         run: |
           git tag "${{ inputs.version }}"
-          git push origin "${{ inputs.branch }}" --tags
+          git push origin "${{ github.ref_name }}" --tags
 
       - name: Create GitHub Release
         if: ${{ !inputs.dry-run }}
