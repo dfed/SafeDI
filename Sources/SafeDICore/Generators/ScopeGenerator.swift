@@ -980,12 +980,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 
 			// Gather all construction arguments from the appropriate initializer.
+			// The macro validates that an initializer always exists, so one of
+			// these will always be non-nil for well-formed types.
 			let constructionArguments: [Initializer.Argument] = if let constructionInitializer {
 				constructionInitializer.arguments
-			} else if let initializer = childInstantiable.initializer {
-				initializer.arguments
 			} else {
-				[]
+				childInstantiable.initializer?.arguments ?? []
 			}
 
 			nodes.append(MockParameterNode(
