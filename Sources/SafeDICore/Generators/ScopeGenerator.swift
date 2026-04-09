@@ -1022,16 +1022,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) {
 		for node in nodes {
 			let childLabels = Set(node.children.map(\.propertyLabel))
-			let collectedLabels = Set(flatUncoveredParameters.map(\.label))
+			let collectedKeys = Set(flatUncoveredParameters.map { "\($0.label):\($0.typeSource)" })
 			for dependency in node.dependencies {
 				guard case .instantiated = dependency.source else { continue }
 				// Skip deps that are covered by a child node in the tree.
 				guard !childLabels.contains(dependency.property.label) else { continue }
-				// Skip deps already collected.
-				guard !collectedLabels.contains(dependency.property.label) else { continue }
 				let sourceType = dependency.property.propertyType.isConstant
 					? dependency.property.typeDescription.asInstantiatedType.asSource
 					: dependency.property.typeDescription.asSource
+				// Skip deps already collected (by label AND type).
+				let key = "\(dependency.property.label):\(sourceType)"
+				guard !collectedKeys.contains(key) else { continue }
 				flatUncoveredParameters.append((label: dependency.property.label, typeSource: sourceType))
 			}
 			// Skip recursion into property cycle children — they're self-references
