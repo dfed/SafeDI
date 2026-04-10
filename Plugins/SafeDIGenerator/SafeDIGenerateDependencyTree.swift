@@ -53,18 +53,37 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 
 		let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
 
-		// Shell out to SafeDITool scan to build the manifest.
-		try runSafeDITool(
-			at: tool,
-			arguments: [
-				"scan",
-				"--input-sources-file", inputSourcesFile.path(percentEncoded: false),
-				"--project-root", packageRoot.path(percentEncoded: false),
-				"--output-directory", outputDirectory.path(percentEncoded: false),
-				"--manifest-file", manifestFile.path(percentEncoded: false),
-				"--mock-scoped-files",
-			] + targetSwiftFiles.map { $0.path(percentEncoded: false) },
-		)
+		// Try to shell out to SafeDITool to build the manifest. When Xcode
+		// builds an SPM package, context.tool(named:) may return a path with
+		// unresolved build variables (e.g. /${BUILD_DIR}/${CONFIGURATION}/SafeDITool)
+		// that cannot be executed during createBuildCommands. In that case, fall
+		// back to the lightweight in-process PluginScanner.
+		do {
+			try runSafeDITool(
+				at: tool,
+				arguments: [
+					"scan",
+					"--input-sources-file", inputSourcesFile.path(percentEncoded: false),
+					"--project-root", packageRoot.path(percentEncoded: false),
+					"--output-directory", outputDirectory.path(percentEncoded: false),
+					"--manifest-file", manifestFile.path(percentEncoded: false),
+					"--mock-scoped-files",
+				] + targetSwiftFiles.map { $0.path(percentEncoded: false) },
+			)
+		} catch {
+			Diagnostics.warning(
+				"SafeDITool could not be executed during plugin setup (\(error)). "
+					+ "Falling back to in-process scan. Output file discovery may over-approximate."
+			)
+			return try createBuildCommandsWithPluginScanner(
+				tool: tool,
+				targetSwiftFiles: targetSwiftFiles,
+				allSwiftFiles: allSwiftFiles,
+				packageRoot: packageRoot,
+				inputSourcesFile: inputSourcesFile,
+				outputDirectory: outputDirectory,
+			)
+		}
 
 		let manifest = try JSONDecoder().decode(
 			ScanManifest.self,
@@ -92,6 +111,45 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 				environment: [:],
 				inputFiles: allSwiftFiles + additionalInputFiles,
 				outputFiles: outputFiles,
+			),
+		]
+	}
+
+	/// Fallback when SafeDITool cannot be executed during plugin setup.
+	/// Uses lightweight in-process scanning to discover output files, then
+	/// returns a build command that does the full scan+generate at build time
+	/// via the --output-directory flag.
+	private func createBuildCommandsWithPluginScanner(
+		tool: URL,
+		targetSwiftFiles: [URL],
+		allSwiftFiles: [URL],
+		packageRoot: URL,
+		inputSourcesFile: URL,
+		outputDirectory: URL,
+	) throws -> [Command] {
+		let scanResult = PluginScanner.scan(
+			swiftFiles: allSwiftFiles,
+			mockScopedSwiftFiles: targetSwiftFiles,
+			relativeTo: packageRoot,
+			outputDirectory: outputDirectory,
+		)
+
+		guard !scanResult.outputFiles.isEmpty else {
+			return []
+		}
+
+		return [
+			.buildCommand(
+				displayName: "SafeDIGenerateDependencyTree",
+				executable: tool,
+				arguments: [
+					inputSourcesFile.path(percentEncoded: false),
+					"--output-directory", outputDirectory.path(percentEncoded: false),
+					"--mock-scoped-files",
+				] + targetSwiftFiles.map { $0.path(percentEncoded: false) },
+				environment: [:],
+				inputFiles: allSwiftFiles + scanResult.additionalInputFiles,
+				outputFiles: scanResult.outputFiles,
 			),
 		]
 	}
