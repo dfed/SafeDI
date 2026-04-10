@@ -114,18 +114,18 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension TypeWithCustomMock {
 		    struct SafeDIParameters {
 		        init(
-		            dependency: Dependency.SafeDIMockConfiguration = .init()
+		            dependency: (() -> Dependency)? = nil
 		        ) {
 		            self.dependency = dependency
 		        }
 
-		        let dependency: Dependency.SafeDIMockConfiguration
+		        let dependency: (() -> Dependency)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> TypeWithCustomMock {
-		        let dependency = (safeDIParameters.dependency.safeDIBuilder ?? Dependency.init)()
+		        let dependency = (safeDIParameters.dependency ?? Dependency.init)()
 		        return TypeWithCustomMock.customMock(dependency: dependency)
 		    }
 		}
@@ -141,20 +141,6 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Dependency {
 		    static func mock() -> Dependency {
 		        Dependency()
-		    }
-		}
-		#endif
-
-		#if DEBUG
-		extension Dependency {
-		    struct SafeDIMockConfiguration {
-		        init(
-		            _ safeDIBuilder: (() -> Dependency)? = nil
-		        ) {
-		            self.safeDIBuilder = safeDIBuilder
-		        }
-
-		        let safeDIBuilder: (() -> Dependency)?
 		    }
 		}
 		#endif
@@ -248,22 +234,22 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Parent {
 		    struct SafeDIParameters {
 		        init(
-		            dependency: Dependency.SafeDIMockConfiguration = .init(),
-		            child: Child.SafeDIMockConfiguration = .init()
+		            dependency: (() -> Dependency)? = nil,
+		            child: ((Dependency) -> Child)? = nil
 		        ) {
 		            self.dependency = dependency
 		            self.child = child
 		        }
 
-		        let dependency: Dependency.SafeDIMockConfiguration
-		        let child: Child.SafeDIMockConfiguration
+		        let dependency: (() -> Dependency)?
+		        let child: ((Dependency) -> Child)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let dependency = (safeDIParameters.dependency.safeDIBuilder ?? Dependency.init)()
-		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.customMock(dependency:))(dependency)
+		        let dependency = (safeDIParameters.dependency ?? Dependency.init)()
+		        let child = (safeDIParameters.child ?? Child.customMock(dependency:))(dependency)
 		        return Parent(child: child)
 		    }
 		}
@@ -280,33 +266,19 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Child {
 		    struct SafeDIParameters {
 		        init(
-		            dependency: Dependency.SafeDIMockConfiguration = .init()
+		            dependency: (() -> Dependency)? = nil
 		        ) {
 		            self.dependency = dependency
 		        }
 
-		        let dependency: Dependency.SafeDIMockConfiguration
+		        let dependency: (() -> Dependency)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Child {
-		        let dependency = (safeDIParameters.dependency.safeDIBuilder ?? Dependency.init)()
+		        let dependency = (safeDIParameters.dependency ?? Dependency.init)()
 		        return Child.customMock(dependency: dependency)
-		    }
-		}
-		#endif
-
-		#if DEBUG
-		extension Child {
-		    struct SafeDIMockConfiguration {
-		        init(
-		            _ safeDIBuilder: ((Dependency) -> Child)? = nil
-		        ) {
-		            self.safeDIBuilder = safeDIBuilder
-		        }
-
-		        let safeDIBuilder: ((Dependency) -> Child)?
 		    }
 		}
 		#endif
@@ -363,22 +335,22 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Parent {
 		    struct SafeDIParameters {
 		        init(
-		            serviceA: ServiceA.SafeDIMockConfiguration = .init(),
-		            serviceB: ServiceB.SafeDIMockConfiguration = .init()
+		            serviceA: (() -> ServiceA)? = nil,
+		            serviceB: (() -> ServiceB)? = nil
 		        ) {
 		            self.serviceA = serviceA
 		            self.serviceB = serviceB
 		        }
 
-		        let serviceA: ServiceA.SafeDIMockConfiguration
-		        let serviceB: ServiceB.SafeDIMockConfiguration
+		        let serviceA: (() -> ServiceA)?
+		        let serviceB: (() -> ServiceB)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let serviceA = (safeDIParameters.serviceA.safeDIBuilder ?? ServiceA.customMock)()
-		        let serviceB = (safeDIParameters.serviceB.safeDIBuilder ?? ServiceB.init)()
+		        let serviceA = (safeDIParameters.serviceA ?? ServiceA.customMock)()
+		        let serviceB = (safeDIParameters.serviceB ?? ServiceB.init)()
 		        return Parent(serviceA: serviceA, serviceB: serviceB)
 		    }
 		}
@@ -445,23 +417,23 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Parent {
 		    struct SafeDIParameters {
 		        init(
-		            service: Service.SafeDIMockConfiguration = .init(),
+		            service: (() -> Service)? = nil,
 		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.service = service
 		            self.child = child
 		        }
 
-		        let service: Service.SafeDIMockConfiguration
+		        let service: (() -> Service)?
 		        let child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let service = (safeDIParameters.service.safeDIBuilder ?? Service.init)()
+		        let service = (safeDIParameters.service ?? Service.init)()
 		        func __safeDI_child() -> Child {
-		            let grandchild = (safeDIParameters.child.grandchild.safeDIBuilder ?? Grandchild.customMock(service:))(service)
+		            let grandchild = (safeDIParameters.child.grandchild ?? Grandchild.customMock(service:))(service)
 		            return (safeDIParameters.child.safeDIBuilder ?? Child.init(grandchild:))(grandchild)
 		        }
 		        let child: Child = __safeDI_child()
@@ -528,22 +500,22 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Parent {
 		    struct SafeDIParameters {
 		        init(
-		            service: Service.SafeDIMockConfiguration = .init(),
-		            child: Child.SafeDIMockConfiguration = .init()
+		            service: (() -> Service)? = nil,
+		            child: ((Service) -> Child)? = nil
 		        ) {
 		            self.service = service
 		            self.child = child
 		        }
 
-		        let service: Service.SafeDIMockConfiguration
-		        let child: Child.SafeDIMockConfiguration
+		        let service: (() -> Service)?
+		        let child: ((Service) -> Child)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let service = (safeDIParameters.service.safeDIBuilder ?? Service.init)()
-		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.customMock(service:))(service)
+		        let service = (safeDIParameters.service ?? Service.init)()
+		        let child = (safeDIParameters.child ?? Child.customMock(service:))(service)
 		        return Parent(child: child)
 		    }
 		}
@@ -605,22 +577,22 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Parent {
 		    struct SafeDIParameters {
 		        init(
-		            service: Service.SafeDIMockConfiguration = .init(),
-		            child: Child.SafeDIMockConfiguration = .init()
+		            service: (() -> Service)? = nil,
+		            child: ((Service) -> Child)? = nil
 		        ) {
 		            self.service = service
 		            self.child = child
 		        }
 
-		        let service: Service.SafeDIMockConfiguration
-		        let child: Child.SafeDIMockConfiguration
+		        let service: (() -> Service)?
+		        let child: ((Service) -> Child)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let service = (safeDIParameters.service.safeDIBuilder ?? Service.init)()
-		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.customMock(service:))(service)
+		        let service = (safeDIParameters.service ?? Service.init)()
+		        let child = (safeDIParameters.child ?? Child.customMock(service:))(service)
 		        return Parent(child: child)
 		    }
 		}
@@ -686,26 +658,26 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Parent {
 		    struct SafeDIParameters {
 		        init(
-		            serviceA: ServiceA.SafeDIMockConfiguration = .init(),
-		            serviceB: ServiceB.SafeDIMockConfiguration = .init(),
-		            child: Child.SafeDIMockConfiguration = .init()
+		            serviceA: (() -> ServiceA)? = nil,
+		            serviceB: (() -> ServiceB)? = nil,
+		            child: ((ServiceA, ServiceB) -> Child)? = nil
 		        ) {
 		            self.serviceA = serviceA
 		            self.serviceB = serviceB
 		            self.child = child
 		        }
 
-		        let serviceA: ServiceA.SafeDIMockConfiguration
-		        let serviceB: ServiceB.SafeDIMockConfiguration
-		        let child: Child.SafeDIMockConfiguration
+		        let serviceA: (() -> ServiceA)?
+		        let serviceB: (() -> ServiceB)?
+		        let child: ((ServiceA, ServiceB) -> Child)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let serviceA = (safeDIParameters.serviceA.safeDIBuilder ?? ServiceA.init)()
-		        let serviceB = (safeDIParameters.serviceB.safeDIBuilder ?? ServiceB.init)()
-		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.customMock(serviceA:serviceB:))(serviceA, serviceB)
+		        let serviceA = (safeDIParameters.serviceA ?? ServiceA.init)()
+		        let serviceB = (safeDIParameters.serviceB ?? ServiceB.init)()
+		        let child = (safeDIParameters.child ?? Child.customMock(serviceA:serviceB:))(serviceA, serviceB)
 		        return Parent(child: child)
 		    }
 		}
@@ -763,22 +735,22 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Child {
 		    struct SafeDIParameters {
 		        init(
-		            serviceA: ServiceA.SafeDIMockConfiguration = .init(),
-		            serviceB: ServiceB.SafeDIMockConfiguration = .init()
+		            serviceA: (() -> ServiceA)? = nil,
+		            serviceB: (() -> ServiceB)? = nil
 		        ) {
 		            self.serviceA = serviceA
 		            self.serviceB = serviceB
 		        }
 
-		        let serviceA: ServiceA.SafeDIMockConfiguration
-		        let serviceB: ServiceB.SafeDIMockConfiguration
+		        let serviceA: (() -> ServiceA)?
+		        let serviceB: (() -> ServiceB)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Child {
-		        let serviceA = (safeDIParameters.serviceA.safeDIBuilder ?? ServiceA.init)()
-		        let serviceB = (safeDIParameters.serviceB.safeDIBuilder ?? ServiceB.init)()
+		        let serviceA = (safeDIParameters.serviceA ?? ServiceA.init)()
+		        let serviceB = (safeDIParameters.serviceB ?? ServiceB.init)()
 		        return Child.customMock(serviceB: serviceB, serviceA: serviceA)
 		    }
 		}
@@ -835,20 +807,6 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    }
 		}
 		#endif
-
-		#if DEBUG
-		extension Child {
-		    struct SafeDIMockConfiguration {
-		        init(
-		            _ safeDIBuilder: ((String) -> Child)? = nil
-		        ) {
-		            self.safeDIBuilder = safeDIBuilder
-		        }
-
-		        let safeDIBuilder: ((String) -> Child)?
-		    }
-		}
-		#endif
 		""", "Unexpected output \(output.mockFiles["Child+SafeDIMock.swift"] ?? "")")
 
 		// Parent DOES get a generated mock with parameters and Child.mock() call.
@@ -861,19 +819,19 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Parent {
 		    struct SafeDIParameters {
 		        init(
-		            child: Child.SafeDIMockConfiguration = .init()
+		            child: ((String) -> Child)? = nil
 		        ) {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        let child: ((String) -> Child)?
 		    }
 
 		    static func mock(
 		        name: String,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.customMock(name:))(name)
+		        let child = (safeDIParameters.child ?? Child.customMock(name:))(name)
 		        return Parent(child: child)
 		    }
 		}
@@ -941,7 +899,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let dependency = (safeDIParameters.child.dependency.safeDIBuilder ?? Dependency.init)()
+		            let dependency = (safeDIParameters.child.dependency ?? Dependency.init)()
 		            return (safeDIParameters.child.safeDIBuilder ?? Child.customMock(dependency:extra:))(dependency, safeDIParameters.child.extra)
 		        }
 		        let child: Child = __safeDI_child()
@@ -1019,7 +977,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_childService() -> ChildService {
-		            let engine = (safeDIParameters.childService.engine.safeDIBuilder ?? Engine.init)()
+		            let engine = (safeDIParameters.childService.engine ?? Engine.init)()
 		            return (safeDIParameters.childService.safeDIBuilder ?? ChildService.customMock(engine:))(engine)
 		        }
 		        let childService: ChildService = __safeDI_childService()
@@ -1029,26 +987,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		#endif
 		""", "Unexpected Root output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
 
-		#expect(output.mockConfigurationFile == """
-		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-		// Any modifications made to this file will be overwritten on subsequent builds.
-		// Please refrain from editing this file directly.
-
-		#if DEBUG
-		extension Engine {
-		    struct SafeDIMockConfiguration {
-		        init(
-		            _ safeDIBuilder: (() -> Engine)? = nil
-		        ) {
-		            self.safeDIBuilder = safeDIBuilder
-		        }
-
-		        let safeDIBuilder: (() -> Engine)?
-		    }
-		}
-		#endif
-
-		""", "Unexpected output \(output.mockConfigurationFile ?? "")")
+		#expect(output.mockConfigurationFile == emptyMockConfigurationFileOutput, "Unexpected output \(output.mockConfigurationFile ?? "")")
 	}
 
 	@Test
@@ -1099,20 +1038,6 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    }
 		}
 		#endif
-
-		#if DEBUG
-		extension Service {
-		    struct SafeDIMockConfiguration {
-		        init(
-		            _ safeDIBuilder: ((@escaping @MainActor (String) -> Void, @escaping @MainActor (String) throws -> Void) -> Service)? = nil
-		        ) {
-		            self.safeDIBuilder = safeDIBuilder
-		        }
-
-		        let safeDIBuilder: ((@escaping @MainActor (String) -> Void, @escaping @MainActor (String) throws -> Void) -> Service)?
-		    }
-		}
-		#endif
 		""", "Unexpected output \(output.mockFiles["Service+SafeDIMock.swift"] ?? "")")
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
 		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
@@ -1123,18 +1048,18 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    struct SafeDIParameters {
 		        init(
-		            service: Service.SafeDIMockConfiguration = .init()
+		            service: ((@escaping @MainActor (String) -> Void, @escaping @MainActor (String) throws -> Void) -> Service)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: Service.SafeDIMockConfiguration
+		        let service: ((@escaping @MainActor (String) -> Void, @escaping @MainActor (String) throws -> Void) -> Service)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let service = (safeDIParameters.service.safeDIBuilder ?? Service.customMock(onCancel:onSubmit:))({ _ in }, { _ in })
+		        let service = (safeDIParameters.service ?? Service.customMock(onCancel:onSubmit:))({ _ in }, { _ in })
 		        return Root(service: service)
 		    }
 		}
@@ -1198,7 +1123,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let service = (safeDIParameters.child.service.safeDIBuilder ?? Service.init)()
+		            let service = (safeDIParameters.child.service ?? Service.init)()
 		            return (safeDIParameters.child.safeDIBuilder ?? Child.customMock(service:))(service)
 		        }
 		        let child: Child = __safeDI_child()
@@ -1275,7 +1200,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let externalService = (safeDIParameters.child.externalService.safeDIBuilder ?? ExternalService.init)()
+		            let externalService = (safeDIParameters.child.externalService ?? ExternalService.init)()
 		            return (safeDIParameters.child.safeDIBuilder ?? Child.customMock(externalService:))(externalService)
 		        }
 		        let child: Child = __safeDI_child()
@@ -1285,26 +1210,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		#endif
 		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
 
-		#expect(output.mockConfigurationFile == """
-		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-		// Any modifications made to this file will be overwritten on subsequent builds.
-		// Please refrain from editing this file directly.
-
-		#if DEBUG
-		extension ExternalService {
-		    struct SafeDIMockConfiguration {
-		        init(
-		            _ safeDIBuilder: (() -> ExternalService)? = nil
-		        ) {
-		            self.safeDIBuilder = safeDIBuilder
-		        }
-
-		        let safeDIBuilder: (() -> ExternalService)?
-		    }
-		}
-		#endif
-
-		""", "Unexpected output \(output.mockConfigurationFile ?? "")")
+		#expect(output.mockConfigurationFile == emptyMockConfigurationFileOutput, "Unexpected output \(output.mockConfigurationFile ?? "")")
 	}
 
 	@Test
@@ -1351,19 +1257,19 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    struct SafeDIParameters {
 		        init(
-		            child: Child.SafeDIMockConfiguration = .init()
+		            child: ((Service?) -> Child)? = nil
 		        ) {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        let child: ((Service?) -> Child)?
 		    }
 
 		    static func mock(
 		        service: Service? = nil,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.customMock(service:))(service)
+		        let child = (safeDIParameters.child ?? Child.customMock(service:))(service)
 		        return Root(child: child)
 		    }
 		}
@@ -1420,22 +1326,22 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    struct SafeDIParameters {
 		        init(
-		            engine: Engine.SafeDIMockConfiguration = .init(),
-		            childService: ChildService.SafeDIMockConfiguration = .init()
+		            engine: (() -> Engine)? = nil,
+		            childService: ((Engine) -> ChildService)? = nil
 		        ) {
 		            self.engine = engine
 		            self.childService = childService
 		        }
 
-		        let engine: Engine.SafeDIMockConfiguration
-		        let childService: ChildService.SafeDIMockConfiguration
+		        let engine: (() -> Engine)?
+		        let childService: ((Engine) -> ChildService)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let engine = (safeDIParameters.engine.safeDIBuilder ?? Engine.init)()
-		        let childService = (safeDIParameters.childService.safeDIBuilder ?? ChildService.customMock(engine:))(engine)
+		        let engine = (safeDIParameters.engine ?? Engine.init)()
+		        let childService = (safeDIParameters.childService ?? ChildService.customMock(engine:))(engine)
 		        return Root(childService: childService, engine: engine)
 		    }
 		}
@@ -1493,22 +1399,22 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    struct SafeDIParameters {
 		        init(
-		            engine: Engine.SafeDIMockConfiguration = .init(),
-		            childService: ChildService.SafeDIMockConfiguration = .init()
+		            engine: (() -> Engine)? = nil,
+		            childService: ((Engine) -> ChildService)? = nil
 		        ) {
 		            self.engine = engine
 		            self.childService = childService
 		        }
 
-		        let engine: Engine.SafeDIMockConfiguration
-		        let childService: ChildService.SafeDIMockConfiguration
+		        let engine: (() -> Engine)?
+		        let childService: ((Engine) -> ChildService)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let engine = (safeDIParameters.engine.safeDIBuilder ?? Engine.init)()
-		        let childService = (safeDIParameters.childService.safeDIBuilder ?? ChildService.init(engine:))(engine)
+		        let engine = (safeDIParameters.engine ?? Engine.init)()
+		        let childService = (safeDIParameters.childService ?? ChildService.init(engine:))(engine)
 		        return Root(childService: childService, engine: engine)
 		    }
 		}
@@ -1564,22 +1470,22 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    struct SafeDIParameters {
 		        init(
-		            engine: Engine.SafeDIMockConfiguration = .init(),
-		            childService: ChildService.SafeDIMockConfiguration = .init()
+		            engine: (() -> Engine)? = nil,
+		            childService: ((Engine) -> ChildService)? = nil
 		        ) {
 		            self.engine = engine
 		            self.childService = childService
 		        }
 
-		        let engine: Engine.SafeDIMockConfiguration
-		        let childService: ChildService.SafeDIMockConfiguration
+		        let engine: (() -> Engine)?
+		        let childService: ((Engine) -> ChildService)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let engine = (safeDIParameters.engine.safeDIBuilder ?? Engine.init)()
-		        let childService = (safeDIParameters.childService.safeDIBuilder ?? ChildService.customMock(engine:))(engine)
+		        let engine = (safeDIParameters.engine ?? Engine.init)()
+		        let childService = (safeDIParameters.childService ?? ChildService.customMock(engine:))(engine)
 		        return Root(childService: childService, engine: engine)
 		    }
 		}
@@ -1636,22 +1542,22 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    struct SafeDIParameters {
 		        init(
-		            engine: Engine.SafeDIMockConfiguration = .init(),
-		            childService: ChildService.SafeDIMockConfiguration = .init()
+		            engine: (() -> Engine)? = nil,
+		            childService: ((Engine) -> ChildService)? = nil
 		        ) {
 		            self.engine = engine
 		            self.childService = childService
 		        }
 
-		        let engine: Engine.SafeDIMockConfiguration
-		        let childService: ChildService.SafeDIMockConfiguration
+		        let engine: (() -> Engine)?
+		        let childService: ((Engine) -> ChildService)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let engine = (safeDIParameters.engine.safeDIBuilder ?? Engine.init)()
-		        let childService = (safeDIParameters.childService.safeDIBuilder ?? ChildService.instantiate(engine:))(engine)
+		        let engine = (safeDIParameters.engine ?? Engine.init)()
+		        let childService = (safeDIParameters.childService ?? ChildService.instantiate(engine:))(engine)
 		        return Root(childService: childService, engine: engine)
 		    }
 		}
@@ -1703,18 +1609,18 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Service {
 		    struct SafeDIParameters {
 		        init(
-		            engine: Engine.SafeDIMockConfiguration = .init()
+		            engine: (() -> Engine)? = nil
 		        ) {
 		            self.engine = engine
 		        }
 
-		        let engine: Engine.SafeDIMockConfiguration
+		        let engine: (() -> Engine)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Service {
-		        let engine = (safeDIParameters.engine.safeDIBuilder ?? Engine.init)()
+		        let engine = (safeDIParameters.engine ?? Engine.init)()
 		        return Service.customMock(engine: engine)
 		    }
 		}
@@ -1724,14 +1630,14 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Service {
 		    struct SafeDIMockConfiguration {
 		        init(
-		            engine: Engine.SafeDIMockConfiguration = .init(),
+		            engine: (() -> Engine)? = nil,
 		            _ safeDIBuilder: ((Engine) -> Service)? = nil
 		        ) {
 		            self.engine = engine
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let engine: Engine.SafeDIMockConfiguration
+		        let engine: (() -> Engine)?
 		        let safeDIBuilder: ((Engine) -> Service)?
 		    }
 		}
@@ -1788,18 +1694,18 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Service {
 		    struct SafeDIParameters {
 		        init(
-		            engine: Engine.SafeDIMockConfiguration = .init()
+		            engine: (() -> Engine)? = nil
 		        ) {
 		            self.engine = engine
 		        }
 
-		        let engine: Engine.SafeDIMockConfiguration
+		        let engine: (() -> Engine)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Service {
-		        let engine = (safeDIParameters.engine.safeDIBuilder ?? Engine.init)()
+		        let engine = (safeDIParameters.engine ?? Engine.init)()
 		        return Service.customMock(engine: engine)
 		    }
 		}
@@ -1809,14 +1715,14 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Service {
 		    struct SafeDIMockConfiguration {
 		        init(
-		            engine: Engine.SafeDIMockConfiguration = .init(),
+		            engine: (() -> Engine)? = nil,
 		            _ safeDIBuilder: ((Engine) -> Service)? = nil
 		        ) {
 		            self.engine = engine
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let engine: Engine.SafeDIMockConfiguration
+		        let engine: (() -> Engine)?
 		        let safeDIBuilder: ((Engine) -> Service)?
 		    }
 		}
@@ -1846,7 +1752,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_service() -> Service {
-		            let engine = (safeDIParameters.service.engine.safeDIBuilder ?? Engine.init)()
+		            let engine = (safeDIParameters.service.engine ?? Engine.init)()
 		            return (safeDIParameters.service.safeDIBuilder ?? Service.customMock(engine:))(engine)
 		        }
 		        let service: Service = __safeDI_service()
@@ -1907,19 +1813,19 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Service {
 		    struct SafeDIParameters {
 		        init(
-		            engine: Engine.SafeDIMockConfiguration = .init()
+		            engine: (() -> Engine)? = nil
 		        ) {
 		            self.engine = engine
 		        }
 
-		        let engine: Engine.SafeDIMockConfiguration
+		        let engine: (() -> Engine)?
 		    }
 
 		    static func mock(
 		        showDebugInfo: Bool = false,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Service {
-		        let engine = (safeDIParameters.engine.safeDIBuilder ?? Engine.init)()
+		        let engine = (safeDIParameters.engine ?? Engine.init)()
 		        return Service.customMock(engine: engine, showDebugInfo: showDebugInfo)
 		    }
 		}
@@ -1929,7 +1835,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Service {
 		    struct SafeDIMockConfiguration {
 		        init(
-		            engine: Engine.SafeDIMockConfiguration = .init(),
+		            engine: (() -> Engine)? = nil,
 		            showDebugInfo: Bool = false,
 		            _ safeDIBuilder: ((Engine, Bool) -> Service)? = nil
 		        ) {
@@ -1938,7 +1844,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let engine: Engine.SafeDIMockConfiguration
+		        let engine: (() -> Engine)?
 		        let showDebugInfo: Bool
 		        let safeDIBuilder: ((Engine, Bool) -> Service)?
 		    }
@@ -1996,33 +1902,19 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Service {
 		    struct SafeDIParameters {
 		        init(
-		            engine: Engine.SafeDIMockConfiguration = .init()
+		            engine: (() -> Engine)? = nil
 		        ) {
 		            self.engine = engine
 		        }
 
-		        let engine: Engine.SafeDIMockConfiguration
+		        let engine: (() -> Engine)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Service {
-		        let engine = (safeDIParameters.engine.safeDIBuilder ?? Engine.init)()
+		        let engine = (safeDIParameters.engine ?? Engine.init)()
 		        return Service.customMock(engine: engine)
-		    }
-		}
-		#endif
-
-		#if DEBUG
-		extension Service {
-		    struct SafeDIMockConfiguration {
-		        init(
-		            _ safeDIBuilder: ((Engine) -> Service)? = nil
-		        ) {
-		            self.safeDIBuilder = safeDIBuilder
-		        }
-
-		        let safeDIBuilder: ((Engine) -> Service)?
 		    }
 		}
 		#endif
@@ -2073,19 +1965,19 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    struct SafeDIParameters {
 		        init(
-		            child: Child.SafeDIMockConfiguration = .init()
+		            child: ((String) -> Child)? = nil
 		        ) {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        let child: ((String) -> Child)?
 		    }
 
 		    static func mock(
 		        name: String,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.customMock(name:))(name)
+		        let child = (safeDIParameters.child ?? Child.customMock(name:))(name)
 		        return Root(child: child, name: name)
 		    }
 		}
@@ -2102,20 +1994,6 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        name: String
 		    ) -> Child {
 		        return Child.customMock(name: name)
-		    }
-		}
-		#endif
-
-		#if DEBUG
-		extension Child {
-		    struct SafeDIMockConfiguration {
-		        init(
-		            _ safeDIBuilder: ((String) -> Child)? = nil
-		        ) {
-		            self.safeDIBuilder = safeDIBuilder
-		        }
-
-		        let safeDIBuilder: ((String) -> Child)?
 		    }
 		}
 		#endif
@@ -2175,23 +2053,23 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    struct SafeDIParameters {
 		        init(
-		            childA: ChildA.SafeDIMockConfiguration = .init(),
-		            childB: ChildB.SafeDIMockConfiguration = .init()
+		            childA: ((String) -> ChildA)? = nil,
+		            childB: ((String) -> ChildB)? = nil
 		        ) {
 		            self.childA = childA
 		            self.childB = childB
 		        }
 
-		        let childA: ChildA.SafeDIMockConfiguration
-		        let childB: ChildB.SafeDIMockConfiguration
+		        let childA: ((String) -> ChildA)?
+		        let childB: ((String) -> ChildB)?
 		    }
 
 		    static func mock(
 		        name: String,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let childA = (safeDIParameters.childA.safeDIBuilder ?? ChildA.customMock(name:))(name)
-		        let childB = (safeDIParameters.childB.safeDIBuilder ?? ChildB.customMock(name:))(name)
+		        let childA = (safeDIParameters.childA ?? ChildA.customMock(name:))(name)
+		        let childB = (safeDIParameters.childB ?? ChildB.customMock(name:))(name)
 		        return Root(childA: childA, childB: childB, name: name)
 		    }
 		}
@@ -2267,14 +2145,14 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    struct SafeDIParameters {
 		        init(
 		            childA: ChildA.SafeDIMockConfiguration = .init(),
-		            childB: ChildB.SafeDIMockConfiguration = .init()
+		            childB: ((String) -> ChildB)? = nil
 		        ) {
 		            self.childA = childA
 		            self.childB = childB
 		        }
 
 		        let childA: ChildA.SafeDIMockConfiguration
-		        let childB: ChildB.SafeDIMockConfiguration
+		        let childB: ((String) -> ChildB)?
 		    }
 
 		    static func mock(
@@ -2282,11 +2160,11 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            let grandchild = (safeDIParameters.childA.grandchild.safeDIBuilder ?? Grandchild.customMock(name:))(name)
+		            let grandchild = (safeDIParameters.childA.grandchild ?? Grandchild.customMock(name:))(name)
 		            return (safeDIParameters.childA.safeDIBuilder ?? ChildA.customMock(grandchild:name:))(grandchild, name)
 		        }
 		        let childA: ChildA = __safeDI_childA()
-		        let childB = (safeDIParameters.childB.safeDIBuilder ?? ChildB.customMock(name:))(name)
+		        let childB = (safeDIParameters.childB ?? ChildB.customMock(name:))(name)
 		        return Root(childA: childA, childB: childB, name: name)
 		    }
 		}
@@ -2334,19 +2212,19 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    struct SafeDIParameters {
 		        init(
-		            child: Child.SafeDIMockConfiguration = .init()
+		            child: ((String) -> Child)? = nil
 		        ) {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        let child: ((String) -> Child)?
 		    }
 
 		    static func mock(
 		        name: String,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.init(name:))(name)
+		        let child = (safeDIParameters.child ?? Child.init(name:))(name)
 		        return Root(child: child, name: name)
 		    }
 		}
@@ -2435,12 +2313,12 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            let value = (safeDIParameters.childA.value.safeDIBuilder ?? String.init)()
+		            let value = (safeDIParameters.childA.value ?? String.init)()
 		            return (safeDIParameters.childA.safeDIBuilder ?? ChildA.customMock(value:))(value)
 		        }
 		        let childA: ChildA = __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            let value = (safeDIParameters.childB.value.safeDIBuilder ?? Int.init)()
+		            let value = (safeDIParameters.childB.value ?? Int.init)()
 		            return (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(value:))(value)
 		        }
 		        let childB: ChildB = __safeDI_childB()

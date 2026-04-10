@@ -853,14 +853,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Attributes to add to the generated `build()` method (e.g. `"@MainActor"`).
 		let mockAttributes: String
 
+		/// Whether this node needs a full `_Configuration` struct or can be inlined
+		/// as an optional closure on the parent. A node needs a struct when it has
+		/// children (subtree customization), non-dependency defaults, or is a property
+		/// cycle (the struct may exist from a non-cycle instance of the same type).
+		var needsConfigurationStruct: Bool {
+			!children.isEmpty || !defaultParameters.isEmpty || isPropertyCycle
+		}
+
 		/// The nested configuration struct name (used in struct definitions).
 		static let configurationStructName = "SafeDIMockConfiguration"
 
 		/// The qualified configuration type name for references (e.g., `ChildA.SafeDIMockConfiguration`).
-		/// Uses the concrete fulfilling type so the configuration can be nested in a
-		/// concrete type extension even when the dependency is typed as a protocol.
 		var configurationTypeName: String {
-			"\(concreteType.asSource).\(Self.configurationStructName)"
+			"\(instantiatedTypeDescription.asSource).\(Self.configurationStructName)"
 		}
 
 		/// The builder closure type as a Swift source string (unlabeled parameters).
@@ -912,7 +918,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let indent = Self.standardIndent
 		return uniqueTypes.map { node in
 			(
-				typeName: node.concreteType.asSource,
+				typeName: node.instantiatedTypeDescription.asSource,
 				structCode: Self.generateConfigurationStruct(for: node, indent: indent),
 			)
 		}
@@ -1095,7 +1101,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var result = [MockParameterNode]()
 
 		func walk(_ node: MockParameterNode, ancestorTypes: Set<String> = []) {
-			let key = node.concreteType.asSource
+			let key = node.instantiatedTypeDescription.asSource
 			// Skip nodes whose type matches an ancestor — self-referencing cycle.
 			guard !ancestorTypes.contains(key) else { return }
 			var childAncestors = ancestorTypes
@@ -1104,12 +1110,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for child in node.children {
 				walk(child, ancestorTypes: childAncestors)
 			}
+			// Skip leaf nodes that don't need a _Configuration struct.
+			guard node.needsConfigurationStruct else { return }
 			if seen.contains(key) {
 				// If this node requires sendable and the existing one doesn't,
 				// replace it — @Sendable closures are compatible in both contexts.
 				if node.requiresSendable,
 				   let existingIndex = result.firstIndex(where: {
-				   	$0.concreteType.asSource == key && !$0.requiresSendable
+				   	$0.instantiatedTypeDescription.asSource == key && !$0.requiresSendable
 				   })
 				{
 					result[existingIndex] = node
@@ -1128,6 +1136,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Generates the `SafeDIParameters` struct. Configuration type references
 	/// use qualified names (e.g., `ChildA.SafeDIMockConfiguration`).
+	/// Returns the struct source code, or `nil` if the tree has no children.
 	private static func generateSafeDIParametersStruct(
 		rootChildren: [MockParameterNode],
 		indent: String,
@@ -1145,7 +1154,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(innerIndent)init(")
 		let initParameters = rootChildren.map { child in
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			return "\(memberIndent)\(label): \(child.configurationTypeName) = .init()"
+			if child.needsConfigurationStruct {
+				return "\(memberIndent)\(label): \(child.configurationTypeName) = .init()"
+			} else {
+				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
+				return "\(memberIndent)\(label): (\(sendableAnnotation)\(child.builderClosureType))? = nil"
+			}
 		}
 		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
@@ -1159,7 +1173,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("")
 		for child in rootChildren {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
+			if child.needsConfigurationStruct {
+				lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
+			} else {
+				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
+				lines.append("\(innerIndent)let \(label): (\(sendableAnnotation)\(child.builderClosureType))?")
+			}
 		}
 
 		lines.append("\(indent)}")
@@ -1187,12 +1206,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Child edge parameters (disambiguated if labels collide).
 		// Exclude children whose type matches this node — they'd create a recursive
 		// value type. These are self-referencing Instantiators (lazy cycles).
-		let nonCycleChildren = node.children.filter { $0.concreteType != node.concreteType }
+		let nonCycleChildren = node.children.filter {
+			$0.instantiatedTypeDescription != node.instantiatedTypeDescription
+		}
 		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
 		for child in nonCycleChildren {
 			let label = disambiguatedLabel(for: child, labelMap: childLabelMap)
-			initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.configurationTypeName) = .init()")
-			storedProperties.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
+			if child.needsConfigurationStruct {
+				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.configurationTypeName) = .init()")
+				storedProperties.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
+			} else {
+				let childSendable = child.requiresSendable ? "@Sendable " : ""
+				initParameters.append("\(innerIndent)\(standardIndent)\(label): (\(childSendable)\(child.builderClosureType))? = nil")
+				storedProperties.append("\(innerIndent)let \(label): (\(childSendable)\(child.builderClosureType))?")
+			}
 			assignments.append("\(innerIndent)\(standardIndent)self.\(label) = \(label)")
 		}
 
@@ -1266,11 +1293,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.replacingOccurrences(of: ".", with: "_")
 
 			if !isCycleNode {
-				extractions.append((
-					localName: "\(functionName)__\(relativePath)_safeDIBuilder",
-					optionalPath: "\(nodePath).safeDIBuilder",
-					defaultExpression: node.defaultBuilderExpression,
-				))
+				let defaultBuilder = node.defaultBuilderExpression
+				if node.needsConfigurationStruct {
+					extractions.append((
+						localName: "\(functionName)__\(relativePath)_safeDIBuilder",
+						optionalPath: "\(nodePath).safeDIBuilder",
+						defaultExpression: defaultBuilder,
+					))
+				} else {
+					// Leaf builder — inline optional closure, no .safeDIBuilder path.
+					extractions.append((
+						localName: "\(functionName)__\(relativePath)_safeDIBuilder",
+						optionalPath: nodePath,
+						defaultExpression: defaultBuilder,
+					))
+				}
 			}
 
 			// Extract default parameter references — direct assignment, no optional.
@@ -1327,16 +1364,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// When inside a sendable extraction, use extracted locals instead of
 			// safeDIParameters paths.
 			let builderExpression: String
+			let optionalBuilderPath: String?
 			let argumentNodePath: String
 			if isCycleNode {
 				builderExpression = defaultBuilder
+				optionalBuilderPath = nil
 				argumentNodePath = nodePath
 			} else if let sendableExtractionPrefix {
 				let extractedName = "\(sendableExtractionPrefix)__\(relativePath)_safeDIBuilder"
 				builderExpression = extractedName
+				optionalBuilderPath = nil
+				argumentNodePath = nodePath
+			} else if node.needsConfigurationStruct {
+				builderExpression = "(\(nodePath).safeDIBuilder ?? \(defaultBuilder))"
+				optionalBuilderPath = "\(nodePath).safeDIBuilder"
 				argumentNodePath = nodePath
 			} else {
-				builderExpression = "(\(nodePath).safeDIBuilder ?? \(defaultBuilder))"
+				// Leaf builder — inline optional closure, no .safeDIBuilder path.
+				builderExpression = "(\(nodePath) ?? \(defaultBuilder))"
+				optionalBuilderPath = nodePath
 				argumentNodePath = nodePath
 			}
 
@@ -1356,6 +1402,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					for: node,
 					nodePath: nodePath,
 					builderExpression: builderExpression,
+					optionalBuilderPath: optionalBuilderPath,
 					arguments: arguments,
 
 					indent: indent,
@@ -1369,9 +1416,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 				let argumentList = arguments.joined(separator: ", ")
 
-				if node.children.isEmpty, node.defaultParameters.isEmpty, !node.isPropertyCycle {
+				if !node.needsConfigurationStruct {
 					// Leaf constant node — flat binding, no scoping needed.
-					if node.erasedToConcreteExistential {
+					if let optionalBuilderPath {
+						let leafBuilderExpression = "(\(optionalBuilderPath) ?? \(node.defaultBuilderExpression))"
+						if node.erasedToConcreteExistential {
+							let protocolType = node.typeDescription.asSource
+							lines.append("\(indent)let \(node.propertyLabel) = \(protocolType)(\(leafBuilderExpression)(\(argumentList)))")
+						} else {
+							lines.append("\(indent)let \(node.propertyLabel) = \(leafBuilderExpression)(\(argumentList))")
+						}
+					} else if node.erasedToConcreteExistential {
 						let protocolType = node.typeDescription.asSource
 						lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(protocolType)(\(builderExpression)(\(argumentList)))")
 					} else {
@@ -1458,6 +1513,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for node: MockParameterNode,
 		nodePath: String,
 		builderExpression: String,
+		optionalBuilderPath: String?,
 		arguments: [String],
 		indent: String,
 		ancestorTypes: Set<String> = [],
@@ -1516,11 +1572,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					into: &extractions,
 				)
 				// Extract the node's own safeDIBuilder.
-				extractions.append((
-					localName: "\(functionName)__safeDIBuilder",
-					optionalPath: "\(nodePath).safeDIBuilder",
-					defaultExpression: node.defaultBuilderExpression,
-				))
+				if let optionalBuilderPath {
+					extractions.append((
+						localName: "\(functionName)__safeDIBuilder",
+						optionalPath: optionalBuilderPath,
+						defaultExpression: node.defaultBuilderExpression,
+					))
+				} else {
+					extractions.append((
+						localName: "\(functionName)__safeDIBuilder",
+						optionalPath: nil,
+						defaultExpression: builderExpression,
+					))
+				}
 
 				for extraction in extractions {
 					if let optionalPath = extraction.optionalPath {
@@ -1568,7 +1632,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 				lines.append(contentsOf: childBindings)
 
-				if childBindings.isEmpty {
+				if let optionalBuilderPath {
+					let nilCoalescingExpression = "(\(optionalBuilderPath) ?? \(node.defaultBuilderExpression))"
+					if childBindings.isEmpty {
+						lines.append("\(innerIndent)\(nilCoalescingExpression)(\(builderCallArguments))")
+					} else {
+						lines.append("\(innerIndent)return \(nilCoalescingExpression)(\(builderCallArguments))")
+					}
+				} else if childBindings.isEmpty {
 					lines.append("\(innerIndent)\(builderExpression)(\(builderCallArguments))")
 				} else {
 					lines.append("\(innerIndent)return \(builderExpression)(\(builderCallArguments))")
