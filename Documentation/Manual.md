@@ -619,6 +619,27 @@ When no override is provided, the original default expression (`false`) is used.
 
 Default-valued parameters do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
 
+### `@Received(onlyIfAvailable: true)` properties in mocks
+
+`@Received(onlyIfAvailable: true)` dependencies from the dependency tree appear in `SafeDIParameters` as optional configuration entries, defaulting to `nil`. When `nil`, the dependency is absent in the mock. When provided, the full subtree is built normally:
+
+```swift
+// Default: analytics service is absent.
+MyView.mock()
+
+// Opt in: analytics service is built with its default subtree.
+MyView.mock(safeDIParameters: .init(
+    analyticsService: .init()
+))
+
+// Opt in with overrides: analytics service is built with a custom logger.
+MyView.mock(safeDIParameters: .init(
+    analyticsService: .init(logger: .init { NoOpLogger() })
+))
+```
+
+This lets you test both the "service available" and "service absent" code paths from a single mock entry point.
+
 ### The `mockAttributes` parameter
 
 When a type’s initializer is bound to a global actor that the plugin cannot detect (e.g. inherited `@MainActor`), use `mockAttributes` to annotate the generated mock:
