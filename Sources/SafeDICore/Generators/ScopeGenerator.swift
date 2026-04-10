@@ -605,11 +605,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let treePropertyLabels = Set(parameterTree.map(\.propertyLabel))
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
 
-		let unwrappedOptionalCounterparts = Set(
-			receivedProperties
-				.filter(\.typeDescription.isOptional)
-				.map(\.asUnwrappedProperty),
-		)
 		let receivedNonOptionalProperties = Set(
 			receivedProperties
 				.filter { !$0.typeDescription.isOptional },
@@ -623,21 +618,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			guard !receivedProperty.typeDescription.isOptional
 				|| !receivedNonOptionalProperties.contains(receivedProperty.asUnwrappedProperty)
 			else { continue }
-			let isOnlyIfAvailable = (receivedProperty.typeDescription.isOptional
-				&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty))
-				|| (!receivedProperty.typeDescription.isOptional
-					&& !unwrappedOptionalCounterparts.contains(receivedProperty)
-					&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty))
-				|| unavailableOptionalProperties.contains(receivedProperty)
+			let isOnlyIfAvailable = receivedProperty.typeDescription.isOptional
+				&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty)
 			if isOnlyIfAvailable {
-				let typeSource: String = if receivedProperty.typeDescription.isOptional {
-					receivedProperty.typeDescription.asSource
-				} else {
-					"\(receivedProperty.typeDescription.asSource)?"
-				}
 				onlyIfAvailableSafeDIParameterEntries.append((
 					label: receivedProperty.label,
-					typeSource: typeSource,
+					typeSource: receivedProperty.typeDescription.asSource,
 				))
 			} else {
 				flatReceivedParameters.append((
