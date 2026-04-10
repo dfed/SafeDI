@@ -601,17 +601,54 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let treePropertyLabels = Set(parameterTree.map(\.propertyLabel))
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
 
+		// Compute received properties excluding contributions that come exclusively
+		// from onlyIfAvailable children. Properties received through those children
+		// are internal to the onlyIfAvailable node's subtree and should not surface
+		// as flat mock parameters (they'd leak transitive deps like forwarded
+		// properties from the top of the tree).
+		let flatEligibleReceivedProperties: Set<Property> = {
+			guard !onlyIfAvailablePromotedProperties.isEmpty else { return receivedProperties }
+			// Received properties from non-onlyIfAvailable children only.
+			var fromNonOnlyIfAvailable = Set<Property>()
+			for child in propertiesToGenerate {
+				guard let childProperty = child.property,
+				      !onlyIfAvailablePromotedProperties.contains(childProperty)
+				else { continue }
+				fromNonOnlyIfAvailable.formUnion(
+					child.receivedProperties
+						.subtracting(propertiesToDeclare)
+						.subtracting(forwardedPropertySet),
+				)
+			}
+			// Add the root type's own received dependencies.
+			for dependency in instantiable.dependencies {
+				switch dependency.source {
+				case let .received(onlyIfAvailable):
+					if !onlyIfAvailable {
+						fromNonOnlyIfAvailable.insert(dependency.property)
+					}
+				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+					if !onlyIfAvailable {
+						fromNonOnlyIfAvailable.insert(fulfillingProperty)
+					}
+				case .instantiated, .forwarded:
+					break
+				}
+			}
+			return receivedProperties.intersection(fromNonOnlyIfAvailable)
+		}()
+
 		let unwrappedOptionalCounterparts = Set(
-			receivedProperties
+			flatEligibleReceivedProperties
 				.filter(\.typeDescription.isOptional)
 				.map(\.asUnwrappedProperty),
 		)
 		let receivedNonOptionalProperties = Set(
-			receivedProperties
+			flatEligibleReceivedProperties
 				.filter { !$0.typeDescription.isOptional },
 		)
 		var flatReceivedParameters = [(label: String, typeSource: String, isOptional: Bool)]()
-		for receivedProperty in receivedProperties.sorted() {
+		for receivedProperty in flatEligibleReceivedProperties.sorted() {
 			guard !treePropertyLabels.contains(receivedProperty.label),
 			      !forwardedPropertySet.contains(receivedProperty)
 			else { continue }

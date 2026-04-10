@@ -451,6 +451,13 @@ public actor DependencyTreeGenerator {
 		var worklist = Array(allReceived)
 
 		while let property = worklist.popLast() {
+			// Don't walk into scopes for onlyIfAvailable dependencies.
+			// Their transitive deps are handled internally by the onlyIfAvailable
+			// node's scope — promoting them to root would surface deps (like
+			// forwarded properties from the top of the tree) that are only needed
+			// when the onlyIfAvailable dep is actually constructed.
+			guard !allOnlyIfAvailable.contains(property) else { continue }
+
 			var dependencyType = property.typeDescription.asInstantiatedType
 			if typeDescriptionToScopeMap[dependencyType] == nil,
 			   let concreteType = erasedToConcreteTypeMap[property.typeDescription]
@@ -514,14 +521,47 @@ public actor DependencyTreeGenerator {
 			// the non-optional type string is shorter).
 			guard promotedLabelAndTypes.insert(receivedProperty.asUnwrappedProperty).inserted
 			else { continue }
+
+			let scopeToPromote: Scope
+			if allOnlyIfAvailable.contains(receivedProperty) {
+				// For onlyIfAvailable deps, create a sub-scope that promotes their
+				// received deps as children. This mirrors the root's promotion logic
+				// so the node's subtree is self-contained — its transitive deps are
+				// built internally rather than leaking to the root as flat params.
+				let (subReceived, subOnlyIfAvailable) = Self.collectReceivedProperties(
+					from: receivedScope,
+					cache: &cache,
+				)
+				let subScope = Scope(instantiable: receivedScope.instantiable)
+				subScope.propertiesToGenerate = receivedScope.propertiesToGenerate
+				for subReceivedProperty in subReceived.sorted() {
+					guard !subOnlyIfAvailable.contains(subReceivedProperty) else { continue }
+					var subDependencyType = subReceivedProperty.typeDescription.asInstantiatedType
+					if typeDescriptionToScopeMap[subDependencyType] == nil,
+					   let concreteType = erasedToConcreteTypeMap[subReceivedProperty.typeDescription]
+					{
+						subDependencyType = concreteType
+					}
+					guard let subReceivedScope = typeDescriptionToScopeMap[subDependencyType] else {
+						continue
+					}
+					subScope.propertiesToGenerate.append(.instantiated(
+						subReceivedProperty,
+						subReceivedScope,
+						erasedToConcreteExistential: false,
+					))
+				}
+				scopeToPromote = subScope
+				onlyIfAvailablePromotedProperties.insert(receivedProperty)
+			} else {
+				scopeToPromote = receivedScope
+			}
+
 			mockRootScope.propertiesToGenerate.append(.instantiated(
 				receivedProperty,
-				receivedScope,
+				scopeToPromote,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 			))
-			if allOnlyIfAvailable.contains(receivedProperty) {
-				onlyIfAvailablePromotedProperties.insert(receivedProperty)
-			}
 		}
 
 		// Validate the promoted mock scope for cycles before generating code.

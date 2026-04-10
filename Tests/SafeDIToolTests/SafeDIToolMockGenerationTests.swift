@@ -7694,16 +7694,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension ProfileService {
 		    struct SafeDIParameters {
 		        init(
-		            notificationCenter: NotificationCenter.SafeDIMockConfiguration = .init(),
 		            applicationStateService: ApplicationStateService.SafeDIMockConfiguration? = nil,
 		            imageService: ImageService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.notificationCenter = notificationCenter
 		            self.applicationStateService = applicationStateService
 		            self.imageService = imageService
 		        }
 
-		        let notificationCenter: NotificationCenter.SafeDIMockConfiguration
 		        let applicationStateService: ApplicationStateService.SafeDIMockConfiguration?
 		        let imageService: ImageService.SafeDIMockConfiguration
 		    }
@@ -7711,8 +7708,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> ProfileService {
-		        let notificationCenter = (safeDIParameters.notificationCenter.safeDIBuilder ?? NotificationCenter.init)()
-		        let applicationStateService: ApplicationStateService? = safeDIParameters.applicationStateService.map { ($0.safeDIBuilder ?? ApplicationStateService.init(notificationCenter:))(notificationCenter) }
+		        func __safeDI_applicationStateService(_ __safeDI_config: ApplicationStateService.SafeDIMockConfiguration) -> ApplicationStateService {
+		            let notificationCenter = (__safeDI_config.notificationCenter.safeDIBuilder ?? NotificationCenter.init)()
+		            return (__safeDI_config.safeDIBuilder ?? ApplicationStateService.init(notificationCenter:))(notificationCenter)
+		        }
+		        let applicationStateService: ApplicationStateService? = safeDIParameters.applicationStateService.map(__safeDI_applicationStateService)
 		        let imageService = (safeDIParameters.imageService.safeDIBuilder ?? ImageService.init(applicationStateService:))(applicationStateService)
 		        return ProfileService(imageService: imageService)
 		    }
