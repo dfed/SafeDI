@@ -72,7 +72,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			)
 		} catch let error as SafeDIToolLaunchError {
 			Diagnostics.warning(
-			"SafeDITool could not be launched during plugin setup (\(error)). "
+				"SafeDITool could not be launched during plugin setup (\(error)). "
 					+ "Falling back to in-process scan. Output file discovery may over-approximate.",
 			)
 			return try createBuildCommandsWithPluginScanner(

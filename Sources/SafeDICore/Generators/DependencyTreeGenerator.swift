@@ -491,7 +491,6 @@ public actor DependencyTreeGenerator {
 		let mockRootScope = Scope(instantiable: instantiable)
 		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate
 
-		var onlyIfAvailablePromotedProperties = Set<Property>()
 		// Track which label+type pairs have already been promoted so that when
 		// both a required (`config: Config`) and an onlyIfAvailable (`config: Config?`)
 		// version of the same dependency exist, only the required version is promoted.
@@ -500,7 +499,8 @@ public actor DependencyTreeGenerator {
 		// `userScopedDefaultsService: UserDefaultsService`) are promoted independently.
 		var promotedLabelAndTypes = Set<Property>()
 		for receivedProperty in allReceived.sorted() {
-			guard !forwardedProperties.contains(receivedProperty)
+			guard !allOnlyIfAvailable.contains(receivedProperty),
+			      !forwardedProperties.contains(receivedProperty)
 			else { continue }
 
 			var dependencyType = receivedProperty.typeDescription.asInstantiatedType
@@ -522,44 +522,9 @@ public actor DependencyTreeGenerator {
 			guard promotedLabelAndTypes.insert(receivedProperty.asUnwrappedProperty).inserted
 			else { continue }
 
-			let scopeToPromote: Scope
-			if allOnlyIfAvailable.contains(receivedProperty) {
-				// For onlyIfAvailable deps, create a sub-scope that promotes their
-				// received deps as children. This mirrors the root's promotion logic
-				// so the node's subtree is self-contained — its transitive deps are
-				// built internally rather than leaking to the root as flat params.
-				let (subReceived, subOnlyIfAvailable) = Self.collectReceivedProperties(
-					from: receivedScope,
-					cache: &cache,
-				)
-				let subScope = Scope(instantiable: receivedScope.instantiable)
-				subScope.propertiesToGenerate = receivedScope.propertiesToGenerate
-				for subReceivedProperty in subReceived.sorted() {
-					guard !subOnlyIfAvailable.contains(subReceivedProperty) else { continue }
-					var subDependencyType = subReceivedProperty.typeDescription.asInstantiatedType
-					if typeDescriptionToScopeMap[subDependencyType] == nil,
-					   let concreteType = erasedToConcreteTypeMap[subReceivedProperty.typeDescription]
-					{
-						subDependencyType = concreteType
-					}
-					guard let subReceivedScope = typeDescriptionToScopeMap[subDependencyType] else {
-						continue
-					}
-					subScope.propertiesToGenerate.append(.instantiated(
-						subReceivedProperty,
-						subReceivedScope,
-						erasedToConcreteExistential: false,
-					))
-				}
-				scopeToPromote = subScope
-				onlyIfAvailablePromotedProperties.insert(receivedProperty)
-			} else {
-				scopeToPromote = receivedScope
-			}
-
 			mockRootScope.propertiesToGenerate.append(.instantiated(
 				receivedProperty,
-				scopeToPromote,
+				receivedScope,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 			))
 		}
@@ -574,15 +539,13 @@ public actor DependencyTreeGenerator {
 		)
 
 		// Build the final ScopeGenerator once.
-		let rootScopeGenerator = try mockRootScope.createScopeGenerator(
+		return try mockRootScope.createScopeGenerator(
 			for: nil,
 			propertyStack: [],
 			receivableProperties: [],
 			erasedToConcreteExistential: false,
 			forMockGeneration: true,
 		)
-		rootScopeGenerator.onlyIfAvailablePromotedProperties = onlyIfAvailablePromotedProperties
-		return rootScopeGenerator
 	}
 
 	/// Recursively collects all unsatisfied received properties from a Scope tree.

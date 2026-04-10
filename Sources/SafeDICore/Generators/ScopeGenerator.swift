@@ -275,12 +275,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Properties that this scope declares as a `let` constant.
 	private let propertiesToDeclare: Set<Property>
 	private let property: Property?
-	/// Properties promoted from `@Received(onlyIfAvailable: true)` in mock mode.
-	/// Set by `createMockRootScopeGenerator` on the mock root scope generator
-	/// before any actor-isolated methods are called.
-	/// Used by `collectMockParameterTree` to tag tree nodes as `onlyIfAvailable`.
-	nonisolated(unsafe) var onlyIfAvailablePromotedProperties: Set<Property> = []
-
 	private var unavailablePropertiesToGenerateCodeTask = [Set<Property>: Task<String, Error>]()
 
 	private lazy var orderedPropertiesToGenerate: [ScopeGenerator] = {
@@ -563,9 +557,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let bodyIndent = "\(indent)\(indent)"
 
 		// 1. Build the parameter tree.
-		let parameterTree = await collectMockParameterTree(
-			onlyIfAvailableProperties: onlyIfAvailablePromotedProperties,
-		)
+		let parameterTree = await collectMockParameterTree()
 
 		// 2. Identify flat parameters.
 
@@ -601,54 +593,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let treePropertyLabels = Set(parameterTree.map(\.propertyLabel))
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
 
-		// Compute received properties excluding contributions that come exclusively
-		// from onlyIfAvailable children. Properties received through those children
-		// are internal to the onlyIfAvailable node's subtree and should not surface
-		// as flat mock parameters (they'd leak transitive deps like forwarded
-		// properties from the top of the tree).
-		let flatEligibleReceivedProperties: Set<Property> = {
-			guard !onlyIfAvailablePromotedProperties.isEmpty else { return receivedProperties }
-			// Received properties from non-onlyIfAvailable children only.
-			var fromNonOnlyIfAvailable = Set<Property>()
-			for child in propertiesToGenerate {
-				guard let childProperty = child.property,
-				      !onlyIfAvailablePromotedProperties.contains(childProperty)
-				else { continue }
-				fromNonOnlyIfAvailable.formUnion(
-					child.receivedProperties
-						.subtracting(propertiesToDeclare)
-						.subtracting(forwardedPropertySet),
-				)
-			}
-			// Add the root type's own received dependencies.
-			for dependency in instantiable.dependencies {
-				switch dependency.source {
-				case let .received(onlyIfAvailable):
-					if !onlyIfAvailable {
-						fromNonOnlyIfAvailable.insert(dependency.property)
-					}
-				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-					if !onlyIfAvailable {
-						fromNonOnlyIfAvailable.insert(fulfillingProperty)
-					}
-				case .instantiated, .forwarded:
-					break
-				}
-			}
-			return receivedProperties.intersection(fromNonOnlyIfAvailable)
-		}()
-
 		let unwrappedOptionalCounterparts = Set(
-			flatEligibleReceivedProperties
+			receivedProperties
 				.filter(\.typeDescription.isOptional)
 				.map(\.asUnwrappedProperty),
 		)
 		let receivedNonOptionalProperties = Set(
-			flatEligibleReceivedProperties
+			receivedProperties
 				.filter { !$0.typeDescription.isOptional },
 		)
+		// Separate received properties into flat mock params vs SafeDIParameters entries.
+		// onlyIfAvailable properties go into SafeDIParameters as plain optional values.
 		var flatReceivedParameters = [(label: String, typeSource: String, isOptional: Bool)]()
-		for receivedProperty in flatEligibleReceivedProperties.sorted() {
+		var onlyIfAvailableSafeDIParameterEntries = [(label: String, typeSource: String)]()
+		for receivedProperty in receivedProperties.sorted() {
 			guard !treePropertyLabels.contains(receivedProperty.label),
 			      !forwardedPropertySet.contains(receivedProperty)
 			else { continue }
@@ -661,16 +619,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					&& !unwrappedOptionalCounterparts.contains(receivedProperty)
 					&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty))
 				|| unavailableOptionalProperties.contains(receivedProperty)
-			let typeSource: String = if isOnlyIfAvailable, !receivedProperty.typeDescription.isOptional {
-				"\(receivedProperty.typeDescription.asSource)?"
+			if isOnlyIfAvailable {
+				let typeSource: String = if !receivedProperty.typeDescription.isOptional {
+					"\(receivedProperty.typeDescription.asSource)?"
+				} else {
+					receivedProperty.typeDescription.asSource
+				}
+				onlyIfAvailableSafeDIParameterEntries.append((
+					label: receivedProperty.label,
+					typeSource: typeSource,
+				))
 			} else {
-				receivedProperty.typeDescription.asSource
+				flatReceivedParameters.append((
+					label: receivedProperty.label,
+					typeSource: receivedProperty.typeDescription.asSource,
+					isOptional: false,
+				))
 			}
-			flatReceivedParameters.append((
-				label: receivedProperty.label,
-				typeSource: typeSource,
-				isOptional: isOnlyIfAvailable,
-			))
 		}
 
 		var flatUncoveredParameters = [(label: String, typeSource: String)]()
@@ -714,7 +679,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return (label: disambiguatedLabel, typeSource: parameter.typeSource, isOptional: parameter.isOptional)
 		}
 		// 3. Simple mock case — no tree, no flat parameters.
-		let hasTree = !parameterTree.isEmpty
+		let hasTree = !parameterTree.isEmpty || !onlyIfAvailableSafeDIParameterEntries.isEmpty
 		let hasFlatParameters = !forwardedDependencies.isEmpty
 			|| !rootDefaultParameters.isEmpty
 			|| !flatReceivedParameters.isEmpty
@@ -750,6 +715,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if hasTree {
 			lines.append(Self.generateSafeDIParametersStruct(
 				rootChildren: parameterTree,
+				onlyIfAvailableEntries: onlyIfAvailableSafeDIParameterEntries,
 				indent: indent,
 			))
 			lines.append("")
@@ -800,6 +766,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Generate mock body.
 		if hasTree {
+			// Bind onlyIfAvailable entries from SafeDIParameters as local optionals.
+			for entry in onlyIfAvailableSafeDIParameterEntries {
+				lines.append("\(bodyIndent)let \(entry.label): \(entry.typeSource) = safeDIParameters.\(entry.label)")
+			}
 			let bodyBindings = Self.generateMockBodyBindings(
 				nodes: parameterTree,
 				parentPath: "safeDIParameters",
@@ -896,11 +866,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let requiresSendable: Bool
 		/// Attributes to add to the generated `build()` method (e.g. `"@MainActor"`).
 		let mockAttributes: String
-		/// Whether this node was promoted from a `@Received(onlyIfAvailable: true)` dependency.
-		/// When `true`, the factory closure defaults to `nil` (producing an optional result via
-		/// optional chaining) instead of the type's real initializer.
-		let isOnlyIfAvailable: Bool
-
 		/// The nested configuration struct name (used in struct definitions).
 		static let configurationStructName = "SafeDIMockConfiguration"
 
@@ -955,9 +920,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Collects all unique configuration types from this scope's mock parameter tree.
 	func collectConfigurationTypes() async -> [(typeName: String, structCode: String)] {
-		let parameterTree = await collectMockParameterTree(
-			onlyIfAvailableProperties: onlyIfAvailablePromotedProperties,
-		)
+		let parameterTree = await collectMockParameterTree()
 		let uniqueTypes = Self.collectUniqueConfigurationTypes(from: parameterTree)
 		let indent = Self.standardIndent
 		return uniqueTypes.map { node in
@@ -973,7 +936,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// subtree children, default parameters, and builder metadata.
 	private func collectMockParameterTree(
 		insideSendableScope: Bool = false,
-		onlyIfAvailableProperties: Set<Property> = [],
 	) async -> [MockParameterNode] {
 		var nodes = [MockParameterNode]()
 
@@ -1050,7 +1012,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				isPropertyCycle: isPropertyCycle,
 				requiresSendable: childInsideSendable,
 				mockAttributes: childInstantiable.mockAttributes,
-				isOnlyIfAvailable: onlyIfAvailableProperties.contains(childProperty),
 			))
 		}
 
@@ -1182,6 +1143,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// use qualified names (e.g., `ChildA.SafeDIMockConfiguration`).
 	private static func generateSafeDIParametersStruct(
 		rootChildren: [MockParameterNode],
+		onlyIfAvailableEntries: [(label: String, typeSource: String)],
 		indent: String,
 	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
@@ -1193,15 +1155,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Disambiguate root-level children property labels.
 		let rootLabelMap = disambiguatePropertyLabels(for: rootChildren)
 
-		// Generate SafeDIParameters init with root-level children.
+		// Generate SafeDIParameters init with root-level children + onlyIfAvailable entries.
 		lines.append("\(innerIndent)init(")
-		let initParameters = rootChildren.map { child in
+		var initParameters = rootChildren.map { child in
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			if child.isOnlyIfAvailable {
-				return "\(memberIndent)\(label): \(child.configurationTypeName)? = nil"
-			} else {
-				return "\(memberIndent)\(label): \(child.configurationTypeName) = .init()"
-			}
+			return "\(memberIndent)\(label): \(child.configurationTypeName) = .init()"
+		}
+		for entry in onlyIfAvailableEntries {
+			initParameters.append("\(memberIndent)\(entry.label): \(entry.typeSource) = nil")
 		}
 		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
@@ -1209,17 +1170,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
 			lines.append("\(memberIndent)self.\(label) = \(label)")
 		}
+		for entry in onlyIfAvailableEntries {
+			lines.append("\(memberIndent)self.\(entry.label) = \(entry.label)")
+		}
 		lines.append("\(innerIndent)}")
 
 		// Generate stored properties.
 		lines.append("")
 		for child in rootChildren {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			if child.isOnlyIfAvailable {
-				lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)?")
-			} else {
-				lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
-			}
+			lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
+		}
+		for entry in onlyIfAvailableEntries {
+			lines.append("\(innerIndent)let \(entry.label): \(entry.typeSource)")
 		}
 
 		lines.append("\(indent)}")
@@ -1421,65 +1384,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indent: indent,
 					ancestorTypes: childAncestors,
 				))
-			} else if node.isOnlyIfAvailable {
-				// onlyIfAvailable constant node — the config is optional, so we
-				// use `.map` to conditionally construct. When the config is nil,
-				// the binding result is nil.
-				let concreteTypeName = node.concreteType.asSource
-				// Use the instantiated type (protocol or concrete, without optional
-				// wrapper) for the binding annotation. The `.map` produces an optional.
-				let bindingType = node.typeDescription.asInstantiatedType.asSource
-
-				if node.children.isEmpty, node.defaultParameters.isEmpty, !node.isPropertyCycle {
-					// Leaf onlyIfAvailable — inline .map closure.
-					let arguments = resolveBuilderArguments(
-						for: node,
-						nodePath: nodePath,
-						sendableExtractionPrefix: sendableExtractionPrefix,
-					)
-					let argumentList = arguments.joined(separator: ", ")
-					let construction = "($0.safeDIBuilder ?? \(node.defaultBuilderExpression))(\(argumentList))"
-					if node.erasedToConcreteExistential {
-						lines.append("\(indent)let \(node.propertyLabel): \(bindingType)? = \(nodePath).map { \(bindingType)(\(construction)) }")
-					} else {
-						lines.append("\(indent)let \(node.propertyLabel): \(bindingType)? = \(nodePath).map { \(construction) }")
-					}
-				} else {
-					// onlyIfAvailable node with children — scoped construction via
-					// helper function that takes the config as a parameter.
-					let functionName = "__safeDI_\(node.propertyLabel)"
-					let configParamName = "__safeDI_config"
-					let innerIndent = "\(indent)\(standardIndent)"
-
-					lines.append("\(indent)func \(functionName)(_ \(configParamName): \(node.configurationTypeName)) -> \(concreteTypeName) {")
-					var childAncestors = ancestorTypes
-					childAncestors.insert(nodeTypeKey)
-					// Use configParamName as the parent path so child bindings
-					// reference the function parameter instead of safeDIParameters.
-					let configBuilderExpression = "(\(configParamName).safeDIBuilder ?? \(node.defaultBuilderExpression))"
-					let arguments = resolveBuilderArguments(
-						for: node,
-						nodePath: configParamName,
-						sendableExtractionPrefix: sendableExtractionPrefix,
-					)
-					let argumentList = arguments.joined(separator: ", ")
-					let childBindings = generateMockBodyBindings(
-						nodes: node.children,
-						parentPath: configParamName,
-						indent: innerIndent,
-						ancestorTypes: childAncestors,
-						sendableExtractionPrefix: sendableExtractionPrefix,
-					)
-					lines.append(contentsOf: childBindings)
-					lines.append("\(innerIndent)return \(configBuilderExpression)(\(argumentList))")
-					lines.append("\(indent)}")
-
-					if node.erasedToConcreteExistential {
-						lines.append("\(indent)let \(node.propertyLabel): \(bindingType)? = \(nodePath).map { \(bindingType)(\(functionName)($0)) }")
-					} else {
-						lines.append("\(indent)let \(node.propertyLabel): \(bindingType)? = \(nodePath).map(\(functionName))")
-					}
-				}
 			} else {
 				let arguments = resolveBuilderArguments(
 					for: node,
