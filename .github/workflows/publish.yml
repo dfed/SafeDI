@@ -91,7 +91,7 @@ jobs:
       - name: Stamp version
         run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
-        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize -Xswiftc -Xfrontend -Xswiftc -internalize-at-link
+        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
       - name: Strip binary
         run: strip -s .build/release/SafeDITool
       - name: Smoke test
@@ -116,7 +116,7 @@ jobs:
       - name: Stamp version
         run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
-        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize -Xswiftc -Xfrontend -Xswiftc -internalize-at-link
+        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
       - name: Strip binary
         run: strip -s .build/release/SafeDITool
       - name: Smoke test
