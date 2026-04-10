@@ -342,7 +342,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		"__safeDI_\(property.label)"
 	}
 
-	static let mockConfigurationStructName = "SafeDIMockConfiguration"
 	private static let standardIndent = "    "
 
 	// MARK: Code Generation

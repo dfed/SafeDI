@@ -185,28 +185,53 @@ public actor DependencyTreeGenerator {
 			return results
 		}
 
+		let rootedTypeNames = Set(generatedRoots.map(\.root.typeDescription.asSource))
 		// Deduplicate configuration types by type name across all roots.
 		var seenTypeNames = Set<String>()
-		var allConfigurationExtensions = [(typeName: String, structCode: String)]()
+		var rootedConfigurationExtensions = [String: String]()
+		var sharedConfigurationExtensions = [(typeName: String, structCode: String)]()
 		for result in generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription }) {
 			for configType in result.configurationTypes {
 				if seenTypeNames.insert(configType.typeName).inserted {
-					allConfigurationExtensions.append(configType)
+					if rootedTypeNames.contains(configType.typeName) {
+						rootedConfigurationExtensions[configType.typeName] = configType.structCode
+					} else {
+						sharedConfigurationExtensions.append(configType)
+					}
 				}
 			}
 		}
 
-		let mockConfigurationCode: String? = if allConfigurationExtensions.isEmpty {
+		let mergedGeneratedRoots = generatedRoots.map { result in
+			let configurationCode = rootedConfigurationExtensions[result.root.typeDescription.asSource].map { structCode in
+				generateMockConfigurationCode(
+					configurationExtensions: [(typeName: result.root.typeDescription.asSource, structCode: structCode)],
+					mockConditionalCompilation: mockConditionalCompilation,
+				)
+			}
+			let code = if let configurationCode, !configurationCode.isEmpty {
+				result.root.code + "\n\n" + configurationCode.trimmingCharacters(in: .whitespacesAndNewlines)
+			} else {
+				result.root.code
+			}
+			return GeneratedRoot(
+				typeDescription: result.root.typeDescription,
+				sourceFilePath: result.root.sourceFilePath,
+				code: code,
+			)
+		}
+
+		let mockConfigurationCode: String? = if sharedConfigurationExtensions.isEmpty {
 			nil
 		} else {
 			generateMockConfigurationCode(
-				configurationExtensions: allConfigurationExtensions,
+				configurationExtensions: sharedConfigurationExtensions,
 				mockConditionalCompilation: mockConditionalCompilation,
 			)
 		}
 
 		return MockGenerationResult(
-			generatedRoots: generatedRoots.map(\.root),
+			generatedRoots: mergedGeneratedRoots,
 			mockConfigurationCode: mockConfigurationCode,
 		)
 	}
