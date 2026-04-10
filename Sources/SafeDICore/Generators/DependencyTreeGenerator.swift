@@ -187,6 +187,8 @@ public actor DependencyTreeGenerator {
 
 		let rootedTypeNames = Set(generatedRoots.map(\.root.typeDescription.asSource))
 		// Deduplicate configuration types by type name across all roots.
+		// When the same type appears again with longer struct code, replace —
+		// the enriched version (from onlyIfAvailable promotion) is a superset.
 		var seenTypeNames = Set<String>()
 		var rootedConfigurationExtensions = [String: String]()
 		var sharedConfigurationExtensions = [(typeName: String, structCode: String)]()
@@ -197,6 +199,15 @@ public actor DependencyTreeGenerator {
 						rootedConfigurationExtensions[configType.typeName] = configType.structCode
 					} else {
 						sharedConfigurationExtensions.append(configType)
+					}
+				} else if configType.structCode.count > (rootedConfigurationExtensions[configType.typeName]?.count ?? 0) {
+					// Enriched version has longer code — replace.
+					if rootedTypeNames.contains(configType.typeName) {
+						rootedConfigurationExtensions[configType.typeName] = configType.structCode
+					} else if let existingIndex = sharedConfigurationExtensions.firstIndex(where: { $0.typeName == configType.typeName }),
+					          configType.structCode.count > sharedConfigurationExtensions[existingIndex].structCode.count
+					{
+						sharedConfigurationExtensions[existingIndex] = configType
 					}
 				}
 			}
@@ -477,8 +488,6 @@ public actor DependencyTreeGenerator {
 		}
 
 		// Promote all received properties that have scopes.
-		// onlyIfAvailable dependencies are NOT promoted — they become optional
-		// mock parameters with no default.
 		// Filter out forwarded properties — they're bare mock parameters, not promoted children.
 		// ScopeData.root doesn't carry forwardedProperties, so receivedProperties doesn't
 		// subtract them. We filter them here instead.
@@ -496,9 +505,9 @@ public actor DependencyTreeGenerator {
 		// wins and the optional version is skipped.
 		var promotedLabelAndTypes = Set<String>()
 		for receivedProperty in allReceived.sorted() {
-			guard !allOnlyIfAvailable.contains(receivedProperty),
-			      !forwardedProperties.contains(receivedProperty)
-			else { continue }
+			guard !forwardedProperties.contains(receivedProperty) else { continue }
+
+			let isOnlyIfAvailable = allOnlyIfAvailable.contains(receivedProperty)
 
 			let labelAndType = "\(receivedProperty.label):\(receivedProperty.typeDescription.asInstantiatedType.asSource)"
 			guard promotedLabelAndTypes.insert(labelAndType).inserted else { continue }
@@ -514,11 +523,36 @@ public actor DependencyTreeGenerator {
 			guard let receivedScope = typeDescriptionToScopeMap[dependencyType] else {
 				continue
 			}
-			mockRootScope.propertiesToGenerate.append(.instantiated(
-				receivedProperty,
-				receivedScope,
-				erasedToConcreteExistential: erasedToConcreteExistential,
-			))
+
+			if isOnlyIfAvailable {
+				// For onlyIfAvailable promotions, create an enriched scope that includes
+				// the type's @Received dependencies as instantiated children, so they
+				// appear in the config struct and can be built inside a .map closure.
+				let enrichedScope = Scope(instantiable: receivedScope.instantiable)
+				enrichedScope.propertiesToGenerate = receivedScope.propertiesToGenerate
+				for receivedDependency in receivedScope.requiredReceivedProperties {
+					let receivedDependencyType = receivedDependency.typeDescription.asInstantiatedType
+					if let receivedDependencyScope = typeDescriptionToScopeMap[receivedDependencyType] {
+						enrichedScope.propertiesToGenerate.append(.instantiated(
+							receivedDependency,
+							receivedDependencyScope,
+							erasedToConcreteExistential: false,
+						))
+					}
+				}
+				mockRootScope.propertiesToGenerate.append(.instantiated(
+					receivedProperty,
+					enrichedScope,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+					suppressReceivedPropagation: true,
+				))
+			} else {
+				mockRootScope.propertiesToGenerate.append(.instantiated(
+					receivedProperty,
+					receivedScope,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+				))
+			}
 		}
 
 		// Validate the promoted mock scope for cycles before generating code.
@@ -571,7 +605,7 @@ public actor DependencyTreeGenerator {
 		// Recurse into children.
 		for childPropertyToGenerate in scope.propertiesToGenerate {
 			switch childPropertyToGenerate {
-			case let .instantiated(childProperty, childScope, _):
+			case let .instantiated(childProperty, childScope, _, _):
 				guard !propertyStack.contains(childProperty) else { continue }
 				let nextStack = [childProperty] + propertyStack
 				try validateMockRootScopeForCycles(
@@ -625,7 +659,7 @@ public actor DependencyTreeGenerator {
 		// Properties declared at this scope (instantiated/aliased children).
 		let propertiesToDeclare = Set(scope.propertiesToGenerate.compactMap { propertyToGenerate -> Property? in
 			switch propertyToGenerate {
-			case let .instantiated(property, _, _): return property
+			case let .instantiated(property, _, _, _): return property
 			case let .aliased(property, _, _, _): return property
 			}
 		})
@@ -644,7 +678,7 @@ public actor DependencyTreeGenerator {
 		// Aliases are handled below in the own-dependency loop: alias children's receivedProperties
 		// = [fulfillingProperty], but the own-dependency union unconditionally adds the same
 		// fulfillingProperty, making the child-path subtraction/filter redundant.
-		for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
+		for case let .instantiated(_, childScope, _, _) in scope.propertiesToGenerate {
 			let (childReceived, childOnlyIfAvailable) = collectReceivedProperties(
 				from: childScope,
 				cache: &cache,
@@ -960,7 +994,7 @@ public actor DependencyTreeGenerator {
 
 			for childPropertyToGenerate in scope.propertiesToGenerate {
 				switch childPropertyToGenerate {
-				case let .instantiated(childProperty, childScope, _):
+				case let .instantiated(childProperty, childScope, _, _):
 					guard !childPropertyStack.contains(childProperty) else {
 						// There is a cycle in our scope tree. Do not re-enter it.
 						continue

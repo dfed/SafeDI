@@ -391,25 +391,25 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		extension Parent {
 		    struct SafeDIParameters {
 		        init(
-		            child: ((Unrelated?, Shared?) -> Child)? = nil,
-		            shared: Shared? = nil,
-		            unrelated: Unrelated? = nil
+		            shared: (() -> Shared)? = nil,
+		            unrelated: (() -> Unrelated)? = nil,
+		            child: ((Unrelated?, Shared?) -> Child)? = nil
 		        ) {
-		            self.child = child
 		            self.shared = shared
 		            self.unrelated = unrelated
+		            self.child = child
 		        }
 
+		        let shared: (() -> Shared)?
+		        let unrelated: (() -> Unrelated)?
 		        let child: ((Unrelated?, Shared?) -> Child)?
-		        let shared: Shared?
-		        let unrelated: Unrelated?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let shared: Shared? = safeDIParameters.shared
-		        let unrelated: Unrelated? = safeDIParameters.unrelated
+		        let shared: Shared? = safeDIParameters.shared?()
+		        let unrelated: Unrelated? = safeDIParameters.unrelated?()
 		        let child = (safeDIParameters.child ?? Child.mock(unrelated:shared:))(unrelated, shared)
 		        return Parent(child: child, shared: shared)
 		    }

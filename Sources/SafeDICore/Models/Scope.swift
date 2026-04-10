@@ -47,7 +47,7 @@ final class Scope: Hashable {
 	var propertiesToGenerate = [PropertyToGenerate]()
 
 	enum PropertyToGenerate {
-		case instantiated(Property, Scope, erasedToConcreteExistential: Bool)
+		case instantiated(Property, Scope, erasedToConcreteExistential: Bool, suppressReceivedPropagation: Bool = false)
 		case aliased(Property, fulfilledBy: Property, erasedToConcreteExistential: Bool, onlyIfAvailable: Bool)
 	}
 
@@ -105,6 +105,7 @@ final class Scope: Hashable {
 		receivableProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
+		suppressReceivedPropagation: Bool = false,
 	) throws -> ScopeGenerator {
 		var childPropertyStack = propertyStack
 		let isPropertyCycle: Bool
@@ -150,13 +151,14 @@ final class Scope: Hashable {
 			property: property,
 			propertiesToGenerate: isPropertyCycle ? [] : propertiesToGenerate.map {
 				switch $0 {
-				case let .instantiated(property, scope, erasedToConcreteExistential):
+				case let .instantiated(property, scope, erasedToConcreteExistential, childSuppressReceivedPropagation):
 					try scope.createScopeGenerator(
 						for: property,
 						propertyStack: childPropertyStack,
 						receivableProperties: receivableProperties,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						forMockGeneration: forMockGeneration,
+						suppressReceivedPropagation: childSuppressReceivedPropagation,
 					)
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
 					ScopeGenerator(
@@ -171,6 +173,7 @@ final class Scope: Hashable {
 			unavailableOptionalProperties: unavailableOptionalProperties,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			isPropertyCycle: isPropertyCycle,
+			suppressReceivedPropagation: suppressReceivedPropagation,
 		)
 		if !forMockGeneration {
 			Task.detached {

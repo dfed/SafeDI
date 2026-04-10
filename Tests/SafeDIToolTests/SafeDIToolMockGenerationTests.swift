@@ -2637,18 +2637,18 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension B {
 		    struct SafeDIParameters {
 		        init(
-		            a: A? = nil
+		            a: (() -> A)? = nil
 		        ) {
 		            self.a = a
 		        }
 
-		        let a: A?
+		        let a: (() -> A)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> B {
-		        let a: A? = safeDIParameters.a
+		        let a: A? = safeDIParameters.a?()
 		        return B(a: a)
 		    }
 		}
@@ -2863,18 +2863,18 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension B {
 		    struct SafeDIParameters {
 		        init(
-		            a: A? = nil
+		            a: (() -> A)? = nil
 		        ) {
 		            self.a = a
 		        }
 
-		        let a: A?
+		        let a: (() -> A)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> B {
-		        let a: A? = safeDIParameters.a
+		        let a: A? = safeDIParameters.a?()
 		        return B(a: a)
 		    }
 		}
@@ -4981,21 +4981,21 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    struct SafeDIParameters {
 		        init(
 		            dependency: (() -> Dependency)? = nil,
-		            idProvider: IDProvider? = nil
+		            idProvider: (() -> ConcreteIDProvider)? = nil
 		        ) {
 		            self.dependency = dependency
 		            self.idProvider = idProvider
 		        }
 
 		        let dependency: (() -> Dependency)?
-		        let idProvider: IDProvider?
+		        let idProvider: (() -> ConcreteIDProvider)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Consumer {
-		        let idProvider: IDProvider? = safeDIParameters.idProvider
 		        let dependency = (safeDIParameters.dependency ?? Dependency.init)()
+		        let idProvider: IDProvider? = safeDIParameters.idProvider?()
 		        return Consumer(idProvider: idProvider, dependency: dependency)
 		    }
 		}
@@ -5225,21 +5225,21 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension Parent {
 		    struct SafeDIParameters {
 		        init(
-		            child: ((IDProvider?) -> Child)? = nil,
-		            idProvider: IDProvider? = nil
+		            idProvider: (() -> ConcreteIDProvider)? = nil,
+		            child: ((IDProvider?) -> Child)? = nil
 		        ) {
-		            self.child = child
 		            self.idProvider = idProvider
+		            self.child = child
 		        }
 
+		        let idProvider: (() -> ConcreteIDProvider)?
 		        let child: ((IDProvider?) -> Child)?
-		        let idProvider: IDProvider?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let idProvider: IDProvider? = safeDIParameters.idProvider
+		        let idProvider: IDProvider? = safeDIParameters.idProvider?()
 		        let child = (safeDIParameters.child ?? Child.init(idProvider:))(idProvider)
 		        return Parent(child: child)
 		    }
@@ -5289,19 +5289,19 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension DeviceService {
 		    struct SafeDIParameters {
 		        init(
-		            appClipService: AppClipService? = nil
+		            appClipService: (() -> ConcreteAppClipService)? = nil
 		        ) {
 		            self.appClipService = appClipService
 		        }
 
-		        let appClipService: AppClipService?
+		        let appClipService: (() -> ConcreteAppClipService)?
 		    }
 
 		    static func mock(
 		        name: String,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> DeviceService {
-		        let appClipService: AppClipService? = safeDIParameters.appClipService
+		        let appClipService: AppClipService? = safeDIParameters.appClipService?()
 		        return DeviceService(appClipService: appClipService, name: name)
 		    }
 		}
@@ -6425,24 +6425,24 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension Parent {
 		    struct SafeDIParameters {
 		        init(
+		            appClipService: (() -> ConcreteAppClipService)? = nil,
 		            childA: ((AppClipService?) -> ChildA)? = nil,
-		            childB: ((AppClipService?) -> ChildB)? = nil,
-		            appClipService: AppClipService? = nil
+		            childB: ((AppClipService?) -> ChildB)? = nil
 		        ) {
+		            self.appClipService = appClipService
 		            self.childA = childA
 		            self.childB = childB
-		            self.appClipService = appClipService
 		        }
 
+		        let appClipService: (() -> ConcreteAppClipService)?
 		        let childA: ((AppClipService?) -> ChildA)?
 		        let childB: ((AppClipService?) -> ChildB)?
-		        let appClipService: AppClipService?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let appClipService: AppClipService? = safeDIParameters.appClipService
+		        let appClipService: AppClipService? = safeDIParameters.appClipService?()
 		        let childA = (safeDIParameters.childA ?? ChildA.init(appClipService:))(appClipService)
 		        let childB = (safeDIParameters.childB ?? ChildB.init(appClipService:))(appClipService)
 		        return Parent(childA: childA, childB: childB)
@@ -6883,22 +6883,22 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension Parent {
 		    struct SafeDIParameters {
 		        init(
-		            consumer: ((ServiceProtocol?) -> Consumer)? = nil,
-		            concreteService: ConcreteService? = nil
+		            concreteService: (() -> ConcreteService)? = nil,
+		            consumer: ((ServiceProtocol?) -> Consumer)? = nil
 		        ) {
-		            self.consumer = consumer
 		            self.concreteService = concreteService
+		            self.consumer = consumer
 		        }
 
+		        let concreteService: (() -> ConcreteService)?
 		        let consumer: ((ServiceProtocol?) -> Consumer)?
-		        let concreteService: ConcreteService?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Parent {
-		        let concreteService: ConcreteService? = safeDIParameters.concreteService
-		        let consumer = (safeDIParameters.consumer ?? Consumer.init(service:))(service)
+		        let concreteService: ConcreteService? = safeDIParameters.concreteService?()
+		        let consumer = (safeDIParameters.consumer ?? Consumer.init(service:))(concreteService)
 		        return Parent(consumer: consumer)
 		    }
 		}
@@ -6966,21 +6966,24 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension ProfileService {
 		    struct SafeDIParameters {
 		        init(
-		            imageService: ((ApplicationStateService?) -> ImageService)? = nil,
-		            applicationStateService: ApplicationStateService? = nil
+		            applicationStateService: ApplicationStateService.SafeDIMockConfiguration? = nil,
+		            imageService: ((ApplicationStateService?) -> ImageService)? = nil
 		        ) {
-		            self.imageService = imageService
 		            self.applicationStateService = applicationStateService
+		            self.imageService = imageService
 		        }
 
+		        let applicationStateService: ApplicationStateService.SafeDIMockConfiguration?
 		        let imageService: ((ApplicationStateService?) -> ImageService)?
-		        let applicationStateService: ApplicationStateService?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> ProfileService {
-		        let applicationStateService: ApplicationStateService? = safeDIParameters.applicationStateService
+		        let applicationStateService: ApplicationStateService? = safeDIParameters.applicationStateService.map { applicationStateServiceConfiguration in
+		            let notificationCenter = (applicationStateServiceConfiguration.notificationCenter ?? NotificationCenter.init)()
+		            return (applicationStateServiceConfiguration.safeDIBuilder ?? ApplicationStateService.init(notificationCenter:))(notificationCenter)
+		        }
 		        let imageService = (safeDIParameters.imageService ?? ImageService.init(applicationStateService:))(applicationStateService)
 		        return ProfileService(imageService: imageService)
 		    }
@@ -10149,18 +10152,18 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension OptionalChild {
 		    struct SafeDIParameters {
 		        init(
-		            service: Service? = nil
+		            service: (() -> Service)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: Service?
+		        let service: (() -> Service)?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> OptionalChild {
-		        let service: Service? = safeDIParameters.service
+		        let service: Service? = safeDIParameters.service?()
 		        return OptionalChild(service: service)
 		    }
 		}
@@ -10567,15 +10570,15 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension Child {
 		    struct SafeDIMockConfiguration {
 		        init(
-		            leaf: (() -> Leaf)? = nil,
-		            _ safeDIBuilder: ((Leaf) -> Child)? = nil
+		            leaf: (@Sendable () -> Leaf)? = nil,
+		            _ safeDIBuilder: (@Sendable (Leaf) -> Child)? = nil
 		        ) {
 		            self.leaf = leaf
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let leaf: (() -> Leaf)?
-		        let safeDIBuilder: ((Leaf) -> Child)?
+		        let leaf: (@Sendable () -> Leaf)?
+		        let safeDIBuilder: (@Sendable (Leaf) -> Child)?
 		    }
 		}
 		#endif
@@ -10896,6 +10899,161 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		""", "Unexpected output \(output.mockFiles["Leaf+SafeDIMock.swift"] ?? "")")
 
 		#expect(output.mockConfigurationFile == emptyMockConfigurationFileOutput, "Unexpected output \(output.mockConfigurationFile ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_configStructUsesEnrichedVersion_whenTypeIsUsedBothAsRegularAndOnlyIfAvailable() async throws {
+		// Service is used by ChildA (regular @Received) and by ChildB (@Received(onlyIfAvailable: true)).
+		// Service has its own @Received dep on Helper. The onlyIfAvailable promotion creates an
+		// enriched scope for Service that includes Helper as an instantiated child.
+		// When both the regular and enriched scopes generate config structs, the enriched
+		// version (with Helper as a child) should win in deduplication.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(helper: Helper, service: Service, childA: ChildA, childB: ChildB) {
+				        self.helper = helper
+				        self.service = service
+				        self.childA = childA
+				        self.childB = childB
+				    }
+				    @Instantiated let helper: Helper
+				    @Instantiated let service: Service
+				    @Instantiated let childA: ChildA
+				    @Instantiated let childB: ChildB
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Service: Instantiable {
+				    public init(helper: Helper) {
+				        self.helper = helper
+				    }
+				    @Received let helper: Helper
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Helper: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct ChildA: Instantiable {
+				    public init(service: Service) {
+				        self.service = service
+				    }
+				    @Received let service: Service
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct ChildB: Instantiable {
+				    public init(service: Service?) {
+				        self.service = service
+				    }
+				    @Received(onlyIfAvailable: true) let service: Service?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// When both a required and an onlyIfAvailable version of Service exist in the same
+		// root, the required version's scope already satisfies ChildB's need (service is in
+		// propertiesToDeclare). The ChildB builder receives `service` directly. The Service
+		// config struct in the shared config file contains Helper as a child from the enriched
+		// onlyIfAvailable scope.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    struct SafeDIParameters {
+		        init(
+		            helper: (() -> Helper)? = nil,
+		            service: ((Helper) -> Service)? = nil,
+		            childA: ((Service) -> ChildA)? = nil,
+		            childB: ((Service?) -> ChildB)? = nil
+		        ) {
+		            self.helper = helper
+		            self.service = service
+		            self.childA = childA
+		            self.childB = childB
+		        }
+
+		        let helper: (() -> Helper)?
+		        let service: ((Helper) -> Service)?
+		        let childA: ((Service) -> ChildA)?
+		        let childB: ((Service?) -> ChildB)?
+		    }
+
+		    static func mock(
+		        safeDIParameters: SafeDIParameters = .init()
+		    ) -> Root {
+		        let helper = (safeDIParameters.helper ?? Helper.init)()
+		        let service = (safeDIParameters.service ?? Service.init(helper:))(helper)
+		        let childA = (safeDIParameters.childA ?? ChildA.init(service:))(service)
+		        let childB = (safeDIParameters.childB ?? ChildB.init(service:))(service)
+		        return Root(helper: helper, service: service, childA: childA, childB: childB)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+
+		// The Service mock file includes the enriched SafeDIMockConfiguration with Helper
+		// as a child. This confirms the enriched version (from onlyIfAvailable promotion)
+		// won in the deduplication over the non-enriched version.
+		#expect(output.mockFiles["Service+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Service {
+		    struct SafeDIParameters {
+		        init(
+		            helper: (() -> Helper)? = nil
+		        ) {
+		            self.helper = helper
+		        }
+
+		        let helper: (() -> Helper)?
+		    }
+
+		    static func mock(
+		        safeDIParameters: SafeDIParameters = .init()
+		    ) -> Service {
+		        let helper = (safeDIParameters.helper ?? Helper.init)()
+		        return Service(helper: helper)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Service {
+		    struct SafeDIMockConfiguration {
+		        init(
+		            helper: (() -> Helper)? = nil,
+		            _ safeDIBuilder: ((Helper) -> Service)? = nil
+		        ) {
+		            self.helper = helper
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let helper: (() -> Helper)?
+		        let safeDIBuilder: ((Helper) -> Service)?
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Service+SafeDIMock.swift"] ?? "")")
 	}
 
 	// MARK: Private

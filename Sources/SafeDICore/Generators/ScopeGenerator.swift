@@ -31,6 +31,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		unavailableOptionalProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
 		isPropertyCycle: Bool,
+		suppressReceivedPropagation: Bool = false,
 	) {
 		if let property {
 			scopeData = .property(
@@ -51,25 +52,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			description = instantiable.concreteInstantiable.asSource
 		}
 		self.property = property
+		self.suppressReceivedPropagation = suppressReceivedPropagation
 		self.propertiesToGenerate = propertiesToGenerate
 		propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property))
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		receivedProperties = Set(
-			propertiesToGenerate.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
-				// All the properties this child and its children require be passed in.
-				propertyToGenerate.receivedProperties
-					// Minus the properties we declare.
-					.subtracting(propertiesToDeclare)
-					// Minus optional properties whose unwrapped form we declare.
-					// This handles the case where a non-optional version is promoted
-					// to satisfy both required and onlyIfAvailable receivers.
-					.filter { property in
-						!property.typeDescription.isOptional
-							|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
-					}
-					// Minus the properties we forward.
-					.subtracting(scopeData.forwardedProperties)
-			},
+			propertiesToGenerate
+				.filter { !$0.suppressReceivedPropagation }
+				.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
+					// All the properties this child and its children require be passed in.
+					propertyToGenerate.receivedProperties
+						// Minus the properties we declare.
+						.subtracting(propertiesToDeclare)
+						// Minus optional properties whose unwrapped form we declare.
+						// This handles the case where a non-optional version is promoted
+						// to satisfy both required and onlyIfAvailable receivers.
+						.filter { property in
+							!property.typeDescription.isOptional
+								|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
+						}
+						// Minus the properties we forward.
+						.subtracting(scopeData.forwardedProperties)
+				},
 		)
 		// Unioned with the properties we require to fulfill our own dependencies.
 		.union(
@@ -87,11 +91,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				},
 		)
 		onlyIfAvailableUnwrappedReceivedProperties = Set(
-			propertiesToGenerate.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
-				propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
-					.subtracting(propertiesToDeclare)
-					.subtracting(scopeData.forwardedProperties)
-			},
+			propertiesToGenerate
+				.filter { !$0.suppressReceivedPropagation }
+				.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
+					propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
+						.subtracting(propertiesToDeclare)
+						.subtracting(scopeData.forwardedProperties)
+				},
 		)
 		.union(
 			instantiable
@@ -136,6 +142,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		} else {
 			[]
 		}
+		suppressReceivedPropagation = false
 		description = property.asSource
 		propertiesToGenerate = []
 		propertiesToDeclare = []
@@ -275,6 +282,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Properties that this scope declares as a `let` constant.
 	private let propertiesToDeclare: Set<Property>
 	private let property: Property?
+	/// When `true`, this node's transitive received properties are NOT propagated
+	/// to its parent. Used for onlyIfAvailable promoted scopes whose subtree is
+	/// self-contained within a `.map` closure.
+	let suppressReceivedPropagation: Bool
 
 	private var unavailablePropertiesToGenerateCodeTask = [Set<Property>: Task<String, Error>]()
 
@@ -864,6 +875,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let requiresSendable: Bool
 		/// Attributes to add to the generated `build()` method (e.g. `"@MainActor"`).
 		let mockAttributes: String
+		/// Whether this node represents an onlyIfAvailable dependency. When `true`,
+		/// the parameter and binding are optional — `nil` means the dependency is absent.
+		let isOnlyIfAvailable: Bool
 
 		/// Whether this node needs a full `_Configuration` struct or can be inlined
 		/// as an optional closure on the parent. A node needs a struct when it has
@@ -1019,6 +1033,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				isPropertyCycle: isPropertyCycle,
 				requiresSendable: childInsideSendable,
 				mockAttributes: childInstantiable.mockAttributes,
+				isOnlyIfAvailable: childGenerator.suppressReceivedPropagation,
 			))
 		}
 
@@ -1130,14 +1145,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Skip leaf nodes that don't need a _Configuration struct.
 			guard node.needsConfigurationStruct else { return }
 			if seen.contains(key) {
-				// If this node requires sendable and the existing one doesn't,
-				// replace it — @Sendable closures are compatible in both contexts.
-				if node.requiresSendable,
-				   let existingIndex = result.firstIndex(where: {
-				   	$0.concreteType.asSource == key && !$0.requiresSendable
-				   })
-				{
-					result[existingIndex] = node
+				if let existingIndex = result.firstIndex(where: {
+					$0.concreteType.asSource == key
+				}) {
+					let existing = result[existingIndex]
+					// When the same type appears with different children counts,
+					// prefer the version with more children (enriched version is
+					// a superset). Also prefer sendable over non-sendable.
+					let shouldReplace = node.children.count > existing.children.count
+						|| (node.requiresSendable && !existing.requiresSendable)
+					if shouldReplace {
+						result[existingIndex] = node
+					}
 				}
 				return
 			}
@@ -1172,7 +1191,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(innerIndent)init(")
 		var initParameters = rootChildren.map { child in
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			if child.needsConfigurationStruct {
+			if child.isOnlyIfAvailable {
+				// onlyIfAvailable nodes are always optional — nil means absent.
+				if child.needsConfigurationStruct {
+					return "\(memberIndent)\(label): \(child.configurationTypeName)? = nil"
+				} else {
+					let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
+					return "\(memberIndent)\(label): (\(sendableAnnotation)\(child.builderClosureType))? = nil"
+				}
+			} else if child.needsConfigurationStruct {
 				return "\(memberIndent)\(label): \(child.configurationTypeName) = .init()"
 			} else {
 				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
@@ -1197,7 +1224,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("")
 		for child in rootChildren {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			if child.needsConfigurationStruct {
+			if child.isOnlyIfAvailable {
+				if child.needsConfigurationStruct {
+					lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)?")
+				} else {
+					let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
+					lines.append("\(innerIndent)let \(label): (\(sendableAnnotation)\(child.builderClosureType))?")
+				}
+			} else if child.needsConfigurationStruct {
 				lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
 			} else {
 				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
@@ -1370,8 +1404,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 		ancestorTypes: Set<String> = [],
 		sendableExtractionPrefix: String? = nil,
+		availableLocalVariables: Set<String> = [],
 	) -> [String] {
 		var lines = [String]()
+		var localVariables = availableLocalVariables
 
 		// Disambiguate sibling labels at this level.
 		let labelMap = disambiguatePropertyLabels(for: nodes)
@@ -1382,6 +1418,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			let nodePath = "\(parentPath).\(disambiguated)"
+
+			// Route onlyIfAvailable nodes to the .map pattern.
+			if node.isOnlyIfAvailable {
+				lines.append(contentsOf: generateOnlyIfAvailableBinding(
+					for: node,
+					nodePath: nodePath,
+					indent: indent,
+					ancestorTypes: ancestorTypes,
+				))
+				localVariables.insert(node.propertyLabel)
+				continue
+			}
 
 			let defaultBuilder = node.defaultBuilderExpression
 			let relativePath = nodePath
@@ -1424,6 +1472,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					for: node,
 					nodePath: argumentNodePath,
 					sendableExtractionPrefix: sendableExtractionPrefix,
+					availableLocalVariables: localVariables,
 				)
 				lines.append(contentsOf: generateInstantiatorBinding(
 					for: node,
@@ -1440,6 +1489,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					for: node,
 					nodePath: argumentNodePath,
 					sendableExtractionPrefix: sendableExtractionPrefix,
+					availableLocalVariables: localVariables,
 				)
 				let argumentList = arguments.joined(separator: ", ")
 
@@ -1494,17 +1544,93 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return lines
 	}
 
+	/// Generates a binding for an onlyIfAvailable dependency using `.map`.
+	/// When the SafeDIParameters value is nil, the dependency is absent (nil).
+	/// When provided, the full subtree is built inside the `.map` closure.
+	private static func generateOnlyIfAvailableBinding(
+		for node: MockParameterNode,
+		nodePath: String,
+		indent: String,
+		ancestorTypes: Set<String>,
+	) -> [String] {
+		var lines = [String]()
+		let instantiatedType = node.instantiatedTypeDescription.asSource
+		let closureParameterName = "\(node.propertyLabel)Configuration"
+
+		if node.needsConfigurationStruct {
+			// Node with config struct — use .map with the configuration closure parameter.
+			let innerIndent = "\(indent)\(standardIndent)"
+
+			lines.append("\(indent)let \(node.propertyLabel): \(instantiatedType)? = \(nodePath).map { \(closureParameterName) in")
+
+			// Build children inside the .map closure using the configuration parameter.
+			var childAncestors = ancestorTypes
+			childAncestors.insert(node.instantiatedTypeDescription.asSource)
+			let childBindings = generateMockBodyBindings(
+				nodes: node.children,
+				parentPath: closureParameterName,
+				indent: innerIndent,
+				ancestorTypes: childAncestors,
+			)
+			lines.append(contentsOf: childBindings)
+
+			let defaultBuilder = node.defaultBuilderExpression
+			let builderExpression = "(\(closureParameterName).safeDIBuilder ?? \(defaultBuilder))"
+			let arguments = resolveBuilderArguments(
+				for: node,
+				nodePath: closureParameterName,
+			)
+			let argumentList = arguments.joined(separator: ", ")
+			if node.erasedToConcreteExistential {
+				let protocolType = node.typeDescription.asSource
+				lines.append("\(innerIndent)return \(protocolType)(\(builderExpression)(\(argumentList)))")
+			} else {
+				lines.append("\(innerIndent)return \(builderExpression)(\(argumentList))")
+			}
+			lines.append("\(indent)}")
+		} else {
+			// Leaf onlyIfAvailable — optional closure invocation.
+			let arguments = resolveBuilderArguments(
+				for: node,
+				nodePath: nodePath,
+			)
+			let argumentList = arguments.joined(separator: ", ")
+			if node.erasedToConcreteExistential {
+				let protocolType = node.typeDescription.asSource
+				lines.append("\(indent)let \(node.propertyLabel): \(protocolType)? = \(nodePath).map { \(protocolType)($0(\(argumentList))) }")
+			} else {
+				lines.append("\(indent)let \(node.propertyLabel): \(instantiatedType)? = \(nodePath)?(\(argumentList))")
+			}
+		}
+
+		return lines
+	}
+
 	/// Resolves the positional arguments for a builder call.
 	/// Each argument comes from one of:
 	/// - A local variable (previously built dep or flat mock param)
 	/// - A stored default on SafeDIParameters (`{nodePath}.{label}`)
+	/// - `availableLocalVariables`: when provided, aliased dependency labels that aren't
+	///   in this set fall back to their fulfilling property label (which is in scope).
 	private static func resolveBuilderArguments(
 		for node: MockParameterNode,
 		nodePath: String,
 		sendableExtractionPrefix: String? = nil,
+		availableLocalVariables: Set<String>? = nil,
 	) -> [String] {
 		let dependencyLabels = Set(node.dependencies.map(\.property.label))
 		let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
+
+		// Build a map from dependency label to the alias's fulfilling property label
+		// for aliased dependencies where the label differs.
+		var aliasedLabelToFulfillingLabel = [String: String]()
+		for dependency in node.dependencies {
+			if case let .aliased(fulfillingProperty, _, _) = dependency.source,
+			   fulfillingProperty.label != dependency.property.label
+			{
+				aliasedLabelToFulfillingLabel[dependency.property.label] = fulfillingProperty.label
+			}
+		}
 
 		let relativePath = nodePath
 			.replacingOccurrences(of: "safeDIParameters.", with: "")
@@ -1512,7 +1638,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		return node.constructionArguments.compactMap { argument in
 			if dependencyLabels.contains(argument.innerLabel) {
-				argument.innerLabel
+				// When the dependency label is an alias and isn't available as a local
+				// variable but its fulfilling property label IS, use the fulfilling label.
+				if let availableLocalVariables,
+				   let fulfillingLabel = aliasedLabelToFulfillingLabel[argument.innerLabel],
+				   !availableLocalVariables.contains(argument.innerLabel),
+				   availableLocalVariables.contains(fulfillingLabel)
+				{
+					fulfillingLabel
+				} else {
+					argument.innerLabel
+				}
 			} else if defaultParameterLabels.contains(argument.label) {
 				if let sendableExtractionPrefix {
 					"\(sendableExtractionPrefix)__\(relativePath)_\(argument.label)"
