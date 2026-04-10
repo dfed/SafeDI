@@ -40,22 +40,26 @@ jobs:
     - name: Select Xcode Version
       run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
 
+    # Pre-build so dependencies are compiled and cached before CodeQL
+    # starts tracing. This prevents CodeQL from analyzing swift-syntax
+    # and other third-party code.
+    - if: matrix.language == 'swift'
+      name: Pre-build dependencies
+      run: xcrun swift build -c release
+
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
-        # If you wish to specify custom queries, you can do so here or in a config file.
-        # By default, queries listed here will override any specified in a config file.
-        # Prefix the list here with "+" to use these queries and those in the config file.
 
-        # For more details on CodeQL's query packs, refer to: https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
-        # queries: security-extended,security-and-quality
-
+    # Touch only our source files so SPM recompiles them (but not
+    # cached dependencies) under CodeQL's compiler tracing.
     - if: matrix.language == 'swift'
+      name: Rebuild project source for CodeQL
       run: |
-        sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+        find Sources -name '*.swift' -exec touch {} +
         xcrun swift build -c release
 
     - name: Perform CodeQL Analysis
