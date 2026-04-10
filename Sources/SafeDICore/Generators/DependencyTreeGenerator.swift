@@ -490,10 +490,18 @@ public actor DependencyTreeGenerator {
 		let mockRootScope = Scope(instantiable: instantiable)
 		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate
 
+		// Track promoted (label, type) pairs to prevent duplicate promotions when
+		// both required and onlyIfAvailable versions of the same dep exist.
+		// Property.< sorts non-optional before optional, so the required version
+		// wins and the optional version is skipped.
+		var promotedLabelAndTypes = Set<String>()
 		for receivedProperty in allReceived.sorted() {
 			guard !allOnlyIfAvailable.contains(receivedProperty),
 			      !forwardedProperties.contains(receivedProperty)
 			else { continue }
+
+			let labelAndType = "\(receivedProperty.label):\(receivedProperty.typeDescription.asInstantiatedType.asSource)"
+			guard promotedLabelAndTypes.insert(labelAndType).inserted else { continue }
 
 			var dependencyType = receivedProperty.typeDescription.asInstantiatedType
 			var erasedToConcreteExistential = false
