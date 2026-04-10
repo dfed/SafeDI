@@ -121,6 +121,8 @@ To also generate mocks for non-root modules, add the plugin to all first-party t
 
 You can see this integration in practice in the [Example Package Integration](Examples/Example Package Integration) package.
 
+Types annotated with `@Instantiable(generateMock: true)` get generated `mock()` methods for testing and SwiftUI previews. When a mock root has an `@Instantiated` dependency subtree, its generated `mock()` accepts a `safeDIParameters` argument for tree-structured overrides. Simple leaf overrides remain direct builder values, while richer child nodes use `SafeDIMockConfiguration`.
+
 Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may add a `#SafeDIConfiguration` in your root module with the additional module names:
 
 ```swift
