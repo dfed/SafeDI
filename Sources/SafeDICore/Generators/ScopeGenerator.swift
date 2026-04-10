@@ -603,7 +603,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			receivedProperties
 				.filter { !$0.typeDescription.isOptional },
 		)
-		var flatReceivedParameters = [(label: String, typeSource: String, isOptional: Bool)]()
+		var flatReceivedParameters = [(label: String, typeSource: String)]()
+		var onlyIfAvailableSafeDIParameterEntries = [(label: String, typeSource: String)]()
 		for receivedProperty in receivedProperties.sorted() {
 			guard !treePropertyLabels.contains(receivedProperty.label),
 			      !forwardedPropertySet.contains(receivedProperty)
@@ -617,16 +618,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					&& !unwrappedOptionalCounterparts.contains(receivedProperty)
 					&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty))
 				|| unavailableOptionalProperties.contains(receivedProperty)
-			let typeSource: String = if isOnlyIfAvailable, !receivedProperty.typeDescription.isOptional {
-				"\(receivedProperty.typeDescription.asSource)?"
+			if isOnlyIfAvailable {
+				let typeSource: String = if receivedProperty.typeDescription.isOptional {
+					receivedProperty.typeDescription.asSource
+				} else {
+					"\(receivedProperty.typeDescription.asSource)?"
+				}
+				onlyIfAvailableSafeDIParameterEntries.append((
+					label: receivedProperty.label,
+					typeSource: typeSource,
+				))
 			} else {
-				receivedProperty.typeDescription.asSource
+				flatReceivedParameters.append((
+					label: receivedProperty.label,
+					typeSource: receivedProperty.typeDescription.asSource,
+				))
 			}
-			flatReceivedParameters.append((
-				label: receivedProperty.label,
-				typeSource: typeSource,
-				isOptional: isOnlyIfAvailable,
-			))
 		}
 
 		var flatUncoveredParameters = [(label: String, typeSource: String)]()
@@ -653,11 +660,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 
 		// Disambiguate flat received parameter labels when collisions exist.
+		// Include onlyIfAvailable labels so flat params with the same label
+		// get disambiguated (onlyIfAvailable entries are accessed via
+		// safeDIParameters.label, so they don't need disambiguation).
 		// Forwarded parameters keep their original labels (must match init signature).
 		let allFlatLabels = forwardedDependencies.map(\.property.label)
 			+ rootDefaultParameters.map(\.label)
 			+ flatReceivedParameters.map(\.label)
 			+ flatUncoveredParameters.map(\.label)
+			+ onlyIfAvailableSafeDIParameterEntries.map(\.label)
 		var flatLabelCounts = [String: Int]()
 		for label in allFlatLabels {
 			flatLabelCounts[label, default: 0] += 1
@@ -667,10 +678,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				return parameter
 			}
 			let disambiguatedLabel = "\(parameter.label)_\(parameter.typeSource.replacingOccurrences(of: "?", with: ""))"
-			return (label: disambiguatedLabel, typeSource: parameter.typeSource, isOptional: parameter.isOptional)
+			return (label: disambiguatedLabel, typeSource: parameter.typeSource)
 		}
 		// 3. Simple mock case — no tree, no flat parameters.
-		let hasTree = !parameterTree.isEmpty
+		let hasTree = !parameterTree.isEmpty || !onlyIfAvailableSafeDIParameterEntries.isEmpty
 		let hasFlatParameters = !forwardedDependencies.isEmpty
 			|| !rootDefaultParameters.isEmpty
 			|| !flatReceivedParameters.isEmpty
@@ -706,6 +717,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if hasTree {
 			lines.append(Self.generateSafeDIParametersStruct(
 				rootChildren: parameterTree,
+				onlyIfAvailableEntries: onlyIfAvailableSafeDIParameterEntries,
 				indent: indent,
 			))
 			lines.append("")
@@ -737,11 +749,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			mockParameters.append("\(bodyIndent)\(rootDefault.label): \(rootDefault.typeSource) = \(rootDefault.defaultExpression)")
 		}
 		for flatReceived in flatReceivedParameters {
-			if flatReceived.isOptional {
-				mockParameters.append("\(bodyIndent)\(flatReceived.label): \(flatReceived.typeSource) = nil")
-			} else {
-				mockParameters.append("\(bodyIndent)\(flatReceived.label): \(flatReceived.typeSource)")
-			}
+			mockParameters.append("\(bodyIndent)\(flatReceived.label): \(flatReceived.typeSource)")
 		}
 		for flatUncovered in flatUncoveredParameters {
 			mockParameters.append("\(bodyIndent)\(flatUncovered.label): \(flatUncovered.typeSource)")
@@ -756,6 +764,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Generate mock body.
 		if hasTree {
+			// Bind onlyIfAvailable entries first — tree bindings may reference them.
+			for entry in onlyIfAvailableSafeDIParameterEntries {
+				lines.append("\(bodyIndent)let \(entry.label): \(entry.typeSource) = safeDIParameters.\(entry.label)")
+			}
 			let bodyBindings = Self.generateMockBodyBindings(
 				nodes: parameterTree,
 				parentPath: "safeDIParameters",
@@ -1144,6 +1156,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Returns the struct source code, or `nil` if the tree has no children.
 	private static func generateSafeDIParametersStruct(
 		rootChildren: [MockParameterNode],
+		onlyIfAvailableEntries: [(label: String, typeSource: String)],
 		indent: String,
 	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
@@ -1155,9 +1168,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Disambiguate root-level children property labels.
 		let rootLabelMap = disambiguatePropertyLabels(for: rootChildren)
 
-		// Generate SafeDIParameters init with root-level children.
+		// Generate SafeDIParameters init with root-level children and onlyIfAvailable entries.
 		lines.append("\(innerIndent)init(")
-		let initParameters = rootChildren.map { child in
+		var initParameters = rootChildren.map { child in
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
 			if child.needsConfigurationStruct {
 				return "\(memberIndent)\(label): \(child.configurationTypeName) = .init()"
@@ -1166,11 +1179,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				return "\(memberIndent)\(label): (\(sendableAnnotation)\(child.builderClosureType))? = nil"
 			}
 		}
+		for entry in onlyIfAvailableEntries {
+			initParameters.append("\(memberIndent)\(entry.label): \(entry.typeSource) = nil")
+		}
 		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
 		for child in rootChildren {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
 			lines.append("\(memberIndent)self.\(label) = \(label)")
+		}
+		for entry in onlyIfAvailableEntries {
+			lines.append("\(memberIndent)self.\(entry.label) = \(entry.label)")
 		}
 		lines.append("\(innerIndent)}")
 
@@ -1184,6 +1203,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
 				lines.append("\(innerIndent)let \(label): (\(sendableAnnotation)\(child.builderClosureType))?")
 			}
+		}
+		for entry in onlyIfAvailableEntries {
+			lines.append("\(innerIndent)let \(entry.label): \(entry.typeSource)")
 		}
 
 		lines.append("\(indent)}")
