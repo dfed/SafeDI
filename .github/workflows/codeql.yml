@@ -53,7 +53,7 @@ jobs:
 
     - if: matrix.language == 'swift'
       name: Build
-      run: xcrun swift build -c release
+      run: xcrun swift build --target SafeDI --target SafeDITool
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
