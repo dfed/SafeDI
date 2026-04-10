@@ -92,7 +92,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension ChildA {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            childB: (() -> Other)? = nil
 		        ) {
@@ -103,10 +104,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> ChildA {
 		        func __safeDI_childB() -> Other {
-		            (safeDIParameters.childB ?? Other.init)()
+		            (safeDIOverrides.childB ?? Other.init)()
 		        }
 		        let childB = Instantiator<Other>(__safeDI_childB)
 		        return ChildA(childB: childB)
@@ -116,6 +117,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension ChildA {
+		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
 		            childB: (() -> Other)? = nil,
@@ -126,6 +128,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        }
 
 		        let childB: (() -> Other)?
+		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((Instantiator<Other>) -> ChildA)?
 		    }
 		}
@@ -167,7 +170,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            childA: ChildA.SafeDIMockConfiguration = .init(),
 		            childB: (() -> ChildB)? = nil
@@ -181,17 +185,17 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
 		            func __safeDI_childB() -> Other {
-		                (safeDIParameters.childA.childB ?? Other.init)()
+		                (safeDIOverrides.childA.childB ?? Other.init)()
 		            }
 		            let childB = Instantiator<Other>(__safeDI_childB)
-		            return (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(childB:))(childB)
+		            return (safeDIOverrides.childA.safeDIBuilder ?? ChildA.init(childB:))(childB)
 		        }
 		        let childA: ChildA = __safeDI_childA()
-		        let childB = (safeDIParameters.childB ?? ChildB.init)()
+		        let childB = (safeDIOverrides.childB ?? ChildB.init)()
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -261,7 +265,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            childA: ChildA.SafeDIMockConfiguration = .init(),
 		            childB: ChildB.SafeDIMockConfiguration = .init()
@@ -275,16 +280,16 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            let service = (safeDIParameters.childA.service ?? ServiceA.init)()
-		            return (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(service:))(service)
+		            let service = (safeDIOverrides.childA.service ?? ServiceA.init)()
+		            return (safeDIOverrides.childA.safeDIBuilder ?? ChildA.init(service:))(service)
 		        }
 		        let childA: ChildA = __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            let service = (safeDIParameters.childB.service ?? ServiceB.init)()
-		            return (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(service:))(service)
+		            let service = (safeDIOverrides.childB.service ?? ServiceB.init)()
+		            return (safeDIOverrides.childB.safeDIBuilder ?? ChildB.init(service:))(service)
 		        }
 		        let childB: ChildB = __safeDI_childB()
 		        return Root(childA: childA, childB: childB)
@@ -301,7 +306,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 	mutating func mock_disambiguationUsesSimplifiedSuffixWhenUnique() async throws {
 		// Two children have `service` with different types. One is optional.
 		// The required ExternalService stays as a disambiguated flat param.
-		// The onlyIfAvailable LocalService? moves into SafeDIParameters.
+		// The onlyIfAvailable LocalService? moves into SafeDIOverrides.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -347,7 +352,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            childA: ((ExternalService) -> ChildA)? = nil,
 		            childB: ((LocalService?) -> ChildB)? = nil,
@@ -365,11 +371,11 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		    static func mock(
 		        service_ExternalService: ExternalService,
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service: LocalService? = safeDIParameters.service
-		        let childA = (safeDIParameters.childA ?? ChildA.init(service:))(service)
-		        let childB = (safeDIParameters.childB ?? ChildB.init(service:))(service)
+		        let service: LocalService? = safeDIOverrides.service
+		        let childA = (safeDIOverrides.childA ?? ChildA.init(service:))(service)
+		        let childB = (safeDIOverrides.childB ?? ChildB.init(service:))(service)
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -382,7 +388,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 	mutating func mock_disambiguationFallsBackToFullSuffixWhenSimplifiedCollides() async throws {
 		// Two children have `service` — one is `Service` (non-optional, @Instantiated in ChildA),
 		// one is `Service?` (optional, onlyIfAvailable in ChildB).
-		// The onlyIfAvailable version moves into SafeDIParameters.
+		// The onlyIfAvailable version moves into SafeDIOverrides.
 		// No flat param disambiguation needed since there's no flat `service` param.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -429,7 +435,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            childA: ChildA.SafeDIMockConfiguration = .init(),
 		            childB: ((Service?) -> ChildB)? = nil,
@@ -446,15 +453,15 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service: Service? = safeDIParameters.service
+		        let service: Service? = safeDIOverrides.service
 		        func __safeDI_childA() -> ChildA {
-		            let service = (safeDIParameters.childA.service ?? Service.init)()
-		            return (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(service:))(service)
+		            let service = (safeDIOverrides.childA.service ?? Service.init)()
+		            return (safeDIOverrides.childA.safeDIBuilder ?? ChildA.init(service:))(service)
 		        }
 		        let childA: ChildA = __safeDI_childA()
-		        let childB = (safeDIParameters.childB ?? ChildB.init(service:))(service)
+		        let childB = (safeDIOverrides.childB ?? ChildB.init(service:))(service)
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -522,7 +529,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            childABuilder: ((String, PresenterA) -> ChildA)? = nil,
 		            childB: ((PresenterB) -> ChildB)? = nil
@@ -538,15 +546,15 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func mock(
 		        presenter_PresenterA: PresenterA,
 		        presenter_PresenterB: PresenterB,
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childABuilder(name: String) -> ChildA {
-		            (safeDIParameters.childABuilder ?? ChildA.init(name:presenter:))(name, presenter)
+		            (safeDIOverrides.childABuilder ?? ChildA.init(name:presenter:))(name, presenter)
 		        }
 		        let childABuilder = Instantiator<ChildA> {
 		            __safeDI_childABuilder(name: $0)
 		        }
-		        let childB = (safeDIParameters.childB ?? ChildB.init(presenter:))(presenter)
+		        let childB = (safeDIOverrides.childB ?? ChildB.init(presenter:))(presenter)
 		        return Root(childABuilder: childABuilder, childB: childB)
 		    }
 		}
@@ -607,7 +615,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            parent: Parent.SafeDIMockConfiguration = .init(),
 		            childBuilder: ((String) -> ChildA)? = nil
@@ -621,20 +630,20 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_parent() -> Parent {
 		            func __safeDI_childBuilder(name: String) -> ChildB {
-		                (safeDIParameters.parent.childBuilder ?? ChildB.init(name:))(name)
+		                (safeDIOverrides.parent.childBuilder ?? ChildB.init(name:))(name)
 		            }
 		            let childBuilder = Instantiator<ChildB> {
 		                __safeDI_childBuilder(name: $0)
 		            }
-		            return (safeDIParameters.parent.safeDIBuilder ?? Parent.init(childBuilder:))(childBuilder)
+		            return (safeDIOverrides.parent.safeDIBuilder ?? Parent.init(childBuilder:))(childBuilder)
 		        }
 		        let parent: Parent = __safeDI_parent()
 		        func __safeDI_childBuilder(name: String) -> ChildA {
-		            (safeDIParameters.childBuilder ?? ChildA.init(name:))(name)
+		            (safeDIOverrides.childBuilder ?? ChildA.init(name:))(name)
 		        }
 		        let childBuilder = Instantiator<ChildA> {
 		            __safeDI_childBuilder(name: $0)
@@ -711,7 +720,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            childBuilder_ChildA: ((String) -> ChildA)? = nil,
 		            childC: ((Instantiator<ChildA>) -> ChildC)? = nil,
@@ -731,22 +741,22 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childBuilder(name: String) -> ChildA {
-		            (safeDIParameters.childBuilder_ChildA ?? ChildA.init(name:))(name)
+		            (safeDIOverrides.childBuilder_ChildA ?? ChildA.init(name:))(name)
 		        }
 		        let childBuilder = Instantiator<ChildA> {
 		            __safeDI_childBuilder(name: $0)
 		        }
-		        let childC = (safeDIParameters.childC ?? ChildC.init(childBuilder:))(childBuilder)
+		        let childC = (safeDIOverrides.childC ?? ChildC.init(childBuilder:))(childBuilder)
 		        func __safeDI_childBuilder(name: String) -> ChildB {
-		            (safeDIParameters.childBuilder_ChildB ?? ChildB.init(name:))(name)
+		            (safeDIOverrides.childBuilder_ChildB ?? ChildB.init(name:))(name)
 		        }
 		        let childBuilder = Instantiator<ChildB> {
 		            __safeDI_childBuilder(name: $0)
 		        }
-		        let childD = (safeDIParameters.childD ?? ChildD.init(childBuilder:))(childBuilder)
+		        let childD = (safeDIOverrides.childD ?? ChildD.init(childBuilder:))(childBuilder)
 		        return Root(childC: childC, childD: childD)
 		    }
 		}
@@ -812,7 +822,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            childBuilder: ((String) -> ChildA)? = nil,
 		            parentBuilder: Parent.SafeDIMockConfiguration = .init()
@@ -826,22 +837,22 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childBuilder(name: String) -> ChildA {
-		            (safeDIParameters.childBuilder ?? ChildA.init(name:))(name)
+		            (safeDIOverrides.childBuilder ?? ChildA.init(name:))(name)
 		        }
 		        let childBuilder = Instantiator<ChildA> {
 		            __safeDI_childBuilder(name: $0)
 		        }
 		        func __safeDI_parentBuilder() -> Parent {
 		            func __safeDI_otherBuilder(name: String) -> ChildB {
-		                (safeDIParameters.parentBuilder.otherBuilder ?? ChildB.init(name:))(name)
+		                (safeDIOverrides.parentBuilder.otherBuilder ?? ChildB.init(name:))(name)
 		            }
 		            let otherBuilder = Instantiator<ChildB> {
 		                __safeDI_otherBuilder(name: $0)
 		            }
-		            return (safeDIParameters.parentBuilder.safeDIBuilder ?? Parent.init(childBuilder:otherBuilder:))(childBuilder, otherBuilder)
+		            return (safeDIOverrides.parentBuilder.safeDIBuilder ?? Parent.init(childBuilder:otherBuilder:))(childBuilder, otherBuilder)
 		        }
 		        let parentBuilder = Instantiator<Parent>(__safeDI_parentBuilder)
 		        return Root(parentBuilder: parentBuilder, childBuilder: childBuilder)
@@ -928,7 +939,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            builder_TypeA: ((String) -> TypeA)? = nil,
 		            childA: ((Instantiator<TypeA>) -> ChildA)? = nil,
@@ -948,24 +960,24 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_builder(name: String) -> TypeA {
-		            (safeDIParameters.builder_TypeA ?? TypeA.init(name:))(name)
+		            (safeDIOverrides.builder_TypeA ?? TypeA.init(name:))(name)
 		        }
 		        let builder = Instantiator<TypeA> {
 		            __safeDI_builder(name: $0)
 		        }
-		        let childA = (safeDIParameters.childA ?? ChildA.init(builder:))(builder)
+		        let childA = (safeDIOverrides.childA ?? ChildA.init(builder:))(builder)
 		        func __safeDI_builder(name: String) -> TypeB {
-		            (safeDIParameters.builder_TypeB ?? TypeB.init(name:))(name)
+		            (safeDIOverrides.builder_TypeB ?? TypeB.init(name:))(name)
 		        }
 		        let builder = Instantiator<TypeB> {
 		            __safeDI_builder(name: $0)
 		        }
 		        func __safeDI_childBBuilder() -> ChildB {
-		            let subChild = (safeDIParameters.childBBuilder.subChild ?? SubChild.init(builder:))(builder)
-		            return (safeDIParameters.childBBuilder.safeDIBuilder ?? ChildB.init(subChild:))(subChild)
+		            let subChild = (safeDIOverrides.childBBuilder.subChild ?? SubChild.init(builder:))(builder)
+		            return (safeDIOverrides.childBBuilder.safeDIBuilder ?? ChildB.init(subChild:))(subChild)
 		        }
 		        let childBBuilder = Instantiator<ChildB>(__safeDI_childBBuilder)
 		        return Root(childA: childA, childBBuilder: childBBuilder)
@@ -1033,7 +1045,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            parentBuilder: ((String, ConfigA) -> Parent)? = nil,
 		            childB: ((ConfigB) -> ChildB)? = nil
@@ -1049,15 +1062,15 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func mock(
 		        config_ConfigA: ConfigA,
 		        config_ConfigB: ConfigB,
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_parentBuilder(name: String) -> Parent {
-		            (safeDIParameters.parentBuilder ?? Parent.init(name:config:))(name, config)
+		            (safeDIOverrides.parentBuilder ?? Parent.init(name:config:))(name, config)
 		        }
 		        let parentBuilder = Instantiator<Parent> {
 		            __safeDI_parentBuilder(name: $0)
 		        }
-		        let childB = (safeDIParameters.childB ?? ChildB.init(config:))(config)
+		        let childB = (safeDIOverrides.childB ?? ChildB.init(config:))(config)
 		        return Root(parentBuilder: parentBuilder, childB: childB)
 		    }
 		}
@@ -1117,7 +1130,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            parent: ((EngineA) -> Parent)? = nil,
 		            child: ((EngineB) -> Child)? = nil
@@ -1133,10 +1147,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func mock(
 		        engine_EngineA: EngineA,
 		        engine_EngineB: EngineB,
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let parent = (safeDIParameters.parent ?? Parent.init(engine:))(engine)
-		        let child = (safeDIParameters.child ?? Child.init(engine:))(engine)
+		        let parent = (safeDIOverrides.parent ?? Parent.init(engine:))(engine)
+		        let child = (safeDIOverrides.child ?? Child.init(engine:))(engine)
 		        return Root(parent: parent, child: child)
 		    }
 		}
@@ -1149,7 +1163,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 	mutating func mock_onlyIfAvailableDisambiguatedSimplifiedUnique() async throws {
 		// ChildA @Receives service: ExternalService. ChildB @Receives(onlyIfAvailable: true) service: LocalService?.
 		// The required ExternalService stays as a disambiguated flat param.
-		// The onlyIfAvailable LocalService? moves into SafeDIParameters.
+		// The onlyIfAvailable LocalService? moves into SafeDIOverrides.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1195,7 +1209,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            childA: ((ExternalService) -> ChildA)? = nil,
 		            childB: ((LocalService?) -> ChildB)? = nil,
@@ -1213,11 +1228,11 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		    static func mock(
 		        service_ExternalService: ExternalService,
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service: LocalService? = safeDIParameters.service
-		        let childA = (safeDIParameters.childA ?? ChildA.init(service:))(service)
-		        let childB = (safeDIParameters.childB ?? ChildB.init(service:))(service)
+		        let service: LocalService? = safeDIOverrides.service
+		        let childA = (safeDIOverrides.childA ?? ChildA.init(service:))(service)
+		        let childB = (safeDIOverrides.childB ?? ChildB.init(service:))(service)
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -1269,7 +1284,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            childA: ChildA.SafeDIMockConfiguration = .init(),
 		            childB: ChildB.SafeDIMockConfiguration = .init()
@@ -1283,14 +1299,14 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            return (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(onAction:))(safeDIParameters.childA.onAction)
+		            return (safeDIOverrides.childA.safeDIBuilder ?? ChildA.init(onAction:))(safeDIOverrides.childA.onAction)
 		        }
 		        let childA: ChildA = __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            return (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(onAction:))(safeDIParameters.childB.onAction)
+		            return (safeDIOverrides.childB.safeDIBuilder ?? ChildB.init(onAction:))(safeDIOverrides.childB.onAction)
 		        }
 		        let childB: ChildB = __safeDI_childB()
 		        return Root(childA: childA, childB: childB)
@@ -1364,7 +1380,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            childA: ((ServiceA) -> ChildA)? = nil,
 		            childB: ((ServiceB) -> ChildB)? = nil,
@@ -1384,11 +1401,11 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        service_ServiceA: ServiceA,
 		        service_ServiceB: ServiceB,
 		        service_ServiceC: ServiceC,
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let childA = (safeDIParameters.childA ?? ChildA.init(service:))(service)
-		        let childB = (safeDIParameters.childB ?? ChildB.init(service:))(service)
-		        let childC = (safeDIParameters.childC ?? ChildC.init(service:))(service)
+		        let childA = (safeDIOverrides.childA ?? ChildA.init(service:))(service)
+		        let childB = (safeDIOverrides.childB ?? ChildB.init(service:))(service)
+		        let childC = (safeDIOverrides.childC ?? ChildC.init(service:))(service)
 		        return Root(childA: childA, childB: childB, childC: childC)
 		    }
 		}
@@ -1469,7 +1486,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            childBuilder: ((String) -> ChildA)? = nil,
 		            parentBuilder: Parent.SafeDIMockConfiguration = .init(),
@@ -1486,32 +1504,32 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childBuilder(name: String) -> ChildA {
-		            (safeDIParameters.childBuilder ?? ChildA.init(name:))(name)
+		            (safeDIOverrides.childBuilder ?? ChildA.init(name:))(name)
 		        }
 		        let childBuilder = Instantiator<ChildA> {
 		            __safeDI_childBuilder(name: $0)
 		        }
 		        func __safeDI_parentBuilder() -> Parent {
 		            func __safeDI_childBuilder(name: String) -> ChildA {
-		                (safeDIParameters.parentBuilder.childBuilder ?? ChildA.init(name:))(name)
+		                (safeDIOverrides.parentBuilder.childBuilder ?? ChildA.init(name:))(name)
 		            }
 		            let childBuilder = Instantiator<ChildA> {
 		                __safeDI_childBuilder(name: $0)
 		            }
-		            return (safeDIParameters.parentBuilder.safeDIBuilder ?? Parent.init(childBuilder:))(childBuilder)
+		            return (safeDIOverrides.parentBuilder.safeDIBuilder ?? Parent.init(childBuilder:))(childBuilder)
 		        }
 		        let parentBuilder = Instantiator<Parent>(__safeDI_parentBuilder)
 		        func __safeDI_other() -> Other {
 		            func __safeDI_childBuilder(name: String) -> ChildB {
-		                (safeDIParameters.other.childBuilder ?? ChildB.init(name:))(name)
+		                (safeDIOverrides.other.childBuilder ?? ChildB.init(name:))(name)
 		            }
 		            let childBuilder = Instantiator<ChildB> {
 		                __safeDI_childBuilder(name: $0)
 		            }
-		            return (safeDIParameters.other.safeDIBuilder ?? Other.init(childBuilder:))(childBuilder)
+		            return (safeDIOverrides.other.safeDIBuilder ?? Other.init(childBuilder:))(childBuilder)
 		        }
 		        let other: Other = __safeDI_other()
 		        return Root(childBuilder: childBuilder, parentBuilder: parentBuilder, other: other)
@@ -1601,7 +1619,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            service_UserService_: (() -> UserService)? = nil,
 		            childA: ((UserService) -> ChildA)? = nil,
@@ -1627,14 +1646,14 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIParameters.service_UserService_ ?? UserService.init)()
-		        let childA = (safeDIParameters.childA ?? ChildA.init(service:))(service)
-		        let service = (safeDIParameters.service_AdminService ?? AdminService.init)()
-		        let childB = (safeDIParameters.childB ?? ChildB.init(service:))(service)
-		        let service_UserService = (safeDIParameters.service_UserService ?? OtherType.init)()
-		        let childC = (safeDIParameters.childC ?? ChildC.init(service_UserService:))(service_UserService)
+		        let service = (safeDIOverrides.service_UserService_ ?? UserService.init)()
+		        let childA = (safeDIOverrides.childA ?? ChildA.init(service:))(service)
+		        let service = (safeDIOverrides.service_AdminService ?? AdminService.init)()
+		        let childB = (safeDIOverrides.childB ?? ChildB.init(service:))(service)
+		        let service_UserService = (safeDIOverrides.service_UserService ?? OtherType.init)()
+		        let childC = (safeDIOverrides.childC ?? ChildC.init(service_UserService:))(service_UserService)
 		        return Root(childA: childA, childB: childB, childC: childC)
 		    }
 		}
@@ -1697,7 +1716,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            service_TypeB: (() -> TypeB)? = nil,
 		            child: Child.SafeDIMockConfiguration = .init(),
@@ -1714,15 +1734,15 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIParameters.service_TypeB ?? TypeB.init)()
+		        let service = (safeDIOverrides.service_TypeB ?? TypeB.init)()
 		        func __safeDI_child() -> Child {
-		            let service = (safeDIParameters.child.service ?? TypeB.init)()
-		            return (safeDIParameters.child.safeDIBuilder ?? Child.init(service:serviceAlias:))(service, serviceAlias)
+		            let service = (safeDIOverrides.child.service ?? TypeB.init)()
+		            return (safeDIOverrides.child.safeDIBuilder ?? Child.init(service:serviceAlias:))(service, serviceAlias)
 		        }
 		        let child: Child = __safeDI_child()
-		        let service = (safeDIParameters.service_TypeA ?? TypeA.init)()
+		        let service = (safeDIOverrides.service_TypeA ?? TypeA.init)()
 		        return Root(child: child, service: service)
 		    }
 		}
@@ -1800,7 +1820,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            childA: ChildA.SafeDIMockConfiguration = .init(),
 		            childB: ChildB.SafeDIMockConfiguration = .init(),
@@ -1817,18 +1838,18 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
-		            return (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(value:))(safeDIParameters.childA.value)
+		            return (safeDIOverrides.childA.safeDIBuilder ?? ChildA.init(value:))(safeDIOverrides.childA.value)
 		        }
 		        let childA: ChildA = __safeDI_childA()
 		        func __safeDI_childB() -> ChildB {
-		            return (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(value:))(safeDIParameters.childB.value)
+		            return (safeDIOverrides.childB.safeDIBuilder ?? ChildB.init(value:))(safeDIOverrides.childB.value)
 		        }
 		        let childB: ChildB = __safeDI_childB()
 		        func __safeDI_childC() -> ChildC {
-		            return (safeDIParameters.childC.safeDIBuilder ?? ChildC.init(value:))(safeDIParameters.childC.value)
+		            return (safeDIOverrides.childC.safeDIBuilder ?? ChildC.init(value:))(safeDIOverrides.childC.value)
 		        }
 		        let childC: ChildC = __safeDI_childC()
 		        return Root(childA: childA, childB: childB, childC: childC)

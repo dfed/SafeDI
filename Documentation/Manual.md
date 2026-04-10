@@ -554,30 +554,42 @@ Your user-defined `mock()` method must be `public` (or `open`) and must accept p
 
 ### Overriding dependencies
 
-When a type has `@Instantiated` dependencies with their own subtrees, the generated `mock()` accepts a `safeDIParameters` argument that provides tree-structured control over every dependency in the graph:
+When a type has `@Instantiated` dependencies with their own subtrees, the generated `mock()` accepts a `safeDIOverrides` argument that provides tree-structured control over every dependency in the graph:
 
 ```swift
 // Override a child’s default-valued parameter:
-Root.mock(safeDIParameters: .init(
+Root.mock(safeDIOverrides: .init(
     child: .init(theme: .dark)
 ))
 
 // Replace an entire type’s construction with a trailing closure:
-Root.mock(safeDIParameters: .init(
+Root.mock(safeDIOverrides: .init(
     child: .init { service, theme in
         CustomChild(service: service, theme: theme)
     }
 ))
 
-// Override a leaf dependency:
-Root.mock(safeDIParameters: .init(
-    service: .init { MockService() }
+// Override a leaf dependency (leaves are simple closures, not config objects):
+Root.mock(safeDIOverrides: .init(
+    service: { MockService() }
 ))
 ```
 
-Each child dependency in the tree has a configuration type that accepts optional overrides for its own children and a trailing `safeDIBuilder` closure to replace its construction entirely. When no overrides are provided, the generated mock uses the type’s real initializer (or custom mock method).
+Each child dependency in the tree that has its own subtree generates a `SafeDIMockConfiguration` struct. This struct accepts optional overrides for the child’s own dependencies and a trailing `safeDIBuilder` closure. The `safeDIBuilder` closure is how you override or customize how the type is constructed within the generated mock tree. Its parameters match the type’s `customMockName` method signature if one is defined, or its `init` parameters otherwise. When no `safeDIBuilder` is provided, the generated mock calls the type’s `customMockName` method or `init` directly.
 
-Types with no `@Instantiated` subtree — for example, types with only `@Received` dependencies — do not generate a `SafeDIParameters` struct. Their `mock()` method uses flat parameters instead.
+For example, given a `Child` type with `init(service: Service, theme: Theme)`, the `safeDIBuilder` closure has the signature `(Service, Theme) -> Child`:
+
+```swift
+Root.mock(safeDIOverrides: .init(
+    child: .init { service, theme in
+        // `service` and `theme` are the resolved values from the mock tree.
+        // Return a customized Child instance.
+        Child(service: service, theme: theme)
+    }
+))
+```
+
+Types with no `@Instantiated` subtree — for example, types with only `@Received` dependencies — do not generate a `SafeDIOverrides` struct. Their `mock()` method uses flat parameters instead.
 
 ### Mock visibility
 
@@ -610,7 +622,7 @@ public struct ProfileView: Instantiable {
 Override the default:
 
 ```swift
-Root.mock(safeDIParameters: .init(
+Root.mock(safeDIOverrides: .init(
     profileView: .init(showDebugInfo: true)
 ))
 ```
@@ -621,7 +633,7 @@ Default-valued parameters do **not** bubble through `Instantiator`, `SendableIns
 
 ### `@Received(onlyIfAvailable: true)` properties in mocks
 
-When a type has a `@Received(onlyIfAvailable: true)` dependency, the generated mock places that dependency inside the `SafeDIParameters` struct as a plain optional property (defaulting to `nil`) rather than exposing it as a top-level `mock()` parameter. When `nil`, the dependency is absent. When provided (e.g., `.mock()`), the value is used.
+When a type has a `@Received(onlyIfAvailable: true)` dependency, the generated mock places that dependency inside the `SafeDIOverrides` struct as a plain optional property (defaulting to `nil`) rather than exposing it as a top-level `mock()` parameter. When `nil`, the dependency is absent. When provided (e.g., `.mock()`), the value is used.
 
 ```swift
 @Instantiable(generateMock: true)
@@ -633,10 +645,10 @@ public struct ImageService: Instantiable {
 }
 ```
 
-Provide the dependency via `SafeDIParameters`:
+Provide the dependency via `SafeDIOverrides`:
 
 ```swift
-ImageService.mock(safeDIParameters: .init(
+ImageService.mock(safeDIOverrides: .init(
     cacheService: .mock()
 ))
 ```
