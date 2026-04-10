@@ -4106,6 +4106,23 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 		}
 		#endif
+
+		#if DEBUG
+		extension DefaultAuthService {
+		    struct SafeDIMockConfiguration {
+		        init(
+		            networkService: (() -> DefaultNetworkService)? = nil,
+		            _ safeDIBuilder: ((NetworkService, NetworkService) -> DefaultAuthService)? = nil
+		        ) {
+		            self.networkService = networkService
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let networkService: (() -> DefaultNetworkService)?
+		        let safeDIBuilder: ((NetworkService, NetworkService) -> DefaultAuthService)?
+		    }
+		}
+		#endif
 		""", "Unexpected output \(output.mockFiles["DefaultAuthService+SafeDIMock.swift"] ?? "")")
 
 		#expect(output.mockFiles["DefaultNetworkService+SafeDIMock.swift"] == """
@@ -4132,14 +4149,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    struct SafeDIParameters {
 		        init(
 		            networkService: (() -> DefaultNetworkService)? = nil,
-		            authService: AuthService.SafeDIMockConfiguration = .init()
+		            authService: DefaultAuthService.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.networkService = networkService
 		            self.authService = authService
 		        }
 
 		        let networkService: (() -> DefaultNetworkService)?
-		        let authService: AuthService.SafeDIMockConfiguration
+		        let authService: DefaultAuthService.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -4162,22 +4179,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		// Any modifications made to this file will be overwritten on subsequent builds.
 		// Please refrain from editing this file directly.
 
-		#if DEBUG
-		extension AuthService {
-		    struct SafeDIMockConfiguration {
-		        init(
-		            networkService: (() -> DefaultNetworkService)? = nil,
-		            _ safeDIBuilder: ((NetworkService, NetworkService) -> DefaultAuthService)? = nil
-		        ) {
-		            self.networkService = networkService
-		            self.safeDIBuilder = safeDIBuilder
-		        }
-
-		        let networkService: (() -> DefaultNetworkService)?
-		        let safeDIBuilder: ((NetworkService, NetworkService) -> DefaultAuthService)?
-		    }
-		}
-		#endif
 
 		""", "Unexpected output \(output.mockConfigurationFile ?? "")")
 	}
@@ -6221,12 +6222,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		extension Root {
 		    struct SafeDIParameters {
 		        init(
-		            service: AnyService.SafeDIMockConfiguration = .init()
+		            service: ConcreteService.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: AnyService.SafeDIMockConfiguration
+		        let service: ConcreteService.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -6248,22 +6249,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		// Any modifications made to this file will be overwritten on subsequent builds.
 		// Please refrain from editing this file directly.
 
-		#if DEBUG
-		extension AnyService {
-		    struct SafeDIMockConfiguration {
-		        init(
-		            helper: (() -> Helper)? = nil,
-		            _ safeDIBuilder: ((Helper) -> ConcreteService)? = nil
-		        ) {
-		            self.helper = helper
-		            self.safeDIBuilder = safeDIBuilder
-		        }
-
-		        let helper: (() -> Helper)?
-		        let safeDIBuilder: ((Helper) -> ConcreteService)?
-		    }
-		}
-		#endif
 
 		""", "Unexpected output \(output.mockConfigurationFile ?? "")")
 	}
