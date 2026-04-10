@@ -300,9 +300,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguationUsesSimplifiedSuffixWhenUnique() async throws {
 		// Two children have `service` with different types. One is optional.
-		// Simplified suffixes (stripping ?) are unique → use simplified.
-		// service: ExternalService → service_ExternalService (not service_ExternalService)
-		// service: LocalService? → service_LocalService (not service_LocalService_Optional)
+		// The required ExternalService stays as a disambiguated flat param.
+		// The onlyIfAvailable LocalService? moves into SafeDIParameters.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -351,21 +350,24 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    struct SafeDIParameters {
 		        init(
 		            childA: ((ExternalService) -> ChildA)? = nil,
-		            childB: ((LocalService?) -> ChildB)? = nil
+		            childB: ((LocalService?) -> ChildB)? = nil,
+		            service: LocalService? = nil
 		        ) {
 		            self.childA = childA
 		            self.childB = childB
+		            self.service = service
 		        }
 
 		        let childA: ((ExternalService) -> ChildA)?
 		        let childB: ((LocalService?) -> ChildB)?
+		        let service: LocalService?
 		    }
 
 		    static func mock(
 		        service_ExternalService: ExternalService,
-		        service_LocalService: LocalService? = nil,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
+		        let service: LocalService? = safeDIParameters.service
 		        let childA = (safeDIParameters.childA ?? ChildA.init(service:))(service)
 		        let childB = (safeDIParameters.childB ?? ChildB.init(service:))(service)
 		        return Root(childA: childA, childB: childB)
@@ -378,9 +380,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_disambiguationFallsBackToFullSuffixWhenSimplifiedCollides() async throws {
-		// Two children have `service` — one is `Service` (non-optional),
-		// one is `Service?` (optional). Simplified types are both `Service` → collision.
-		// Must fall back to full suffix: service_Service vs service_Service_Optional.
+		// Two children have `service` — one is `Service` (non-optional, @Instantiated in ChildA),
+		// one is `Service?` (optional, onlyIfAvailable in ChildB).
+		// The onlyIfAvailable version moves into SafeDIParameters.
+		// No flat param disambiguation needed since there's no flat `service` param.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -429,20 +432,23 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    struct SafeDIParameters {
 		        init(
 		            childA: ChildA.SafeDIMockConfiguration = .init(),
-		            childB: ((Service?) -> ChildB)? = nil
+		            childB: ((Service?) -> ChildB)? = nil,
+		            service: Service? = nil
 		        ) {
 		            self.childA = childA
 		            self.childB = childB
+		            self.service = service
 		        }
 
 		        let childA: ChildA.SafeDIMockConfiguration
 		        let childB: ((Service?) -> ChildB)?
+		        let service: Service?
 		    }
 
 		    static func mock(
-		        service: Service? = nil,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
+		        let service: Service? = safeDIParameters.service
 		        func __safeDI_childA() -> ChildA {
 		            let service = (safeDIParameters.childA.service ?? Service.init)()
 		            return (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(service:))(service)
@@ -1142,8 +1148,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_onlyIfAvailableDisambiguatedSimplifiedUnique() async throws {
 		// ChildA @Receives service: ExternalService. ChildB @Receives(onlyIfAvailable: true) service: LocalService?.
-		// Both share label "service" — disambiguated by type. Optional suffix stripped from
-		// onlyIfAvailable dep: service_LocalService (not service_Optional_LocalService).
+		// The required ExternalService stays as a disambiguated flat param.
+		// The onlyIfAvailable LocalService? moves into SafeDIParameters.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1192,21 +1198,24 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    struct SafeDIParameters {
 		        init(
 		            childA: ((ExternalService) -> ChildA)? = nil,
-		            childB: ((LocalService?) -> ChildB)? = nil
+		            childB: ((LocalService?) -> ChildB)? = nil,
+		            service: LocalService? = nil
 		        ) {
 		            self.childA = childA
 		            self.childB = childB
+		            self.service = service
 		        }
 
 		        let childA: ((ExternalService) -> ChildA)?
 		        let childB: ((LocalService?) -> ChildB)?
+		        let service: LocalService?
 		    }
 
 		    static func mock(
 		        service_ExternalService: ExternalService,
-		        service_LocalService: LocalService? = nil,
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
+		        let service: LocalService? = safeDIParameters.service
 		        let childA = (safeDIParameters.childA ?? ChildA.init(service:))(service)
 		        let childB = (safeDIParameters.childB ?? ChildB.init(service:))(service)
 		        return Root(childA: childA, childB: childB)

@@ -619,6 +619,30 @@ When no override is provided, the original default expression (`false`) is used.
 
 Default-valued parameters do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
 
+### `@Received(onlyIfAvailable: true)` properties in mocks
+
+When a type has a `@Received(onlyIfAvailable: true)` dependency, the generated mock places that dependency inside the `SafeDIParameters` struct as a plain optional property (defaulting to `nil`) rather than exposing it as a top-level `mock()` parameter. When `nil`, the dependency is absent. When provided (e.g., `.mock()`), the value is used.
+
+```swift
+@Instantiable(generateMock: true)
+public struct ImageService: Instantiable {
+    public init(cacheService: CacheService?) {
+        self.cacheService = cacheService
+    }
+    @Received(onlyIfAvailable: true) let cacheService: CacheService?
+}
+```
+
+Provide the dependency via `SafeDIParameters`:
+
+```swift
+ImageService.mock(safeDIParameters: .init(
+    cacheService: .mock()
+))
+```
+
+When no value is provided, the dependency defaults to `nil`.
+
 ### The `mockAttributes` parameter
 
 When a type’s initializer is bound to a global actor that the plugin cannot detect (e.g. inherited `@MainActor`), use `mockAttributes` to annotate the generated mock:
