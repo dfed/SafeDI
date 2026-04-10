@@ -88,6 +88,14 @@ struct SafeDIToolProcessError: Error, CustomStringConvertible {
 	}
 }
 
+struct SafeDIToolLaunchError: Error, CustomStringConvertible {
+	let underlyingError: Error
+
+	var description: String {
+		underlyingError.localizedDescription
+	}
+}
+
 func runSafeDITool(
 	at toolURL: URL,
 	arguments: [String],
@@ -97,7 +105,11 @@ func runSafeDITool(
 	process.arguments = arguments
 	let errorPipe = Pipe()
 	process.standardError = errorPipe
-	try process.run()
+	do {
+		try process.run()
+	} catch {
+		throw SafeDIToolLaunchError(underlyingError: error)
+	}
 	process.waitUntilExit()
 	guard process.terminationStatus == 0 else {
 		let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
