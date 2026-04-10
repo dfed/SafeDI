@@ -42,6 +42,8 @@ jobs:
         run: strip -rSTx .build/*/release/SafeDITool
       - name: Give SafeDITool executable permissions
         run: chmod +x .build/*/release/SafeDITool
+      - name: Smoke test
+        run: .build/*/release/SafeDITool --version
       - name: Make codesigning folder
         run: |
           mkdir codesign
@@ -92,6 +94,8 @@ jobs:
         run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize -Xswiftc -Xfrontend -Xswiftc -internalize-at-link
       - name: Strip binary
         run: strip -s .build/release/SafeDITool
+      - name: Smoke test
+        run: .build/release/SafeDITool --version
       - name: Upload SafeDITool artifact
         uses: actions/upload-artifact@v7
         with:
@@ -115,6 +119,8 @@ jobs:
         run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize -Xswiftc -Xfrontend -Xswiftc -internalize-at-link
       - name: Strip binary
         run: strip -s .build/release/SafeDITool
+      - name: Smoke test
+        run: .build/release/SafeDITool --version
       - name: Upload SafeDITool artifact
         uses: actions/upload-artifact@v7
         with:
