@@ -37,7 +37,7 @@ jobs:
       - name: Stamp version
         run: sed -i '' 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
-        run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }} -Xswiftc -Osize -Xlinker -dead_strip
+        run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }} -Xswiftc -Osize -Xswiftc -Xfrontend -Xswiftc -internalize-at-link -Xlinker -dead_strip
       - name: Strip binary
         run: strip -rSTx .build/*/release/SafeDITool
       - name: Give SafeDITool executable permissions
@@ -89,7 +89,7 @@ jobs:
       - name: Stamp version
         run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
-        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
+        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize -Xswiftc -Xfrontend -Xswiftc -internalize-at-link
       - name: Strip binary
         run: strip -s .build/release/SafeDITool
       - name: Upload SafeDITool artifact
@@ -112,7 +112,7 @@ jobs:
       - name: Stamp version
         run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
-        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
+        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize -Xswiftc -Xfrontend -Xswiftc -internalize-at-link
       - name: Strip binary
         run: strip -s .build/release/SafeDITool
       - name: Upload SafeDITool artifact
