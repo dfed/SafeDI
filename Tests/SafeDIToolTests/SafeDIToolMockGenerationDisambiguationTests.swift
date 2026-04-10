@@ -460,28 +460,30 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    struct SafeDIParameters {
 		        init(
 		            childA: ChildA.SafeDIMockConfiguration = .init(),
-		            childB: ChildB.SafeDIMockConfiguration = .init(),
-		            service: Service? = nil
+		            service: Service.SafeDIMockConfiguration? = nil,
+		            childB: ChildB.SafeDIMockConfiguration = .init()
 		        ) {
 		            self.childA = childA
-		            self.childB = childB
 		            self.service = service
+		            self.childB = childB
 		        }
 
 		        let childA: ChildA.SafeDIMockConfiguration
+		        let service: Service.SafeDIMockConfiguration?
 		        let childB: ChildB.SafeDIMockConfiguration
-		        let service: Service?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let service: Service? = safeDIParameters.service
 		        func __safeDI_childA() -> ChildA {
 		            let service = (safeDIParameters.childA.service.safeDIBuilder ?? Service.init)()
 		            return (safeDIParameters.childA.safeDIBuilder ?? ChildA.init(service:))(service)
 		        }
 		        let childA: ChildA = __safeDI_childA()
+		        let service: Service? = safeDIParameters.service.map { serviceConfiguration in
+		            (serviceConfiguration.safeDIBuilder ?? Service.init)()
+		        }
 		        let childB = (safeDIParameters.childB.safeDIBuilder ?? ChildB.init(service:))(service)
 		        return Root(childA: childA, childB: childB)
 		    }

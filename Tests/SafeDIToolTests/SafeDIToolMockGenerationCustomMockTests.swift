@@ -1351,21 +1351,23 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		extension Root {
 		    struct SafeDIParameters {
 		        init(
-		            child: Child.SafeDIMockConfiguration = .init(),
-		            service: Service? = nil
+		            service: Service.SafeDIMockConfiguration? = nil,
+		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.child = child
 		            self.service = service
+		            self.child = child
 		        }
 
+		        let service: Service.SafeDIMockConfiguration?
 		        let child: Child.SafeDIMockConfiguration
-		        let service: Service?
 		    }
 
 		    static func mock(
 		        safeDIParameters: SafeDIParameters = .init()
 		    ) -> Root {
-		        let service: Service? = safeDIParameters.service
+		        let service: Service? = safeDIParameters.service.map { serviceConfiguration in
+		            (serviceConfiguration.safeDIBuilder ?? Service.init)()
+		        }
 		        let child = (safeDIParameters.child.safeDIBuilder ?? Child.customMock(service:))(service)
 		        return Root(child: child)
 		    }

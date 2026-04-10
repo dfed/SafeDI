@@ -187,6 +187,9 @@ public actor DependencyTreeGenerator {
 
 		let rootedTypeNames = Set(generatedRoots.map(\.root.typeDescription.asSource))
 		// Deduplicate configuration types by type name across all roots.
+		// When the same type appears in multiple roots with different config struct
+		// shapes (e.g., enriched with received deps in one root, not in another),
+		// keep the longer version — it's a superset that compiles in all contexts.
 		var seenTypeNames = Set<String>()
 		var rootedConfigurationExtensions = [String: String]()
 		var sharedConfigurationExtensions = [(typeName: String, structCode: String)]()
@@ -198,6 +201,14 @@ public actor DependencyTreeGenerator {
 					} else {
 						sharedConfigurationExtensions.append(configType)
 					}
+				} else if let existingIndex = sharedConfigurationExtensions.firstIndex(where: { $0.typeName == configType.typeName }),
+				          configType.structCode.count > sharedConfigurationExtensions[existingIndex].structCode.count
+				{
+					sharedConfigurationExtensions[existingIndex] = configType
+				} else if let existingCode = rootedConfigurationExtensions[configType.typeName],
+				          configType.structCode.count > existingCode.count
+				{
+					rootedConfigurationExtensions[configType.typeName] = configType.structCode
 				}
 			}
 		}
@@ -499,9 +510,8 @@ public actor DependencyTreeGenerator {
 		// `userScopedDefaultsService: UserDefaultsService`) are promoted independently.
 		var promotedLabelAndTypes = Set<Property>()
 		for receivedProperty in allReceived.sorted() {
-			guard !allOnlyIfAvailable.contains(receivedProperty),
-			      !forwardedProperties.contains(receivedProperty)
-			else { continue }
+			guard !forwardedProperties.contains(receivedProperty) else { continue }
+			let isOnlyIfAvailable = allOnlyIfAvailable.contains(receivedProperty)
 
 			var dependencyType = receivedProperty.typeDescription.asInstantiatedType
 			var erasedToConcreteExistential = false
@@ -522,11 +532,43 @@ public actor DependencyTreeGenerator {
 			guard promotedLabelAndTypes.insert(receivedProperty.asUnwrappedProperty).inserted
 			else { continue }
 
-			mockRootScope.propertiesToGenerate.append(.instantiated(
-				receivedProperty,
-				receivedScope,
-				erasedToConcreteExistential: erasedToConcreteExistential,
-			))
+			if isOnlyIfAvailable {
+				// For onlyIfAvailable deps, create an enriched scope that includes
+				// received deps as children. This allows the config struct to include
+				// them, and the .map closure to build them before constructing the type.
+				let enrichedScope = Scope(instantiable: receivedScope.instantiable)
+				enrichedScope.propertiesToGenerate = receivedScope.propertiesToGenerate
+				for receivedDep in receivedScope.requiredReceivedProperties {
+					var receivedDepType = receivedDep.typeDescription.asInstantiatedType
+					var receivedDepErasedToConcreteExistential = false
+					if typeDescriptionToScopeMap[receivedDepType] == nil,
+					   let concreteType = erasedToConcreteTypeMap[receivedDep.typeDescription]
+					{
+						receivedDepType = concreteType
+						receivedDepErasedToConcreteExistential = true
+					}
+					guard let receivedDepScope = typeDescriptionToScopeMap[receivedDepType] else {
+						continue
+					}
+					enrichedScope.propertiesToGenerate.append(.instantiated(
+						receivedDep,
+						receivedDepScope,
+						erasedToConcreteExistential: receivedDepErasedToConcreteExistential,
+					))
+				}
+				mockRootScope.propertiesToGenerate.append(.instantiated(
+					receivedProperty,
+					enrichedScope,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+					suppressReceivedPropagation: true,
+				))
+			} else {
+				mockRootScope.propertiesToGenerate.append(.instantiated(
+					receivedProperty,
+					receivedScope,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+				))
+			}
 		}
 
 		// Validate the promoted mock scope for cycles before generating code.
@@ -579,7 +621,7 @@ public actor DependencyTreeGenerator {
 		// Recurse into children.
 		for childPropertyToGenerate in scope.propertiesToGenerate {
 			switch childPropertyToGenerate {
-			case let .instantiated(childProperty, childScope, _):
+			case let .instantiated(childProperty, childScope, _, _):
 				guard !propertyStack.contains(childProperty) else { continue }
 				let nextStack = [childProperty] + propertyStack
 				try validateMockRootScopeForCycles(
@@ -633,7 +675,7 @@ public actor DependencyTreeGenerator {
 		// Properties declared at this scope (instantiated/aliased children).
 		let propertiesToDeclare = Set(scope.propertiesToGenerate.compactMap { propertyToGenerate -> Property? in
 			switch propertyToGenerate {
-			case let .instantiated(property, _, _): return property
+			case let .instantiated(property, _, _, _): return property
 			case let .aliased(property, _, _, _): return property
 			}
 		})
@@ -652,7 +694,7 @@ public actor DependencyTreeGenerator {
 		// Aliases are handled below in the own-dependency loop: alias children's receivedProperties
 		// = [fulfillingProperty], but the own-dependency union unconditionally adds the same
 		// fulfillingProperty, making the child-path subtraction/filter redundant.
-		for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
+		for case let .instantiated(_, childScope, _, _) in scope.propertiesToGenerate {
 			let (childReceived, childOnlyIfAvailable) = collectReceivedProperties(
 				from: childScope,
 				cache: &cache,
@@ -968,7 +1010,7 @@ public actor DependencyTreeGenerator {
 
 			for childPropertyToGenerate in scope.propertiesToGenerate {
 				switch childPropertyToGenerate {
-				case let .instantiated(childProperty, childScope, _):
+				case let .instantiated(childProperty, childScope, _, _):
 					guard !childPropertyStack.contains(childProperty) else {
 						// There is a cycle in our scope tree. Do not re-enter it.
 						continue

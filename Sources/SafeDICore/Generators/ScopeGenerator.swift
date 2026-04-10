@@ -27,6 +27,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	init(
 		instantiable: Instantiable,
 		property: Property?,
+		suppressReceivedPropagation: Bool = false,
 		propertiesToGenerate: [ScopeGenerator],
 		unavailableOptionalProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
@@ -51,13 +52,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			description = instantiable.concreteInstantiable.asSource
 		}
 		self.property = property
+		self.suppressReceivedPropagation = suppressReceivedPropagation
 		self.propertiesToGenerate = propertiesToGenerate
 		propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property))
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		receivedProperties = Set(
 			propertiesToGenerate.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
+				// Skip children whose received properties should not propagate to the parent.
+				// This prevents onlyIfAvailable subtrees from leaking their transitive deps.
+				guard !propertyToGenerate.suppressReceivedPropagation else { return Set<Property>() }
 				// All the properties this child and its children require be passed in.
-				propertyToGenerate.receivedProperties
+				return propertyToGenerate.receivedProperties
 					// Minus the properties we declare.
 					.subtracting(propertiesToDeclare)
 					// Minus optional properties whose unwrapped form we declare.
@@ -88,7 +93,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 		onlyIfAvailableUnwrappedReceivedProperties = Set(
 			propertiesToGenerate.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
-				propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
+				guard !propertyToGenerate.suppressReceivedPropagation else { return Set<Property>() }
+				return propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
 					.subtracting(propertiesToDeclare)
 					.subtracting(scopeData.forwardedProperties)
 			},
@@ -141,6 +147,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		propertiesToDeclare = []
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		self.property = property
+		suppressReceivedPropagation = false
 	}
 
 	// MARK: CustomStringConvertible
@@ -264,6 +271,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let mockConditionalCompilation: String?
 	}
 
+	/// Whether this child's received properties should not propagate to the parent scope.
+	/// Used for onlyIfAvailable subtrees whose transitive deps should stay internal.
+	let suppressReceivedPropagation: Bool
 	private let scopeData: ScopeData
 	/// Unwrapped versions of received properties from transitive `@Received(onlyIfAvailable: true)` dependencies.
 	/// Used by mock generation to identify dependencies that should become optional mock parameters (no guaranteed default).
@@ -861,6 +871,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let forwardedProperties: Set<Property>
 		/// Whether this node is part of a property cycle.
 		let isPropertyCycle: Bool
+		/// Whether this node represents an onlyIfAvailable dependency.
+		/// When `true`, the configuration type is optional on SafeDIParameters
+		/// and the mock body uses `.map { ... }` to conditionally build the subtree.
+		let isOnlyIfAvailable: Bool
 		/// Whether this node is inside a sendable scope (descendant of SendableInstantiator).
 		/// When `true`, the `safeDIBuilder` closure on `_Configuration` is `@Sendable`.
 		let requiresSendable: Bool
@@ -1010,6 +1024,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				concreteType: childInstantiable.concreteInstantiable,
 				forwardedProperties: forwardedProperties,
 				isPropertyCycle: isPropertyCycle,
+				isOnlyIfAvailable: childGenerator.suppressReceivedPropagation,
 				requiresSendable: childInsideSendable,
 				mockAttributes: childInstantiable.mockAttributes,
 			))
@@ -1099,8 +1114,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Collects all unique types from the `MockParameterNode` tree, deduplicated
 	/// by `instantiatedTypeDescription`. Returns nodes in depth-first order
 	/// (children before parents) so that referenced types appear before their referrers.
-	/// When the same type appears in both sendable and non-sendable contexts,
-	/// the sendable version is preferred (`@Sendable` closures work in both contexts).
+	/// When the same type appears multiple times, the version with more children is
+	/// preferred (enriched onlyIfAvailable scopes include received deps as children,
+	/// making them a superset of the non-enriched version). When the same type appears
+	/// in both sendable and non-sendable contexts, the sendable version is preferred.
 	private static func collectUniqueConfigurationTypes(
 		from nodes: [MockParameterNode],
 	) -> [MockParameterNode] {
@@ -1118,12 +1135,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				walk(child, ancestorTypes: childAncestors)
 			}
 			if seen.contains(key) {
-				// If this node requires sendable and the existing one doesn't,
-				// replace it — @Sendable closures are compatible in both contexts.
-				if node.requiresSendable,
-				   let existingIndex = result.firstIndex(where: {
-				   	$0.concreteType.asSource == key && !$0.requiresSendable
-				   })
+				guard let existingIndex = result.firstIndex(where: {
+					$0.concreteType.asSource == key
+				}) else { return }
+				let existing = result[existingIndex]
+				// Replace if this node has more children (enriched onlyIfAvailable
+				// scope includes received deps — a superset of the non-enriched
+				// version) or if this node requires sendable and the existing doesn't.
+				if node.children.count > existing.children.count
+					|| (node.requiresSendable && !existing.requiresSendable)
 				{
 					result[existingIndex] = node
 				}
@@ -1159,7 +1179,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(innerIndent)init(")
 		var initParameters = rootChildren.map { child in
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			return "\(memberIndent)\(label): \(child.configurationTypeName) = .init()"
+			if child.isOnlyIfAvailable {
+				return "\(memberIndent)\(label): \(child.configurationTypeName)? = nil"
+			} else {
+				return "\(memberIndent)\(label): \(child.configurationTypeName) = .init()"
+			}
 		}
 		for entry in onlyIfAvailableEntries {
 			initParameters.append("\(memberIndent)\(entry.label): \(entry.typeSource) = nil")
@@ -1179,7 +1203,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("")
 		for child in rootChildren {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
+			if child.isOnlyIfAvailable {
+				lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)?")
+			} else {
+				lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
+			}
 		}
 		for entry in onlyIfAvailableEntries {
 			lines.append("\(innerIndent)let \(entry.label): \(entry.typeSource)")
@@ -1384,6 +1412,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indent: indent,
 					ancestorTypes: childAncestors,
 				))
+			} else if node.isOnlyIfAvailable {
+				// onlyIfAvailable constant node — wrap in .map to conditionally build subtree.
+				lines.append(contentsOf: generateOnlyIfAvailableBinding(
+					for: node,
+					nodePath: nodePath,
+					indent: indent,
+					ancestorTypes: ancestorTypes,
+				))
 			} else {
 				let arguments = resolveBuilderArguments(
 					for: node,
@@ -1430,6 +1466,75 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				}
 			}
+		}
+
+		return lines
+	}
+
+	/// Generates the binding for an onlyIfAvailable constant node.
+	/// Wraps the construction in `.map { config in ... }` so the subtree
+	/// is only built when the optional configuration is provided.
+	private static func generateOnlyIfAvailableBinding(
+		for node: MockParameterNode,
+		nodePath: String,
+		indent: String,
+		ancestorTypes: Set<String>,
+	) -> [String] {
+		var lines = [String]()
+		let concreteTypeName = node.concreteType.asSource
+		let configParamName = "\(node.propertyLabel)Configuration"
+		let innerIndent = "\(indent)\(standardIndent)"
+
+		// Build the child bindings using the config closure parameter as the path.
+		var childAncestors = ancestorTypes
+		childAncestors.insert(node.instantiatedTypeDescription.asSource)
+		let childBindings = generateMockBodyBindings(
+			nodes: node.children,
+			parentPath: configParamName,
+			indent: innerIndent,
+			ancestorTypes: childAncestors,
+		)
+
+		// Resolve builder arguments using the config closure parameter.
+		let arguments = resolveBuilderArguments(
+			for: node,
+			nodePath: configParamName,
+		)
+		let argumentList = arguments.joined(separator: ", ")
+
+		let builderExpression = "(\(configParamName).safeDIBuilder ?? \(node.defaultBuilderExpression))"
+
+		// Determine the non-optional base type for the binding annotation.
+		// When the instantiated type differs from the concrete type (protocol fulfilled
+		// by concrete), use the instantiated type (the protocol) for compatibility.
+		// Otherwise, use the concrete type name.
+		let baseType: String = if node.erasedToConcreteExistential || node.instantiatedTypeDescription != node.concreteType {
+			node.instantiatedTypeDescription.asSource
+		} else {
+			concreteTypeName
+		}
+
+		if childBindings.isEmpty {
+			// Simple case: no children, just call the builder inside .map.
+			if node.erasedToConcreteExistential {
+				lines.append("\(indent)let \(node.propertyLabel): \(baseType)? = \(nodePath).map { \(configParamName) in")
+				lines.append("\(innerIndent)\(baseType)(\(builderExpression)(\(argumentList)))")
+				lines.append("\(indent)}")
+			} else {
+				lines.append("\(indent)let \(node.propertyLabel): \(baseType)? = \(nodePath).map { \(configParamName) in")
+				lines.append("\(innerIndent)\(builderExpression)(\(argumentList))")
+				lines.append("\(indent)}")
+			}
+		} else {
+			// Complex case: build children first, then call the builder.
+			lines.append("\(indent)let \(node.propertyLabel): \(baseType)? = \(nodePath).map { \(configParamName) in")
+			lines.append(contentsOf: childBindings)
+			if node.erasedToConcreteExistential {
+				lines.append("\(innerIndent)return \(baseType)(\(builderExpression)(\(argumentList)))")
+			} else {
+				lines.append("\(innerIndent)return \(builderExpression)(\(argumentList))")
+			}
+			lines.append("\(indent)}")
 		}
 
 		return lines
