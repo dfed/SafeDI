@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: '35 2 * * 0'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
@@ -40,13 +44,6 @@ jobs:
     - name: Select Xcode Version
       run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
 
-    # Pre-build so dependencies are compiled and cached before CodeQL
-    # starts tracing. This prevents CodeQL from analyzing swift-syntax
-    # and other third-party code.
-    - if: matrix.language == 'swift'
-      name: Pre-build dependencies
-      run: xcrun swift build -c release
-
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
@@ -54,13 +51,9 @@ jobs:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
 
-    # Touch only our source files so SPM recompiles them (but not
-    # cached dependencies) under CodeQL's compiler tracing.
     - if: matrix.language == 'swift'
-      name: Rebuild project source for CodeQL
-      run: |
-        find Sources -name '*.swift' -exec touch {} +
-        xcrun swift build -c release
+      name: Build
+      run: xcrun swift build -c release
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
