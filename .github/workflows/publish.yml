@@ -37,11 +37,13 @@ jobs:
       - name: Stamp version
         run: sed -i '' 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
-        run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }} -Xswiftc -Osize -Xlinker -dead_strip
+        run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }} -Xswiftc -Osize -Xswiftc -Xfrontend -Xswiftc -internalize-at-link -Xlinker -dead_strip
       - name: Strip binary
         run: strip -rSTx .build/*/release/SafeDITool
       - name: Give SafeDITool executable permissions
         run: chmod +x .build/*/release/SafeDITool
+      - name: Smoke test
+        run: .build/*/release/SafeDITool --version
       - name: Make codesigning folder
         run: |
           mkdir codesign
@@ -92,6 +94,8 @@ jobs:
         run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
       - name: Strip binary
         run: strip -s .build/release/SafeDITool
+      - name: Smoke test
+        run: .build/release/SafeDITool --version
       - name: Upload SafeDITool artifact
         uses: actions/upload-artifact@v7
         with:
@@ -115,6 +119,8 @@ jobs:
         run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
       - name: Strip binary
         run: strip -s .build/release/SafeDITool
+      - name: Smoke test
+        run: .build/release/SafeDITool --version
       - name: Upload SafeDITool artifact
         uses: actions/upload-artifact@v7
         with:
@@ -230,8 +236,10 @@ jobs:
 
       - name: Prepare release assets
         run: |
-          cp artifacts/SafeDITool-macos-arm64/SafeDITool SafeDITool-arm64
-          cp artifacts/SafeDITool-macos-x86_64/SafeDITool SafeDITool-x86_64
+          cp artifacts/SafeDITool-macos-arm64/SafeDITool SafeDITool-macos-arm64
+          cp artifacts/SafeDITool-macos-x86_64/SafeDITool SafeDITool-macos-x86_64
+          cp artifacts/SafeDITool-linux-x86_64/SafeDITool SafeDITool-linux-x86_64
+          cp artifacts/SafeDITool-linux-arm64/SafeDITool SafeDITool-linux-arm64
 
       - name: Tag and push
         if: ${{ !inputs.dry-run }}
@@ -249,5 +257,7 @@ jobs:
             --generate-notes \
             ${{ inputs.prerelease && '--prerelease' || '' }} \
             SafeDITool.artifactbundle.zip \
-            SafeDITool-arm64 \
-            SafeDITool-x86_64
+            SafeDITool-macos-arm64 \
+            SafeDITool-macos-x86_64 \
+            SafeDITool-linux-x86_64 \
+            SafeDITool-linux-arm64
