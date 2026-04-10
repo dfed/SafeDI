@@ -451,11 +451,6 @@ public actor DependencyTreeGenerator {
 		var worklist = Array(allReceived)
 
 		while let property = worklist.popLast() {
-			// Don't walk into scopes for onlyIfAvailable dependencies.
-			// They become optional mock parameters with no default construction,
-			// so their transitive dependencies don't need promoting.
-			guard !allOnlyIfAvailable.contains(property) else { continue }
-
 			var dependencyType = property.typeDescription.asInstantiatedType
 			if typeDescriptionToScopeMap[dependencyType] == nil,
 			   let concreteType = erasedToConcreteTypeMap[property.typeDescription]
@@ -476,9 +471,8 @@ public actor DependencyTreeGenerator {
 			allOnlyIfAvailable.formUnion(scopeOnlyIfAvailable)
 		}
 
-		// Promote all received properties that have scopes.
-		// onlyIfAvailable dependencies are NOT promoted — they become optional
-		// mock parameters with no default.
+		// Promote all received properties that have scopes — including onlyIfAvailable
+		// dependencies, which become tree nodes with nil-returning default factories.
 		// Filter out forwarded properties — they're bare mock parameters, not promoted children.
 		// ScopeData.root doesn't carry forwardedProperties, so receivedProperties doesn't
 		// subtract them. We filter them here instead.
@@ -490,9 +484,16 @@ public actor DependencyTreeGenerator {
 		let mockRootScope = Scope(instantiable: instantiable)
 		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate
 
+		var onlyIfAvailablePromotedProperties = Set<Property>()
+		// Track which label+type pairs have already been promoted so that when
+		// both a required (`config: Config`) and an onlyIfAvailable (`config: Config?`)
+		// version of the same dependency exist, only the required version is promoted.
+		// The key is (label, unwrapped type) so that different labels with the same
+		// type (e.g., `installScopedDefaultsService: UserDefaultsService` and
+		// `userScopedDefaultsService: UserDefaultsService`) are promoted independently.
+		var promotedLabelAndTypes = Set<Property>()
 		for receivedProperty in allReceived.sorted() {
-			guard !allOnlyIfAvailable.contains(receivedProperty),
-			      !forwardedProperties.contains(receivedProperty)
+			guard !forwardedProperties.contains(receivedProperty)
 			else { continue }
 
 			var dependencyType = receivedProperty.typeDescription.asInstantiatedType
@@ -506,11 +507,21 @@ public actor DependencyTreeGenerator {
 			guard let receivedScope = typeDescriptionToScopeMap[dependencyType] else {
 				continue
 			}
+			// Skip if this label+unwrapped-type pair was already promoted. This
+			// happens when both a required `@Received` and an
+			// `@Received(onlyIfAvailable: true)` exist for the same label and
+			// underlying type — the required version wins (it sorts first because
+			// the non-optional type string is shorter).
+			guard promotedLabelAndTypes.insert(receivedProperty.asUnwrappedProperty).inserted
+			else { continue }
 			mockRootScope.propertiesToGenerate.append(.instantiated(
 				receivedProperty,
 				receivedScope,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 			))
+			if allOnlyIfAvailable.contains(receivedProperty) {
+				onlyIfAvailablePromotedProperties.insert(receivedProperty)
+			}
 		}
 
 		// Validate the promoted mock scope for cycles before generating code.
@@ -523,13 +534,15 @@ public actor DependencyTreeGenerator {
 		)
 
 		// Build the final ScopeGenerator once.
-		return try mockRootScope.createScopeGenerator(
+		let rootScopeGenerator = try mockRootScope.createScopeGenerator(
 			for: nil,
 			propertyStack: [],
 			receivableProperties: [],
 			erasedToConcreteExistential: false,
 			forMockGeneration: true,
 		)
+		rootScopeGenerator.onlyIfAvailablePromotedProperties = onlyIfAvailablePromotedProperties
+		return rootScopeGenerator
 	}
 
 	/// Recursively collects all unsatisfied received properties from a Scope tree.

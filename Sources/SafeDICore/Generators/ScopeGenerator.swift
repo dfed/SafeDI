@@ -275,6 +275,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Properties that this scope declares as a `let` constant.
 	private let propertiesToDeclare: Set<Property>
 	private let property: Property?
+	/// Properties promoted from `@Received(onlyIfAvailable: true)` in mock mode.
+	/// Set by `createMockRootScopeGenerator` on the mock root scope generator
+	/// before any actor-isolated methods are called.
+	/// Used by `collectMockParameterTree` to tag tree nodes as `onlyIfAvailable`.
+	nonisolated(unsafe) var onlyIfAvailablePromotedProperties: Set<Property> = []
 
 	private var unavailablePropertiesToGenerateCodeTask = [Set<Property>: Task<String, Error>]()
 
@@ -558,7 +563,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let bodyIndent = "\(indent)\(indent)"
 
 		// 1. Build the parameter tree.
-		let parameterTree = await collectMockParameterTree()
+		let parameterTree = await collectMockParameterTree(
+			onlyIfAvailableProperties: onlyIfAvailablePromotedProperties,
+		)
 
 		// 2. Identify flat parameters.
 
@@ -852,6 +859,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let requiresSendable: Bool
 		/// Attributes to add to the generated `build()` method (e.g. `"@MainActor"`).
 		let mockAttributes: String
+		/// Whether this node was promoted from a `@Received(onlyIfAvailable: true)` dependency.
+		/// When `true`, the factory closure defaults to `nil` (producing an optional result via
+		/// optional chaining) instead of the type's real initializer.
+		let isOnlyIfAvailable: Bool
 
 		/// The nested configuration struct name (used in struct definitions).
 		static let configurationStructName = "SafeDIMockConfiguration"
@@ -907,7 +918,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Collects all unique configuration types from this scope's mock parameter tree.
 	func collectConfigurationTypes() async -> [(typeName: String, structCode: String)] {
-		let parameterTree = await collectMockParameterTree()
+		let parameterTree = await collectMockParameterTree(
+			onlyIfAvailableProperties: onlyIfAvailablePromotedProperties,
+		)
 		let uniqueTypes = Self.collectUniqueConfigurationTypes(from: parameterTree)
 		let indent = Self.standardIndent
 		return uniqueTypes.map { node in
@@ -923,6 +936,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// subtree children, default parameters, and builder metadata.
 	private func collectMockParameterTree(
 		insideSendableScope: Bool = false,
+		onlyIfAvailableProperties: Set<Property> = [],
 	) async -> [MockParameterNode] {
 		var nodes = [MockParameterNode]()
 
@@ -999,6 +1013,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				isPropertyCycle: isPropertyCycle,
 				requiresSendable: childInsideSendable,
 				mockAttributes: childInstantiable.mockAttributes,
+				isOnlyIfAvailable: onlyIfAvailableProperties.contains(childProperty),
 			))
 		}
 
@@ -1145,7 +1160,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(innerIndent)init(")
 		let initParameters = rootChildren.map { child in
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			return "\(memberIndent)\(label): \(child.configurationTypeName) = .init()"
+			if child.isOnlyIfAvailable {
+				return "\(memberIndent)\(label): \(child.configurationTypeName)? = nil"
+			} else {
+				return "\(memberIndent)\(label): \(child.configurationTypeName) = .init()"
+			}
 		}
 		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
@@ -1159,7 +1178,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("")
 		for child in rootChildren {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
+			if child.isOnlyIfAvailable {
+				lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)?")
+			} else {
+				lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
+			}
 		}
 
 		lines.append("\(indent)}")
@@ -1361,6 +1384,65 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indent: indent,
 					ancestorTypes: childAncestors,
 				))
+			} else if node.isOnlyIfAvailable {
+				// onlyIfAvailable constant node — the config is optional, so we
+				// use `.map` to conditionally construct. When the config is nil,
+				// the binding result is nil.
+				let concreteTypeName = node.concreteType.asSource
+				// Use the instantiated type (protocol or concrete, without optional
+				// wrapper) for the binding annotation. The `.map` produces an optional.
+				let bindingType = node.typeDescription.asInstantiatedType.asSource
+
+				if node.children.isEmpty, node.defaultParameters.isEmpty, !node.isPropertyCycle {
+					// Leaf onlyIfAvailable — inline .map closure.
+					let arguments = resolveBuilderArguments(
+						for: node,
+						nodePath: nodePath,
+						sendableExtractionPrefix: sendableExtractionPrefix,
+					)
+					let argumentList = arguments.joined(separator: ", ")
+					let construction = "($0.safeDIBuilder ?? \(node.defaultBuilderExpression))(\(argumentList))"
+					if node.erasedToConcreteExistential {
+						lines.append("\(indent)let \(node.propertyLabel): \(bindingType)? = \(nodePath).map { \(bindingType)(\(construction)) }")
+					} else {
+						lines.append("\(indent)let \(node.propertyLabel): \(bindingType)? = \(nodePath).map { \(construction) }")
+					}
+				} else {
+					// onlyIfAvailable node with children — scoped construction via
+					// helper function that takes the config as a parameter.
+					let functionName = "__safeDI_\(node.propertyLabel)"
+					let configParamName = "__safeDI_config"
+					let innerIndent = "\(indent)\(standardIndent)"
+
+					lines.append("\(indent)func \(functionName)(_ \(configParamName): \(node.configurationTypeName)) -> \(concreteTypeName) {")
+					var childAncestors = ancestorTypes
+					childAncestors.insert(nodeTypeKey)
+					// Use configParamName as the parent path so child bindings
+					// reference the function parameter instead of safeDIParameters.
+					let configBuilderExpression = "(\(configParamName).safeDIBuilder ?? \(node.defaultBuilderExpression))"
+					let arguments = resolveBuilderArguments(
+						for: node,
+						nodePath: configParamName,
+						sendableExtractionPrefix: sendableExtractionPrefix,
+					)
+					let argumentList = arguments.joined(separator: ", ")
+					let childBindings = generateMockBodyBindings(
+						nodes: node.children,
+						parentPath: configParamName,
+						indent: innerIndent,
+						ancestorTypes: childAncestors,
+						sendableExtractionPrefix: sendableExtractionPrefix,
+					)
+					lines.append(contentsOf: childBindings)
+					lines.append("\(innerIndent)return \(configBuilderExpression)(\(argumentList))")
+					lines.append("\(indent)}")
+
+					if node.erasedToConcreteExistential {
+						lines.append("\(indent)let \(node.propertyLabel): \(bindingType)? = \(nodePath).map { \(bindingType)(\(functionName)($0)) }")
+					} else {
+						lines.append("\(indent)let \(node.propertyLabel): \(bindingType)? = \(nodePath).map(\(functionName))")
+					}
+				}
 			} else {
 				let arguments = resolveBuilderArguments(
 					for: node,
