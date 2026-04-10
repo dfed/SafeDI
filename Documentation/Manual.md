@@ -575,9 +575,7 @@ Root.mock(safeDIParameters: .init(
 ))
 ```
 
-Each child dependency in the tree has a configuration type, even when the dependency is a simple leaf. That configuration type accepts optional overrides for its own children and a trailing `safeDIBuilder` closure to replace its construction entirely. When no overrides are provided, the generated mock uses the type’s real initializer (or custom mock method).
-
-Using a configuration object for every edge keeps the generated API shape stable as a dependency evolves. A leaf that later gains its own default-valued parameters or subtree still uses the same `.init(...)` call site rather than changing from a raw builder value into a different kind of argument.
+Each child dependency in the tree has a configuration type that accepts optional overrides for its own children and a trailing `safeDIBuilder` closure to replace its construction entirely. When no overrides are provided, the generated mock uses the type’s real initializer (or custom mock method).
 
 Types with no `@Instantiated` subtree — for example, types with only `@Received` dependencies — do not generate a `SafeDIParameters` struct. Their `mock()` method uses flat parameters instead.
 
