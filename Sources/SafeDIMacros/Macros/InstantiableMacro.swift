@@ -78,6 +78,15 @@ public struct InstantiableMacro: MemberMacro {
 				throw InstantiableError.customMockNameArgumentInvalid
 			}
 		}
+		if let mockOnlyArgument = declaration
+			.attributes
+			.instantiableMacro?
+			.mockOnly
+		{
+			if BooleanLiteralExprSyntax(mockOnlyArgument) == nil {
+				throw InstantiableError.mockOnlyArgumentInvalid
+			}
+		}
 
 		if let concreteDeclaration: ConcreteDeclSyntaxProtocol
 			= ActorDeclSyntax(declaration)
@@ -85,12 +94,13 @@ public struct InstantiableMacro: MemberMacro {
 			?? StructDeclSyntax(declaration)
 		{
 			lazy var extendsInstantiable = concreteDeclaration.inheritanceClause?.inheritedTypes.contains(where: \.type.typeDescription.isInstantiable) ?? false
+			let isMockOnly = declaration.attributes.instantiableMacro?.mockOnlyValue ?? false
 			let mustExtendInstantiable = if let conformsElsewhereArgument = declaration.attributes.instantiableMacro?.conformsElsewhere,
 			                                let boolExpression = BooleanLiteralExprSyntax(conformsElsewhereArgument)
 			{
-				boolExpression.literal.tokenKind == .keyword(.false)
+				boolExpression.literal.tokenKind == .keyword(.false) && !isMockOnly
 			} else {
-				true
+				!isMockOnly
 			}
 
 			if mustExtendInstantiable, !extendsInstantiable {
@@ -135,6 +145,44 @@ public struct InstantiableMacro: MemberMacro {
 			for diagnostic in visitor.diagnostics {
 				context.diagnose(diagnostic)
 			}
+			if let instantiableMacro = declaration.attributes.instantiableMacro {
+				if instantiableMacro.mockOnlyValue, instantiableMacro.generateMockValue {
+					context.diagnose(Diagnostic(
+						node: Syntax(instantiableMacro),
+						error: FixableInstantiableError.mockOnlyWithGenerateMock,
+						changes: [
+							.replace(
+								oldNode: Syntax(instantiableMacro),
+								newNode: Syntax(instantiableMacro),
+							),
+						],
+					))
+				}
+				if instantiableMacro.mockOnlyValue, visitor.isRoot {
+					context.diagnose(Diagnostic(
+						node: Syntax(instantiableMacro),
+						error: FixableInstantiableError.mockOnlyWithIsRoot,
+						changes: [
+							.replace(
+								oldNode: Syntax(instantiableMacro),
+								newNode: Syntax(instantiableMacro),
+							),
+						],
+					))
+				}
+				if instantiableMacro.mockOnlyValue, visitor.mockFunctionSyntax == nil {
+					context.diagnose(Diagnostic(
+						node: Syntax(instantiableMacro),
+						error: FixableInstantiableError.mockOnlyMissingMockMethod,
+						changes: [
+							.replace(
+								oldNode: Syntax(instantiableMacro),
+								newNode: Syntax(instantiableMacro),
+							),
+						],
+					))
+				}
+			}
 
 			if visitor.isRoot, let instantiableType = visitor.instantiableType {
 				let inheritedDependencies = visitor.dependencies.filter {
@@ -163,7 +211,8 @@ public struct InstantiableMacro: MemberMacro {
 			let hasMemberwiseInitializerForInjectableProperties = visitor
 				.initializers
 				.contains(where: { $0.isValid(forFulfilling: visitor.dependencies) })
-			guard hasMemberwiseInitializerForInjectableProperties else {
+			let requiresInitializer = !visitor.mockOnly
+			guard !requiresInitializer || hasMemberwiseInitializerForInjectableProperties else {
 				func associatedError(for initializer: Initializer) -> (initializer: Initializer, syntax: InitializerDeclSyntax, error: Initializer.FixableError)? {
 					do {
 						try initializer.validate(fulfilling: visitor.dependencies)
@@ -629,12 +678,13 @@ public struct InstantiableMacro: MemberMacro {
 
 		} else if let extensionDeclaration = ExtensionDeclSyntax(declaration) {
 			lazy var extendsInstantiable = extensionDeclaration.inheritanceClause?.inheritedTypes.contains(where: \.type.typeDescription.isInstantiable) ?? false
+			let isMockOnly = declaration.attributes.instantiableMacro?.mockOnlyValue ?? false
 			let mustExtendInstantiable = if let conformsElsewhereArgument = declaration.attributes.instantiableMacro?.conformsElsewhere,
 			                                let boolExpression = BooleanLiteralExprSyntax(conformsElsewhereArgument)
 			{
-				boolExpression.literal.tokenKind == .keyword(.false)
+				boolExpression.literal.tokenKind == .keyword(.false) && !isMockOnly
 			} else {
-				true
+				!isMockOnly
 			}
 
 			if mustExtendInstantiable, !extendsInstantiable {
@@ -692,6 +742,44 @@ public struct InstantiableMacro: MemberMacro {
 			visitor.walk(extensionDeclaration)
 			for diagnostic in visitor.diagnostics {
 				context.diagnose(diagnostic)
+			}
+			if let instantiableMacro = declaration.attributes.instantiableMacro {
+				if instantiableMacro.mockOnlyValue, instantiableMacro.generateMockValue {
+					context.diagnose(Diagnostic(
+						node: Syntax(instantiableMacro),
+						error: FixableInstantiableError.mockOnlyWithGenerateMock,
+						changes: [
+							.replace(
+								oldNode: Syntax(instantiableMacro),
+								newNode: Syntax(instantiableMacro),
+							),
+						],
+					))
+				}
+				if instantiableMacro.mockOnlyValue, visitor.isRoot {
+					context.diagnose(Diagnostic(
+						node: Syntax(instantiableMacro),
+						error: FixableInstantiableError.mockOnlyWithIsRoot,
+						changes: [
+							.replace(
+								oldNode: Syntax(instantiableMacro),
+								newNode: Syntax(instantiableMacro),
+							),
+						],
+					))
+				}
+				if instantiableMacro.mockOnlyValue, visitor.mockFunctionSyntax == nil {
+					context.diagnose(Diagnostic(
+						node: Syntax(instantiableMacro),
+						error: FixableInstantiableError.mockOnlyMissingMockMethod,
+						changes: [
+							.replace(
+								oldNode: Syntax(instantiableMacro),
+								newNode: Syntax(instantiableMacro),
+							),
+						],
+					))
+				}
 			}
 
 			// Validate mock() methods on extensions: must be public, return the extended type or Self, and be unique per return type.
@@ -944,7 +1032,7 @@ public struct InstantiableMacro: MemberMacro {
 						concreteInstantiables.insert(concreteInstantiable)
 					}
 				}
-			} else if instantiables.isEmpty {
+			} else if instantiables.isEmpty, !visitor.mockOnly {
 				let extendedTypeName = extensionDeclaration.extendedType.typeDescription.asSource
 				var membersWithInitializer = declaration.memberBlock.members
 				membersWithInitializer.insert(
@@ -1282,6 +1370,7 @@ public struct InstantiableMacro: MemberMacro {
 		case mockAttributesArgumentInvalid
 		case generateMockArgumentInvalid
 		case customMockNameArgumentInvalid
+		case mockOnlyArgumentInvalid
 		case tooManyInstantiateMethods(TypeDescription)
 		case cannotBeRoot(TypeDescription, violatingDependencies: [Dependency])
 
@@ -1299,6 +1388,8 @@ public struct InstantiableMacro: MemberMacro {
 				"The argument `generateMock` must be a Bool literal (`true` or `false`)"
 			case .customMockNameArgumentInvalid:
 				"The argument `customMockName` must be a string literal or `nil`"
+			case .mockOnlyArgumentInvalid:
+				"The argument `mockOnly` must be a Bool literal (`true` or `false`)"
 			case let .tooManyInstantiateMethods(type):
 				"@\(InstantiableVisitor.macroName)-decorated extension must have a single `\(InstantiableVisitor.instantiateMethodName)(…)` method that returns `\(type.asSource)`"
 			case let .cannotBeRoot(declaredRootType, violatingDependencies):

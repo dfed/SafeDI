@@ -6394,6 +6394,118 @@ import Testing
 		}
 
 		@Test
+		func declaration_mockOnlyDoesNotRequireInstantiableConformance_whenConformanceIsMissing() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true)
+				public struct MyService {
+				    @Received let dependency: Dependency
+				    public static func mock(dependency: Dependency) -> MyService {
+				        MyService(dependency: dependency)
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService {
+				    let dependency: Dependency
+				    public static func mock(dependency: Dependency) -> MyService {
+				        MyService(dependency: dependency)
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_mockOnlyProducesDiagnostic_whenCombinedWithGenerateMock() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true, generateMock: true)
+				public struct MyService {
+				    public static func mock() -> MyService { MyService() }
+				}
+				""",
+				expandedSource: """
+				public struct MyService {
+				    public static func mock() -> MyService { MyService() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`mockOnly: true` cannot be combined with `generateMock: true`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove `generateMock: true` or `mockOnly: true`"),
+						],
+					),
+					DiagnosticSpec(
+						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`."#,
+						line: 3,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: #"Rename method to `customMock` and add `customMockName: "customMock"` to `@Instantiable`"#),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_mockOnlyProducesDiagnostic_whenCombinedWithIsRoot() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, mockOnly: true)
+				public struct MyService {
+				    public static func mock() -> MyService { MyService() }
+				}
+				""",
+				expandedSource: """
+				public struct MyService {
+				    public static func mock() -> MyService { MyService() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`mockOnly: true` cannot be combined with `isRoot: true`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove `isRoot: true` or `mockOnly: true`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_mockOnlyProducesDiagnostic_whenMockMethodIsMissing() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true)
+				public struct MyService {}
+				""",
+				expandedSource: """
+				public struct MyService {}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`mockOnly: true` requires a hand-written `public static func mock(…)` method.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `public static func mock(…)` method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func multipleMockMethodsProducesDiagnosticOnSecond() {
 			assertMacroExpansion(
 				"""

@@ -173,6 +173,7 @@ struct Generate: AsyncParsableCommand {
 				declarationType: unnormalizedInstantiable.declarationType,
 				mockAttributes: unnormalizedInstantiable.mockAttributes,
 				generateMock: unnormalizedInstantiable.generateMock,
+				mockOnly: unnormalizedInstantiable.mockOnly,
 				mockInitializer: unnormalizedInstantiable.mockInitializer,
 				mockReturnType: unnormalizedInstantiable.mockReturnType,
 				customMockName: unnormalizedInstantiable.customMockName,
@@ -185,6 +186,7 @@ struct Generate: AsyncParsableCommand {
 			typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
 				instantiables: normalizedInstantiables,
 			),
+			allInstantiables: normalizedInstantiables,
 		)
 		if let moduleInfoOutput {
 			try JSONEncoder().encode(module).write(toPath: moduleInfoOutput)
@@ -399,24 +401,39 @@ struct Generate: AsyncParsableCommand {
 
 	private func resolveSafeDIFulfilledTypes(instantiables: [Instantiable]) throws -> [TypeDescription: Instantiable] {
 		var typeDescriptionToFulfillingInstantiableMap = [TypeDescription: Instantiable]()
+		var typeDescriptionToMockProviderCount = [TypeDescription: Int]()
 		for instantiable in instantiables {
 			for instantiableType in instantiable.instantiableTypes {
+				if instantiable.mockInitializer != nil {
+					typeDescriptionToMockProviderCount[instantiableType, default: 0] += 1
+				}
+				if instantiable.mockOnly {
+					continue
+				}
 				if typeDescriptionToFulfillingInstantiableMap[instantiableType] != nil {
 					throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)
 				}
 				typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
 			}
 		}
+		for (instantiableType, mockProviderCount) in typeDescriptionToMockProviderCount
+			where mockProviderCount > 1
+		{
+			throw CollectInstantiablesError.foundDuplicateMockProvider(instantiableType.asSource)
+		}
 		return typeDescriptionToFulfillingInstantiableMap
 	}
 
 	private enum CollectInstantiablesError: Error, CustomStringConvertible {
 		case foundDuplicateInstantiable(String)
+		case foundDuplicateMockProvider(String)
 
 		var description: String {
 			switch self {
 			case let .foundDuplicateInstantiable(duplicateInstantiable):
 				"@\(InstantiableVisitor.macroName)-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `\(duplicateInstantiable)`"
+			case let .foundDuplicateMockProvider(duplicateInstantiable):
+				"Found multiple `@\(InstantiableVisitor.macroName)` declarations with a hand-written mock method for `\(duplicateInstantiable)`. Keep only one mock provider for this type."
 			}
 		}
 	}

@@ -30,6 +30,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		declarationType: DeclarationType,
 		mockAttributes: String = "",
 		generateMock: Bool = false,
+		mockOnly: Bool = false,
 		mockInitializer: Initializer? = nil,
 		mockReturnType: TypeDescription? = nil,
 		customMockName: String? = nil,
@@ -41,6 +42,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.declarationType = declarationType
 		self.mockAttributes = mockAttributes
 		self.generateMock = generateMock
+		self.mockOnly = mockOnly
 		self.mockInitializer = mockInitializer
 		self.mockReturnType = mockReturnType
 		self.customMockName = customMockName
@@ -68,6 +70,8 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public let mockAttributes: String
 	/// Whether to generate a `mock()` method for this type.
 	public let generateMock: Bool
+	/// Whether this declaration is used only for mock generation.
+	public let mockOnly: Bool
 	/// A user-defined `static func mock(...)` method, if one exists.
 	/// When present, generated mocks call `TypeName.mock(...)` instead of `TypeName(...)`.
 	public var mockInitializer: Initializer?

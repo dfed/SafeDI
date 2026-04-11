@@ -56,6 +56,7 @@
 ///   - mockAttributes: Attributes to add to the generated `mock()` method. Use this when the type's initializer is bound to a global actor that the plugin cannot detect from source (e.g. inherited `@MainActor`). Example: `@Instantiable(mockAttributes: "@MainActor")`.
 ///   - generateMock: Whether to generate a `mock()` method for this type. Defaults to `false`.
 ///   - customMockName: The name of a hand-written method that the generated `mock()` method should call through to. When `generateMock` is `true` and a hand-written mock method exists, it must have a different name from the generated `mock()` to avoid ambiguity. This parameter specifies that name. Requires `generateMock: true`.
+///   - mockOnly: Whether this declaration should participate in mock generation only. When `true`, a hand-written `mock()` method is required, and `isRoot` / `generateMock` are invalid.
 @attached(member, names: named(ForwardedProperties))
 public macro Instantiable(
 	isRoot: Bool = false,
@@ -64,6 +65,7 @@ public macro Instantiable(
 	mockAttributes: StaticString = "",
 	generateMock: Bool = false,
 	customMockName: StaticString? = nil,
+	mockOnly: Bool = false,
 ) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")
 
 /// A type that can be instantiated with runtime-injected properties.

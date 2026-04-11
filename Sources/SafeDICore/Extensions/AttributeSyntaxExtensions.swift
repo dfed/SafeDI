@@ -120,6 +120,28 @@ extension AttributeSyntax {
 		return segment.content.text
 	}
 
+	public var mockOnly: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let firstLabeledExpression = labeledExpressionList.first(where: {
+		      	$0.label?.text == "mockOnly"
+		      })
+		else {
+			return nil
+		}
+
+		return firstLabeledExpression.expression
+	}
+
+	public var mockOnlyValue: Bool {
+		guard let mockOnly,
+		      let boolLiteral = BooleanLiteralExprSyntax(mockOnly)
+		else {
+			return false
+		}
+		return boolLiteral.literal.tokenKind == .keyword(.true)
+	}
+
 	public var mockAttributesValue: String {
 		guard let mockAttributes,
 		      let stringLiteral = StringLiteralExprSyntax(mockAttributes),

@@ -542,6 +542,8 @@ The `customMockName` parameter requires `generateMock: true`.
 
 If you provide a mock method without `generateMock: true`, parent types that instantiate the child will call `ChildType.mock(...)` (or `ChildType.customMock(...)`) instead of `ChildType(...)` when constructing it, threading mock parameters through your custom method.
 
+For types that should only participate in mock generation, use `@Instantiable(mockOnly: true)`. A `mockOnly` declaration requires a hand-written `public static func mock(...)` and does not require an `init(...)` (for type declarations), `instantiate(...)` (for extensions), or `Instantiable` conformance. `mockOnly: true` is incompatible with `generateMock: true` and `isRoot: true`.
+
 Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type’s `@Instantiated`, `@Received`, and `@Forwarded` dependencies. Non-dependency parameters must have default values. On concrete type declarations the return type must be `Self`, the type name, or a type listed in `fulfillingAdditionalTypes`; on extension-based `@Instantiable` types the return type must match the extended type (e.g. `-> Container<Bool>`) or a `fulfillingAdditionalTypes` entry, mirroring the corresponding `instantiate()` method. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
 
 ```swift

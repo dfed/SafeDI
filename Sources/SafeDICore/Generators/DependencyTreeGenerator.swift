@@ -24,9 +24,11 @@ public actor DependencyTreeGenerator {
 	public init(
 		importStatements: [ImportStatement],
 		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
+		allInstantiables: [Instantiable]? = nil,
 	) {
 		self.importStatements = importStatements
 		self.typeDescriptionToFulfillingInstantiableMap = typeDescriptionToFulfillingInstantiableMap
+		self.allInstantiables = allInstantiables ?? Array(typeDescriptionToFulfillingInstantiableMap.values)
 	}
 
 	// MARK: Public
@@ -364,6 +366,7 @@ public actor DependencyTreeGenerator {
 
 	private let importStatements: [ImportStatement]
 	private let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
+	private let allInstantiables: [Instantiable]
 	private struct RootScopeInfo {
 		let typeDescription: TypeDescription
 		let sourceFilePath: String?
@@ -699,7 +702,19 @@ public actor DependencyTreeGenerator {
 	/// promoted here — they're promoted at the root level in `createMockRootScopeGenerator`.
 	private func createMockTypeDescriptionToScopeMapping() -> [TypeDescription: Scope] {
 		// Create scopes for all types.
-		let typeDescriptionToScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
+		let preferredMockInstantiables = allInstantiables
+			.reduce(into: [TypeDescription: Instantiable]()) { partialResult, instantiable in
+				let concreteType = instantiable.concreteInstantiable
+				if let existing = partialResult[concreteType] {
+					if instantiable.mockOnly, !existing.mockOnly {
+						partialResult[concreteType] = instantiable
+					}
+				} else {
+					partialResult[concreteType] = instantiable
+				}
+			}
+			.map(\.value)
+		let typeDescriptionToScopeMap: [TypeDescription: Scope] = preferredMockInstantiables
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
 				guard partialResult[instantiable.concreteInstantiable] == nil else { return }
 				let scope = Scope(instantiable: instantiable)

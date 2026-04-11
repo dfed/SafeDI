@@ -222,6 +222,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				declarationType: .extensionType,
 				mockAttributes: mockAttributes,
 				generateMock: generateMock,
+				mockOnly: mockOnly,
 				mockInitializer: mockInitializer,
 				mockReturnType: mockReturnType,
 				customMockName: customMockName,
@@ -316,6 +317,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var additionalInstantiables: [TypeDescription]?
 	public private(set) var mockAttributes = ""
 	public private(set) var generateMock: Bool = false
+	public private(set) var mockOnly: Bool = false
 	public private(set) var customMockName: String?
 	public private(set) var mockInitializer: Initializer?
 	public private(set) var mockReturnType: TypeDescription?
@@ -367,7 +369,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		switch declarationType {
 		case .concreteDecl:
 			if let instantiableType, let instantiableDeclarationType {
-				[
+				return [
 					Instantiable(
 						instantiableType: instantiableType,
 						isRoot: isRoot,
@@ -377,18 +379,19 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						declarationType: instantiableDeclarationType.asDeclarationType,
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
+						mockOnly: mockOnly,
 						mockInitializer: mockInitializer,
 						mockReturnType: mockReturnType,
 						customMockName: customMockName,
 					),
 				]
 			} else {
-				[]
+				return []
 			}
 		case .extensionDecl:
 			// mockInitializer may be set after extensionInstantiables are built
 			// (visit order depends on source order). Patch it in here.
-			extensionInstantiables.map { instantiable in
+			let patchedExtensionInstantiables = extensionInstantiables.map { instantiable in
 				guard instantiable.mockInitializer == nil, let mockInitializer else {
 					return instantiable
 				}
@@ -397,6 +400,34 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				patched.mockReturnType = mockReturnType
 				return patched
 			}
+			if !patchedExtensionInstantiables.isEmpty {
+				return patchedExtensionInstantiables
+			}
+			if mockOnly, let instantiableType {
+				let dependencies = mockInitializer?.arguments.map {
+					Dependency(
+						property: $0.asProperty,
+						source: .received(onlyIfAvailable: false),
+					)
+				} ?? []
+				return [
+					Instantiable(
+						instantiableType: instantiableType,
+						isRoot: isRoot,
+						initializer: nil,
+						additionalInstantiables: additionalInstantiables,
+						dependencies: dependencies,
+						declarationType: .extensionType,
+						mockAttributes: mockAttributes,
+						generateMock: generateMock,
+						mockOnly: mockOnly,
+						mockInitializer: mockInitializer,
+						mockReturnType: mockReturnType,
+						customMockName: customMockName,
+					),
+				]
+			}
+			return []
 		}
 	}
 
@@ -471,12 +502,16 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		func processCustomMockName() {
 			customMockName = macro.customMockNameValue
 		}
+		func processMockOnly() {
+			mockOnly = macro.mockOnlyValue
+		}
 
 		processIsRoot()
 		processFulfillingAdditionalTypesParameter()
 		processMockAttributes()
 		processGenerateMock()
 		processCustomMockName()
+		processMockOnly()
 	}
 
 	private func processModifiers(_: DeclModifierListSyntax, on node: some ConcreteDeclSyntaxProtocol) {

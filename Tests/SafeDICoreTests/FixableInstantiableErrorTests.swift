@@ -137,4 +137,22 @@ struct FixableInstantiableErrorTests {
 		])
 		#expect(error.fixIt.message == "Add default values to mock() non-dependency parameters for extra: Bool")
 	}
+
+	@Test
+	func mockOnlyWithGenerateMock_description_mentionsIncompatibleCombination() {
+		let error = FixableInstantiableError.mockOnlyWithGenerateMock
+		#expect(error.description == "`mockOnly: true` cannot be combined with `generateMock: true`.")
+	}
+
+	@Test
+	func mockOnlyWithIsRoot_description_mentionsIncompatibleCombination() {
+		let error = FixableInstantiableError.mockOnlyWithIsRoot
+		#expect(error.description == "`mockOnly: true` cannot be combined with `isRoot: true`.")
+	}
+
+	@Test
+	func mockOnlyMissingMockMethod_description_mentionsRequiredMockMethod() {
+		let error = FixableInstantiableError.mockOnlyMissingMockMethod
+		#expect(error.description == "`mockOnly: true` requires a hand-written `public static func mock(…)` method.")
+	}
 }
