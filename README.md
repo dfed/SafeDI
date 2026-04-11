@@ -68,7 +68,9 @@ SafeDI utilizes both Swift macros and a code generation plugin to read your code
 1. [Integrate SafeDI’s code generation into your build](#generating-your-dependency-tree)
 1. [Create your dependency tree using SafeDI’s macros](Documentation/Manual.md)
 
-You can see sample integrations in the [Examples folder](Examples/). Note that the example projects use the `sourceBuild` trait to build SafeDITool from source — this is needed for local development and unreleased versions. Consumers using a published release should omit the `traits` parameter to use the faster prebuilt binary. If you are migrating an existing project to SafeDI, follow our [migration guide](Documentation/Manual.md#migrating-to-safedi).
+You can see sample integrations in the [Examples folder](Examples/). Note that the example projects use the `sourceBuild` trait to build `SafeDITool` from source: consumers using a published release do not need to specify `traits`.
+
+If you are migrating an existing project to SafeDI, follow our [migration guide](Documentation/Manual.md#migrating-to-safedi).
 
 ### Adding SafeDI as a Dependency
 
@@ -82,12 +84,11 @@ dependencies: [
 ]
 ```
 
-
 To install the SafeDI framework into an Xcode project with Swift Package Manager, follow [Apple’s instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to add `https://github.com/dfed/SafeDI.git` as a dependency.
 
 ### Generating your dependency tree
 
-SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin uses a prebuilt binary by default for fast builds without compiling SwiftSyntax. To build SafeDITool from source instead, enable the `sourceBuild` trait on your SafeDI dependency: `.package(url: "...", from: "2.0.0", traits: ["sourceBuild"])`. This plugin works out of the box on most project configurations. If your project uses a custom build system, you can configure your build to utilize the `SafeDITool` command-line executable directly.
+SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin uses a prebuilt binary for fast builds without compiling SwiftSyntax. This plugin works out of the box on most project configurations. If your project uses a custom build system, you can configure your build to utilize the `SafeDITool` command-line executable directly.
 
 #### Swift package manager
 
@@ -95,7 +96,7 @@ SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin us
 
 If your first-party code comprises a single module in an `.xcodeproj`, once your Xcode project depends on the SafeDI package you can integrate the Swift Package Plugin simply by going to your target’s `Build Phases`, expanding the `Run Build Tool Plug-ins` drop-down, and adding the `SafeDIGenerator` as a build tool plug-in. You can see this integration in practice in the [ExampleProjectIntegration](Examples/ExampleProjectIntegration) project.
 
-If your Xcode project comprises multiple modules, follow the above steps, and then add a `#SafeDIConfiguration` in your root module to configure SafeDI:
+If your Xcode project comprises multiple modules, follow the above steps, and then add a `#SafeDIConfiguration` to your module to configure SafeDI:
 
 ```swift
 import SafeDI
@@ -105,7 +106,7 @@ import SafeDI
 )
 ```
 
-The `additionalDirectoriesToInclude` parameter specifies folders outside of your root module that SafeDI will scan for Swift source files. Paths must be relative to the project directory. You can see [an example of this configuration](Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) project.
+The `additionalDirectoriesToInclude` parameter specifies folders outside of your module that SafeDI will scan for Swift source files. Paths must be relative to the project directory. Use this parameter to specify the paths to dependent modules' source directories, since Xcode project plugins can not discover these automatically. You can see [an example of this configuration](Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) project. 
 
 ##### Swift package
 
@@ -133,7 +134,7 @@ import SafeDI
 
 #### Additional configurations
 
-`SafeDITool` is designed to integrate into projects of any size or shape. Our [Releases](https://github.com/dfed/SafeDI/releases) page has prebuilt, codesigned release binaries of the `SafeDITool`  that can be downloaded and utilizied directly in a pre-build script ([example](Examples/PrebuildScript/safeditool.sh)). Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
+`SafeDITool` is designed to integrate into projects of any size or shape. Our [Releases](https://github.com/dfed/SafeDI/releases) page has prebuilt, codesigned release binaries of the `SafeDITool`  that can be downloaded and utilized directly in a pre-build script ([example](Examples/PrebuildScript/safeditool.sh)). Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
 
 `SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run `swift run SafeDITool --help` to see documentation of the tool’s supported arguments.
 
