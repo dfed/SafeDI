@@ -6502,6 +6502,9 @@ import Testing
 						message: "`mockOnly` and `generateMock` cannot both be `true`.",
 						line: 1,
 						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove either `mockOnly: true` or `generateMock: true`"),
+						],
 					),
 					DiagnosticSpec(
 						message: "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`.",
@@ -6535,6 +6538,9 @@ import Testing
 						message: "`mockOnly` types cannot be marked `isRoot`.",
 						line: 1,
 						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove either `mockOnly: true` or `isRoot: true`"),
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -6560,6 +6566,9 @@ import Testing
 						message: "@Instantiable(mockOnly: true) requires a `public static func mock(...) -> ExampleService` method.",
 						line: 1,
 						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `public static func mock(...) -> ExampleService` method"),
+						],
 					),
 				],
 				macros: instantiableTestMacros,
@@ -6583,6 +6592,9 @@ import Testing
 						message: "@Instantiable(mockOnly: true) requires a `public static func mock(...) -> ExternalService` method.",
 						line: 1,
 						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `public static func mock(...) -> ExternalService` method"),
+						],
 					),
 				],
 				macros: instantiableTestMacros,

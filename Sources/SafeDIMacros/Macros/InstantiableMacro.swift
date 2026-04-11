@@ -155,7 +155,13 @@ public struct InstantiableMacro: MemberMacro {
 					if instantiableMacro.generateMockValue {
 						context.diagnose(Diagnostic(
 							node: Syntax(instantiableMacro),
-							message: FixableInstantiableError.mockOnlyWithGenerateMock.diagnostic,
+							error: FixableInstantiableError.mockOnlyWithGenerateMock,
+							changes: [
+								.replace(
+									oldNode: Syntax(instantiableMacro),
+									newNode: Syntax(instantiableMacro),
+								),
+							],
 						))
 					}
 				}
@@ -163,7 +169,13 @@ public struct InstantiableMacro: MemberMacro {
 					if let instantiableMacro = declaration.attributes.instantiableMacro {
 						context.diagnose(Diagnostic(
 							node: Syntax(instantiableMacro),
-							message: FixableInstantiableError.mockOnlyWithIsRoot.diagnostic,
+							error: FixableInstantiableError.mockOnlyWithIsRoot,
+							changes: [
+								.replace(
+									oldNode: Syntax(instantiableMacro),
+									newNode: Syntax(instantiableMacro),
+								),
+							],
 						))
 					}
 				}
@@ -171,10 +183,16 @@ public struct InstantiableMacro: MemberMacro {
 				if visitor.mockFunctionSyntax == nil {
 					context.diagnose(Diagnostic(
 						node: Syntax(node),
-						message: FixableInstantiableError.mockOnlyMissingMockMethod(
+						error: FixableInstantiableError.mockOnlyMissingMockMethod(
 							typeName: concreteDeclaration.name.text,
 							methodName: expectedMethodName,
-						).diagnostic,
+						),
+						changes: [
+							.replace(
+								oldNode: Syntax(node),
+								newNode: Syntax(node),
+							),
+						],
 					))
 				}
 			}
@@ -748,7 +766,13 @@ public struct InstantiableMacro: MemberMacro {
 					if instantiableMacro.generateMockValue {
 						context.diagnose(Diagnostic(
 							node: Syntax(instantiableMacro),
-							message: FixableInstantiableError.mockOnlyWithGenerateMock.diagnostic,
+							error: FixableInstantiableError.mockOnlyWithGenerateMock,
+							changes: [
+								.replace(
+									oldNode: Syntax(instantiableMacro),
+									newNode: Syntax(instantiableMacro),
+								),
+							],
 						))
 					}
 				}
@@ -756,7 +780,13 @@ public struct InstantiableMacro: MemberMacro {
 					if let instantiableMacro = declaration.attributes.instantiableMacro {
 						context.diagnose(Diagnostic(
 							node: Syntax(instantiableMacro),
-							message: FixableInstantiableError.mockOnlyWithIsRoot.diagnostic,
+							error: FixableInstantiableError.mockOnlyWithIsRoot,
+							changes: [
+								.replace(
+									oldNode: Syntax(instantiableMacro),
+									newNode: Syntax(instantiableMacro),
+								),
+							],
 						))
 					}
 				}
@@ -764,10 +794,16 @@ public struct InstantiableMacro: MemberMacro {
 				if visitor.mockFunctionSyntax == nil {
 					context.diagnose(Diagnostic(
 						node: Syntax(node),
-						message: FixableInstantiableError.mockOnlyMissingMockMethod(
+						error: FixableInstantiableError.mockOnlyMissingMockMethod(
 							typeName: extensionDeclaration.extendedType.typeDescription.asSource,
 							methodName: expectedMethodName,
-						).diagnostic,
+						),
+						changes: [
+							.replace(
+								oldNode: Syntax(node),
+								newNode: Syntax(node),
+							),
+						],
 					))
 				}
 			}

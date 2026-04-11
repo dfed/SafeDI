@@ -137,4 +137,42 @@ struct FixableInstantiableErrorTests {
 		])
 		#expect(error.fixIt.message == "Add default values to mock() non-dependency parameters for extra: Bool")
 	}
+
+	// MARK: mockOnly Tests
+
+	@Test
+	func mockOnlyWithGenerateMock_description_mentionsIncompatibleCombination() {
+		let error = FixableInstantiableError.mockOnlyWithGenerateMock
+		#expect(error.description == "`mockOnly` and `generateMock` cannot both be `true`.")
+	}
+
+	@Test
+	func mockOnlyWithGenerateMock_fixIt_mentionsRemovingEither() {
+		let error = FixableInstantiableError.mockOnlyWithGenerateMock
+		#expect(error.fixIt.message == "Remove either `mockOnly: true` or `generateMock: true`")
+	}
+
+	@Test
+	func mockOnlyWithIsRoot_description_mentionsIncompatibleCombination() {
+		let error = FixableInstantiableError.mockOnlyWithIsRoot
+		#expect(error.description == "`mockOnly` types cannot be marked `isRoot`.")
+	}
+
+	@Test
+	func mockOnlyWithIsRoot_fixIt_mentionsRemovingEither() {
+		let error = FixableInstantiableError.mockOnlyWithIsRoot
+		#expect(error.fixIt.message == "Remove either `mockOnly: true` or `isRoot: true`")
+	}
+
+	@Test
+	func mockOnlyMissingMockMethod_description_mentionsRequiredMockMethod() {
+		let error = FixableInstantiableError.mockOnlyMissingMockMethod(typeName: "MyService", methodName: "mock")
+		#expect(error.description == "@Instantiable(mockOnly: true) requires a `public static func mock(...) -> MyService` method.")
+	}
+
+	@Test
+	func mockOnlyMissingMockMethod_fixIt_mentionsAddingMethod() {
+		let error = FixableInstantiableError.mockOnlyMissingMockMethod(typeName: "MyService", methodName: "mock")
+		#expect(error.fixIt.message == "Add `public static func mock(...) -> MyService` method")
+	}
 }
