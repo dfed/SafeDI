@@ -71,7 +71,3 @@ protocol FileFinder: Sendable {
 }
 
 extension FileManager: FileFinder {}
-extension FileManager: @retroactive @unchecked Sendable {
-	// FileManager is thread safe:
-	// https://developer.apple.com/documentation/foundation/nsfilemanager#1651181
-}
