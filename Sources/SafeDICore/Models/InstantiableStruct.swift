@@ -30,6 +30,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		declarationType: DeclarationType,
 		mockAttributes: String = "",
 		generateMock: Bool = false,
+		mockOnly: Bool = false,
 		mockInitializer: Initializer? = nil,
 		mockReturnType: TypeDescription? = nil,
 		customMockName: String? = nil,
@@ -41,6 +42,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.declarationType = declarationType
 		self.mockAttributes = mockAttributes
 		self.generateMock = generateMock
+		self.mockOnly = mockOnly
 		self.mockInitializer = mockInitializer
 		self.mockReturnType = mockReturnType
 		self.customMockName = customMockName
@@ -68,6 +70,9 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public let mockAttributes: String
 	/// Whether to generate a `mock()` method for this type.
 	public let generateMock: Bool
+	/// Whether this declaration exists solely for mock generation (user provides a hand-written mock method).
+	/// When `true`, no `init`/`instantiate()` or `Instantiable` conformance is required.
+	public let mockOnly: Bool
 	/// A user-defined `static func mock(...)` method, if one exists.
 	/// When present, generated mocks call `TypeName.mock(...)` instead of `TypeName(...)`.
 	public var mockInitializer: Initializer?
@@ -90,6 +95,24 @@ public struct Instantiable: Codable, Hashable, Sendable {
 
 	/// The path to the source file that declared this Instantiable.
 	public var sourceFilePath: String?
+
+	// MARK: Codable
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: CodingKeys.self)
+		instantiableTypes = try container.decode([TypeDescription].self, forKey: .instantiableTypes)
+		isRoot = try container.decode(Bool.self, forKey: .isRoot)
+		initializer = try container.decodeIfPresent(Initializer.self, forKey: .initializer)
+		dependencies = try container.decode([Dependency].self, forKey: .dependencies)
+		declarationType = try container.decode(DeclarationType.self, forKey: .declarationType)
+		mockAttributes = try container.decode(String.self, forKey: .mockAttributes)
+		generateMock = try container.decode(Bool.self, forKey: .generateMock)
+		mockOnly = try container.decodeIfPresent(Bool.self, forKey: .mockOnly) ?? false
+		mockInitializer = try container.decodeIfPresent(Initializer.self, forKey: .mockInitializer)
+		mockReturnType = try container.decodeIfPresent(TypeDescription.self, forKey: .mockReturnType)
+		customMockName = try container.decodeIfPresent(String.self, forKey: .customMockName)
+		sourceFilePath = try container.decodeIfPresent(String.self, forKey: .sourceFilePath)
+	}
 
 	/// The type of declaration where this Instantiable was defined.
 	public enum DeclarationType: Codable, Hashable, Sendable {

@@ -538,9 +538,63 @@ public struct NetworkClient: Instantiable {
 }
 ```
 
-The `customMockName` parameter requires `generateMock: true`.
+The `customMockName` parameter requires `generateMock: true` or `mockOnly: true`.
 
 If you provide a mock method without `generateMock: true`, parent types that instantiate the child will call `ChildType.mock(...)` (or `ChildType.customMock(...)`) instead of `ChildType(...)` when constructing it, threading mock parameters through your custom method.
+
+### The `mockOnly` parameter
+
+The `mockOnly` parameter lets you provide a hand-written `mock()` method for types that don't need full `@Instantiable` infrastructure. This is useful for:
+
+- Types defined in other modules (e.g., third-party dependencies) that need mocks in your tests
+- Primitive or Foundation types used as `@Forwarded` dependencies (e.g., `String`, `Int`, `UUID`)
+- Types whose `@Instantiable` declaration is in another module and isn't in the current module's dependency tree
+
+When `mockOnly: true`:
+- The user **must** hand-write a `mock()` method (or a method named by `customMockName`)
+- No `init` (type declarations) or `instantiate()` (extensions) is required
+- No `Instantiable` protocol conformance is required
+- `mockOnly` is mutually exclusive with `generateMock` and `isRoot`
+- `conformsElsewhere` is redundant but allowed
+
+```swift
+// Provide a mock for a third-party type:
+@Instantiable(mockOnly: true)
+extension ExternalService {
+    public static func mock() -> ExternalService {
+        ExternalService(apiKey: "test-key")
+    }
+}
+
+// Provide a mock for a primitive forwarded type:
+@Instantiable(mockOnly: true)
+extension String {
+    public static func mock() -> String { "" }
+}
+```
+
+When a parent type references a `mockOnly` type as a dependency:
+- **`@Forwarded` dependencies**: The forwarded parameter gets a default value of `Type.mock()`, so callers don't need to provide it
+- **`@Instantiated` dependencies**: The type becomes a tree child in `SafeDIOverrides` with `Type.mock()` as the default builder, allowing optional override
+
+A type may have `@Instantiable` on both its declaration and an extension, with one being `mockOnly: true`. This allows a type to have full production behavior from one declaration and a hand-written mock from the other:
+
+```swift
+// Production declaration in this or another module:
+@Instantiable
+public struct MyService: Instantiable {
+    public init(database: Database) { ... }
+    @Instantiated let database: Database
+}
+
+// Mock-only extension in this module:
+@Instantiable(mockOnly: true)
+extension MyService {
+    public static func mock() -> MyService {
+        MyService(database: .mock())
+    }
+}
+```
 
 Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type’s `@Instantiated`, `@Received`, and `@Forwarded` dependencies. Non-dependency parameters must have default values. On concrete type declarations the return type must be `Self`, the type name, or a type listed in `fulfillingAdditionalTypes`; on extension-based `@Instantiable` types the return type must match the extended type (e.g. `-> Container<Bool>`) or a `fulfillingAdditionalTypes` entry, mirroring the corresponding `instantiate()` method. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
 

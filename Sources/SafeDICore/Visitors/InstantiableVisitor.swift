@@ -222,6 +222,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				declarationType: .extensionType,
 				mockAttributes: mockAttributes,
 				generateMock: generateMock,
+				mockOnly: mockOnly,
 				mockInitializer: mockInitializer,
 				mockReturnType: mockReturnType,
 				customMockName: customMockName,
@@ -316,6 +317,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var additionalInstantiables: [TypeDescription]?
 	public private(set) var mockAttributes = ""
 	public private(set) var generateMock: Bool = false
+	public private(set) var mockOnly: Bool = false
 	public private(set) var customMockName: String?
 	public private(set) var mockInitializer: Initializer?
 	public private(set) var mockReturnType: TypeDescription?
@@ -377,6 +379,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						declarationType: instantiableDeclarationType.asDeclarationType,
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
+						mockOnly: mockOnly,
 						mockInitializer: mockInitializer,
 						mockReturnType: mockReturnType,
 						customMockName: customMockName,
@@ -386,16 +389,37 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				[]
 			}
 		case .extensionDecl:
-			// mockInitializer may be set after extensionInstantiables are built
-			// (visit order depends on source order). Patch it in here.
-			extensionInstantiables.map { instantiable in
-				guard instantiable.mockInitializer == nil, let mockInitializer else {
-					return instantiable
+			if extensionInstantiables.isEmpty, mockOnly, let mockReturnType {
+				// mockOnly extensions without instantiate() still produce an Instantiable
+				// so the type is registered in the mock scope map.
+				[
+					Instantiable(
+						instantiableType: mockReturnType,
+						isRoot: isRoot,
+						initializer: nil,
+						additionalInstantiables: additionalInstantiables,
+						dependencies: [],
+						declarationType: .extensionType,
+						mockAttributes: mockAttributes,
+						generateMock: generateMock,
+						mockOnly: mockOnly,
+						mockInitializer: mockInitializer,
+						mockReturnType: mockReturnType,
+						customMockName: customMockName,
+					),
+				]
+			} else {
+				// mockInitializer may be set after extensionInstantiables are built
+				// (visit order depends on source order). Patch it in here.
+				extensionInstantiables.map { instantiable in
+					guard instantiable.mockInitializer == nil, let mockInitializer else {
+						return instantiable
+					}
+					var patched = instantiable
+					patched.mockInitializer = mockInitializer
+					patched.mockReturnType = mockReturnType
+					return patched
 				}
-				var patched = instantiable
-				patched.mockInitializer = mockInitializer
-				patched.mockReturnType = mockReturnType
-				return patched
 			}
 		}
 	}
@@ -468,6 +492,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		func processGenerateMock() {
 			generateMock = macro.generateMockValue
 		}
+		func processMockOnly() {
+			mockOnly = macro.mockOnlyValue
+		}
 		func processCustomMockName() {
 			customMockName = macro.customMockNameValue
 		}
@@ -476,6 +503,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		processFulfillingAdditionalTypesParameter()
 		processMockAttributes()
 		processGenerateMock()
+		processMockOnly()
 		processCustomMockName()
 	}
 

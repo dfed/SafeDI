@@ -41,6 +41,9 @@ public enum FixableInstantiableError: DiagnosticError {
 	case customMockNameWithoutGenerateMock
 	case customMockNameMethodNotFound(String)
 	case mockMethodNonDependencyMissingDefaultValue([Property])
+	case mockOnlyWithGenerateMock
+	case mockOnlyWithIsRoot
+	case mockOnlyMissingMockMethod(typeName: String, methodName: String)
 
 	public enum MissingInitializer: Sendable {
 		case hasOnlyInjectableProperties
@@ -103,6 +106,12 @@ public enum FixableInstantiableError: DiagnosticError {
 			"No method named `\(name)` found. Add a `public static func \(name)(…)` method."
 		case .mockMethodNonDependencyMissingDefaultValue:
 			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values."
+		case .mockOnlyWithGenerateMock:
+			"`mockOnly` and `generateMock` cannot both be `true`."
+		case .mockOnlyWithIsRoot:
+			"`mockOnly` types cannot be marked `isRoot`."
+		case let .mockOnlyMissingMockMethod(typeName, methodName):
+			"@\(InstantiableVisitor.macroName)(mockOnly: true) requires a `public static func \(methodName)(...) -> \(typeName)` method."
 		}
 	}
 
@@ -139,7 +148,10 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .mockMethodConflictsWithGeneratedMock,
 			     .customMockNameWithoutGenerateMock,
 			     .customMockNameMethodNotFound,
-			     .mockMethodNonDependencyMissingDefaultValue:
+			     .mockMethodNonDependencyMissingDefaultValue,
+			     .mockOnlyWithGenerateMock,
+			     .mockOnlyWithIsRoot,
+			     .mockOnlyMissingMockMethod:
 				.error
 			}
 			message = error.description
@@ -204,6 +216,12 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Add `public static func \(name)(…)` method"
 			case let .mockMethodNonDependencyMissingDefaultValue(properties):
 				"Add default values to mock() non-dependency parameters for \(properties.map(\.asSource).joined(separator: ", "))"
+			case .mockOnlyWithGenerateMock:
+				"Remove either `mockOnly: true` or `generateMock: true`"
+			case .mockOnlyWithIsRoot:
+				"Remove either `mockOnly: true` or `isRoot: true`"
+			case let .mockOnlyMissingMockMethod(typeName, methodName):
+				"Add `public static func \(methodName)(...) -> \(typeName)` method"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}

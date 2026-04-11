@@ -110,6 +110,13 @@ public actor DependencyTreeGenerator {
 			cyclesOnly: true,
 		)
 
+		// Compute mockOnly types: maps type description to mock method name.
+		let mockOnlyTypes: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
+			.reduce(into: [TypeDescription: String]()) { result, instantiable in
+				guard instantiable.mockOnly, instantiable.mockInitializer != nil else { return }
+				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? "mock"
+			}
+
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
@@ -165,6 +172,7 @@ public actor DependencyTreeGenerator {
 					async let code = mockRoot.generateCode(
 						codeGeneration: .mock(ScopeGenerator.MockContext(
 							mockConditionalCompilation: mockConditionalCompilation,
+							mockOnlyTypes: mockOnlyTypes,
 						)),
 					)
 					async let configurationTypes = mockRoot.collectConfigurationTypes()

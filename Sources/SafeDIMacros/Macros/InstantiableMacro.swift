@@ -67,6 +67,16 @@ public struct InstantiableMacro: MemberMacro {
 			}
 		}
 
+		if let mockOnlyArgument = declaration
+			.attributes
+			.instantiableMacro?
+			.mockOnly
+		{
+			if BooleanLiteralExprSyntax(mockOnlyArgument) == nil {
+				throw InstantiableError.mockOnlyArgumentInvalid
+			}
+		}
+
 		if let customMockNameArgument = declaration
 			.attributes
 			.instantiableMacro?
@@ -84,9 +94,13 @@ public struct InstantiableMacro: MemberMacro {
 			?? ClassDeclSyntax(declaration)
 			?? StructDeclSyntax(declaration)
 		{
+			let isMockOnly = declaration.attributes.instantiableMacro?.mockOnlyValue ?? false
+
 			lazy var extendsInstantiable = concreteDeclaration.inheritanceClause?.inheritedTypes.contains(where: \.type.typeDescription.isInstantiable) ?? false
-			let mustExtendInstantiable = if let conformsElsewhereArgument = declaration.attributes.instantiableMacro?.conformsElsewhere,
-			                                let boolExpression = BooleanLiteralExprSyntax(conformsElsewhereArgument)
+			let mustExtendInstantiable = if isMockOnly {
+				false
+			} else if let conformsElsewhereArgument = declaration.attributes.instantiableMacro?.conformsElsewhere,
+			          let boolExpression = BooleanLiteralExprSyntax(conformsElsewhereArgument)
 			{
 				boolExpression.literal.tokenKind == .keyword(.false)
 			} else {
@@ -136,6 +150,35 @@ public struct InstantiableMacro: MemberMacro {
 				context.diagnose(diagnostic)
 			}
 
+			if isMockOnly {
+				if let instantiableMacro = declaration.attributes.instantiableMacro {
+					if instantiableMacro.generateMockValue {
+						context.diagnose(Diagnostic(
+							node: Syntax(instantiableMacro),
+							message: FixableInstantiableError.mockOnlyWithGenerateMock.diagnostic,
+						))
+					}
+				}
+				if visitor.isRoot {
+					if let instantiableMacro = declaration.attributes.instantiableMacro {
+						context.diagnose(Diagnostic(
+							node: Syntax(instantiableMacro),
+							message: FixableInstantiableError.mockOnlyWithIsRoot.diagnostic,
+						))
+					}
+				}
+				let expectedMethodName = visitor.customMockName ?? "mock"
+				if visitor.mockFunctionSyntax == nil {
+					context.diagnose(Diagnostic(
+						node: Syntax(node),
+						message: FixableInstantiableError.mockOnlyMissingMockMethod(
+							typeName: concreteDeclaration.name.text,
+							methodName: expectedMethodName,
+						).diagnostic,
+					))
+				}
+			}
+
 			if visitor.isRoot, let instantiableType = visitor.instantiableType {
 				let inheritedDependencies = visitor.dependencies.filter {
 					switch $0.source {
@@ -160,7 +203,7 @@ public struct InstantiableMacro: MemberMacro {
 				.dependencies
 				.filter { $0.source == .forwarded }
 				.map(\.property)
-			let hasMemberwiseInitializerForInjectableProperties = visitor
+			let hasMemberwiseInitializerForInjectableProperties = isMockOnly || visitor
 				.initializers
 				.contains(where: { $0.isValid(forFulfilling: visitor.dependencies) })
 			guard hasMemberwiseInitializerForInjectableProperties else {
@@ -426,11 +469,12 @@ public struct InstantiableMacro: MemberMacro {
 				))
 			}
 
-			// Validate customMockName: requires generateMock: true.
+			// Validate customMockName: requires generateMock: true or mockOnly: true.
 			if let instantiableMacro = declaration.attributes.instantiableMacro {
 				let customMockNameValue = instantiableMacro.customMockNameValue
 				if customMockNameValue != nil,
 				   !instantiableMacro.generateMockValue,
+				   !isMockOnly,
 				   let macroArguments = instantiableMacro.arguments,
 				   let arguments = LabeledExprListSyntax(macroArguments),
 				   let customMockNameIndex = arguments.firstIndex(where: { $0.label?.text == "customMockName" })
@@ -628,9 +672,13 @@ public struct InstantiableMacro: MemberMacro {
 			return generateForwardedProperties(from: forwardedProperties)
 
 		} else if let extensionDeclaration = ExtensionDeclSyntax(declaration) {
+			let isMockOnly = declaration.attributes.instantiableMacro?.mockOnlyValue ?? false
+
 			lazy var extendsInstantiable = extensionDeclaration.inheritanceClause?.inheritedTypes.contains(where: \.type.typeDescription.isInstantiable) ?? false
-			let mustExtendInstantiable = if let conformsElsewhereArgument = declaration.attributes.instantiableMacro?.conformsElsewhere,
-			                                let boolExpression = BooleanLiteralExprSyntax(conformsElsewhereArgument)
+			let mustExtendInstantiable = if isMockOnly {
+				false
+			} else if let conformsElsewhereArgument = declaration.attributes.instantiableMacro?.conformsElsewhere,
+			          let boolExpression = BooleanLiteralExprSyntax(conformsElsewhereArgument)
 			{
 				boolExpression.literal.tokenKind == .keyword(.false)
 			} else {
@@ -694,6 +742,36 @@ public struct InstantiableMacro: MemberMacro {
 				context.diagnose(diagnostic)
 			}
 
+			// Validate mockOnly on extensions.
+			if isMockOnly {
+				if let instantiableMacro = declaration.attributes.instantiableMacro {
+					if instantiableMacro.generateMockValue {
+						context.diagnose(Diagnostic(
+							node: Syntax(instantiableMacro),
+							message: FixableInstantiableError.mockOnlyWithGenerateMock.diagnostic,
+						))
+					}
+				}
+				if visitor.isRoot {
+					if let instantiableMacro = declaration.attributes.instantiableMacro {
+						context.diagnose(Diagnostic(
+							node: Syntax(instantiableMacro),
+							message: FixableInstantiableError.mockOnlyWithIsRoot.diagnostic,
+						))
+					}
+				}
+				let expectedMethodName = visitor.customMockName ?? "mock"
+				if visitor.mockFunctionSyntax == nil {
+					context.diagnose(Diagnostic(
+						node: Syntax(node),
+						message: FixableInstantiableError.mockOnlyMissingMockMethod(
+							typeName: extensionDeclaration.extendedType.typeDescription.asSource,
+							methodName: expectedMethodName,
+						).diagnostic,
+					))
+				}
+			}
+
 			// Validate mock() methods on extensions: must be public, return the extended type or Self, and be unique per return type.
 			let extendedTypeDescription = extensionDeclaration.extendedType.typeDescription
 			let extendedTypeName = extendedTypeDescription.asSource
@@ -704,11 +782,12 @@ public struct InstantiableMacro: MemberMacro {
 			}
 			allMockFunctions.append(contentsOf: visitor.duplicateMockFunctionSyntaxes)
 			let extensionDependencies = visitor.instantiables.flatMap(\.dependencies)
-			// Validate customMockName: requires generateMock: true.
+			// Validate customMockName: requires generateMock: true or mockOnly: true.
 			if let instantiableMacro = declaration.attributes.instantiableMacro {
 				let customMockNameValue = instantiableMacro.customMockNameValue
 				if customMockNameValue != nil,
 				   !instantiableMacro.generateMockValue,
+				   !isMockOnly,
 				   let macroArguments = instantiableMacro.arguments,
 				   let arguments = LabeledExprListSyntax(macroArguments),
 				   let customMockNameIndex = arguments.firstIndex(where: { $0.label?.text == "customMockName" })
@@ -944,7 +1023,7 @@ public struct InstantiableMacro: MemberMacro {
 						concreteInstantiables.insert(concreteInstantiable)
 					}
 				}
-			} else if instantiables.isEmpty {
+			} else if instantiables.isEmpty, !isMockOnly {
 				let extendedTypeName = extensionDeclaration.extendedType.typeDescription.asSource
 				var membersWithInitializer = declaration.memberBlock.members
 				membersWithInitializer.insert(
@@ -1281,6 +1360,7 @@ public struct InstantiableMacro: MemberMacro {
 		case fulfillingAdditionalTypesArgumentInvalid
 		case mockAttributesArgumentInvalid
 		case generateMockArgumentInvalid
+		case mockOnlyArgumentInvalid
 		case customMockNameArgumentInvalid
 		case tooManyInstantiateMethods(TypeDescription)
 		case cannotBeRoot(TypeDescription, violatingDependencies: [Dependency])
@@ -1297,6 +1377,8 @@ public struct InstantiableMacro: MemberMacro {
 				"The argument `mockAttributes` must be a string literal"
 			case .generateMockArgumentInvalid:
 				"The argument `generateMock` must be a Bool literal (`true` or `false`)"
+			case .mockOnlyArgumentInvalid:
+				"The argument `mockOnly` must be a Bool literal (`true` or `false`)"
 			case .customMockNameArgumentInvalid:
 				"The argument `customMockName` must be a string literal or `nil`"
 			case let .tooManyInstantiateMethods(type):
