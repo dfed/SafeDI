@@ -30,7 +30,7 @@ Compile-time-safe dependency injection for Swift projects. SafeDI provides devel
 
 - [x] Simple integration: no DI-specific types or generics required
 
-- [x] Easy testing: every type has a memberwise initializer
+- [x] Easy testing: automatic mock generation
 
 - [x] Clear error messages: never debug generated code
 
