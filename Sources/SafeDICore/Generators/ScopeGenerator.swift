@@ -662,7 +662,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Disambiguate flat received parameter labels when collisions exist.
 		// Include onlyIfAvailable labels so flat params with the same label
 		// get disambiguated (onlyIfAvailable entries are accessed via
-		// safeDIParameters.label, so they don't need disambiguation).
+		// safeDIOverrides.label, so they don't need disambiguation).
 		// Forwarded parameters keep their original labels (must match init signature).
 		let allFlatLabels = forwardedDependencies.map(\.property.label)
 			+ rootDefaultParameters.map(\.label)
@@ -715,7 +715,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("extension \(typeName) {")
 
 		if hasTree {
-			lines.append(Self.generateSafeDIParametersStruct(
+			lines.append(Self.generateSafeDIOverridesStruct(
 				rootChildren: parameterTree,
 				onlyIfAvailableEntries: onlyIfAvailableSafeDIParameterEntries,
 				indent: indent,
@@ -755,7 +755,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			mockParameters.append("\(bodyIndent)\(flatUncovered.label): \(flatUncovered.typeSource)")
 		}
 		if hasTree {
-			mockParameters.append("\(bodyIndent)safeDIParameters: SafeDIParameters = .init()")
+			mockParameters.append("\(bodyIndent)safeDIOverrides: SafeDIOverrides = .init()")
 		}
 
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
@@ -766,11 +766,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if hasTree {
 			// Bind onlyIfAvailable entries first — tree bindings may reference them.
 			for entry in onlyIfAvailableSafeDIParameterEntries {
-				lines.append("\(bodyIndent)let \(entry.label): \(entry.typeSource) = safeDIParameters.\(entry.label)")
+				lines.append("\(bodyIndent)let \(entry.label): \(entry.typeSource) = safeDIOverrides.\(entry.label)")
 			}
 			let bodyBindings = Self.generateMockBodyBindings(
 				nodes: parameterTree,
-				parentPath: "safeDIParameters",
+				parentPath: "safeDIOverrides",
 				indent: bodyIndent,
 			)
 			lines.append(contentsOf: bodyBindings)
@@ -1058,7 +1058,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	// MARK: SafeDIParameters Generation
+	// MARK: SafeDIOverrides Generation
 
 	/// Computes disambiguated property labels for a list of nodes at the same scope level.
 	/// When two nodes share a `propertyLabel`, appends `_TypeName` to make them unique.
@@ -1151,10 +1151,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return result
 	}
 
-	/// Generates the `SafeDIParameters` struct. Configuration type references
+	/// Generates the `SafeDIOverrides` struct. Configuration type references
 	/// use qualified names (e.g., `ChildA.SafeDIMockConfiguration`).
 	/// Returns the struct source code, or `nil` if the tree has no children.
-	private static func generateSafeDIParametersStruct(
+	private static func generateSafeDIOverridesStruct(
 		rootChildren: [MockParameterNode],
 		onlyIfAvailableEntries: [(label: String, typeSource: String)],
 		indent: String,
@@ -1163,12 +1163,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let memberIndent = "\(innerIndent)\(standardIndent)"
 
 		var lines = [String]()
-		lines.append("\(indent)struct SafeDIParameters {")
+		lines.append("\(indent)/// Overrides for the mock dependency tree.")
+		lines.append("\(indent)struct SafeDIOverrides {")
 
 		// Disambiguate root-level children property labels.
 		let rootLabelMap = disambiguatePropertyLabels(for: rootChildren)
 
-		// Generate SafeDIParameters init with root-level children and onlyIfAvailable entries.
+		// Generate SafeDIOverrides init with root-level children and onlyIfAvailable entries.
 		lines.append("\(innerIndent)init(")
 		var initParameters = rootChildren.map { child in
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
@@ -1223,6 +1224,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let sendableAnnotation = node.requiresSendable ? "@Sendable " : ""
 		var lines = [String]()
 
+		lines.append("\(indent)/// Configuration for how this type is constructed within a mock tree.")
 		lines.append("\(indent)struct \(MockParameterNode.configurationStructName) {")
 
 		// Build init parameters in order: children, defaults, builder (last).
@@ -1271,6 +1273,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let closureType = node.builderClosureType
 		initParameters.append("\(innerIndent)\(standardIndent)_ safeDIBuilder: (\(sendableAnnotation)\(closureType))? = nil")
 		assignments.append("\(innerIndent)\(standardIndent)self.safeDIBuilder = safeDIBuilder")
+		storedProperties.append("\(innerIndent)/// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.")
 		storedProperties.append("\(innerIndent)let safeDIBuilder: (\(sendableAnnotation)\(closureType))?")
 
 		// Emit init.
@@ -1291,11 +1294,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// MARK: Mock Body Generation
 
 	/// Generates the mock body bindings for the tree. Walks depth-first (children before
-	/// parent), emitting `let` bindings that call through `safeDIParameters.path.safeDIBuilder(...)`.
+	/// parent), emitting `let` bindings that call through `safeDIOverrides.path.safeDIBuilder(...)`.
 	///
-	/// For constant nodes: `let {label} = safeDIParameters.{path}.safeDIBuilder({arguments})`
+	/// For constant nodes: `let {label} = safeDIOverrides.{path}.safeDIBuilder({arguments})`
 	/// For Instantiator nodes: inner builder function + `Instantiator<T>` wrapping.
-	/// Collects all `safeDIParameters` references that would appear inside a
+	/// Collects all `safeDIOverrides` references that would appear inside a
 	/// `@Sendable func`, so they can be extracted and resolved outside the function.
 	/// Each extraction is a `(localName, optionalPath, defaultExpression)` tuple.
 	/// When `optionalPath` is non-nil, the extraction resolves an optional builder via nil-coalescing.
@@ -1314,9 +1317,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			let nodePath = "\(parentPath).\(disambiguated)"
 			// Convert nodePath to a local name: replace dots with underscores,
-			// strip the "safeDIParameters." prefix.
+			// strip the "safeDIOverrides." prefix.
 			let relativePath = nodePath
-				.replacingOccurrences(of: "safeDIParameters.", with: "")
+				.replacingOccurrences(of: "safeDIOverrides.", with: "")
 				.replacingOccurrences(of: ".", with: "_")
 
 			if !isCycleNode {
@@ -1385,11 +1388,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 			let defaultBuilder = node.defaultBuilderExpression
 			let relativePath = nodePath
-				.replacingOccurrences(of: "safeDIParameters.", with: "")
+				.replacingOccurrences(of: "safeDIOverrides.", with: "")
 				.replacingOccurrences(of: ".", with: "_")
 
 			// When inside a sendable extraction, use extracted locals instead of
-			// safeDIParameters paths.
+			// safeDIOverrides paths.
 			let builderExpression: String
 			let optionalBuilderPath: String?
 			let argumentNodePath: String
@@ -1497,7 +1500,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Resolves the positional arguments for a builder call.
 	/// Each argument comes from one of:
 	/// - A local variable (previously built dep or flat mock param)
-	/// - A stored default on SafeDIParameters (`{nodePath}.{label}`)
+	/// - A stored default on SafeDIOverrides (`{nodePath}.{label}`)
 	private static func resolveBuilderArguments(
 		for node: MockParameterNode,
 		nodePath: String,
@@ -1507,7 +1510,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
 
 		let relativePath = nodePath
-			.replacingOccurrences(of: "safeDIParameters.", with: "")
+			.replacingOccurrences(of: "safeDIOverrides.", with: "")
 			.replacingOccurrences(of: ".", with: "_")
 
 		return node.constructionArguments.compactMap { argument in
@@ -1586,10 +1589,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// depend on forwarded properties that are only available as parameters.
 		if !node.isPropertyCycle {
 			if propertyType.isSendable {
-				// For @Sendable functions, extract all safeDIParameters references
+				// For @Sendable functions, extract all safeDIOverrides references
 				// OUTSIDE the function and resolve nil-coalescing here (in the
 				// @MainActor mock() context). This avoids capturing the non-Sendable
-				// SafeDIParameters struct inside the @Sendable function.
+				// SafeDIOverrides struct inside the @Sendable function.
 				var extractions = [(localName: String, optionalPath: String?, defaultExpression: String)]()
 				collectSendableExtractions(
 					nodes: node.children,
@@ -1744,7 +1747,7 @@ extension Instantiable {
 		}
 		if forMockGeneration {
 			// In the simple mock case (no dependencies, no tree), the initializer is always present
-			// and covers all dependencies. The SafeDIParameters pipeline handles complex cases.
+			// and covers all dependencies. The SafeDIOverrides pipeline handles complex cases.
 			guard let initializerToUse else { return "" }
 			return initializerToUse
 				.createMockInitializerArgumentList(

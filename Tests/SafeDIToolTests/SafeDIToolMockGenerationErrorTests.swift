@@ -389,7 +389,8 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 		#if DEBUG
 		extension Parent {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            child: ((Unrelated?, Shared?) -> Child)? = nil,
 		            shared: Shared? = nil,
@@ -406,11 +407,11 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
-		        let shared: Shared? = safeDIParameters.shared
-		        let unrelated: Unrelated? = safeDIParameters.unrelated
-		        let child = (safeDIParameters.child ?? Child.mock(unrelated:shared:))(unrelated, shared)
+		        let shared: Shared? = safeDIOverrides.shared
+		        let unrelated: Unrelated? = safeDIOverrides.unrelated
+		        let child = (safeDIOverrides.child ?? Child.mock(unrelated:shared:))(unrelated, shared)
 		        return Parent(child: child, shared: shared)
 		    }
 		}

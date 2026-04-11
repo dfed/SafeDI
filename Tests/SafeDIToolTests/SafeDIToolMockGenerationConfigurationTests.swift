@@ -159,7 +159,8 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            dependency: (() -> Dependency)? = nil
 		        ) {
@@ -170,9 +171,9 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let dependency = (safeDIParameters.dependency ?? Dependency.init)()
+		        let dependency = (safeDIOverrides.dependency ?? Dependency.init)()
 		        return Root(dependency: dependency)
 		    }
 		}
@@ -476,7 +477,8 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            crossModuleService: (() -> CrossModuleService)? = nil
 		        ) {
@@ -487,9 +489,9 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let crossModuleService = (safeDIParameters.crossModuleService ?? CrossModuleService.init)()
+		        let crossModuleService = (safeDIOverrides.crossModuleService ?? CrossModuleService.init)()
 		        return Root(crossModuleService: crossModuleService)
 		    }
 		}
@@ -547,7 +549,8 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
@@ -558,11 +561,11 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let leaf = (safeDIParameters.child.leaf ?? Leaf.init)()
-		            return (safeDIParameters.child.safeDIBuilder ?? Child.init(leaf:))(leaf)
+		            let leaf = (safeDIOverrides.child.leaf ?? Leaf.init)()
+		            return (safeDIOverrides.child.safeDIBuilder ?? Child.init(leaf:))(leaf)
 		        }
 		        let child: Child = __safeDI_child()
 		        return Root(child: child)
@@ -637,7 +640,8 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    struct SafeDIParameters {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
 		        init(
 		            crossModuleService: (() -> CrossModuleService)? = nil
 		        ) {
@@ -648,9 +652,9 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIParameters: SafeDIParameters = .init()
+		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let crossModuleService = (safeDIParameters.crossModuleService ?? CrossModuleService.init)()
+		        let crossModuleService = (safeDIOverrides.crossModuleService ?? CrossModuleService.init)()
 		        return Root(crossModuleService: crossModuleService)
 		    }
 		}
