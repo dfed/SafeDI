@@ -147,9 +147,9 @@ struct FixableInstantiableErrorTests {
 	}
 
 	@Test
-	func mockOnlyWithGenerateMock_fixIt_mentionsRemovingEither() {
+	func mockOnlyWithGenerateMock_fixIt_mentionsRemovingGenerateMock() {
 		let error = FixableInstantiableError.mockOnlyWithGenerateMock
-		#expect(error.fixIt.message == "Remove either `mockOnly: true` or `generateMock: true`")
+		#expect(error.fixIt.message == "Remove `generateMock: true`")
 	}
 
 	@Test
@@ -159,9 +159,9 @@ struct FixableInstantiableErrorTests {
 	}
 
 	@Test
-	func mockOnlyWithIsRoot_fixIt_mentionsRemovingEither() {
+	func mockOnlyWithIsRoot_fixIt_mentionsRemovingIsRoot() {
 		let error = FixableInstantiableError.mockOnlyWithIsRoot
-		#expect(error.fixIt.message == "Remove either `mockOnly: true` or `isRoot: true`")
+		#expect(error.fixIt.message == "Remove `isRoot: true`")
 	}
 
 	@Test

@@ -156,12 +156,7 @@ public struct InstantiableMacro: MemberMacro {
 						context.diagnose(Diagnostic(
 							node: Syntax(instantiableMacro),
 							error: FixableInstantiableError.mockOnlyWithGenerateMock,
-							changes: [
-								.replace(
-									oldNode: Syntax(instantiableMacro),
-									newNode: Syntax(instantiableMacro),
-								),
-							],
+							changes: Self.removeArgument(labeled: "generateMock", from: instantiableMacro, on: declaration),
 						))
 					}
 				}
@@ -170,12 +165,7 @@ public struct InstantiableMacro: MemberMacro {
 						context.diagnose(Diagnostic(
 							node: Syntax(instantiableMacro),
 							error: FixableInstantiableError.mockOnlyWithIsRoot,
-							changes: [
-								.replace(
-									oldNode: Syntax(instantiableMacro),
-									newNode: Syntax(instantiableMacro),
-								),
-							],
+							changes: Self.removeArgument(labeled: "isRoot", from: instantiableMacro, on: declaration),
 						))
 					}
 				}
@@ -187,12 +177,12 @@ public struct InstantiableMacro: MemberMacro {
 							typeName: concreteDeclaration.name.text,
 							methodName: expectedMethodName,
 						),
-						changes: [
-							.replace(
-								oldNode: Syntax(node),
-								newNode: Syntax(node),
-							),
-						],
+						changes: Self.generateCustomMockStub(
+							named: expectedMethodName,
+							typeName: concreteDeclaration.name.text,
+							dependencies: visitor.dependencies,
+							on: declaration,
+						),
 					))
 				}
 			}
@@ -767,12 +757,7 @@ public struct InstantiableMacro: MemberMacro {
 						context.diagnose(Diagnostic(
 							node: Syntax(instantiableMacro),
 							error: FixableInstantiableError.mockOnlyWithGenerateMock,
-							changes: [
-								.replace(
-									oldNode: Syntax(instantiableMacro),
-									newNode: Syntax(instantiableMacro),
-								),
-							],
+							changes: Self.removeArgument(labeled: "generateMock", from: instantiableMacro, on: declaration),
 						))
 					}
 				}
@@ -781,12 +766,7 @@ public struct InstantiableMacro: MemberMacro {
 						context.diagnose(Diagnostic(
 							node: Syntax(instantiableMacro),
 							error: FixableInstantiableError.mockOnlyWithIsRoot,
-							changes: [
-								.replace(
-									oldNode: Syntax(instantiableMacro),
-									newNode: Syntax(instantiableMacro),
-								),
-							],
+							changes: Self.removeArgument(labeled: "isRoot", from: instantiableMacro, on: declaration),
 						))
 					}
 				}
@@ -798,12 +778,13 @@ public struct InstantiableMacro: MemberMacro {
 							typeName: extensionDeclaration.extendedType.typeDescription.asSource,
 							methodName: expectedMethodName,
 						),
-						changes: [
-							.replace(
-								oldNode: Syntax(node),
-								newNode: Syntax(node),
-							),
-						],
+						changes: Self.generateCustomMockStub(
+							named: expectedMethodName,
+							typeName: extensionDeclaration.extendedType.typeDescription.asSource,
+							dependencies: [],
+							isExtension: true,
+							on: declaration,
+						),
 					))
 				}
 			}
@@ -1228,6 +1209,31 @@ public struct InstantiableMacro: MemberMacro {
 			}
 		}
 		return result
+	}
+
+	/// Builds fix-it changes that remove a labeled argument from an `@Instantiable` attribute.
+	private static func removeArgument(
+		labeled label: String,
+		from attribute: AttributeSyntax,
+		on declaration: some SyntaxProtocol,
+	) -> [FixIt.Change] {
+		var fixedAttribute = attribute
+		guard let arguments = LabeledExprListSyntax(attribute.arguments!),
+		      let targetIndex = arguments.firstIndex(where: { $0.label?.text == label })
+		else {
+			return []
+		}
+		var newArguments = Array(arguments)
+		let removedIndex = arguments.distance(from: arguments.startIndex, to: targetIndex)
+		newArguments.remove(at: removedIndex)
+		// Fix trailing commas: the new last argument must not have a trailing comma.
+		if !newArguments.isEmpty, let lastIndex = newArguments.indices.last {
+			newArguments[lastIndex].trailingComma = nil
+		}
+		fixedAttribute.arguments = .argumentList(LabeledExprListSyntax(newArguments))
+		let rewriter = AttributeRewriter(oldID: attribute.id, replacement: fixedAttribute)
+		let fixedDeclaration = rewriter.rewrite(Syntax(declaration))
+		return [.replace(oldNode: Syntax(declaration), newNode: fixedDeclaration)]
 	}
 
 	/// Builds fix-it changes that add `generateMock: true` to an existing `@Instantiable` attribute.

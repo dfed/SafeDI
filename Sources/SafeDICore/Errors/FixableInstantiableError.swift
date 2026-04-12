@@ -217,9 +217,9 @@ public enum FixableInstantiableError: DiagnosticError {
 			case let .mockMethodNonDependencyMissingDefaultValue(properties):
 				"Add default values to mock() non-dependency parameters for \(properties.map(\.asSource).joined(separator: ", "))"
 			case .mockOnlyWithGenerateMock:
-				"Remove either `mockOnly: true` or `generateMock: true`"
+				"Remove `generateMock: true`"
 			case .mockOnlyWithIsRoot:
-				"Remove either `mockOnly: true` or `isRoot: true`"
+				"Remove `isRoot: true`"
 			case let .mockOnlyMissingMockMethod(typeName, methodName):
 				"Add `public static func \(methodName)(...) -> \(typeName)` method"
 			}
