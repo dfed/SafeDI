@@ -37,6 +37,19 @@ SafeDI is a compile-time dependency injection framework for Swift. It uses Swift
 3. **DependencyTreeGenerator** creates `ScopeGenerator` trees → each generates its code via `generatePropertyCode`
 4. **Mock generation** (`generateMockCode`) creates `mock()` static methods with `@autoclosure @escaping` parameters, `T? = nil` subtree parameters, and `MockContext` for disambiguation
 
+### Mock generation flow
+
+Mock generation follows this pipeline:
+
+1. **`generateMockCode`** builds the mock scope map via `createMockTypeDescriptionToScopeMapping` (includes ALL types, not just reachable from roots)
+2. For each type with `generateMock: true`, **`createMockRootScopeGenerator`** promotes `@Received` dependencies to root-level children and validates for cycles
+3. **`ScopeGenerator.generateMockRootCode`** builds the mock method:
+   - Calls `collectMockParameterTree` to walk the dependency tree and build `MockParameterNode` trees
+   - Collects flat parameters: `@Forwarded` deps, uncovered `@Instantiated` deps, `@Received` deps not in the tree
+   - Generates `SafeDIOverrides` struct (if tree children exist) and the `mock()` method signature and body
+
+The production code path (`generatePropertyCode` with `.dependencyTree`) and mock path (`.mock`) share the same `ScopeGenerator` but diverge at `generatePropertyCode`. Mock fields (`mockInitializer`, `mockReturnType`, `customMockName`) are only accessed in mock code paths — never in production paths.
+
 ### Mock generation specifics
 
 - **Share logic between production and mock paths where possible.** Validation, scope population, and other shared concerns should live in common helpers rather than being duplicated between `createTypeDescriptionToScopeMapping` and `createMockTypeDescriptionToScopeMapping`. When adding validation to one path, check whether the other path needs it too.
@@ -47,6 +60,17 @@ SafeDI is a compile-time dependency injection framework for Swift. It uses Swift
 - `TypeDescription.simplified` strips wrappers for cleaner suffixes, with fallback on collision
 - Closure-typed defaults use `@escaping T = default` (not `@autoclosure`)
 - `#SafeDIConfiguration` is always read from the current module only, never dependent modules
+
+### Validation boundaries
+
+Validation is split between the macro and the plugin based on available context:
+
+- **Macro validation** (compile-time, local context only): The macro sees only the single decorated type or extension. Any error that can be determined from local context belongs here — missing `init`/`instantiate()`, invalid parameter combinations (`mockOnly + generateMock`), mock method signature issues, access control. These produce fix-its in the IDE.
+- **Plugin validation** (build-time, full context): The plugin (`SafeDITool generate`) sees all modules' types. Errors that require cross-type knowledge belong here — unfulfillable dependencies, dependency cycles, duplicate type declarations, duplicate mock providers.
+
+### Serialization
+
+The `Instantiable` struct conforms to `Codable` and is serialized as JSON in `.safedi` module info files. These files are **regenerated every build** — there is no cross-version deserialization. Do not add backward-compatibility decoding logic (e.g., `decodeIfPresent` with defaults). The synthesized `Codable` conformance is sufficient.
 
 ## Code Style
 
@@ -66,6 +90,7 @@ SafeDI is a compile-time dependency injection framework for Swift. It uses Swift
 - **Full `==` output comparison.** Never use `.contains()` for mock output. Compare the complete expected string.
 - **Verify updated test expectations compile.** When updating expected output in generator tests, review the new expected code to confirm it would compile as valid Swift. Check that variable references resolve to the correct scope, types match (no optional where non-optional expected), and all referenced variables have bindings. Do not blindly update expected output to match actual — the actual output may itself be buggy.
 - **If code can't be covered by a test with real parsed input, remove the code.** Dead branches and defensive fallbacks for structurally unreachable paths should not exist.
+- **Test fixture file naming affects processing order.** `executeSafeDIToolTest` names fixture files by extracting the type name from `@Instantiable` in the source content. Files are processed alphabetically, so the order types appear in `resolveSafeDIFulfilledTypes` depends on these names. When testing ordering-sensitive behavior (e.g., duplicate detection), be aware that a `struct MyService` file sorts differently than an `extension MyService` file (which falls back to `"File"`).
 
 ## Common Pitfalls
 
