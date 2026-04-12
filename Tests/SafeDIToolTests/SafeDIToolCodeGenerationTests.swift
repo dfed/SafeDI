@@ -6054,7 +6054,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			moduleInfoOutput,
 		]
 
-		var tool = try Generate.parse([
+		let tool = try Generate.parse([
 			swiftFileCSV.relativePath,
 			"--module-info-output", moduleInfoOutput.relativePath,
 			"--swift-manifest", manifestFile.relativePath,
@@ -6300,7 +6300,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		filesToDelete += [swiftFileCSV, swiftFile, manifestFile, moduleInfoOutput, outputDirectory]
 
 		func runTool() async throws {
-			var tool = try Generate.parse([
+			let tool = try Generate.parse([
 				swiftFileCSV.relativePath,
 				"--module-info-output", moduleInfoOutput.relativePath,
 				"--swift-manifest", manifestFile.relativePath,
@@ -6719,7 +6719,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		filesToDelete += [rootDirectory, swiftFileCSV, outputDirectory, moduleInfoOutput]
 
 		// Use --output-directory without --swift-manifest to trigger the auto-scan path.
-		var tool = try Generate.parse([
+		let tool = try Generate.parse([
 			swiftFileCSV.relativePath,
 			"--module-info-output", moduleInfoOutput.relativePath,
 			"--output-directory", outputDirectory.path,
@@ -6756,7 +6756,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		filesToDelete += [rootDirectory, swiftFileCSV, outputDirectory, manifestFile]
 
 		// Exercise Scan.run() directly via parse.
-		var scan = try Scan.parse([
+		let scan = try Scan.parse([
 			"--input-sources-file", swiftFileCSV.relativePath,
 			"--project-root", rootDirectory.path,
 			"--output-directory", outputDirectory.path,

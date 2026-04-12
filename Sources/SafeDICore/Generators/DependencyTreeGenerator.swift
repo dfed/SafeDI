@@ -110,6 +110,15 @@ public actor DependencyTreeGenerator {
 			cyclesOnly: true,
 		)
 
+		// Compute types with hand-written mocks that aren't generating their own mock code.
+		// This includes standalone mockOnly types AND merged entries where a mockOnly
+		// declaration's mock was copied onto a non-mockOnly production entry.
+		let handWrittenMockTypes: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
+			.reduce(into: [TypeDescription: String]()) { result, instantiable in
+				guard !instantiable.generateMock, instantiable.mockInitializer != nil else { return }
+				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
+			}
+
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
@@ -165,6 +174,7 @@ public actor DependencyTreeGenerator {
 					async let code = mockRoot.generateCode(
 						codeGeneration: .mock(ScopeGenerator.MockContext(
 							mockConditionalCompilation: mockConditionalCompilation,
+							handWrittenMockTypes: handWrittenMockTypes,
 						)),
 					)
 					async let configurationTypes = mockRoot.collectConfigurationTypes()

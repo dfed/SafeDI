@@ -262,6 +262,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	struct MockContext {
 		/// The conditional compilation flag for wrapping mock output (e.g. "DEBUG").
 		let mockConditionalCompilation: String?
+		/// Maps types with hand-written mock methods to their mock method name (e.g. "mock" or a custom name).
+		/// Used to provide default values for forwarded dependencies whose type has a hand-written mock.
+		let handWrittenMockTypes: [TypeDescription: String]
 	}
 
 	private let scopeData: ScopeData
@@ -692,7 +695,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableOptionalProperties,
 				forMockGeneration: true,
 			)
-			let mockMethodName = instantiable.customMockName ?? "mock"
+			let mockMethodName = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 			let construction = if instantiable.mockInitializer != nil {
 				"\(typeName).\(mockMethodName)(\(argumentList))"
 			} else if instantiable.declarationType.isExtension {
@@ -741,6 +744,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let typeSource = dependency.property.typeDescription.asFunctionParameter.asSource
 			if let defaultExpression = constructionDefaults[dependency.property.label] {
 				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(defaultExpression)")
+			} else if let mockMethodName = context.handWrittenMockTypes[dependency.property.typeDescription] {
+				let mockTypeName = dependency.property.typeDescription.asSource
+				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(mockTypeName).\(mockMethodName)()")
 			} else {
 				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource)")
 			}
@@ -780,7 +786,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let returnArgumentList = try generateReturnArgumentList(
 			instantiable: instantiable,
 		)
-		let mockMethodName = instantiable.customMockName ?? "mock"
+		let mockMethodName = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 		let returnConstruction = if instantiable.mockInitializer != nil {
 			"\(typeName).\(mockMethodName)(\(returnArgumentList))"
 		} else if instantiable.declarationType.isExtension {
@@ -896,7 +902,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// e.g., `Grandchild.customMock(service:style:)` or `Service.init`.
 		var defaultBuilderExpression: String {
 			let methodName: String = if useMockInitializer {
-				customMockName ?? "mock"
+				customMockName ?? InstantiableVisitor.mockMethodName
 			} else if isExtensionBased {
 				InstantiableVisitor.instantiateMethodName
 			} else {

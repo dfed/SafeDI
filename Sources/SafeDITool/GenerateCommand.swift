@@ -173,6 +173,7 @@ struct Generate: AsyncParsableCommand {
 				declarationType: unnormalizedInstantiable.declarationType,
 				mockAttributes: unnormalizedInstantiable.mockAttributes,
 				generateMock: unnormalizedInstantiable.generateMock,
+				mockOnly: unnormalizedInstantiable.mockOnly,
 				mockInitializer: unnormalizedInstantiable.mockInitializer,
 				mockReturnType: unnormalizedInstantiable.mockReturnType,
 				customMockName: unnormalizedInstantiable.customMockName,
@@ -335,7 +336,7 @@ struct Generate: AsyncParsableCommand {
 			case let .noRootFound(inputPath):
 				"Manifest lists '\(inputPath)' as containing a dependency tree root, but no @\(InstantiableVisitor.macroName)(isRoot: true) was found in that file."
 			case let .rootNotInManifest(sourceFilePath):
-				"Found @\(InstantiableVisitor.macroName)(isRoot: true) in '\(sourceFilePath)', but this file is not listed in the manifest's dependencyTreeGeneration. Add it to the manifest or remove the isRoot annotation."
+				"Found @\(InstantiableVisitor.macroName)(isRoot: true) in '\(sourceFilePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. Add it to the manifest or remove the isRoot annotation."
 			}
 		}
 	}
@@ -401,10 +402,31 @@ struct Generate: AsyncParsableCommand {
 		var typeDescriptionToFulfillingInstantiableMap = [TypeDescription: Instantiable]()
 		for instantiable in instantiables {
 			for instantiableType in instantiable.instantiableTypes {
-				if typeDescriptionToFulfillingInstantiableMap[instantiableType] != nil {
-					throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)
+				if let existing = typeDescriptionToFulfillingInstantiableMap[instantiableType] {
+					// Allow one mockOnly and one non-mockOnly for the same type.
+					switch (existing.mockOnly, instantiable.mockOnly) {
+					case (true, true):
+						throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+					case (false, true):
+						// Merge: keep existing production info, take mock info from mockOnly.
+						let existingHasMock = existing.generateMock || existing.mockInitializer != nil
+						if existingHasMock {
+							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+						}
+						typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
+					case (true, false):
+						// Merge: take production info from new, keep mock info from existing mockOnly.
+						let newHasMock = instantiable.generateMock || instantiable.mockInitializer != nil
+						if newHasMock {
+							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+						}
+						typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
+					case (false, false):
+						throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)
+					}
+				} else {
+					typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
 				}
-				typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
 			}
 		}
 		return typeDescriptionToFulfillingInstantiableMap
@@ -412,11 +434,14 @@ struct Generate: AsyncParsableCommand {
 
 	private enum CollectInstantiablesError: Error, CustomStringConvertible {
 		case foundDuplicateInstantiable(String)
+		case duplicateMockProvider(String)
 
 		var description: String {
 			switch self {
 			case let .foundDuplicateInstantiable(duplicateInstantiable):
 				"@\(InstantiableVisitor.macroName)-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `\(duplicateInstantiable)`"
+			case let .duplicateMockProvider(duplicateInstantiable):
+				"Multiple mock providers found for `\(duplicateInstantiable)`. A type can have at most one mock — either via `generateMock: true`, a hand-written `mock()` method, or `mockOnly: true`."
 			}
 		}
 	}

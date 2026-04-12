@@ -30,6 +30,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		declarationType: DeclarationType,
 		mockAttributes: String = "",
 		generateMock: Bool = false,
+		mockOnly: Bool = false,
 		mockInitializer: Initializer? = nil,
 		mockReturnType: TypeDescription? = nil,
 		customMockName: String? = nil,
@@ -41,6 +42,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.declarationType = declarationType
 		self.mockAttributes = mockAttributes
 		self.generateMock = generateMock
+		self.mockOnly = mockOnly
 		self.mockInitializer = mockInitializer
 		self.mockReturnType = mockReturnType
 		self.customMockName = customMockName
@@ -68,15 +70,28 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public let mockAttributes: String
 	/// Whether to generate a `mock()` method for this type.
 	public let generateMock: Bool
+	/// Whether this declaration exists solely for mock generation (user provides a hand-written mock method).
+	/// When `true`, no `init`/`instantiate()` or `Instantiable` conformance is required.
+	public let mockOnly: Bool
 	/// A user-defined `static func mock(...)` method, if one exists.
-	/// When present, generated mocks call `TypeName.mock(...)` instead of `TypeName(...)`.
+	/// When present, mock generation calls this method instead of `init` or `instantiate`.
 	public var mockInitializer: Initializer?
 	/// The return type of the user-defined `mock()` method, if one exists.
-	/// Used to determine whether to call `.mock` or fall through to `init` based on the property type.
+	/// Used to determine whether to use the mock method or fall through to `init` based on the property type.
 	public var mockReturnType: TypeDescription?
-	/// The name of the user's custom mock method when `generateMock` is `true`.
-	/// The generated `mock()` calls through to this method instead of `init`.
-	public let customMockName: String?
+	/// The name of the user's custom mock method. With `generateMock`, the generated `mock()` calls
+	/// through to this method. With `mockOnly`, SafeDI uses this method as the mock provider.
+	public var customMockName: String?
+
+	/// Returns a copy of this Instantiable with mock-related fields replaced by those from `mockProvider`.
+	/// Used when merging a production `@Instantiable` with a `mockOnly` declaration for the same type.
+	public func mergedWithMockProvider(_ mockProvider: Instantiable) -> Instantiable {
+		var merged = self
+		merged.mockInitializer = mockProvider.mockInitializer
+		merged.mockReturnType = mockProvider.mockReturnType
+		merged.customMockName = mockProvider.customMockName
+		return merged
+	}
 
 	/// Whether the user-defined mock() method's return type is compatible with the given property type.
 	/// Returns `true` when the mock returns the concrete type, `Self`, or the exact property type.

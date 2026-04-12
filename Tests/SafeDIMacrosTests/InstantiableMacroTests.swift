@@ -4600,11 +4600,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`customMockName` requires `generateMock: true`.",
+						message: "`customMockName` requires `generateMock: true` or `mockOnly: true`.",
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `generateMock: true` to `@Instantiable`"),
+							FixItSpec(message: "Add `generateMock: true` or `mockOnly: true` to `@Instantiable`"),
 						],
 					),
 				],
@@ -4646,11 +4646,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`customMockName` requires `generateMock: true`.",
+						message: "`customMockName` requires `generateMock: true` or `mockOnly: true`.",
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `generateMock: true` to `@Instantiable`"),
+							FixItSpec(message: "Add `generateMock: true` or `mockOnly: true` to `@Instantiable`"),
 						],
 					),
 				],
@@ -4818,11 +4818,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`customMockName` requires `generateMock: true`.",
+						message: "`customMockName` requires `generateMock: true` or `mockOnly: true`.",
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `generateMock: true` to `@Instantiable`"),
+							FixItSpec(message: "Add `generateMock: true` or `mockOnly: true` to `@Instantiable`"),
 						],
 					),
 				],
@@ -4864,11 +4864,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`customMockName` requires `generateMock: true`.",
+						message: "`customMockName` requires `generateMock: true` or `mockOnly: true`.",
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `generateMock: true` to `@Instantiable`"),
+							FixItSpec(message: "Add `generateMock: true` or `mockOnly: true` to `@Instantiable`"),
 						],
 					),
 				],
@@ -5008,7 +5008,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						message: "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5158,7 +5158,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						message: "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
 						line: 8,
 						column: 5,
 						fixIts: [
@@ -5292,7 +5292,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						message: "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5380,7 +5380,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						message: "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
 						line: 9,
 						column: 5,
 						fixIts: [
@@ -5424,7 +5424,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
 						line: 8,
 						column: 5,
 						fixIts: [
@@ -5486,7 +5486,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
 						line: 10,
 						column: 5,
 						fixIts: [
@@ -5554,7 +5554,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
 						line: 10,
 						column: 5,
 						fixIts: [
@@ -5590,7 +5590,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must be `public` or `open`.",
+						message: "@Instantiable-decorated type’s `mock()` method must be `public` or `open`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5626,7 +5626,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `MyService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `MyService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5673,7 +5673,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `MyService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `MyService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5825,7 +5825,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must be `public` or `open`.",
+						message: "@Instantiable-decorated type’s `mock()` method must be `public` or `open`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5874,7 +5874,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5921,7 +5921,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5969,7 +5969,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -6134,7 +6134,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -6239,7 +6239,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -6296,7 +6296,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -6368,7 +6368,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `MyService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `MyService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -6440,6 +6440,500 @@ import Testing
 					),
 				],
 				macros: instantiableTestMacros,
+			)
+		}
+
+		// MARK: mockOnly Tests
+
+		@Test
+		func extension_expandsWithoutIssueOnTypeDeclarationWhenMockOnlyIsTrue() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true)
+				public struct ExternalService {
+				    @Received let database: Database
+				    public static func mock(database: Database) -> ExternalService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				public struct ExternalService {
+				    let database: Database
+				    public static func mock(database: Database) -> ExternalService { fatalError() }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_expandsWithoutIssueOnExtensionWhenMockOnlyIsTrue() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true)
+				extension ExternalService {
+				    public static func mock() -> ExternalService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension ExternalService {
+				    public static func mock() -> ExternalService { fatalError() }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_throwsErrorWhenMockOnlyAndGenerateMockBothTrue() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true, generateMock: true)
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`mockOnly` and `generateMock` cannot both be `true`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove `generateMock: true`"),
+						],
+					),
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`.",
+						line: 3,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Rename method to `customMock` and add `customMockName: \"customMock\"` to `@Instantiable`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true)
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_throwsErrorWhenMockOnlyAndIsRootBothTrue() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, mockOnly: true)
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`mockOnly` types cannot be marked `isRoot`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove `isRoot: true`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true)
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_throwsErrorWhenMockOnlyTypeDeclarationMissingMockMethod() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true)
+				public struct ExampleService {
+				    @Received let database: Database
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let database: Database
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable(mockOnly: true) requires a `public static func mock(…) -> ExampleService` method.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `public static func mock(…) -> ExampleService` method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true)
+				public struct ExampleService {
+				    @Received let database: Database
+				public static func mock(database: Database) -> ExampleService {ExampleService(database: database)}
+
+
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_throwsErrorWhenMockOnlyExtensionMissingMockMethod() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true)
+				extension ExternalService {
+				}
+				""",
+				expandedSource: """
+				extension ExternalService {
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable(mockOnly: true) requires a `public static func mock(…) -> ExternalService` method.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `public static func mock(…) -> ExternalService` method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true)
+				extension ExternalService {
+				public static func mock() -> ExternalService {ExternalService.instantiate()}
+
+
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssueWhenMockOnlyAndConformsElsewhereBothTrue() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(conformsElsewhere: true, mockOnly: true)
+				public struct ExternalService {
+				    public static func mock() -> ExternalService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				public struct ExternalService {
+				    public static func mock() -> ExternalService { fatalError() }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_throwsErrorWhenMockOnlyMockMissingDependencyArguments() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true)
+				public struct ExampleService {
+				    @Received let database: Database
+				    @Instantiated let cache: CacheService
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let database: Database
+				    let cache: CacheService
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add mock() arguments for database: Database, cache: CacheService"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_throwsErrorWhenMockOnlyAndGenerateMockBothTrue() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true, generateMock: true)
+				extension ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`mockOnly` and `generateMock` cannot both be `true`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove `generateMock: true`"),
+						],
+					),
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`.",
+						line: 3,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Rename method to `customMock` and add `customMockName: \"customMock\"` to `@Instantiable`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true)
+				extension ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_throwsErrorWhenMockOnlyAndIsRootBothTrue() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, mockOnly: true)
+				extension ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`mockOnly` types cannot be marked `isRoot`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove `isRoot: true`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true)
+				extension ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_throwsErrorWhenMockOnlyArgumentIsNotBoolLiteral() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: someVariable)
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `mockOnly` must be a Bool literal (`true` or `false`)",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_throwsErrorWhenMockOnlyWithCustomMockNameButMethodIsMissing() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true, customMockName: "preview")
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable(mockOnly: true) requires a `public static func preview(…) -> ExampleService` method.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `public static func preview(…) -> ExampleService` method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true, customMockName: "preview")
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				public static func preview() -> ExampleService {ExampleService()}
+
+
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixItRemovesIsRoot_whenIsRootIsFirstOfThreeArguments() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, mockOnly: true, mockAttributes: "@MainActor")
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`mockOnly` types cannot be marked `isRoot`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove `isRoot: true`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true, mockAttributes: "@MainActor")
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixItRemovesGenerateMock_whenGenerateMockIsLastArgument() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true, generateMock: true)
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`mockOnly` and `generateMock` cannot both be `true`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove `generateMock: true`"),
+						],
+					),
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`.",
+						line: 4,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Rename method to `customMock` and add `customMockName: \"customMock\"` to `@Instantiable`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true)
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixItGeneratesMockStub_whenMockOnlyTypeDeclarationHasMultipleDependencies() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true)
+				public struct ExampleService {
+				    @Received let database: Database
+				    @Instantiated let cache: CacheService
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let database: Database
+				    let cache: CacheService
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable(mockOnly: true) requires a `public static func mock(…) -> ExampleService` method.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `public static func mock(…) -> ExampleService` method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true)
+				public struct ExampleService {
+				    @Received let database: Database
+				    @Instantiated let cache: CacheService
+				public static func mock(database: Database, cache: CacheService) -> ExampleService {ExampleService(database: database, cache: cache)}
+
+
+				}
+				""",
 			)
 		}
 	}

@@ -147,7 +147,7 @@ func executeSafeDIToolTest(
 		if buildDOTFileOutput {
 			generateArguments += ["--dot-file-output", dotTreeOutput.relativePath]
 		}
-		var tool = try Generate.parse(generateArguments)
+		let tool = try Generate.parse(generateArguments)
 		try await tool.run()
 
 		filesToDelete.append(swiftFileCSV)
