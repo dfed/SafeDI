@@ -443,7 +443,7 @@ struct Generate: AsyncParsableCommand {
 			case let .foundDuplicateInstantiable(duplicateInstantiable):
 				"@\(InstantiableVisitor.macroName)-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `\(duplicateInstantiable)`"
 			case let .duplicateMockProvider(duplicateInstantiable):
-				"Multiple mock providers found for `\(duplicateInstantiable)`. A type can have at most one mock — either via `generateMock: true`, a hand-written `mock()` method, or `mockOnly: true`."
+				"Found multiple `mockOnly: true` declarations for `\(duplicateInstantiable)`. A type can have at most one `mockOnly` declaration."
 			}
 		}
 	}

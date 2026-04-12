@@ -82,7 +82,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTwoMockOnlyExistForSameType() async {
 		await assertThrowsError(
-			"Multiple mock providers found for `MyService`. A type can have at most one mock — either via `generateMock: true`, a hand-written `mock()` method, or `mockOnly: true`.",
+			"Found multiple `mockOnly: true` declarations for `MyService`. A type can have at most one `mockOnly` declaration.",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
