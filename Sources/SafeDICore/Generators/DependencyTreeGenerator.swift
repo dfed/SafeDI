@@ -110,12 +110,13 @@ public actor DependencyTreeGenerator {
 			cyclesOnly: true,
 		)
 
-		// Compute types with hand-written mocks that aren't generating their own mock code
-		// and whose mock method can be called with zero arguments. This includes standalone
-		// mockOnly types AND merged entries where a mockOnly declaration's mock was copied
-		// onto a non-mockOnly production entry. Types whose mock method has required
-		// parameters are excluded, since the generated default `Type.mock()` would not compile.
-		let handWrittenMockTypes: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
+		// Compute types with hand-written mocks that can be called with zero arguments,
+		// suitable for use as default values in forwarded mock parameters. This includes
+		// standalone mockOnly types AND merged entries where a mockOnly declaration's mock
+		// was copied onto a non-mockOnly production entry. Types whose mock method has
+		// required parameters are excluded, since the generated default `Type.mock()` would
+		// not compile.
+		let defaultableMockTypes: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
 			.reduce(into: [TypeDescription: String]()) { result, instantiable in
 				guard !instantiable.generateMock,
 				      let mockInitializer = instantiable.mockInitializer,
@@ -179,7 +180,7 @@ public actor DependencyTreeGenerator {
 					async let code = mockRoot.generateCode(
 						codeGeneration: .mock(ScopeGenerator.MockContext(
 							mockConditionalCompilation: mockConditionalCompilation,
-							handWrittenMockTypes: handWrittenMockTypes,
+							defaultableMockTypes: defaultableMockTypes,
 						)),
 					)
 					async let configurationTypes = mockRoot.collectConfigurationTypes()

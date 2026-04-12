@@ -264,7 +264,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let mockConditionalCompilation: String?
 		/// Maps types with hand-written mock methods to their mock method name (e.g. "mock" or a custom name).
 		/// Used to provide default values for forwarded dependencies whose type has a hand-written mock.
-		let handWrittenMockTypes: [TypeDescription: String]
+		let defaultableMockTypes: [TypeDescription: String]
 	}
 
 	private let scopeData: ScopeData
@@ -744,7 +744,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let typeSource = dependency.property.typeDescription.asFunctionParameter.asSource
 			if let defaultExpression = constructionDefaults[dependency.property.label] {
 				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(defaultExpression)")
-			} else if let mockMethodName = context.handWrittenMockTypes[dependency.property.typeDescription] {
+			} else if let mockMethodName = context.defaultableMockTypes[dependency.property.typeDescription] {
 				let mockTypeName = dependency.property.typeDescription.asSource
 				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(mockTypeName).\(mockMethodName)()")
 			} else {
