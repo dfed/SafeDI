@@ -83,6 +83,16 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// The generated `mock()` calls through to this method instead of `init`.
 	public var customMockName: String?
 
+	/// Returns a copy of this Instantiable with mock-related fields replaced by those from `mockProvider`.
+	/// Used when merging a production `@Instantiable` with a `mockOnly` declaration for the same type.
+	public func mergedWithMockProvider(_ mockProvider: Instantiable) -> Instantiable {
+		var merged = self
+		merged.mockInitializer = mockProvider.mockInitializer
+		merged.mockReturnType = mockProvider.mockReturnType
+		merged.customMockName = mockProvider.customMockName
+		return merged
+	}
+
 	/// Whether the user-defined mock() method's return type is compatible with the given property type.
 	/// Returns `true` when the mock returns the concrete type, `Self`, or the exact property type.
 	/// Returns `false` when there is no mock method.

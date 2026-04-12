@@ -413,22 +413,14 @@ struct Generate: AsyncParsableCommand {
 						if existingHasMock {
 							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 						}
-						var merged = existing
-						merged.mockInitializer = instantiable.mockInitializer
-						merged.mockReturnType = instantiable.mockReturnType
-						merged.customMockName = instantiable.customMockName
-						typeDescriptionToFulfillingInstantiableMap[instantiableType] = merged
+						typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
 					case (true, false):
 						// Merge: take production info from new, keep mock info from existing mockOnly.
 						let newHasMock = instantiable.generateMock || instantiable.mockInitializer != nil
 						if newHasMock {
 							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 						}
-						var merged = instantiable
-						merged.mockInitializer = existing.mockInitializer
-						merged.mockReturnType = existing.mockReturnType
-						merged.customMockName = existing.customMockName
-						typeDescriptionToFulfillingInstantiableMap[instantiableType] = merged
+						typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
 					case (false, false):
 						throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)
 					}

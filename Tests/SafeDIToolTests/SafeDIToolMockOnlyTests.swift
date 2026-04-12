@@ -442,6 +442,132 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
 	}
 
+	// MARK: Production Isolation Tests
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func productionCodeUnchanged_whenMockOnlyMergeAddsHandWrittenMock() async throws {
+		// Generate production code WITHOUT mockOnly.
+		let baselineOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(child: Child) {
+				        self.child = child
+				    }
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// Generate production code WITH a mockOnly merge for Child.
+		let mergedOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(child: Child) {
+				        self.child = child
+				    }
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(mockOnly: true, customMockName: "preview")
+				extension Child {
+				    public static func preview() -> Child { Child() }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// Production output must be identical — mockOnly must not leak.
+		#expect(
+			baselineOutput.dependencyTreeFiles == mergedOutput.dependencyTreeFiles,
+			"Production code changed after mockOnly merge. Baseline: \(baselineOutput.dependencyTreeFiles). Merged: \(mergedOutput.dependencyTreeFiles)",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func productionCodeUnchanged_whenMockOnlyMergeAddsHandWrittenMockWithMockAttributes() async throws {
+		// Generate production code WITHOUT mockOnly.
+		let baselineOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(child: Child) {
+				        self.child = child
+				    }
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// Generate production code WITH a mockOnly merge that includes mockAttributes.
+		let mergedOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(child: Child) {
+				        self.child = child
+				    }
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(mockOnly: true, mockAttributes: "@MainActor")
+				extension Child {
+				    @MainActor public static func mock() -> Child { Child() }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// Production output must be identical.
+		#expect(
+			baselineOutput.dependencyTreeFiles == mergedOutput.dependencyTreeFiles,
+			"Production code changed after mockOnly merge with mockAttributes. Baseline: \(baselineOutput.dependencyTreeFiles). Merged: \(mergedOutput.dependencyTreeFiles)",
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()
