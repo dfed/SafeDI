@@ -695,7 +695,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableOptionalProperties,
 				forMockGeneration: true,
 			)
-			let mockMethodName = instantiable.customMockName ?? "mock"
+			let mockMethodName = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 			let construction = if instantiable.mockInitializer != nil {
 				"\(typeName).\(mockMethodName)(\(argumentList))"
 			} else if instantiable.declarationType.isExtension {
@@ -786,7 +786,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let returnArgumentList = try generateReturnArgumentList(
 			instantiable: instantiable,
 		)
-		let mockMethodName = instantiable.customMockName ?? "mock"
+		let mockMethodName = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 		let returnConstruction = if instantiable.mockInitializer != nil {
 			"\(typeName).\(mockMethodName)(\(returnArgumentList))"
 		} else if instantiable.declarationType.isExtension {
@@ -902,7 +902,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// e.g., `Grandchild.customMock(service:style:)` or `Service.init`.
 		var defaultBuilderExpression: String {
 			let methodName: String = if useMockInitializer {
-				customMockName ?? "mock"
+				customMockName ?? InstantiableVisitor.mockMethodName
 			} else if isExtensionBased {
 				InstantiableVisitor.instantiateMethodName
 			} else {

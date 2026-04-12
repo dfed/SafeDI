@@ -170,7 +170,7 @@ public struct InstantiableMacro: MemberMacro {
 				))
 			}
 			if isMockOnly, visitor.mockFunctionSyntax == nil {
-				let expectedMethodName = visitor.customMockName ?? "mock"
+				let expectedMethodName = visitor.customMockName ?? InstantiableVisitor.mockMethodName
 				context.diagnose(Diagnostic(
 					node: Syntax(node),
 					error: FixableInstantiableError.mockOnlyMissingMockMethod(
@@ -770,7 +770,7 @@ public struct InstantiableMacro: MemberMacro {
 				))
 			}
 			if isMockOnly, visitor.mockFunctionSyntax == nil {
-				let expectedMethodName = visitor.customMockName ?? "mock"
+				let expectedMethodName = visitor.customMockName ?? InstantiableVisitor.mockMethodName
 				context.diagnose(Diagnostic(
 					node: Syntax(node),
 					error: FixableInstantiableError.mockOnlyMissingMockMethod(

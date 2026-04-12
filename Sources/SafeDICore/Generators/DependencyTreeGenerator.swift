@@ -116,7 +116,7 @@ public actor DependencyTreeGenerator {
 		let handWrittenMockTypes: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
 			.reduce(into: [TypeDescription: String]()) { result, instantiable in
 				guard !instantiable.generateMock, instantiable.mockInitializer != nil else { return }
-				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? "mock"
+				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 			}
 
 		// Create mock-root ScopeGenerators using the production Scope tree.

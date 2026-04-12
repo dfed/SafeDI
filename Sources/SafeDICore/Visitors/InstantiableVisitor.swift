@@ -152,7 +152,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
 		// Detect existing static/class func mock(...) methods.
 		// When customMockName is set, detect by that name; otherwise detect "mock".
-		let mockMethodName = customMockName ?? "mock"
+		let mockMethodName = customMockName ?? Self.mockMethodName
 		let isStaticOrClass = node.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) || $0.name.tokenKind == .keyword(.class) })
 		if node.name.text == mockMethodName, isStaticOrClass {
 			if mockFunctionSyntax != nil {
@@ -166,7 +166,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		}
 		// When customMockName is set, also detect a literal "mock" method — it would
 		// conflict with the generated mock().
-		if customMockName != nil, node.name.text == "mock", isStaticOrClass {
+		if customMockName != nil, node.name.text == Self.mockMethodName, isStaticOrClass {
 			conflictingMockFunctionSyntax = node
 		}
 
@@ -329,6 +329,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	public static let macroName = "Instantiable"
 	public static let instantiateMethodName = "instantiate"
+	public static let mockMethodName = "mock"
 
 	public func walk(_ node: some ConcreteDeclSyntaxProtocol) {
 		super.walk(node)
