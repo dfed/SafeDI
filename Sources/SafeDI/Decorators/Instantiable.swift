@@ -56,7 +56,7 @@
 ///   - mockOnly: Whether this declaration exists solely for mock generation. When `true`, the user must hand-write a `mock()` method (or a method named by `customMockName`). No `init`/`instantiate()` or `Instantiable` conformance is required. Mutually exclusive with `generateMock` and `isRoot`. Defaults to `false`.
 ///   - mockAttributes: Attributes to add to the generated `mock()` method. Use this when the type's initializer is bound to a global actor that the plugin cannot detect from source (e.g. inherited `@MainActor`). Example: `@Instantiable(mockAttributes: "@MainActor")`.
 ///   - generateMock: Whether to generate a `mock()` method for this type. Defaults to `false`.
-///   - customMockName: The name of a hand-written method that the generated `mock()` method should call through to. When `generateMock` is `true` and a hand-written mock method exists, it must have a different name from the generated `mock()` to avoid ambiguity. This parameter specifies that name. Requires `generateMock: true` or `mockOnly: true`.
+///   - customMockName: The name of a hand-written mock method. With `generateMock: true`, the generated `mock()` calls through to this method (it must have a different name to avoid ambiguity). With `mockOnly: true`, the mock generator references this method directly as the mock provider. Requires `generateMock: true` or `mockOnly: true`.
 @attached(member, names: named(ForwardedProperties))
 public macro Instantiable(
 	isRoot: Bool = false,

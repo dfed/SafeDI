@@ -515,9 +515,9 @@ By default, `generateMock` is `false` and no mock is generated. Generated mocks 
 
 ### Using generated mocks
 
-Each `@Instantiable` type with `generateMock: true` gets a generated `mock()` static method that builds its full dependency subtree. Note that mocks defined in separate extensions are not detected; the method must be in the `@Instantiable`-decorated declaration body.
+Each `@Instantiable` type with `generateMock: true` gets a generated `mock()` static method that builds its full dependency subtree. The hand-written mock method must be in the same `@Instantiable`-decorated declaration body — methods in undecorated extensions are not detected. To provide a mock from a separate extension, use `@Instantiable(mockOnly: true)` on that extension instead.
 
-When a type also has a hand-written mock method, it must have a different name from the generated `mock()` to avoid ambiguity. Use the `customMockName` parameter to specify the name of the hand-written method, and the generated `mock()` will call through to it. This is useful when you need custom logic during mock construction — for example, setting up stub behavior, configuring test doubles, or wiring delegates:
+When a type also has a hand-written mock method, it must have a different name from the generated `mock()` to avoid ambiguity. Use the `customMockName` parameter to specify the name of the hand-written method. With `generateMock: true`, the generated `mock()` calls through to this method. With `mockOnly: true`, the mock generator references this method directly (e.g., `Type.preview()` instead of `Type.mock()`). This is useful when you need custom logic during mock construction — for example, setting up stub behavior, configuring test doubles, or wiring delegates:
 
 ```swift
 @Instantiable(generateMock: true, customMockName: "customMock")
@@ -653,13 +653,16 @@ To use a mock from another module in your tests, see [Cross-module mock generati
 
 ### @Forwarded properties in mocks
 
-`@Forwarded` properties become required parameters on the mock method (no default value), since they represent runtime input:
+`@Forwarded` properties become parameters on the mock method since they represent runtime input. By default they are required (no default value):
 
 ```swift
 let noteView = NoteView.mock(userName: "Preview User")
 ```
 
-If the root type’s own initializer or custom mock provides a default for a `@Forwarded` property, the generated root `mock()` preserves that default and the parameter becomes optional.
+A forwarded parameter gets a default value in three cases:
+- The root type’s own initializer or custom mock provides a default for the parameter
+- The forwarded type has a `mockOnly` provider — the parameter defaults to `Type.mock()` (or the `customMockName` method)
+- The forwarded type has a hand-written mock method on a merged `@Instantiable` declaration
 
 ### Default-valued init parameters in mocks
 
