@@ -714,13 +714,16 @@ public actor DependencyTreeGenerator {
 	/// but includes ALL types (not just reachable from roots). Received dependencies are NOT
 	/// promoted here — they're promoted at the root level in `createMockRootScopeGenerator`.
 	private func createMockTypeDescriptionToScopeMapping() -> [TypeDescription: Scope] {
-		// Create scopes for all types.
+		// Create scopes for all types. mockOnly types take priority for
+		// additional-type slots so mocks use mock implementations when available.
 		let typeDescriptionToScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
 				guard partialResult[instantiable.concreteInstantiable] == nil else { return }
 				let scope = Scope(instantiable: instantiable)
 				for instantiableType in instantiable.instantiableTypes {
-					partialResult[instantiableType] = scope
+					if instantiable.mockOnly || partialResult[instantiableType] == nil {
+						partialResult[instantiableType] = scope
+					}
 				}
 			}
 
