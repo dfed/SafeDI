@@ -65,6 +65,49 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenFulfilledByTypeFallbackChildHasForwardedProperty() async {
+		// When fulfilledByType is not visible and mock generation falls back to
+		// the declared type (via mockOnly), the forwarded-property validation
+		// must still fire for constant @Instantiated dependencies.
+		await assertThrowsError(
+			"""
+			Property `service: AnyService` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
+			""",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public class AnyService {
+					    public init(_ value: some Any) {}
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct Root: Instantiable {
+					    public init(service: AnyService) {
+					        self.service = service
+					    }
+					    @Instantiated(fulfilledByType: "ConcreteService", erasedToConcreteExistential: true) let service: AnyService
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [AnyService.self], mockOnly: true)
+					public struct MockService: Instantiable {
+					    public init(name: String) {
+					        self.name = name
+					    }
+					    @Forwarded let name: String
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

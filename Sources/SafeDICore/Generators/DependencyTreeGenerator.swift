@@ -150,9 +150,13 @@ public actor DependencyTreeGenerator {
 
 			// Validate that this type's constant @Instantiated children have no @Forwarded properties.
 			for dependency in scope.instantiable.dependencies {
-				guard case .instantiated = dependency.source else { continue }
+				guard case let .instantiated(fulfillingTypeDescription, _) = dependency.source else { continue }
 				let instantiatedType = dependency.asInstantiatedType
-				if let childInstantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType] {
+				let childInstantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType]
+					?? (fulfillingTypeDescription != nil
+						? typeDescriptionToFulfillingInstantiableMap[dependency.property.typeDescription.asInstantiatedType]
+						: nil)
+				if let childInstantiable {
 					try validateNoForwardedProperties(
 						for: dependency,
 						instantiable: childInstantiable,
