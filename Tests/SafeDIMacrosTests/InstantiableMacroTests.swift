@@ -6650,5 +6650,94 @@ import Testing
 				macros: instantiableTestMacros,
 			)
 		}
+
+		@Test
+		func extension_throwsErrorWhenMockOnlyAndGenerateMockBothTrue() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true, generateMock: true)
+				extension ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`mockOnly` and `generateMock` cannot both be `true`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove either `mockOnly: true` or `generateMock: true`"),
+						],
+					),
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`.",
+						line: 3,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Rename method to `customMock` and add `customMockName: \"customMock\"` to `@Instantiable`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_throwsErrorWhenMockOnlyAndIsRootBothTrue() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, mockOnly: true)
+				extension ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`mockOnly` types cannot be marked `isRoot`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove either `mockOnly: true` or `isRoot: true`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_throwsErrorWhenMockOnlyArgumentIsNotBoolLiteral() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: someVariable)
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `mockOnly` must be a Bool literal (`true` or `false`)",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
 	}
 #endif
