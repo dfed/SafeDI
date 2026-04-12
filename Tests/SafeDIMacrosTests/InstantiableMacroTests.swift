@@ -6739,5 +6739,33 @@ import Testing
 				macros: instantiableTestMacros,
 			)
 		}
+
+		@Test
+		func declaration_throwsErrorWhenMockOnlyWithCustomMockNameButMethodIsMissing() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true, customMockName: "preview")
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable(mockOnly: true) requires a `public static func preview(...) -> ExampleService` method.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `public static func preview(...) -> ExampleService` method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
 	}
 #endif
