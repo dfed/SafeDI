@@ -150,41 +150,40 @@ public struct InstantiableMacro: MemberMacro {
 				context.diagnose(diagnostic)
 			}
 
-			if isMockOnly {
-				if let instantiableMacro = declaration.attributes.instantiableMacro {
-					if instantiableMacro.generateMockValue {
-						context.diagnose(Diagnostic(
-							node: Syntax(instantiableMacro),
-							error: FixableInstantiableError.mockOnlyWithGenerateMock,
-							changes: Self.removeArgument(labeled: "generateMock", from: instantiableMacro, on: declaration),
-						))
-					}
-				}
-				if visitor.isRoot {
-					if let instantiableMacro = declaration.attributes.instantiableMacro {
-						context.diagnose(Diagnostic(
-							node: Syntax(instantiableMacro),
-							error: FixableInstantiableError.mockOnlyWithIsRoot,
-							changes: Self.removeArgument(labeled: "isRoot", from: instantiableMacro, on: declaration),
-						))
-					}
-				}
+			if isMockOnly,
+			   let instantiableMacro = declaration.attributes.instantiableMacro,
+			   instantiableMacro.generateMockValue
+			{
+				context.diagnose(Diagnostic(
+					node: Syntax(instantiableMacro),
+					error: FixableInstantiableError.mockOnlyWithGenerateMock,
+					changes: Self.removeArgument(labeled: "generateMock", from: instantiableMacro, on: declaration),
+				))
+			}
+			if isMockOnly, visitor.isRoot,
+			   let instantiableMacro = declaration.attributes.instantiableMacro
+			{
+				context.diagnose(Diagnostic(
+					node: Syntax(instantiableMacro),
+					error: FixableInstantiableError.mockOnlyWithIsRoot,
+					changes: Self.removeArgument(labeled: "isRoot", from: instantiableMacro, on: declaration),
+				))
+			}
+			if isMockOnly, visitor.mockFunctionSyntax == nil {
 				let expectedMethodName = visitor.customMockName ?? "mock"
-				if visitor.mockFunctionSyntax == nil {
-					context.diagnose(Diagnostic(
-						node: Syntax(node),
-						error: FixableInstantiableError.mockOnlyMissingMockMethod(
-							typeName: concreteDeclaration.name.text,
-							methodName: expectedMethodName,
-						),
-						changes: Self.generateCustomMockStub(
-							named: expectedMethodName,
-							typeName: concreteDeclaration.name.text,
-							dependencies: visitor.dependencies,
-							on: declaration,
-						),
-					))
-				}
+				context.diagnose(Diagnostic(
+					node: Syntax(node),
+					error: FixableInstantiableError.mockOnlyMissingMockMethod(
+						typeName: concreteDeclaration.name.text,
+						methodName: expectedMethodName,
+					),
+					changes: Self.generateCustomMockStub(
+						named: expectedMethodName,
+						typeName: concreteDeclaration.name.text,
+						dependencies: visitor.dependencies,
+						on: declaration,
+					),
+				))
 			}
 
 			if visitor.isRoot, let instantiableType = visitor.instantiableType {
@@ -751,42 +750,41 @@ public struct InstantiableMacro: MemberMacro {
 			}
 
 			// Validate mockOnly on extensions.
-			if isMockOnly {
-				if let instantiableMacro = declaration.attributes.instantiableMacro {
-					if instantiableMacro.generateMockValue {
-						context.diagnose(Diagnostic(
-							node: Syntax(instantiableMacro),
-							error: FixableInstantiableError.mockOnlyWithGenerateMock,
-							changes: Self.removeArgument(labeled: "generateMock", from: instantiableMacro, on: declaration),
-						))
-					}
-				}
-				if visitor.isRoot {
-					if let instantiableMacro = declaration.attributes.instantiableMacro {
-						context.diagnose(Diagnostic(
-							node: Syntax(instantiableMacro),
-							error: FixableInstantiableError.mockOnlyWithIsRoot,
-							changes: Self.removeArgument(labeled: "isRoot", from: instantiableMacro, on: declaration),
-						))
-					}
-				}
+			if isMockOnly,
+			   let instantiableMacro = declaration.attributes.instantiableMacro,
+			   instantiableMacro.generateMockValue
+			{
+				context.diagnose(Diagnostic(
+					node: Syntax(instantiableMacro),
+					error: FixableInstantiableError.mockOnlyWithGenerateMock,
+					changes: Self.removeArgument(labeled: "generateMock", from: instantiableMacro, on: declaration),
+				))
+			}
+			if isMockOnly, visitor.isRoot,
+			   let instantiableMacro = declaration.attributes.instantiableMacro
+			{
+				context.diagnose(Diagnostic(
+					node: Syntax(instantiableMacro),
+					error: FixableInstantiableError.mockOnlyWithIsRoot,
+					changes: Self.removeArgument(labeled: "isRoot", from: instantiableMacro, on: declaration),
+				))
+			}
+			if isMockOnly, visitor.mockFunctionSyntax == nil {
 				let expectedMethodName = visitor.customMockName ?? "mock"
-				if visitor.mockFunctionSyntax == nil {
-					context.diagnose(Diagnostic(
-						node: Syntax(node),
-						error: FixableInstantiableError.mockOnlyMissingMockMethod(
-							typeName: extensionDeclaration.extendedType.typeDescription.asSource,
-							methodName: expectedMethodName,
-						),
-						changes: Self.generateCustomMockStub(
-							named: expectedMethodName,
-							typeName: extensionDeclaration.extendedType.typeDescription.asSource,
-							dependencies: [],
-							isExtension: true,
-							on: declaration,
-						),
-					))
-				}
+				context.diagnose(Diagnostic(
+					node: Syntax(node),
+					error: FixableInstantiableError.mockOnlyMissingMockMethod(
+						typeName: extensionDeclaration.extendedType.typeDescription.asSource,
+						methodName: expectedMethodName,
+					),
+					changes: Self.generateCustomMockStub(
+						named: expectedMethodName,
+						typeName: extensionDeclaration.extendedType.typeDescription.asSource,
+						dependencies: [],
+						isExtension: true,
+						on: declaration,
+					),
+				))
 			}
 
 			// Validate mock() methods on extensions: must be public, return the extended type or Self, and be unique per return type.
