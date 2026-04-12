@@ -517,7 +517,7 @@ By default, `generateMock` is `false` and no mock is generated. Generated mocks 
 
 Each `@Instantiable` type with `generateMock: true` gets a generated `mock()` static method that builds its full dependency subtree. The hand-written mock method must be in the same `@Instantiable`-decorated declaration body — methods in undecorated extensions are not detected. To provide a mock from a separate extension, use `@Instantiable(mockOnly: true)` on that extension instead.
 
-When a type also has a hand-written mock method, it must have a different name from the generated `mock()` to avoid ambiguity. Use the `customMockName` parameter to specify the name of the hand-written method. With `generateMock: true`, the generated `mock()` calls through to this method. With `mockOnly: true`, the mock generator references this method directly (e.g., `Type.preview()` instead of `Type.mock()`). This is useful when you need custom logic during mock construction — for example, setting up stub behavior, configuring test doubles, or wiring delegates:
+When a type also has a hand-written mock method, it must have a different name from the generated `mock()` to avoid ambiguity. Use the `customMockName` parameter to specify the name of your hand-written method. The generated `mock()` will call through to it. With `mockOnly: true`, `customMockName` tells SafeDI which method to use as the mock provider. This is useful when you need custom logic during mock construction — for example, setting up stub behavior, configuring test doubles, or wiring delegates:
 
 ```swift
 @Instantiable(generateMock: true, customMockName: "customMock")
@@ -551,7 +551,7 @@ The `mockOnly` parameter lets you provide a hand-written `mock()` method for typ
 - Types whose `@Instantiable` declaration is in another module and isn't in the current module's dependency tree
 
 When `mockOnly: true`:
-- The user **must** hand-write a `mock()` method (or a method named by `customMockName`)
+- You **must** provide a hand-written `mock()` method (or a method named by `customMockName`)
 - No `init` (type declarations) or `instantiate()` (extensions) is required
 - No `Instantiable` protocol conformance is required
 - `mockOnly` is mutually exclusive with `generateMock` and `isRoot`
@@ -573,11 +573,9 @@ extension String {
 }
 ```
 
-When a parent type references a `mockOnly` type as a dependency:
-- **`@Forwarded` dependencies**: The forwarded parameter gets a default value of `Type.mock()`, so callers don't need to provide it
-- **`@Instantiated` dependencies**: The type becomes a tree child in `SafeDIOverrides` with `Type.mock()` as the default builder, allowing optional override
+When a parent type references a `mockOnly` type as a dependency, the generated mock uses `Type.mock()` as the default. For `@Forwarded` dependencies, the parameter gets a default value so callers don't need to provide it. For `@Instantiated` dependencies, the type appears in `SafeDIOverrides` with `Type.mock()` as the default, allowing optional override.
 
-A type may have `@Instantiable` on both its declaration and an extension, with one being `mockOnly: true`. This allows a type to have full production behavior from one declaration and a hand-written mock from the other. SafeDI merges the two declarations: production information (initializer, dependencies) comes from the non-`mockOnly` declaration, and the mock method comes from the `mockOnly` declaration. At most one declaration may provide a mock — if both the production declaration and the `mockOnly` declaration provide mock methods, SafeDI emits an error.
+A type may have `@Instantiable` on both its declaration and an extension, with one being `mockOnly: true`. This allows a type to have full production behavior from one declaration and a hand-written mock from the other. SafeDI combines the two: the production `@Instantiable` provides the initializer and dependency tree, while the `mockOnly` declaration provides the mock method. At most one declaration may provide a mock — if both provide mock methods, SafeDI emits an error.
 
 ```swift
 // Production declaration in this or another module:
@@ -659,10 +657,9 @@ To use a mock from another module in your tests, see [Cross-module mock generati
 let noteView = NoteView.mock(userName: "Preview User")
 ```
 
-A forwarded parameter gets a default value in three cases:
+A forwarded parameter gets a default value when:
 - The root type’s own initializer or custom mock provides a default for the parameter
 - The forwarded type has a `mockOnly` provider — the parameter defaults to `Type.mock()` (or the `customMockName` method)
-- The forwarded type has a hand-written mock method on a merged `@Instantiable` declaration
 
 ### Default-valued init parameters in mocks
 
