@@ -99,15 +99,15 @@ struct FixableInstantiableErrorTests {
 	}
 
 	@Test
-	func customMockNameWithoutGenerateMock_description_mentionsRequiringGenerateMock() {
-		let error = FixableInstantiableError.customMockNameWithoutGenerateMock
-		#expect(error.description == "`customMockName` requires `generateMock: true`.")
+	func customMockNameWithoutMockGeneration_description_mentionsRequiringGenerateMock() {
+		let error = FixableInstantiableError.customMockNameWithoutMockGeneration
+		#expect(error.description == "`customMockName` requires `generateMock: true` or `mockOnly: true`.")
 	}
 
 	@Test
-	func customMockNameWithoutGenerateMock_fixIt_mentionsAddingGenerateMock() {
-		let error = FixableInstantiableError.customMockNameWithoutGenerateMock
-		#expect(error.fixIt.message == "Add `generateMock: true` to `@Instantiable`")
+	func customMockNameWithoutMockGeneration_fixIt_mentionsAddingGenerateMock() {
+		let error = FixableInstantiableError.customMockNameWithoutMockGeneration
+		#expect(error.fixIt.message == "Add `generateMock: true` or `mockOnly: true` to `@Instantiable`")
 	}
 
 	@Test

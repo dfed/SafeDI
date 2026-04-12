@@ -38,7 +38,7 @@ public enum FixableInstantiableError: DiagnosticError {
 	case duplicateMockMethod
 	case mockMethodNeedsCustomName
 	case mockMethodConflictsWithGeneratedMock
-	case customMockNameWithoutGenerateMock
+	case customMockNameWithoutMockGeneration
 	case customMockNameMethodNotFound(String)
 	case mockMethodNonDependencyMissingDefaultValue([Property])
 	case mockOnlyWithGenerateMock
@@ -100,8 +100,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			"@\(InstantiableVisitor.macroName)-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@\(InstantiableVisitor.macroName)`."
 		case .mockMethodConflictsWithGeneratedMock:
 			"@\(InstantiableVisitor.macroName)-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method. The generated `mock()` would conflict with this method. Remove it or rename it."
-		case .customMockNameWithoutGenerateMock:
-			"`customMockName` requires `generateMock: true`."
+		case .customMockNameWithoutMockGeneration:
+			"`customMockName` requires `generateMock: true` or `mockOnly: true`."
 		case let .customMockNameMethodNotFound(name):
 			"No method named `\(name)` found. Add a `public static func \(name)(…)` method."
 		case .mockMethodNonDependencyMissingDefaultValue:
@@ -146,7 +146,7 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .duplicateMockMethod,
 			     .mockMethodNeedsCustomName,
 			     .mockMethodConflictsWithGeneratedMock,
-			     .customMockNameWithoutGenerateMock,
+			     .customMockNameWithoutMockGeneration,
 			     .customMockNameMethodNotFound,
 			     .mockMethodNonDependencyMissingDefaultValue,
 			     .mockOnlyWithGenerateMock,
@@ -210,8 +210,8 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Rename method to `customMock` and add `customMockName: \"customMock\"` to `@Instantiable`"
 			case .mockMethodConflictsWithGeneratedMock:
 				"Remove this `mock()` method"
-			case .customMockNameWithoutGenerateMock:
-				"Add `generateMock: true` to `@Instantiable`"
+			case .customMockNameWithoutMockGeneration:
+				"Add `generateMock: true` or `mockOnly: true` to `@Instantiable`"
 			case let .customMockNameMethodNotFound(name):
 				"Add `public static func \(name)(…)` method"
 			case let .mockMethodNonDependencyMissingDefaultValue(properties):

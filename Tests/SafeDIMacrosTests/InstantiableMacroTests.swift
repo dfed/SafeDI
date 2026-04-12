@@ -4600,11 +4600,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`customMockName` requires `generateMock: true`.",
+						message: "`customMockName` requires `generateMock: true` or `mockOnly: true`.",
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `generateMock: true` to `@Instantiable`"),
+							FixItSpec(message: "Add `generateMock: true` or `mockOnly: true` to `@Instantiable`"),
 						],
 					),
 				],
@@ -4646,11 +4646,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`customMockName` requires `generateMock: true`.",
+						message: "`customMockName` requires `generateMock: true` or `mockOnly: true`.",
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `generateMock: true` to `@Instantiable`"),
+							FixItSpec(message: "Add `generateMock: true` or `mockOnly: true` to `@Instantiable`"),
 						],
 					),
 				],
@@ -4818,11 +4818,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`customMockName` requires `generateMock: true`.",
+						message: "`customMockName` requires `generateMock: true` or `mockOnly: true`.",
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `generateMock: true` to `@Instantiable`"),
+							FixItSpec(message: "Add `generateMock: true` or `mockOnly: true` to `@Instantiable`"),
 						],
 					),
 				],
@@ -4864,11 +4864,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`customMockName` requires `generateMock: true`.",
+						message: "`customMockName` requires `generateMock: true` or `mockOnly: true`.",
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `generateMock: true` to `@Instantiable`"),
+							FixItSpec(message: "Add `generateMock: true` or `mockOnly: true` to `@Instantiable`"),
 						],
 					),
 				],

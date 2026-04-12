@@ -499,7 +499,7 @@ public struct InstantiableMacro: MemberMacro {
 				{
 					context.diagnose(Diagnostic(
 						node: Syntax(instantiableMacro),
-						error: FixableInstantiableError.customMockNameWithoutGenerateMock,
+						error: FixableInstantiableError.customMockNameWithoutMockGeneration,
 						changes: Self.addGenerateMockArgument(to: instantiableMacro, arguments: arguments, customMockNameOffset: arguments.distance(from: arguments.startIndex, to: customMockNameIndex), on: declaration),
 					))
 				}
@@ -830,7 +830,7 @@ public struct InstantiableMacro: MemberMacro {
 				{
 					context.diagnose(Diagnostic(
 						node: Syntax(instantiableMacro),
-						error: FixableInstantiableError.customMockNameWithoutGenerateMock,
+						error: FixableInstantiableError.customMockNameWithoutMockGeneration,
 						changes: Self.addGenerateMockArgument(to: instantiableMacro, arguments: arguments, customMockNameOffset: arguments.distance(from: arguments.startIndex, to: customMockNameIndex), on: declaration),
 					))
 				}

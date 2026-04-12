@@ -577,7 +577,7 @@ When a parent type references a `mockOnly` type as a dependency:
 - **`@Forwarded` dependencies**: The forwarded parameter gets a default value of `Type.mock()`, so callers don't need to provide it
 - **`@Instantiated` dependencies**: The type becomes a tree child in `SafeDIOverrides` with `Type.mock()` as the default builder, allowing optional override
 
-A type may have `@Instantiable` on both its declaration and an extension, with one being `mockOnly: true`. This allows a type to have full production behavior from one declaration and a hand-written mock from the other:
+A type may have `@Instantiable` on both its declaration and an extension, with one being `mockOnly: true`. This allows a type to have full production behavior from one declaration and a hand-written mock from the other. SafeDI merges the two declarations: production information (initializer, dependencies) comes from the non-`mockOnly` declaration, and the mock method comes from the `mockOnly` declaration. At most one declaration may provide a mock — if both the production declaration and the `mockOnly` declaration provide mock methods, SafeDI emits an error.
 
 ```swift
 // Production declaration in this or another module:
