@@ -110,10 +110,12 @@ public actor DependencyTreeGenerator {
 			cyclesOnly: true,
 		)
 
-		// Compute mockOnly types: maps type description to mock method name.
+		// Compute types with hand-written mocks that aren't generating their own mock code.
+		// This includes standalone mockOnly types AND merged entries where a mockOnly
+		// declaration's mock was copied onto a non-mockOnly production entry.
 		let mockOnlyTypes: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
 			.reduce(into: [TypeDescription: String]()) { result, instantiable in
-				guard instantiable.mockOnly, instantiable.mockInitializer != nil else { return }
+				guard !instantiable.generateMock, instantiable.mockInitializer != nil else { return }
 				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? "mock"
 			}
 
