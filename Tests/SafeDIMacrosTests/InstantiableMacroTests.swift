@@ -5008,7 +5008,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						message: "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5158,7 +5158,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						message: "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
 						line: 8,
 						column: 5,
 						fixIts: [
@@ -5292,7 +5292,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						message: "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5380,7 +5380,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						message: "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
 						line: 9,
 						column: 5,
 						fixIts: [
@@ -5424,7 +5424,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
 						line: 8,
 						column: 5,
 						fixIts: [
@@ -5486,7 +5486,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
 						line: 10,
 						column: 5,
 						fixIts: [
@@ -5554,7 +5554,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
 						line: 10,
 						column: 5,
 						fixIts: [
@@ -5590,7 +5590,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must be `public` or `open`.",
+						message: "@Instantiable-decorated type’s `mock()` method must be `public` or `open`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5626,7 +5626,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `MyService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `MyService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5673,7 +5673,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `MyService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `MyService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5825,7 +5825,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must be `public` or `open`.",
+						message: "@Instantiable-decorated type’s `mock()` method must be `public` or `open`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5874,7 +5874,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5921,7 +5921,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -5969,7 +5969,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -6134,7 +6134,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -6239,7 +6239,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -6296,7 +6296,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -6368,7 +6368,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must return `Self` or `MyService`.",
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `MyService`.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -6575,11 +6575,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable(mockOnly: true) requires a `public static func mock(...) -> ExampleService` method.",
+						message: "@Instantiable(mockOnly: true) requires a `public static func mock(…) -> ExampleService` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `public static func mock(...) -> ExampleService` method"),
+							FixItSpec(message: "Add `public static func mock(…) -> ExampleService` method"),
 						],
 					),
 				],
@@ -6610,11 +6610,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable(mockOnly: true) requires a `public static func mock(...) -> ExternalService` method.",
+						message: "@Instantiable(mockOnly: true) requires a `public static func mock(…) -> ExternalService` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `public static func mock(...) -> ExternalService` method"),
+							FixItSpec(message: "Add `public static func mock(…) -> ExternalService` method"),
 						],
 					),
 				],
@@ -6668,7 +6668,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type's `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
 						line: 5,
 						column: 5,
 						fixIts: [
@@ -6797,11 +6797,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable(mockOnly: true) requires a `public static func preview(...) -> ExampleService` method.",
+						message: "@Instantiable(mockOnly: true) requires a `public static func preview(…) -> ExampleService` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `public static func preview(...) -> ExampleService` method"),
+							FixItSpec(message: "Add `public static func preview(…) -> ExampleService` method"),
 						],
 					),
 				],
@@ -6915,11 +6915,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable(mockOnly: true) requires a `public static func mock(...) -> ExampleService` method.",
+						message: "@Instantiable(mockOnly: true) requires a `public static func mock(…) -> ExampleService` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `public static func mock(...) -> ExampleService` method"),
+							FixItSpec(message: "Add `public static func mock(…) -> ExampleService` method"),
 						],
 					),
 				],

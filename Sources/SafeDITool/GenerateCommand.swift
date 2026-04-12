@@ -336,7 +336,7 @@ struct Generate: AsyncParsableCommand {
 			case let .noRootFound(inputPath):
 				"Manifest lists '\(inputPath)' as containing a dependency tree root, but no @\(InstantiableVisitor.macroName)(isRoot: true) was found in that file."
 			case let .rootNotInManifest(sourceFilePath):
-				"Found @\(InstantiableVisitor.macroName)(isRoot: true) in '\(sourceFilePath)', but this file is not listed in the manifest's dependencyTreeGeneration. Add it to the manifest or remove the isRoot annotation."
+				"Found @\(InstantiableVisitor.macroName)(isRoot: true) in '\(sourceFilePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. Add it to the manifest or remove the isRoot annotation."
 			}
 		}
 	}

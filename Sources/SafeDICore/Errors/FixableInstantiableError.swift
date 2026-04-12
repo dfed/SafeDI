@@ -89,11 +89,11 @@ public enum FixableInstantiableError: DiagnosticError {
 				"@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property."
 			}
 		case .mockMethodMissingArguments:
-			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method must have a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. Extra parameters with default values are allowed."
+			"@\(InstantiableVisitor.macroName)-decorated type’s `mock()` method must have a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. Extra parameters with default values are allowed."
 		case .mockMethodNotPublic:
-			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method must be `public` or `open`."
+			"@\(InstantiableVisitor.macroName)-decorated type’s `mock()` method must be `public` or `open`."
 		case let .mockMethodIncorrectReturnType(typeName):
-			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method must return `Self` or `\(typeName)`."
+			"@\(InstantiableVisitor.macroName)-decorated type’s `mock()` method must return `Self` or `\(typeName)`."
 		case .duplicateMockMethod:
 			"@\(InstantiableVisitor.macroName)-decorated type must have at most one `mock()` method. Remove this duplicate."
 		case .mockMethodNeedsCustomName:
@@ -105,13 +105,13 @@ public enum FixableInstantiableError: DiagnosticError {
 		case let .customMockNameMethodNotFound(name):
 			"No method named `\(name)` found. Add a `public static func \(name)(…)` method."
 		case .mockMethodNonDependencyMissingDefaultValue:
-			"@\(InstantiableVisitor.macroName)-decorated type's `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values."
+			"@\(InstantiableVisitor.macroName)-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values."
 		case .mockOnlyWithGenerateMock:
 			"`mockOnly` and `generateMock` cannot both be `true`."
 		case .mockOnlyWithIsRoot:
 			"`mockOnly` types cannot be marked `isRoot`."
 		case let .mockOnlyMissingMockMethod(typeName, methodName):
-			"@\(InstantiableVisitor.macroName)(mockOnly: true) requires a `public static func \(methodName)(...) -> \(typeName)` method."
+			"@\(InstantiableVisitor.macroName)(mockOnly: true) requires a `public static func \(methodName)(…) -> \(typeName)` method."
 		}
 	}
 
@@ -221,7 +221,7 @@ public enum FixableInstantiableError: DiagnosticError {
 			case .mockOnlyWithIsRoot:
 				"Remove `isRoot: true`"
 			case let .mockOnlyMissingMockMethod(typeName, methodName):
-				"Add `public static func \(methodName)(...) -> \(typeName)` method"
+				"Add `public static func \(methodName)(…) -> \(typeName)` method"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}

@@ -540,11 +540,11 @@ public struct NetworkClient: Instantiable {
 
 The `customMockName` parameter requires `generateMock: true` or `mockOnly: true`.
 
-If you provide a mock method without `generateMock: true`, parent types that instantiate the child will call `ChildType.mock(...)` (or `ChildType.customMock(...)`) instead of `ChildType(...)` when constructing it, threading mock parameters through your custom method.
+If you provide a mock method without `generateMock: true`, parent types that instantiate the child will call `ChildType.mock(…)` (or `ChildType.customMock(…)`) instead of `ChildType(…)` when constructing it, threading mock parameters through your custom method.
 
 ### The `mockOnly` parameter
 
-The `mockOnly` parameter lets you provide a hand-written `mock()` method for types that don't need full `@Instantiable` infrastructure. Here's an example providing a mock for a third-party type:
+The `mockOnly` parameter lets you provide a hand-written `mock()` method for types that don’t need full `@Instantiable` infrastructure. Here’s an example providing a mock for a third-party type:
 
 ```swift
 @Instantiable(mockOnly: true)
@@ -564,13 +564,13 @@ extension String {
 }
 ```
 
-When a parent type references a `mockOnly` type as a dependency, the generated mock uses `Type.mock()` as the default. For `@Forwarded` dependencies, the parameter gets a default value so callers don't need to provide it. For `@Instantiated` dependencies, the type appears in `SafeDIOverrides` with `Type.mock()` as the default, allowing optional override.
+When a parent type references a `mockOnly` type as a dependency, the generated mock uses `Type.mock()` as the default. For `@Forwarded` dependencies, the parameter gets a default value so callers don’t need to provide it. For `@Instantiated` dependencies, the type appears in `SafeDIOverrides` with `Type.mock()` as the default, allowing optional override.
 
 `mockOnly` is useful for:
 
 - Types defined in other modules (e.g., third-party dependencies) that need mocks in your tests
 - Primitive or Foundation types used as `@Forwarded` dependencies (e.g., `String`, `Int`, `UUID`)
-- Types whose `@Instantiable` declaration is in another module and isn't in the current module's dependency tree
+- Types whose `@Instantiable` declaration is in another module and isn’t in the current module’s dependency tree
 
 A `mockOnly` declaration requires a hand-written `mock()` method (or a method named by `customMockName`). No `init` (type declarations), `instantiate()` (extensions), or `Instantiable` conformance is required. `mockOnly` is mutually exclusive with `generateMock` and `isRoot`. `conformsElsewhere` has no effect when `mockOnly` is true.
 

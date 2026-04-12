@@ -1976,7 +1976,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		let tool = try Generate.parse(["--include", "Fake"])
 		await SafeDITool.$fileFinder.withValue(FailingFileFinder()) {
 			await assertThrowsError("Could not create file enumerator for directory 'Fake'") {
-				var mutableTool = tool
+				let mutableTool = tool
 				try await mutableTool.run()
 			}
 		}
@@ -1985,7 +1985,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func include_throwsErrorWhenNoSwiftSourcesFilePathAndNoInclude() async throws {
-		var tool = try Generate.parse([])
+		let tool = try Generate.parse([])
 		await assertThrowsError("Must provide 'swift-sources-file-path' or '--include'.") {
 			try await tool.run()
 		}
@@ -1995,7 +1995,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func generate_throwsError_whenOutputDirectoryProvidedWithoutCSV() async throws {
 		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-		var tool = try Generate.parse([
+		let tool = try Generate.parse([
 			"--include", "SomeDir",
 			"--output-directory", outputDirectory.path,
 		])
@@ -2029,7 +2029,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			"Manifest lists '\(swiftFile.relativePath)' as containing a dependency tree root, but no @Instantiable(isRoot: true) was found in that file.",
 		) {
-			var tool = try Generate.parse([
+			let tool = try Generate.parse([
 				swiftFileCSV.relativePath,
 				"--module-info-output", moduleInfoOutput.relativePath,
 				"--swift-manifest", manifestFile.relativePath,
@@ -2063,9 +2063,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		filesToDelete += [swiftFileCSV, swiftFile, manifestFile, moduleInfoOutput]
 
 		await assertThrowsError(
-			"Found @Instantiable(isRoot: true) in '\(swiftFile.relativePath)', but this file is not listed in the manifest's dependencyTreeGeneration. Add it to the manifest or remove the isRoot annotation.",
+			"Found @Instantiable(isRoot: true) in '\(swiftFile.relativePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. Add it to the manifest or remove the isRoot annotation.",
 		) {
-			var tool = try Generate.parse([
+			let tool = try Generate.parse([
 				swiftFileCSV.relativePath,
 				"--module-info-output", moduleInfoOutput.relativePath,
 				"--swift-manifest", manifestFile.relativePath,
