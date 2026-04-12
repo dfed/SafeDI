@@ -120,6 +120,33 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenRegularInstantiableWithMockExistsAndMockOnlyArrivesSecond() async {
+		await assertThrowsError(
+			"Multiple mock providers found for `MyService`. A type can have at most one mock — either via `generateMock: true`, a hand-written `mock()` method, or `mockOnly: true`.",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct MyService: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable(mockOnly: true)
+					extension MyService {
+					    public static func mock() -> MyService { fatalError() }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()
