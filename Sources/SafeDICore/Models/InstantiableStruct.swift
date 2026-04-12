@@ -74,13 +74,13 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// When `true`, no `init`/`instantiate()` or `Instantiable` conformance is required.
 	public let mockOnly: Bool
 	/// A user-defined `static func mock(...)` method, if one exists.
-	/// When present, generated mocks call `TypeName.mock(...)` instead of `TypeName(...)`.
+	/// When present, mock generation calls this method instead of `init` or `instantiate`.
 	public var mockInitializer: Initializer?
 	/// The return type of the user-defined `mock()` method, if one exists.
-	/// Used to determine whether to call `.mock` or fall through to `init` based on the property type.
+	/// Used to determine whether to use the mock method or fall through to `init` based on the property type.
 	public var mockReturnType: TypeDescription?
-	/// The name of the user's custom mock method when `generateMock` is `true`.
-	/// The generated `mock()` calls through to this method instead of `init`.
+	/// The name of the user's custom mock method. With `generateMock`, the generated `mock()` calls
+	/// through to this method. With `mockOnly`, SafeDI uses this method as the mock provider.
 	public var customMockName: String?
 
 	/// Returns a copy of this Instantiable with mock-related fields replaced by those from `mockProvider`.
