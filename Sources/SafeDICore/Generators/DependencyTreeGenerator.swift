@@ -116,7 +116,7 @@ public actor DependencyTreeGenerator {
 		// was copied onto a non-mockOnly production entry. Types whose mock method has
 		// required parameters are excluded, since the generated default `Type.mock()` would
 		// not compile.
-		let defaultableMockTypes: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
+		let forwardedParameterMockDefaults: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
 			.reduce(into: [TypeDescription: String]()) { result, instantiable in
 				guard !instantiable.generateMock,
 				      let mockInitializer = instantiable.mockInitializer,
@@ -180,7 +180,7 @@ public actor DependencyTreeGenerator {
 					async let code = mockRoot.generateCode(
 						codeGeneration: .mock(ScopeGenerator.MockContext(
 							mockConditionalCompilation: mockConditionalCompilation,
-							defaultableMockTypes: defaultableMockTypes,
+							forwardedParameterMockDefaults: forwardedParameterMockDefaults,
 						)),
 					)
 					async let configurationTypes = mockRoot.collectConfigurationTypes()
