@@ -544,29 +544,20 @@ If you provide a mock method without `generateMock: true`, parent types that ins
 
 ### The `mockOnly` parameter
 
-The `mockOnly` parameter lets you provide a hand-written `mock()` method for types that don't need full `@Instantiable` infrastructure. This is useful for:
-
-- Types defined in other modules (e.g., third-party dependencies) that need mocks in your tests
-- Primitive or Foundation types used as `@Forwarded` dependencies (e.g., `String`, `Int`, `UUID`)
-- Types whose `@Instantiable` declaration is in another module and isn't in the current module's dependency tree
-
-When `mockOnly: true`:
-- You **must** provide a hand-written `mock()` method (or a method named by `customMockName`)
-- No `init` (type declarations) or `instantiate()` (extensions) is required
-- No `Instantiable` protocol conformance is required
-- `mockOnly` is mutually exclusive with `generateMock` and `isRoot`
-- `conformsElsewhere` is redundant but allowed
+The `mockOnly` parameter lets you provide a hand-written `mock()` method for types that don't need full `@Instantiable` infrastructure. Here's an example providing a mock for a third-party type:
 
 ```swift
-// Provide a mock for a third-party type:
 @Instantiable(mockOnly: true)
 extension ExternalService {
     public static func mock() -> ExternalService {
         ExternalService(apiKey: "test-key")
     }
 }
+```
 
-// Provide a mock for a primitive forwarded type:
+This also works for primitive types used as `@Forwarded` dependencies:
+
+```swift
 @Instantiable(mockOnly: true)
 extension String {
     public static func mock() -> String { "" }
@@ -575,7 +566,17 @@ extension String {
 
 When a parent type references a `mockOnly` type as a dependency, the generated mock uses `Type.mock()` as the default. For `@Forwarded` dependencies, the parameter gets a default value so callers don't need to provide it. For `@Instantiated` dependencies, the type appears in `SafeDIOverrides` with `Type.mock()` as the default, allowing optional override.
 
-A type may have `@Instantiable` on both its declaration and an extension, with one being `mockOnly: true`. This allows a type to have full production behavior from one declaration and a hand-written mock from the other. SafeDI combines the two: the production `@Instantiable` provides the initializer and dependency tree, while the `mockOnly` declaration provides the mock method. At most one declaration may provide a mock — if both provide mock methods, SafeDI emits an error.
+`mockOnly` is useful for:
+
+- Types defined in other modules (e.g., third-party dependencies) that need mocks in your tests
+- Primitive or Foundation types used as `@Forwarded` dependencies (e.g., `String`, `Int`, `UUID`)
+- Types whose `@Instantiable` declaration is in another module and isn't in the current module's dependency tree
+
+A `mockOnly` declaration requires a hand-written `mock()` method (or a method named by `customMockName`). No `init` (type declarations), `instantiate()` (extensions), or `Instantiable` conformance is required. `mockOnly` is mutually exclusive with `generateMock` and `isRoot`. `conformsElsewhere` has no effect when `mockOnly` is true.
+
+#### Splitting production and mock declarations
+
+A type may have `@Instantiable` on both its declaration and an extension, with one being `mockOnly: true`. This lets you keep production behavior in one declaration and a hand-written mock in the other:
 
 ```swift
 // Production declaration in this or another module:
@@ -593,6 +594,8 @@ extension MyService {
     }
 }
 ```
+
+When both declarations exist, SafeDI uses the production `@Instantiable` for the dependency tree and the `mockOnly` declaration for mock generation. At most one declaration may provide a mock — if both provide mock methods, SafeDI emits an error.
 
 Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type’s `@Instantiated`, `@Received`, and `@Forwarded` dependencies. Non-dependency parameters must have default values. On concrete type declarations the return type must be `Self`, the type name, or a type listed in `fulfillingAdditionalTypes`; on extension-based `@Instantiable` types the return type must match the extended type (e.g. `-> Container<Bool>`) or a `fulfillingAdditionalTypes` entry, mirroring the corresponding `instantiate()` method. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
 
