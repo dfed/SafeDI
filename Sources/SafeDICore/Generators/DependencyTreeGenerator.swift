@@ -110,12 +110,17 @@ public actor DependencyTreeGenerator {
 			cyclesOnly: true,
 		)
 
-		// Compute types with hand-written mocks that aren't generating their own mock code.
-		// This includes standalone mockOnly types AND merged entries where a mockOnly
-		// declaration's mock was copied onto a non-mockOnly production entry.
+		// Compute types with hand-written mocks that aren't generating their own mock code
+		// and whose mock method can be called with zero arguments. This includes standalone
+		// mockOnly types AND merged entries where a mockOnly declaration's mock was copied
+		// onto a non-mockOnly production entry. Types whose mock method has required
+		// parameters are excluded, since the generated default `Type.mock()` would not compile.
 		let handWrittenMockTypes: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
 			.reduce(into: [TypeDescription: String]()) { result, instantiable in
-				guard !instantiable.generateMock, instantiable.mockInitializer != nil else { return }
+				guard !instantiable.generateMock,
+				      let mockInitializer = instantiable.mockInitializer,
+				      mockInitializer.arguments.allSatisfy(\.hasDefaultValue)
+				else { return }
 				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 			}
 
