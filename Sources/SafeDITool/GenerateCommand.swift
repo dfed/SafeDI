@@ -408,19 +408,21 @@ struct Generate: AsyncParsableCommand {
 					case (true, true):
 						throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 					case (false, true):
-						// Merge: keep existing production info, take mock info from mockOnly.
+						// Keep existing production info. If it lacks a mock, merge
+						// in mock info from the mockOnly type.
 						let existingHasMock = existing.generateMock || existing.mockInitializer != nil
-						if existingHasMock {
-							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+						if !existingHasMock {
+							typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
 						}
-						typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
 					case (true, false):
-						// Merge: take production info from new, keep mock info from existing mockOnly.
+						// Replace with production info. If it lacks a mock, merge
+						// in mock info from the existing mockOnly type.
 						let newHasMock = instantiable.generateMock || instantiable.mockInitializer != nil
 						if newHasMock {
-							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
+						} else {
+							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
 						}
-						typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
 					case (false, false):
 						throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)
 					}
