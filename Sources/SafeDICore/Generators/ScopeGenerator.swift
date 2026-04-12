@@ -1273,7 +1273,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let closureType = node.builderClosureType
 		initParameters.append("\(innerIndent)\(standardIndent)_ safeDIBuilder: (\(sendableAnnotation)\(closureType))? = nil")
 		assignments.append("\(innerIndent)\(standardIndent)self.safeDIBuilder = safeDIBuilder")
-		storedProperties.append("\(innerIndent)/// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.")
+		storedProperties.append("\(innerIndent)/// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.")
 		storedProperties.append("\(innerIndent)let safeDIBuilder: (\(sendableAnnotation)\(closureType))?")
 
 		// Emit init.

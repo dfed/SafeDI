@@ -381,7 +381,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let grandchild: ((SharedThing) -> Grandchild)?
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((SharedThing, Grandchild) -> ChildA)?
 		    }
 		}
@@ -823,7 +823,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		        let grandchildAA: ((Shared) -> GrandchildAA)?
 		        let grandchildAB: ((Shared) -> GrandchildAB)?
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((GrandchildAA, GrandchildAB) -> ChildA)?
 		    }
 		}
@@ -1394,7 +1394,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let grandchild: Grandchild.SafeDIMockConfiguration
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((Grandchild, Leaf) -> Child)?
 		    }
 		}
@@ -1445,7 +1445,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let greatGrandchild: ((Leaf) -> GreatGrandchild)?
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((GreatGrandchild, Leaf) -> Grandchild)?
 		    }
 		}
@@ -2205,7 +2205,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let flag: Bool
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((String, Shared, Bool) -> Child)?
 		    }
 		}
@@ -2446,7 +2446,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((Instantiator<Root>) -> Root)?
 		    }
 		}
@@ -3417,7 +3417,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let grandchildBuilder: ((Int) -> Grandchild)?
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((String, Instantiator<Grandchild>) -> Child)?
 		    }
 		}
@@ -3708,7 +3708,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let profileViewControllerBuilder: ProfileViewController.SafeDIMockConfiguration
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((UserManager, NetworkService, Instantiator<ProfileViewController>) -> LoggedInViewController)?
 		    }
 		}
@@ -3766,7 +3766,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let editProfileViewControllerBuilder: ((UserVendor, UserManager, NetworkService) -> EditProfileViewController)?
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((UserVendor, Instantiator<EditProfileViewController>) -> ProfileViewController)?
 		    }
 		}
@@ -3925,7 +3925,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let grandchildBuilder: ((AnyIterator) -> Grandchild)?
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((IndexingIterator<Array<Element>>, Instantiator<Grandchild>) -> Child)?
 		    }
 		}
@@ -4224,7 +4224,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let networkService: (() -> DefaultNetworkService)?
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((NetworkService, NetworkService) -> DefaultAuthService)?
 		    }
 		}
@@ -9878,7 +9878,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((Instantiator<Child>, Service) -> Child)?
 		    }
 		}
@@ -10182,7 +10182,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let cachedPlayerBuilder: ((Player) -> CachedPlayer)?
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((Instantiator<CachedPlayer>) -> Player)?
 		    }
 		}
@@ -10371,7 +10371,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		        let optionalChild: ((Service?) -> OptionalChild)?
 		        let requiredChild: ((Service) -> RequiredChild)?
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((OptionalChild, RequiredChild) -> Parent)?
 		    }
 		}
@@ -10693,7 +10693,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let child: Child.SafeDIMockConfiguration
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: (@Sendable (Child, String) -> Parent)?
 		    }
 		}
@@ -10740,7 +10740,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let leaf: (() -> Leaf)?
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((Leaf) -> Child)?
 		    }
 		}
@@ -10893,7 +10893,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let innerFactory: (@Sendable (Int) -> Leaf)?
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: (@Sendable (SendableInstantiator<Leaf>, String) -> Parent)?
 		    }
 		}
@@ -11046,7 +11046,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let innerFactory: (@Sendable (Int) -> Leaf)?
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: (@Sendable (Instantiator<Leaf>, String) -> Parent)?
 		    }
 		}

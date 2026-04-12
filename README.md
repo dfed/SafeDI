@@ -160,7 +160,7 @@ swift package plugin safedi-v1-to-v2 --target <YourRootTarget>
 
 This plugin will:
 1. Verify your `swift-tools-version` is 6.3 or later
-2. Create a `SafeDIConfiguration.swift` file in your target's source directory
+2. Create a `SafeDIConfiguration.swift` file in your target’s source directory
 3. Migrate any existing CSV configuration values into the new `#SafeDIConfiguration` macro
 4. Delete the obsolete CSV files
 
@@ -169,7 +169,7 @@ This plugin will:
 1. Update your `swift-tools-version` to 6.3 or later
 2. Update your SafeDI dependency to `from: "2.0.0"`
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
-4. If you don't have CSV configuration files, add a `#SafeDIConfiguration()` in your root module
+4. If you don’t have CSV configuration files, add a `#SafeDIConfiguration()` in your root module
 
 ### Plugin changes
 

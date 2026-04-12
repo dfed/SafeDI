@@ -128,7 +128,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        }
 
 		        let childB: (() -> Other)?
-		        /// Overrides how this type is constructed. Parameters match the type's initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((Instantiator<Other>) -> ChildA)?
 		    }
 		}

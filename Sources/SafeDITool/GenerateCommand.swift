@@ -36,7 +36,7 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "The names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModules: [String] = []
 
-	@Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project's non-root module. Must have a `.safedi` suffix.") var moduleInfoOutput: String?
+	@Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project’s non-root module. Must have a `.safedi` suffix.") var moduleInfoOutput: String?
 
 	@Option(help: "A path to a CSV file containing paths of SafeDI representations of other modules to parse.") var dependentModuleInfoFilePath: String?
 
@@ -46,7 +46,7 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Swift file paths scoped to the current target for mock generation. Only used when --output-directory is provided without --swift-manifest.") var mockScopedFiles: [String] = []
 
-	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project's root module.") var dotFileOutput: String?
+	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
 
 	// MARK: Internal
 
