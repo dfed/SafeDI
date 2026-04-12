@@ -81,7 +81,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public var mockReturnType: TypeDescription?
 	/// The name of the user's custom mock method when `generateMock` is `true`.
 	/// The generated `mock()` calls through to this method instead of `init`.
-	public let customMockName: String?
+	public var customMockName: String?
 
 	/// Whether the user-defined mock() method's return type is compatible with the given property type.
 	/// Returns `true` when the mock returns the concrete type, `Self`, or the exact property type.

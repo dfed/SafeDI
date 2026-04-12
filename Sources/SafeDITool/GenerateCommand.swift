@@ -416,6 +416,7 @@ struct Generate: AsyncParsableCommand {
 						var merged = existing
 						merged.mockInitializer = instantiable.mockInitializer
 						merged.mockReturnType = instantiable.mockReturnType
+						merged.customMockName = instantiable.customMockName
 						typeDescriptionToFulfillingInstantiableMap[instantiableType] = merged
 					case (true, false):
 						// Merge: take production info from new, keep mock info from existing mockOnly.
@@ -426,6 +427,7 @@ struct Generate: AsyncParsableCommand {
 						var merged = instantiable
 						merged.mockInitializer = existing.mockInitializer
 						merged.mockReturnType = existing.mockReturnType
+						merged.customMockName = existing.customMockName
 						typeDescriptionToFulfillingInstantiableMap[instantiableType] = merged
 					case (false, false):
 						throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)
