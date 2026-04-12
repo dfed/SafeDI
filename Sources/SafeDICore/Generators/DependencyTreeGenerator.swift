@@ -728,12 +728,23 @@ public actor DependencyTreeGenerator {
 		for scope in Set(typeDescriptionToScopeMap.values) {
 			for dependency in scope.instantiable.dependencies {
 				switch dependency.source {
-				case let .instantiated(_, erasedToConcreteExistential):
+				case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
 					let instantiatedType = dependency.asInstantiatedType
 					if let instantiatedScope = typeDescriptionToScopeMap[instantiatedType] {
 						scope.propertiesToGenerate.append(.instantiated(
 							dependency.property,
 							instantiatedScope,
+							erasedToConcreteExistential: erasedToConcreteExistential,
+						))
+					} else if fulfillingTypeDescription != nil,
+					          let declaredTypeScope = typeDescriptionToScopeMap[dependency.property.typeDescription.asInstantiatedType]
+					{
+						// The fulfilling type (from fulfilledByType:) is not visible in this
+						// module. Fall back to the declared property type, which may be
+						// fulfilled by a mockOnly type visible in the current module.
+						scope.propertiesToGenerate.append(.instantiated(
+							dependency.property,
+							declaredTypeScope,
 							erasedToConcreteExistential: erasedToConcreteExistential,
 						))
 					}
