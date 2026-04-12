@@ -1218,11 +1218,8 @@ public struct InstantiableMacro: MemberMacro {
 		on declaration: some SyntaxProtocol,
 	) -> [FixIt.Change] {
 		var fixedAttribute = attribute
-		guard let arguments = LabeledExprListSyntax(attribute.arguments!),
-		      let targetIndex = arguments.firstIndex(where: { $0.label?.text == label })
-		else {
-			return []
-		}
+		let arguments = LabeledExprListSyntax(attribute.arguments!)!
+		let targetIndex = arguments.firstIndex(where: { $0.label?.text == label })!
 		var newArguments = Array(arguments)
 		let removedIndex = arguments.distance(from: arguments.startIndex, to: targetIndex)
 		newArguments.remove(at: removedIndex)
