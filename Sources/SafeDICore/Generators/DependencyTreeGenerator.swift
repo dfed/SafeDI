@@ -714,12 +714,11 @@ public actor DependencyTreeGenerator {
 	/// but includes ALL types (not just reachable from roots). Received dependencies are NOT
 	/// promoted here — they're promoted at the root level in `createMockRootScopeGenerator`.
 	private func createMockTypeDescriptionToScopeMapping() -> [TypeDescription: Scope] {
-		// Create scopes for all types. When multiple types fulfill the same
-		// additional type, prefer mock-capable types over plain production types:
-		//   1. Non-mockOnly with its own mock (generateMock/mockInitializer) — highest
-		//   2. mockOnly — provides a mock when the production type has none
-		//   3. Non-mockOnly without mock — lowest (use real initializer)
+		// Create scopes for all types. Process non-mockOnly types first so they
+		// claim additional-type slots. mockOnly types then overwrite slots whose
+		// existing scope lacks its own mock (generateMock/mockInitializer).
 		let typeDescriptionToScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
+			.sorted(by: { !$0.mockOnly && $1.mockOnly })
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
 				guard partialResult[instantiable.concreteInstantiable] == nil else { return }
 				let scope = Scope(instantiable: instantiable)
@@ -728,14 +727,11 @@ public actor DependencyTreeGenerator {
 						partialResult[instantiableType] = scope
 						continue
 					}
-					let existingHasMock = existingScope.instantiable.generateMock
-						|| existingScope.instantiable.mockInitializer != nil
-					// A mockOnly type overwrites a production type that lacks its
-					// own mock. A non-mockOnly type with a mock always wins.
-					if instantiable.mockOnly, !existingHasMock {
-						partialResult[instantiableType] = scope
-					} else if !instantiable.mockOnly,
-					          instantiable.generateMock || instantiable.mockInitializer != nil
+					// A mockOnly type overwrites a non-mockOnly scope that lacks
+					// its own mock, providing a mock where the production type has none.
+					if instantiable.mockOnly,
+					   !existingScope.instantiable.generateMock,
+					   existingScope.instantiable.mockInitializer == nil
 					{
 						partialResult[instantiableType] = scope
 					}
