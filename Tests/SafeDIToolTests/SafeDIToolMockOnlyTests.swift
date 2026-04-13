@@ -978,7 +978,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_usesMockOnlyMock_whenFulfilledByTypeIsVisibleButDeclaredTypeHasMockOnly() async throws {
+	mutating func mock_usesMockOnlyMock_whenFulfilledByTypeIsVisibleAndHasNoMockWhileDeclaredTypeHasMockOnly() async throws {
 		// fulfilledByType is a production-only directive. For mocks, the declared
 		// type (AnyService) is resolved via the scope map's priority rules.
 		// MockService (mockOnly, hand-written mock) wins over ConcreteService (no mock).
