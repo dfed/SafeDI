@@ -734,16 +734,24 @@ public actor DependencyTreeGenerator {
 				if lhs.mockOnly != rhs.mockOnly {
 					return !lhs.mockOnly
 				} else {
-					// Within the same mockOnly tier, entries with mock info first
+					// Within the same mockOnly tier, prefer entries with mock info
 					// so scope-reuse creates scopes from mock-capable entries.
-					let lhsHasMock = lhs.generateMock || lhs.mockInitializer != nil
-					let rhsHasMock = rhs.generateMock || rhs.mockInitializer != nil
-					if lhsHasMock != rhsHasMock {
-						return lhsHasMock
+					// Hand-written mocks (mockInitializer) before generateMock,
+					// since hand-written mocks take priority.
+					let lhsHasHandWrittenMock = lhs.mockInitializer != nil
+					let rhsHasHandWrittenMock = rhs.mockInitializer != nil
+					if lhsHasHandWrittenMock != rhsHasHandWrittenMock {
+						return lhsHasHandWrittenMock
 					} else {
-						// Stable tiebreaker: sort by concrete type name so scope-reuse
-						// selects the same entry across runs.
-						return lhs.concreteInstantiable < rhs.concreteInstantiable
+						let lhsHasMock = lhs.generateMock || lhsHasHandWrittenMock
+						let rhsHasMock = rhs.generateMock || rhsHasHandWrittenMock
+						if lhsHasMock != rhsHasMock {
+							return lhsHasMock
+						} else {
+							// Stable tiebreaker: sort by concrete type name so scope-reuse
+							// selects the same entry across runs.
+							return lhs.concreteInstantiable < rhs.concreteInstantiable
+						}
 					}
 				}
 			}
@@ -755,12 +763,12 @@ public actor DependencyTreeGenerator {
 						partialResult[instantiableType] = scope
 						continue
 					}
-					// A mockOnly type overwrites a non-mockOnly scope that lacks
-					// its own mock. A mockInitializer whose return type doesn't match
-					// the scope's concrete type was inherited from a mockOnly merge
-					// and doesn't count as the production type's own mock.
+					// A mockOnly hand-written mock overwrites a scope that lacks
+					// its own hand-written mock. generateMock (which wraps init)
+					// does not count — hand-written mocks take priority.
+					// mockReturnTypeIsCompatible distinguishes genuine hand-written
+					// mocks (compatible return type) from inherited merge artifacts.
 					if instantiable.mockOnly,
-					   !existingScope.instantiable.generateMock,
 					   !existingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: existingScope.instantiable.concreteInstantiable)
 					{
 						partialResult[instantiableType] = scope

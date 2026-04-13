@@ -424,8 +424,11 @@ struct Generate: AsyncParsableCommand {
 							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 						}
 						typesWithMockOnlyMerge.insert(instantiableType)
-						let existingHasMock = existing.generateMock || existing.mockInitializer != nil
-						if !existingHasMock {
+						// Only a hand-written mock on the production type suppresses
+						// the mockOnly. generateMock (which wraps init) does not —
+						// hand-written mocks take priority over generated ones.
+						let existingHasHandWrittenMock = existing.mockInitializer != nil
+						if !existingHasHandWrittenMock {
 							typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
 						} else {
 							clearMockOnlyMockInfo = true
@@ -434,8 +437,8 @@ struct Generate: AsyncParsableCommand {
 						// The existing entry is mockOnly — record it so a second
 						// mockOnly for the same type is still rejected.
 						typesWithMockOnlyMerge.insert(instantiableType)
-						let newHasMock = instantiable.generateMock || instantiable.mockInitializer != nil
-						if newHasMock {
+						let newHasHandWrittenMock = instantiable.mockInitializer != nil
+						if newHasHandWrittenMock {
 							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
 							concreteTypesWhereProductionMockReplacedMockOnly.insert(instantiable.concreteInstantiable)
 						} else {
@@ -457,9 +460,9 @@ struct Generate: AsyncParsableCommand {
 		}
 
 		// Clean stale mockOnly entries that were registered before the production
-		// type (with its own mock) was processed. The inline clearMockOnlyMockInfo
-		// flag handles the case where the production type is processed first; this
-		// handles the reverse ordering.
+		// type (with its own hand-written mock) was processed. The inline
+		// clearMockOnlyMockInfo flag handles the case where the production type is
+		// processed first; this handles the reverse ordering.
 		for typeDescription in concreteTypesWhereProductionMockReplacedMockOnly {
 			for (key, instantiable) in typeDescriptionToFulfillingInstantiableMap
 				where instantiable.mockOnly && instantiable.concreteInstantiable == typeDescription && instantiable.mockInitializer != nil
@@ -469,6 +472,25 @@ struct Generate: AsyncParsableCommand {
 				cleared.mockReturnType = nil
 				cleared.customMockName = nil
 				typeDescriptionToFulfillingInstantiableMap[key] = cleared
+			}
+		}
+
+		// Propagate merged mock info to sibling entries: when a mockOnly merged
+		// into one key for a concreteInstantiable, other keys for the same
+		// concreteInstantiable (from fulfillingAdditionalTypes) may still lack
+		// the mock info. Copy it so all entries are consistent.
+		var mockProviderByConcreteType = [TypeDescription: Instantiable]()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
+			where !instantiable.mockOnly && instantiable.mockInitializer != nil
+		{
+			mockProviderByConcreteType[instantiable.concreteInstantiable] = instantiable
+		}
+		for (typeDescription, instantiable) in typeDescriptionToFulfillingInstantiableMap {
+			if !instantiable.mockOnly,
+			   instantiable.mockInitializer == nil,
+			   let mockProvider = mockProviderByConcreteType[instantiable.concreteInstantiable]
+			{
+				typeDescriptionToFulfillingInstantiableMap[typeDescription] = instantiable.mergedWithMockProvider(mockProvider)
 			}
 		}
 
