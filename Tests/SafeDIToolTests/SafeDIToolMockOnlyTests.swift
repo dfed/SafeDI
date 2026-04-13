@@ -1047,7 +1047,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_fallsBackToFulfillingType_whenDeclaredTypeHasNoMockOnly() async throws {
+	mutating func mock_fallsBackToFulfillingType_whenDeclaredTypeHasNoMock() async throws {
 		// fulfilledByType names ConcreteService. AnyService has no mockOnly.
 		// The declared type (AnyService) isn't in the mock scope map, so
 		// mock resolution falls back to the fulfilling type (ConcreteService).
