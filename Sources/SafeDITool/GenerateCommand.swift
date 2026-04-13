@@ -445,15 +445,19 @@ struct Generate: AsyncParsableCommand {
 		// are consistent. Two directions:
 		// 1. Entries missing mock info get it from a merged mockOnly provider.
 		// 2. Stale mockOnly entries get their mock info cleared when the production
-		//    type has generateMock (so they don't pollute forwardedParameterMockDefaults).
+		//    type has its own mock (generateMock or hand-written), so they don't
+		//    pollute forwardedParameterMockDefaults.
 		var mockProviderByConcreteType = [TypeDescription: Instantiable]()
-		var generateMockConcreteTypes = Set<TypeDescription>()
-		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
+		var productionMockConcreteTypes = Set<TypeDescription>()
+		// Sort mockOnly entries first so non-mockOnly entries win mockProviderByConcreteType.
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
+			.sorted(by: { $0.mockOnly && !$1.mockOnly })
+		{
 			if instantiable.mockInitializer != nil {
 				mockProviderByConcreteType[instantiable.concreteInstantiable] = instantiable
 			}
-			if instantiable.generateMock {
-				generateMockConcreteTypes.insert(instantiable.concreteInstantiable)
+			if !instantiable.mockOnly, instantiable.generateMock || instantiable.mockInitializer != nil {
+				productionMockConcreteTypes.insert(instantiable.concreteInstantiable)
 			}
 		}
 		for (typeDescription, instantiable) in typeDescriptionToFulfillingInstantiableMap {
@@ -466,10 +470,10 @@ struct Generate: AsyncParsableCommand {
 				typeDescriptionToFulfillingInstantiableMap[typeDescription] = instantiable.mergedWithMockProvider(mockProvider)
 			} else if instantiable.mockOnly,
 			          instantiable.mockInitializer != nil,
-			          generateMockConcreteTypes.contains(concreteType)
+			          productionMockConcreteTypes.contains(concreteType)
 			{
-				// Clear stale mockOnly mock info when the production type has
-				// generateMock — the generated mock takes priority.
+				// Clear stale mockOnly mock info when the production type has its
+				// own mock — the production mock takes priority.
 				var cleared = instantiable
 				cleared.mockInitializer = nil
 				cleared.mockReturnType = nil
