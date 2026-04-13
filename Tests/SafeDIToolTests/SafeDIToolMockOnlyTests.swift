@@ -1119,10 +1119,9 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_propagationPreservesGenerateMock_whenMockOnlyHasExtraAdditionalType() async throws {
-		// P1: When a production type has generateMock: true and a mockOnly adds
-		// extra fulfillingAdditionalTypes, the mock propagation pass must not
-		// overwrite the production type's generated mock behavior with the
-		// mockOnly's hand-written mock.
+		// When a production type has generateMock: true and a mockOnly adds
+		// extra fulfillingAdditionalTypes, the stale-clearing pass must not
+		// let the mockOnly's hand-written mock override the generated mock.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""

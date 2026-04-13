@@ -112,8 +112,8 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenSecondMockOnlyArrivesAfterFirstMerged() async {
-		// P2: After a mockOnly merges into a production entry, a second mockOnly
-		// for the same fulfilled type must still be rejected — not silently ignored.
+		// After a mockOnly merges into a production entry, a second mockOnly
+		// for the same fulfilled type must still be rejected.
 		await assertThrowsError(
 			"Found multiple `mockOnly: true` declarations for `MyService`. A type can have at most one `mockOnly` declaration.",
 		) {
@@ -148,9 +148,9 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenMockOnlyWinsAdditionalTypeSlotAndChildHasForwardedProperty() async {
-		// P1: When mockOnly wins an additional-type slot in the mock scope map,
+		// When mockOnly wins an additional-type slot in the mock scope map,
 		// forwarded-child validation must check the mockOnly child (not the
-		// production child from typeDescriptionToFulfillingInstantiableMap).
+		// production child).
 		await assertThrowsError(
 			"""
 			Property `service: ServiceProtocol` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
@@ -196,7 +196,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenSecondMockOnlyIgnoredAfterProductionWithMock() async {
-		// P2: When a production type has generateMock and a mockOnly is silently
+		// When a production type has generateMock and a mockOnly is silently
 		// ignored, a second mockOnly must still be rejected.
 		await assertThrowsError(
 			"Found multiple `mockOnly: true` declarations for `MyService`. A type can have at most one `mockOnly` declaration.",
