@@ -95,6 +95,38 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTwoDifferentMockOnlyConcreteTypesFulfillSameAdditionalType() async {
+		await assertThrowsError(
+			"Found multiple hand-written mock providers for `ServiceProtocol`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol ServiceProtocol {}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+					public struct MockServiceA: Instantiable, ServiceProtocol {
+					    public init() {}
+					    public static func mock() -> MockServiceA { MockServiceA() }
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+					public struct MockServiceB: Instantiable, ServiceProtocol {
+					    public init() {}
+					    public static func mock() -> MockServiceB { MockServiceB() }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenFulfilledByTypeFallbackChildHasForwardedProperty() async {
 		// When fulfilledByType is not visible and mock generation falls back to
 		// the declared type (via mockOnly), the forwarded-property validation

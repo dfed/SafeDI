@@ -414,19 +414,30 @@ struct Generate: AsyncParsableCommand {
 						if typesWithMockOnlyMerge.contains(instantiableType) {
 							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 						}
-						// Two hand-written mocks for the same type is ambiguous.
-						if existing.mockInitializer != nil {
-							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
-						}
 						typesWithMockOnlyMerge.insert(instantiableType)
-						typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
+						if existing.concreteInstantiable == instantiable.concreteInstantiable {
+							// Same concrete type: two hand-written mocks is ambiguous.
+							if existing.mockInitializer != nil {
+								throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+							}
+							// Merge mockOnly's mock info onto the production entry.
+							typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
+						}
+					// Different concrete types: non-mockOnly already holds the
+					// slot, so the mockOnly is simply not registered here.
 					case (true, false):
-						// Two hand-written mocks for the same type is ambiguous.
-						if instantiable.mockInitializer != nil {
-							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
-						}
 						typesWithMockOnlyMerge.insert(instantiableType)
-						typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
+						if existing.concreteInstantiable == instantiable.concreteInstantiable {
+							// Same concrete type: two hand-written mocks is ambiguous.
+							if instantiable.mockInitializer != nil {
+								throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+							}
+							// Merge existing mockOnly's mock info onto the production entry.
+							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
+						} else {
+							// Different concrete types: non-mockOnly wins the slot.
+							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
+						}
 					case (false, false):
 						throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)
 					}
