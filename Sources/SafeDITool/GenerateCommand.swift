@@ -441,20 +441,40 @@ struct Generate: AsyncParsableCommand {
 				}
 			}
 		}
-		// Propagate mock info: when a mockOnly merge updated one key for a
-		// concreteInstantiable, other keys for the same concreteInstantiable may
-		// still point to the stale unmerged value. Propagate mock fields onto
-		// stale entries so downstream consumers see consistent mock state.
+		// Propagate mock state so all entries with the same concreteInstantiable
+		// are consistent. Two directions:
+		// 1. Entries missing mock info get it from a merged mockOnly provider.
+		// 2. Stale mockOnly entries get their mock info cleared when the production
+		//    type has generateMock (so they don't pollute forwardedParameterMockDefaults).
 		var mockProviderByConcreteType = [TypeDescription: Instantiable]()
-		for instantiable in typeDescriptionToFulfillingInstantiableMap.values where instantiable.mockInitializer != nil {
-			mockProviderByConcreteType[instantiable.concreteInstantiable] = instantiable
+		var generateMockConcreteTypes = Set<TypeDescription>()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
+			if instantiable.mockInitializer != nil {
+				mockProviderByConcreteType[instantiable.concreteInstantiable] = instantiable
+			}
+			if instantiable.generateMock {
+				generateMockConcreteTypes.insert(instantiable.concreteInstantiable)
+			}
 		}
 		for (typeDescription, instantiable) in typeDescriptionToFulfillingInstantiableMap {
+			let concreteType = instantiable.concreteInstantiable
 			if instantiable.mockInitializer == nil,
 			   !instantiable.generateMock,
-			   let mockProvider = mockProviderByConcreteType[instantiable.concreteInstantiable]
+			   let mockProvider = mockProviderByConcreteType[concreteType]
 			{
+				// Propagate mock info onto stale entries missing it.
 				typeDescriptionToFulfillingInstantiableMap[typeDescription] = instantiable.mergedWithMockProvider(mockProvider)
+			} else if instantiable.mockOnly,
+			          instantiable.mockInitializer != nil,
+			          generateMockConcreteTypes.contains(concreteType)
+			{
+				// Clear stale mockOnly mock info when the production type has
+				// generateMock — the generated mock takes priority.
+				var cleared = instantiable
+				cleared.mockInitializer = nil
+				cleared.mockReturnType = nil
+				cleared.customMockName = nil
+				typeDescriptionToFulfillingInstantiableMap[typeDescription] = cleared
 			}
 		}
 
