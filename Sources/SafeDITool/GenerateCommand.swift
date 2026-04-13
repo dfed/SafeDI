@@ -404,6 +404,11 @@ struct Generate: AsyncParsableCommand {
 		// mockOnly is rejected even after the merged entry appears non-mockOnly.
 		var typesWithMockOnlyMerge = Set<TypeDescription>()
 		for instantiable in instantiables {
+			// When a mockOnly is silently ignored because the production type
+			// already has a mock, its remaining additional types should be
+			// registered with mock info cleared to avoid polluting
+			// forwardedParameterMockDefaults.
+			var clearMockOnlyMockInfo = false
 			for instantiableType in instantiable.instantiableTypes {
 				if let existing = typeDescriptionToFulfillingInstantiableMap[instantiableType] {
 					// Allow one mockOnly and one non-mockOnly for the same type.
@@ -415,18 +420,16 @@ struct Generate: AsyncParsableCommand {
 							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 						}
 						typesWithMockOnlyMerge.insert(instantiableType)
-						// Keep existing production info. If it lacks a mock, merge
-						// in mock info from the mockOnly type.
 						let existingHasMock = existing.generateMock || existing.mockInitializer != nil
 						if !existingHasMock {
 							typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
+						} else {
+							clearMockOnlyMockInfo = true
 						}
 					case (true, false):
 						// The existing entry is mockOnly — record it so a second
 						// mockOnly for the same type is still rejected.
 						typesWithMockOnlyMerge.insert(instantiableType)
-						// Replace with production info. If it lacks a mock, merge
-						// in mock info from the existing mockOnly type.
 						let newHasMock = instantiable.generateMock || instantiable.mockInitializer != nil
 						if newHasMock {
 							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
@@ -436,33 +439,15 @@ struct Generate: AsyncParsableCommand {
 					case (false, false):
 						throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)
 					}
+				} else if clearMockOnlyMockInfo {
+					var cleared = instantiable
+					cleared.mockInitializer = nil
+					cleared.mockReturnType = nil
+					cleared.customMockName = nil
+					typeDescriptionToFulfillingInstantiableMap[instantiableType] = cleared
 				} else {
 					typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
 				}
-			}
-		}
-		// Clear stale mockOnly entries: when the production type has its own mock
-		// (generateMock or hand-written), stale mockOnly entries for the same
-		// concreteInstantiable must have their mock info cleared so they don't
-		// pollute forwardedParameterMockDefaults. Single pass collects both
-		// production-mock concrete types and stale mockOnly keys.
-		var productionMockConcreteTypes = Set<TypeDescription>()
-		var staleMockOnlyKeys = [TypeDescription]()
-		for (typeDescription, instantiable) in typeDescriptionToFulfillingInstantiableMap {
-			if !instantiable.mockOnly, instantiable.generateMock || instantiable.mockInitializer != nil {
-				productionMockConcreteTypes.insert(instantiable.concreteInstantiable)
-			} else if instantiable.mockOnly, instantiable.mockInitializer != nil {
-				staleMockOnlyKeys.append(typeDescription)
-			}
-		}
-		for typeDescription in staleMockOnlyKeys {
-			if var instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription],
-			   productionMockConcreteTypes.contains(instantiable.concreteInstantiable)
-			{
-				instantiable.mockInitializer = nil
-				instantiable.mockReturnType = nil
-				instantiable.customMockName = nil
-				typeDescriptionToFulfillingInstantiableMap[typeDescription] = instantiable
 			}
 		}
 
