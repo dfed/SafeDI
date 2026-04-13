@@ -1109,10 +1109,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_usesMockOnlyAdditionalType_whenMockOnlyHasAdditionalTypeProductionDoesNot() async throws {
-		// Production fulfills only MyService. MockOnly fulfills MyService and
-		// ServiceProtocol. A root referencing ServiceProtocol should get the
-		// mockOnly scope.
+	mutating func mock_usesMockOnlyCustomMock_whenBothFulfillSameAdditionalTypeAndProductionHasNoMock() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1128,7 +1125,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
+				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
 				public struct MyService: Instantiable, ServiceProtocol {
 				    public init() {}
 				}
