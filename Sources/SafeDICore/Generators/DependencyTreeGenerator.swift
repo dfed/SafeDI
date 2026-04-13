@@ -731,15 +731,21 @@ public actor DependencyTreeGenerator {
 		let typeDescriptionToScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
 			.sorted { lhs, rhs in
 				// Non-mockOnly before mockOnly (production claims slots first).
-				if lhs.mockOnly != rhs.mockOnly { return !lhs.mockOnly }
-				// Within the same mockOnly tier, entries with mock info first
-				// so scope-reuse creates scopes from mock-capable entries.
-				let lhsHasMock = lhs.generateMock || lhs.mockInitializer != nil
-				let rhsHasMock = rhs.generateMock || rhs.mockInitializer != nil
-				if lhsHasMock != rhsHasMock { return lhsHasMock }
-				// Stable tiebreaker: sort by concrete type name so scope-reuse
-				// selects the same entry across runs.
-				return lhs.concreteInstantiable < rhs.concreteInstantiable
+				if lhs.mockOnly != rhs.mockOnly {
+					return !lhs.mockOnly
+				} else {
+					// Within the same mockOnly tier, entries with mock info first
+					// so scope-reuse creates scopes from mock-capable entries.
+					let lhsHasMock = lhs.generateMock || lhs.mockInitializer != nil
+					let rhsHasMock = rhs.generateMock || rhs.mockInitializer != nil
+					if lhsHasMock != rhsHasMock {
+						return lhsHasMock
+					} else {
+						// Stable tiebreaker: sort by concrete type name so scope-reuse
+						// selects the same entry across runs.
+						return lhs.concreteInstantiable < rhs.concreteInstantiable
+					}
+				}
 			}
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
 				let scope = scopeByConcreteType[instantiable.concreteInstantiable] ?? Scope(instantiable: instantiable)
