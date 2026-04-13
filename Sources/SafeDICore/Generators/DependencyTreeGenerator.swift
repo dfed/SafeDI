@@ -151,13 +151,16 @@ public actor DependencyTreeGenerator {
 			// Validate that this type's constant @Instantiated children have no @Forwarded properties.
 			// Use the mock scope map (not typeDescriptionToFulfillingInstantiableMap) because
 			// mockOnly types can win additional-type slots and may have different @Forwarded properties.
+			// For fulfilledByType deps, validate against the declared type (same as mock resolution).
 			for dependency in scope.instantiable.dependencies {
 				guard case let .instantiated(fulfillingTypeDescription, _) = dependency.source else { continue }
 				let instantiatedType = dependency.asInstantiatedType
-				let childScope = typeDescriptionToScopeMap[instantiatedType]
-					?? (fulfillingTypeDescription != nil
-						? typeDescriptionToScopeMap[dependency.property.typeDescription.asInstantiatedType]
-						: nil)
+				let childScope: Scope? = if fulfillingTypeDescription != nil {
+					typeDescriptionToScopeMap[dependency.property.typeDescription.asInstantiatedType]
+						?? typeDescriptionToScopeMap[instantiatedType]
+				} else {
+					typeDescriptionToScopeMap[instantiatedType]
+				}
 				if let childScope {
 					try validateNoForwardedProperties(
 						for: dependency,
@@ -781,22 +784,22 @@ public actor DependencyTreeGenerator {
 			for dependency in scope.instantiable.dependencies {
 				switch dependency.source {
 				case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
+					// For fulfilledByType deps, prefer the declared type for mock
+					// resolution — fulfilledByType is a production-only directive.
+					// The scope map's priority rules determine the best mock for
+					// the declared type. Fall back to the fulfilling type if the
+					// declared type isn't in the scope map.
 					let instantiatedType = dependency.asInstantiatedType
-					if let instantiatedScope = typeDescriptionToScopeMap[instantiatedType] {
+					let declaredType = dependency.property.typeDescription.asInstantiatedType
+					let instantiatedScope: Scope? = if fulfillingTypeDescription != nil {
+						typeDescriptionToScopeMap[declaredType] ?? typeDescriptionToScopeMap[instantiatedType]
+					} else {
+						typeDescriptionToScopeMap[instantiatedType]
+					}
+					if let instantiatedScope {
 						scope.propertiesToGenerate.append(.instantiated(
 							dependency.property,
 							instantiatedScope,
-							erasedToConcreteExistential: erasedToConcreteExistential,
-						))
-					} else if fulfillingTypeDescription != nil,
-					          let declaredTypeScope = typeDescriptionToScopeMap[dependency.property.typeDescription.asInstantiatedType]
-					{
-						// The fulfilling type (from fulfilledByType:) is not visible in this
-						// module. Fall back to the declared property type, which may be
-						// fulfilled by a mockOnly type visible in the current module.
-						scope.propertiesToGenerate.append(.instantiated(
-							dependency.property,
-							declaredTypeScope,
 							erasedToConcreteExistential: erasedToConcreteExistential,
 						))
 					}
