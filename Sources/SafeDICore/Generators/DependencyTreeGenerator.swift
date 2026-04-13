@@ -720,51 +720,20 @@ public actor DependencyTreeGenerator {
 	/// but includes ALL types (not just reachable from roots). Received dependencies are NOT
 	/// promoted here — they're promoted at the root level in `createMockRootScopeGenerator`.
 	private func createMockTypeDescriptionToScopeMapping() -> [TypeDescription: Scope] {
-		// Multiple map keys can point to different Instantiable values with the
-		// same concreteInstantiable (e.g., a merged entry under MyService and an
-		// unmerged entry under ServiceProtocol). Pick the best instantiable per
-		// concrete type (preferring entries with mock info), then create one scope
-		// per concrete type and map ALL instantiableTypes from every entry to it.
-		var bestByConcreteType = [TypeDescription: Instantiable]()
-		var allInstantiableTypesByConcreteType = [TypeDescription: [TypeDescription]]()
-		// Sort so entries without mock info are processed first, ensuring
-		// mock-capable entries deterministically win via the replacement branch.
-		let sortedValues = typeDescriptionToFulfillingInstantiableMap.values
-			.sorted { lhs, rhs in
-				let lhsHasMock = lhs.generateMock || lhs.mockInitializer != nil
-				let rhsHasMock = rhs.generateMock || rhs.mockInitializer != nil
-				return !lhsHasMock && rhsHasMock
-			}
-		for instantiable in sortedValues {
-			let concreteType = instantiable.concreteInstantiable
-			// Accumulate all instantiableTypes across entries.
-			allInstantiableTypesByConcreteType[concreteType, default: []].append(
-				contentsOf: instantiable.instantiableTypes,
-			)
-			// Track the best instantiable (prefer mock-capable entries).
-			if let existing = bestByConcreteType[concreteType] {
-				let existingHasMock = existing.generateMock || existing.mockInitializer != nil
-				let newHasMock = instantiable.generateMock || instantiable.mockInitializer != nil
-				if newHasMock, !existingHasMock {
-					bestByConcreteType[concreteType] = instantiable
-				}
-			} else {
-				bestByConcreteType[concreteType] = instantiable
-			}
-		}
-
 		// Create scopes for all types. Process non-mockOnly types first so they
 		// claim additional-type slots. mockOnly types then overwrite slots whose
 		// existing scope lacks its own mock (generateMock/mockInitializer).
+		// Multiple map entries can share a concreteInstantiable but have different
+		// instantiableTypes (e.g., a mockOnly with extra fulfillingAdditionalTypes).
+		// Reuse the same scope for all entries sharing a concreteInstantiable so
+		// every instantiableType is mapped.
 		var scopeByConcreteType = [TypeDescription: Scope]()
-		let typeDescriptionToScopeMap: [TypeDescription: Scope] = bestByConcreteType.values
+		let typeDescriptionToScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
 			.sorted(by: { !$0.mockOnly && $1.mockOnly })
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
-				let concreteType = instantiable.concreteInstantiable
-				let scope = Scope(instantiable: instantiable)
-				scopeByConcreteType[concreteType] = scope
-				let allTypes = Set(allInstantiableTypesByConcreteType[concreteType] ?? [])
-				for instantiableType in allTypes {
+				let scope = scopeByConcreteType[instantiable.concreteInstantiable] ?? Scope(instantiable: instantiable)
+				scopeByConcreteType[instantiable.concreteInstantiable] = scope
+				for instantiableType in instantiable.instantiableTypes {
 					guard let existingScope = partialResult[instantiableType] else {
 						partialResult[instantiableType] = scope
 						continue

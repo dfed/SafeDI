@@ -439,6 +439,22 @@ struct Generate: AsyncParsableCommand {
 				}
 			}
 		}
+		// Propagate mock info: when a mockOnly merge updated one key for a
+		// concreteInstantiable, other keys for the same concreteInstantiable may
+		// still point to the stale unmerged value. Propagate mock fields onto
+		// stale entries so downstream consumers see consistent mock state.
+		var mockProviderByConcreteType = [TypeDescription: Instantiable]()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values where instantiable.mockInitializer != nil {
+			mockProviderByConcreteType[instantiable.concreteInstantiable] = instantiable
+		}
+		for (typeDescription, instantiable) in typeDescriptionToFulfillingInstantiableMap {
+			if instantiable.mockInitializer == nil,
+			   let mockProvider = mockProviderByConcreteType[instantiable.concreteInstantiable]
+			{
+				typeDescriptionToFulfillingInstantiableMap[typeDescription] = instantiable.mergedWithMockProvider(mockProvider)
+			}
+		}
+
 		return typeDescriptionToFulfillingInstantiableMap
 	}
 
