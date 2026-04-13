@@ -42,7 +42,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTwoMockOnlyExistForSameType() async {
 		await assertThrowsError(
-			"Found multiple `mockOnly: true` declarations for `MyService`. A type can have at most one `mockOnly` declaration.",
+			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -56,6 +56,34 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					@Instantiable(mockOnly: true)
 					extension MyService {
 					    public static func mock() -> MyService { fatalError() }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenProductionHasHandWrittenMockAndMockOnlyAlsoExists() async {
+		await assertThrowsError(
+			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(customMockName: "customMock")
+					public struct MyService: Instantiable {
+					    public init() {}
+					    public static func customMock() -> MyService { MyService() }
+					}
+					""",
+					"""
+					@Instantiable(mockOnly: true, customMockName: "preview")
+					extension MyService {
+					    public static func preview() -> MyService { MyService() }
 					}
 					""",
 				],
@@ -113,7 +141,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenSecondMockOnlyArrivesAfterFirstMerged() async {
 		await assertThrowsError(
-			"Found multiple `mockOnly: true` declarations for `MyService`. A type can have at most one `mockOnly` declaration.",
+			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -192,7 +220,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenSecondMockOnlyIgnoredAfterProductionWithMock() async {
 		await assertThrowsError(
-			"Found multiple `mockOnly: true` declarations for `MyService`. A type can have at most one `mockOnly` declaration.",
+			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [

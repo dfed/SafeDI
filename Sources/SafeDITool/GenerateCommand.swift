@@ -403,16 +403,7 @@ struct Generate: AsyncParsableCommand {
 		// Track types that have already had a mockOnly merged in, so a second
 		// mockOnly is rejected even after the merged entry appears non-mockOnly.
 		var typesWithMockOnlyMerge = Set<TypeDescription>()
-		// Track concrete types where a production type with its own mock replaced
-		// a mockOnly. Stale mockOnly entries for these types (registered before
-		// the production type was processed) are cleaned after the loop.
-		var concreteTypesWhereProductionMockReplacedMockOnly = Set<TypeDescription>()
 		for instantiable in instantiables {
-			// When a mockOnly is silently ignored because the production type
-			// already has a mock, its remaining additional types should be
-			// registered with mock info cleared to avoid polluting
-			// forwardedParameterMockDefaults.
-			var clearMockOnlyMockInfo = false
 			for instantiableType in instantiable.instantiableTypes {
 				if let existing = typeDescriptionToFulfillingInstantiableMap[instantiableType] {
 					// Allow one mockOnly and one non-mockOnly for the same type.
@@ -423,55 +414,25 @@ struct Generate: AsyncParsableCommand {
 						if typesWithMockOnlyMerge.contains(instantiableType) {
 							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 						}
-						typesWithMockOnlyMerge.insert(instantiableType)
-						// Only a hand-written mock on the production type suppresses
-						// the mockOnly. generateMock (which wraps init) does not —
-						// hand-written mocks take priority over generated ones.
-						let existingHasHandWrittenMock = existing.mockInitializer != nil
-						if !existingHasHandWrittenMock {
-							typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
-						} else {
-							clearMockOnlyMockInfo = true
+						// Two hand-written mocks for the same type is ambiguous.
+						if existing.mockInitializer != nil {
+							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 						}
+						typesWithMockOnlyMerge.insert(instantiableType)
+						typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
 					case (true, false):
-						// The existing entry is mockOnly — record it so a second
-						// mockOnly for the same type is still rejected.
-						typesWithMockOnlyMerge.insert(instantiableType)
-						let newHasHandWrittenMock = instantiable.mockInitializer != nil
-						if newHasHandWrittenMock {
-							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
-							concreteTypesWhereProductionMockReplacedMockOnly.insert(instantiable.concreteInstantiable)
-						} else {
-							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
+						// Two hand-written mocks for the same type is ambiguous.
+						if instantiable.mockInitializer != nil {
+							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 						}
+						typesWithMockOnlyMerge.insert(instantiableType)
+						typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
 					case (false, false):
 						throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)
 					}
-				} else if clearMockOnlyMockInfo {
-					var cleared = instantiable
-					cleared.mockInitializer = nil
-					cleared.mockReturnType = nil
-					cleared.customMockName = nil
-					typeDescriptionToFulfillingInstantiableMap[instantiableType] = cleared
 				} else {
 					typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
 				}
-			}
-		}
-
-		// Clean stale mockOnly entries that were registered before the production
-		// type (with its own hand-written mock) was processed. The inline
-		// clearMockOnlyMockInfo flag handles the case where the production type is
-		// processed first; this handles the reverse ordering.
-		for typeDescription in concreteTypesWhereProductionMockReplacedMockOnly {
-			for (key, instantiable) in typeDescriptionToFulfillingInstantiableMap
-				where instantiable.mockOnly && instantiable.concreteInstantiable == typeDescription && instantiable.mockInitializer != nil
-			{
-				var cleared = instantiable
-				cleared.mockInitializer = nil
-				cleared.mockReturnType = nil
-				cleared.customMockName = nil
-				typeDescriptionToFulfillingInstantiableMap[key] = cleared
 			}
 		}
 
@@ -506,7 +467,7 @@ struct Generate: AsyncParsableCommand {
 			case let .foundDuplicateInstantiable(duplicateInstantiable):
 				"@\(InstantiableVisitor.macroName)-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `\(duplicateInstantiable)`"
 			case let .duplicateMockProvider(duplicateInstantiable):
-				"Found multiple `mockOnly: true` declarations for `\(duplicateInstantiable)`. A type can have at most one `mockOnly` declaration."
+				"Found multiple hand-written mock providers for `\(duplicateInstantiable)`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both."
 			}
 		}
 	}
