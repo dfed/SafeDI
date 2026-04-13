@@ -403,6 +403,10 @@ struct Generate: AsyncParsableCommand {
 		// Track types that have already had a mockOnly merged in, so a second
 		// mockOnly is rejected even after the merged entry appears non-mockOnly.
 		var typesWithMockOnlyMerge = Set<TypeDescription>()
+		// Track concrete types where a production type with its own mock replaced
+		// a mockOnly. Stale mockOnly entries for these types (registered before
+		// the production type was processed) are cleaned after the loop.
+		var concreteTypesWhereProductionMockReplacedMockOnly = Set<TypeDescription>()
 		for instantiable in instantiables {
 			// When a mockOnly is silently ignored because the production type
 			// already has a mock, its remaining additional types should be
@@ -433,6 +437,7 @@ struct Generate: AsyncParsableCommand {
 						let newHasMock = instantiable.generateMock || instantiable.mockInitializer != nil
 						if newHasMock {
 							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
+							concreteTypesWhereProductionMockReplacedMockOnly.insert(instantiable.concreteInstantiable)
 						} else {
 							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
 						}
@@ -448,6 +453,22 @@ struct Generate: AsyncParsableCommand {
 				} else {
 					typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
 				}
+			}
+		}
+
+		// Clean stale mockOnly entries that were registered before the production
+		// type (with its own mock) was processed. The inline clearMockOnlyMockInfo
+		// flag handles the case where the production type is processed first; this
+		// handles the reverse ordering.
+		for typeDescription in concreteTypesWhereProductionMockReplacedMockOnly {
+			for (key, instantiable) in typeDescriptionToFulfillingInstantiableMap
+				where instantiable.mockOnly && instantiable.concreteInstantiable == typeDescription && instantiable.mockInitializer != nil
+			{
+				var cleared = instantiable
+				cleared.mockInitializer = nil
+				cleared.mockReturnType = nil
+				cleared.customMockName = nil
+				typeDescriptionToFulfillingInstantiableMap[key] = cleared
 			}
 		}
 
