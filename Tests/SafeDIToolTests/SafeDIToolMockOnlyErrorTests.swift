@@ -99,6 +99,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					        self.name = name
 					    }
 					    @Forwarded let name: String
+					    public static func mock(name: String) -> MockService { MockService(name: name) }
 					}
 					""",
 				],
@@ -134,6 +135,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					@Instantiable(fulfillingAdditionalTypes: [MyService.self], mockOnly: true)
 					public struct FakeService: Instantiable {
 					    public init() {}
+					    public static func mock() -> FakeService { FakeService() }
 					}
 					""",
 				],
@@ -181,6 +183,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					        self.name = name
 					    }
 					    @Forwarded let name: String
+					    public static func mock(name: String) -> MockService { MockService(name: name) }
 					}
 					""",
 				],
@@ -216,6 +219,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					@Instantiable(fulfillingAdditionalTypes: [MyService.self], mockOnly: true)
 					public struct FakeService: Instantiable {
 					    public init() {}
+					    public static func mock() -> FakeService { FakeService() }
 					}
 					""",
 				],

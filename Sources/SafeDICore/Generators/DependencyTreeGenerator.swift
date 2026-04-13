@@ -729,7 +729,15 @@ public actor DependencyTreeGenerator {
 		// every instantiableType is mapped.
 		var scopeByConcreteType = [TypeDescription: Scope]()
 		let typeDescriptionToScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
-			.sorted(by: { !$0.mockOnly && $1.mockOnly })
+			.sorted { lhs, rhs in
+				// Non-mockOnly before mockOnly (production claims slots first).
+				if lhs.mockOnly != rhs.mockOnly { return !lhs.mockOnly }
+				// Within the same mockOnly tier, entries with mock info first
+				// so scope-reuse creates scopes from mock-capable entries.
+				let lhsHasMock = lhs.generateMock || lhs.mockInitializer != nil
+				let rhsHasMock = rhs.generateMock || rhs.mockInitializer != nil
+				return lhsHasMock && !rhsHasMock
+			}
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
 				let scope = scopeByConcreteType[instantiable.concreteInstantiable] ?? Scope(instantiable: instantiable)
 				scopeByConcreteType[instantiable.concreteInstantiable] = scope
@@ -739,10 +747,12 @@ public actor DependencyTreeGenerator {
 						continue
 					}
 					// A mockOnly type overwrites a non-mockOnly scope that lacks
-					// its own mock, providing a mock where the production type has none.
+					// its own mock. A mockInitializer whose return type doesn't match
+					// the scope's concrete type was inherited from a mockOnly merge
+					// and doesn't count as the production type's own mock.
 					if instantiable.mockOnly,
 					   !existingScope.instantiable.generateMock,
-					   existingScope.instantiable.mockInitializer == nil
+					   !existingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: existingScope.instantiable.concreteInstantiable)
 					{
 						partialResult[instantiableType] = scope
 					}
