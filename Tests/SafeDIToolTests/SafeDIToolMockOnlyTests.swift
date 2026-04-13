@@ -746,9 +746,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_usesProductionConcreteType_whenMockOnlyAlsoFulfillsSameAdditionalType() async throws {
-		// Both ConcreteService and MockService fulfill AnyService via fulfillingAdditionalTypes.
-		// MockService is mockOnly. Production code should use ConcreteService without error.
+	mutating func mock_usesMockOnly_whenProductionHasNoMockAndBothFulfillSameAdditionalType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
