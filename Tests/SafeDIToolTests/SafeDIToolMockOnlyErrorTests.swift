@@ -190,6 +190,41 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenSecondMockOnlyIgnoredAfterProductionWithMock() async {
+		// P2: When a production type has generateMock and a mockOnly is silently
+		// ignored, a second mockOnly must still be rejected.
+		await assertThrowsError(
+			"Found multiple `mockOnly: true` declarations for `MyService`. A type can have at most one `mockOnly` declaration.",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct MyService: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable(mockOnly: true)
+					extension MyService {
+					    public static func mock() -> MyService { MyService() }
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [MyService.self], mockOnly: true)
+					public struct FakeService: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

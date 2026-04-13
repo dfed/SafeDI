@@ -414,12 +414,12 @@ struct Generate: AsyncParsableCommand {
 						if typesWithMockOnlyMerge.contains(instantiableType) {
 							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 						}
+						typesWithMockOnlyMerge.insert(instantiableType)
 						// Keep existing production info. If it lacks a mock, merge
 						// in mock info from the mockOnly type.
 						let existingHasMock = existing.generateMock || existing.mockInitializer != nil
 						if !existingHasMock {
 							typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
-							typesWithMockOnlyMerge.insert(instantiableType)
 						}
 					case (true, false):
 						// Replace with production info. If it lacks a mock, merge
@@ -449,6 +449,7 @@ struct Generate: AsyncParsableCommand {
 		}
 		for (typeDescription, instantiable) in typeDescriptionToFulfillingInstantiableMap {
 			if instantiable.mockInitializer == nil,
+			   !instantiable.generateMock,
 			   let mockProvider = mockProviderByConcreteType[instantiable.concreteInstantiable]
 			{
 				typeDescriptionToFulfillingInstantiableMap[typeDescription] = instantiable.mergedWithMockProvider(mockProvider)
