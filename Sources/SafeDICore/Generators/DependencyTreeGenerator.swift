@@ -736,7 +736,10 @@ public actor DependencyTreeGenerator {
 				// so scope-reuse creates scopes from mock-capable entries.
 				let lhsHasMock = lhs.generateMock || lhs.mockInitializer != nil
 				let rhsHasMock = rhs.generateMock || rhs.mockInitializer != nil
-				return lhsHasMock && !rhsHasMock
+				if lhsHasMock != rhsHasMock { return lhsHasMock }
+				// Stable tiebreaker: sort by concrete type name so scope-reuse
+				// selects the same entry across runs.
+				return lhs.concreteInstantiable < rhs.concreteInstantiable
 			}
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
 				let scope = scopeByConcreteType[instantiable.concreteInstantiable] ?? Scope(instantiable: instantiable)
