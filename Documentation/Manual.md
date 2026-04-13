@@ -595,7 +595,7 @@ extension MyService {
 }
 ```
 
-When both declarations exist, SafeDI uses the production `@Instantiable` for the dependency tree. The `mockOnly` declaration is used for mock generation only when the production declaration does not already provide a mock. If the production type has `generateMock: true` or a hand-written `mock()` method, the production type’s mock takes priority.
+When both declarations exist, SafeDI uses the production `@Instantiable` for the dependency tree. The `mockOnly` declaration’s hand-written mock is used for mock generation unless the production declaration also has a hand-written `mock()` method — in that case, the production type’s mock takes priority. A `generateMock: true` production type that lacks a hand-written mock will use the `mockOnly` declaration’s mock, since hand-written mocks take priority over generated ones.
 
 Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type’s `@Instantiated`, `@Received`, and `@Forwarded` dependencies. Non-dependency parameters must have default values. On concrete type declarations the return type must be `Self`, the type name, or a type listed in `fulfillingAdditionalTypes`; on extension-based `@Instantiable` types the return type must match the extended type (e.g. `-> Container<Bool>`) or a `fulfillingAdditionalTypes` entry, mirroring the corresponding `instantiate()` method. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
 
