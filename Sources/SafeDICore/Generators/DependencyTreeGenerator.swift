@@ -725,7 +725,15 @@ public actor DependencyTreeGenerator {
 		// per concrete type and map ALL instantiableTypes from every entry to it.
 		var bestByConcreteType = [TypeDescription: Instantiable]()
 		var allInstantiableTypesByConcreteType = [TypeDescription: [TypeDescription]]()
-		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
+		// Sort so entries without mock info are processed first, ensuring
+		// mock-capable entries deterministically win via the replacement branch.
+		let sortedValues = typeDescriptionToFulfillingInstantiableMap.values
+			.sorted { lhs, rhs in
+				let lhsHasMock = lhs.generateMock || lhs.mockInitializer != nil
+				let rhsHasMock = rhs.generateMock || rhs.mockInitializer != nil
+				return !lhsHasMock && rhsHasMock
+			}
+		for instantiable in sortedValues {
 			let concreteType = instantiable.concreteInstantiable
 			// Accumulate all instantiableTypes across entries.
 			allInstantiableTypesByConcreteType[concreteType, default: []].append(
