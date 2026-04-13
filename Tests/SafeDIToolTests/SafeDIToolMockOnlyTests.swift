@@ -1183,7 +1183,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(generateMock: true)
-				public struct MyService: Instantiable {
+				public struct MyService: Instantiable, ServiceProtocol {
 				    public init() {}
 				}
 				""",
@@ -1390,7 +1390,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(generateMock: true)
-				public struct MyService: Instantiable {
+				public struct MyService: Instantiable, ServiceProtocol {
 				    public init() {}
 				}
 				""",
@@ -1626,7 +1626,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(generateMock: true)
-				public struct MyService: Instantiable {
+				public struct MyService: Instantiable, ServiceProtocol {
 				    public init() {}
 				}
 				""",
