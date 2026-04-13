@@ -400,6 +400,9 @@ struct Generate: AsyncParsableCommand {
 
 	private func resolveSafeDIFulfilledTypes(instantiables: [Instantiable]) throws -> [TypeDescription: Instantiable] {
 		var typeDescriptionToFulfillingInstantiableMap = [TypeDescription: Instantiable]()
+		// Track types that have already had a mockOnly merged in, so a second
+		// mockOnly is rejected even after the merged entry appears non-mockOnly.
+		var typesWithMockOnlyMerge = Set<TypeDescription>()
 		for instantiable in instantiables {
 			for instantiableType in instantiable.instantiableTypes {
 				if let existing = typeDescriptionToFulfillingInstantiableMap[instantiableType] {
@@ -408,11 +411,15 @@ struct Generate: AsyncParsableCommand {
 					case (true, true):
 						throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 					case (false, true):
+						if typesWithMockOnlyMerge.contains(instantiableType) {
+							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+						}
 						// Keep existing production info. If it lacks a mock, merge
 						// in mock info from the mockOnly type.
 						let existingHasMock = existing.generateMock || existing.mockInitializer != nil
 						if !existingHasMock {
 							typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
+							typesWithMockOnlyMerge.insert(instantiableType)
 						}
 					case (true, false):
 						// Replace with production info. If it lacks a mock, merge
@@ -422,6 +429,7 @@ struct Generate: AsyncParsableCommand {
 							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
 						} else {
 							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
+							typesWithMockOnlyMerge.insert(instantiableType)
 						}
 					case (false, false):
 						throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)

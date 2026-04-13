@@ -108,6 +108,88 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenSecondMockOnlyArrivesAfterFirstMerged() async {
+		// P2: After a mockOnly merges into a production entry, a second mockOnly
+		// for the same fulfilled type must still be rejected — not silently ignored.
+		await assertThrowsError(
+			"Found multiple `mockOnly: true` declarations for `MyService`. A type can have at most one `mockOnly` declaration.",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable
+					public struct MyService: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable(mockOnly: true)
+					extension MyService {
+					    public static func mock() -> MyService { MyService() }
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [MyService.self], mockOnly: true)
+					public struct FakeService: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenMockOnlyWinsAdditionalTypeSlotAndChildHasForwardedProperty() async {
+		// P1: When mockOnly wins an additional-type slot in the mock scope map,
+		// forwarded-child validation must check the mockOnly child (not the
+		// production child from typeDescriptionToFulfillingInstantiableMap).
+		await assertThrowsError(
+			"""
+			Property `service: ServiceProtocol` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
+			""",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol ServiceProtocol {}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct Root: Instantiable {
+					    public init(service: ServiceProtocol) {
+					        self.service = service
+					    }
+					    @Instantiated let service: ServiceProtocol
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+					public struct RealService: Instantiable, ServiceProtocol {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+					public struct MockService: Instantiable, ServiceProtocol {
+					    public init(name: String) {
+					        self.name = name
+					    }
+					    @Forwarded let name: String
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

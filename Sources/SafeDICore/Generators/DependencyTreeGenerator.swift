@@ -149,17 +149,19 @@ public actor DependencyTreeGenerator {
 			}
 
 			// Validate that this type's constant @Instantiated children have no @Forwarded properties.
+			// Use the mock scope map (not typeDescriptionToFulfillingInstantiableMap) because
+			// mockOnly types can win additional-type slots and may have different @Forwarded properties.
 			for dependency in scope.instantiable.dependencies {
 				guard case let .instantiated(fulfillingTypeDescription, _) = dependency.source else { continue }
 				let instantiatedType = dependency.asInstantiatedType
-				let childInstantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType]
+				let childScope = typeDescriptionToScopeMap[instantiatedType]
 					?? (fulfillingTypeDescription != nil
-						? typeDescriptionToFulfillingInstantiableMap[dependency.property.typeDescription.asInstantiatedType]
+						? typeDescriptionToScopeMap[dependency.property.typeDescription.asInstantiatedType]
 						: nil)
-				if let childInstantiable {
+				if let childScope {
 					try validateNoForwardedProperties(
 						for: dependency,
-						instantiable: childInstantiable,
+						instantiable: childScope.instantiable,
 						parent: scope.instantiable,
 					)
 				}
