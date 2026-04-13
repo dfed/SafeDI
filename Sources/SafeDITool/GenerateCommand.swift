@@ -444,23 +444,25 @@ struct Generate: AsyncParsableCommand {
 		// Clear stale mockOnly entries: when the production type has its own mock
 		// (generateMock or hand-written), stale mockOnly entries for the same
 		// concreteInstantiable must have their mock info cleared so they don't
-		// pollute forwardedParameterMockDefaults.
+		// pollute forwardedParameterMockDefaults. Single pass collects both
+		// production-mock concrete types and stale mockOnly keys.
 		var productionMockConcreteTypes = Set<TypeDescription>()
-		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
-			where !instantiable.mockOnly && (instantiable.generateMock || instantiable.mockInitializer != nil)
-		{
-			productionMockConcreteTypes.insert(instantiable.concreteInstantiable)
-		}
+		var staleMockOnlyKeys = [TypeDescription]()
 		for (typeDescription, instantiable) in typeDescriptionToFulfillingInstantiableMap {
-			if instantiable.mockOnly,
-			   instantiable.mockInitializer != nil,
+			if !instantiable.mockOnly, instantiable.generateMock || instantiable.mockInitializer != nil {
+				productionMockConcreteTypes.insert(instantiable.concreteInstantiable)
+			} else if instantiable.mockOnly, instantiable.mockInitializer != nil {
+				staleMockOnlyKeys.append(typeDescription)
+			}
+		}
+		for typeDescription in staleMockOnlyKeys {
+			if var instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription],
 			   productionMockConcreteTypes.contains(instantiable.concreteInstantiable)
 			{
-				var cleared = instantiable
-				cleared.mockInitializer = nil
-				cleared.mockReturnType = nil
-				cleared.customMockName = nil
-				typeDescriptionToFulfillingInstantiableMap[typeDescription] = cleared
+				instantiable.mockInitializer = nil
+				instantiable.mockReturnType = nil
+				instantiable.customMockName = nil
+				typeDescriptionToFulfillingInstantiableMap[typeDescription] = instantiable
 			}
 		}
 
