@@ -201,7 +201,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenSecondMockOnlyArrivesAfterFirstMerged() async {
+	mutating func mock_throwsError_whenTwoMockOnlyTypesAndProductionAllClaimSameType() async {
 		await assertThrowsError(
 			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
 		) {
@@ -280,7 +280,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenSecondMockOnlyIgnoredAfterProductionWithMock() async {
+	mutating func mock_throwsError_whenTwoMockOnlyTypesClaimSameTypeAsProductionWithGenerateMock() async {
 		await assertThrowsError(
 			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
 		) {

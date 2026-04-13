@@ -1213,7 +1213,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_usesMockOnlyMock_whenProductionHasGenerateMockForSameType() async throws {
-		// B+X: production has generateMock, mockOnly has customMockName "preview".
+		// Production has generateMock, mockOnly has customMockName "preview".
 		// The mockOnly's hand-written mock wins — the generated mock calls through
 		// to preview() since hand-written mocks take priority over generated ones.
 		let output = try await executeSafeDIToolTest(
@@ -1448,7 +1448,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_usesMockOnlyMock_whenProductionHasGenerateMockAndExtraAdditionalType() async throws {
-		// B+W: production has generateMock + fulfillingAdditionalTypes, mockOnly
+		// Production has generateMock + fulfillingAdditionalTypes, mockOnly
 		// for concrete type only. Hand-written mock wins over generateMock.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -1527,7 +1527,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_usesMockOnlyMock_whenProductionHasGenerateMockAndExtraAdditionalType_referencedByConcrete() async throws {
-		// B+W, ref by concrete: same as above but parent references MyService directly.
+		// Same as above but parent references MyService directly.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
