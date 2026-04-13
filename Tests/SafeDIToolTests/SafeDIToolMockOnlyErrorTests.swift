@@ -67,12 +67,20 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenProductionHasHandWrittenMockAndMockOnlyAlsoExists() async {
+	mutating func mock_throwsError_whenProductionHasHandWrittenMockAndMockOnlyAlsoExists_mockOnlyFirst() async {
+		// mockOnly extension processed first (File.swift < MyService.swift).
+		// Hits (true, false) branch.
 		await assertThrowsError(
 			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
+					"""
+					@Instantiable(mockOnly: true, customMockName: "preview")
+					extension MyService {
+					    public static func preview() -> MyService { MyService() }
+					}
+					""",
 					"""
 					@Instantiable(customMockName: "customMock")
 					public struct MyService: Instantiable {
@@ -80,10 +88,32 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					    public static func customMock() -> MyService { MyService() }
 					}
 					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenProductionHasHandWrittenMockAndMockOnlyAlsoExists_productionFirst() async {
+		await assertThrowsError(
+			"Found multiple hand-written mock providers for `AService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(customMockName: "customMock")
+					public struct AService: Instantiable {
+					    public init() {}
+					    public static func customMock() -> AService { AService() }
+					}
+					""",
 					"""
 					@Instantiable(mockOnly: true, customMockName: "preview")
-					extension MyService {
-					    public static func preview() -> MyService { MyService() }
+					extension AService {
+					    public static func preview() -> AService { AService() }
 					}
 					""",
 				],
