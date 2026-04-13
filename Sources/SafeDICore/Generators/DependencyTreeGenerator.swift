@@ -727,7 +727,7 @@ public actor DependencyTreeGenerator {
 		// instantiableTypes (e.g., a mockOnly with extra fulfillingAdditionalTypes).
 		// Reuse the same scope for all entries sharing a concreteInstantiable so
 		// every instantiableType is mapped.
-		var scopeByConcreteType = [TypeDescription: Scope]()
+		var visitedConcreteTypeToScope = [TypeDescription: Scope]()
 		let typeDescriptionToScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
 			.sorted { lhs, rhs in
 				// Non-mockOnly before mockOnly (production claims slots first).
@@ -748,8 +748,8 @@ public actor DependencyTreeGenerator {
 				}
 			}
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
-				let scope = scopeByConcreteType[instantiable.concreteInstantiable] ?? Scope(instantiable: instantiable)
-				scopeByConcreteType[instantiable.concreteInstantiable] = scope
+				let scope = visitedConcreteTypeToScope[instantiable.concreteInstantiable] ?? Scope(instantiable: instantiable)
+				visitedConcreteTypeToScope[instantiable.concreteInstantiable] = scope
 				for instantiableType in instantiable.instantiableTypes {
 					guard let existingScope = partialResult[instantiableType] else {
 						partialResult[instantiableType] = scope
