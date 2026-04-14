@@ -726,8 +726,8 @@ public actor DependencyTreeGenerator {
 	private func createMockTypeDescriptionToScopeMapping() -> [TypeDescription: Scope] {
 		// Create scopes for all types. Process non-mockOnly types first so they
 		// claim additional-type slots. mockOnly types then overwrite slots whose
-		// existing scope lacks its own mock (generateMock or a compatible
-		// hand-written mock). Multiple map entries can share a concreteInstantiable but have different
+		// existing scope lacks a compatible hand-written mock.
+		// Multiple map entries can share a concreteInstantiable but have different
 		// instantiableTypes (e.g., a mockOnly with extra fulfillingAdditionalTypes).
 		// Reuse the same scope for all entries sharing a concreteInstantiable so
 		// every instantiableType is mapped.

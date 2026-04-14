@@ -411,13 +411,13 @@ struct Generate: AsyncParsableCommand {
 					case (true, true):
 						throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 					case (false, true):
-						if typesWithMockOnlyMerge.contains(instantiableType) {
+						guard !typesWithMockOnlyMerge.contains(instantiableType) else {
 							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 						}
 						typesWithMockOnlyMerge.insert(instantiableType)
 						if existing.concreteInstantiable == instantiable.concreteInstantiable {
 							// Same concrete type: two hand-written mocks is ambiguous.
-							if existing.mockInitializer != nil {
+							guard existing.mockInitializer == nil else {
 								throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 							}
 							// Merge mockOnly's mock info onto the production entry.
@@ -429,7 +429,7 @@ struct Generate: AsyncParsableCommand {
 						typesWithMockOnlyMerge.insert(instantiableType)
 						if existing.concreteInstantiable == instantiable.concreteInstantiable {
 							// Same concrete type: two hand-written mocks is ambiguous.
-							if instantiable.mockInitializer != nil {
+							guard instantiable.mockInitializer == nil else {
 								throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 							}
 							// Merge existing mockOnly's mock info onto the production entry.
@@ -451,6 +451,9 @@ struct Generate: AsyncParsableCommand {
 		// into one key for a concreteInstantiable, other keys for the same
 		// concreteInstantiable (from fulfillingAdditionalTypes) may still lack
 		// the mock info. Copy it so all entries are consistent.
+		// Invariant: the merge logic above ensures at most one non-mockOnly entry
+		// per concreteInstantiable has mockInitializer, so the last-wins behavior
+		// of this dictionary is safe.
 		var mockProviderByConcreteType = [TypeDescription: Instantiable]()
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
 			where !instantiable.mockOnly && instantiable.mockInitializer != nil
