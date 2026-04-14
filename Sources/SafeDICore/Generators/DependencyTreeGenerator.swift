@@ -114,11 +114,14 @@ public actor DependencyTreeGenerator {
 		// suitable for use as default values in forwarded mock parameters. This includes
 		// standalone mockOnly types AND merged entries where a mockOnly declaration's mock
 		// was copied onto a production entry (which may also have generateMock). Types
-		// whose mock method has required parameters are excluded.
+		// whose mock method has required parameters are excluded. The mock return type
+		// must be compatible with the concrete type — extension mocks returning a
+		// protocol type are not valid defaults for concrete-type forwarded parameters.
 		let forwardedParameterMockDefaults: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
 			.reduce(into: [TypeDescription: String]()) { result, instantiable in
 				guard let mockInitializer = instantiable.mockInitializer,
-				      mockInitializer.arguments.allSatisfy(\.hasDefaultValue)
+				      mockInitializer.arguments.allSatisfy(\.hasDefaultValue),
+				      instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiable.concreteInstantiable)
 				else { return }
 				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 			}

@@ -1868,5 +1868,90 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 
 	// MARK: Private
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_forwardedDefaultOmitted_whenExtensionMockReturnsProtocolNotConcreteType() async throws {
+		// Extension mock returns ServiceProtocol (not ConcreteService). A
+		// @Forwarded let service: ConcreteService should NOT get a default of
+		// ConcreteService.mock() since that returns ServiceProtocol, not ConcreteService.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol ServiceProtocol {}
+				""",
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(service: ConcreteService) {
+				        self.service = service
+				    }
+				    @Forwarded let service: ConcreteService
+				}
+				""",
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+				extension ConcreteService: Instantiable {
+				    public static func instantiate() -> ConcreteService { ConcreteService() }
+				    public static func mock() -> ServiceProtocol { ConcreteService() }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
+		// The forwarded parameter should be required (no default) since the mock
+		// returns ServiceProtocol, not ConcreteService.
+		#expect(rootMock.contains("service: ConcreteService\n"), "Expected required parameter, got: \(rootMock)")
+		#expect(!rootMock.contains("ConcreteService.mock()"), "Should not use incompatible mock as default, got: \(rootMock)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_mockOnlyWinsSlot_whenProductionHasNoMockEvenForMultipleAdditionalTypes() async throws {
+		// MockService (mockOnly, hand-written mock) fulfills both ServiceProtocol
+		// and OtherProtocol. ConcreteOther (production, no mock) also fulfills
+		// OtherProtocol. MockService's hand-written mock wins the OtherProtocol
+		// slot because hand-written mock > init.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol ServiceProtocol {}
+				public protocol OtherProtocol {}
+				""",
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(other: OtherProtocol) {
+				        self.other = other
+				    }
+				    @Instantiated let other: OtherProtocol
+				}
+				""",
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [OtherProtocol.self])
+				public struct ConcreteOther: Instantiable, OtherProtocol {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self, OtherProtocol.self], mockOnly: true)
+				public struct MockService: Instantiable, ServiceProtocol, OtherProtocol {
+				    public init() {}
+				    public static func mock() -> MockService { MockService() }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
+		#expect(rootMock.contains("MockService.mock"), "Expected MockService.mock for OtherProtocol slot, got: \(rootMock)")
+	}
+
+	// MARK: Private
+
 	private var filesToDelete = [URL]()
 }
