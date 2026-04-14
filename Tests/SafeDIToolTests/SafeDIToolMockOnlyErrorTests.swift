@@ -136,7 +136,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
-					public struct MockServiceEService, ServiceProtocol {
+					public struct MockServiceA: Instantiable, ServiceProtocol {
 					    public init() {}
 					    public static func mock() -> MockServiceA { MockServiceA() }
 					}
