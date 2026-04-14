@@ -552,12 +552,12 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> MyService)? = nil
+		            service: (() -> ServiceProtocol)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: (() -> MyService)?
+		        let service: (() -> ServiceProtocol)?
 		    }
 
 		    static func mock(
@@ -807,12 +807,12 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> MockService)? = nil
+		            service: (() -> AnyService)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: (() -> MockService)?
+		        let service: (() -> AnyService)?
 		    }
 
 		    static func mock(
@@ -887,12 +887,12 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> MockService)? = nil
+		            service: (() -> ServiceProtocol)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: (() -> MockService)?
+		        let service: (() -> ServiceProtocol)?
 		    }
 
 		    static func mock(
@@ -952,18 +952,18 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> MockService)? = nil
+		            service: (() -> AnyService)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: (() -> MockService)?
+		        let service: (() -> AnyService)?
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = AnyService((safeDIOverrides.service ?? MockService.mock)())
+		        let service = safeDIOverrides.service?() ?? AnyService(MockService.mock())
 		        return Root(service: service)
 		    }
 		}
@@ -1023,18 +1023,18 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> MockService)? = nil
+		            service: (() -> AnyService)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: (() -> MockService)?
+		        let service: (() -> AnyService)?
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = AnyService((safeDIOverrides.service ?? MockService.mock)())
+		        let service = safeDIOverrides.service?() ?? AnyService(MockService.mock())
 		        return Root(service: service)
 		    }
 		}
@@ -1085,18 +1085,18 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> ConcreteService)? = nil
+		            service: (() -> AnyService)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: (() -> ConcreteService)?
+		        let service: (() -> AnyService)?
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = AnyService((safeDIOverrides.service ?? ConcreteService.init)())
+		        let service = safeDIOverrides.service?() ?? AnyService(ConcreteService())
 		        return Root(service: service)
 		    }
 		}
@@ -1149,12 +1149,12 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> MyService)? = nil
+		            service: (() -> ServiceProtocol)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: (() -> MyService)?
+		        let service: (() -> ServiceProtocol)?
 		    }
 
 		    static func mock(
@@ -1505,12 +1505,12 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> MyService)? = nil
+		            service: (() -> ServiceProtocol)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: (() -> MyService)?
+		        let service: (() -> ServiceProtocol)?
 		    }
 
 		    static func mock(
@@ -1704,12 +1704,12 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> ConcreteService)? = nil
+		            service: (() -> ServiceProtocol)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: (() -> ConcreteService)?
+		        let service: (() -> ServiceProtocol)?
 		    }
 
 		    static func mock(
@@ -1895,12 +1895,12 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> ConcreteService)? = nil
+		            service: (() -> ServiceProtocol)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: (() -> ConcreteService)?
+		        let service: (() -> ServiceProtocol)?
 		    }
 
 		    static func mock(
@@ -2006,12 +2006,12 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            other: (() -> MockService)? = nil
+		            other: (() -> OtherProtocol)? = nil
 		        ) {
 		            self.other = other
 		        }
 
-		        let other: (() -> MockService)?
+		        let other: (() -> OtherProtocol)?
 		    }
 
 		    static func mock(
@@ -2352,12 +2352,12 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> MyService)? = nil
+		            service: (() -> ServiceProtocol)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: (() -> MyService)?
+		        let service: (() -> ServiceProtocol)?
 		    }
 
 		    static func mock(
@@ -2437,12 +2437,12 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> MyService)? = nil
+		            service: (() -> ServiceProtocol)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: (() -> MyService)?
+		        let service: (() -> ServiceProtocol)?
 		    }
 
 		    static func mock(
@@ -2565,12 +2565,12 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> MockService)? = nil
+		            service: (() -> ServiceProtocol)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: (() -> MockService)?
+		        let service: (() -> ServiceProtocol)?
 		    }
 
 		    static func mock(
@@ -2638,12 +2638,12 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            other: (() -> MyService)? = nil
+		            other: (() -> OtherProtocol)? = nil
 		        ) {
 		            self.other = other
 		        }
 
-		        let other: (() -> MyService)?
+		        let other: (() -> OtherProtocol)?
 		    }
 
 		    static func mock(

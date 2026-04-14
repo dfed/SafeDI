@@ -1347,14 +1347,14 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            engine: (() -> Engine)? = nil,
-		            childService: ((Engine) -> ChildService)? = nil
+		            childService: ((Engine) -> ChildServiceProtocol)? = nil
 		        ) {
 		            self.engine = engine
 		            self.childService = childService
 		        }
 
 		        let engine: (() -> Engine)?
-		        let childService: ((Engine) -> ChildService)?
+		        let childService: ((Engine) -> ChildServiceProtocol)?
 		    }
 
 		    static func mock(
@@ -1493,14 +1493,14 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            engine: (() -> Engine)? = nil,
-		            childService: ((Engine) -> ChildService)? = nil
+		            childService: ((Engine) -> ChildServiceProtocol)? = nil
 		        ) {
 		            self.engine = engine
 		            self.childService = childService
 		        }
 
 		        let engine: (() -> Engine)?
-		        let childService: ((Engine) -> ChildService)?
+		        let childService: ((Engine) -> ChildServiceProtocol)?
 		    }
 
 		    static func mock(
