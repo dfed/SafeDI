@@ -764,7 +764,17 @@ public actor DependencyTreeGenerator {
 				visitedConcreteTypeToScope[instantiable.concreteInstantiable] = scope
 				for instantiableType in instantiable.instantiableTypes {
 					guard let existingScope = partialResult[instantiableType] else {
-						partialResult[instantiableType] = scope
+						// When a mockOnly entry adds a new slot and the reused scope
+						// lacks mock metadata, use a scope built from the mockOnly's
+						// instantiable so the slot retains the hand-written mock info.
+						if instantiable.mockOnly,
+						   instantiable.mockInitializer != nil,
+						   scope.instantiable.mockInitializer == nil
+						{
+							partialResult[instantiableType] = Scope(instantiable: instantiable)
+						} else {
+							partialResult[instantiableType] = scope
+						}
 						continue
 					}
 					// A mockOnly hand-written mock overwrites a scope that lacks
