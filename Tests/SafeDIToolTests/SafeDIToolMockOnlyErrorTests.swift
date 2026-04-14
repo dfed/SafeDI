@@ -99,21 +99,21 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenProductionHasHandWrittenMockAndMockOnlyAlsoExists_productionFirst() async {
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `AService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			"Found multiple hand-written mock providers for `EService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
 					@Instantiable(customMockName: "customMock")
-					public struct AService: Instantiable {
+					public struct EService: Instantiable {
 					    public init() {}
-					    public static func customMock() -> AService { AService() }
+					    public static func customMock() -> EService { EService() }
 					}
 					""",
 					"""
 					@Instantiable(mockOnly: true, customMockName: "preview")
-					extension AService {
-					    public static func preview() -> AService { AService() }
+					extension EService {
+					    public static func preview() -> EService { EService() }
 					}
 					""",
 				],
@@ -136,7 +136,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
-					public struct MockServiceA: Instantiable, ServiceProtocol {
+					public struct MockServiceEService, ServiceProtocol {
 					    public init() {}
 					    public static func mock() -> MockServiceA { MockServiceA() }
 					}
