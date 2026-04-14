@@ -143,6 +143,12 @@ public actor DependencyTreeGenerator {
 			      seen.insert(instantiable.concreteInstantiable).inserted,
 			      let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable]
 			else { continue }
+			// Canonicalize: slot-specific merges can produce different entries
+			// for the same concreteInstantiable (e.g., the ServiceProtocol key
+			// has a protocol-returning mock but the MyService key does not).
+			// Always use the concrete-type key entry so mock root generation
+			// uses the correct mock info for the concrete type.
+			let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiable.concreteInstantiable] ?? instantiable
 			if let currentModuleSourceFilePaths, !isAdditionalMock {
 				guard let sourceFilePath = instantiable.sourceFilePath,
 				      currentModuleSourceFilePaths.contains(sourceFilePath)
