@@ -420,8 +420,14 @@ struct Generate: AsyncParsableCommand {
 							guard existing.mockInitializer == nil else {
 								throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 							}
-							// Merge mockOnly's mock info onto the production entry.
-							typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
+							// Only merge if the mockOnly's return type is compatible
+							// with the concrete type. Extension mocks returning a
+							// protocol (via fulfillingAdditionalTypes) are not valid
+							// for the concrete type's mock — they serve the protocol
+							// slot instead.
+							if instantiable.mockReturnTypeIsCompatible(withPropertyType: existing.concreteInstantiable) {
+								typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
+							}
 						} else {
 							// Different concrete types: non-mockOnly already holds the
 							// slot, so the mockOnly is not registered here.
@@ -433,8 +439,15 @@ struct Generate: AsyncParsableCommand {
 							guard instantiable.mockInitializer == nil else {
 								throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 							}
-							// Merge existing mockOnly's mock info onto the production entry.
-							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
+							// Only merge if the mockOnly's return type is compatible
+							// with the concrete type.
+							if existing.mockReturnTypeIsCompatible(withPropertyType: instantiable.concreteInstantiable) {
+								typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
+							} else {
+								// mockOnly's mock returns incompatible type — replace
+								// with production entry (no mock merge).
+								typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
+							}
 						} else {
 							// Different concrete types: non-mockOnly wins the slot.
 							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
