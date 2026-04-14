@@ -1823,6 +1823,49 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		#expect(rootMock.contains("MyService.preview"), "Expected MyService.preview, got: \(rootMock)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_usesExtensionMock_whenExtensionMockReturnsProtocolTypeAndMockOnlyAlsoFulfillsProtocol() async throws {
+		// Extension-based mock returns ServiceProtocol (a fulfillingAdditionalType).
+		// A separate mockOnly struct also fulfills ServiceProtocol. The extension's
+		// hand-written mock should win since it's on the non-mockOnly production type.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol ServiceProtocol {}
+				""",
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(service: ServiceProtocol) {
+				        self.service = service
+				    }
+				    @Instantiated let service: ServiceProtocol
+				}
+				""",
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+				extension ConcreteService: Instantiable {
+				    public static func instantiate() -> ConcreteService { ConcreteService() }
+				    public static func mock() -> ServiceProtocol { ConcreteService() }
+				}
+				""",
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+				public struct MockService: Instantiable, ServiceProtocol {
+				    public init() {}
+				    public static func mock() -> MockService { MockService() }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
+		#expect(rootMock.contains("ConcreteService.mock"), "Expected ConcreteService.mock (not MockService), got: \(rootMock)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

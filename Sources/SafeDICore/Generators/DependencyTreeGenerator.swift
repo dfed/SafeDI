@@ -767,10 +767,12 @@ public actor DependencyTreeGenerator {
 					// A mockOnly hand-written mock overwrites a scope that lacks
 					// its own hand-written mock. generateMock (which wraps init)
 					// does not count — hand-written mocks take priority.
-					// mockReturnTypeIsCompatible distinguishes genuine hand-written
-					// mocks (compatible return type) from inherited merge artifacts.
+					// Check compatibility against both the concrete type and the
+					// slot type — extension mocks can validly return a protocol
+					// from fulfillingAdditionalTypes.
 					if instantiable.mockOnly,
-					   !existingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: existingScope.instantiable.concreteInstantiable)
+					   !existingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: existingScope.instantiable.concreteInstantiable),
+					   !existingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiableType)
 					{
 						partialResult[instantiableType] = scope
 					}
