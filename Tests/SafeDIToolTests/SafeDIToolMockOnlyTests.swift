@@ -1966,6 +1966,52 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_doesNotOverwriteSlot_whenMockOnlyExtensionClaimsMultipleAdditionalTypesButMockReturnsOnlyOne() async throws {
+		// MockOnly extension claims both ServiceProtocol and OtherProtocol, but
+		// its mock returns ServiceProtocol only. For the OtherProtocol slot, the
+		// mockOnly's mock is incompatible, so it should not overwrite the
+		// production type (ConcreteOther) that fulfills OtherProtocol.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol ServiceProtocol {}
+				public protocol OtherProtocol {}
+				""",
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(other: OtherProtocol) {
+				        self.other = other
+				    }
+				    @Instantiated let other: OtherProtocol
+				}
+				""",
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [OtherProtocol.self])
+				public struct ConcreteOther: Instantiable, OtherProtocol {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self, OtherProtocol.self], mockOnly: true)
+				public struct MockBoth: Instantiable, ServiceProtocol, OtherProtocol {
+				    public init() {}
+				    public static func mock() -> ServiceProtocol { MockBoth() }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
+		// ConcreteOther should win OtherProtocol — the mockOnly's mock returns
+		// ServiceProtocol, not OtherProtocol, so it can't serve this slot.
+		#expect(rootMock.contains("ConcreteOther.init"), "Expected ConcreteOther for OtherProtocol slot, got: \(rootMock)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()
