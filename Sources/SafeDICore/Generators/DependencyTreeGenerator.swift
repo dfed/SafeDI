@@ -773,8 +773,10 @@ public actor DependencyTreeGenerator {
 						// When a mockOnly entry adds a new slot and the reused scope
 						// lacks mock metadata, use a scope built from the mockOnly's
 						// instantiable so the slot retains the hand-written mock info.
+						// Only when the mock return type is compatible with this slot.
 						if instantiable.mockOnly,
 						   instantiable.mockInitializer != nil,
+						   instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiableType),
 						   scope.instantiable.mockInitializer == nil
 						{
 							partialResult[instantiableType] = Scope(instantiable: instantiable)
