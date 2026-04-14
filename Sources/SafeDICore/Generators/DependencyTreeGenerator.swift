@@ -772,8 +772,11 @@ public actor DependencyTreeGenerator {
 					// does not count — hand-written mocks take priority.
 					// Check compatibility against both the concrete type and the
 					// slot type — extension mocks can validly return a protocol
-					// from fulfillingAdditionalTypes.
+					// from fulfillingAdditionalTypes. Also verify the incoming
+					// mockOnly's mock is usable for this slot (its return type
+					// must match the slot type or its own concrete type).
 					if instantiable.mockOnly,
+					   instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiableType),
 					   !existingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: existingScope.instantiable.concreteInstantiable),
 					   !existingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiableType)
 					{

@@ -422,9 +422,10 @@ struct Generate: AsyncParsableCommand {
 							}
 							// Merge mockOnly's mock info onto the production entry.
 							typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
+						} else {
+							// Different concrete types: non-mockOnly already holds the
+							// slot, so the mockOnly is not registered here.
 						}
-					// else: different concrete types — non-mockOnly already
-					// holds the slot, so the mockOnly is not registered here.
 					case (true, false):
 						typesWithMockOnlyMerge.insert(instantiableType)
 						if existing.concreteInstantiable == instantiable.concreteInstantiable {
