@@ -2077,6 +2077,8 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		// Production MyService has generateMock: true. mockOnly extension on MyService
 		// returns ServiceProtocol (incompatible with MyService). The mockOnly's mock
 		// should NOT be merged onto the production entry — generateMock should use init.
+		// Both declarations in the same file (production first) guarantees the
+		// (false, true) branch regardless of TaskGroup ordering.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2096,8 +2098,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				public struct MyService: Instantiable, ServiceProtocol {
 				    public init() {}
 				}
-				""",
-				"""
+
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
 				extension MyService {
 				    public static func mock() -> ServiceProtocol { MyService() }
@@ -2155,7 +2156,8 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_usesProductionInit_whenMockOnlyExtensionReturnTypeIsIncompatibleWithConcreteType_reversedOrder() async throws {
-		// Same as above but with reversed source file order to cover the (true, false) branch.
+		// Same as above but with mockOnly first in the same file to cover
+		// the (true, false) branch regardless of TaskGroup ordering.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2166,8 +2168,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				extension MyService {
 				    public static func mock() -> ServiceProtocol { MyService() }
 				}
-				""",
-				"""
+
 				@Instantiable(generateMock: true)
 				public struct MyService: Instantiable, ServiceProtocol {
 				    public init() {}
@@ -2236,6 +2237,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		// Production MyService has no generateMock and no hand-written mock.
 		// mockOnly extension returns ServiceProtocol (incompatible with MyService).
 		// The mockOnly should not be merged — parent uses MyService.init.
+		// Both in same file (production first) for deterministic ordering.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2255,8 +2257,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				public struct MyService: Instantiable, ServiceProtocol {
 				    public init() {}
 				}
-				""",
-				"""
+
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
 				extension MyService {
 				    public static func mock() -> ServiceProtocol { MyService() }
