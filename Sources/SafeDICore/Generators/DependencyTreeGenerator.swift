@@ -113,13 +113,11 @@ public actor DependencyTreeGenerator {
 		// Compute types with hand-written mocks that can be called with zero arguments,
 		// suitable for use as default values in forwarded mock parameters. This includes
 		// standalone mockOnly types AND merged entries where a mockOnly declaration's mock
-		// was copied onto a non-mockOnly production entry. Types whose mock method has
-		// required parameters are excluded, since the generated default `Type.mock()` would
-		// not compile.
+		// was copied onto a production entry (which may also have generateMock). Types
+		// whose mock method has required parameters are excluded.
 		let forwardedParameterMockDefaults: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
 			.reduce(into: [TypeDescription: String]()) { result, instantiable in
-				guard !instantiable.generateMock,
-				      let mockInitializer = instantiable.mockInitializer,
+				guard let mockInitializer = instantiable.mockInitializer,
 				      mockInitializer.arguments.allSatisfy(\.hasDefaultValue)
 				else { return }
 				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
