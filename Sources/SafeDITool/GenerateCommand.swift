@@ -421,11 +421,10 @@ struct Generate: AsyncParsableCommand {
 								throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 							}
 							// Only merge if the mockOnly's return type is compatible
-							// with the concrete type. Extension mocks returning a
-							// protocol (via fulfillingAdditionalTypes) are not valid
-							// for the concrete type's mock — they serve the protocol
-							// slot instead.
-							if instantiable.mockReturnTypeIsCompatible(withPropertyType: existing.concreteInstantiable) {
+							// with this slot. Check against instantiableType (the key)
+							// so a mock returning ServiceProtocol merges for the
+							// ServiceProtocol slot but not the MyService slot.
+							if instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiableType) {
 								typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
 							}
 						} else {
@@ -440,8 +439,8 @@ struct Generate: AsyncParsableCommand {
 								throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 							}
 							// Only merge if the mockOnly's return type is compatible
-							// with the concrete type.
-							if existing.mockReturnTypeIsCompatible(withPropertyType: instantiable.concreteInstantiable) {
+							// with this slot.
+							if existing.mockReturnTypeIsCompatible(withPropertyType: instantiableType) {
 								typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
 							} else {
 								// mockOnly's mock returns incompatible type — replace
@@ -465,9 +464,9 @@ struct Generate: AsyncParsableCommand {
 		// into one key for a concreteInstantiable, other keys for the same
 		// concreteInstantiable (from fulfillingAdditionalTypes) may still lack
 		// the mock info. Copy it so all entries are consistent.
-		// Invariant: the merge logic above ensures at most one non-mockOnly entry
-		// per concreteInstantiable has mockInitializer, so the last-wins behavior
-		// of this dictionary is safe.
+		// Only propagate when the mock return type is compatible with the
+		// target entry's concrete type — a mock returning ServiceProtocol
+		// should not spread to the MyService slot.
 		var mockProviderByConcreteType = [TypeDescription: Instantiable]()
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
 			where !instantiable.mockOnly && instantiable.mockInitializer != nil
@@ -477,7 +476,8 @@ struct Generate: AsyncParsableCommand {
 		for (typeDescription, instantiable) in typeDescriptionToFulfillingInstantiableMap {
 			if !instantiable.mockOnly,
 			   instantiable.mockInitializer == nil,
-			   let mockProvider = mockProviderByConcreteType[instantiable.concreteInstantiable]
+			   let mockProvider = mockProviderByConcreteType[instantiable.concreteInstantiable],
+			   mockProvider.mockReturnTypeIsCompatible(withPropertyType: instantiable.concreteInstantiable)
 			{
 				typeDescriptionToFulfillingInstantiableMap[typeDescription] = instantiable.mergedWithMockProvider(mockProvider)
 			}
