@@ -68,8 +68,9 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenProductionHasHandWrittenMockAndMockOnlyAlsoExists_mockOnlyFirst() async {
-		// mockOnly extension processed first (File.swift < MyService.swift).
-		// Hits (true, false) branch.
+		// Both declarations in the same file guarantees mockOnly extension is
+		// parsed first (FileVisitor processes top-to-bottom), hitting the
+		// (true, false) branch regardless of TaskGroup ordering.
 		await assertThrowsError(
 			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
 		) {
@@ -80,8 +81,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					extension MyService {
 					    public static func preview() -> MyService { MyService() }
 					}
-					""",
-					"""
+
 					@Instantiable(customMockName: "customMock")
 					public struct MyService: Instantiable {
 					    public init() {}
@@ -98,22 +98,24 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenProductionHasHandWrittenMockAndMockOnlyAlsoExists_productionFirst() async {
+		// Both declarations in the same file guarantees production is parsed
+		// first (FileVisitor processes top-to-bottom), hitting the (false, true)
+		// branch regardless of TaskGroup ordering.
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `EService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
 					@Instantiable(customMockName: "customMock")
-					public struct EService: Instantiable {
+					public struct MyService: Instantiable {
 					    public init() {}
-					    public static func customMock() -> EService { EService() }
+					    public static func customMock() -> MyService { MyService() }
 					}
-					""",
-					"""
+
 					@Instantiable(mockOnly: true, customMockName: "preview")
-					extension EService {
-					    public static func preview() -> EService { EService() }
+					extension MyService {
+					    public static func preview() -> MyService { MyService() }
 					}
 					""",
 				],
