@@ -1,0 +1,29 @@
+name: Retry
+description: Run a command with retries and delay between attempts.
+
+inputs:
+  command:
+    description: The command to run.
+    required: true
+  attempts:
+    description: Maximum number of attempts.
+    default: '3'
+  delay:
+    description: Seconds to wait between retries.
+    default: '10'
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        for attempt in $(seq 1 ${{ inputs.attempts }}); do
+          ${{ inputs.command }} && break
+          if [ $attempt -lt ${{ inputs.attempts }} ]; then
+            echo "Attempt $attempt failed, retrying in ${{ inputs.delay }}s..."
+            sleep ${{ inputs.delay }}
+          else
+            echo "All ${{ inputs.attempts }} attempts failed"
+            exit 1
+          fi
+        done
