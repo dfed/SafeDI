@@ -2278,7 +2278,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 
 		// No MyService mock file generated (generateMock is false).
 		#expect(output.mockFiles["MyService+SafeDIMock.swift"] == nil,
-			"Should not generate mock for MyService without generateMock")
+		        "Should not generate mock for MyService without generateMock")
 
 		// Root's mock uses MyService.init as default builder.
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
