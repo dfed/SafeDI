@@ -1623,7 +1623,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ancestorTypes: Set<String> = [],
 	) -> [String] {
 		let functionName = "__safeDI_\(node.propertyLabel)"
-		let concreteTypeName = node.concreteType.asSource
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let propertyType = node.typeDescription.propertyType
 		let innerIndent = "\(indent)\(standardIndent)"

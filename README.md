@@ -90,9 +90,7 @@ To install the SafeDI framework into an Xcode project with Swift Package Manager
 
 SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin uses a prebuilt binary for fast builds without compiling SwiftSyntax. This plugin works out of the box on most project configurations. If your project uses a custom build system, you can configure your build to utilize the `SafeDITool` command-line executable directly.
 
-#### Swift package manager
-
-##### Xcode project
+#### Xcode project
 
 If your first-party code comprises a single module in an `.xcodeproj`, once your Xcode project depends on the SafeDI package you can integrate the Swift Package Plugin simply by going to your target’s `Build Phases`, expanding the `Run Build Tool Plug-ins` drop-down, and adding the `SafeDIGenerator` as a build tool plug-in. You can see this integration in practice in the [ExampleProjectIntegration](Examples/ExampleProjectIntegration) project.
 
@@ -106,9 +104,9 @@ import SafeDI
 )
 ```
 
-The `additionalDirectoriesToInclude` parameter specifies folders outside of your module that SafeDI will scan for Swift source files. Paths must be relative to the project directory. Use this parameter to specify the paths to dependent modules' source directories, since Xcode project plugins can not discover these automatically. You can see [an example of this configuration](Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) project. 
+The `additionalDirectoriesToInclude` parameter specifies folders outside of your module that SafeDI will scan for Swift source files. Paths must be relative to the project directory. Use this parameter to specify the paths to dependent modules' source directories, since Xcode project plugins cannot discover these automatically. You can see [an example of this configuration](Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](Examples/ExampleMultiProjectIntegration) project.
 
-##### Swift package
+#### Swift package
 
 If your first-party code is entirely contained in a Swift Package with one or more modules, you can add the following lines to your root target’s definition:
 
@@ -177,7 +175,7 @@ The `SafeDIPrebuiltGenerator` plugin and `InstallSafeDITool` command plugin have
 
 ### Migrating prebuild scripts or custom build system integrations
 
-If you invoke `SafeDITool` directly (not via the provided SPM plugin), the `--dependency-tree-output` flag has been replaced with `--swift-manifest`. The tool now takes a JSON manifest file that maps input Swift files to output files. See [`SafeDIToolManifest`](Sources/SafeDICore/Models/SafeDIToolManifest.swift) for the expected format.
+If you invoke `SafeDITool` directly (not via the provided SPM plugin), the `--dependency-tree-output` flag has been replaced with `generate --swift-manifest`. The tool now takes a JSON manifest file that maps input Swift files to output files. See [`SafeDIToolManifest`](Sources/SafeDICore/Models/SafeDIToolManifest.swift) for the expected format.
 
 Before (1.x):
 ```bash
@@ -197,7 +195,7 @@ cat > manifest.json << 'EOF'
   ]
 }
 EOF
-safeditool input.csv --swift-manifest manifest.json
+safeditool generate Sources.txt --swift-manifest manifest.json
 ```
 
 ## Contributing
