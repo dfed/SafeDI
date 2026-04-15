@@ -5750,7 +5750,7 @@ import Testing
 		}
 
 		@Test
-		func mockMethodReturningFulfillingAdditionalTypeProducesNoDiagnostic() {
+		func mockMethodReturningFulfillingAdditionalTypeProducesDiagnosticOnConcreteType() {
 			assertMacroExpansion(
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [MyServiceProtocol.self])
@@ -5771,6 +5771,16 @@ import Testing
 				    }
 				}
 				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type\u{2019}s `mock()` method must return `Self` or `MyService`.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Change mock() return type to `MyService`"),
+						],
+					),
+				],
 				macros: instantiableTestMacros,
 			)
 		}

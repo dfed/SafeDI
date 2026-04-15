@@ -400,6 +400,9 @@ struct Generate: AsyncParsableCommand {
 
 	private func resolveSafeDIFulfilledTypes(instantiables: [Instantiable]) throws -> [TypeDescription: Instantiable] {
 		var typeDescriptionToFulfillingInstantiableMap = [TypeDescription: Instantiable]()
+		// Track types that have already had a mockOnly merged in, so a second
+		// mockOnly is rejected even after the merged entry appears non-mockOnly.
+		var typesWithMockOnlyMerge = Set<TypeDescription>()
 		for instantiable in instantiables {
 			for instantiableType in instantiable.instantiableTypes {
 				if let existing = typeDescriptionToFulfillingInstantiableMap[instantiableType] {
@@ -408,19 +411,46 @@ struct Generate: AsyncParsableCommand {
 					case (true, true):
 						throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 					case (false, true):
-						// Merge: keep existing production info, take mock info from mockOnly.
-						let existingHasMock = existing.generateMock || existing.mockInitializer != nil
-						if existingHasMock {
+						guard !typesWithMockOnlyMerge.contains(instantiableType) else {
 							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
 						}
-						typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
+						typesWithMockOnlyMerge.insert(instantiableType)
+						if existing.concreteInstantiable == instantiable.concreteInstantiable {
+							// Same concrete type: two hand-written mocks is ambiguous.
+							guard existing.mockInitializer == nil else {
+								throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+							}
+							// Only merge if the mockOnly's return type is compatible
+							// with this slot. Check against instantiableType (the key)
+							// so a mock returning ServiceProtocol merges for the
+							// ServiceProtocol slot but not the MyService slot.
+							if instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiableType) {
+								typeDescriptionToFulfillingInstantiableMap[instantiableType] = existing.mergedWithMockProvider(instantiable)
+							}
+						} else {
+							// Different concrete types: non-mockOnly already holds the
+							// slot, so the mockOnly is not registered here.
+						}
 					case (true, false):
-						// Merge: take production info from new, keep mock info from existing mockOnly.
-						let newHasMock = instantiable.generateMock || instantiable.mockInitializer != nil
-						if newHasMock {
-							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+						typesWithMockOnlyMerge.insert(instantiableType)
+						if existing.concreteInstantiable == instantiable.concreteInstantiable {
+							// Same concrete type: two hand-written mocks is ambiguous.
+							guard instantiable.mockInitializer == nil else {
+								throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+							}
+							// Only merge if the mockOnly's return type is compatible
+							// with this slot.
+							if existing.mockReturnTypeIsCompatible(withPropertyType: instantiableType) {
+								typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
+							} else {
+								// mockOnly's mock returns incompatible type — replace
+								// with production entry (no mock merge).
+								typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
+							}
+						} else {
+							// Different concrete types: non-mockOnly wins the slot.
+							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
 						}
-						typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable.mergedWithMockProvider(existing)
 					case (false, false):
 						throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)
 					}
@@ -429,6 +459,30 @@ struct Generate: AsyncParsableCommand {
 				}
 			}
 		}
+
+		// Propagate merged mock info to sibling entries: when a mockOnly merged
+		// into one key for a concreteInstantiable, other keys for the same
+		// concreteInstantiable (from fulfillingAdditionalTypes) may still lack
+		// the mock info. Copy it so all entries are consistent.
+		// Only propagate when the mock return type is compatible with the
+		// target entry's concrete type — a mock returning ServiceProtocol
+		// should not spread to the MyService slot.
+		var mockProviderByConcreteType = [TypeDescription: Instantiable]()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
+			where !instantiable.mockOnly && instantiable.mockInitializer != nil
+		{
+			mockProviderByConcreteType[instantiable.concreteInstantiable] = instantiable
+		}
+		for (typeDescription, instantiable) in typeDescriptionToFulfillingInstantiableMap {
+			if !instantiable.mockOnly,
+			   instantiable.mockInitializer == nil,
+			   let mockProvider = mockProviderByConcreteType[instantiable.concreteInstantiable],
+			   mockProvider.mockReturnTypeIsCompatible(withPropertyType: instantiable.concreteInstantiable)
+			{
+				typeDescriptionToFulfillingInstantiableMap[typeDescription] = instantiable.mergedWithMockProvider(mockProvider)
+			}
+		}
+
 		return typeDescriptionToFulfillingInstantiableMap
 	}
 
@@ -441,7 +495,7 @@ struct Generate: AsyncParsableCommand {
 			case let .foundDuplicateInstantiable(duplicateInstantiable):
 				"@\(InstantiableVisitor.macroName)-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `\(duplicateInstantiable)`"
 			case let .duplicateMockProvider(duplicateInstantiable):
-				"Multiple mock providers found for `\(duplicateInstantiable)`. A type can have at most one mock — either via `generateMock: true`, a hand-written `mock()` method, or `mockOnly: true`."
+				"Found multiple hand-written mock providers for `\(duplicateInstantiable)`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both."
 			}
 		}
 	}

@@ -60,6 +60,7 @@ The production code path (`generatePropertyCode` with `.dependencyTree`) and moc
 - `TypeDescription.simplified` strips wrappers for cleaner suffixes, with fallback on collision
 - Closure-typed defaults use `@escaping T = default` (not `@autoclosure`)
 - `#SafeDIConfiguration` is always read from the current module only, never dependent modules
+- When a mockOnly and a non-mockOnly coexist for the same type, `resolveSafeDIFulfilledTypes` merges them. The `(false, true)` and `(true, false)` branches handle opposite processing orders. Any cross-cutting concern (tracking sets, stale clearing) must be applied to both branches or order-dependent bugs will surface only on CI.
 
 ### Validation boundaries
 
@@ -89,6 +90,8 @@ The `Instantiable` struct conforms to `Codable` and is serialized as JSON in `.s
 - **Test through the pipeline**, not direct model construction. Mock tests use `executeSafeDIToolTest` which parses real Swift source through the full visitor → generator pipeline.
 - **Full `==` output comparison.** Never use `.contains()` for mock output. Compare the complete expected string.
 - **Verify updated test expectations compile.** When updating expected output in generator tests, review the new expected code to confirm it would compile as valid Swift. Check that variable references resolve to the correct scope, types match (no optional where non-optional expected), and all referenced variables have bindings. Do not blindly update expected output to match actual — the actual output may itself be buggy.
+- **Code generation tests should only test paths where the macro would not emit an error.** Test inputs must be valid under `@Instantiable` macro validation — every `mockOnly: true` type needs a `mock()` method (or `customMockName` method), mock method names on the same type must not collide, and production types need `init` or `instantiate()`.
+- **Test titles must be observably verified.** When a test title says "prefers X over Y", the assertion must verify X is used — not just that the test doesn't crash. Add a parent type with `generateMock: true` that instantiates the type under test, and assert the full mock output shows X's method name.
 - **If code can't be covered by a test with real parsed input, remove the code.** Dead branches and defensive fallbacks for structurally unreachable paths should not exist.
 - **Test fixture file naming affects processing order.** `executeSafeDIToolTest` names fixture files by extracting the type name from `@Instantiable` in the source content. Files are processed alphabetically, so the order types appear in `resolveSafeDIFulfilledTypes` depends on these names. When testing ordering-sensitive behavior (e.g., duplicate detection), be aware that a `struct MyService` file sorts differently than an `extension MyService` file (which falls back to `"File"`).
 
@@ -99,3 +102,6 @@ The `Instantiable` struct conforms to `Codable` and is serialized as JSON in `.s
 - Extension-based `@Instantiable` types use `static func instantiate(...)` instead of `init(...)`. Their `@Instantiated` dependencies are constructed by the parent scope.
 - When a received dependency is promoted to root scope, the producer branch must capture the root-bound value — not reconstruct the type.
 - `resolvedParameters` flows through sibling accumulation AND parent-to-child descent. Both paths must be consistent.
+- `typeDescriptionToFulfillingInstantiableMap` is a dictionary — iterating `.values` has non-deterministic order. Any code that reduces, sorts, or builds state from `.values` must produce the same result regardless of iteration order. CI runs tests 5 times specifically to catch non-determinism.
+- `resolveSafeDIFulfilledTypes` can produce multiple map entries with the same `concreteInstantiable` under different keys (e.g., a merged entry under `MyService` and an unmerged entry under `ServiceProtocol`). These entries may have different mock info. The mock scope map uses scope-reuse by `concreteInstantiable` and a deterministic sort to handle this.
+- `mockInitializer` on an `Instantiable` can be inherited from a mockOnly merge — it doesn't always mean the type declared its own mock. `generateMock` is never inherited. Use `mockReturnTypeIsCompatible(withPropertyType: concreteInstantiable)` to distinguish genuine hand-written mocks from inherited ones.

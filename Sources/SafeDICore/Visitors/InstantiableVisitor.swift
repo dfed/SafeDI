@@ -392,10 +392,12 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		case .extensionDecl:
 			if extensionInstantiables.isEmpty, mockOnly, let mockReturnType {
 				// mockOnly extensions without instantiate() still produce an Instantiable
-				// so the type is registered in the mock scope map.
+				// so the type is registered in the mock scope map. Use the extended
+				// type (instantiableType) as the concrete type — not mockReturnType,
+				// which may be a protocol from fulfillingAdditionalTypes.
 				[
 					Instantiable(
-						instantiableType: mockReturnType,
+						instantiableType: instantiableType ?? mockReturnType,
 						isRoot: isRoot,
 						initializer: nil,
 						additionalInstantiables: additionalInstantiables,

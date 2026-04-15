@@ -40,36 +40,9 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenMockOnlyAndGenerateMockExistForSameType() async {
-		await assertThrowsError(
-			"Multiple mock providers found for `MyService`. A type can have at most one mock — either via `generateMock: true`, a hand-written `mock()` method, or `mockOnly: true`.",
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public struct MyService: Instantiable {
-					    public init() {}
-					}
-					""",
-					"""
-					@Instantiable(mockOnly: true)
-					extension MyService {
-					    public static func mock() -> MyService { fatalError() }
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTwoMockOnlyExistForSameType() async {
 		await assertThrowsError(
-			"Multiple mock providers found for `MyService`. A type can have at most one mock — either via `generateMock: true`, a hand-written `mock()` method, or `mockOnly: true`.",
+			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -94,23 +67,165 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenMockOnlyExistsAndRegularInstantiableAlsoHasMock() async {
+	mutating func mock_throwsError_whenProductionHasHandWrittenMockAndMockOnlyAlsoExists_mockOnlyFirst() async {
+		// Both declarations in the same file guarantees mockOnly extension is
+		// parsed first (FileVisitor processes top-to-bottom), hitting the
+		// (true, false) branch regardless of TaskGroup ordering.
 		await assertThrowsError(
-			"Multiple mock providers found for `MyService`. A type can have at most one mock — either via `generateMock: true`, a hand-written `mock()` method, or `mockOnly: true`.",
+			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
-					@Instantiable(mockOnly: true)
+					@Instantiable(mockOnly: true, customMockName: "preview")
 					extension MyService {
-					    public static func mock() -> MyService { fatalError() }
+					    public static func preview() -> MyService { MyService() }
+					}
+
+					@Instantiable(customMockName: "customMock")
+					public struct MyService: Instantiable {
+					    public init() {}
+					    public static func customMock() -> MyService { MyService() }
 					}
 					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenProductionHasHandWrittenMockAndMockOnlyAlsoExists_productionFirst() async {
+		// Both declarations in the same file guarantees production is parsed
+		// first (FileVisitor processes top-to-bottom), hitting the (false, true)
+		// branch regardless of TaskGroup ordering.
+		await assertThrowsError(
+			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(customMockName: "customMock")
+					public struct MyService: Instantiable {
+					    public init() {}
+					    public static func customMock() -> MyService { MyService() }
+					}
+
+					@Instantiable(mockOnly: true, customMockName: "preview")
+					extension MyService {
+					    public static func preview() -> MyService { MyService() }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTwoDifferentMockOnlyConcreteTypesFulfillSameAdditionalType() async {
+		await assertThrowsError(
+			"Found multiple hand-written mock providers for `ServiceProtocol`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol ServiceProtocol {}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+					public struct MockServiceA: Instantiable, ServiceProtocol {
+					    public init() {}
+					    public static func mock() -> MockServiceA { MockServiceA() }
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+					public struct MockServiceB: Instantiable, ServiceProtocol {
+					    public init() {}
+					    public static func mock() -> MockServiceB { MockServiceB() }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenFulfilledByTypeFallbackChildHasForwardedProperty() async {
+		// When fulfilledByType is not visible and mock generation falls back to
+		// the declared type (via mockOnly), the forwarded-property validation
+		// must still fire for constant @Instantiated dependencies.
+		await assertThrowsError(
+			"""
+			Property `service: AnyService` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
+			""",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public class AnyService {
+					    public init(_ value: some Any) {}
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct Root: Instantiable {
+					    public init(service: AnyService) {
+					        self.service = service
+					    }
+					    @Instantiated(fulfilledByType: "ConcreteService", erasedToConcreteExistential: true) let service: AnyService
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [AnyService.self], mockOnly: true)
+					public struct MockService: Instantiable {
+					    public init(name: String) {
+					        self.name = name
+					    }
+					    @Forwarded let name: String
+					    public static func mock(name: String) -> MockService { MockService(name: name) }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTwoMockOnlyTypesAndProductionAllClaimSameType() async {
+		await assertThrowsError(
+			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
 					"""
 					@Instantiable
 					public struct MyService: Instantiable {
 					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable(mockOnly: true)
+					extension MyService {
 					    public static func mock() -> MyService { MyService() }
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [MyService.self], mockOnly: true)
+					public struct FakeService: Instantiable {
+					    public init() {}
+					    public static func mock() -> FakeService { FakeService() }
 					}
 					""",
 				],
@@ -122,9 +237,54 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenRegularInstantiableWithMockExistsAndMockOnlyArrivesSecond() async {
+	mutating func mock_throwsError_whenMockOnlyWinsAdditionalTypeSlotAndChildHasForwardedProperty() async {
 		await assertThrowsError(
-			"Multiple mock providers found for `MyService`. A type can have at most one mock — either via `generateMock: true`, a hand-written `mock()` method, or `mockOnly: true`.",
+			"""
+			Property `service: ServiceProtocol` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
+			""",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol ServiceProtocol {}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct Root: Instantiable {
+					    public init(service: ServiceProtocol) {
+					        self.service = service
+					    }
+					    @Instantiated let service: ServiceProtocol
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+					public struct RealService: Instantiable, ServiceProtocol {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+					public struct MockService: Instantiable, ServiceProtocol {
+					    public init(name: String) {
+					        self.name = name
+					    }
+					    @Forwarded let name: String
+					    public static func mock(name: String) -> MockService { MockService(name: name) }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTwoMockOnlyTypesClaimSameTypeAsProductionWithGenerateMock() async {
+		await assertThrowsError(
+			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -137,7 +297,14 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					"""
 					@Instantiable(mockOnly: true)
 					extension MyService {
-					    public static func mock() -> MyService { fatalError() }
+					    public static func mock() -> MyService { MyService() }
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [MyService.self], mockOnly: true)
+					public struct FakeService: Instantiable {
+					    public init() {}
+					    public static func mock() -> FakeService { FakeService() }
 					}
 					""",
 				],

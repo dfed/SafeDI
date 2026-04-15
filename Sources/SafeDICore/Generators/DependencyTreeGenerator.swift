@@ -113,14 +113,15 @@ public actor DependencyTreeGenerator {
 		// Compute types with hand-written mocks that can be called with zero arguments,
 		// suitable for use as default values in forwarded mock parameters. This includes
 		// standalone mockOnly types AND merged entries where a mockOnly declaration's mock
-		// was copied onto a non-mockOnly production entry. Types whose mock method has
-		// required parameters are excluded, since the generated default `Type.mock()` would
-		// not compile.
+		// was copied onto a production entry (which may also have generateMock). Types
+		// whose mock method has required parameters are excluded. The mock return type
+		// must be compatible with the concrete type — extension mocks returning a
+		// protocol type are not valid defaults for concrete-type forwarded parameters.
 		let forwardedParameterMockDefaults: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
 			.reduce(into: [TypeDescription: String]()) { result, instantiable in
-				guard !instantiable.generateMock,
-				      let mockInitializer = instantiable.mockInitializer,
-				      mockInitializer.arguments.allSatisfy(\.hasDefaultValue)
+				guard let mockInitializer = instantiable.mockInitializer,
+				      mockInitializer.arguments.allSatisfy(\.hasDefaultValue),
+				      instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiable.concreteInstantiable)
 				else { return }
 				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 			}
@@ -142,6 +143,12 @@ public actor DependencyTreeGenerator {
 			      seen.insert(instantiable.concreteInstantiable).inserted,
 			      let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable]
 			else { continue }
+			// Canonicalize: slot-specific merges can produce different entries
+			// for the same concreteInstantiable (e.g., the ServiceProtocol key
+			// has a protocol-returning mock but the MyService key does not).
+			// Always use the concrete-type key entry so mock root generation
+			// uses the correct mock info for the concrete type.
+			let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiable.concreteInstantiable] ?? instantiable
 			if let currentModuleSourceFilePaths, !isAdditionalMock {
 				guard let sourceFilePath = instantiable.sourceFilePath,
 				      currentModuleSourceFilePaths.contains(sourceFilePath)
@@ -149,13 +156,22 @@ public actor DependencyTreeGenerator {
 			}
 
 			// Validate that this type's constant @Instantiated children have no @Forwarded properties.
+			// Use the mock scope map (not typeDescriptionToFulfillingInstantiableMap) because
+			// mockOnly types can win additional-type slots and may have different @Forwarded properties.
+			// For fulfilledByType deps, validate against the declared type (same as mock resolution).
 			for dependency in scope.instantiable.dependencies {
-				guard case .instantiated = dependency.source else { continue }
+				guard case let .instantiated(fulfillingTypeDescription, _) = dependency.source else { continue }
 				let instantiatedType = dependency.asInstantiatedType
-				if let childInstantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType] {
+				let childScope: Scope? = if fulfillingTypeDescription != nil {
+					typeDescriptionToScopeMap[dependency.property.typeDescription.asInstantiatedType]
+						?? typeDescriptionToScopeMap[instantiatedType]
+				} else {
+					typeDescriptionToScopeMap[instantiatedType]
+				}
+				if let childScope {
 					try validateNoForwardedProperties(
 						for: dependency,
-						instantiable: childInstantiable,
+						instantiable: childScope.instantiable,
 						parent: scope.instantiable,
 					)
 				}
@@ -714,13 +730,76 @@ public actor DependencyTreeGenerator {
 	/// but includes ALL types (not just reachable from roots). Received dependencies are NOT
 	/// promoted here — they're promoted at the root level in `createMockRootScopeGenerator`.
 	private func createMockTypeDescriptionToScopeMapping() -> [TypeDescription: Scope] {
-		// Create scopes for all types.
+		// Create scopes for all types. Process non-mockOnly types first so they
+		// claim additional-type slots. mockOnly types then overwrite slots whose
+		// existing scope lacks a compatible hand-written mock.
+		// Multiple map entries can share a concreteInstantiable but have different
+		// instantiableTypes (e.g., a mockOnly with extra fulfillingAdditionalTypes).
+		// Reuse the same scope for all entries sharing a concreteInstantiable so
+		// every instantiableType is mapped.
+		var visitedConcreteTypeToScope = [TypeDescription: Scope]()
 		let typeDescriptionToScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
+			.sorted { lhs, rhs in
+				// Non-mockOnly before mockOnly (production claims slots first).
+				if lhs.mockOnly != rhs.mockOnly {
+					return !lhs.mockOnly
+				} else {
+					// Within the same mockOnly tier, prefer entries with mock info
+					// so scope-reuse creates scopes from mock-capable entries.
+					// Hand-written mocks (mockInitializer) before generateMock,
+					// since hand-written mocks take priority.
+					let lhsHasHandWrittenMock = lhs.mockInitializer != nil
+					let rhsHasHandWrittenMock = rhs.mockInitializer != nil
+					if lhsHasHandWrittenMock != rhsHasHandWrittenMock {
+						return lhsHasHandWrittenMock
+					} else {
+						let lhsHasMock = lhs.generateMock || lhsHasHandWrittenMock
+						let rhsHasMock = rhs.generateMock || rhsHasHandWrittenMock
+						if lhsHasMock != rhsHasMock {
+							return lhsHasMock
+						} else {
+							// Stable tiebreaker: sort by concrete type name so scope-reuse
+							// selects the same entry across runs.
+							return lhs.concreteInstantiable < rhs.concreteInstantiable
+						}
+					}
+				}
+			}
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
-				guard partialResult[instantiable.concreteInstantiable] == nil else { return }
-				let scope = Scope(instantiable: instantiable)
+				let scope = visitedConcreteTypeToScope[instantiable.concreteInstantiable] ?? Scope(instantiable: instantiable)
+				visitedConcreteTypeToScope[instantiable.concreteInstantiable] = scope
 				for instantiableType in instantiable.instantiableTypes {
-					partialResult[instantiableType] = scope
+					guard let existingScope = partialResult[instantiableType] else {
+						// When a mockOnly entry adds a new slot and the reused scope
+						// lacks mock metadata, use a scope built from the mockOnly's
+						// instantiable so the slot retains the hand-written mock info.
+						// Only when the mock return type is compatible with this slot.
+						if instantiable.mockOnly,
+						   instantiable.mockInitializer != nil,
+						   instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiableType),
+						   scope.instantiable.mockInitializer == nil
+						{
+							partialResult[instantiableType] = Scope(instantiable: instantiable)
+						} else {
+							partialResult[instantiableType] = scope
+						}
+						continue
+					}
+					// A mockOnly hand-written mock overwrites a scope that lacks
+					// its own hand-written mock. generateMock (which wraps init)
+					// does not count — hand-written mocks take priority.
+					// Check compatibility against both the concrete type and the
+					// slot type — extension mocks can validly return a protocol
+					// from fulfillingAdditionalTypes. Also verify the incoming
+					// mockOnly's mock is usable for this slot (its return type
+					// must match the slot type or its own concrete type).
+					if instantiable.mockOnly,
+					   instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiableType),
+					   !existingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: existingScope.instantiable.concreteInstantiable),
+					   !existingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiableType)
+					{
+						partialResult[instantiableType] = scope
+					}
 				}
 			}
 
@@ -728,9 +807,20 @@ public actor DependencyTreeGenerator {
 		for scope in Set(typeDescriptionToScopeMap.values) {
 			for dependency in scope.instantiable.dependencies {
 				switch dependency.source {
-				case let .instantiated(_, erasedToConcreteExistential):
+				case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
+					// For fulfilledByType deps, prefer the declared type for mock
+					// resolution — fulfilledByType is a production-only directive.
+					// The scope map's priority rules determine the best mock for
+					// the declared type. Fall back to the fulfilling type if the
+					// declared type isn't in the scope map.
 					let instantiatedType = dependency.asInstantiatedType
-					if let instantiatedScope = typeDescriptionToScopeMap[instantiatedType] {
+					let declaredType = dependency.property.typeDescription.asInstantiatedType
+					let instantiatedScope: Scope? = if fulfillingTypeDescription != nil {
+						typeDescriptionToScopeMap[declaredType] ?? typeDescriptionToScopeMap[instantiatedType]
+					} else {
+						typeDescriptionToScopeMap[instantiatedType]
+					}
+					if let instantiatedScope {
 						scope.propertiesToGenerate.append(.instantiated(
 							dependency.property,
 							instantiatedScope,

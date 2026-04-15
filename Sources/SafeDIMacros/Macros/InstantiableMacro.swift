@@ -578,11 +578,11 @@ public struct InstantiableMacro: MemberMacro {
 				let typeName = concreteDeclaration.name.text
 				let instantiableTypeStrippingGenerics = visitor.instantiableType?.strippingGenerics
 				let mockReturnType = mockSyntax.signature.returnClause?.type.typeDescription
-				let additionalTypesStrippingGenerics = (visitor.additionalInstantiables ?? []).map(\.strippingGenerics)
 				let isSelfReturnType = mockReturnType == .simple(name: "Self", generics: [])
+				// Concrete type mocks must return Self or the type name.
+				// Additional types are only allowed for extension-based mocks.
 				let returnTypeMatchesTypeName = isSelfReturnType
 					|| mockReturnType?.strippingGenerics == instantiableTypeStrippingGenerics
-					|| additionalTypesStrippingGenerics.contains(where: { $0 == mockReturnType?.strippingGenerics })
 				if !returnTypeMatchesTypeName {
 					var fixedMockSyntax = mockSyntax
 					if let existingReturnClause = mockSyntax.signature.returnClause {
