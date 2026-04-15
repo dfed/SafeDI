@@ -890,8 +890,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		/// The builder closure type as a Swift source string (unlabeled parameters).
-		/// e.g., `(Service, Style) -> Grandchild` or `() -> Service`.
+		/// Uses the property type (not the concrete fulfilling type) so the override
+		/// closure matches what the parent init expects. Swift covariant return types
+		/// ensure a concrete builder (e.g., `ConcreteService.init`) is assignable to
+		/// a closure returning the property type (e.g., `() -> ServiceProtocol`).
 		var builderClosureType: String {
+			let parameterTypes = constructionArguments
+				.map(\.typeDescription.asFunctionParameter.asSource)
+				.joined(separator: ", ")
+			return "(\(parameterTypes)) -> \(instantiatedTypeDescription.asSource)"
+		}
+
+		/// The builder closure type using the concrete type for the return.
+		/// Used in `SafeDIMockConfiguration` structs which are deduplicated by
+		/// concrete type and must have a single consistent builder signature.
+		var concreteBuilderClosureType: String {
 			let parameterTypes = constructionArguments
 				.map(\.typeDescription.asFunctionParameter.asSource)
 				.joined(separator: ", ")
@@ -915,6 +928,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					.map { "\($0.label):" }
 					.joined()
 				return "\(concreteType.asSource).\(methodName)(\(labels))"
+			}
+		}
+
+		/// A direct call expression using the default builder with labeled arguments.
+		/// e.g., `ConcreteService(helper: helper)` or `ConcreteService.instantiate(helper: helper)`.
+		/// Unlike `defaultBuilderExpression` (a function reference for `??` coalescing),
+		/// this produces a complete call that's faster for the compiler to type-check.
+		func defaultBuilderCall(arguments: [String]) -> String {
+			let methodName: String = if useMockInitializer {
+				customMockName ?? InstantiableVisitor.mockMethodName
+			} else if isExtensionBased {
+				InstantiableVisitor.instantiateMethodName
+			} else {
+				"init"
+			}
+			let labeledArguments = zip(constructionArguments, arguments)
+				.map { $0.0.label == "_" ? $0.1 : "\($0.0.label): \($0.1)" }
+				.joined(separator: ", ")
+			if methodName == "init" {
+				return "\(concreteType.asSource)(\(labeledArguments))"
+			} else {
+				return "\(concreteType.asSource).\(methodName)(\(labeledArguments))"
 			}
 		}
 
@@ -1276,7 +1311,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Builder parameter (always last, unlabeled). Optional with nil default so that
 		// the default function reference (which may be @MainActor) is resolved in build()
 		// rather than in this nonisolated init.
-		let closureType = node.builderClosureType
+		let closureType = node.concreteBuilderClosureType
 		initParameters.append("\(innerIndent)\(standardIndent)_ safeDIBuilder: (\(sendableAnnotation)\(closureType))? = nil")
 		assignments.append("\(innerIndent)\(standardIndent)self.safeDIBuilder = safeDIBuilder")
 		storedProperties.append("\(innerIndent)/// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.")
@@ -1330,7 +1365,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 			if !isCycleNode {
 				let defaultBuilder = node.defaultBuilderExpression
-				if node.needsConfigurationStruct {
+				if node.erasedToConcreteExistential {
+					// Erased wrappers: the override returns the property type but
+					// the default returns the concrete type — not covariant.
+					// Extract only the override; the function body handles the default.
+					let overridePath = if node.needsConfigurationStruct {
+						"\(nodePath).safeDIBuilder"
+					} else {
+						nodePath
+					}
+					extractions.append((
+						localName: "\(functionName)__\(relativePath)_safeDIBuilder",
+						optionalPath: nil,
+						defaultExpression: overridePath,
+					))
+				} else if node.needsConfigurationStruct {
 					extractions.append((
 						localName: "\(functionName)__\(relativePath)_safeDIBuilder",
 						optionalPath: "\(nodePath).safeDIBuilder",
@@ -1455,16 +1504,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				if !node.needsConfigurationStruct {
 					// Leaf constant node — flat binding, no scoping needed.
 					if let optionalBuilderPath {
-						let leafBuilderExpression = "(\(optionalBuilderPath) ?? \(node.defaultBuilderExpression))"
 						if node.erasedToConcreteExistential {
-							let protocolType = node.typeDescription.asSource
-							lines.append("\(indent)let \(node.propertyLabel) = \(protocolType)(\(leafBuilderExpression)(\(argumentList)))")
+							// The override closure returns the property type directly.
+							// The default builder returns the concrete type, which must
+							// be wrapped. Use optional chaining + ?? to split the paths.
+							let wrapperType = node.typeDescription.asSource
+							lines.append("\(indent)let \(node.propertyLabel) = \(optionalBuilderPath)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
 						} else {
+							let leafBuilderExpression = "(\(optionalBuilderPath) ?? \(node.defaultBuilderExpression))"
 							lines.append("\(indent)let \(node.propertyLabel) = \(leafBuilderExpression)(\(argumentList))")
 						}
 					} else if node.erasedToConcreteExistential {
-						let protocolType = node.typeDescription.asSource
-						lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(protocolType)(\(builderExpression)(\(argumentList)))")
+						// Sendable context: extracted local is optional.
+						let wrapperType = node.typeDescription.asSource
+						lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
 					} else {
 						lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)(\(argumentList))")
 					}
@@ -1473,10 +1526,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// A function scope prevents child bindings from colliding with
 					// siblings' child bindings that share the same property label.
 					let functionName = "__safeDI_\(node.propertyLabel)"
-					let concreteTypeName = node.concreteType.asSource
+					let propertyTypeName = node.instantiatedTypeDescription.asSource
 					let innerIndent = "\(indent)\(standardIndent)"
 
-					lines.append("\(indent)func \(functionName)() -> \(concreteTypeName) {")
 					var childAncestors = ancestorTypes
 					childAncestors.insert(nodeTypeKey)
 					let childBindings = generateMockBodyBindings(
@@ -1486,16 +1538,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						ancestorTypes: childAncestors,
 						sendableExtractionPrefix: sendableExtractionPrefix,
 					)
-					lines.append(contentsOf: childBindings)
-					lines.append("\(innerIndent)return \(builderExpression)(\(argumentList))")
-					lines.append("\(indent)}")
 
 					if node.erasedToConcreteExistential {
-						let protocolType = node.typeDescription.asSource
-						lines.append("\(indent)let \(node.propertyLabel): \(protocolType) = \(protocolType)(\(functionName)())")
+						// The config struct's safeDIBuilder returns the concrete type.
+						// Both paths must wrap to the property type (the wrapper).
+						// In sendable context, use the extracted local (builderExpression)
+						// instead of referencing safeDIOverrides directly.
+						// Note: constant erased cycles are rejected by mock validation
+						// before reaching this point, so isCycleNode is always false here.
+						let wrapperType = node.typeDescription.asSource
+						let overridePath = optionalBuilderPath ?? builderExpression
+						lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
+						lines.append(contentsOf: childBindings)
+						lines.append("\(innerIndent)if let safeDIBuilder = \(overridePath) {")
+						lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(safeDIBuilder(\(argumentList)))")
+						lines.append("\(innerIndent)} else {")
+						lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+						lines.append("\(innerIndent)}")
+						lines.append("\(indent)}")
 					} else {
-						lines.append("\(indent)let \(node.propertyLabel): \(concreteTypeName) = \(functionName)()")
+						lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
+						lines.append(contentsOf: childBindings)
+						lines.append("\(innerIndent)return \(builderExpression)(\(argumentList))")
+						lines.append("\(indent)}")
 					}
+
+					lines.append("\(indent)let \(node.propertyLabel): \(propertyTypeName) = \(functionName)()")
 				}
 			}
 		}
@@ -1608,15 +1676,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					into: &extractions,
 				)
 				// Extract the node's own safeDIBuilder.
-				if let optionalBuilderPath {
+				let extractedBuilderName = "\(functionName)__safeDIBuilder"
+				if node.erasedToConcreteExistential, let optionalBuilderPath {
+					// For erased wrappers, the override returns the property type
+					// but the default returns the concrete type — not covariant.
+					// Extract only the override; handle the default inside the function.
 					extractions.append((
-						localName: "\(functionName)__safeDIBuilder",
+						localName: extractedBuilderName,
+						optionalPath: nil,
+						defaultExpression: optionalBuilderPath,
+					))
+				} else if let optionalBuilderPath {
+					extractions.append((
+						localName: extractedBuilderName,
 						optionalPath: optionalBuilderPath,
 						defaultExpression: node.defaultBuilderExpression,
 					))
 				} else {
 					extractions.append((
-						localName: "\(functionName)__safeDIBuilder",
+						localName: extractedBuilderName,
 						optionalPath: nil,
 						defaultExpression: builderExpression,
 					))
@@ -1630,7 +1708,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				}
 
-				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {")
+				let functionReturnType = node.instantiatedTypeDescription.asSource
+				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
 
 				// Generate children using extracted locals.
 				// Include this node's type in ancestors for cycle detection.
@@ -1645,15 +1724,31 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 				lines.append(contentsOf: childBindings)
 
-				let extractedBuilderName = "\(functionName)__safeDIBuilder"
-				if childBindings.isEmpty {
+				if node.erasedToConcreteExistential {
+					let wrapperType = node.typeDescription.unwrapped.asInstantiatedType.asSource
+					let hasReturn = !childBindings.isEmpty
+					let returnKeyword = hasReturn ? "return " : ""
+					lines.append("\(innerIndent)if let \(extractedBuilderName) {")
+					if node.needsConfigurationStruct {
+						// Config struct's safeDIBuilder returns the concrete type — wrap.
+						lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(wrapperType)(\(extractedBuilderName)(\(builderCallArguments)))")
+					} else {
+						// Inline closure returns the property type — no wrap.
+						lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(extractedBuilderName)(\(builderCallArguments))")
+					}
+					lines.append("\(innerIndent)} else {")
+					lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+					lines.append("\(innerIndent)}")
+				} else if childBindings.isEmpty {
 					lines.append("\(innerIndent)\(extractedBuilderName)(\(builderCallArguments))")
 				} else {
 					lines.append("\(innerIndent)return \(extractedBuilderName)(\(builderCallArguments))")
 				}
 				lines.append("\(indent)}")
 			} else {
-				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {")
+				let functionReturnType = node.instantiatedTypeDescription.asSource
+
+				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
 
 				// Generate children's bindings inside the function body.
 				// Include this node's type in ancestors so self-referencing
@@ -1668,7 +1763,37 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 				lines.append(contentsOf: childBindings)
 
-				if let optionalBuilderPath {
+				if node.erasedToConcreteExistential, let optionalBuilderPath {
+					let wrapperType = node.typeDescription.unwrapped.asInstantiatedType.asSource
+					let hasReturn = !childBindings.isEmpty
+					let returnKeyword = hasReturn ? "return " : ""
+					lines.append("\(innerIndent)if let safeDIBuilder = \(optionalBuilderPath) {")
+					if node.needsConfigurationStruct {
+						// Config struct's safeDIBuilder returns the concrete type — wrap.
+						lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(wrapperType)(safeDIBuilder(\(builderCallArguments)))")
+					} else {
+						// Inline closure returns the property type — no wrap.
+						lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)safeDIBuilder(\(builderCallArguments))")
+					}
+					lines.append("\(innerIndent)} else {")
+					lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+					lines.append("\(innerIndent)}")
+				} else if node.erasedToConcreteExistential {
+					// Sendable-extracted context: builderExpression is the extracted
+					// optional local.
+					let wrapperType = node.typeDescription.unwrapped.asInstantiatedType.asSource
+					let hasReturn = !childBindings.isEmpty
+					let returnKeyword = hasReturn ? "return " : ""
+					lines.append("\(innerIndent)if let \(builderExpression) {")
+					if node.needsConfigurationStruct {
+						lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(wrapperType)(\(builderExpression)(\(builderCallArguments)))")
+					} else {
+						lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(builderExpression)(\(builderCallArguments))")
+					}
+					lines.append("\(innerIndent)} else {")
+					lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+					lines.append("\(innerIndent)}")
+				} else if let optionalBuilderPath {
 					let nilCoalescingExpression = "(\(optionalBuilderPath) ?? \(node.defaultBuilderExpression))"
 					if childBindings.isEmpty {
 						lines.append("\(innerIndent)\(nilCoalescingExpression)(\(builderCallArguments))")
@@ -1686,16 +1811,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Emit the Instantiator/ErasedInstantiator construction.
 		let unwrappedTypeDescription = node.typeDescription.unwrapped.asSource
-		let instantiatedTypeDescription = node.instantiatedTypeDescription.asSource
 
-		let instantiatorConstruction = if forwardedArguments.isEmpty, !node.erasedToConcreteExistential {
+		// The builder function now returns the property type directly (including
+		// wrapping for erasedToConcreteExistential), so no outer wrapping needed.
+		let instantiatorConstruction = if forwardedArguments.isEmpty {
 			"\(unwrappedTypeDescription)(\(functionName))"
-		} else if node.erasedToConcreteExistential {
-			"""
-			\(unwrappedTypeDescription) {
-			\(indent)\(standardIndent)\(instantiatedTypeDescription)(\(functionName)(\(forwardedArguments)))
-			\(indent)}
-			"""
 		} else {
 			"""
 			\(unwrappedTypeDescription) {
