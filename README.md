@@ -195,7 +195,7 @@ cat > manifest.json << 'EOF'
   ]
 }
 EOF
-safeditool generate Sources.txt --swift-manifest manifest.json
+safeditool generate input.csv --swift-manifest manifest.json
 ```
 
 ## Contributing
