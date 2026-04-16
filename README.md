@@ -6,59 +6,113 @@
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fdfed%2FSafeDI%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/dfed/SafeDI)
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fdfed%2FSafeDI%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/dfed/SafeDI)
 
-Compile-time-safe dependency injection for Swift projects. SafeDI provides developers with the safety and simplicity of manual dependency injection, without the overhead of boilerplate code.
+Compile-time-safe dependency injection for Swift projects. SafeDI provides developers with the safety and simplicity of manual dependency injection, without the overhead of manually maintained boilerplate code.
 
-## Features
+SafeDI reads your code during compilation, validates the dependency graph, and generates both production and mock trees for you. No containers. No service locators. No dependency protocol boilerplate. Just Swift.
 
-- [x] Compile-time safe
+## Why teams choose SafeDI
 
-- [x] Thread safe
-
-- [x] Hierarchical dependency scoping
-
-- [x] Constructor injection
-
-- [x] Multi-module support
-
-- [x] Dependency inversion support
-
-- [x] Transitive dependency solving
-
-- [x] Cycle detection
-
-- [x] Architecture independent
-
-- [x] Simple integration: no DI-specific types or generics required
-
-- [x] Easy testing: automatic mock generation
-
-- [x] Clear error messages: never debug generated code
+- **Dependency injection without dependency-injection types.** Your app types stay focused on your app.
+- **Compile-time graph validation.** If the code compiles, the dependency graph is valid.
+- **Non-optional runtime values.** Forward runtime data like an authenticated user into a subtree and receive it later where it is actually needed.
+- **Typed mock trees.** Generate `mock()` from real feature roots and override only the branches you care about.
+- **Architecture-independent.** Works with SwiftUI, UIKit, coordinators, services, multi-module codebases, etc.
+- **Clear failures.** SafeDI flags unsolvable dependency graphs with explicit build errors.
 
 ## The core concept
 
-SafeDI reads your code, validates your dependencies, and generates a dependency tree—all during project compilation. If your code compiles, your dependency tree is valid.
+SafeDI reads your code, validates your dependencies, and generates a dependency tree—all during project compilation.
 
-Opting a type into the SafeDI dependency tree is simple: add the `@Instantiable` macro to your type declaration, and decorate your type’s dependencies with macros to indicate the lifecycle of each property. Here is what a `Boiler` in a `CoffeeMaker` might look like in SafeDI:
+Opting a type into the SafeDI dependency tree is simple: add the `@Instantiable` macro to your type declaration, and decorate your type’s dependencies with macros to indicate the lifecycle of each property. Here is what an application’s `LoggedInView` might look like in SafeDI:
 
 ```swift
-// The boiler type is opted into SafeDI because it has been decorated with the `@Instantiable` macro.
+// The logged in view type is opted into SafeDI because it has been decorated with the `@Instantiable` macro.
 @Instantiable
-public final class Boiler {
-    public init(pump: Pump, waterReservoir: WaterReservoir) {
-        self.pump = pump
-        self.waterReservoir = waterReservoir
+public final class LoggedInView: View, Instantiable {
+    public init(
+        user: User,
+        profileService: ProfileService
+    ) {
+        self.user = user
+        self.profileService = profileService
     }
 
-    …
+    public var body: some View { … }
+    
+    // The logged in view creates, or in SafeDI parlance ‘instantiates’, its profile.
+    @Instantiated private let profileService: ProfileService
+    // The logged in view is injected with a reference to a non-optional User.
+    @Forwarded private let user: User
+}
 
-    // The boiler creates, or in SafeDI parlance ‘instantiates’, its pump.
-    @Instantiated private let pump: Pump
-    // The boiler receives a reference to a water reservoir that has been instantiated by the coffee maker.
-    @Received private let waterReservoir: WaterReservoir
+@Instantiable
+public final class ProfileService: Instantiable {
+    public init(user: User, apiClient: APIClient) {
+        self.user = user
+        self.apiClient = apiClient
+    }
+
+    @Received private let user: User
+    @Instantiated private let apiClient: APIClient
 }
 ```
 
-That is all it takes! SafeDI utilizes macro decorations on your existing types to define your dependency tree. For a comprehensive explanation of SafeDI’s macros and their usage, please read [the Macros section of our manual](Documentation/Manual.md#macros).
+User is a runtime-derived object. It is forwarded once at the logged-in boundary and then received later by the types that actually need it.
+
+This is the core SafeDI model:
+• write normal Swift types,
+• declare dependencies where they live,
+• let SafeDI validate and generate the wiring.
+
+For a comprehensive explanation of SafeDI’s macros and their usage, please read [the Macros section of our manual](Documentation/Manual.md#macros).
+
+## Tests and previews from real feature roots
+
+Decorate a type with `@Instantiable(generateMock: true)` and SafeDI generates a `public static func mock(…) -> Type` method for the type.
+
+```swift
+@Instantiable(generateMock: true)
+public final class LoggedInView: View, Instantiable { /* same as above */ }
+
+#Preview {
+     // Mock method is generated by SafeDI.
+    LoggedInView.mock(
+        user: User(identifier: UUID(), name: "Mock User"),
+        safeDIOverrides: .init(
+            // @DAN TODO: what would be interesting to put in here
+            profileService: .init(
+                apiClient: { MockAPIClient() } // @DAN TODO: do better. and align with teh above
+            )
+        )
+    )
+}
+```
+
+`mock(…)` builds the full dependency subtree for `LoggedInView`. `safeDIOverrides` gives you tree-structured control over the graph, so tests and previews can replace the dependencies they care about. The same declarations that define your production graph also enables generation of test and preview graphs.
+
+If you don’t need full control over the graph, `mock` methods can be called without supplying any arguments if every dependency in `@Instantiable`:
+
+```swift
+#Preview {
+    LoggedInView.mock()
+}
+
+// The user type tells SafeDI how to create a mock of itself.
+@Instantiable(mockOnly: true)
+public final class User {
+    public init(identifier: UUID, name: String) {
+        self.identifier = identifier
+        self.name = name
+    }
+
+    public static func mock() -> User {
+        .init(identifier: UUID(), name: "Mock User")
+    }
+
+    public let identifier: UUID
+    public var name: String
+}
+```
 
 ## Getting started
 
@@ -72,7 +126,7 @@ You can see sample integrations in the [Examples folder](Examples/). Note that t
 
 If you are migrating an existing project to SafeDI, follow our [migration guide](Documentation/Manual.md#migrating-to-safedi).
 
-### Adding SafeDI as a Dependency
+### Adding SafeDI as a Dependency // @DAN TODO: move most of this to Manual
 
 #### Swift package manager
 
@@ -141,6 +195,32 @@ import SafeDI
 SafeDI’s compile-time safety and hierarchical dependency scoping make it similar to [Needle](https://github.com/uber/needle) and [Weaver](https://github.com/scribd/Weaver). Unlike Needle, SafeDI does not require defining dependency protocols for each type that can be instantiated within the DI tree. Unlike Weaver, SafeDI does not require defining and maintaining containers that live alongside your regular Swift code.
 
 Other Swift DI libraries, like [Factory](https://github.com/hmlongco/Factory) and [swift-dependencies](https://github.com/pointfreeco/swift-dependencies) do offer compile-time validation of the dependency tree but do not have hierarchical dependency scoping. This means scoped dependencies—like an authentication token in a network layer—can only be optionally injected when using these libraries. Meanwhile, libraries like [Swinject](https://github.com/Swinject/Swinject) do not offer compile-time safety.
+
+## Features
+
+- [x] Compile-time safe
+
+- [x] Thread safe
+
+- [x] Hierarchical dependency scoping
+
+- [x] Constructor injection
+
+- [x] Multi-module support
+
+- [x] Dependency inversion support
+
+- [x] Transitive dependency solving
+
+- [x] Cycle detection
+
+- [x] Architecture independent
+
+- [x] Simple integration: no DI-specific types or generics required
+
+- [x] Easy testing: automatic mock generation
+
+- [x] Clear error messages: never debug generated code
 
 ## Migrating from SafeDI 1.x to 2.x
 
