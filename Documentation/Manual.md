@@ -519,8 +519,7 @@ When you want to instantiate a dependency after `init(…)`, you need to declare
 The [`Instantiator`](../Sources/SafeDI/DelayedInstantiation/Instantiator.swift) type is how SafeDI enables deferred instantiation of an `@Instantiable` type. `Instantiator` has a single generic that matches the type of the to-be-instantiated instance. Creating an `Instantiator` property is as simple as creating any other property in the SafeDI ecosystem:
 
 ```swift
-@Instantiable(isRoot: true)
-@main
+@Instantiable(isRoot: true) @MainActor @main
 public struct NotesApp: App, Instantiable {
     public var body: some Scene {
         WindowGroup {
@@ -534,7 +533,8 @@ public struct NotesApp: App, Instantiable {
         }
     }
 
-    @Instantiated private let userService: UserService
+    // `@ObservedObject` so SwiftUI re-renders when the user logs in or out.
+    @ObservedObject @Instantiated private var userService: AnyUserService
     @Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
     @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
 }
