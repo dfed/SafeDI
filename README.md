@@ -15,7 +15,7 @@ SafeDI reads your code at compile time, validates the dependency graph, and gene
 - **Dependency injection without dependency-injection types.** Your app types stay focused on your app.
 - **Compile-time graph validation.** If the code compiles, the dependency graph is valid.
 - **Non-optional runtime values.** Forward runtime data like an authenticated user into a subtree and receive it later where it is actually needed.
-- **Typed mock trees.** Generate `mock()` from real feature roots and override only the branches you care about.
+- **Full-graph mocks.** Generate `mock()` from real feature roots and override only the branches you care about.
 - **Architecture-independent.** Works with SwiftUI, UIKit, coordinators, services, multi-module codebases, etc.
 - **Clear failures.** SafeDI flags unsolvable dependency graphs with explicit build errors.
 
@@ -129,7 +129,7 @@ func test_logOut_clearsAuthenticatedUser() {
 | ✓ Compile-time safe | ✓ Thread safe | ✓ Hierarchical dependency scoping |
 | ✓ Constructor injection | ✓ Multi-module support | ✓ Dependency inversion support |
 | ✓ Transitive dependency solving | ✓ Cycle detection | ✓ Architecture independent |
-| ✓ No DI-specific types or generics required | ✓ Automatic mock generation | ✓ Clear errors: never debug generated code |
+| ✓ No DI-specific types or generics required | ✓ Full-graph mocks | ✓ Clear errors: never debug generated code |
 
 ## Getting started
 
@@ -151,7 +151,7 @@ SafeDI is closest in spirit to [Needle](https://github.com/uber/needle) and [Wea
 
 SwiftUI’s own `Environment` is a useful mental model for a dependency tree — but without compile-time validation. SafeDI applies that tree shape to the full object graph and guarantees it resolves.
 
-Across all of these, SafeDI is the only Swift DI library that generates typed mock subtrees from your real dependency graph, and the only hierarchical DI library whose integration errors surface as Swift macro diagnostics with fix-its directly in your IDE.
+Across all of these, SafeDI is the only Swift DI library that generates full-graph mocks from your real dependency graph, and the only hierarchical DI library whose integration errors surface as Swift macro diagnostics with fix-its directly in your IDE.
 
 ## Contributing
 
