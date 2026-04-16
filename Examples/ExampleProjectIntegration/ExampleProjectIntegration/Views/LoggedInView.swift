@@ -60,7 +60,11 @@ public struct LoggedInView: Instantiable, View {
 }
 
 #if DEBUG
-	#Preview {
+	#Preview("Bare mock") {
+		LoggedInView.mock()
+	}
+
+	#Preview("Customized") {
 		LoggedInView.mock(
 			user: User(name: "dfed"),
 			defaultNote: "dfed says hello",
