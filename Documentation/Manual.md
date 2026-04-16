@@ -1,6 +1,76 @@
 # SafeDI Manual
 
-This manual provides a detailed guide to using SafeDI effectively in your Swift projects. You’ll learn how to create your dependency tree utilizing SafeDI’s macros, learn recommended approaches to adopting SafeDI, and get a tour of how SafeDI works under the hood.
+This manual provides a detailed guide to using SafeDI effectively in your Swift projects. You’ll learn how to integrate SafeDI into your build, create your dependency tree utilizing SafeDI’s macros, learn recommended approaches to adopting SafeDI, and get a tour of how SafeDI works under the hood.
+
+## Installation
+
+SafeDI utilizes both Swift macros and a code generation plugin to read your code and generate a dependency tree. Integrating SafeDI is a three-step process: add the package, wire the `SafeDIGenerator` plugin into your build, and decorate your types with SafeDI’s macros.
+
+You can see sample integrations in the [Examples folder](../Examples/). Note that the example projects use the `sourceBuild` trait to build `SafeDITool` from source: consumers using a published release do not need to specify `traits`.
+
+### Adding SafeDI as a dependency
+
+#### Swift package manager
+
+To add the SafeDI framework as a dependency to a package utilizing [Swift Package Manager](https://github.com/apple/swift-package-manager), add the following lines to your `Package.swift` file:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.0.0"),
+]
+```
+
+To install the SafeDI framework into an Xcode project with Swift Package Manager, follow [Apple’s instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to add `https://github.com/dfed/SafeDI.git` as a dependency.
+
+### Generating your dependency tree
+
+SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin uses a prebuilt binary for fast builds without compiling SwiftSyntax. This plugin works out of the box on most project configurations. If your project uses a custom build system, you can configure your build to utilize the `SafeDITool` command-line executable directly.
+
+#### Xcode project
+
+If your first-party code comprises a single module in an `.xcodeproj`, once your Xcode project depends on the SafeDI package you can integrate the Swift Package Plugin simply by going to your target’s `Build Phases`, expanding the `Run Build Tool Plug-ins` drop-down, and adding the `SafeDIGenerator` as a build tool plug-in. You can see this integration in practice in the [ExampleProjectIntegration](../Examples/ExampleProjectIntegration) project.
+
+If your Xcode project comprises multiple modules, follow the above steps, and then add a `#SafeDIConfiguration` to your module to configure SafeDI:
+
+```swift
+import SafeDI
+
+#SafeDIConfiguration(
+    additionalDirectoriesToInclude: ["Subproject"]
+)
+```
+
+The `additionalDirectoriesToInclude` parameter specifies folders outside of your module that SafeDI will scan for Swift source files. Paths must be relative to the project directory. Use this parameter to specify the paths to dependent modules' source directories, since Xcode project plugins cannot discover these automatically. You can see [an example of this configuration](../Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](../Examples/ExampleMultiProjectIntegration) project.
+
+#### Swift package
+
+If your first-party code is entirely contained in a Swift Package with one or more modules, you can add the following lines to your root target’s definition:
+
+```swift
+    plugins: [
+        .plugin(name: "SafeDIGenerator", package: "SafeDI")
+    ]
+```
+
+To also generate mocks for non-root modules, add the plugin to all first-party targets.
+
+You can see this integration in practice in the [Example Package Integration](../Examples/Example%20Package%20Integration) package.
+
+Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may add a `#SafeDIConfiguration` in your root module with the additional module names:
+
+```swift
+import SafeDI
+
+#SafeDIConfiguration(
+    additionalImportedModules: ["MyModule"]
+)
+```
+
+### Additional configurations
+
+`SafeDITool` is designed to integrate into projects of any size or shape. Our [Releases](https://github.com/dfed/SafeDI/releases) page has prebuilt, codesigned release binaries of the `SafeDITool` that can be downloaded and utilized directly in a pre-build script ([example](../Examples/PrebuildScript/safeditool.sh)). Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
+
+`SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run `swift run SafeDITool --help` to see documentation of the tool’s supported arguments.
 
 ## Macros
 
@@ -785,6 +855,62 @@ SwiftUI applications have a natural root: the `App`-conforming type that is init
 ### Selecting a root in UIKit applications
 
 UIKit applications’ natural root is the `UIApplicationDelegate`-conforming app delegate, however, this type inherits from the Objective-C `NSObject` which already has a no-argument `init()`. As such, it is best to create a custom `@Instantiable(isRoot: true) public final class Root: Instantiable` type that is initialized and stored by the application’s app delegate.
+
+## Migrating from SafeDI 1.x to 2.x
+
+SafeDI 2.x requires Swift 6.3 or later and does not support CocoaPods. Projects using an earlier Swift version or CocoaPods should use SafeDI 1.x.
+
+SafeDI 2.x also removes support for CSV-based configuration files (`.safedi/configuration/include.csv` and `.safedi/configuration/additionalImportedModules.csv`). Configuration is now done via the `#SafeDIConfiguration` macro.
+
+### Automated migration
+
+SafeDI provides a command plugin to automate the migration:
+
+```bash
+swift package plugin safedi-v1-to-v2 --target <YourRootTarget>
+```
+
+This plugin will:
+1. Verify your `swift-tools-version` is 6.3 or later
+2. Create a `SafeDIConfiguration.swift` file in your target’s source directory
+3. Migrate any existing CSV configuration values into the new `#SafeDIConfiguration` macro
+4. Delete the obsolete CSV files
+
+### Manual migration
+
+1. Update your `swift-tools-version` to 6.3 or later
+2. Update your SafeDI dependency to `from: "2.0.0"`
+3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
+4. If you don’t have CSV configuration files, add a `#SafeDIConfiguration()` in your root module
+
+### Plugin changes
+
+The `SafeDIPrebuiltGenerator` plugin and `InstallSafeDITool` command plugin have been removed in SafeDI 2.x. `SafeDIGenerator` is now the only build tool plugin and uses a prebuilt binary by default. If you were previously using `SafeDIPrebuiltGenerator` or the `safedi-release-install` command, switch to `SafeDIGenerator`.
+
+### Migrating prebuild scripts or custom build system integrations
+
+If you invoke `SafeDITool` directly (not via the provided SPM plugin), the `--dependency-tree-output` flag has been replaced with `generate --swift-manifest`. The tool now takes a JSON manifest file that maps input Swift files to output files. See [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) for the expected format.
+
+Before (1.x):
+```bash
+safeditool input.csv --dependency-tree-output ./generated/SafeDI.swift
+```
+
+After (2.x):
+```bash
+# Create a manifest mapping root files to outputs
+cat > manifest.json << 'EOF'
+{
+  "dependencyTreeGeneration": [
+    {
+      "inputFilePath": "Sources/App/Root.swift",
+      "outputFilePath": "generated/Root+SafeDI.swift"
+    }
+  ]
+}
+EOF
+safeditool generate input.csv --swift-manifest manifest.json
+```
 
 ## Example applications
 
