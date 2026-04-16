@@ -15,7 +15,7 @@ SafeDI reads your code at compile time, validates the dependency graph, and gene
 - **Dependency injection that feels natural.** Get the simplicity of manual dependency injection without ceremony.
 - **Compile-time graph validation.** If the code compiles, the dependency graph is valid.
 - **Non-optional runtime values.** Forward runtime data like an authenticated user into a subtree and receive it later where it is actually needed.
-- **Full-graph mocks.** Generated from your real dependency graph with every dependency overridable, `mock()` makes writing previews and tests easy.
+- **Full-graph mocks.** Generated from your real dependency graph, `mock()` lets you override any branch for easy previews and tests.
 - **Architecture-independent.** Keep your architecture and patterns.
 - **Clear failures.** SafeDI flags unsolvable dependency graphs with explicit build errors.
 
