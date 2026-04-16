@@ -54,7 +54,7 @@ If your first-party code is entirely contained in a Swift Package with one or mo
 
 To also generate mocks for non-root modules, add the plugin to all first-party targets.
 
-You can see this integration in practice in the [Example Package Integration](../Examples/Example%20Package%20Integration) package.
+You can see this integration in practice in the [Example Package Integration](../Examples/Example Package Integration) package.
 
 Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may add a `#SafeDIConfiguration` in your root module with the additional module names:
 
@@ -108,36 +108,29 @@ import SafeDI
 @Instantiable
 public final class UserService: Instantiable {
     /// Public, memberwise initializer that takes each injected property.
-    public init(authService: AuthService, securePersistentStorage: SecurePersistentStorage) {
-        self.authService = authService
-        self.securePersistentStorage = securePersistentStorage
+    public init(stringStorage: StringStorage) {
+        self.stringStorage = stringStorage
     }
 
-    public private(set) lazy var user: User? = loadPersistedUser() {
-        didSet {
-            persistUserData()
+    public var user: User? {
+        get {
+            stringStorage
+                .string(forKey: Self.userKey)?
+                .data(using: .utf8)
+                .flatMap { try? JSONDecoder().decode(User.self, from: $0) }
+        }
+        set {
+            let encoded = newValue
+                .flatMap { try? JSONEncoder().encode($0) }
+                .flatMap { String(data: $0, encoding: .utf8) }
+            stringStorage.setString(encoded, forKey: Self.userKey)
         }
     }
 
-    public func login(username: String, password: String) async throws -> User {
-        let user = try await authService.login(username: username, password: password)
-        self.user = user
-        return user
-    }
+    /// A string storage instance that is instantiated further up the dependency tree.
+    @Received private let stringStorage: StringStorage
 
-    /// An auth service instance that is instantiated when the `UserService` is instantiated.
-    @Instantiated private let authService: AuthService
-
-    /// An instance of secure, persistent storage that is instantiated further up the dependency tree.
-    @Received private let securePersistentStorage: SecurePersistentStorage
-
-    private func loadPersistedUser() -> User? {
-        securePersistentStorage["user", ofType: User.self]
-    }
-
-    private func persistUserData() {
-        securePersistentStorage["user"] = user
-    }
+    private static let userKey = "user"
 }
 ```
 
@@ -154,8 +147,7 @@ import SafeDI
 
 /// A protocol that defines a UserService.
 public protocol UserService {
-    var user: User? { get }
-    func login(username: String, password: String) async throws -> User
+    var user: User? { get set }
 }
 
 /// A default implementation of `UserService` that can fulfill `@Instantiated`
@@ -170,17 +162,30 @@ public final class DefaultUserService: UserService, Instantiable {
 
 Types that are declared outside of your project can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via a `public static func instantiate(…) -> ExtendedType` function. This `instantiate(…)` function can receive dependencies instantiated or forwarded by objects further up the dependency tree by declaring these dependencies as parameters to the `instantiate(…)` function.
 
-Here we have a sample `@Instantiable` `SecurePersistentStorage` whose concrete type is defined in a third-party dependency:
+Here we have a sample `@Instantiable` extension on `UserDefaults` that adopts a first-party `StringStorage` protocol so SafeDI can instantiate it in place of a hand-rolled storage type:
 
 ```swift
+import Foundation
 import SafeDI
-import SecurePersistentStorage // A third-party library that provides secure, persistent storage.
 
-@Instantiable
-extension SecurePersistentStorage: Instantiable {
+public protocol StringStorage {
+    func string(forKey key: String) -> String?
+    func setString(_ string: String?, forKey key: String)
+}
+
+@Instantiable(fulfillingAdditionalTypes: [StringStorage.self])
+extension UserDefaults: @retroactive Instantiable, StringStorage {
     /// A public static function that defines how SafeDI can instantiate the type.
-    public static func instantiate() -> SecurePersistentStorage {
-        SecurePersistentStorage()
+    public static func instantiate() -> UserDefaults {
+        .standard
+    }
+
+    public func string(forKey key: String) -> String? {
+        object(forKey: key) as? String
+    }
+
+    public func setString(_ string: String?, forKey key: String) {
+        set(string, forKey: key)
     }
 }
 ```
@@ -252,44 +257,41 @@ A `@Forwarded` property is forwarded into the SafeDI dependency tree by an [`Ins
 
 Forwarded property types do not need to be decorated with the `@Instantiable` macro.
 
-Here’s an example showing how to forward a runtime value into an `@Instantiable` type:
+Here’s an example showing how to forward a runtime value — an authenticated `User` — into an `@Instantiable` type:
 
 ```swift
-// A view that requires a runtime value (the user’s name).
+// A view that requires a runtime value (the authenticated user).
 @Instantiable
 public struct LoggedInView: View, Instantiable {
-    public init(userName: String) {
-        self.userName = userName
+    public init(user: User) {
+        self.user = user
     }
 
     public var body: some View {
-        Text("Hello, \(userName)")
+        Text("Hello, \(user.name)")
     }
 
-    @Forwarded private let userName: String
+    @Forwarded private let user: User
 }
 
-// A view that creates LoggedInView when there is a user.
-@Instantiable
-public struct RootView: View, Instantiable {
-    public init(loggedInViewBuilder: Instantiator<LoggedInView>, loggedOutViewBuilder: Instantiator<LoggedOutView>, userService: UserService) {
-        self.loggedInViewBuilder = loggedInViewBuilder
-        self.loggedOutViewBuilder = loggedOutViewBuilder
-        self.userService = userService
-    }
-
-    public var body: some View {
-        if let userName = userService.currentUser?.name {
-            // Pass the forwarded property when instantiating.
-            loggedInViewBuilder.instantiate(userName)
-        } else {
-            loggedOutViewBuilder.instantiate()
+// The app’s root type creates a LoggedInView when there is a user.
+@Instantiable(isRoot: true)
+@main
+public struct NotesApp: App, Instantiable {
+    public var body: some Scene {
+        WindowGroup {
+            if let user = userService.user {
+                // Pass the forwarded property when instantiating.
+                loggedInViewBuilder.instantiate(user)
+            } else {
+                nameEntryViewBuilder.instantiate()
+            }
         }
     }
 
-    @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
-    @Instantiated private let loggedOutViewBuilder: Instantiator<LoggedOutView>
     @Instantiated private let userService: UserService
+    @Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
+    @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
 }
 ```
 
@@ -297,53 +299,49 @@ public struct RootView: View, Instantiable {
 
 Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. Received properties must be `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree.
 
-Here we have a `LoggedInContentView` in which the forwarded `user` property is received by an `UpdateUserService` further down the dependency tree.
+Here we have a `LoggedInView` in which the forwarded `user` property is received by a `NoteStorage` further down the dependency tree:
 
 ```swift
 @Instantiable
-public struct LoggedInContentView: View, Instantiable {
-    public init(user: User, profileViewBuilder: ErasedInstantiator<(), AnyView>) {
+public struct LoggedInView: View, Instantiable {
+    public init(user: User, noteStorage: NoteStorage) {
         self.user = user
-        self.profileViewBuilder = profileViewBuilder
+        self.noteStorage = noteStorage
     }
 
     public var body: some View {
-        ... // Instantiates and displays a ProfileView when a button is pressed.
+        ... // Displays and edits the current user’s note.
     }
 
     @Forwarded private let user: User
 
-    @Instantiated(fulfilledByType: "ProfileView", erasedToConcreteExistential: true) private let profileViewBuilder: ErasedInstantiator<(), AnyView>
+    // NoteStorage is instantiated by LoggedInView, so it lives for the
+    // lifetime of the logged-in subtree.
+    @Instantiated private let noteStorage: NoteStorage
 }
 
 @Instantiable
-public struct ProfileView: View, Instantiable {
-    public init(updateUserService: UpdateUserService) {
-        self.updateUserService = updateUserService
-    }
-
-    public var body: some View {
-        ... // Allows for updating user information.
-    }
-
-    @Instantiated private let updateUserService: UpdateUserService
-}
-
-@Instantiable
-public final class UpdateUserService: Instantiable {
-    public init(user: User) {
+public final class NoteStorage: Instantiable {
+    public init(user: User, stringStorage: StringStorage) {
         self.user = user
-        urlSession = .shared
+        self.stringStorage = stringStorage
     }
 
-    public func updateUserName(to newName: String) async {
-        // Updates the user name.
+    public func note() -> String? {
+        stringStorage.string(forKey: noteKey)
     }
 
-    // The user object which is received from the LoggedInContentView.
+    public func setNote(_ note: String?) {
+        stringStorage.setString(note, forKey: noteKey)
+    }
+
+    // The user object is received from the LoggedInView.
     @Received private let user: User
 
-    private let urlSession: URLSession
+    // The string storage is received from further up the tree.
+    @Received private let stringStorage: StringStorage
+
+    private var noteKey: String { "note-for-\(user.name)" }
 }
 ```
 
@@ -508,20 +506,23 @@ The [`Instantiator`](../Sources/SafeDI/DelayedInstantiation/Instantiator.swift) 
 
 ```swift
 @Instantiable(isRoot: true)
-public struct MyApp: App, Instantiable {
-    public init(contentViewInstantiator: Instantiator<ContentView>) {
-        self.contentViewInstantiator = contentViewInstantiator
-    }
-
+@main
+public struct NotesApp: App, Instantiable {
     public var body: some Scene {
         WindowGroup {
-            // Returns a new instance of a `ContentView`.
-            contentViewInstantiator.instantiate()
+            if let user = userService.user {
+                // Forward the user into a freshly built LoggedInView.
+                loggedInViewBuilder.instantiate(user)
+            } else {
+                // Build a NameEntryView with no forwarded value.
+                nameEntryViewBuilder.instantiate()
+            }
         }
     }
 
-    /// A private property that knows how to instantiate a content view.
-    @Instantiated private let contentViewInstantiator: Instantiator<ContentView>
+    @Instantiated private let userService: UserService
+    @Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
+    @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
 }
 ```
 
@@ -571,13 +572,13 @@ To generate a `mock()` method for a type, set `generateMock: true` on the `@Inst
 ```swift
 @Instantiable(generateMock: true)
 public final class UserService: Instantiable {
-    public init(authService: AuthService, securePersistentStorage: SecurePersistentStorage) {
-        self.authService = authService
-        self.securePersistentStorage = securePersistentStorage
+    public init(stringStorage: StringStorage) {
+        self.stringStorage = stringStorage
     }
 
-    @Instantiated private let authService: AuthService
-    @Received private let securePersistentStorage: SecurePersistentStorage
+    public var user: User? { ... }
+
+    @Received private let stringStorage: StringStorage
 }
 ```
 
@@ -625,12 +626,14 @@ extension ExternalService {
 }
 ```
 
-This also works for primitive types used as `@Forwarded` dependencies:
+This also works for types that are pure data and used as `@Forwarded` dependencies — for example, an authenticated `User`:
 
 ```swift
 @Instantiable(mockOnly: true)
-extension String {
-    public static func mock() -> String { "" }
+extension User {
+    public static func mock() -> User {
+        User(name: "Mock User")
+    }
 }
 ```
 
@@ -682,34 +685,34 @@ Your user-defined `mock()` method must be `public` (or `open`) and must accept p
 When a type has `@Instantiated` dependencies with their own subtrees, the generated `mock()` accepts a `safeDIOverrides` argument that provides tree-structured control over every dependency in the graph:
 
 ```swift
-// Override a child’s default-valued parameter:
-Root.mock(safeDIOverrides: .init(
-    child: .init(theme: .dark)
+// Override a child subtree’s leaf dependency:
+LoggedInView.mock(safeDIOverrides: .init(
+    noteStorage: .init(stringStorage: { InMemoryStorage() })
 ))
 
 // Replace an entire type’s construction with a trailing closure:
-Root.mock(safeDIOverrides: .init(
-    child: .init { service, theme in
-        CustomChild(service: service, theme: theme)
+LoggedInView.mock(safeDIOverrides: .init(
+    noteStorage: .init { user, stringStorage in
+        StubNoteStorage(user: user, stringStorage: stringStorage)
     }
 ))
 
 // Override a leaf dependency (leaves are simple closures, not config objects):
-Root.mock(safeDIOverrides: .init(
-    service: { MockService() }
+LoggedInView.mock(safeDIOverrides: .init(
+    userService: { _ in AnyUserService(StubUserService(user: User(name: "dfed"))) }
 ))
 ```
 
 Each child dependency in the tree that has its own subtree generates a `SafeDIMockConfiguration` struct. This struct accepts optional overrides for the child’s own dependencies and a trailing `safeDIBuilder` closure. The `safeDIBuilder` closure is how you override or customize how the type is constructed within the generated mock tree. Its parameters match the type’s `customMockName` method signature if one is defined, or its `init` parameters otherwise. When no `safeDIBuilder` is provided, the generated mock calls the type’s `customMockName` method or `init` directly.
 
-For example, given a `Child` type with `init(service: Service, theme: Theme)`, the `safeDIBuilder` closure has the signature `(Service, Theme) -> Child`:
+For example, given a `NoteStorage` type with `init(user: User, stringStorage: StringStorage)`, the `safeDIBuilder` closure has the signature `(User, StringStorage) -> NoteStorage`:
 
 ```swift
-Root.mock(safeDIOverrides: .init(
-    child: .init { service, theme in
-        // `service` and `theme` are the resolved values from the mock tree.
-        // Return a customized Child instance.
-        Child(service: service, theme: theme)
+LoggedInView.mock(safeDIOverrides: .init(
+    noteStorage: .init { user, stringStorage in
+        // `user` and `stringStorage` are the resolved values from the mock tree.
+        // Return a customized NoteStorage instance.
+        NoteStorage(user: user, stringStorage: stringStorage)
     }
 ))
 ```
@@ -727,7 +730,7 @@ To use a mock from another module in your tests, see [Cross-module mock generati
 `@Forwarded` properties become parameters on the mock method since they represent runtime input. By default they are required (no default value):
 
 ```swift
-let noteView = NoteView.mock(userName: "Preview User")
+let view = LoggedInView.mock(user: User(name: "dfed"))
 ```
 
 A forwarded parameter gets a default value when:
@@ -736,25 +739,27 @@ A forwarded parameter gets a default value when:
 
 ### Default-valued init parameters in mocks
 
-If an `@Instantiable` type’s initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are automatically exposed in the generated mock. This lets you override values like feature flags or optional view models in tests while keeping the original defaults for production code.
+If an `@Instantiable` type’s initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are automatically exposed in the generated mock. This lets you override values like seed data or feature flags in tests and previews while keeping the original defaults for production code.
 
 ```swift
 @Instantiable(generateMock: true)
-public struct ProfileView: Instantiable {
-    public init(user: User, showDebugInfo: Bool = false) { ... }
-    @Received let user: User
+public struct LoggedInView: View, Instantiable {
+    public init(user: User, noteStorage: NoteStorage, defaultNote: String = "") { ... }
+    @Forwarded let user: User
+    @Instantiated let noteStorage: NoteStorage
 }
 ```
 
-Override the default:
+Pass the default override directly:
 
 ```swift
-Root.mock(safeDIOverrides: .init(
-    profileView: .init(showDebugInfo: true)
-))
+LoggedInView.mock(
+    user: User(name: "dfed"),
+    defaultNote: "dfed says hello"
+)
 ```
 
-When no override is provided, the original default expression (`false`) is used.
+When no override is provided, the original default expression (`""`) is used.
 
 Default-valued parameters do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
 
