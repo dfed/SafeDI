@@ -23,28 +23,28 @@ import SwiftUI
 
 @MainActor
 @Instantiable(generateMock: true)
-public struct NoteView: Instantiable, View {
+public struct LoggedInView: Instantiable, View {
 	public init(
-		userName: String,
+		user: User,
 		userService: AnyUserService,
-		stringStorage: StringStorage,
+		noteStorage: NoteStorage,
 		defaultNote: String = "",
 	) {
-		self.userName = userName
+		self.user = user
 		self.userService = userService
-		self.stringStorage = stringStorage
-		_note = State(initialValue: stringStorage.string(forKey: userName) ?? defaultNote)
+		self.noteStorage = noteStorage
+		_note = State(initialValue: noteStorage.note() ?? defaultNote)
 	}
 
 	public var body: some View {
 		VStack {
-			Text("\(userName)’s note")
+			Text("\(user.name)’s note")
 			TextEditor(text: $note)
 				.onChange(of: note) { _, newValue in
-					stringStorage.setString(newValue, forKey: userName)
+					noteStorage.setNote(newValue)
 				}
 			Button(action: {
-				userService.userName = nil
+				userService.user = nil
 			}, label: {
 				Text("Log out")
 			})
@@ -52,17 +52,17 @@ public struct NoteView: Instantiable, View {
 		.padding()
 	}
 
-	@Forwarded private let userName: String
+	@Forwarded private let user: User
 	@Received private let userService: AnyUserService
-	@Received private let stringStorage: StringStorage
+	@Instantiated private let noteStorage: NoteStorage
 
 	@State private var note: String = ""
 }
 
 #if DEBUG
 	#Preview {
-		NoteView.mock(
-			userName: "dfed",
+		LoggedInView.mock(
+			user: User(name: "dfed"),
 			defaultNote: "dfed says hello",
 		)
 	}

@@ -36,7 +36,7 @@ public struct NameEntryView: Instantiable, View {
 				label: {},
 			)
 			Button(action: {
-				userService.userName = name
+				userService.user = User(name: name)
 			}, label: {
 				Text("Log in")
 			})

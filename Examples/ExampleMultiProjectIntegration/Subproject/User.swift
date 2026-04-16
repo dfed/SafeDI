@@ -18,53 +18,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
 import SafeDI
-import Subproject
-import SwiftUI
 
-@MainActor
-@Instantiable(generateMock: true)
-public struct NoteView: Instantiable, View {
-	public init(
-		userName: String,
-		userService: AnyUserService,
-		stringStorage: StringStorage,
-		defaultNote: String = "",
-	) {
-		self.userName = userName
-		self.userService = userService
-		self.stringStorage = stringStorage
-		_note = State(initialValue: stringStorage.string(forKey: userName) ?? defaultNote)
+public struct User: Codable, Equatable, Hashable, Sendable {
+	public init(name: String) {
+		self.name = name
 	}
 
-	public var body: some View {
-		VStack {
-			Text("\(userName)’s note")
-			TextEditor(text: $note)
-				.onChange(of: note) { _, newValue in
-					stringStorage.setString(newValue, forKey: userName)
-				}
-			Button(action: {
-				userService.userName = nil
-			}, label: {
-				Text("Log out")
-			})
-		}
-		.padding()
-	}
-
-	@Forwarded private let userName: String
-	@Received private let userService: AnyUserService
-	@Received private let stringStorage: StringStorage
-
-	@State private var note: String = ""
+	public let name: String
 }
 
-#if DEBUG
-	#Preview {
-		NoteView.mock(
-			userName: "dfed",
-			defaultNote: "dfed says hello",
-		)
+@Instantiable(mockOnly: true)
+extension User {
+	public static func mock() -> User {
+		User(name: "Mock User")
 	}
-#endif
+}

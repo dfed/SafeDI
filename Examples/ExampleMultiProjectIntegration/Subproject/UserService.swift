@@ -19,10 +19,11 @@
 // SOFTWARE.
 
 import Combine
+import Foundation
 import SafeDI
 
 public protocol UserService: ObservableObject {
-	var userName: String? { get set }
+	var user: User? { get set }
 	var observableObjectPublisher: ObservableObjectPublisher { get }
 }
 
@@ -36,12 +37,12 @@ public final class AnyUserService: UserService, ObservableObject {
 			.eraseToAnyPublisher()
 	}
 
-	public var userName: String? {
+	public var user: User? {
 		get {
-			userService.userName
+			userService.user
 		}
 		set {
-			userService.userName = newValue
+			userService.user = newValue
 		}
 	}
 
@@ -60,13 +61,17 @@ public final class DefaultUserService: Instantiable, UserService {
 		self.stringStorage = stringStorage
 	}
 
-	public var userName: String? {
+	public var user: User? {
 		get {
-			stringStorage.string(forKey: #function)
+			guard let data = stringStorage.string(forKey: Self.userKey)?.data(using: .utf8) else {
+				return nil
+			}
+			return try? JSONDecoder().decode(User.self, from: data)
 		}
 		set {
 			objectWillChange.send()
-			stringStorage.setString(newValue, forKey: #function)
+			let encoded = newValue.flatMap { try? JSONEncoder().encode($0) }
+			stringStorage.setString(encoded.flatMap { String(data: $0, encoding: .utf8) }, forKey: Self.userKey)
 		}
 	}
 
@@ -76,4 +81,6 @@ public final class DefaultUserService: Instantiable, UserService {
 
 	@Received
 	@Published private var stringStorage: StringStorage
+
+	private static let userKey = "user"
 }

@@ -24,34 +24,47 @@ import SwiftUI
 
 @MainActor
 @Instantiable(generateMock: true)
-public struct NameEntryView: Instantiable, View {
-	public init(userService: AnyUserService) {
+public struct LoggedInView: Instantiable, View {
+	public init(
+		user: User,
+		userService: AnyUserService,
+		noteStorage: NoteStorage,
+		defaultNote: String = "",
+	) {
+		self.user = user
 		self.userService = userService
+		self.noteStorage = noteStorage
+		_note = State(initialValue: noteStorage.note() ?? defaultNote)
 	}
 
 	public var body: some View {
 		VStack {
-			TextField(
-				text: $name,
-				prompt: Text("Enter your name"),
-				label: {},
-			)
+			Text("\(user.name)’s note")
+			TextEditor(text: $note)
+				.onChange(of: note) { _, newValue in
+					noteStorage.setNote(newValue)
+				}
 			Button(action: {
-				userService.user = User(name: name)
+				userService.user = nil
 			}, label: {
-				Text("Log in")
+				Text("Log out")
 			})
 		}
 		.padding()
 	}
 
-	@State private var name: String = ""
-
+	@Forwarded private let user: User
 	@Received private let userService: AnyUserService
+	@Instantiated private let noteStorage: NoteStorage
+
+	@State private var note: String = ""
 }
 
 #if DEBUG
 	#Preview {
-		NameEntryView.mock()
+		LoggedInView.mock(
+			user: User(name: "dfed"),
+			defaultNote: "dfed says hello",
+		)
 	}
 #endif

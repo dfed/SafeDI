@@ -19,39 +19,26 @@
 // SOFTWARE.
 
 import SafeDI
-import Subproject
-import SwiftUI
 
-@MainActor
 @Instantiable(generateMock: true)
-public struct NameEntryView: Instantiable, View {
-	public init(userService: AnyUserService) {
-		self.userService = userService
+public final class NoteStorage: Instantiable {
+	public init(user: User, stringStorage: StringStorage) {
+		self.user = user
+		self.stringStorage = stringStorage
 	}
 
-	public var body: some View {
-		VStack {
-			TextField(
-				text: $name,
-				prompt: Text("Enter your name"),
-				label: {},
-			)
-			Button(action: {
-				userService.user = User(name: name)
-			}, label: {
-				Text("Log in")
-			})
-		}
-		.padding()
+	public func note() -> String? {
+		stringStorage.string(forKey: noteKey)
 	}
 
-	@State private var name: String = ""
+	public func setNote(_ note: String?) {
+		stringStorage.setString(note, forKey: noteKey)
+	}
 
-	@Received private let userService: AnyUserService
+	@Received private let user: User
+	@Received private let stringStorage: StringStorage
+
+	private var noteKey: String {
+		"note-for-\(user.name)"
+	}
 }
-
-#if DEBUG
-	#Preview {
-		NameEntryView.mock()
-	}
-#endif

@@ -18,40 +18,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
 import SafeDI
-import Subproject
-import SwiftUI
 
-@MainActor
-@Instantiable(generateMock: true)
-public struct NameEntryView: Instantiable, View {
-	public init(userService: AnyUserService) {
-		self.userService = userService
+public struct User: Codable, Equatable, Hashable, Sendable {
+	public init(name: String) {
+		self.name = name
 	}
 
-	public var body: some View {
-		VStack {
-			TextField(
-				text: $name,
-				prompt: Text("Enter your name"),
-				label: {},
-			)
-			Button(action: {
-				userService.user = User(name: name)
-			}, label: {
-				Text("Log in")
-			})
-		}
-		.padding()
-	}
-
-	@State private var name: String = ""
-
-	@Received private let userService: AnyUserService
+	public let name: String
 }
 
-#if DEBUG
-	#Preview {
-		NameEntryView.mock()
+@Instantiable(mockOnly: true)
+extension User {
+	public static func mock() -> User {
+		User(name: "Mock User")
 	}
-#endif
+}

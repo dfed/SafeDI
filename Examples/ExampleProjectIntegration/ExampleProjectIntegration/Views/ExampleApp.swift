@@ -29,9 +29,9 @@ import SwiftUI
 public struct NotesApp: Instantiable, App {
 	public var body: some Scene {
 		WindowGroup {
-			if let userName = userService.userName {
-				// Returns a new instance of `NoteView`.
-				noteViewBuilder.instantiate(userName)
+			if let user = userService.user {
+				// Returns a new instance of `LoggedInView` with the authenticated user forwarded into the subtree.
+				loggedInViewBuilder.instantiate(user)
 			} else {
 				// Returns a new instance of a `NameEntryView`.
 				nameEntryViewBuilder.instantiate()
@@ -45,12 +45,12 @@ public struct NotesApp: Instantiable, App {
 		userService: AnyUserService,
 		stringStorage: StringStorage,
 		nameEntryViewBuilder: Instantiator<NameEntryView>,
-		noteViewBuilder: Instantiator<NoteView>,
+		loggedInViewBuilder: Instantiator<LoggedInView>,
 	) {
 		self.userService = userService
 		self.stringStorage = stringStorage
 		self.nameEntryViewBuilder = nameEntryViewBuilder
-		self.noteViewBuilder = noteViewBuilder
+		self.loggedInViewBuilder = loggedInViewBuilder
 	}
 
 	/// A private property that is instantiated when the app is instantiated and manages the User state.
@@ -59,6 +59,6 @@ public struct NotesApp: Instantiable, App {
 	@Instantiated private let stringStorage: StringStorage
 	/// A private property that is instantiated when the app is instantiated and can create a NameEntryView on demand.
 	@Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
-	/// A private property that is instantiated when the app is instantiated and can create a NoteView on demand.
-	@Instantiated private let noteViewBuilder: Instantiator<NoteView>
+	/// A private property that is instantiated when the app is instantiated and can create a LoggedInView on demand.
+	@Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
 }
