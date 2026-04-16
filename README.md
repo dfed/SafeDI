@@ -6,17 +6,17 @@
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fdfed%2FSafeDI%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/dfed/SafeDI)
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fdfed%2FSafeDI%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/dfed/SafeDI)
 
-Compile-time-safe dependency injection optimized for modern Swift. SafeDI provides the safety and simplicity of manual dependency injection without the boilerplate.
+Compile-time-safe dependency injection without the boilerplate. No containers. No service locators. No DI-specific types.
 
-SafeDI reads your code at compile time, validates the dependency graph, and generates both production and mock trees for you.
+SafeDI reads your code at compile time, validates the dependency graph, and generates production and mock trees for you.
 
 ## Why teams choose SafeDI
 
-- **Dependency injection without dependency-injection types.** Your app types stay focused on your app.
+- **Dependency injection that feels natural.** Get the simplicity of manual dependency injection without ceremony.
 - **Compile-time graph validation.** If the code compiles, the dependency graph is valid.
 - **Non-optional runtime values.** Forward runtime data like an authenticated user into a subtree and receive it later where it is actually needed.
-- **Full-graph mocks.** Generate `mock()` from real feature roots and override only the branches you care about.
-- **Architecture-independent.** Works with SwiftUI, UIKit, coordinators, services, multi-module codebases, etc.
+- **Full-graph mocks.** Generated `mock()`s with overridable dependencies makes writing previews and testing easy.
+- **Architecture-independent.** Keep your architecture and patterns.
 - **Clear failures.** SafeDI flags unsolvable dependency graphs with explicit build errors.
 
 ## The core concept
