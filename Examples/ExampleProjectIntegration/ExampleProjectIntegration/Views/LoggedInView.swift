@@ -28,12 +28,11 @@ public struct LoggedInView: Instantiable, View {
 		user: User,
 		userService: AnyUserService,
 		noteStorage: NoteStorage,
-		defaultNote: String = "",
 	) {
 		self.user = user
 		self.userService = userService
 		self.noteStorage = noteStorage
-		_note = State(initialValue: noteStorage.note ?? defaultNote)
+		_note = State(initialValue: noteStorage.note)
 	}
 
 	public var body: some View {
@@ -67,7 +66,10 @@ public struct LoggedInView: Instantiable, View {
 	#Preview("Customized") {
 		LoggedInView.mock(
 			user: User(name: "dfed"),
-			defaultNote: "dfed says hello",
+			safeDIOverrides: .init(
+				stringStorage: { InMemoryStorage() },
+				noteStorage: .init(defaultNote: "dfed says hello"),
+			),
 		)
 	}
 #endif

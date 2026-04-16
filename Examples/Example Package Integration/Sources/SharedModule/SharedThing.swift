@@ -20,7 +20,7 @@
 
 import SafeDI
 
-@Instantiable(generateMock: true)
+@Instantiable
 public final class SharedThing: Instantiable, Sendable {
 	public init() {}
 }

@@ -21,7 +21,7 @@
 import SafeDI
 import SharedModule
 
-@Instantiable(generateMock: true)
+@Instantiable
 public struct GrandchildC: Instantiable {
 	public init(shared: SharedThing) {
 		self.shared = shared

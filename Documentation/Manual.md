@@ -100,39 +100,45 @@ Every `@Instantiable`-decorated type must be:
 
 The `@Instantiable` macro guides developers through satisfying these requirements with code generation and build-time fix-its.
 
-Here is a sample `UserService` implementation that is `@Instantiable`:
+Here is a sample `LoggedInView` implementation that is `@Instantiable`. It is annotated with each of the three dependency-kind macros — `@Forwarded`, `@Received`, and `@Instantiated` — that together describe how dependencies enter a SafeDI scope:
 
 ```swift
 import SafeDI
+import SwiftUI
 
+@MainActor
 @Instantiable
-public final class UserService: Instantiable {
+public struct LoggedInView: Instantiable, View {
     /// Public, memberwise initializer that takes each injected property.
-    public init(stringStorage: StringStorage) {
-        self.stringStorage = stringStorage
+    public init(user: User, userService: AnyUserService, noteStorage: NoteStorage) {
+        self.user = user
+        self.userService = userService
+        self.noteStorage = noteStorage
     }
 
-    public var user: User? {
-        get {
-            stringStorage
-                .string(forKey: Self.userKey)?
-                .data(using: .utf8)
-                .flatMap { try? JSONDecoder().decode(User.self, from: $0) }
-        }
-        set {
-            let encoded = newValue
-                .flatMap { try? JSONEncoder().encode($0) }
-                .flatMap { String(data: $0, encoding: .utf8) }
-            stringStorage.setString(encoded, forKey: Self.userKey)
+    public var body: some View {
+        VStack {
+            Text("\(user.name)’s note")
+            // ...
         }
     }
 
-    /// A string storage instance that is instantiated further up the dependency tree.
-    @Received private let stringStorage: StringStorage
+    /// The authenticated user, forwarded in from the parent scope at runtime.
+    @Forwarded private let user: User
 
-    private static let userKey = "user"
+    /// Shared user state, instantiated further up the dependency tree.
+    @Received private let userService: AnyUserService
+
+    /// A note storage instance created by SafeDI just for this view.
+    @Instantiated private let noteStorage: NoteStorage
 }
 ```
+
+- `@Forwarded` marks a dependency that is passed in at runtime (e.g., the authenticated `User` returned from sign-in) and made available to the rest of this scope and its subtree.
+- `@Received` marks a dependency that was already created further up the tree and is being received here.
+- `@Instantiated` marks a dependency that SafeDI constructs when this type is instantiated. `noteStorage`’s own `@Received` inputs are resolved from this scope’s context.
+
+The exact semantics of each dependency kind — including `@Instantiated`’s configuration parameters for dependency inversion, and `@Received`’s `onlyIfAvailable` option — are covered in [@Instantiated](#instantiated), [@Received](#received), and [@Forwarded](#forwarded).
 
 #### Creating the root of your dependency tree
 
@@ -154,7 +160,16 @@ public protocol UserService {
 /// properties of type `UserService` or `DefaultUserService`.
 @Instantiable(fulfillingAdditionalTypes: [UserService.self])
 public final class DefaultUserService: UserService, Instantiable {
-    ... // Same implementation as above.
+    public init(stringStorage: StringStorage) {
+        self.stringStorage = stringStorage
+    }
+
+    public var user: User? {
+        get { /* read from stringStorage */ }
+        set { /* write to stringStorage */ }
+    }
+
+    @Received private let stringStorage: StringStorage
 }
 ```
 
@@ -695,9 +710,10 @@ LoggedInView.mock(safeDIOverrides: .init(
     }
 ))
 
-// Override a child whose own init consumes a tree-resolved value:
+// `userService`’s closure receives the resolved `stringStorage` from the mock tree.
+// We ignore it here because `StubUserService` doesn’t need it:
 LoggedInView.mock(safeDIOverrides: .init(
-    userService: { _ in
+    userService: { _ /* stringStorage */ in
         AnyUserService(StubUserService(user: User(name: "dfed")))
     }
 ))
@@ -705,7 +721,9 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 When a child dependency is itself a type with `@Instantiated` dependencies (i.e. its own subtree), its entry on `SafeDIOverrides` is not a bare closure but a nested `SafeDIMockConfiguration` struct. `SafeDIMockConfiguration` accepts optional overrides for the child’s own dependencies and a trailing `safeDIBuilder` closure. The `safeDIBuilder` closure is how you override or customize how the type is constructed within the generated mock tree. Its parameters match the type’s `customMockName` method signature if one is defined, or its `init` parameters otherwise. When no `safeDIBuilder` is provided, the generated mock calls the type’s `customMockName` method or `init` directly.
 
-Types with no `@Instantiated` subtree — for example, types with only `@Received` dependencies — do not generate a `SafeDIOverrides` struct. Their `mock()` method uses flat parameters instead.
+A child dependency is represented on its parent’s `SafeDIOverrides` as a bare closure when the child has nothing further to configure — no `@Instantiated` subtree and no default-valued init parameters. The moment a child exposes any configurable option (an `@Instantiated` subtree or a default-valued init parameter), its entry becomes a nested `SafeDIMockConfiguration` instead.
+
+A type generates its own `SafeDIOverrides` struct only when it has `@Instantiated` dependencies. A type whose only dependencies are `@Received` or `@Forwarded` uses flat parameters on its `mock()` method.
 
 ### Mock visibility
 
@@ -730,20 +748,32 @@ A forwarded parameter gets a default value when:
 If an `@Instantiable` type’s initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are automatically exposed in the generated mock. This lets you override values like seed data or feature flags in tests and previews while keeping the original defaults for production code.
 
 ```swift
-@Instantiable(generateMock: true)
-public struct LoggedInView: View, Instantiable {
-    public init(user: User, noteStorage: NoteStorage, defaultNote: String = "") { ... }
-    @Forwarded let user: User
-    @Instantiated let noteStorage: NoteStorage
+@Instantiable
+public final class NoteStorage: Instantiable {
+    public init(user: User, stringStorage: StringStorage, defaultNote: String = "") { ... }
+    @Received let user: User
+    @Received let stringStorage: StringStorage
 }
 ```
 
-Pass the default override directly:
+When mocking `NoteStorage` directly, pass the override as a flat parameter:
+
+```swift
+NoteStorage.mock(
+    user: User(name: "dfed"),
+    stringStorage: InMemoryStorage(),
+    defaultNote: "dfed says hello"
+)
+```
+
+When mocking a parent of `NoteStorage`, the default-valued parameter appears on `NoteStorage`’s nested `SafeDIMockConfiguration`:
 
 ```swift
 LoggedInView.mock(
     user: User(name: "dfed"),
-    defaultNote: "dfed says hello"
+    safeDIOverrides: .init(
+        noteStorage: .init(defaultNote: "dfed says hello")
+    )
 )
 ```
 

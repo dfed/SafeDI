@@ -22,18 +22,21 @@ import SafeDI
 
 @Instantiable
 public final class NoteStorage: Instantiable {
-	public init(user: User, stringStorage: StringStorage) {
+	public init(user: User, stringStorage: StringStorage, defaultNote: String = "") {
 		self.user = user
 		self.stringStorage = stringStorage
+		self.defaultNote = defaultNote
 	}
 
-	public var note: String? {
-		get { stringStorage.string(forKey: noteKey) }
+	public var note: String {
+		get { stringStorage.string(forKey: noteKey) ?? defaultNote }
 		set { stringStorage.setString(newValue, forKey: noteKey) }
 	}
 
 	@Received private let user: User
 	@Received private let stringStorage: StringStorage
+
+	private let defaultNote: String
 
 	private var noteKey: String {
 		"note-for-\(user.name)"

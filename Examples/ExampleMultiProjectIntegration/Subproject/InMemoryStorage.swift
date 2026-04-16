@@ -20,25 +20,23 @@
 
 import SafeDI
 
-@Instantiable
-public final class NoteStorage: Instantiable {
-	public init(user: User, stringStorage: StringStorage, defaultNote: String = "") {
-		self.user = user
-		self.stringStorage = stringStorage
-		self.defaultNote = defaultNote
+@Instantiable(mockOnly: true)
+public final class InMemoryStorage: StringStorage {
+	public init(storage: [String: String] = [:]) {
+		self.storage = storage
 	}
 
-	public var note: String {
-		get { stringStorage.string(forKey: noteKey) ?? defaultNote }
-		set { stringStorage.setString(newValue, forKey: noteKey) }
+	public static func mock(storage: [String: String] = [:]) -> InMemoryStorage {
+		InMemoryStorage(storage: storage)
 	}
 
-	@Received private let user: User
-	@Received private let stringStorage: StringStorage
-
-	private let defaultNote: String
-
-	private var noteKey: String {
-		"note-for-\(user.name)"
+	public func string(forKey key: String) -> String? {
+		storage[key]
 	}
+
+	public func setString(_ string: String?, forKey key: String) {
+		storage[key] = string
+	}
+
+	private var storage: [String: String]
 }

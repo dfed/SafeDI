@@ -14,6 +14,7 @@
 		324F1ED22B3150480001AC0C /* LoggedInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ED12B3150480001AC0C /* LoggedInView.swift */; };
 		324F1ED42B3150480001AC0C /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ED32B3150480001AC0C /* User.swift */; };
 		324F1ED62B3150480001AC0C /* NoteStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1ED52B3150480001AC0C /* NoteStorage.swift */; };
+		324F1EE02B3150490001AC0C /* InMemoryStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324F1EE12B3150490001AC0C /* InMemoryStorage.swift */; };
 		32756FE62B24C042006BDD24 /* ExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32756FE52B24C042006BDD24 /* ExampleApp.swift */; };
 		32756FEA2B24C044006BDD24 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 32756FE92B24C044006BDD24 /* Assets.xcassets */; };
 		32756FEE2B24C044006BDD24 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 32756FED2B24C044006BDD24 /* Preview Assets.xcassets */; };
@@ -27,6 +28,7 @@
 		324F1ED12B3150480001AC0C /* LoggedInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggedInView.swift; sourceTree = "<group>"; };
 		324F1ED32B3150480001AC0C /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
 		324F1ED52B3150480001AC0C /* NoteStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteStorage.swift; sourceTree = "<group>"; };
+		324F1EE12B3150490001AC0C /* InMemoryStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryStorage.swift; sourceTree = "<group>"; };
 		32756FE22B24C042006BDD24 /* ExampleProjectIntegration.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ExampleProjectIntegration.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		32756FE52B24C042006BDD24 /* ExampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExampleApp.swift; sourceTree = "<group>"; };
 		32756FE92B24C044006BDD24 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -62,6 +64,7 @@
 				324F1ECC2B314DB20001AC0C /* StringStorage.swift */,
 				324F1ED32B3150480001AC0C /* User.swift */,
 				324F1ED52B3150480001AC0C /* NoteStorage.swift */,
+				324F1EE12B3150490001AC0C /* InMemoryStorage.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -189,6 +192,7 @@
 				324F1ED22B3150480001AC0C /* LoggedInView.swift in Sources */,
 				324F1ED42B3150480001AC0C /* User.swift in Sources */,
 				324F1ED62B3150480001AC0C /* NoteStorage.swift in Sources */,
+				324F1EE02B3150490001AC0C /* InMemoryStorage.swift in Sources */,
 				32756FE62B24C042006BDD24 /* ExampleApp.swift in Sources */,
 				324F1ECD2B314DB20001AC0C /* StringStorage.swift in Sources */,
 				324F1ECB2B314D8D0001AC0C /* UserService.swift in Sources */,
