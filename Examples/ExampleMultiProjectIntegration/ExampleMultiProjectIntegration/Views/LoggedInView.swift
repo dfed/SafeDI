@@ -34,7 +34,7 @@ public struct LoggedInView: Instantiable, View {
 		self.user = user
 		self.userService = userService
 		self.noteStorage = noteStorage
-		_note = State(initialValue: noteStorage.note() ?? defaultNote)
+		_note = State(initialValue: noteStorage.note ?? defaultNote)
 	}
 
 	public var body: some View {
@@ -42,7 +42,7 @@ public struct LoggedInView: Instantiable, View {
 			Text("\(user.name)’s note")
 			TextEditor(text: $note)
 				.onChange(of: note) { _, newValue in
-					noteStorage.setNote(newValue)
+					noteStorage.note = newValue
 				}
 			Button(action: {
 				userService.user = nil

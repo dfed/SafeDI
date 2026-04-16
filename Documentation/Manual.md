@@ -327,12 +327,9 @@ public final class NoteStorage: Instantiable {
         self.stringStorage = stringStorage
     }
 
-    public func note() -> String? {
-        stringStorage.string(forKey: noteKey)
-    }
-
-    public func setNote(_ note: String?) {
-        stringStorage.setString(note, forKey: noteKey)
+    public var note: String? {
+        get { stringStorage.string(forKey: noteKey) }
+        set { stringStorage.setString(newValue, forKey: noteKey) }
     }
 
     // The user object is received from the LoggedInView.
@@ -682,40 +679,31 @@ Your user-defined `mock()` method must be `public` (or `open`) and must accept p
 
 ### Overriding dependencies
 
-When a type has `@Instantiated` dependencies with their own subtrees, the generated `mock()` accepts a `safeDIOverrides` argument that provides tree-structured control over every dependency in the graph:
+When a type has `@Instantiated` dependencies, the generated `mock()` accepts a `safeDIOverrides` argument that provides closure-based control over every dependency in the tree. Each entry on `SafeDIOverrides` is a closure whose parameters match the resolved values of that dependency’s own inputs:
 
 ```swift
-// Override a child subtree’s leaf dependency:
+// Override a leaf dependency — UserDefaults.instantiate() takes nothing, so its closure takes nothing:
 LoggedInView.mock(safeDIOverrides: .init(
-    noteStorage: .init(stringStorage: { InMemoryStorage() })
+    stringStorage: { InMemoryStorage() }
 ))
 
-// Replace an entire type’s construction with a trailing closure:
+// Override how NoteStorage is constructed — its closure receives the resolved
+// `user` and `stringStorage` values from the mock tree:
 LoggedInView.mock(safeDIOverrides: .init(
-    noteStorage: .init { user, stringStorage in
+    noteStorage: { user, stringStorage in
         StubNoteStorage(user: user, stringStorage: stringStorage)
     }
 ))
 
-// Override a leaf dependency (leaves are simple closures, not config objects):
+// Override a child whose own init consumes a tree-resolved value:
 LoggedInView.mock(safeDIOverrides: .init(
-    userService: { _ in AnyUserService(StubUserService(user: User(name: "dfed"))) }
-))
-```
-
-Each child dependency in the tree that has its own subtree generates a `SafeDIMockConfiguration` struct. This struct accepts optional overrides for the child’s own dependencies and a trailing `safeDIBuilder` closure. The `safeDIBuilder` closure is how you override or customize how the type is constructed within the generated mock tree. Its parameters match the type’s `customMockName` method signature if one is defined, or its `init` parameters otherwise. When no `safeDIBuilder` is provided, the generated mock calls the type’s `customMockName` method or `init` directly.
-
-For example, given a `NoteStorage` type with `init(user: User, stringStorage: StringStorage)`, the `safeDIBuilder` closure has the signature `(User, StringStorage) -> NoteStorage`:
-
-```swift
-LoggedInView.mock(safeDIOverrides: .init(
-    noteStorage: .init { user, stringStorage in
-        // `user` and `stringStorage` are the resolved values from the mock tree.
-        // Return a customized NoteStorage instance.
-        NoteStorage(user: user, stringStorage: stringStorage)
+    userService: { _ in
+        AnyUserService(StubUserService(user: User(name: "dfed")))
     }
 ))
 ```
+
+When a child dependency is itself a type with `@Instantiated` dependencies (i.e. its own subtree), its entry on `SafeDIOverrides` is not a bare closure but a nested `SafeDIMockConfiguration` struct. `SafeDIMockConfiguration` accepts optional overrides for the child’s own dependencies and a trailing `safeDIBuilder` closure. The `safeDIBuilder` closure is how you override or customize how the type is constructed within the generated mock tree. Its parameters match the type’s `customMockName` method signature if one is defined, or its `init` parameters otherwise. When no `safeDIBuilder` is provided, the generated mock calls the type’s `customMockName` method or `init` directly.
 
 Types with no `@Instantiated` subtree — for example, types with only `@Received` dependencies — do not generate a `SafeDIOverrides` struct. Their `mock()` method uses flat parameters instead.
 

@@ -20,19 +20,16 @@
 
 import SafeDI
 
-@Instantiable(generateMock: true)
+@Instantiable
 public final class NoteStorage: Instantiable {
 	public init(user: User, stringStorage: StringStorage) {
 		self.user = user
 		self.stringStorage = stringStorage
 	}
 
-	public func note() -> String? {
-		stringStorage.string(forKey: noteKey)
-	}
-
-	public func setNote(_ note: String?) {
-		stringStorage.setString(note, forKey: noteKey)
+	public var note: String? {
+		get { stringStorage.string(forKey: noteKey) }
+		set { stringStorage.setString(newValue, forKey: noteKey) }
 	}
 
 	@Received private let user: User
