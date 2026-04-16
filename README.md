@@ -27,8 +27,7 @@ Opting a type into the SafeDI dependency tree is simple: add the `@Instantiable`
 
 ```swift
 // `NotesApp` is the root of the dependency graph. SafeDI generates its public `init()`.
-@Instantiable(isRoot: true)
-@main
+@Instantiable(isRoot: true) @main
 public struct NotesApp: App, Instantiable {
     public var body: some Scene {
         WindowGroup {

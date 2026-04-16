@@ -290,9 +290,7 @@ public struct LoggedInView: View, Instantiable {
 }
 
 // The app’s root type creates a LoggedInView when there is a user.
-@Instantiable(isRoot: true)
-@MainActor
-@main
+@Instantiable(isRoot: true) @MainActor @main
 public struct NotesApp: App, Instantiable {
     public var body: some Scene {
         WindowGroup {
