@@ -4,3 +4,4 @@ checkout/
 .swiftpm
 .build/
 codesign/
+.claude/
