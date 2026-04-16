@@ -291,6 +291,7 @@ public struct LoggedInView: View, Instantiable {
 
 // The app’s root type creates a LoggedInView when there is a user.
 @Instantiable(isRoot: true)
+@MainActor
 @main
 public struct NotesApp: App, Instantiable {
     public var body: some Scene {
@@ -304,7 +305,8 @@ public struct NotesApp: App, Instantiable {
         }
     }
 
-    @Instantiated private let userService: UserService
+    // `@ObservedObject` so SwiftUI re-renders when the user logs in or out.
+    @ObservedObject @Instantiated private var userService: AnyUserService
     @Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
     @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
 }
@@ -337,13 +339,14 @@ public struct LoggedInView: View, Instantiable {
 
 @Instantiable
 public final class NoteStorage: Instantiable {
-    public init(user: User, stringStorage: StringStorage) {
+    public init(user: User, stringStorage: StringStorage, defaultNote: String = "") {
         self.user = user
         self.stringStorage = stringStorage
+        self.defaultNote = defaultNote
     }
 
-    public var note: String? {
-        get { stringStorage.string(forKey: noteKey) }
+    public var note: String {
+        get { stringStorage.string(forKey: noteKey) ?? defaultNote }
         set { stringStorage.setString(newValue, forKey: noteKey) }
     }
 
@@ -353,6 +356,7 @@ public final class NoteStorage: Instantiable {
     // The string storage is received from further up the tree.
     @Received private let stringStorage: StringStorage
 
+    private let defaultNote: String
     private var noteKey: String { "note-for-\(user.name)" }
 }
 ```
