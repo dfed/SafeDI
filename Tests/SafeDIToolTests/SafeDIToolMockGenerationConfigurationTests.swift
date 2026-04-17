@@ -321,7 +321,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_generatedForType_whenEnableMockGenerationIsTrue() async throws {
+	mutating func mock_generatedForType_whenGenerateMockIsTrueWithoutConfiguration() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -505,7 +505,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_configurationFileGeneratedWithoutConditionalCompilation_whenMockConditionalCompilationIsNil() async throws {
+	mutating func mock_rootFileGeneratedWithoutConditionalCompilation_whenMockConditionalCompilationIsNil() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
