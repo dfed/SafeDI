@@ -769,7 +769,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_existingMockMethodSkipsGenerationForTypeButGeneratesForParent() async throws {
+	mutating func mock_existingMockMethodGeneratesCallThroughForTypeAndParent() async throws {
 		// A type with a user-defined mock() gets no generated mock file, but its parent
 		// still gets a generated mock with parameters and inline construction.
 		let output = try await executeSafeDIToolTest(
@@ -1152,7 +1152,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_userMockDependencyBecomesRequiredParameterWhenNotFulfillable() async throws {
+	mutating func mock_userMockDependencyIsOptionalParameterWhenFulfillableFromDependentModule() async throws {
 		// Child has a user-defined mock() with a dep from a dependent module.
 		// The dep is constructible (via .safedi) but from another module.
 		// It should be an optional parameter (constructible from .safedi).
@@ -1957,7 +1957,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_bubblesCustomMockDependencyDefault_whenForwardedPropertyReceivedByChild() async throws {
+	mutating func mock_doesNotBubbleCustomMockDependencyDefault_whenForwardedPropertyReceivedByChild() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2037,7 +2037,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_nearestReceiverDefaultWins_whenMultipleChildrenAtSameDepth() async throws {
+	mutating func mock_doesNotBubbleCustomMockDependencyDefault_whenForwardedPropertyReceivedByMultipleChildren() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2115,7 +2115,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_forwardedPropertyDefaultBubblesAcrossThreeLevels_eachWithCustomMock() async throws {
+	mutating func mock_doesNotBubbleCustomMockDependencyDefault_whenForwardedPropertyReceivedAcrossThreeLevels() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
