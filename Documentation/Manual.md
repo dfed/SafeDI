@@ -384,7 +384,7 @@ public struct LoggedInView: View, Instantiable {
 }
 
 @Instantiable
-public final class NoteStorage: Instantiable {
+public class NoteStorage: Instantiable {
     public init(user: User, stringStorage: StringStorage, defaultNote: String = "") {
         self.user = user
         self.stringStorage = stringStorage
@@ -753,12 +753,11 @@ LoggedInView.mock(safeDIOverrides: .init(
     noteStorage: .init(defaultNote: "Welcome back")
 ))
 
-// Replace how NoteStorage itself is built — the `safeDIBuilder` closure receives
-// the resolved `user`, `stringStorage`, and `defaultNote` values from the mock tree:
+// Replace how NoteStorage itself is built. `StubNoteStorage` is a subclass of
+// `NoteStorage` whose `init` matches the signature of `NoteStorage.init`, so we
+// can pass its initializer directly as the `safeDIBuilder`:
 LoggedInView.mock(safeDIOverrides: .init(
-    noteStorage: .init(safeDIBuilder: { user, stringStorage, _ /* defaultNote */ in
-        StubNoteStorage(user: user, stringStorage: stringStorage)
-    })
+    noteStorage: .init(safeDIBuilder: StubNoteStorage.init)
 ))
 ```
 
@@ -790,7 +789,7 @@ If an `@Instantiable` type’s initializer has parameters with default values th
 
 ```swift
 @Instantiable(generateMock: true)
-public final class NoteStorage: Instantiable {
+public class NoteStorage: Instantiable {
     public init(user: User, stringStorage: StringStorage, defaultNote: String = "") { ... }
     @Received let user: User
     @Received let stringStorage: StringStorage
