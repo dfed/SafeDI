@@ -38,7 +38,8 @@ public struct NotesApp: App, Instantiable {
         }
     }
 
-    @Instantiated private let userService: UserService
+    // `AnyUserService` is a type-erasing wrapper so `@ObservedObject` gets a concrete `ObservableObject` to observe.
+    @ObservedObject @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) private var userService: AnyUserService
     @Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
     @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
 }
