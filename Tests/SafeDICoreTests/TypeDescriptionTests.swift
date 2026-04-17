@@ -418,7 +418,7 @@ struct TypeDescriptionTests {
 	}
 
 	@Test
-	func typeDescription_whenCalledOnATypeSyntaxNodeRepresentingASigleElementTupleTypeSyntax_findsTheType() throws {
+	func typeDescription_whenCalledOnATypeSyntaxNodeRepresentingASingleElementTupleTypeSyntax_findsTheType() throws {
 		let content = """
 		var tupleWrappedString: (String)
 		"""
