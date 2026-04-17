@@ -409,76 +409,24 @@ public class NoteStorage: Instantiable {
 
 #### Renaming and retyping dependencies
 
-It is possible to rename or retype a dependency that is `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree with the `@Received(fulfilledByDependencyNamed:ofType:)` macro. Renamed or retyped dependencies are able to be received with their new name and type by objects instantiated further down the dependency tree.
+Use `@Received(fulfilledByDependencyNamed:ofType:)` to rename or retype a dependency that was `@Instantiated` or `@Forwarded` higher up the tree. Types further down the tree can then `@Received` the dependency under its new name and type.
 
-Here we have an example of a `UserManager` type that is received as a `UserVendor` further down the dependency tree.
+Here, a parent forwards a read-write `UserManager`; a child receives the same instance as the read-only `UserVendor` protocol:
 
 ```swift
-public struct User {
-    … // User information.
-}
-
-public protocol UserVendor {
-    var user: User { … }
-}
-
-public protocol UserManager: UserVendor {
-    var user: User { get set }
-}
-
-public final class DefaultUserManager: UserManager {
-    public init(user: User) {
-        self.user = user
-    }
-
-    public var user: User
-}
-
-import SwiftUI
+public protocol UserVendor { var user: User { get } }
+public protocol UserManager: UserVendor { var user: User { get set } }
 
 @Instantiable
-public struct LoggedInView: View, Instantiable {
-    public init(userManager: UserManager, profileViewBuilder: Instantiator<ProfileView>) {
-        self.userManager = userManager
-        self.profileViewBuilder = profileViewBuilder
-    }
-
-    public var body: some View {
-        … // A logged in user experience
-    }
-
+public struct LoggedInView: Instantiable {
     @Forwarded private let userManager: UserManager
-
     @Instantiated private let profileViewBuilder: Instantiator<ProfileView>
 }
 
 @Instantiable
-public struct ProfileView: View, Instantiable {
-    public init(userVendor: UserVendor, editProfileViewBuilder: Instantiator<EditProfileView>) {
-        self.userVendor = userVendor
-        self.editProfileViewBuilder = editProfileViewBuilder
-    }
-
-    public var body: some View {
-        … // A profile viewing experience
-    }
-
-    @Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self) private let userVendor: UserVendor
-
-    @Instantiated private let editProfileViewBuilder: Instantiator<EditProfileView>
-}
-
-@Instantiable
-public struct EditProfileView: View, Instantiable {
-    public init(userVendor: UserVendor) {
-        self.userVendor = userVendor
-    }
-
-    public var body: some View {
-        … // A profile editing experience
-    }
-
-    @Received private let userVendor: UserVendor
+public struct ProfileView: Instantiable {
+    @Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self)
+    private let userVendor: UserVendor
 }
 ```
 
