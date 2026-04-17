@@ -208,12 +208,7 @@ public final class AnyUserService: UserService, ObservableObject {
 }
 ```
 
-`AnyUserService` isn’t itself `@Instantiable` and isn’t a superclass of `DefaultUserService`, so SafeDI can’t pick a fulfiller on its own or assign a `DefaultUserService` to an `AnyUserService` property directly — it needs two hints. `fulfilledByType` takes a string literal naming the concrete type to construct (representing the type as a string allows for dependency inversion: the consuming module does not need to import the module that declares the fulfiller). `erasedToConcreteExistential: true` tells SafeDI that the constructed value must be wrapped via the property type’s initializer — here, `AnyUserService(_:)` — rather than assigned directly. Together they wire up the full pattern:
-
-| Parameter | Logic | Example |
-| --------- | ----- | ------- |
-| `erasedToConcreteExistential: false` | **Cast:** `FulfillingType as PropertyType` | `MyViewController` → `UIViewController` |
-| `erasedToConcreteExistential: true` | **Wrap:** `PropertyType(FulfillingType())` | `MyView` → `AnyView(MyView())` |
+`AnyUserService` isn’t itself `@Instantiable` and isn’t a superclass of `DefaultUserService`, so SafeDI can’t wire this up on its own — you need to tell it what to build and how to assign it:
 
 ```swift
 @Instantiable(isRoot: true) @main
@@ -225,6 +220,13 @@ public struct NotesApp: App, Instantiable {
     private var userService: AnyUserService
 }
 ```
+
+`fulfilledByType` takes a string literal naming the concrete type to construct — here, `"DefaultUserService"`. Representing the type as a string allows for dependency inversion: the consuming module does not need to import the module that declares the fulfiller. `erasedToConcreteExistential: true` tells SafeDI that the constructed value must be wrapped via the property type’s initializer — here, `AnyUserService(_:)` — rather than assigned directly:
+
+| Parameter | Logic | Example |
+| --------- | ----- | ------- |
+| `erasedToConcreteExistential: false` | **Cast:** `FulfillingType as PropertyType` | `MyViewController` → `UIViewController` |
+| `erasedToConcreteExistential: true` | **Wrap:** `PropertyType(FulfillingType())` | `MyView` → `AnyView(MyView())` |
 
 #### Making external types `@Instantiable`
 
@@ -302,7 +304,8 @@ public enum MyEnum {
     …
 }
 
-/// An extension on the Container type that tells SafeDI how to instantiate a `Container<MyEnum>`. We tell the `@Instantiable` macro that this type already conforms to the `Instantiable` protocol elsewhere to prevent the macro from requiring that this extension declares a conformance to `Instantiable`.
+/// An extension on the Container type that tells SafeDI how to instantiate a `Container<MyEnum>`.
+/// We tell the `@Instantiable` macro that this type already conforms to the `Instantiable` protocol elsewhere to prevent the macro from requiring that this extension declares a conformance to `Instantiable`.
 @Instantiable(conformsElsewhere: true)
 extension Container {
     public static func instantiate() -> Container<MyEnum> {
