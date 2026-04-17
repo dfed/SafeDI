@@ -787,7 +787,7 @@ public struct InstantiableMacro: MemberMacro {
 				))
 			}
 
-			// Validate mock() methods on extensions: must be public, return the extended type or Self, and be unique per return type.
+			// Validate mock() methods on extensions: must be public, return the extended type or one of its `fulfillingAdditionalTypes`, and be unique per return type.
 			let extendedTypeDescription = extensionDeclaration.extendedType.typeDescription
 			let extendedTypeName = extendedTypeDescription.asSource
 			let extendedTypeStrippingGenerics = extendedTypeDescription.strippingGenerics
