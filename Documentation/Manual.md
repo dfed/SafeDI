@@ -128,7 +128,7 @@ public struct LoggedInView: Instantiable, View {
     /// Shared user state, instantiated further up the dependency tree.
     @Received private let userService: UserService
 
-    /// A note storage instance created by SafeDI just for this view.
+    /// A note storage instance created by SafeDI when this view is created.
     @Instantiated private let noteStorage: NoteStorage
 }
 ```
