@@ -50,6 +50,8 @@ public struct LoggedInView: View, Instantiable {
 
     // `user` is a runtime value forwarded in at this boundary.
     @Forwarded private let user: User
+    // `userService` is received from an ancestor in the tree.
+    @Received private let userService: AnyUserService
     // `noteStorage` is created by `LoggedInView` and lives for its lifetime.
     @Instantiated private let noteStorage: NoteStorage
 }
@@ -91,14 +93,11 @@ extension User {
 }
 ```
 
-For previews and tests that need real data, pass any forwarded or overridable parameter directly:
+For previews and tests that need real data, pass forwarded values directly:
 
 ```swift
 #Preview {
-    LoggedInView.mock(
-        user: User(name: "dfed"),
-        defaultNote: "dfed says hello"
-    )
+    LoggedInView.mock(user: User(name: "dfed"))
 }
 ```
 
@@ -110,7 +109,7 @@ func test_logOut_clearsAuthenticatedUser() {
     let view = LoggedInView.mock(
         user: User(name: "dfed"),
         safeDIOverrides: .init(
-            noteStorage: { user, _ in NoteStorage(user: user, stringStorage: InMemoryStorage()) },
+            stringStorage: { InMemoryStorage() },
             userService: { _ in userService }
         )
     )
