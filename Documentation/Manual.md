@@ -175,20 +175,7 @@ public final class DefaultUserService: UserService, Instantiable {
 }
 ```
 
-With this in place, any `@Instantiated private let userService: UserService` or `@Received private let userService: UserService` elsewhere in the dependency tree will be wired to a `DefaultUserService`.
-
-When you need explicit control over which concrete type fulfills a type-erased property, `@Instantiated` accepts a `fulfilledByType` parameter. It takes a string literal identical to the name of the concrete type that will be assigned to the property. Representing the type as a string allows for dependency inversion: the code that receives the concrete type does not need to have a dependency on the module that defines the concrete type.
-
-```swift
-@Instantiable(isRoot: true) @main
-public struct NotesApp: App, Instantiable {
-    // ...
-
-    // Selects `DefaultUserService` as the fulfiller without requiring NotesApp’s
-    // module to import the module that declares it.
-    @Instantiated(fulfilledByType: "DefaultUserService") private let userService: UserService
-}
-```
+With this in place, any `@Instantiated private let userService: UserService` or `@Received private let userService: UserService` elsewhere in the dependency tree will be wired to a `DefaultUserService` — no decoration parameters needed.
 
 SwiftUI’s `@ObservedObject` property wrapper requires a concrete `ObservableObject` — a protocol type like `UserService` won’t satisfy that constraint. To observe a protocol-typed dependency, upgrade the protocol to inherit `ObservableObject` and pair it with a concrete type-erasing wrapper (by convention prefixed with `Any`):
 
@@ -221,7 +208,7 @@ public final class AnyUserService: UserService, ObservableObject {
 }
 ```
 
-`AnyUserService` isn’t a superclass of `DefaultUserService`, so SafeDI can’t assign a `DefaultUserService` to an `AnyUserService` property directly — it has to construct a `DefaultUserService` and then wrap it via `AnyUserService(_:)`. The `erasedToConcreteExistential: true` parameter tells SafeDI to do exactly that. Combined with `fulfilledByType`, it wires up the full pattern:
+`AnyUserService` isn’t itself `@Instantiable` and isn’t a superclass of `DefaultUserService`, so SafeDI can’t pick a fulfiller on its own or assign a `DefaultUserService` to an `AnyUserService` property directly — it needs two hints. `fulfilledByType` takes a string literal naming the concrete type to construct (representing the type as a string allows for dependency inversion: the consuming module does not need to import the module that declares the fulfiller). `erasedToConcreteExistential: true` tells SafeDI that the constructed value must be wrapped via the property type’s initializer — here, `AnyUserService(_:)` — rather than assigned directly. Together they wire up the full pattern:
 
 ```swift
 @Instantiable(isRoot: true) @main
