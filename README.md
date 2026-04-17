@@ -93,32 +93,20 @@ extension User {
 }
 ```
 
-For previews and tests that need real data, pass forwarded values directly:
+For previews and tests that need real data, pass forwarded values directly and use `safeDIOverrides` to reach into the subtree:
 
 ```swift
 #Preview {
-    LoggedInView.mock(user: User(name: "dfed"))
-}
-```
-
-And when a test needs to reach deeper into the subtree, `safeDIOverrides` replaces any branch of the graph without touching the rest:
-
-```swift
-func test_logOut_clearsAuthenticatedUser() {
-    let userService = AnyUserService(StubUserService(user: User(name: "dfed")))
-    let view = LoggedInView.mock(
+    LoggedInView.mock(
         user: User(name: "dfed"),
         safeDIOverrides: .init(
-            stringStorage: { InMemoryStorage() },
-            userService: { _ in userService }
+            noteStorage: .init(defaultNote: "dfed says hello")
         )
     )
-    // ... drive the view, then assert:
-    XCTAssertNil(userService.user)
 }
 ```
 
-`safeDIOverrides` is a generated `struct` whose fields mirror the subtree SafeDI built. Each closure receives the same runtime inputs SafeDI would have passed to the real producer, so overrides compose with the rest of the graph instead of replacing it.
+`safeDIOverrides` is a generated `struct` whose fields mirror the subtree SafeDI built. SafeDI still wires the rest of the graph around each override, so customizations compose with the subtree instead of replacing it.
 
 ## Features
 
