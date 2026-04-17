@@ -675,44 +675,28 @@ Generated mocks have `internal` visibility. They are accessible within the modul
 
 To use a mock from another module in your tests, see [Cross-module mock generation](#cross-module-mock-generation).
 
-### @Forwarded properties in mocks
+### Dependency kinds in the generated mock
 
-`@Forwarded` properties become parameters on the mock method since they represent runtime input. By default they are required (no default value):
+Each dependency kind surfaces in a predictable place on `mock()` and `SafeDIOverrides`:
+
+| Dependency kind | Shape in the mock | Default |
+| --- | --- | --- |
+| Required `@Received` | Flat `mock()` parameter | Required |
+| `@Forwarded` | Flat `mock()` parameter | Required, unless the root provides a default or the forwarded type has a [`mockOnly`](#the-mockonly-parameter) provider (which defaults the parameter to `Type.mock()`) |
+| `@Instantiated` | Entry on `SafeDIOverrides` | Built from the real subtree — see [Overriding dependencies](#overriding-dependencies) |
+| `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
+| Default-valued non-DI init parameter | Flat `mock()` parameter on a direct mock, or a nested `SafeDIMockConfiguration` field when reached through a parent | The parameter’s original default expression |
 
 ```swift
+// @Forwarded → flat parameter:
 let view = LoggedInView.mock(user: User(name: "dfed"))
-```
 
-A forwarded parameter gets a default value when:
-- The root type’s own initializer or custom mock provides a default for the parameter
-- The forwarded type has a `mockOnly` provider — the parameter defaults to `Type.mock()` (or the `customMockName` method)
+// @Received(onlyIfAvailable: true) → SafeDIOverrides, defaults to nil:
+FeedView.mock(safeDIOverrides: .init(
+    user: .mock()
+))
 
-### Default-valued init parameters in mocks
-
-If an `@Instantiable` type’s initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are automatically exposed in the generated mock. This lets you override values like seed data or feature flags in tests and previews while keeping the original defaults for production code.
-
-```swift
-@Instantiable(generateMock: true)
-public class NoteStorage: Instantiable {
-    public init(user: User, stringStorage: StringStorage, defaultNote: String = "") { … }
-    @Received let user: User
-    @Received let stringStorage: StringStorage
-}
-```
-
-When mocking `NoteStorage` directly, pass the override as a flat parameter:
-
-```swift
-NoteStorage.mock(
-    user: User(name: "dfed"),
-    stringStorage: InMemoryStorage(),
-    defaultNote: "dfed says hello"
-)
-```
-
-When mocking a parent of `NoteStorage`, the default-valued parameter appears on `NoteStorage`’s nested `SafeDIMockConfiguration`:
-
-```swift
+// Default-valued init parameter → nested SafeDIMockConfiguration when mocking a parent:
 LoggedInView.mock(
     user: User(name: "dfed"),
     safeDIOverrides: .init(
@@ -721,33 +705,7 @@ LoggedInView.mock(
 )
 ```
 
-When no override is provided, the original default expression (`""`) is used.
-
 Default-valued parameters do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
-
-### `@Received(onlyIfAvailable: true)` properties in mocks
-
-When a type has a `@Received(onlyIfAvailable: true)` dependency, the generated mock places that dependency inside the `SafeDIOverrides` struct as a plain optional property (defaulting to `nil`) rather than exposing it as a top-level `mock()` parameter. When `nil`, the dependency is absent. When provided (e.g., `.mock()`), the value is used.
-
-```swift
-@Instantiable(generateMock: true)
-public struct ImageService: Instantiable {
-    public init(cacheService: CacheService?) {
-        self.cacheService = cacheService
-    }
-    @Received(onlyIfAvailable: true) let cacheService: CacheService?
-}
-```
-
-Provide the dependency via `SafeDIOverrides`:
-
-```swift
-ImageService.mock(safeDIOverrides: .init(
-    cacheService: .mock()
-))
-```
-
-When no value is provided, the dependency defaults to `nil`.
 
 ### The `mockAttributes` parameter
 
