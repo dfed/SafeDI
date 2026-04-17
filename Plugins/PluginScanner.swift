@@ -20,15 +20,12 @@
 
 import Foundation
 
-/// Lightweight text-based scanner used by the Xcode plugin to discover output
-/// files without needing SwiftSyntax. This runs in the plugin process during
-/// `createBuildCommands` and only determines what output files will be generated.
-/// The actual code generation is done by SafeDITool at build time.
-///
-/// This scanner intentionally over-matches (may declare outputs that SafeDITool
-/// won't actually write). SafeDITool creates empty files for declared outputs it
-/// doesn't need, so over-matching is safe. Under-matching would cause Xcode to
-/// skip compiling generated files, which is worse.
+/// Lightweight text-based scanner used to discover output files without needing
+/// SwiftSyntax. It runs in-process during `createBuildCommands` when the plugin
+/// cannot shell out to `SafeDITool scan` (the XcodeProjectPlugin path, and the
+/// SPM fallback when `context.tool(named:)` returns an unresolved path). Only
+/// output-file discovery happens here — the real parse and code generation are
+/// performed by SafeDITool at build time via the `--output-directory` flag.
 enum PluginScanner {
 	struct ScanResult {
 		var outputFiles: [URL]
