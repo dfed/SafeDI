@@ -688,8 +688,7 @@ When you provide a `mockOnly` extension for a type, SafeDI’s mock generator wi
 - Primitive or Foundation types used as `@Forwarded` dependencies (e.g., `String`, `Int`, `UUID`)
 - Types whose `@Instantiable` declaration is in another module and isn’t in the current module’s dependency tree
 
-A `mockOnly` declaration requires a hand-written `mock()` method (or a method named by `customMockName`).
- No `init` (type declarations), `instantiate()` (extensions), or `Instantiable` conformance is required. `mockOnly` is mutually exclusive with `generateMock` and `isRoot`. `conformsElsewhere` has no effect when `mockOnly` is true.
+A `mockOnly` declaration requires a hand-written `mock()` method (or a method named by `customMockName`). No `init` (type declarations), `instantiate()` (extensions), or `Instantiable` conformance is required. `mockOnly` is mutually exclusive with `generateMock` and `isRoot`. `conformsElsewhere` has no effect when `mockOnly` is true.
 
 #### Splitting production and mock declarations
 
@@ -900,7 +899,7 @@ The `@StateObject` documentation reads:
 
 > Declare state objects as private to prevent setting them from a memberwise initializer, which can conflict with the storage management that SwiftUI provides
 
-`@Instantiated`, `@Forwarded`, or `@Received` objects may be decorated with [`@ObservedObject`](https://developer.apple.com/documentation/swiftui/ObservedObject). Keep in mind that `@Instantiated` objects in a `View` are re-initialized each time the view is recreated by SwiftUI. You can find a deep dive on SwiftUI view lifecycles [here](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
+`@Instantiated`, `@Forwarded`, or `@Received` objects may be decorated with [`@ObservedObject`](https://developer.apple.com/documentation/swiftui/ObservedObject).
 
 ### Inheritance
 
