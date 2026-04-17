@@ -330,22 +330,9 @@ A `@Forwarded` property is forwarded into the SafeDI dependency tree by an [`Ins
 
 Forwarded property types do not need to be decorated with the `@Instantiable` macro.
 
-Here’s an example showing how to forward a runtime value — an authenticated `User` — into an `@Instantiable` type:
+The [Macros intro](#macros) shows a `LoggedInView` with a `@Forwarded user: User`. The parent side — the root that actually passes the authenticated user in — uses the child’s `Instantiator` to forward the value:
 
 ```swift
-// A view that requires a runtime value (the authenticated user).
-@Instantiable
-public struct LoggedInView: View, Instantiable {
-    public init(user: User) {
-        self.user = user
-    }
-
-    // …
-
-    @Forwarded private let user: User
-}
-
-// The app’s root type forwards the authenticated `user` into the logged-in subtree.
 @Instantiable(isRoot: true) @main
 public struct NotesApp: App, Instantiable {
     public var body: some Scene {
@@ -369,20 +356,9 @@ public struct NotesApp: App, Instantiable {
 
 Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. Received properties must be `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree.
 
-Here we have a `LoggedInView` in which the forwarded `user` property is received by a `NoteStorage` further down the dependency tree:
+Continuing the [Macros intro](#macros) example: `LoggedInView` has a `@Forwarded user: User` and an `@Instantiated noteStorage: NoteStorage`. `NoteStorage` can `@Received` the same `user` instance from anywhere in the subtree below `LoggedInView`:
 
 ```swift
-@Instantiable
-public struct LoggedInView: View, Instantiable {
-    // …
-
-    @Forwarded private let user: User
-
-    // NoteStorage is instantiated by LoggedInView, so it lives for the
-    // lifetime of the logged-in subtree.
-    @Instantiated private let noteStorage: NoteStorage
-}
-
 @Instantiable
 public class NoteStorage: Instantiable {
     public init(user: User, stringStorage: StringStorage, defaultNote: String = "") {
@@ -391,15 +367,10 @@ public class NoteStorage: Instantiable {
         self.defaultNote = defaultNote
     }
 
-    public var note: String {
-        get { stringStorage.string(forKey: noteKey) ?? defaultNote }
-        set { stringStorage.setString(newValue, forKey: noteKey) }
-    }
-
-    // The user object is received from the LoggedInView.
+    // Forwarded into the tree by `LoggedInView`.
     @Received private let user: User
 
-    // The string storage is received from further up the tree.
+    // Instantiated further up the tree.
     @Received private let stringStorage: StringStorage
 
     private let defaultNote: String
