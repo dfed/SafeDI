@@ -21,7 +21,6 @@
 import SafeDI
 import SwiftUI
 
-@MainActor
 @Instantiable(generateMock: true)
 public struct LoggedInView: Instantiable, View {
 	public init(

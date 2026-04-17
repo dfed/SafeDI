@@ -22,7 +22,6 @@ import SafeDI
 import Subproject
 import SwiftUI
 
-@MainActor
 @Instantiable(generateMock: true)
 public struct NameEntryView: Instantiable, View {
 	public init(userService: AnyUserService) {

@@ -106,7 +106,6 @@ Here is a sample `LoggedInView` implementation that is `@Instantiable`. It is an
 import SafeDI
 import SwiftUI
 
-@MainActor
 @Instantiable
 public struct LoggedInView: Instantiable, View {
     /// Public, memberwise initializer that takes each injected property.
@@ -290,7 +289,7 @@ public struct LoggedInView: View, Instantiable {
 }
 
 // The app’s root type creates a LoggedInView when there is a user.
-@Instantiable(isRoot: true) @MainActor @main
+@Instantiable(isRoot: true) @main
 public struct NotesApp: App, Instantiable {
     public var body: some Scene {
         WindowGroup {
@@ -519,7 +518,7 @@ When you want to instantiate a dependency after `init(…)`, you need to declare
 The [`Instantiator`](../Sources/SafeDI/DelayedInstantiation/Instantiator.swift) type is how SafeDI enables deferred instantiation of an `@Instantiable` type. `Instantiator` has a single generic that matches the type of the to-be-instantiated instance. Creating an `Instantiator` property is as simple as creating any other property in the SafeDI ecosystem:
 
 ```swift
-@Instantiable(isRoot: true) @MainActor @main
+@Instantiable(isRoot: true) @main
 public struct NotesApp: App, Instantiable {
     public var body: some Scene {
         WindowGroup {
