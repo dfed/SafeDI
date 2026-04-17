@@ -210,6 +210,11 @@ public final class AnyUserService: UserService, ObservableObject {
 
 `AnyUserService` isn’t itself `@Instantiable` and isn’t a superclass of `DefaultUserService`, so SafeDI can’t pick a fulfiller on its own or assign a `DefaultUserService` to an `AnyUserService` property directly — it needs two hints. `fulfilledByType` takes a string literal naming the concrete type to construct (representing the type as a string allows for dependency inversion: the consuming module does not need to import the module that declares the fulfiller). `erasedToConcreteExistential: true` tells SafeDI that the constructed value must be wrapped via the property type’s initializer — here, `AnyUserService(_:)` — rather than assigned directly. Together they wire up the full pattern:
 
+| Parameter | Logic | Example |
+| --------- | ----- | ------- |
+| `erasedToConcreteExistential: false` | **Cast:** `FulfillingType as PropertyType` | `MyViewController` → `UIViewController` |
+| `erasedToConcreteExistential: true` | **Wrap:** `PropertyType(FulfillingType())` | `MyView` → `AnyView(MyView())` |
+
 ```swift
 @Instantiable(isRoot: true) @main
 public struct NotesApp: App, Instantiable {
@@ -311,6 +316,8 @@ extension Container {
 Property declarations within `@Instantiable` types decorated with [`@Instantiated`](../Sources/SafeDI/Decorators/Instantiated.swift) are instantiated when its enclosing type is instantiated. `@Instantiated`-decorated properties are available to be `@Received` by objects instantiated further down the dependency tree.
 
 `@Instantiated`-decorated properties must be an `@Instantiable` type, or of an `additionalType` listed in an `@Instantiable(fulfillingAdditionalTypes:)`’s declaration.
+
+If the enclosing type is a SwiftUI `View`, keep in mind that `@Instantiated` objects are re-initialized each time the view is recreated by SwiftUI. You can find a deep dive on SwiftUI view lifecycles [here](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
 
 ### @Forwarded
 
@@ -568,6 +575,8 @@ public struct NotesApp: App, Instantiable {
 }
 ```
 
+SafeDI generates a `ForwardedProperties` typealias for every `@Instantiable` type. This typealias is a tuple containing all properties decorated with `@Forwarded`. `Instantiator.instantiate(_:)` takes a `ForwardedProperties` argument, ensuring that you provide all required runtime dependencies when instantiating the type.
+
 An `Instantiator` is not `Sendable`: if you want to be able to share an instantiator across concurrency domains, use a [`SendableInstantiator`](../Sources/SafeDI/DelayedInstantiation/SendableInstantiator.swift).
 
 ### ErasedInstantiator
@@ -671,7 +680,7 @@ extension User {
 }
 ```
 
-When a parent type references a `mockOnly` type as a dependency, the generated mock uses `Type.mock()` as the default. For `@Forwarded` dependencies, the parameter gets a default value so callers don’t need to provide it. For `@Instantiated` dependencies, the type appears in `SafeDIOverrides` with `Type.mock()` as the default, allowing optional override.
+When you provide a `mockOnly` extension for a type, SafeDI’s mock generator will utilize that mock wherever the type appears in a mock dependency tree. This "auto-filling" behavior means you don’t have to manually provide a mock for common types (like `User` or `NetworkClient`) every time you call `mock()` on a parent type. For `@Forwarded` dependencies, the parameter gets a default value so callers don’t need to provide it. For `@Instantiated` dependencies, the type appears in `SafeDIOverrides` with `Type.mock()` as the default, allowing optional override.
 
 `mockOnly` is useful for:
 
@@ -679,7 +688,8 @@ When a parent type references a `mockOnly` type as a dependency, the generated m
 - Primitive or Foundation types used as `@Forwarded` dependencies (e.g., `String`, `Int`, `UUID`)
 - Types whose `@Instantiable` declaration is in another module and isn’t in the current module’s dependency tree
 
-A `mockOnly` declaration requires a hand-written `mock()` method (or a method named by `customMockName`). No `init` (type declarations), `instantiate()` (extensions), or `Instantiable` conformance is required. `mockOnly` is mutually exclusive with `generateMock` and `isRoot`. `conformsElsewhere` has no effect when `mockOnly` is true.
+A `mockOnly` declaration requires a hand-written `mock()` method (or a method named by `customMockName`).
+ No `init` (type declarations), `instantiate()` (extensions), or `Instantiable` conformance is required. `mockOnly` is mutually exclusive with `generateMock` and `isRoot`. `conformsElsewhere` has no effect when `mockOnly` is true.
 
 #### Splitting production and mock declarations
 
