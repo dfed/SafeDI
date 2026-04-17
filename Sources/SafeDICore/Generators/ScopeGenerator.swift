@@ -874,10 +874,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Whether this node is inside a sendable scope (descendant of SendableInstantiator).
 		/// When `true`, the `safeDIBuilder` closure on `SafeDIMockConfiguration` is `@Sendable`.
 		let requiresSendable: Bool
-		/// Attributes declared on the node's type for its generated `mock()` method
-		/// (e.g. `"@MainActor"`). Captured on the node for completeness; the root's
-		/// attributes are read from `instantiable.mockAttributes` directly.
-		let mockAttributes: String
 
 		/// Whether this node needs a full `SafeDIMockConfiguration` struct or can be
 		/// inlined as an optional builder closure on the parent. A node needs a struct
@@ -1067,7 +1063,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				forwardedProperties: forwardedProperties,
 				isPropertyCycle: isPropertyCycle,
 				requiresSendable: childInsideSendable,
-				mockAttributes: childInstantiable.mockAttributes,
 			))
 		}
 
