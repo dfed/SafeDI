@@ -27,7 +27,6 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 		context: PackagePlugin.PluginContext,
 		arguments: [String],
 	) throws {
-		// Parse --target argument.
 		guard let targetIndex = arguments.firstIndex(of: "--target"),
 		      arguments.index(after: targetIndex) < arguments.endIndex
 		else {
@@ -43,7 +42,6 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 			return
 		}
 
-		// Validate swift-tools-version >= 6.3.
 		let packageSwiftURL = context.package.directoryURL.appending(component: "Package.swift")
 		let packageSwiftContents = try String(contentsOf: packageSwiftURL, encoding: .utf8)
 		guard let firstLine = packageSwiftContents.components(separatedBy: .newlines).first,
@@ -63,16 +61,13 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 		let safediFolder = context.package.directoryURL.appending(component: ".safedi")
 		let configurationFolder = safediFolder.appending(component: "configuration")
 
-		// Check for existing #SafeDIConfiguration in target sources.
 		let existingConfigurationFile = findExistingSafeDIConfiguration(in: targetDirectoryURL)
 
-		// Read CSV files if they exist.
 		let includeCSV = configurationFolder.appending(component: "include.csv")
 		let additionalImportedModulesCSV = configurationFolder.appending(component: "additionalImportedModules.csv")
 		let includeValues = readCSV(at: includeCSV)
 		let additionalImportedModulesValues = readCSV(at: additionalImportedModulesCSV)
 
-		// Create SafeDIConfiguration.swift if one doesn't already exist.
 		if let existingConfigurationFile {
 			Diagnostics.warning("#SafeDIConfiguration already exists at \(existingConfigurationFile.path(percentEncoded: false)). Skipping file creation.")
 			if includeValues != nil || additionalImportedModulesValues != nil {

@@ -80,7 +80,6 @@ enum PluginScanner {
 		let mockFiles = sortedMockFiles.filter { fileContainsGenerateMockTrue(at: $0) }
 		let mockOutputFileNames = outputFileNames(for: mockFiles, relativeTo: projectRoot, suffix: "+SafeDIMock.swift")
 
-		// Build additional mock output entries from additionalMocksToGenerate.
 		let additionalMockOutputFiles = additionalMocksToGenerate.map {
 			outputDirectory.appendingPathComponent("\($0)+SafeDIMock.swift")
 		}
@@ -89,7 +88,6 @@ enum PluginScanner {
 			+ mockOutputFileNames.map { outputDirectory.appendingPathComponent($0) }
 			+ additionalMockOutputFiles
 
-		// Add mock configuration file when any mock entries exist.
 		let hasMockEntries = !mockFiles.isEmpty || !additionalMocksToGenerate.isEmpty
 		if hasMockEntries {
 			outputFiles.append(outputDirectory.appendingPathComponent("SafeDIMockConfiguration.swift"))
@@ -186,12 +184,10 @@ enum PluginScanner {
 	private static func extractArrayArgument(named argumentLabel: String, in source: String) -> [String] {
 		guard let labelRange = source.range(of: argumentLabel) else { return [] }
 		var index = labelRange.upperBound
-		// Find opening bracket.
 		while index < source.endIndex, source[index] != "[" {
 			index = source.index(after: index)
 		}
 		guard index < source.endIndex else { return [] }
-		// Find closing bracket.
 		var depth = 0
 		var closingIndex = index
 		while closingIndex < source.endIndex {
