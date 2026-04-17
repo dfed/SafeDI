@@ -5540,7 +5540,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_whenPropertyIsOptionalAndMarkedOnlyIfAvailableAndItIsOnlyAvialableViaCircularDependency() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenPropertyIsOptionalAndMarkedOnlyIfAvailableAndItIsOnlyAvailableViaCircularDependency() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
