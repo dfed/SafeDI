@@ -333,7 +333,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_misconfiguredMockMethodEmitsComment() async throws {
+	mutating func mock_referencesExpectedMockSignature_whenCustomMockMethodMissingDependencyParameters() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
