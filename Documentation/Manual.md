@@ -118,7 +118,7 @@ public struct LoggedInView: Instantiable, View {
     public var body: some View {
         VStack {
             Text("\(user.name)’s note")
-            // ...
+            // …
         }
     }
 
@@ -213,7 +213,7 @@ public final class AnyUserService: UserService, ObservableObject {
 ```swift
 @Instantiable(isRoot: true) @main
 public struct NotesApp: App, Instantiable {
-    // ...
+    // …
 
     // Builds a `DefaultUserService`, wraps it in `AnyUserService`, and observes it for SwiftUI updates.
     @ObservedObject @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true)
@@ -340,7 +340,7 @@ public struct LoggedInView: View, Instantiable {
         self.user = user
     }
 
-    // ...
+    // …
 
     @Forwarded private let user: User
 }
@@ -374,7 +374,7 @@ Here we have a `LoggedInView` in which the forwarded `user` property is received
 ```swift
 @Instantiable
 public struct LoggedInView: View, Instantiable {
-    // ...
+    // …
 
     @Forwarded private let user: User
 
@@ -415,11 +415,11 @@ Here we have an example of a `UserManager` type that is received as a `UserVendo
 
 ```swift
 public struct User {
-    ... // User information.
+    … // User information.
 }
 
 public protocol UserVendor {
-    var user: User { get }
+    var user: User { … }
 }
 
 public protocol UserManager: UserVendor {
@@ -444,7 +444,7 @@ public struct LoggedInView: View, Instantiable {
     }
 
     public var body: some View {
-        ... // A logged in user experience
+        … // A logged in user experience
     }
 
     @Forwarded private let userManager: UserManager
@@ -460,7 +460,7 @@ public struct ProfileView: View, Instantiable {
     }
 
     public var body: some View {
-        ... // A profile viewing experience
+        … // A profile viewing experience
     }
 
     @Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self) private let userVendor: UserVendor
@@ -475,7 +475,7 @@ public struct EditProfileView: View, Instantiable {
     }
 
     public var body: some View {
-        ... // A profile editing experience
+        … // A profile editing experience
     }
 
     @Received private let userVendor: UserVendor
@@ -490,7 +490,7 @@ Here’s an example of a feed view in a social app that optionally receives a `u
 
 ```swift
 public struct User {
-    ... // User information.
+    … // User information.
 }
 
 import SwiftUI
@@ -502,7 +502,7 @@ public struct LoggedOutView: View, Instantiable {
     }
 
     public var body: some View {
-        ... // A logged out user experience that shows a feed
+        … // A logged out user experience that shows a feed
     }
 
     @Instantiated private let feedViewBuilder: Instantiator<FeedView>
@@ -516,7 +516,7 @@ public struct LoggedInView: View, Instantiable {
     }
 
     public var body: some View {
-        ... // A logged in user experience that shows a feed customized for this user
+        … // A logged in user experience that shows a feed customized for this user
     }
 
     @Forwarded private let user: User
@@ -531,7 +531,7 @@ public struct FeedView: View, Instantiable {
     }
 
     public var body: some View {
-        ... // A feed experience that is customized when a user is present.
+        … // A feed experience that is customized when a user is present.
     }
 
     @Received(onlyIfAvailable: true) private let user: User?
@@ -569,7 +569,7 @@ The [`Instantiator`](../Sources/SafeDI/DelayedInstantiation/Instantiator.swift) 
 ```swift
 @Instantiable(isRoot: true) @main
 public struct NotesApp: App, Instantiable {
-    // ...
+    // …
 
     // The two child views are built lazily via `Instantiator`:
     // `nameEntryViewBuilder.instantiate()` and `loggedInViewBuilder.instantiate(user)`.
@@ -622,7 +622,7 @@ To generate a `mock()` method for a type, set `generateMock: true` on the `@Inst
 ```swift
 @Instantiable(generateMock: true, fulfillingAdditionalTypes: [UserService.self])
 public final class DefaultUserService: UserService, Instantiable {
-    // ...
+    // …
 
     @Received private let stringStorage: StringStorage
 }
@@ -701,7 +701,7 @@ A type may have `@Instantiable` on both its declaration and an extension, with o
 // Production declaration in this or another module:
 @Instantiable
 public struct MyService: Instantiable {
-    public init(database: Database) { ... }
+    public init(database: Database) { … }
     @Instantiated let database: Database
 }
 
@@ -790,7 +790,7 @@ If an `@Instantiable` type’s initializer has parameters with default values th
 ```swift
 @Instantiable(generateMock: true)
 public class NoteStorage: Instantiable {
-    public init(user: User, stringStorage: StringStorage, defaultNote: String = "") { ... }
+    public init(user: User, stringStorage: StringStorage, defaultNote: String = "") { … }
     @Received let user: User
     @Received let stringStorage: StringStorage
 }
@@ -851,7 +851,7 @@ When a type’s initializer is bound to a global actor that the plugin cannot de
 
 ```swift
 @Instantiable(mockAttributes: "@MainActor")
-public final class MyPresenter: Instantiable { ... }
+public final class MyPresenter: Instantiable { … }
 ```
 
 ### Multi-module mock generation
