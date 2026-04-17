@@ -145,7 +145,9 @@ Any type decorated with `@Instantiable(isRoot: true)` is a root of a SafeDI depe
 
 #### Making protocols `@Instantiable`
 
-While it is not necessary to utilize protocols with SafeDI, protocol-driven development aids both testability and dependency inversion. The `@Instantiable` macro has a parameter `fulfillingAdditionalTypes` that enables any concrete `@Instantiable` type to fulfill properties that are declared as conforming to a protocol (or superclass) type. Here’s a sample implementation of a protocol-backed, `@Instantiable` `UserService`:
+While it is not necessary to utilize protocols with SafeDI, protocol-driven development aids both testability and dependency inversion. The `@Instantiable` macro has a parameter `fulfillingAdditionalTypes` that enables any concrete `@Instantiable` type to fulfill properties that are declared as conforming to a protocol (or superclass) type.
+
+So far we have been treating `UserService` as a concrete type. Let’s consider what we need to do if `UserService` is instead a protocol:
 
 ```swift
 import SafeDI
@@ -155,8 +157,9 @@ public protocol UserService {
     var user: User? { get set }
 }
 
-/// A default implementation of `UserService` that can fulfill `@Instantiated`
-/// properties of type `UserService` or `DefaultUserService`.
+/// A default implementation of `UserService`. `fulfillingAdditionalTypes`
+/// registers `DefaultUserService` as a valid fulfiller for any `UserService`
+/// property anywhere in the dependency tree.
 @Instantiable(fulfillingAdditionalTypes: [UserService.self])
 public final class DefaultUserService: UserService, Instantiable {
     public init(stringStorage: StringStorage) {
@@ -172,7 +175,64 @@ public final class DefaultUserService: UserService, Instantiable {
 }
 ```
 
-SwiftUI contexts like `@ObservedObject` require a concrete `ObservableObject` — a protocol type like `UserService` won’t satisfy that constraint. In those cases, pair the protocol with a thin type-erasing wrapper (by convention prefixed with `Any`) that is itself a concrete `ObservableObject`. Later in this manual we use `AnyUserService` this way; SafeDI resolves it via [`@Instantiated`’s `fulfilledByType` and `erasedToConcreteExistential` parameters](#utilizing-instantiated-with-type-erased-properties), which build a `DefaultUserService` and wrap it in `AnyUserService` at the root of the subtree.
+With this in place, any `@Instantiated private let userService: UserService` or `@Received private let userService: UserService` elsewhere in the dependency tree will be wired to a `DefaultUserService`.
+
+When you need explicit control over which concrete type fulfills a type-erased property, `@Instantiated` accepts a `fulfilledByType` parameter. It takes a string literal identical to the name of the concrete type that will be assigned to the property. Representing the type as a string allows for dependency inversion: the code that receives the concrete type does not need to have a dependency on the module that defines the concrete type.
+
+```swift
+@Instantiable(isRoot: true) @main
+public struct NotesApp: App, Instantiable {
+    // ...
+
+    // Selects `DefaultUserService` as the fulfiller without requiring NotesApp’s
+    // module to import the module that declares it.
+    @Instantiated(fulfilledByType: "DefaultUserService") private let userService: UserService
+}
+```
+
+SwiftUI’s `@ObservedObject` property wrapper requires a concrete `ObservableObject` — a protocol type like `UserService` won’t satisfy that constraint. To observe a protocol-typed dependency, upgrade the protocol to inherit `ObservableObject` and pair it with a concrete type-erasing wrapper (by convention prefixed with `Any`):
+
+```swift
+import Combine
+import SwiftUI
+
+/// The protocol now inherits `ObservableObject` so conformers can publish changes.
+public protocol UserService: ObservableObject {
+    var user: User? { get set }
+}
+
+/// A concrete [existential](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/#Boxed-Protocol-Types) wrapper around `UserService` — a non-protocol type that boxes any `UserService` and is itself an `ObservableObject`.
+public final class AnyUserService: UserService, ObservableObject {
+    public init(_ userService: some UserService) {
+        self.userService = userService
+        objectWillChange = userService.objectWillChange
+            .map { _ in () }
+            .eraseToAnyPublisher()
+    }
+
+    public var user: User? {
+        get { userService.user }
+        set { userService.user = newValue }
+    }
+
+    public let objectWillChange: AnyPublisher<Void, Never>
+
+    private let userService: any UserService
+}
+```
+
+`AnyUserService` isn’t a superclass of `DefaultUserService`, so SafeDI can’t assign a `DefaultUserService` to an `AnyUserService` property directly — it has to construct a `DefaultUserService` and then wrap it via `AnyUserService(_:)`. The `erasedToConcreteExistential: true` parameter tells SafeDI to do exactly that. Combined with `fulfilledByType`, it wires up the full pattern:
+
+```swift
+@Instantiable(isRoot: true) @main
+public struct NotesApp: App, Instantiable {
+    // ...
+
+    // Builds a `DefaultUserService`, wraps it in `AnyUserService`, and observes it for SwiftUI updates.
+    @ObservedObject @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true)
+    private var userService: AnyUserService
+}
+```
 
 #### Making external types `@Instantiable`
 
@@ -302,11 +362,7 @@ public struct NotesApp: App, Instantiable {
         }
     }
 
-    // `@ObservedObject` so SwiftUI re-renders when the user logs in or out.
-    // `fulfilledByType` + `erasedToConcreteExistential` tell SafeDI to build a
-    // `DefaultUserService` and wrap it in `AnyUserService` (see [Utilizing @Instantiated with type erased properties](#utilizing-instantiated-with-type-erased-properties)).
-    @ObservedObject @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true)
-    private var userService: AnyUserService
+    @Instantiated private let userService: UserService
     @Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
     @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
 }
@@ -527,13 +583,9 @@ public struct NotesApp: App, Instantiable {
 
 An `Instantiator` is not `Sendable`: if you want to be able to share an instantiator across concurrency domains, use a [`SendableInstantiator`](../Sources/SafeDI/DelayedInstantiation/SendableInstantiator.swift).
 
-### Utilizing @Instantiated with type erased properties
+### ErasedInstantiator
 
-When you want to instantiate a type-erased property, you may specify which concrete type you expect to fulfill your property by utilizing `@Instantiated`’s `fulfilledByType` and `erasedToConcreteExistential` parameters.
-
-The `fulfilledByType` parameter takes a string literal identical to the type name of the concrete type that will be assigned to the type-erased property. Representing the type as a string allows for dependency inversion: the code that receives the concrete type does not need to have a dependency on the module that defines the concrete type.
-
-The `erasedToConcreteExistential` parameter takes a boolean value that indicates whether the fulfilling type is being erased to a concrete [existential](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/#Boxed-Protocol-Types) type. A concrete existential type is a non-protocol type that wraps a protocol and is usually prefixed with `Any`. A fulfilling type does not inherit from a concrete existential type, and therefore when the property’s type is a concrete existential the fulfilling type must be wrapped in the erasing concrete existential type’s initializer before it is returned. When the property’s type is not a concrete existential, the fulfilling type is cast as the property’s type. For example, an `AnyView` is a concrete and existential type-erased form of some `struct MyExampleView: View`, while a `UIViewController` is a concrete but not existential type-erased form of some `final class MyExampleViewController: UIViewController`. This parameter defaults to `false`.
+For deferred instantiation of a type-erased dependency, use `ErasedInstantiator` — it combines the deferred construction of [`Instantiator`](#instantiator) with the `fulfilledByType` / `erasedToConcreteExistential` parameters covered in [Making protocols `@Instantiable`](#making-protocols-instantiable).
 
 The [`ErasedInstantiator`](../Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift) type is how SafeDI enables instantiating any `@Instantiable` type when using type erasure. `ErasedInstantiator` has two generics. The first generic must match the type’s `ForwardedProperties` typealias. The second generic matches the type of the to-be-instantiated instance. An `ErasedInstantiator` is not `Sendable`: if you want to be able to share an erased instantiator across concurrency domains, use a [`SendableErasedInstantiator`](../Sources/SafeDI/DelayedInstantiation/SendableErasedInstantiator.swift).
 
