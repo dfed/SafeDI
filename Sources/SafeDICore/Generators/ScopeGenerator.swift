@@ -1599,10 +1599,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else if argument.hasDefaultValue, argument.label != "_",
 			          let defaultExpression = argument.defaultValueExpression
 			{
-				// Non-dependency default not tracked on the _Configuration struct
-				// (e.g., Instantiator children where defaults don't bubble).
-				// Pass the default expression inline so the builder call has
-				// the correct arity for the function reference.
+				// Argument has a default value but isn't tracked on the child's
+				// SafeDIMockConfiguration (e.g., when a zero-arg mock initializer
+				// overrides a production init that still carries default-valued
+				// non-dependency parameters). Pass the default expression inline
+				// so the builder call has the correct arity.
 				defaultExpression
 			} else {
 				// Unknown argument — use the label as a local variable reference.
