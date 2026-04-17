@@ -109,7 +109,7 @@ import SwiftUI
 @Instantiable
 public struct LoggedInView: Instantiable, View {
     /// Public, memberwise initializer that takes each injected property.
-    public init(user: User, userService: AnyUserService, noteStorage: NoteStorage) {
+    public init(user: User, userService: UserService, noteStorage: NoteStorage) {
         self.user = user
         self.userService = userService
         self.noteStorage = noteStorage
@@ -126,7 +126,7 @@ public struct LoggedInView: Instantiable, View {
     @Forwarded private let user: User
 
     /// Shared user state, instantiated further up the dependency tree.
-    @Received private let userService: AnyUserService
+    @Received private let userService: UserService
 
     /// A note storage instance created by SafeDI just for this view.
     @Instantiated private let noteStorage: NoteStorage
@@ -171,6 +171,8 @@ public final class DefaultUserService: UserService, Instantiable {
     @Received private let stringStorage: StringStorage
 }
 ```
+
+SwiftUI contexts like `@ObservedObject` require a concrete `ObservableObject` — a protocol type like `UserService` won’t satisfy that constraint. In those cases, pair the protocol with a thin type-erasing wrapper (by convention prefixed with `Any`) that is itself a concrete `ObservableObject`. Later in this manual we use `AnyUserService` this way; SafeDI resolves it via [`@Instantiated`’s `fulfilledByType` and `erasedToConcreteExistential` parameters](#utilizing-instantiated-with-type-erased-properties), which build a `DefaultUserService` and wrap it in `AnyUserService` at the root of the subtree.
 
 #### Making external types `@Instantiable`
 
@@ -281,14 +283,12 @@ public struct LoggedInView: View, Instantiable {
         self.user = user
     }
 
-    public var body: some View {
-        Text("Hello, \(user.name)")
-    }
+    // ...
 
     @Forwarded private let user: User
 }
 
-// The app’s root type creates a LoggedInView when there is a user.
+// The app’s root type forwards the authenticated `user` into the logged-in subtree.
 @Instantiable(isRoot: true) @main
 public struct NotesApp: App, Instantiable {
     public var body: some Scene {
@@ -303,7 +303,10 @@ public struct NotesApp: App, Instantiable {
     }
 
     // `@ObservedObject` so SwiftUI re-renders when the user logs in or out.
-    @ObservedObject @Instantiated private var userService: AnyUserService
+    // `fulfilledByType` + `erasedToConcreteExistential` tell SafeDI to build a
+    // `DefaultUserService` and wrap it in `AnyUserService` (see [Utilizing @Instantiated with type erased properties](#utilizing-instantiated-with-type-erased-properties)).
+    @ObservedObject @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true)
+    private var userService: AnyUserService
     @Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
     @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
 }
@@ -318,14 +321,7 @@ Here we have a `LoggedInView` in which the forwarded `user` property is received
 ```swift
 @Instantiable
 public struct LoggedInView: View, Instantiable {
-    public init(user: User, noteStorage: NoteStorage) {
-        self.user = user
-        self.noteStorage = noteStorage
-    }
-
-    public var body: some View {
-        ... // Displays and edits the current user’s note.
-    }
+    // ...
 
     @Forwarded private let user: User
 
@@ -520,20 +516,10 @@ The [`Instantiator`](../Sources/SafeDI/DelayedInstantiation/Instantiator.swift) 
 ```swift
 @Instantiable(isRoot: true) @main
 public struct NotesApp: App, Instantiable {
-    public var body: some Scene {
-        WindowGroup {
-            if let user = userService.user {
-                // Forward the user into a freshly built LoggedInView.
-                loggedInViewBuilder.instantiate(user)
-            } else {
-                // Build a NameEntryView with no forwarded value.
-                nameEntryViewBuilder.instantiate()
-            }
-        }
-    }
+    // ...
 
-    // `@ObservedObject` so SwiftUI re-renders when the user logs in or out.
-    @ObservedObject @Instantiated private var userService: AnyUserService
+    // The two child views are built lazily via `Instantiator`:
+    // `nameEntryViewBuilder.instantiate()` and `loggedInViewBuilder.instantiate(user)`.
     @Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
     @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
 }
@@ -583,13 +569,9 @@ SafeDI can automatically generate `mock()` methods for `@Instantiable` types, dr
 To generate a `mock()` method for a type, set `generateMock: true` on the `@Instantiable` decorator:
 
 ```swift
-@Instantiable(generateMock: true)
-public final class UserService: Instantiable {
-    public init(stringStorage: StringStorage) {
-        self.stringStorage = stringStorage
-    }
-
-    public var user: User? { ... }
+@Instantiable(generateMock: true, fulfillingAdditionalTypes: [UserService.self])
+public final class DefaultUserService: UserService, Instantiable {
+    // ...
 
     @Received private let stringStorage: StringStorage
 }
@@ -705,12 +687,10 @@ LoggedInView.mock(safeDIOverrides: .init(
     stringStorage: { InMemoryStorage() }
 ))
 
-// `userService`’s closure receives the resolved `stringStorage` from the mock tree.
-// We ignore it here because `StubUserService` doesn’t need it:
+// `StubUserService.init(stringStorage:)` already matches the override closure's shape
+// — `(StringStorage) -> UserService` — so the initializer can be passed directly:
 LoggedInView.mock(safeDIOverrides: .init(
-    userService: { _ /* stringStorage */ in
-        AnyUserService(StubUserService(user: User(name: "dfed")))
-    }
+    userService: StubUserService.init
 ))
 ```
 
