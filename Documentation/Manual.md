@@ -696,20 +696,14 @@ Your user-defined `mock()` method must be `public` (or `open`) and must accept p
 
 ### Overriding dependencies
 
-When a type has `@Instantiated` dependencies, the generated `mock()` accepts a `safeDIOverrides` argument that provides closure-based control over every dependency in the tree. Each entry on `SafeDIOverrides` is a closure whose parameters match the resolved values of that dependency’s own inputs:
+When a type has `@Instantiated` dependencies, the generated `mock()` accepts a `safeDIOverrides` argument that lets you override any dependency in the tree. Each entry on `SafeDIOverrides` is either a closure whose parameters match the resolved values of that dependency’s own inputs, or a nested `SafeDIMockConfiguration` struct when the dependency has its own `@Instantiated` subtree or default-valued init parameters.
+
+Closure-shaped entries apply when the dependency has nothing further to configure:
 
 ```swift
 // Override a leaf dependency — UserDefaults.instantiate() takes nothing, so its closure takes nothing:
 LoggedInView.mock(safeDIOverrides: .init(
     stringStorage: { InMemoryStorage() }
-))
-
-// Override how NoteStorage is constructed — its closure receives the resolved
-// `user` and `stringStorage` values from the mock tree:
-LoggedInView.mock(safeDIOverrides: .init(
-    noteStorage: { user, stringStorage in
-        StubNoteStorage(user: user, stringStorage: stringStorage)
-    }
 ))
 
 // `userService`’s closure receives the resolved `stringStorage` from the mock tree.
@@ -721,9 +715,24 @@ LoggedInView.mock(safeDIOverrides: .init(
 ))
 ```
 
-When a child dependency is itself a type with `@Instantiated` dependencies (i.e. its own subtree), its entry on `SafeDIOverrides` is not a bare closure but a nested `SafeDIMockConfiguration` struct. `SafeDIMockConfiguration` accepts optional overrides for the child’s own dependencies and a trailing `safeDIBuilder` closure. The `safeDIBuilder` closure is how you override or customize how the type is constructed within the generated mock tree. Its parameters match the type’s `customMockName` method signature if one is defined, or its `init` parameters otherwise. When no `safeDIBuilder` is provided, the generated mock calls the type’s `customMockName` method or `init` directly.
+`NoteStorage` has a default-valued `defaultNote` init parameter, so its entry is a nested `SafeDIMockConfiguration`:
 
-A child dependency is represented on its parent’s `SafeDIOverrides` as a bare closure when the child has nothing further to configure — no `@Instantiated` subtree and no default-valued init parameters. The moment a child exposes any configurable option (an `@Instantiated` subtree or a default-valued init parameter), its entry becomes a nested `SafeDIMockConfiguration` instead.
+```swift
+// Tweak `defaultNote` without replacing how NoteStorage is built:
+LoggedInView.mock(safeDIOverrides: .init(
+    noteStorage: .init(defaultNote: "Welcome back")
+))
+
+// Replace how NoteStorage itself is built — the `safeDIBuilder` closure receives
+// the resolved `user`, `stringStorage`, and `defaultNote` values from the mock tree:
+LoggedInView.mock(safeDIOverrides: .init(
+    noteStorage: .init(safeDIBuilder: { user, stringStorage, _ /* defaultNote */ in
+        StubNoteStorage(user: user, stringStorage: stringStorage)
+    })
+))
+```
+
+`SafeDIMockConfiguration` exposes an optional override for each of the child’s own `@Instantiated` dependencies and each default-valued init parameter, plus a trailing `safeDIBuilder` closure. The `safeDIBuilder` parameters match the type’s `customMockName` method signature if one is defined, or its `init` parameters otherwise. When no `safeDIBuilder` is provided, the generated mock calls the type’s `customMockName` method or `init` directly.
 
 A type generates its own `SafeDIOverrides` struct only when it has `@Instantiated` dependencies. A type whose only dependencies are `@Received` or `@Forwarded` uses flat parameters on its `mock()` method.
 
