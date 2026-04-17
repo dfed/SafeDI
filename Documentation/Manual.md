@@ -734,7 +734,7 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 `SafeDIMockConfiguration` exposes an optional override for each of the child’s own `@Instantiated` dependencies and each default-valued init parameter, plus a trailing `safeDIBuilder` closure. The `safeDIBuilder` parameters match the type’s `customMockName` method signature if one is defined, or its `init` parameters otherwise. When no `safeDIBuilder` is provided, the generated mock calls the type’s `customMockName` method or `init` directly.
 
-A type generates its own `SafeDIOverrides` struct only when it has `@Instantiated` dependencies. A type whose only dependencies are `@Received` or `@Forwarded` uses flat parameters on its `mock()` method.
+A type generates its own `SafeDIOverrides` struct when it has `@Instantiated` dependencies or `@Received(onlyIfAvailable: true)` dependencies. A type whose only dependencies are required `@Received` or `@Forwarded` uses flat parameters on its `mock()` method.
 
 ### Mock visibility
 
@@ -759,7 +759,7 @@ A forwarded parameter gets a default value when:
 If an `@Instantiable` type’s initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are automatically exposed in the generated mock. This lets you override values like seed data or feature flags in tests and previews while keeping the original defaults for production code.
 
 ```swift
-@Instantiable
+@Instantiable(generateMock: true)
 public final class NoteStorage: Instantiable {
     public init(user: User, stringStorage: StringStorage, defaultNote: String = "") { ... }
     @Received let user: User
