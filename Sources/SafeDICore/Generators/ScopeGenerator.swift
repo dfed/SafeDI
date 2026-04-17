@@ -150,7 +150,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// MARK: Internal
 
 	/// Properties that we require in order to satisfy our (and our children's) dependencies.
-	/// Used by mock generation to read unsatisfied dependencies after initial tree build.
+	/// Used both to order child generation (dependencies before dependents) and by mock
+	/// generation to surface dependencies the tree does not itself provide.
 	let receivedProperties: Set<Property>
 
 	func generateCode(
@@ -258,7 +259,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case mock(MockContext)
 	}
 
-	/// Context for mock code generation, threaded through the tree.
+	/// Context for mock code generation, consumed by the mock root when emitting the
+	/// `mock()` method and its conditional-compilation wrapper.
 	struct MockContext {
 		/// The conditional compilation flag for wrapping mock output (e.g. "DEBUG").
 		let mockConditionalCompilation: String?
@@ -349,8 +351,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	// MARK: Code Generation
 
-	/// Generates code for this scope — unified for both dependency tree and mock modes.
-	/// In mock mode, the only difference is the `let` binding line wraps with an override closure.
+	/// Generates code for this scope. Dependency-tree mode emits the full subtree
+	/// recursively. Mock mode only reaches this function for `.root` scopes, which
+	/// delegate to `generateMockRootCode`; non-root mock code is produced via
+	/// `collectMockParameterTree` + `generateMockBodyBindings` instead.
 	private func generatePropertyCode(
 		codeGeneration: CodeGeneration,
 		unavailableProperties: Set<Property>,
@@ -565,7 +569,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// 2. Identify flat parameters.
 
-		// Forwarded dependencies → bare required parameters.
+		// Forwarded dependencies → flat parameters on mock(). Defaults may be supplied
+		// from the construction initializer or from a hand-written mock on the forwarded type.
 		let forwardedDependencies = instantiable.dependencies
 			.filter { $0.source == .forwarded }
 			.sorted { $0.property < $1.property }
@@ -830,14 +835,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// A node in the mock parameter tree. Each node represents one property edge
 	/// in the dependency tree and carries the metadata needed to generate its
-	/// `_Configuration` struct and builder call.
+	/// `SafeDIMockConfiguration` struct and builder call.
 	struct MockParameterNode {
 		/// The property label on the parent type's init (e.g., "service", "childBuilder").
 		let propertyLabel: String
 		/// The full type description of the property (e.g., `Instantiator<Child>`).
 		let typeDescription: TypeDescription
 		/// The instantiated type — `typeDescription.asInstantiatedType` (e.g., `Child`).
-		/// Used for struct naming (`Child_Configuration`) and builder return type.
+		/// Used for the builder closure's return type, disambiguation keys, and
+		/// cycle detection. Configuration struct nesting uses `concreteType` instead.
 		let instantiatedTypeDescription: TypeDescription
 		/// Whether this property is an Instantiator/ErasedInstantiator/Sendable variant.
 		let isInstantiator: Bool
@@ -866,15 +872,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Whether this node is part of a property cycle.
 		let isPropertyCycle: Bool
 		/// Whether this node is inside a sendable scope (descendant of SendableInstantiator).
-		/// When `true`, the `safeDIBuilder` closure on `_Configuration` is `@Sendable`.
+		/// When `true`, the `safeDIBuilder` closure on `SafeDIMockConfiguration` is `@Sendable`.
 		let requiresSendable: Bool
-		/// Attributes to add to the generated `build()` method (e.g. `"@MainActor"`).
+		/// Attributes declared on the node's type for its generated `mock()` method
+		/// (e.g. `"@MainActor"`). Captured on the node for completeness; the root's
+		/// attributes are read from `instantiable.mockAttributes` directly.
 		let mockAttributes: String
 
-		/// Whether this node needs a full `_Configuration` struct or can be inlined
-		/// as an optional closure on the parent. A node needs a struct when it has
-		/// children (subtree customization), non-dependency defaults, or is a property
-		/// cycle (the struct may exist from a non-cycle instance of the same type).
+		/// Whether this node needs a full `SafeDIMockConfiguration` struct or can be
+		/// inlined as an optional builder closure on the parent. A node needs a struct
+		/// when it has children (subtree customization), non-dependency defaults, or is
+		/// a property cycle (the struct may exist from a non-cycle instance of the same type).
 		var needsConfigurationStruct: Bool {
 			!children.isEmpty || !defaultParameters.isEmpty || isPropertyCycle
 		}
@@ -1168,7 +1176,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for child in node.children {
 				walk(child, ancestorTypes: childAncestors)
 			}
-			// Skip leaf nodes that don't need a _Configuration struct.
+			// Skip leaf nodes that don't need a SafeDIMockConfiguration struct.
 			guard node.needsConfigurationStruct else { return }
 			if seen.contains(key) {
 				// If this node requires sendable and the existing one doesn't,
@@ -1194,7 +1202,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Generates the `SafeDIOverrides` struct. Configuration type references
 	/// use qualified names (e.g., `ChildA.SafeDIMockConfiguration`).
-	/// Returns the struct source code, or `nil` if the tree has no children.
 	private static func generateSafeDIOverridesStruct(
 		rootChildren: [MockParameterNode],
 		onlyIfAvailableEntries: [(label: String, typeSource: String)],
@@ -1309,7 +1316,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// Builder parameter (always last, unlabeled). Optional with nil default so that
-		// the default function reference (which may be @MainActor) is resolved in build()
+		// the default function reference (which may be @MainActor) is resolved in mock()
 		// rather than in this nonisolated init.
 		let closureType = node.concreteBuilderClosureType
 		initParameters.append("\(innerIndent)\(standardIndent)_ safeDIBuilder: (\(sendableAnnotation)\(closureType))? = nil")
@@ -1334,16 +1341,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	// MARK: Mock Body Generation
 
-	/// Generates the mock body bindings for the tree. Walks depth-first (children before
-	/// parent), emitting `let` bindings that call through `safeDIOverrides.path.safeDIBuilder(...)`.
-	///
-	/// For constant nodes: `let {label} = safeDIOverrides.{path}.safeDIBuilder({arguments})`
-	/// For Instantiator nodes: inner builder function + `Instantiator<T>` wrapping.
 	/// Collects all `safeDIOverrides` references that would appear inside a
 	/// `@Sendable func`, so they can be extracted and resolved outside the function.
 	/// Each extraction is a `(localName, optionalPath, defaultExpression)` tuple.
 	/// When `optionalPath` is non-nil, the extraction resolves an optional builder via nil-coalescing.
-	/// When nil (default parameter references), it's a direct assignment.
+	/// When `optionalPath` is nil, the extraction is a direct assignment — used for default
+	/// parameter references and for erased-wrapper overrides whose defaults are resolved inside
+	/// the builder function rather than via nil-coalescing.
 	private static func collectSendableExtractions(
 		nodes: [MockParameterNode],
 		parentPath: String,
@@ -1422,6 +1426,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// Generates the mock body bindings for the tree. Walks depth-first (children before
+	/// parent), emitting `let` bindings that call through `safeDIOverrides.path.safeDIBuilder(...)`.
+	///
+	/// For leaf constant nodes: `let {label} = (safeDIOverrides.{path} ?? {defaultBuilder})({arguments})`
+	/// For constant nodes with children: a nested helper function that returns the property type.
+	/// For Instantiator nodes: an inner builder function plus `Instantiator<T>(...)` wrapping.
+	/// When `sendableExtractionPrefix` is set, references resolve against extracted locals
+	/// (produced by `collectSendableExtractions`) instead of `safeDIOverrides` paths.
 	private static func generateMockBodyBindings(
 		nodes: [MockParameterNode],
 		parentPath: String,
@@ -1574,7 +1586,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Resolves the positional arguments for a builder call.
 	/// Each argument comes from one of:
 	/// - A local variable (previously built dep or flat mock param)
-	/// - A stored default on SafeDIOverrides (`{nodePath}.{label}`)
+	/// - A stored default on SafeDIOverrides (`{nodePath}.{label}`) — or its
+	///   extracted local when `sendableExtractionPrefix` is set
+	/// - The argument's inline default expression, when the default isn't tracked
+	///   on the child's SafeDIMockConfiguration
 	private static func resolveBuilderArguments(
 		for node: MockParameterNode,
 		nodePath: String,
@@ -1612,8 +1627,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// Generates the Instantiator wrapping bindings for an Instantiator node.
-	/// Produces: inner builder function + `let {label} = Instantiator<T>(...)`.
+	/// Generates the wrapping bindings for an Instantiator-family node
+	/// (`Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or
+	/// `SendableErasedInstantiator`). Produces an inner builder function plus a
+	/// `let {label} = <WrapperType>(...)` construction.
 	private static func generateInstantiatorBinding(
 		for node: MockParameterNode,
 		nodePath: String,
