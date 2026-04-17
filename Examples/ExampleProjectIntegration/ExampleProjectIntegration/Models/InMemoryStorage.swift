@@ -20,7 +20,11 @@
 
 import SafeDI
 
-@Instantiable(mockOnly: true)
+// `mockOnly` means `InMemoryStorage` only exists in mock mode (previews, tests).
+// `fulfillingAdditionalTypes: [StringStorage.self]` makes `InMemoryStorage` the
+// `StringStorage` every `mock()` in the graph receives by default —
+// `safeDIOverrides` is only needed to deviate from it.
+@Instantiable(fulfillingAdditionalTypes: [StringStorage.self], mockOnly: true)
 public final class InMemoryStorage: StringStorage {
 	public init(storage: [String: String] = [:]) {
 		self.storage = storage
