@@ -37,7 +37,6 @@ extension AttributeSyntax {
 		guard let arguments,
 		      let labeledExpressionList = LabeledExprListSyntax(arguments),
 		      let firstLabeledExpression = labeledExpressionList.first(where: {
-		      	// In `@Instantiatable`, the `fulfillingAdditionalTypes` parameter is the second parameter, though the first parameter has a default.
 		      	$0.label?.text == "fulfillingAdditionalTypes"
 		      })
 		else {
@@ -51,7 +50,6 @@ extension AttributeSyntax {
 		guard let arguments,
 		      let labeledExpressionList = LabeledExprListSyntax(arguments),
 		      let firstLabeledExpression = labeledExpressionList.first(where: {
-		      	// In `@Instantiated`, the `conformsElsewhere` parameter is the second parameter, though the first parameter has a default.
 		      	$0.label?.text == "conformsElsewhere"
 		      })
 		else {
