@@ -572,7 +572,6 @@ public actor DependencyTreeGenerator {
 		)
 	}
 
-	/// Recursively collects all unsatisfied received properties from a Scope tree.
 	/// Walks a post-promotion mock root scope for dependency cycles.
 	/// The mock root scope has @Received dependencies promoted as children,
 	/// which can create cycles not visible in the pre-promotion scope.
@@ -1118,9 +1117,7 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
-	/// Validates a mock scope for dependency cycles only (not unfulfillable properties).
-	/// Mock-only types may have unfulfillable received properties by design (they become
-	/// required mock parameters), but cycles still generate uncompilable code.
+	/// Validates that every reachable type description has a corresponding `@Instantiable`.
 	private func validateReachableTypeDescriptions() throws {
 		for reachableTypeDescription in reachableTypeDescriptions {
 			if typeDescriptionToFulfillingInstantiableMap[reachableTypeDescription] == nil {
