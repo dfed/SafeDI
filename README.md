@@ -6,7 +6,7 @@
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fdfed%2FSafeDI%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/dfed/SafeDI)
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fdfed%2FSafeDI%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/dfed/SafeDI)
 
-Compile-time-safe dependency injection without the boilerplate. No containers. No service locators. No DI-specific types.
+Compile-time-safe dependency injection without the boilerplate. No containers. No service locators. No hand-written DI types.
 
 ## Why teams choose SafeDI
 
@@ -74,7 +74,7 @@ For a comprehensive explanation of SafeDI’s macros and their usage, please rea
 
 ## Tests and previews from real feature roots
 
-Decorate a type with `@Instantiable(generateMock: true)` and SafeDI generates an `internal static func mock(…) -> Type` method that builds the full dependency subtree for that type. The same declarations that define the production graph generate the test and preview graphs.
+Decorate a type with `@Instantiable(generateMock: true)` and SafeDI generates a `static func mock(…) -> Type` method that builds the full dependency subtree for that type. The same declarations that define the production graph generate the test and preview graphs.
 
 If every dependency can be mocked, calling `mock()` with no arguments works:
 
@@ -130,9 +130,9 @@ If you are migrating an existing project to SafeDI, follow our [migration guide]
 
 ## Comparing SafeDI to other DI libraries
 
-SafeDI is closest in spirit to [Needle](https://github.com/uber/needle) and [Weaver](https://github.com/scribd/Weaver): all three validate the dependency graph at compile time and support hierarchical scoping, letting runtime-derived values like an authenticated user live non-optionally inside a subtree. SafeDI drops the per-type dependency protocols Needle requires and the containers Weaver maintains alongside your code — your app types remain your app types.
+SafeDI is closest in spirit to [Needle](https://github.com/uber/needle) and [Weaver](https://github.com/scribd/Weaver): all three validate the dependency graph at compile time and support hierarchical scoping, letting runtime-derived values like an authenticated user live non-optionally inside a subtree. Where Needle asks you to maintain a dependency protocol for every type, and Weaver keeps a separate container declaration alongside your code, SafeDI leaves your types untouched — the macros *are* the integration.
 
-[Factory](https://github.com/hmlongco/Factory) and [swift-dependencies](https://github.com/pointfreeco/swift-dependencies) take a container/environment approach that excels at scalar dependencies (a `Clock`, a `URLSession`). SafeDI additionally represents graph-local runtime values — an auth token, a logged-in user — as first-class subtree dependencies, so they can be received non-optionally wherever they’re needed. [Swinject](https://github.com/Swinject/Swinject) offers no compile-time validation at all.
+[Factory](https://github.com/hmlongco/Factory) and [swift-dependencies](https://github.com/pointfreeco/swift-dependencies) take a container/environment approach that shines for scalar dependencies like a `Clock` or a `URLSession`. SafeDI is built around the object graph itself — hierarchical scoping makes graph-local runtime values (an auth token, a logged-in user) first-class subtree dependencies, received non-optionally where they’re actually needed. [Swinject](https://github.com/Swinject/Swinject) goes further in that runtime-lookup direction and offers no compile-time validation at all.
 
 SwiftUI’s own `Environment` is a useful mental model for a dependency tree — but without compile-time validation. SafeDI applies that tree shape to the full object graph and guarantees it resolves.
 
