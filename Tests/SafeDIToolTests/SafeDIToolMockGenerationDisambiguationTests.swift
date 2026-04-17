@@ -385,7 +385,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_disambiguationFallsBackToFullSuffixWhenSimplifiedCollides() async throws {
+	mutating func mock_noDisambiguationNeeded_whenSharedLabelOnlyAppearsInNestedConfigurations() async throws {
 		// Two children have `service` — one is `Service` (non-optional, @Instantiated in ChildA),
 		// one is `Service?` (optional, onlyIfAvailable in ChildB).
 		// The onlyIfAvailable version moves into SafeDIOverrides.
@@ -1080,7 +1080,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_disambiguatedUncoveredDependencyInNestedInstantiator() async throws {
+	mutating func mock_disambiguatesUncoveredReceivedDependencies_whenSameLabelDifferentTypesAcrossSiblings() async throws {
 		// Root @Instantiates parent: Parent and child: Child.
 		// Parent @Receives engine: EngineA. Child @Receives engine: EngineB.
 		// Same label "engine", different types — both uncovered (required mock params).
@@ -1754,7 +1754,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_disambiguationFallsBackToFullSuffixWhenSimplifiedSuffixesCollide() async throws {
+	mutating func mock_noDisambiguationNeeded_whenSameLabelDefaultValuedParametersAreScoped() async throws {
 		// Root instantiates three children. Each child has a default-valued init
 		// parameter named "value" with a different type. ServiceA and ServiceA?
 		// both simplify to "ServiceA", forcing the full suffix fallback.
