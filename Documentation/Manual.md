@@ -382,7 +382,7 @@ public class NoteStorage: Instantiable {
 
 Use `@Received(fulfilledByDependencyNamed:ofType:)` to rename or retype a dependency that was `@Instantiated` or `@Forwarded` higher up the tree. Types further down the tree can then `@Received` the dependency under its new name and type.
 
-Here, a parent forwards a read-write `UserManager`; a child receives the same instance as the read-only `UserVendor` protocol:
+Here, a parent instantiates a read-write `UserManager` and also renames the object to make it available a `UserVendor`. A child receives the same instance as the read-only `UserVendor`:
 
 ```swift
 public protocol UserVendor { var user: User { get } }
@@ -390,14 +390,14 @@ public protocol UserManager: UserVendor { var user: User { get set } }
 
 @Instantiable
 public struct LoggedInView: Instantiable {
-    @Forwarded private let userManager: UserManager
+    @Instantaited private let userManager: UserManager
+    @Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self) private let userVendor: UserVendor
     @Instantiated private let profileViewBuilder: Instantiator<ProfileView>
 }
 
 @Instantiable
 public struct ProfileView: Instantiable {
-    @Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self)
-    private let userVendor: UserVendor
+    @Received private let userVendor: UserVendor
 }
 ```
 
