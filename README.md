@@ -17,7 +17,7 @@ SafeDI reads your code at compile time, validates the dependency graph, and gene
 - **Scoped runtime values.** Make your real logged-in `User` available non-optionally to any type in the subtree with just a single macro decoration.
 - **Full-graph mocks.** Generated from your real dependency graph, `mock()` lets you override any branch for easy previews and tests.
 - **Architecture-independent.** SwiftUI or UIKit, coordinators or MVVM, one module or hundreds — SafeDI fits what you already have.
-- **Clear failures.** SafeDI flags unsolvable dependency graphs with explicit build errors.
+- **Clear failures.** SafeDI flags unsolvable dependency graphs, outlining the problem and suggesting fixes.
 
 ## The core concept
 
