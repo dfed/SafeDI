@@ -269,7 +269,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_defaultValuedParameterDoesNotBubbleThroughInstantiator() async throws {
+	mutating func mock_exposesDefaultValuedParameterOnChildMockConfiguration_whenChildReachedViaInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -571,7 +571,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_defaultValuedParameterDoesNotBubbleThroughSendableInstantiator() async throws {
+	mutating func mock_exposesDefaultValuedParameterOnChildMockConfiguration_whenChildReachedViaSendableInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -871,7 +871,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_defaultValuedParameterDoesNotBubbleThroughErasedInstantiator() async throws {
+	mutating func mock_exposesDefaultValuedParameterOnChildMockConfiguration_whenChildReachedViaErasedInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -934,7 +934,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_defaultValuedParameterDoesNotBubbleThroughSendableErasedInstantiator() async throws {
+	mutating func mock_exposesDefaultValuedParameterOnChildMockConfiguration_whenChildReachedViaSendableErasedInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1278,7 +1278,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_defaultValuedParameterFromGrandchildStopsAtInstantiatorBoundary() async throws {
+	mutating func mock_exposesGrandchildDefaultValuedParameterThroughNestedConfiguration_whenGrandchildReachedViaInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
