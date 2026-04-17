@@ -10654,7 +10654,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_forwardedDepWithDefaultFromCustomMock() async throws {
+	mutating func mock_forwardedDependencyWithDefaultFromCustomMock() async throws {
 		// Matches apple CachedPlayer pattern:
 		// Type has @Forwarded properties with defaults on the customMock method.
 		// The generated mock() should preserve the defaults.
@@ -10789,7 +10789,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_forwardedDepCycleDoesNotTriggerValidationError() async throws {
+	mutating func mock_forwardedDependencyCycleDoesNotTriggerValidationError() async throws {
 		// Matches apple ConversationPlayer/CachedPlayer pattern:
 		// Parent has Instantiator<Child>, Child @Forwards Parent.
 		// This is valid in production. Mock validation should NOT reject it.
