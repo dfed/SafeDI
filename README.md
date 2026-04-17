@@ -8,8 +8,6 @@
 
 Compile-time-safe dependency injection without the boilerplate. No containers. No service locators. No DI-specific types.
 
-SafeDI reads your code at compile time, validates the dependency graph, and generates production and mock trees for you.
-
 ## Why teams choose SafeDI
 
 - **Dependency injection that feels natural.** Get the simplicity of manual dependency injection without ceremony.
@@ -21,7 +19,7 @@ SafeDI reads your code at compile time, validates the dependency graph, and gene
 
 ## The core concept
 
-SafeDI reads your code, validates your dependencies, and generates a dependency tree—all during project compilation.
+SafeDI reads your code, validates your dependencies, and generates production and mock dependency trees—all during project compilation.
 
 Opting a type into the SafeDI dependency tree is simple: add the `@Instantiable` macro to your type declaration, and decorate each dependency with a macro that indicates its lifecycle. Here is what a notes app might look like in SafeDI:
 
