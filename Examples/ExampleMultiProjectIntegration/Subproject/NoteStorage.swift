@@ -19,51 +19,26 @@
 // SOFTWARE.
 
 import SafeDI
-import SwiftUI
 
-@MainActor
-@Instantiable(generateMock: true)
-public struct NoteView: Instantiable, View {
-	public init(
-		userName: String,
-		userService: AnyUserService,
-		stringStorage: StringStorage,
-		defaultNote: String = "",
-	) {
-		self.userName = userName
-		self.userService = userService
+@Instantiable
+public final class NoteStorage: Instantiable {
+	public init(user: User, stringStorage: StringStorage, defaultNote: String = "") {
+		self.user = user
 		self.stringStorage = stringStorage
-		_note = State(initialValue: stringStorage.string(forKey: userName) ?? defaultNote)
+		self.defaultNote = defaultNote
 	}
 
-	public var body: some View {
-		VStack {
-			Text("\(userName)’s note")
-			TextEditor(text: $note)
-				.onChange(of: note) { _, newValue in
-					stringStorage.setString(newValue, forKey: userName)
-				}
-			Button(action: {
-				userService.userName = nil
-			}, label: {
-				Text("Log out")
-			})
-		}
-		.padding()
+	public var note: String {
+		get { stringStorage.string(forKey: noteKey) ?? defaultNote }
+		set { stringStorage.setString(newValue, forKey: noteKey) }
 	}
 
-	@Forwarded private let userName: String
-	@Received private let userService: AnyUserService
+	@Received private let user: User
 	@Received private let stringStorage: StringStorage
 
-	@State private var note: String = ""
-}
+	private let defaultNote: String
 
-#if DEBUG
-	#Preview {
-		NoteView.mock(
-			userName: "dfed",
-			defaultNote: "dfed says hello",
-		)
+	private var noteKey: String {
+		"note-for-\(user.name)"
 	}
-#endif
+}

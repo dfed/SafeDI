@@ -18,18 +18,29 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import GrandchildrenModule
 import SafeDI
-import SharedModule
 
-@Instantiable
-public final class ChildC: Instantiable {
-	public init(shared: SharedThing, grandchildC: GrandchildC) {
-		self.shared = shared
-		self.grandchildC = grandchildC
+// `mockOnly` means `InMemoryStorage` only exists in mock mode (previews, tests).
+// `fulfillingAdditionalTypes: [StringStorage.self]` makes `InMemoryStorage` the
+// `StringStorage` every `mock()` in the graph receives by default —
+// `safeDIOverrides` is only needed to deviate from it.
+@Instantiable(fulfillingAdditionalTypes: [StringStorage.self], mockOnly: true)
+public final class InMemoryStorage: StringStorage {
+	public init(storage: [String: String] = [:]) {
+		self.storage = storage
 	}
 
-	@Received let shared: SharedThing
+	public static func mock(storage: [String: String] = [:]) -> InMemoryStorage {
+		InMemoryStorage(storage: storage)
+	}
 
-	@Instantiated let grandchildC: GrandchildC
+	public func string(forKey key: String) -> String? {
+		storage[key]
+	}
+
+	public func setString(_ string: String?, forKey key: String) {
+		storage[key] = string
+	}
+
+	private var storage: [String: String]
 }

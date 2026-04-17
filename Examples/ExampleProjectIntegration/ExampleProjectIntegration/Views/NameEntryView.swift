@@ -21,7 +21,6 @@
 import SafeDI
 import SwiftUI
 
-@MainActor
 @Instantiable(generateMock: true)
 public struct NameEntryView: Instantiable, View {
 	public init(userService: AnyUserService) {
@@ -36,7 +35,7 @@ public struct NameEntryView: Instantiable, View {
 				label: {},
 			)
 			Button(action: {
-				userService.userName = name
+				userService.user = User(name: name)
 			}, label: {
 				Text("Log in")
 			})

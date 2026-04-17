@@ -26,7 +26,7 @@ public protocol StringStorage {
 	func setString(_ string: String?, forKey key: String)
 }
 
-@Instantiable(fulfillingAdditionalTypes: [StringStorage.self], generateMock: true)
+@Instantiable(fulfillingAdditionalTypes: [StringStorage.self])
 extension UserDefaults: @retroactive Instantiable, StringStorage {
 	public static func instantiate() -> UserDefaults {
 		.standard

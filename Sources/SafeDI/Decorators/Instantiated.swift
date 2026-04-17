@@ -25,6 +25,8 @@
 ///     @Instantiated private let dependency: DependencyType
 ///
 /// Note that the access level of the dependency in the above example does not affect the dependency tree – a `private` dependency can still be `@Received` by `@Instantiable`-decorated types further down the dependency tree.
+///
+/// If the enclosing type is a SwiftUI `View`, keep in mind that `@Instantiated` objects are re-initialized each time the view is recreated by SwiftUI.
 @attached(peer)
 public macro Instantiated() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
 
@@ -37,6 +39,8 @@ public macro Instantiated() = #externalMacro(module: "SafeDIMacros", type: "Inje
 ///     @Instantiated(fulfilledByType: "ConcreteView", erasedToConcreteExistential: true) private let dependencyBuilder: Instantiator<AnyView>
 ///
 /// Note that the access level of the dependency in the above example does not affect the dependency tree – a `private` dependency can still be `@Received` by `@Instantiable`-decorated types further down the dependency tree.
+///
+/// If the enclosing type is a SwiftUI `View`, keep in mind that `@Instantiated` objects are re-initialized each time the view is recreated by SwiftUI.
 ///
 /// - Parameters:
 ///   - concreteTypeName: The name of the concrete type that will be instantiated and assigned to this property. This parameter is only required when the decorated property’s type does not match an `@Instantiable` type or its `additionalTypes`. This parameter is particularly useful when working with a type-erased property.

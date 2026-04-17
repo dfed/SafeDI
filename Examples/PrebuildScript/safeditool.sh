@@ -37,8 +37,8 @@ cat > "$SAFEDI_OUTPUT_DIR/SafeDIManifest.json" << MANIFEST
 {
   "dependencyTreeGeneration": [
     {
-      "inputFilePath": "$SOURCE_DIR/Views/ExampleApp.swift",
-      "outputFilePath": "$SAFEDI_OUTPUT_DIR/ExampleApp+SafeDI.swift"
+      "inputFilePath": "$SOURCE_DIR/Views/NotesApp.swift",
+      "outputFilePath": "$SAFEDI_OUTPUT_DIR/NotesApp+SafeDI.swift"
     }
   ]
 }

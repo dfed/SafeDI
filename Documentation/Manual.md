@@ -1,6 +1,76 @@
 # SafeDI Manual
 
-This manual provides a detailed guide to using SafeDI effectively in your Swift projects. You’ll learn how to create your dependency tree utilizing SafeDI’s macros, learn recommended approaches to adopting SafeDI, and get a tour of how SafeDI works under the hood.
+This manual provides a detailed guide to using SafeDI effectively in your Swift projects. You’ll learn how to integrate SafeDI into your build, create your dependency tree utilizing SafeDI’s macros, learn recommended approaches to adopting SafeDI, and get a tour of how SafeDI works under the hood.
+
+## Installation
+
+SafeDI utilizes both Swift macros and a code generation plugin to read your code and generate a dependency tree. Integrating SafeDI is a three-step process: add the package, wire the `SafeDIGenerator` plugin into your build, and decorate your types with SafeDI’s macros.
+
+You can see sample integrations in the [Examples folder](../Examples/). Note that the example projects use the `sourceBuild` trait to build `SafeDITool` from source: consumers using a published release do not need to specify `traits`.
+
+### Adding SafeDI as a dependency
+
+#### Swift package manager
+
+To add the SafeDI framework as a dependency to a package utilizing [Swift Package Manager](https://github.com/apple/swift-package-manager), add the following lines to your `Package.swift` file:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.0.0"),
+]
+```
+
+To install the SafeDI framework into an Xcode project with Swift Package Manager, follow [Apple’s instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to add `https://github.com/dfed/SafeDI.git` as a dependency.
+
+### Generating your dependency tree
+
+SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin uses a prebuilt binary for fast builds without compiling SwiftSyntax. This plugin works out of the box on most project configurations. If your project uses a custom build system, you can configure your build to utilize the `SafeDITool` command-line executable directly.
+
+#### Xcode project
+
+If your first-party code comprises a single module in an `.xcodeproj`, once your Xcode project depends on the SafeDI package you can integrate the Swift Package Plugin simply by going to your target’s `Build Phases`, expanding the `Run Build Tool Plug-ins` drop-down, and adding the `SafeDIGenerator` as a build tool plug-in. You can see this integration in practice in the [ExampleProjectIntegration](../Examples/ExampleProjectIntegration) project.
+
+If your Xcode project comprises multiple modules, follow the above steps, and then add a `#SafeDIConfiguration` to your module to configure SafeDI:
+
+```swift
+import SafeDI
+
+#SafeDIConfiguration(
+    additionalDirectoriesToInclude: ["Subproject"]
+)
+```
+
+The `additionalDirectoriesToInclude` parameter specifies folders outside of your module that SafeDI will scan for Swift source files. Paths must be relative to the project directory. Use this parameter to specify the paths to dependent modules' source directories, since Xcode project plugins cannot discover these automatically. You can see [an example of this configuration](../Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](../Examples/ExampleMultiProjectIntegration) project.
+
+#### Swift package
+
+If your first-party code is entirely contained in a Swift Package with one or more modules, you can add the following lines to your root target’s definition:
+
+```swift
+    plugins: [
+        .plugin(name: "SafeDIGenerator", package: "SafeDI")
+    ]
+```
+
+To also generate mocks for non-root modules, add the plugin to all first-party targets.
+
+You can see this integration in practice in the [Example Package Integration](../Examples/Example Package Integration) package.
+
+Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may add a `#SafeDIConfiguration` in your root module with the additional module names:
+
+```swift
+import SafeDI
+
+#SafeDIConfiguration(
+    additionalImportedModules: ["MyModule"]
+)
+```
+
+### Additional configurations
+
+`SafeDITool` is designed to integrate into projects of any size or shape. Our [Releases](https://github.com/dfed/SafeDI/releases) page has prebuilt, codesigned release binaries of the `SafeDITool` that can be downloaded and utilized directly in a pre-build script ([example](../Examples/PrebuildScript/safeditool.sh)). Make sure to set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
+
+`SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run `swift run SafeDITool --help` to see documentation of the tool’s supported arguments.
 
 ## Macros
 
@@ -30,46 +100,44 @@ Every `@Instantiable`-decorated type must be:
 
 The `@Instantiable` macro guides developers through satisfying these requirements with code generation and build-time fix-its.
 
-Here is a sample `UserService` implementation that is `@Instantiable`:
+Here is a sample `LoggedInView` implementation that is `@Instantiable`. It is annotated with each of the three dependency-kind macros — `@Forwarded`, `@Received`, and `@Instantiated` — that together describe how dependencies enter a SafeDI scope:
 
 ```swift
 import SafeDI
+import SwiftUI
 
 @Instantiable
-public final class UserService: Instantiable {
+public struct LoggedInView: Instantiable, View {
     /// Public, memberwise initializer that takes each injected property.
-    public init(authService: AuthService, securePersistentStorage: SecurePersistentStorage) {
-        self.authService = authService
-        self.securePersistentStorage = securePersistentStorage
+    public init(user: User, userService: UserService, noteStorage: NoteStorage) {
+        self.user = user
+        self.userService = userService
+        self.noteStorage = noteStorage
     }
 
-    public private(set) lazy var user: User? = loadPersistedUser() {
-        didSet {
-            persistUserData()
+    public var body: some View {
+        VStack {
+            Text("\(user.name)’s note")
+            // …
         }
     }
 
-    public func login(username: String, password: String) async throws -> User {
-        let user = try await authService.login(username: username, password: password)
-        self.user = user
-        return user
-    }
+    /// The authenticated user, forwarded in from the parent scope at runtime.
+    @Forwarded private let user: User
 
-    /// An auth service instance that is instantiated when the `UserService` is instantiated.
-    @Instantiated private let authService: AuthService
+    /// Shared user state, instantiated further up the dependency tree.
+    @Received private let userService: UserService
 
-    /// An instance of secure, persistent storage that is instantiated further up the dependency tree.
-    @Received private let securePersistentStorage: SecurePersistentStorage
-
-    private func loadPersistedUser() -> User? {
-        securePersistentStorage["user", ofType: User.self]
-    }
-
-    private func persistUserData() {
-        securePersistentStorage["user"] = user
-    }
+    /// A note storage instance created by SafeDI when this view is created.
+    @Instantiated private let noteStorage: NoteStorage
 }
 ```
+
+- `@Forwarded` marks a dependency that is passed in at runtime (e.g., the authenticated `User` returned from sign-in) and made available to the rest of this scope and its subtree.
+- `@Received` marks a dependency that was already created further up the tree and is being received here.
+- `@Instantiated` marks a dependency that SafeDI constructs when this type is instantiated. `noteStorage`’s own `@Received` inputs are resolved from this scope’s context.
+
+The exact semantics of each dependency kind — including `@Instantiated`’s configuration parameters for dependency inversion, and `@Received`’s `onlyIfAvailable` option — are covered in [@Instantiated](#instantiated), [@Received](#received), and [@Forwarded](#forwarded).
 
 #### Creating the root of your dependency tree
 
@@ -77,40 +145,117 @@ Any type decorated with `@Instantiable(isRoot: true)` is a root of a SafeDI depe
 
 #### Making protocols `@Instantiable`
 
-While it is not necessary to utilize protocols with SafeDI, protocol-driven development aids both testability and dependency inversion. The `@Instantiable` macro has a parameter `fulfillingAdditionalTypes` that enables any concrete `@Instantiable` type to fulfill properties that are declared as conforming to a protocol (or superclass) type. Here’s a sample implementation of a protocol-backed, `@Instantiable` `UserService`:
+While it is not necessary to utilize protocols with SafeDI, protocol-driven development aids both testability and dependency inversion. The `@Instantiable` macro has a parameter `fulfillingAdditionalTypes` that enables any concrete `@Instantiable` type to fulfill properties that are declared as conforming to a protocol (or superclass) type.
+
+So far we have been treating `UserService` as a concrete type. Let’s consider what we need to do if `UserService` is instead a protocol:
 
 ```swift
 import SafeDI
 
 /// A protocol that defines a UserService.
 public protocol UserService {
-    var user: User? { get }
-    func login(username: String, password: String) async throws -> User
+    var user: User? { get set }
 }
 
-/// A default implementation of `UserService` that can fulfill `@Instantiated`
-/// properties of type `UserService` or `DefaultUserService`.
+/// A default implementation of `UserService`. `fulfillingAdditionalTypes`
+/// registers `DefaultUserService` as a valid fulfiller for any `UserService`
+/// property anywhere in the dependency tree.
 @Instantiable(fulfillingAdditionalTypes: [UserService.self])
 public final class DefaultUserService: UserService, Instantiable {
-    ... // Same implementation as above.
+    public init(stringStorage: StringStorage) {
+        self.stringStorage = stringStorage
+    }
+
+    public var user: User? {
+        get { /* read from stringStorage */ }
+        set { /* write to stringStorage */ }
+    }
+
+    @Received private let stringStorage: StringStorage
 }
 ```
+
+With this in place, any `@Instantiated private let userService: UserService` or `@Received private let userService: UserService` elsewhere in the dependency tree will be wired to a `DefaultUserService` — no decoration parameters needed.
+
+SwiftUI’s `@ObservedObject` property wrapper requires a concrete `ObservableObject` — a protocol type like `UserService` won’t satisfy that constraint. To observe a protocol-typed dependency, upgrade the protocol to inherit `ObservableObject` and pair it with a concrete type-erasing wrapper (by convention prefixed with `Any`):
+
+```swift
+import Combine
+import SwiftUI
+
+/// The protocol now inherits `ObservableObject` so conformers can publish changes.
+public protocol UserService: ObservableObject {
+    var user: User? { get set }
+}
+
+/// A concrete [existential](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/#Boxed-Protocol-Types) wrapper around `UserService` — a non-protocol type that boxes any `UserService` and is itself an `ObservableObject`.
+public final class AnyUserService: UserService, ObservableObject {
+    public init(_ userService: some UserService) {
+        self.userService = userService
+        objectWillChange = userService.objectWillChange
+            .map { _ in () }
+            .eraseToAnyPublisher()
+    }
+
+    public var user: User? {
+        get { userService.user }
+        set { userService.user = newValue }
+    }
+
+    public let objectWillChange: AnyPublisher<Void, Never>
+
+    private let userService: any UserService
+}
+```
+
+`AnyUserService` isn’t itself `@Instantiable` and isn’t a superclass of `DefaultUserService`, so SafeDI can’t wire this up on its own — you need to tell it what to build and how to assign it:
+
+```swift
+@Instantiable(isRoot: true) @main
+public struct NotesApp: App, Instantiable {
+    // …
+
+    // Builds a `DefaultUserService`, wraps it in `AnyUserService`, and observes it for SwiftUI updates.
+    @ObservedObject @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true)
+    private var userService: AnyUserService
+}
+```
+
+`fulfilledByType` takes a string literal naming the concrete type to construct — here, `"DefaultUserService"`. Representing the type as a string allows for dependency inversion: the consuming module does not need to import the module that declares the fulfiller. `erasedToConcreteExistential: true` tells SafeDI that the constructed value must be wrapped via the property type’s initializer — here, `AnyUserService(_:)` — rather than assigned directly:
+
+| Parameter | Logic | Example |
+| --------- | ----- | ------- |
+| `erasedToConcreteExistential: false` | **Cast:** `FulfillingType as PropertyType` | `MyViewController` → `UIViewController` |
+| `erasedToConcreteExistential: true` | **Wrap:** `PropertyType(FulfillingType())` | `MyView` → `AnyView(MyView())` |
 
 #### Making external types `@Instantiable`
 
 Types that are declared outside of your project can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via a `public static func instantiate(…) -> ExtendedType` function. This `instantiate(…)` function can receive dependencies instantiated or forwarded by objects further up the dependency tree by declaring these dependencies as parameters to the `instantiate(…)` function.
 
-Here we have a sample `@Instantiable` `SecurePersistentStorage` whose concrete type is defined in a third-party dependency:
+Here we have a sample `@Instantiable` extension on `UserDefaults` that adopts a first-party `StringStorage` protocol so SafeDI can instantiate it in place of a hand-rolled storage type:
 
 ```swift
+import Foundation
 import SafeDI
-import SecurePersistentStorage // A third-party library that provides secure, persistent storage.
 
-@Instantiable
-extension SecurePersistentStorage: Instantiable {
+public protocol StringStorage {
+    func string(forKey key: String) -> String?
+    func setString(_ string: String?, forKey key: String)
+}
+
+@Instantiable(fulfillingAdditionalTypes: [StringStorage.self])
+extension UserDefaults: @retroactive Instantiable, StringStorage {
     /// A public static function that defines how SafeDI can instantiate the type.
-    public static func instantiate() -> SecurePersistentStorage {
-        SecurePersistentStorage()
+    public static func instantiate() -> UserDefaults {
+        .standard
+    }
+
+    public func string(forKey key: String) -> String? {
+        object(forKey: key) as? String
+    }
+
+    public func setString(_ string: String?, forKey key: String) {
+        set(string, forKey: key)
     }
 }
 ```
@@ -159,7 +304,8 @@ public enum MyEnum {
     …
 }
 
-/// An extension on the Container type that tells SafeDI how to instantiate a `Container<MyEnum>`. We tell the `@Instantiable` macro that this type already conforms to the `Instantiable` protocol elsewhere to prevent the macro from requiring that this extension declares a conformance to `Instantiable`.
+/// An extension on the Container type that tells SafeDI how to instantiate a `Container<MyEnum>`.
+/// We tell the `@Instantiable` macro that this type already conforms to the `Instantiable` protocol elsewhere to prevent the macro from requiring that this extension declares a conformance to `Instantiable`.
 @Instantiable(conformsElsewhere: true)
 extension Container {
     public static func instantiate() -> Container<MyEnum> {
@@ -174,6 +320,8 @@ Property declarations within `@Instantiable` types decorated with [`@Instantiate
 
 `@Instantiated`-decorated properties must be an `@Instantiable` type, or of an `additionalType` listed in an `@Instantiable(fulfillingAdditionalTypes:)`’s declaration.
 
+If the enclosing type is a SwiftUI `View`, keep in mind that `@Instantiated` objects are re-initialized each time the view is recreated by SwiftUI. You can find a deep dive on SwiftUI view lifecycles [here](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
+
 ### @Forwarded
 
 Property declarations within `@Instantiable` types decorated with [`@Forwarded`](../Sources/SafeDI/Decorators/Forwarded.swift) represent dependencies that come from the runtime, e.g. user input or backend-delivered content. Like an `@Instantiated`-decorated property, a `@Forwarded`-decorated property is available to be `@Received` by objects instantiated further down the dependency tree.
@@ -182,44 +330,38 @@ A `@Forwarded` property is forwarded into the SafeDI dependency tree by an [`Ins
 
 Forwarded property types do not need to be decorated with the `@Instantiable` macro.
 
-Here’s an example showing how to forward a runtime value into an `@Instantiable` type:
+Here’s an example showing how to forward a runtime value — an authenticated `User` — into an `@Instantiable` type:
 
 ```swift
-// A view that requires a runtime value (the user’s name).
+// A view that requires a runtime value (the authenticated user).
 @Instantiable
 public struct LoggedInView: View, Instantiable {
-    public init(userName: String) {
-        self.userName = userName
+    public init(user: User) {
+        self.user = user
     }
 
-    public var body: some View {
-        Text("Hello, \(userName)")
-    }
+    // …
 
-    @Forwarded private let userName: String
+    @Forwarded private let user: User
 }
 
-// A view that creates LoggedInView when there is a user.
-@Instantiable
-public struct RootView: View, Instantiable {
-    public init(loggedInViewBuilder: Instantiator<LoggedInView>, loggedOutViewBuilder: Instantiator<LoggedOutView>, userService: UserService) {
-        self.loggedInViewBuilder = loggedInViewBuilder
-        self.loggedOutViewBuilder = loggedOutViewBuilder
-        self.userService = userService
-    }
-
-    public var body: some View {
-        if let userName = userService.currentUser?.name {
-            // Pass the forwarded property when instantiating.
-            loggedInViewBuilder.instantiate(userName)
-        } else {
-            loggedOutViewBuilder.instantiate()
+// The app’s root type forwards the authenticated `user` into the logged-in subtree.
+@Instantiable(isRoot: true) @main
+public struct NotesApp: App, Instantiable {
+    public var body: some Scene {
+        WindowGroup {
+            if let user = userService.user {
+                // Pass the forwarded property when instantiating.
+                loggedInViewBuilder.instantiate(user)
+            } else {
+                nameEntryViewBuilder.instantiate()
+            }
         }
     }
 
-    @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
-    @Instantiated private let loggedOutViewBuilder: Instantiator<LoggedOutView>
     @Instantiated private let userService: UserService
+    @Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
+    @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
 }
 ```
 
@@ -227,53 +369,41 @@ public struct RootView: View, Instantiable {
 
 Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. Received properties must be `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree.
 
-Here we have a `LoggedInContentView` in which the forwarded `user` property is received by an `UpdateUserService` further down the dependency tree.
+Here we have a `LoggedInView` in which the forwarded `user` property is received by a `NoteStorage` further down the dependency tree:
 
 ```swift
 @Instantiable
-public struct LoggedInContentView: View, Instantiable {
-    public init(user: User, profileViewBuilder: ErasedInstantiator<(), AnyView>) {
-        self.user = user
-        self.profileViewBuilder = profileViewBuilder
-    }
-
-    public var body: some View {
-        ... // Instantiates and displays a ProfileView when a button is pressed.
-    }
+public struct LoggedInView: View, Instantiable {
+    // …
 
     @Forwarded private let user: User
 
-    @Instantiated(fulfilledByType: "ProfileView", erasedToConcreteExistential: true) private let profileViewBuilder: ErasedInstantiator<(), AnyView>
+    // NoteStorage is instantiated by LoggedInView, so it lives for the
+    // lifetime of the logged-in subtree.
+    @Instantiated private let noteStorage: NoteStorage
 }
 
 @Instantiable
-public struct ProfileView: View, Instantiable {
-    public init(updateUserService: UpdateUserService) {
-        self.updateUserService = updateUserService
-    }
-
-    public var body: some View {
-        ... // Allows for updating user information.
-    }
-
-    @Instantiated private let updateUserService: UpdateUserService
-}
-
-@Instantiable
-public final class UpdateUserService: Instantiable {
-    public init(user: User) {
+public class NoteStorage: Instantiable {
+    public init(user: User, stringStorage: StringStorage, defaultNote: String = "") {
         self.user = user
-        urlSession = .shared
+        self.stringStorage = stringStorage
+        self.defaultNote = defaultNote
     }
 
-    public func updateUserName(to newName: String) async {
-        // Updates the user name.
+    public var note: String {
+        get { stringStorage.string(forKey: noteKey) ?? defaultNote }
+        set { stringStorage.setString(newValue, forKey: noteKey) }
     }
 
-    // The user object which is received from the LoggedInContentView.
+    // The user object is received from the LoggedInView.
     @Received private let user: User
 
-    private let urlSession: URLSession
+    // The string storage is received from further up the tree.
+    @Received private let stringStorage: StringStorage
+
+    private let defaultNote: String
+    private var noteKey: String { "note-for-\(user.name)" }
 }
 ```
 
@@ -285,11 +415,11 @@ Here we have an example of a `UserManager` type that is received as a `UserVendo
 
 ```swift
 public struct User {
-    ... // User information.
+    … // User information.
 }
 
 public protocol UserVendor {
-    var user: User { get }
+    var user: User { … }
 }
 
 public protocol UserManager: UserVendor {
@@ -314,7 +444,7 @@ public struct LoggedInView: View, Instantiable {
     }
 
     public var body: some View {
-        ... // A logged in user experience
+        … // A logged in user experience
     }
 
     @Forwarded private let userManager: UserManager
@@ -330,7 +460,7 @@ public struct ProfileView: View, Instantiable {
     }
 
     public var body: some View {
-        ... // A profile viewing experience
+        … // A profile viewing experience
     }
 
     @Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self) private let userVendor: UserVendor
@@ -345,7 +475,7 @@ public struct EditProfileView: View, Instantiable {
     }
 
     public var body: some View {
-        ... // A profile editing experience
+        … // A profile editing experience
     }
 
     @Received private let userVendor: UserVendor
@@ -360,7 +490,7 @@ Here’s an example of a feed view in a social app that optionally receives a `u
 
 ```swift
 public struct User {
-    ... // User information.
+    … // User information.
 }
 
 import SwiftUI
@@ -372,7 +502,7 @@ public struct LoggedOutView: View, Instantiable {
     }
 
     public var body: some View {
-        ... // A logged out user experience that shows a feed
+        … // A logged out user experience that shows a feed
     }
 
     @Instantiated private let feedViewBuilder: Instantiator<FeedView>
@@ -386,7 +516,7 @@ public struct LoggedInView: View, Instantiable {
     }
 
     public var body: some View {
-        ... // A logged in user experience that shows a feed customized for this user
+        … // A logged in user experience that shows a feed customized for this user
     }
 
     @Forwarded private let user: User
@@ -401,7 +531,7 @@ public struct FeedView: View, Instantiable {
     }
 
     public var body: some View {
-        ... // A feed experience that is customized when a user is present.
+        … // A feed experience that is customized when a user is present.
     }
 
     @Received(onlyIfAvailable: true) private let user: User?
@@ -437,33 +567,24 @@ When you want to instantiate a dependency after `init(…)`, you need to declare
 The [`Instantiator`](../Sources/SafeDI/DelayedInstantiation/Instantiator.swift) type is how SafeDI enables deferred instantiation of an `@Instantiable` type. `Instantiator` has a single generic that matches the type of the to-be-instantiated instance. Creating an `Instantiator` property is as simple as creating any other property in the SafeDI ecosystem:
 
 ```swift
-@Instantiable(isRoot: true)
-public struct MyApp: App, Instantiable {
-    public init(contentViewInstantiator: Instantiator<ContentView>) {
-        self.contentViewInstantiator = contentViewInstantiator
-    }
+@Instantiable(isRoot: true) @main
+public struct NotesApp: App, Instantiable {
+    // …
 
-    public var body: some Scene {
-        WindowGroup {
-            // Returns a new instance of a `ContentView`.
-            contentViewInstantiator.instantiate()
-        }
-    }
-
-    /// A private property that knows how to instantiate a content view.
-    @Instantiated private let contentViewInstantiator: Instantiator<ContentView>
+    // The two child views are built lazily via `Instantiator`:
+    // `nameEntryViewBuilder.instantiate()` and `loggedInViewBuilder.instantiate(user)`.
+    @Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
+    @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
 }
 ```
 
+SafeDI generates a `ForwardedProperties` typealias for every `@Instantiable` type. This typealias is a tuple containing all properties decorated with `@Forwarded`. `Instantiator.instantiate(_:)` takes a `ForwardedProperties` argument, ensuring that you provide all required runtime dependencies when instantiating the type.
+
 An `Instantiator` is not `Sendable`: if you want to be able to share an instantiator across concurrency domains, use a [`SendableInstantiator`](../Sources/SafeDI/DelayedInstantiation/SendableInstantiator.swift).
 
-### Utilizing @Instantiated with type erased properties
+### ErasedInstantiator
 
-When you want to instantiate a type-erased property, you may specify which concrete type you expect to fulfill your property by utilizing `@Instantiated`’s `fulfilledByType` and `erasedToConcreteExistential` parameters.
-
-The `fulfilledByType` parameter takes a string literal identical to the type name of the concrete type that will be assigned to the type-erased property. Representing the type as a string allows for dependency inversion: the code that receives the concrete type does not need to have a dependency on the module that defines the concrete type.
-
-The `erasedToConcreteExistential` parameter takes a boolean value that indicates whether the fulfilling type is being erased to a concrete [existential](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/#Boxed-Protocol-Types) type. A concrete existential type is a non-protocol type that wraps a protocol and is usually prefixed with `Any`. A fulfilling type does not inherit from a concrete existential type, and therefore when the property’s type is a concrete existential the fulfilling type must be wrapped in the erasing concrete existential type’s initializer before it is returned. When the property’s type is not a concrete existential, the fulfilling type is cast as the property’s type. For example, an `AnyView` is a concrete and existential type-erased form of some `struct MyExampleView: View`, while a `UIViewController` is a concrete but not existential type-erased form of some `final class MyExampleViewController: UIViewController`. This parameter defaults to `false`.
+For deferred instantiation of a type-erased dependency, use `ErasedInstantiator` — it combines the deferred construction of [`Instantiator`](#instantiator) with the `fulfilledByType` / `erasedToConcreteExistential` parameters covered in [Making protocols `@Instantiable`](#making-protocols-instantiable).
 
 The [`ErasedInstantiator`](../Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift) type is how SafeDI enables instantiating any `@Instantiable` type when using type erasure. `ErasedInstantiator` has two generics. The first generic must match the type’s `ForwardedProperties` typealias. The second generic matches the type of the to-be-instantiated instance. An `ErasedInstantiator` is not `Sendable`: if you want to be able to share an erased instantiator across concurrency domains, use a [`SendableErasedInstantiator`](../Sources/SafeDI/DelayedInstantiation/SendableErasedInstantiator.swift).
 
@@ -499,15 +620,11 @@ SafeDI can automatically generate `mock()` methods for `@Instantiable` types, dr
 To generate a `mock()` method for a type, set `generateMock: true` on the `@Instantiable` decorator:
 
 ```swift
-@Instantiable(generateMock: true)
-public final class UserService: Instantiable {
-    public init(authService: AuthService, securePersistentStorage: SecurePersistentStorage) {
-        self.authService = authService
-        self.securePersistentStorage = securePersistentStorage
-    }
+@Instantiable(generateMock: true, fulfillingAdditionalTypes: [UserService.self])
+public final class DefaultUserService: UserService, Instantiable {
+    // …
 
-    @Instantiated private let authService: AuthService
-    @Received private let securePersistentStorage: SecurePersistentStorage
+    @Received private let stringStorage: StringStorage
 }
 ```
 
@@ -555,16 +672,18 @@ extension ExternalService {
 }
 ```
 
-This also works for primitive types used as `@Forwarded` dependencies:
+This also works for types that are pure data and used as `@Forwarded` dependencies — for example, an authenticated `User`:
 
 ```swift
 @Instantiable(mockOnly: true)
-extension String {
-    public static func mock() -> String { "" }
+extension User {
+    public static func mock() -> User {
+        User(name: "Mock User")
+    }
 }
 ```
 
-When a parent type references a `mockOnly` type as a dependency, the generated mock uses `Type.mock()` as the default. For `@Forwarded` dependencies, the parameter gets a default value so callers don’t need to provide it. For `@Instantiated` dependencies, the type appears in `SafeDIOverrides` with `Type.mock()` as the default, allowing optional override.
+When you provide a `mockOnly` extension for a type, SafeDI’s mock generator will utilize that mock wherever the type appears in a mock dependency tree. This "auto-filling" behavior means you don’t have to manually provide a mock for common types (like `User` or `NetworkClient`) every time you call `mock()` on a parent type. For `@Forwarded` dependencies, the parameter gets a default value so callers don’t need to provide it. For `@Instantiated` dependencies, the type appears in `SafeDIOverrides` with `Type.mock()` as the default, allowing optional override.
 
 `mockOnly` is useful for:
 
@@ -582,7 +701,7 @@ A type may have `@Instantiable` on both its declaration and an extension, with o
 // Production declaration in this or another module:
 @Instantiable
 public struct MyService: Instantiable {
-    public init(database: Database) { ... }
+    public init(database: Database) { … }
     @Instantiated let database: Database
 }
 
@@ -609,42 +728,42 @@ Your user-defined `mock()` method must be `public` (or `open`) and must accept p
 
 ### Overriding dependencies
 
-When a type has `@Instantiated` dependencies with their own subtrees, the generated `mock()` accepts a `safeDIOverrides` argument that provides tree-structured control over every dependency in the graph:
+When a type has `@Instantiated` dependencies, the generated `mock()` accepts a `safeDIOverrides` argument that lets you override any dependency in the tree. Each entry on `SafeDIOverrides` is either a closure whose parameters match the resolved values of that dependency’s own inputs, or a nested `SafeDIMockConfiguration` struct when the dependency has its own `@Instantiated` subtree or default-valued init parameters.
+
+Closure-shaped entries apply when the dependency has nothing further to configure:
 
 ```swift
-// Override a child’s default-valued parameter:
-Root.mock(safeDIOverrides: .init(
-    child: .init(theme: .dark)
+// Override a leaf dependency — UserDefaults.instantiate() takes nothing, so its closure takes nothing:
+LoggedInView.mock(safeDIOverrides: .init(
+    stringStorage: { InMemoryStorage() }
 ))
 
-// Replace an entire type’s construction with a trailing closure:
-Root.mock(safeDIOverrides: .init(
-    child: .init { service, theme in
-        CustomChild(service: service, theme: theme)
-    }
-))
-
-// Override a leaf dependency (leaves are simple closures, not config objects):
-Root.mock(safeDIOverrides: .init(
-    service: { MockService() }
+// `StubUserService.init(stringStorage:)` already matches the override closure's shape
+// — `(StringStorage) -> UserService` — so the initializer can be passed directly:
+LoggedInView.mock(safeDIOverrides: .init(
+    userService: StubUserService.init
 ))
 ```
 
-Each child dependency in the tree that has its own subtree generates a `SafeDIMockConfiguration` struct. This struct accepts optional overrides for the child’s own dependencies and a trailing `safeDIBuilder` closure. The `safeDIBuilder` closure is how you override or customize how the type is constructed within the generated mock tree. Its parameters match the type’s `customMockName` method signature if one is defined, or its `init` parameters otherwise. When no `safeDIBuilder` is provided, the generated mock calls the type’s `customMockName` method or `init` directly.
-
-For example, given a `Child` type with `init(service: Service, theme: Theme)`, the `safeDIBuilder` closure has the signature `(Service, Theme) -> Child`:
+`NoteStorage` has a default-valued `defaultNote` init parameter, so its entry is a nested `SafeDIMockConfiguration`:
 
 ```swift
-Root.mock(safeDIOverrides: .init(
-    child: .init { service, theme in
-        // `service` and `theme` are the resolved values from the mock tree.
-        // Return a customized Child instance.
-        Child(service: service, theme: theme)
-    }
+// Tweak `defaultNote` without replacing how NoteStorage is built:
+LoggedInView.mock(safeDIOverrides: .init(
+    noteStorage: .init(defaultNote: "Welcome back")
+))
+
+// Replace how NoteStorage itself is built. `StubNoteStorage` is a subclass of
+// `NoteStorage` whose `init` matches the signature of `NoteStorage.init`, so we
+// can pass its initializer directly as the `safeDIBuilder`:
+LoggedInView.mock(safeDIOverrides: .init(
+    noteStorage: .init(safeDIBuilder: StubNoteStorage.init)
 ))
 ```
 
-Types with no `@Instantiated` subtree — for example, types with only `@Received` dependencies — do not generate a `SafeDIOverrides` struct. Their `mock()` method uses flat parameters instead.
+`SafeDIMockConfiguration` exposes an optional override for each of the child’s own `@Instantiated` dependencies and each default-valued init parameter, plus a trailing `safeDIBuilder` closure. The `safeDIBuilder` parameters match the type’s `customMockName` method signature if one is defined, or its `init` parameters otherwise. When no `safeDIBuilder` is provided, the generated mock calls the type’s `customMockName` method or `init` directly.
+
+A type generates its own `SafeDIOverrides` struct when it has `@Instantiated` dependencies or `@Received(onlyIfAvailable: true)` dependencies. A type whose only dependencies are required `@Received` or `@Forwarded` uses flat parameters on its `mock()` method.
 
 ### Mock visibility
 
@@ -657,7 +776,7 @@ To use a mock from another module in your tests, see [Cross-module mock generati
 `@Forwarded` properties become parameters on the mock method since they represent runtime input. By default they are required (no default value):
 
 ```swift
-let noteView = NoteView.mock(userName: "Preview User")
+let view = LoggedInView.mock(user: User(name: "dfed"))
 ```
 
 A forwarded parameter gets a default value when:
@@ -666,25 +785,39 @@ A forwarded parameter gets a default value when:
 
 ### Default-valued init parameters in mocks
 
-If an `@Instantiable` type’s initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are automatically exposed in the generated mock. This lets you override values like feature flags or optional view models in tests while keeping the original defaults for production code.
+If an `@Instantiable` type’s initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are automatically exposed in the generated mock. This lets you override values like seed data or feature flags in tests and previews while keeping the original defaults for production code.
 
 ```swift
 @Instantiable(generateMock: true)
-public struct ProfileView: Instantiable {
-    public init(user: User, showDebugInfo: Bool = false) { ... }
+public class NoteStorage: Instantiable {
+    public init(user: User, stringStorage: StringStorage, defaultNote: String = "") { … }
     @Received let user: User
+    @Received let stringStorage: StringStorage
 }
 ```
 
-Override the default:
+When mocking `NoteStorage` directly, pass the override as a flat parameter:
 
 ```swift
-Root.mock(safeDIOverrides: .init(
-    profileView: .init(showDebugInfo: true)
-))
+NoteStorage.mock(
+    user: User(name: "dfed"),
+    stringStorage: InMemoryStorage(),
+    defaultNote: "dfed says hello"
+)
 ```
 
-When no override is provided, the original default expression (`false`) is used.
+When mocking a parent of `NoteStorage`, the default-valued parameter appears on `NoteStorage`’s nested `SafeDIMockConfiguration`:
+
+```swift
+LoggedInView.mock(
+    user: User(name: "dfed"),
+    safeDIOverrides: .init(
+        noteStorage: .init(defaultNote: "dfed says hello")
+    )
+)
+```
+
+When no override is provided, the original default expression (`""`) is used.
 
 Default-valued parameters do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
 
@@ -718,7 +851,7 @@ When a type’s initializer is bound to a global actor that the plugin cannot de
 
 ```swift
 @Instantiable(mockAttributes: "@MainActor")
-public final class MyPresenter: Instantiable { ... }
+public final class MyPresenter: Instantiable { … }
 ```
 
 ### Multi-module mock generation
@@ -768,7 +901,7 @@ The `@StateObject` documentation reads:
 
 > Declare state objects as private to prevent setting them from a memberwise initializer, which can conflict with the storage management that SwiftUI provides
 
-`@Instantiated`, `@Forwarded`, or `@Received` objects may be decorated with [`@ObservedObject`](https://developer.apple.com/documentation/swiftui/ObservedObject). Keep in mind that `@Instantiated` objects in a `View` are re-initialized each time the view is recreated by SwiftUI. You can find a deep dive on SwiftUI view lifecycles [here](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
+`@Instantiated`, `@Forwarded`, or `@Received` objects may be decorated with [`@ObservedObject`](https://developer.apple.com/documentation/swiftui/ObservedObject).
 
 ### Inheritance
 
@@ -785,6 +918,62 @@ SwiftUI applications have a natural root: the `App`-conforming type that is init
 ### Selecting a root in UIKit applications
 
 UIKit applications’ natural root is the `UIApplicationDelegate`-conforming app delegate, however, this type inherits from the Objective-C `NSObject` which already has a no-argument `init()`. As such, it is best to create a custom `@Instantiable(isRoot: true) public final class Root: Instantiable` type that is initialized and stored by the application’s app delegate.
+
+## Migrating from SafeDI 1.x to 2.x
+
+SafeDI 2.x requires Swift 6.3 or later and does not support CocoaPods. Projects using an earlier Swift version or CocoaPods should use SafeDI 1.x.
+
+SafeDI 2.x also removes support for CSV-based configuration files (`.safedi/configuration/include.csv` and `.safedi/configuration/additionalImportedModules.csv`). Configuration is now done via the `#SafeDIConfiguration` macro.
+
+### Automated migration
+
+SafeDI provides a command plugin to automate the migration:
+
+```bash
+swift package plugin safedi-v1-to-v2 --target <YourRootTarget>
+```
+
+This plugin will:
+1. Verify your `swift-tools-version` is 6.3 or later
+2. Create a `SafeDIConfiguration.swift` file in your target’s source directory
+3. Migrate any existing CSV configuration values into the new `#SafeDIConfiguration` macro
+4. Delete the obsolete CSV files
+
+### Manual migration
+
+1. Update your `swift-tools-version` to 6.3 or later
+2. Update your SafeDI dependency to `from: "2.0.0"`
+3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
+4. If you don’t have CSV configuration files, add a `#SafeDIConfiguration()` in your root module
+
+### Plugin changes
+
+The `SafeDIPrebuiltGenerator` plugin and `InstallSafeDITool` command plugin have been removed in SafeDI 2.x. `SafeDIGenerator` is now the only build tool plugin and uses a prebuilt binary by default. If you were previously using `SafeDIPrebuiltGenerator` or the `safedi-release-install` command, switch to `SafeDIGenerator`.
+
+### Migrating prebuild scripts or custom build system integrations
+
+If you invoke `SafeDITool` directly (not via the provided SPM plugin), the `--dependency-tree-output` flag has been replaced with `generate --swift-manifest`. The tool now takes a JSON manifest file that maps input Swift files to output files. See [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) for the expected format.
+
+Before (1.x):
+```bash
+safeditool input.csv --dependency-tree-output ./generated/SafeDI.swift
+```
+
+After (2.x):
+```bash
+# Create a manifest mapping root files to outputs
+cat > manifest.json << 'EOF'
+{
+  "dependencyTreeGeneration": [
+    {
+      "inputFilePath": "Sources/App/Root.swift",
+      "outputFilePath": "generated/Root+SafeDI.swift"
+    }
+  ]
+}
+EOF
+safeditool generate input.csv --swift-manifest manifest.json
+```
 
 ## Example applications
 

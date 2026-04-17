@@ -18,18 +18,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import GrandchildrenModule
+import Foundation
 import SafeDI
-import SharedModule
 
-@Instantiable
-public final class ChildC: Instantiable {
-	public init(shared: SharedThing, grandchildC: GrandchildC) {
-		self.shared = shared
-		self.grandchildC = grandchildC
+public struct User: Codable, Equatable, Hashable, Sendable {
+	public init(name: String) {
+		self.name = name
 	}
 
-	@Received let shared: SharedThing
+	public let name: String
+}
 
-	@Instantiated let grandchildC: GrandchildC
+@Instantiable(mockOnly: true)
+extension User {
+	public static func mock() -> User {
+		User(name: "Mock User")
+	}
 }

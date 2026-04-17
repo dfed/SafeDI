@@ -18,18 +18,56 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import GrandchildrenModule
 import SafeDI
-import SharedModule
+import SwiftUI
 
-@Instantiable
-public final class ChildC: Instantiable {
-	public init(shared: SharedThing, grandchildC: GrandchildC) {
-		self.shared = shared
-		self.grandchildC = grandchildC
+@Instantiable(generateMock: true)
+public struct LoggedInView: Instantiable, View {
+	public init(
+		user: User,
+		userService: AnyUserService,
+		noteStorage: NoteStorage,
+	) {
+		self.user = user
+		self.userService = userService
+		self.noteStorage = noteStorage
+		_note = State(initialValue: noteStorage.note)
 	}
 
-	@Received let shared: SharedThing
+	public var body: some View {
+		VStack {
+			Text("\(user.name)’s note")
+			TextEditor(text: $note)
+				.onChange(of: note) { _, newValue in
+					noteStorage.note = newValue
+				}
+			Button(action: {
+				userService.user = nil
+			}, label: {
+				Text("Log out")
+			})
+		}
+		.padding()
+	}
 
-	@Instantiated let grandchildC: GrandchildC
+	@Forwarded private let user: User
+	@Received private let userService: AnyUserService
+	@Instantiated private let noteStorage: NoteStorage
+
+	@State private var note: String = ""
 }
+
+#if DEBUG
+	#Preview("Bare mock") {
+		LoggedInView.mock()
+	}
+
+	#Preview("Customized") {
+		LoggedInView.mock(
+			user: User(name: "dfed"),
+			safeDIOverrides: .init(
+				noteStorage: .init(defaultNote: "dfed says hello"),
+			),
+		)
+	}
+#endif
