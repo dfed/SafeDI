@@ -38,8 +38,7 @@ public struct NotesApp: App, Instantiable {
         }
     }
 
-    // `AnyUserService` is a type-erasing wrapper so `@ObservedObject` gets a concrete `ObservableObject` to observe.
-    @ObservedObject @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) private var userService: AnyUserService
+    @ObservedObject @Instantiated private var userService: UserService
     @Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
     @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
 }
@@ -51,7 +50,7 @@ public struct LoggedInView: View, Instantiable {
     // `user` is a runtime value forwarded in at this boundary.
     @Forwarded private let user: User
     // `userService` is received from an ancestor in the tree.
-    @Received private let userService: AnyUserService
+    @Received private let userService: UserService
     // `noteStorage` is created by `LoggedInView` and lives for its lifetime.
     @Instantiated private let noteStorage: NoteStorage
 }
@@ -75,7 +74,7 @@ For a comprehensive explanation of SafeDI’s macros and their usage, please rea
 
 ## Tests and previews from real feature roots
 
-Decorate a type with `@Instantiable(generateMock: true)` and SafeDI generates a `public static func mock(…) -> Type` method that builds the full dependency subtree for that type. The same declarations that define the production graph generate the test and preview graphs.
+Decorate a type with `@Instantiable(generateMock: true)` and SafeDI generates an `internal static func mock(…) -> Type` method that builds the full dependency subtree for that type. The same declarations that define the production graph generate the test and preview graphs.
 
 If every dependency can be mocked, calling `mock()` with no arguments works:
 
@@ -133,7 +132,7 @@ If you are migrating an existing project to SafeDI, follow our [migration guide]
 
 SafeDI is closest in spirit to [Needle](https://github.com/uber/needle) and [Weaver](https://github.com/scribd/Weaver): all three validate the dependency graph at compile time and support hierarchical scoping, letting runtime-derived values like an authenticated user live non-optionally inside a subtree. SafeDI drops the per-type dependency protocols Needle requires and the containers Weaver maintains alongside your code — your app types remain your app types.
 
-[Factory](https://github.com/hmlongco/Factory) and [swift-dependencies](https://github.com/pointfreeco/swift-dependencies) take a container/environment approach. Both are excellent for scalar dependencies (a `Clock`, a `URLSession`) but cannot express hierarchical scoping: values that should exist only after a particular runtime event — an auth token, a logged-in user — must be modeled as optionals and checked at every use site. [Swinject](https://github.com/Swinject/Swinject) offers no compile-time validation at all.
+[Factory](https://github.com/hmlongco/Factory) and [swift-dependencies](https://github.com/pointfreeco/swift-dependencies) take a container/environment approach that excels at scalar dependencies (a `Clock`, a `URLSession`). SafeDI additionally represents graph-local runtime values — an auth token, a logged-in user — as first-class subtree dependencies, so they can be received non-optionally wherever they’re needed. [Swinject](https://github.com/Swinject/Swinject) offers no compile-time validation at all.
 
 SwiftUI’s own `Environment` is a useful mental model for a dependency tree — but without compile-time validation. SafeDI applies that tree shape to the full object graph and guarantees it resolves.
 
