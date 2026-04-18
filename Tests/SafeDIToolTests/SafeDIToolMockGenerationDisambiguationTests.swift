@@ -752,20 +752,28 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childBuilder(name: String) -> ChildA {
+		        func __safeDI_childBuilder_ChildA(name: String) -> ChildA {
 		            (safeDIOverrides.childBuilder_ChildA ?? ChildA.init(name:))(name)
 		        }
-		        let childBuilder = Instantiator<ChildA> {
-		            __safeDI_childBuilder(name: $0)
+		        let childBuilder_ChildA = Instantiator<ChildA> {
+		            __safeDI_childBuilder_ChildA(name: $0)
 		        }
-		        let childC = (safeDIOverrides.childC ?? ChildC.init(childBuilder:))(childBuilder)
-		        func __safeDI_childBuilder(name: String) -> ChildB {
+		        func __safeDI_childC() -> ChildC {
+		            let childBuilder: Instantiator<ChildA> = childBuilder_ChildA
+		            return (safeDIOverrides.childC ?? ChildC.init(childBuilder:))(childBuilder)
+		        }
+		        let childC: ChildC = __safeDI_childC()
+		        func __safeDI_childBuilder_ChildB(name: String) -> ChildB {
 		            (safeDIOverrides.childBuilder_ChildB ?? ChildB.init(name:))(name)
 		        }
-		        let childBuilder = Instantiator<ChildB> {
-		            __safeDI_childBuilder(name: $0)
+		        let childBuilder_ChildB = Instantiator<ChildB> {
+		            __safeDI_childBuilder_ChildB(name: $0)
 		        }
-		        let childD = (safeDIOverrides.childD ?? ChildD.init(childBuilder:))(childBuilder)
+		        func __safeDI_childD() -> ChildD {
+		            let childBuilder: Instantiator<ChildB> = childBuilder_ChildB
+		            return (safeDIOverrides.childD ?? ChildD.init(childBuilder:))(childBuilder)
+		        }
+		        let childD: ChildD = __safeDI_childD()
 		        return Root(childC: childC, childD: childD)
 		    }
 		}
@@ -971,21 +979,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_builder(name: String) -> TypeA {
+		        func __safeDI_builder_TypeA(name: String) -> TypeA {
 		            (safeDIOverrides.builder_TypeA ?? TypeA.init(name:))(name)
 		        }
-		        let builder = Instantiator<TypeA> {
-		            __safeDI_builder(name: $0)
+		        let builder_TypeA = Instantiator<TypeA> {
+		            __safeDI_builder_TypeA(name: $0)
 		        }
-		        let childA = (safeDIOverrides.childA ?? ChildA.init(builder:))(builder)
-		        func __safeDI_builder(name: String) -> TypeB {
+		        func __safeDI_childA() -> ChildA {
+		            let builder: Instantiator<TypeA> = builder_TypeA
+		            return (safeDIOverrides.childA ?? ChildA.init(builder:))(builder)
+		        }
+		        let childA: ChildA = __safeDI_childA()
+		        func __safeDI_builder_TypeB(name: String) -> TypeB {
 		            (safeDIOverrides.builder_TypeB ?? TypeB.init(name:))(name)
 		        }
-		        let builder = Instantiator<TypeB> {
-		            __safeDI_builder(name: $0)
+		        let builder_TypeB = Instantiator<TypeB> {
+		            __safeDI_builder_TypeB(name: $0)
 		        }
 		        func __safeDI_childBBuilder() -> ChildB {
-		            let subChild = (safeDIOverrides.childBBuilder.subChild ?? SubChild.init(builder:))(builder)
+		            func __safeDI_subChild() -> SubChild {
+		                let builder: Instantiator<TypeB> = builder_TypeB
+		                return (safeDIOverrides.childBBuilder.subChild ?? SubChild.init(builder:))(builder)
+		            }
+		            let subChild: SubChild = __safeDI_subChild()
 		            return (safeDIOverrides.childBBuilder.safeDIBuilder ?? ChildB.init(subChild:))(subChild)
 		        }
 		        let childBBuilder = Instantiator<ChildB>(__safeDI_childBBuilder)
@@ -1686,10 +1702,18 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service_UserService_ ?? UserService.init)()
-		        let childA = (safeDIOverrides.childA ?? ChildA.init(service:))(service)
-		        let service = (safeDIOverrides.service_AdminService ?? AdminService.init)()
-		        let childB = (safeDIOverrides.childB ?? ChildB.init(service:))(service)
+		        let service_UserService_ = (safeDIOverrides.service_UserService_ ?? UserService.init)()
+		        func __safeDI_childA() -> ChildA {
+		            let service: UserService = service_UserService_
+		            return (safeDIOverrides.childA ?? ChildA.init(service:))(service)
+		        }
+		        let childA: ChildA = __safeDI_childA()
+		        let service_AdminService = (safeDIOverrides.service_AdminService ?? AdminService.init)()
+		        func __safeDI_childB() -> ChildB {
+		            let service: AdminService = service_AdminService
+		            return (safeDIOverrides.childB ?? ChildB.init(service:))(service)
+		        }
+		        let childB: ChildB = __safeDI_childB()
 		        let service_UserService = (safeDIOverrides.service_UserService ?? OtherType.init)()
 		        let childC = (safeDIOverrides.childC ?? ChildC.init(service_UserService:))(service_UserService)
 		        return Root(childA: childA, childB: childB, childC: childC)
@@ -1774,15 +1798,15 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service_TypeB ?? TypeB.init)()
+		        let service_TypeB = (safeDIOverrides.service_TypeB ?? TypeB.init)()
 		        func __safeDI_child() -> Child {
-		            let serviceAlias: TypeB = service
+		            let serviceAlias: TypeB = service_TypeB
 		            let service = (safeDIOverrides.child.service ?? TypeB.init)()
 		            return (safeDIOverrides.child.safeDIBuilder ?? Child.init(service:serviceAlias:))(service, serviceAlias)
 		        }
 		        let child: Child = __safeDI_child()
-		        let service = (safeDIOverrides.service_TypeA ?? TypeA.init)()
-		        return Root(child: child, service: service)
+		        let service_TypeA = (safeDIOverrides.service_TypeA ?? TypeA.init)()
+		        return Root(child: child, service: service_TypeA)
 		    }
 		}
 		#endif

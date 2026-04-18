@@ -780,6 +780,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(indent)) -> \(typeName) {")
 
 		// Generate mock body.
+		// Fold root-sibling disambiguation into the receiver map so that:
+		// (a) the root-return call below can reference disambiguated names when
+		//     a root `.instantiated` dep label collided with a promoted sibling;
+		// (b) `emitReceiverBindings` for root's own deps sees the merged map.
+		var rootDisambiguationMap = flatParameterDisambiguationMap
+		Self.mergeSiblingDisambiguations(into: &rootDisambiguationMap, for: parameterTree)
+
 		if hasTree {
 			// Bind onlyIfAvailable entries first — tree bindings may reference them.
 			for entry in onlyIfAvailableSafeDIParameterEntries {
@@ -801,7 +808,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// scope case).
 		let rootReceiverBindings = Self.emitReceiverBindings(
 			for: instantiable.dependencies,
-			flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+			flatParameterDisambiguationMap: rootDisambiguationMap,
 			indent: bodyIndent,
 		)
 		lines.append(contentsOf: rootReceiverBindings)
@@ -809,6 +816,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Generate return statement.
 		let returnArgumentList = try generateReturnArgumentList(
 			instantiable: instantiable,
+			disambiguationMap: rootDisambiguationMap,
 		)
 		let mockMethodName = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 		let returnConstruction = if instantiable.mockInitializer != nil {
@@ -837,6 +845,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// that appears in the root's init.
 	private func generateReturnArgumentList(
 		instantiable: Instantiable,
+		disambiguationMap: [String: [String: String]] = [:],
 	) throws -> String {
 		let constructionInitializer: Initializer? = if let mockInitializer = instantiable.mockInitializer {
 			mockInitializer
@@ -851,8 +860,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 		var parts = [String]()
 		for argument in constructionInitializer.arguments {
-			if dependenciesByLabel[argument.innerLabel] != nil {
-				parts.append("\(argument.label): \(argument.innerLabel)")
+			if let dependency = dependenciesByLabel[argument.innerLabel] {
+				// When the dep's label was sibling-disambiguated in the tree
+				// (e.g. root's `service: TypeA` when a promoted sibling is also
+				// labeled `service`), the bound `let` uses the disambiguated
+				// name. Rewrite the reference so the Root init call finds it.
+				let typeSource = dependency.property.typeDescription.asSource
+				let resolved = disambiguationMap[argument.innerLabel]?[typeSource] ?? argument.innerLabel
+				parts.append("\(argument.label): \(resolved)")
 			} else if argument.hasDefaultValue, argument.label != "_" {
 				parts.append("\(argument.label): \(argument.label)")
 			}
@@ -1220,6 +1235,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	// MARK: SafeDIOverrides Generation
 
+	/// Merges the sibling-level disambiguations for a given level of tree nodes
+	/// into an existing receiver disambiguation map. Used at both the root scope
+	/// and within `generateMockBodyBindings` so that consumers at the current
+	/// scope can rebind disambiguated labels back to their natural labels via
+	/// `emitReceiverBindings`, and so that the root's return call can reference
+	/// disambiguated bindings when the root's own `.instantiated` dep label
+	/// collides with a promoted sibling.
+	private static func mergeSiblingDisambiguations(
+		into map: inout [String: [String: String]],
+		for nodes: [MockParameterNode],
+	) {
+		let labelMap = disambiguatePropertyLabels(for: nodes)
+		for node in nodes {
+			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
+			if disambiguated != node.propertyLabel {
+				map[node.propertyLabel, default: [:]][node.typeDescription.asSource] = disambiguated
+			}
+		}
+	}
+
 	/// Computes disambiguated property labels for a list of nodes at the same scope level.
 	/// When two nodes share a `propertyLabel`, appends `_TypeName` to make them unique.
 	/// If the disambiguated name collides with another node's original label, appends
@@ -1558,12 +1593,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Disambiguate sibling labels at this level.
 		let labelMap = disambiguatePropertyLabels(for: nodes)
 
+		// Merge sibling-level disambiguations into the receiver-disambiguation
+		// map so consumers can rebind colliding sibling names back to their raw
+		// labels via `emitReceiverBindings`, and construction arguments resolve
+		// via Swift lexical scoping inside a wrapper function body.
+		var combinedDisambiguationMap = flatParameterDisambiguationMap
+		mergeSiblingDisambiguations(into: &combinedDisambiguationMap, for: nodes)
+
 		for node in nodes {
 			let nodeTypeKey = node.instantiatedTypeDescription.asSource
 			let isCycleNode = ancestorTypes.contains(nodeTypeKey)
 
 			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			let nodePath = "\(parentPath).\(disambiguated)"
+			// When this node's label collides with a sibling, use the
+			// disambiguated label for the outer `let` binding and for the
+			// inner `__safeDI_<name>` function so neither redeclares across
+			// siblings. Consumer nodes reach the value either directly (when
+			// the dep also resolves to this sibling) via a rebinding emitted
+			// by `emitReceiverBindings` inside the consumer's wrapper.
+			let outerBindingName = disambiguated
 
 			let defaultBuilder = node.defaultBuilderExpression
 			let relativePath = nodePath
@@ -1611,15 +1660,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				childAncestors.insert(nodeTypeKey)
 				lines.append(contentsOf: generateInstantiatorBinding(
 					for: node,
+					outerBindingName: outerBindingName,
 					nodePath: nodePath,
 					builderExpression: builderExpression,
 					optionalBuilderPath: optionalBuilderPath,
 					arguments: arguments,
 					indent: indent,
 					ancestorTypes: childAncestors,
-					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+					flatParameterDisambiguationMap: combinedDisambiguationMap,
 				))
-			} else if node.requiresFunctionWrapper || hasDisambiguatedReceiver(node, flatParameterDisambiguationMap: flatParameterDisambiguationMap) {
+			} else if node.requiresFunctionWrapper || hasDisambiguatedReceiver(node, flatParameterDisambiguationMap: combinedDisambiguationMap) {
 				// Constant node that needs a dedicated Swift scope — either for its
 				// own children/defaults/cycle, for aliased deps, or to host the
 				// `let <label>: <Type> = <disambiguatedName>` binding that aliases a
@@ -1627,13 +1677,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// function scope keeps child bindings from colliding with siblings'
 				// child bindings that share the same property label and gives these
 				// receiver bindings a place to live.
-				let functionName = "__safeDI_\(node.propertyLabel)"
+				let functionName = "__safeDI_\(disambiguated)"
 				let propertyTypeName = node.instantiatedTypeDescription.asSource
 				let innerIndent = "\(indent)\(standardIndent)"
 
 				let receiverBindings = emitReceiverBindings(
 					for: node.dependencies,
-					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+					flatParameterDisambiguationMap: combinedDisambiguationMap,
 					indent: innerIndent,
 				)
 
@@ -1645,7 +1695,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indent: innerIndent,
 					ancestorTypes: childAncestors,
 					sendableExtractionPrefix: sendableExtractionPrefix,
-					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+					flatParameterDisambiguationMap: combinedDisambiguationMap,
 				)
 
 				if node.erasedToConcreteExistential {
@@ -1674,7 +1724,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					lines.append("\(indent)}")
 				}
 
-				lines.append("\(indent)let \(node.propertyLabel): \(propertyTypeName) = \(functionName)()")
+				lines.append("\(indent)let \(outerBindingName): \(propertyTypeName) = \(functionName)()")
 			} else {
 				// Leaf constant node — flat binding, no scoping needed.
 				if let optionalBuilderPath {
@@ -1683,17 +1733,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						// The default builder returns the concrete type, which must
 						// be wrapped. Use optional chaining + ?? to split the paths.
 						let wrapperType = node.typeDescription.asSource
-						lines.append("\(indent)let \(node.propertyLabel) = \(optionalBuilderPath)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+						lines.append("\(indent)let \(outerBindingName) = \(optionalBuilderPath)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
 					} else {
 						let leafBuilderExpression = "(\(optionalBuilderPath) ?? \(node.defaultBuilderExpression))"
-						lines.append("\(indent)let \(node.propertyLabel) = \(leafBuilderExpression)(\(argumentList))")
+						lines.append("\(indent)let \(outerBindingName) = \(leafBuilderExpression)(\(argumentList))")
 					}
 				} else if node.erasedToConcreteExistential {
 					// Sendable context: extracted local is optional.
 					let wrapperType = node.typeDescription.asSource
-					lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+					lines.append("\(indent)let \(outerBindingName) = \(builderExpression)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
 				} else {
-					lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)(\(argumentList))")
+					lines.append("\(indent)let \(outerBindingName) = \(builderExpression)(\(argumentList))")
 				}
 			}
 		}
@@ -1754,6 +1804,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `let {label} = <WrapperType>(...)` construction.
 	private static func generateInstantiatorBinding(
 		for node: MockParameterNode,
+		outerBindingName: String,
 		nodePath: String,
 		builderExpression: String,
 		optionalBuilderPath: String?,
@@ -1762,7 +1813,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ancestorTypes: Set<String> = [],
 		flatParameterDisambiguationMap: [String: [String: String]] = [:],
 	) -> [String] {
-		let functionName = "__safeDI_\(node.propertyLabel)"
+		let functionName = "__safeDI_\(outerBindingName)"
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let propertyType = node.typeDescription.propertyType
 		let innerIndent = "\(indent)\(standardIndent)"
@@ -1987,7 +2038,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"""
 		}
 
-		lines.append("\(indent)let \(node.propertyLabel) = \(instantiatorConstruction)")
+		lines.append("\(indent)let \(outerBindingName) = \(instantiatorConstruction)")
 
 		return lines
 	}
