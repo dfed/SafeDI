@@ -785,11 +785,38 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for entry in onlyIfAvailableSafeDIParameterEntries {
 				lines.append("\(bodyIndent)let \(entry.label): \(entry.typeSource) = safeDIOverrides.\(entry.label)")
 			}
+			// Seed the root scope's enclosing context:
+			//  - `rootAliasMap` carries the root type's own `.aliased` deps so
+			//    descendants that reference the receiver label translate to the
+			//    fulfilling (root-bound) identifier.
+			//  - `rootBoundLabels` names every identifier bound at the mock body's
+			//    top level. Descendants that reference these labels resolve to the
+			//    root bindings via Swift lexical scoping, so flat-parameter
+			//    disambiguation must NOT rewrite them.
+			let rootAliasMap = Self.mergeAliasMap(parent: [:], dependencies: instantiable.dependencies)
+			var rootBoundLabels: LocallyBoundLabels = [:]
+			for entry in onlyIfAvailableSafeDIParameterEntries {
+				rootBoundLabels[entry.label] = entry.typeSource
+			}
+			for dependency in forwardedDependencies {
+				rootBoundLabels[dependency.property.label] = dependency.property.typeDescription.asSource
+			}
+			for rootDefault in rootDefaultParameters {
+				rootBoundLabels[rootDefault.label] = rootDefault.typeSource
+			}
+			for parameter in flatReceivedParameters {
+				rootBoundLabels[parameter.label] = parameter.typeSource
+			}
+			for parameter in flatUncoveredParameters {
+				rootBoundLabels[parameter.label] = parameter.typeSource
+			}
 			let bodyBindings = Self.generateMockBodyBindings(
 				nodes: parameterTree,
 				parentPath: "safeDIOverrides",
 				indent: bodyIndent,
 				flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+				enclosingAliasMap: rootAliasMap,
+				enclosingBoundLabels: rootBoundLabels,
 			)
 			lines.append(contentsOf: bodyBindings)
 		}
@@ -828,27 +855,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		guard let constructionInitializer else {
 			return Instantiable.incorrectlyConfiguredComment
 		}
-		let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
+		let dependenciesByLabel = Dictionary(
+			uniqueKeysWithValues: instantiable.dependencies.map { ($0.property.label, $0) },
+		)
 		var parts = [String]()
 		for argument in constructionInitializer.arguments {
-			if dependencyLabels.contains(argument.innerLabel) {
+			if let dependency = dependenciesByLabel[argument.innerLabel] {
 				// Aliased deps reference their fulfilling property's label. Any
 				// (label, type) that matches a disambiguated flat parameter on
 				// mock() resolves to the disambiguated name.
 				let resolvedLabel: String
 				let resolvedTypeSource: String
-				if let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }) {
-					switch dependency.source {
-					case let .aliased(fulfillingProperty, _, _):
-						resolvedLabel = fulfillingProperty.label
-						resolvedTypeSource = fulfillingProperty.typeDescription.asSource
-					case .instantiated, .received, .forwarded:
-						resolvedLabel = argument.innerLabel
-						resolvedTypeSource = dependency.property.typeDescription.asSource
-					}
-				} else {
+				switch dependency.source {
+				case let .aliased(fulfillingProperty, _, _):
+					resolvedLabel = fulfillingProperty.label
+					resolvedTypeSource = fulfillingProperty.typeDescription.asSource
+				case .instantiated, .received, .forwarded:
 					resolvedLabel = argument.innerLabel
-					resolvedTypeSource = argument.typeDescription.asSource
+					resolvedTypeSource = dependency.property.typeDescription.asSource
 				}
 				let finalLabel = flatParameterDisambiguationMap[resolvedLabel]?[resolvedTypeSource] ?? resolvedLabel
 				parts.append("\(argument.label): \(finalLabel)")
@@ -857,6 +881,48 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		return parts.joined(separator: ", ")
+	}
+
+	// MARK: Mock scope context
+
+	/// Alias translations inherited from ancestor scopes.
+	///
+	/// `M[L]` gives the `(label, typeSource)` actually bound in the enclosing Swift
+	/// scope chain when a descendant references label `L`. Populated by
+	/// `mergeAliasMap` as we descend through each `@Instantiable` whose dependencies
+	/// include `.aliased` entries; ancestor alias chains are collapsed into a
+	/// single-hop lookup.
+	fileprivate typealias MockAliasMap = [String: (label: String, typeSource: String)]
+
+	/// Labels that are `let`-bound (or forwarded as function parameters) somewhere
+	/// in the enclosing Swift scope chain, mapped to the typeSource of the binding.
+	/// Used to suppress `flatParameterDisambiguationMap` rewrites when a nearer
+	/// local binding already satisfies the reference with a matching type — Swift
+	/// lexical scoping handles those references correctly without any rewrite. A
+	/// local binding with the same label but a different type does NOT shadow;
+	/// the rewrite must still apply so the reference targets the correctly-typed
+	/// disambiguated flat parameter.
+	fileprivate typealias LocallyBoundLabels = [String: String]
+
+	/// Extends a parent scope's alias map with the aliased dependencies of the
+	/// current scope. For each `.aliased(fulfillingProperty, _, _)` dep `L → F`,
+	/// the returned map contains `L → parentMap[F] ?? (F, F's type)`, collapsing
+	/// any ancestor alias chain on `F` into a single-hop lookup.
+	fileprivate static func mergeAliasMap(
+		parent: MockAliasMap,
+		dependencies: [Dependency],
+	) -> MockAliasMap {
+		var result = parent
+		for dependency in dependencies {
+			guard case let .aliased(fulfillingProperty, _, _) = dependency.source else { continue }
+			let fulfillingLabel = fulfillingProperty.label
+			let fulfillingTypeSource = fulfillingProperty.typeDescription.asSource
+			result[dependency.property.label] = parent[fulfillingLabel] ?? (
+				label: fulfillingLabel,
+				typeSource: fulfillingTypeSource,
+			)
+		}
+		return result
 	}
 
 	// MARK: MockParameterNode
@@ -1464,11 +1530,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ancestorTypes: Set<String> = [],
 		sendableExtractionPrefix: String? = nil,
 		flatParameterDisambiguationMap: [String: [String: String]] = [:],
+		enclosingAliasMap: MockAliasMap = [:],
+		enclosingBoundLabels: LocallyBoundLabels = [:],
 	) -> [String] {
 		var lines = [String]()
 
 		// Disambiguate sibling labels at this level.
 		let labelMap = disambiguatePropertyLabels(for: nodes)
+
+		// Tracks identifiers emitted at the current scope. Each sibling's `let`
+		// becomes visible to subsequent siblings and to recursively-generated
+		// subtrees, so the set grows as we iterate.
+		var boundLabels = enclosingBoundLabels
 
 		for node in nodes {
 			let nodeTypeKey = node.instantiatedTypeDescription.asSource
@@ -1519,7 +1592,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					nodePath: argumentNodePath,
 					sendableExtractionPrefix: sendableExtractionPrefix,
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+					enclosingAliasMap: enclosingAliasMap,
+					enclosingBoundLabels: boundLabels,
 				)
+				let nodeAliasMap = mergeAliasMap(parent: enclosingAliasMap, dependencies: node.dependencies)
 				lines.append(contentsOf: generateInstantiatorBinding(
 					for: node,
 					nodePath: nodePath,
@@ -1530,6 +1606,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indent: indent,
 					ancestorTypes: childAncestors,
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+					enclosingAliasMap: nodeAliasMap,
+					enclosingBoundLabels: boundLabels,
 				))
 			} else {
 				let arguments = resolveBuilderArguments(
@@ -1537,6 +1615,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					nodePath: argumentNodePath,
 					sendableExtractionPrefix: sendableExtractionPrefix,
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+					enclosingAliasMap: enclosingAliasMap,
+					enclosingBoundLabels: boundLabels,
 				)
 				let argumentList = arguments.joined(separator: ", ")
 
@@ -1570,6 +1650,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 					var childAncestors = ancestorTypes
 					childAncestors.insert(nodeTypeKey)
+					let nodeAliasMap = mergeAliasMap(parent: enclosingAliasMap, dependencies: node.dependencies)
 					let childBindings = generateMockBodyBindings(
 						nodes: node.children,
 						parentPath: nodePath,
@@ -1577,6 +1658,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						ancestorTypes: childAncestors,
 						sendableExtractionPrefix: sendableExtractionPrefix,
 						flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+						enclosingAliasMap: nodeAliasMap,
+						enclosingBoundLabels: boundLabels,
 					)
 
 					if node.erasedToConcreteExistential {
@@ -1606,6 +1689,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					lines.append("\(indent)let \(node.propertyLabel): \(propertyTypeName) = \(functionName)()")
 				}
 			}
+
+			// Each node emits a `let <propertyLabel> = ...` at this scope. The
+			// binding is visible to all later siblings (same level) and to any
+			// subtree emitted after this node, so record it before moving on.
+			boundLabels[node.propertyLabel] = node.typeDescription.asSource
 		}
 
 		return lines
@@ -1623,8 +1711,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		nodePath: String,
 		sendableExtractionPrefix: String? = nil,
 		flatParameterDisambiguationMap: [String: [String: String]] = [:],
+		enclosingAliasMap: MockAliasMap = [:],
+		enclosingBoundLabels: LocallyBoundLabels = [:],
 	) -> [String] {
-		let dependencyLabels = Set(node.dependencies.map(\.property.label))
+		let dependenciesByLabel = Dictionary(
+			uniqueKeysWithValues: node.dependencies.map { ($0.property.label, $0) },
+		)
 		let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
 
 		let relativePath = nodePath
@@ -1632,26 +1724,48 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.replacingOccurrences(of: ".", with: "_")
 
 		return node.constructionArguments.compactMap { argument in
-			if dependencyLabels.contains(argument.innerLabel) {
+			if let dependency = dependenciesByLabel[argument.innerLabel] {
 				// Resolve the label and type a caller at this scope would use to
 				// reference the value. Aliased deps resolve to their fulfilling
 				// property; other deps resolve to the dep's own label and type.
-				// When the resolved (label, type) matches a disambiguated flat
-				// parameter on the root mock(), substitute the disambiguated name.
-				let resolvedLabel: String
-				let resolvedTypeSource: String
-				if let dependency = node.dependencies.first(where: { $0.property.label == argument.innerLabel }) {
-					switch dependency.source {
-					case let .aliased(fulfillingProperty, _, _):
-						resolvedLabel = fulfillingProperty.label
-						resolvedTypeSource = fulfillingProperty.typeDescription.asSource
-					case .instantiated, .received, .forwarded:
-						resolvedLabel = argument.innerLabel
-						resolvedTypeSource = dependency.property.typeDescription.asSource
-					}
-				} else {
+				// `.instantiated` and `.forwarded` children are bound inside the
+				// inner builder function (as local `let`s or function parameters),
+				// so they reference their own label directly — skip ancestor-scope
+				// alias translation and root-level flat-parameter disambiguation.
+				var resolvedLabel: String
+				var resolvedTypeSource: String
+				let consultsEnclosingScope: Bool
+				switch dependency.source {
+				case let .aliased(fulfillingProperty, _, _):
+					resolvedLabel = fulfillingProperty.label
+					resolvedTypeSource = fulfillingProperty.typeDescription.asSource
+					consultsEnclosingScope = true
+				case .received:
 					resolvedLabel = argument.innerLabel
-					resolvedTypeSource = argument.typeDescription.asSource
+					resolvedTypeSource = dependency.property.typeDescription.asSource
+					consultsEnclosingScope = true
+				case .instantiated, .forwarded:
+					resolvedLabel = argument.innerLabel
+					resolvedTypeSource = dependency.property.typeDescription.asSource
+					consultsEnclosingScope = false
+				}
+				guard consultsEnclosingScope else { return resolvedLabel }
+				// A nearer `let <label> = ...` in the enclosing Swift scope wins
+				// over both ancestor aliases and root-level disambiguation — Swift
+				// lexical scoping resolves the bare identifier correctly. The local
+				// binding must match the expected type; a same-label binding with a
+				// different type (e.g., `service: LocalService?` shadowing a dep
+				// that expects `service: ExternalService`) does NOT shadow the
+				// disambiguated flat parameter, since resolving to the local would
+				// produce a type error.
+				if enclosingBoundLabels[resolvedLabel] == resolvedTypeSource {
+					return resolvedLabel
+				}
+				// If an ancestor aliased this label, translate to the identifier
+				// actually bound in that ancestor's scope.
+				if let translation = enclosingAliasMap[resolvedLabel] {
+					resolvedLabel = translation.label
+					resolvedTypeSource = translation.typeSource
 				}
 				return flatParameterDisambiguationMap[resolvedLabel]?[resolvedTypeSource] ?? resolvedLabel
 			} else if defaultParameterLabels.contains(argument.label) {
@@ -1689,11 +1803,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 		ancestorTypes: Set<String> = [],
 		flatParameterDisambiguationMap: [String: [String: String]] = [:],
+		enclosingAliasMap: MockAliasMap = [:],
+		enclosingBoundLabels: LocallyBoundLabels = [:],
 	) -> [String] {
 		let functionName = "__safeDI_\(node.propertyLabel)"
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let propertyType = node.typeDescription.propertyType
 		let innerIndent = "\(indent)\(standardIndent)"
+		// Forwarded properties become parameters of the inner builder function.
+		// Any descendant reference to these labels resolves locally, so add them
+		// to the bound set for the children's recursion.
+		var innerBoundLabels = enclosingBoundLabels
+		for property in forwardedProperties {
+			innerBoundLabels[property.label] = property.typeDescription.asSource
+		}
 
 		// Build the inner function parameter list (forwarded properties).
 		let functionArguments = if forwardedProperties.isEmpty {
@@ -1789,6 +1912,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					ancestorTypes: functionAncestors,
 					sendableExtractionPrefix: functionName,
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+					enclosingAliasMap: enclosingAliasMap,
+					enclosingBoundLabels: innerBoundLabels,
 				)
 				lines.append(contentsOf: childBindings)
 
@@ -1829,6 +1954,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indent: innerIndent,
 					ancestorTypes: functionAncestors,
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+					enclosingAliasMap: enclosingAliasMap,
+					enclosingBoundLabels: innerBoundLabels,
 				)
 				lines.append(contentsOf: childBindings)
 
