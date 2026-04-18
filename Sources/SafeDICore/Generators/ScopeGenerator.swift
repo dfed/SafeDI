@@ -1163,9 +1163,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 
 			// Determine which initializer to use for construction arguments and defaults.
+			// When the child has a compatible mock method, it fully controls the
+			// construction signature — its parameter list wins even when empty.
+			// Init-only default-valued parameters are intentionally hidden behind
+			// the mock.
 			let useMockInitializer = childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childProperty.typeDescription)
 			let constructionInitializer: Initializer? = if useMockInitializer, let mockInitializer = childInstantiable.mockInitializer {
-				mockInitializer.arguments.isEmpty ? nil : mockInitializer
+				mockInitializer
 			} else {
 				childInstantiable.initializer
 			}
@@ -1195,14 +1199,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					.map(\.property),
 			)
 
-			// Gather all construction arguments from the appropriate initializer.
-			// The macro validates that an initializer always exists, so one of
-			// these will always be non-nil for well-formed types.
-			let constructionArguments: [Initializer.Argument] = if let constructionInitializer {
-				constructionInitializer.arguments
-			} else {
-				childInstantiable.initializer?.arguments ?? []
-			}
+			// Gather all construction arguments from the chosen initializer.
+			let constructionArguments: [Initializer.Argument] = constructionInitializer?.arguments ?? []
 
 			nodes.append(MockParameterNode(
 				propertyLabel: childProperty.label,
