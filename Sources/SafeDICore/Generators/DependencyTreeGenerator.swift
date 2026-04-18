@@ -711,6 +711,10 @@ public actor DependencyTreeGenerator {
 					onlyIfAvailable.insert(dependency.property)
 				}
 			case let .aliased(fulfillingProperty, _, isOnlyIfAvailable):
+				// If the fulfilling property is also locally declared here (e.g., as an
+				// @Instantiated sibling), the alias resolves against that local binding —
+				// it's not a received dependency that needs promoting.
+				guard !propertiesToDeclare.contains(fulfillingProperty) else { break }
 				received.insert(fulfillingProperty)
 				if isOnlyIfAvailable {
 					onlyIfAvailable.insert(fulfillingProperty)

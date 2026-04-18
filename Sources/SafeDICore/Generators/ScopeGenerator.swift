@@ -75,14 +75,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		.union(
 			instantiable
 				.dependencies
-				.compactMap {
+				.compactMap { [propertiesToDeclare] in
 					switch $0.source {
 					case .instantiated, .forwarded:
 						nil
 					case .received:
 						$0.property
 					case let .aliased(fulfillingProperty, _, _):
-						fulfillingProperty
+						// If the alias's fulfilling property is locally declared
+						// (e.g., as an @Instantiated sibling), the alias binds
+						// against that local — it doesn't need to be received.
+						propertiesToDeclare.contains(fulfillingProperty) ? nil : fulfillingProperty
 					}
 				},
 		)
@@ -96,7 +99,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		.union(
 			instantiable
 				.dependencies
-				.compactMap {
+				.compactMap { [propertiesToDeclare] in
 					switch $0.source {
 					case .instantiated, .forwarded:
 						nil
@@ -107,7 +110,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							nil
 						}
 					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-						if onlyIfAvailable {
+						// Skip locally-declared fulfilling properties — the
+						// alias binds to the local, not to an ancestor.
+						if onlyIfAvailable, !propertiesToDeclare.contains(fulfillingProperty) {
 							fulfillingProperty.asUnwrappedProperty
 						} else {
 							nil
@@ -806,12 +811,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// first. The return statement that follows references these labels
 		// directly via Swift lexical scoping (matches production's `.alias`
 		// scope case).
+		// The root return statement references these bindings directly; it has
+		// no nested functions, so the partition just flattens to a single list.
 		let rootReceiverBindings = Self.emitReceiverBindings(
 			for: instantiable.dependencies,
 			flatParameterDisambiguationMap: rootDisambiguationMap,
+			localChildLabels: Set(parameterTree.map(\.propertyLabel)),
 			indent: bodyIndent,
 		)
-		lines.append(contentsOf: rootReceiverBindings)
+		lines.append(contentsOf: rootReceiverBindings.preChild)
+		lines.append(contentsOf: rootReceiverBindings.postChild)
 
 		// Generate return statement.
 		let returnArgumentList = try generateReturnArgumentList(
@@ -898,12 +907,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `.instantiated` and `.forwarded` never need a receiver binding: the
 	/// former is bound as a child `let` at this scope, the latter as a function
 	/// parameter on the wrapping builder.
+	/// Emits receiver `let` bindings for a scope, partitioned by whether they
+	/// reference a label that is locally bound by a sibling child node.
+	///
+	/// - `preChild`: receivers whose fulfilling label is NOT bound as a local
+	///   child. These must be declared BEFORE sibling child bindings so that any
+	///   nested builder functions emitted among those children can reference
+	///   them (Swift does not allow nested functions to forward-reference
+	///   `let`s declared later in the same scope).
+	/// - `postChild`: aliases whose fulfilling label IS bound as a local child.
+	///   These must be declared AFTER the children so the fulfilling `let`
+	///   exists by the time the alias binds (and so the alias resolves to the
+	///   same instance the child produced — matching production's `.alias`
+	///   scope case).
 	fileprivate static func emitReceiverBindings(
 		for dependencies: [Dependency],
 		flatParameterDisambiguationMap: [String: [String: String]],
+		localChildLabels: Set<String> = [],
 		indent: String,
-	) -> [String] {
-		var lines = [String]()
+	) -> (preChild: [String], postChild: [String]) {
+		var preChild = [String]()
+		var postChild = [String]()
 		for dependency in dependencies {
 			switch dependency.source {
 			case let .aliased(fulfillingProperty, _, _):
@@ -912,18 +936,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let fulfillingLabel = fulfillingProperty.label
 				let fulfillingTypeSource = fulfillingProperty.typeDescription.asSource
 				let resolvedFulfilling = flatParameterDisambiguationMap[fulfillingLabel]?[fulfillingTypeSource] ?? fulfillingLabel
-				lines.append("\(indent)let \(aliasLabel): \(aliasTypeSource) = \(resolvedFulfilling)")
+				let line = "\(indent)let \(aliasLabel): \(aliasTypeSource) = \(resolvedFulfilling)"
+				if localChildLabels.contains(fulfillingLabel) {
+					postChild.append(line)
+				} else {
+					preChild.append(line)
+				}
 			case .received:
 				let label = dependency.property.label
 				let typeSource = dependency.property.typeDescription.asSource
 				if let disambiguatedLabel = flatParameterDisambiguationMap[label]?[typeSource] {
-					lines.append("\(indent)let \(label): \(typeSource) = \(disambiguatedLabel)")
+					preChild.append("\(indent)let \(label): \(typeSource) = \(disambiguatedLabel)")
 				}
 			case .instantiated, .forwarded:
 				break
 			}
 		}
-		return lines
+		return (preChild, postChild)
 	}
 
 	/// Whether a node's construction references any `.received` dependency whose
@@ -1682,6 +1711,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let receiverBindings = emitReceiverBindings(
 					for: node.dependencies,
 					flatParameterDisambiguationMap: combinedDisambiguationMap,
+					localChildLabels: Set(node.children.map(\.propertyLabel)),
 					indent: innerIndent,
 				)
 
@@ -1706,8 +1736,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let wrapperType = node.typeDescription.asSource
 					let overridePath = optionalBuilderPath ?? builderExpression
 					lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
-					lines.append(contentsOf: receiverBindings)
+					lines.append(contentsOf: receiverBindings.preChild)
 					lines.append(contentsOf: childBindings)
+					lines.append(contentsOf: receiverBindings.postChild)
 					lines.append("\(innerIndent)if let safeDIBuilder = \(overridePath) {")
 					lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(safeDIBuilder(\(argumentList)))")
 					lines.append("\(innerIndent)} else {")
@@ -1716,8 +1747,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					lines.append("\(indent)}")
 				} else {
 					lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
-					lines.append(contentsOf: receiverBindings)
+					lines.append(contentsOf: receiverBindings.preChild)
 					lines.append(contentsOf: childBindings)
+					lines.append(contentsOf: receiverBindings.postChild)
 					lines.append("\(innerIndent)return \(builderExpression)(\(argumentList))")
 					lines.append("\(indent)}")
 				}
@@ -1818,10 +1850,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Emit alias and disambiguated-receiver bindings inside the inner
 		// builder function so construction arguments resolve by bare label via
-		// Swift lexical scoping.
+		// Swift lexical scoping. An alias whose fulfilling property is itself a
+		// local child is deferred to `postChild` so the fulfilling `let` is
+		// declared first; others come before children so nested builder
+		// functions can capture them without forward-referencing.
 		let receiverBindings = emitReceiverBindings(
 			for: node.dependencies,
 			flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+			localChildLabels: Set(node.children.map(\.propertyLabel)),
 			indent: innerIndent,
 		)
 
@@ -1908,7 +1944,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let functionReturnType = node.instantiatedTypeDescription.asSource
 				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
 
-				lines.append(contentsOf: receiverBindings)
+				lines.append(contentsOf: receiverBindings.preChild)
 
 				// Generate children using extracted locals.
 				// Include this node's type in ancestors for cycle detection.
@@ -1923,12 +1959,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 				)
 				lines.append(contentsOf: childBindings)
+				lines.append(contentsOf: receiverBindings.postChild)
 
 				// Swift's implicit-return rule only applies when the function
 				// body is a single expression. Receiver bindings and child
 				// bindings both add extra statements, so either one forces an
 				// explicit `return`.
-				let hasPreamble = !childBindings.isEmpty || !receiverBindings.isEmpty
+				let hasPreamble = !childBindings.isEmpty
+					|| !receiverBindings.preChild.isEmpty
+					|| !receiverBindings.postChild.isEmpty
 
 				if node.erasedToConcreteExistential {
 					let wrapperType = node.typeDescription.unwrapped.asInstantiatedType.asSource
@@ -1955,7 +1994,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
 
-				lines.append(contentsOf: receiverBindings)
+				lines.append(contentsOf: receiverBindings.preChild)
 
 				// Generate children's bindings inside the function body.
 				// Include this node's type in ancestors so self-referencing
@@ -1970,12 +2009,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 				)
 				lines.append(contentsOf: childBindings)
+				lines.append(contentsOf: receiverBindings.postChild)
 
 				// Swift's implicit-return rule only applies when the function
 				// body is a single expression. Receiver bindings and child
 				// bindings both add extra statements, so either one forces an
 				// explicit `return`.
-				let hasPreamble = !childBindings.isEmpty || !receiverBindings.isEmpty
+				let hasPreamble = !childBindings.isEmpty
+					|| !receiverBindings.preChild.isEmpty
+					|| !receiverBindings.postChild.isEmpty
 
 				if node.erasedToConcreteExistential, let optionalBuilderPath {
 					let wrapperType = node.typeDescription.unwrapped.asInstantiatedType.asSource
