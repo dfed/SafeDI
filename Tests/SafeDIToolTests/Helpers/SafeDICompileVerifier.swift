@@ -293,6 +293,21 @@ enum SafeDIBuildArtifactLocator {
 			}
 		}
 
+		// Xcode's test runner is the shared `xctest` binary from the toolchain,
+		// so `Bundle.main.executablePath` lives outside DerivedData. Xcode
+		// exports the real build-products directory via these environment
+		// variables — use them first when present.
+		let environment = ProcessInfo.processInfo.environment
+		if let builtProductsDirectoryPaths = environment["__XCODE_BUILT_PRODUCTS_DIR_PATHS"] {
+			for path in builtProductsDirectoryPaths.split(separator: ":") where !path.isEmpty {
+				append(URL(fileURLWithPath: String(path)))
+			}
+		}
+		if let xctestBundlePath = environment["XCTestBundlePath"] {
+			// `<config>/SafeDIToolTests.xctest` — the config directory is its parent.
+			append(URL(fileURLWithPath: xctestBundlePath).deletingLastPathComponent())
+		}
+
 		// Walk up from the test binary's executable path. Xcode's test runner
 		// lives inside `<config>/SafeDIToolTests.xctest/Contents/MacOS/` —
 		// four levels deep from the config directory — while `swift test` runs
