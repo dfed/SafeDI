@@ -1587,12 +1587,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		parentPath: String,
 		functionName: String,
 		ancestorTypes: Set<String>,
+		parentConcreteType: String? = nil,
+		cycleEdges: Set<CycleEdge> = [],
+		overridePathReachable: Bool = true,
 		into extractions: inout [(localName: String, optionalPath: String?, defaultExpression: String)],
 	) {
 		let labelMap = disambiguatePropertyLabels(for: nodes)
 		for node in nodes {
 			let nodeTypeKey = node.instantiatedTypeDescription.asSource
 			let isCycleNode = ancestorTypes.contains(nodeTypeKey)
+			let nodeConcreteType = node.concreteType.asSource
+			// A back-edge from parentConcreteType to this node means this node
+			// was filtered out of the parent's SafeDIMockConfiguration struct —
+			// so its override path is unreachable here. Descendants of an
+			// unreachable node stay unreachable (path can't be recovered).
+			let isBackEdge = parentConcreteType.map {
+				cycleEdges.contains(CycleEdge(parent: $0, child: nodeConcreteType))
+			} ?? false
+			let thisOverrideReachable = overridePathReachable && !isBackEdge
+
 			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			let nodePath = "\(parentPath).\(disambiguated)"
 			// Convert nodePath to a local name: replace dots with underscores,
@@ -1601,7 +1614,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.replacingOccurrences(of: "safeDIOverrides.", with: "")
 				.replacingOccurrences(of: ".", with: "_")
 
-			if !isCycleNode {
+			if !isCycleNode, thisOverrideReachable {
 				let defaultBuilder = node.defaultBuilderExpression
 				if node.erasedToConcreteExistential {
 					// Erased wrappers: the override returns the property type but
@@ -1634,12 +1647,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 
 			// Extract default parameter references — direct assignment, no optional.
-			for defaultParameter in node.defaultParameters {
-				extractions.append((
-					localName: "\(functionName)__\(relativePath)_\(defaultParameter.label)",
-					optionalPath: nil,
-					defaultExpression: "\(nodePath).\(defaultParameter.label)",
-				))
+			// Skip when the override path is unreachable: the slot was pruned from
+			// the config struct, so `nodePath.<label>` would not compile.
+			// `resolveBuilderArguments` inlines the declared default expression in
+			// that case via its `!overrideReachable` branch.
+			if thisOverrideReachable {
+				for defaultParameter in node.defaultParameters {
+					extractions.append((
+						localName: "\(functionName)__\(relativePath)_\(defaultParameter.label)",
+						optionalPath: nil,
+						defaultExpression: "\(nodePath).\(defaultParameter.label)",
+					))
+				}
 			}
 
 			// Recurse into children (for constant node children inside the sendable function).
@@ -1651,6 +1670,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					parentPath: nodePath,
 					functionName: functionName,
 					ancestorTypes: childAncestors,
+					parentConcreteType: nodeConcreteType,
+					cycleEdges: cycleEdges,
+					overridePathReachable: thisOverrideReachable,
 					into: &extractions,
 				)
 			}
@@ -2015,6 +2037,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					parentPath: nodePath,
 					functionName: functionName,
 					ancestorTypes: ancestorTypes,
+					parentConcreteType: node.concreteType.asSource,
+					cycleEdges: cycleEdges,
+					overridePathReachable: overridePathReachable,
 					into: &extractions,
 				)
 				// Extract the node's own safeDIBuilder.
