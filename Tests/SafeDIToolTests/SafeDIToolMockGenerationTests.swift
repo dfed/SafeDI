@@ -4232,18 +4232,18 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public protocol ChildAProtocol {}
+				public protocol ChildAProtocol: Sendable {}
 				""",
 				"""
 				@Instantiable(generateMock: true)
-				public struct Recreated: Instantiable {
+				public struct Recreated: Instantiable, Sendable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ChildAProtocol.self], generateMock: true)
-				public final class ChildA: ChildAProtocol {
-				    public init(recreated: Recreated) {
+				public final class ChildA: ChildAProtocol, Sendable {
+				    @Sendable public init(recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
 				    @Forwarded let recreated: Recreated
@@ -4272,11 +4272,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// FIXME: Generated mock converts a non-Sendable `ChildA.init(recreated:)`
-			// to `@Sendable (Recreated) -> any ChildAProtocol` without wrapping the
-			// reference in a `@Sendable` closure. Skipping compile verification
-			// until the generator marks that conversion explicitly.
-			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 4)
