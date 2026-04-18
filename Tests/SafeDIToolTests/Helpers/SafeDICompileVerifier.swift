@@ -243,17 +243,40 @@ struct SafeDIBuildArtifacts {
 enum SafeDIBuildArtifactLocator {
 	static func locate() -> SafeDIBuildArtifacts? {
 		for configurationDirectory in candidateConfigurationDirectories() {
-			let modulesDirectory = configurationDirectory.appendingPathComponent("Modules")
-			let safeDISwiftmodule = modulesDirectory.appendingPathComponent("SafeDI.swiftmodule")
-			guard FileManager.default.fileExists(atPath: safeDISwiftmodule.path) else { continue }
+			// `swift build` places the swiftmodule in a `Modules/` subdirectory;
+			// Xcode places it directly in the configuration (e.g.,
+			// `Build/Products/Debug/SafeDI.swiftmodule`). Check both layouts and
+			// use the parent of the swiftmodule as the `-I` search path so
+			// swiftc resolves `import SafeDI` either way.
+			let searchPathCandidates = [
+				configurationDirectory.appendingPathComponent("Modules"),
+				configurationDirectory,
+			]
+			var moduleSearchPath: URL?
+			for candidate in searchPathCandidates {
+				let safeDISwiftmodule = candidate.appendingPathComponent("SafeDI.swiftmodule")
+				if FileManager.default.fileExists(atPath: safeDISwiftmodule.path) {
+					moduleSearchPath = candidate
+					break
+				}
+			}
+			guard let moduleSearchPath else { continue }
+
+			// `swift build` names the macro plugin executable `SafeDIMacros-tool`;
+			// Xcode names it `SafeDIMacros`. Match either.
 			for toolName in ["SafeDIMacros-tool", "SafeDIMacros-tool.exe", "SafeDIMacros"] {
 				let toolURL = configurationDirectory.appendingPathComponent(toolName)
-				if FileManager.default.fileExists(atPath: toolURL.path) {
-					return SafeDIBuildArtifacts(
-						swiftModuleSearchPath: modulesDirectory,
-						safeDIMacrosToolPath: toolURL,
-					)
-				}
+				guard FileManager.default.fileExists(atPath: toolURL.path) else { continue }
+				var isDirectory: ObjCBool = false
+				_ = FileManager.default.fileExists(atPath: toolURL.path, isDirectory: &isDirectory)
+				// Xcode writes a `SafeDIMacros.swiftmodule` directory alongside
+				// the executable — skip directory matches so we only return the
+				// compiled plugin binary.
+				if isDirectory.boolValue { continue }
+				return SafeDIBuildArtifacts(
+					swiftModuleSearchPath: moduleSearchPath,
+					safeDIMacrosToolPath: toolURL,
+				)
 			}
 		}
 		return nil
@@ -270,10 +293,14 @@ enum SafeDIBuildArtifactLocator {
 			}
 		}
 
-		// Walk up from the test binary's executable path.
+		// Walk up from the test binary's executable path. Xcode's test runner
+		// lives inside `<config>/SafeDIToolTests.xctest/Contents/MacOS/` —
+		// four levels deep from the config directory — while `swift test` runs
+		// directly from `.build/<platform>/<config>/`. Keep the walk deep
+		// enough to cover both.
 		if let executablePath = Bundle.main.executablePath {
 			var directory = URL(fileURLWithPath: executablePath).deletingLastPathComponent()
-			for _ in 0..<8 {
+			for _ in 0..<10 {
 				append(directory)
 				directory = directory.deletingLastPathComponent()
 			}
