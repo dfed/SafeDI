@@ -295,118 +295,56 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// Computes the set of `(parent, child)` type-reference edges that, when removed,
-	/// makes the global type graph acyclic. Returned edges include every back-edge
-	/// inside every strongly-connected component (size > 1) plus every self-loop.
-	/// "Back-edge" is defined deterministically: within an SCC, sort members by
-	/// `asSource`; an edge `(u, v)` where `u >= v` is a back-edge. Removing every
-	/// such edge collapses the SCC into a forward-only DAG, breaking *every* cycle
-	/// in the SCC — not just the one that happens to pass through any single node.
+	/// makes the global type graph acyclic. Walks the graph with a recursive DFS,
+	/// starting from each node in alphabetical order; any edge into a node already
+	/// on the active DFS stack is recorded as a back-edge. Determinism comes from
+	/// sorted iteration over both roots and successors. Type graphs are typically
+	/// shallow, so a recursive driver is fine; if very deep graphs surface in the
+	/// future, switch to an iterative driver.
 	private static func computeCycleEdges(
 		in scopeMap: [TypeDescription: Scope],
 	) -> Set<ScopeGenerator.CycleEdge> {
-		var adjacency = [TypeDescription: Set<TypeDescription>]()
+		var adjacency = [TypeDescription: [TypeDescription]]()
 		for scope in Set(scopeMap.values) {
 			let parent = scope.instantiable.concreteInstantiable
 			for property in scope.propertiesToGenerate {
 				if case let .instantiated(_, childScope, _) = property {
-					adjacency[parent, default: []].insert(childScope.instantiable.concreteInstantiable)
+					adjacency[parent, default: []].append(childScope.instantiable.concreteInstantiable)
 				}
 			}
 		}
+		for key in adjacency.keys {
+			adjacency[key] = adjacency[key]!.sorted { $0.asSource < $1.asSource }
+		}
 
-		let sccs = TarjanSCC(adjacency: adjacency).compute()
+		let allNodes = Set(adjacency.keys)
+			.union(adjacency.values.flatMap(\.self))
+			.sorted { $0.asSource < $1.asSource }
+
+		var visited = Set<TypeDescription>()
+		var onStack = Set<TypeDescription>()
 		var edges = Set<ScopeGenerator.CycleEdge>()
-		for scc in sccs {
-			let sccMembers = Set(scc)
-			for parent in scc {
-				for child in adjacency[parent] ?? [] where sccMembers.contains(child) {
-					if parent.asSource >= child.asSource {
-						edges.insert(ScopeGenerator.CycleEdge(
-							parent: parent.asSource,
-							child: child.asSource,
-						))
-					}
+
+		func visit(_ node: TypeDescription) {
+			visited.insert(node)
+			onStack.insert(node)
+			for neighbor in adjacency[node] ?? [] {
+				if onStack.contains(neighbor) {
+					edges.insert(ScopeGenerator.CycleEdge(
+						parent: node.asSource,
+						child: neighbor.asSource,
+					))
+				} else if !visited.contains(neighbor) {
+					visit(neighbor)
 				}
 			}
+			onStack.remove(node)
+		}
+
+		for node in allNodes where !visited.contains(node) {
+			visit(node)
 		}
 		return edges
-	}
-
-	/// Tarjan's strongly-connected-components algorithm. Iterative driver to avoid
-	/// stack overflow on deep type graphs.
-	private final class TarjanSCC {
-		init(adjacency: [TypeDescription: Set<TypeDescription>]) {
-			self.adjacency = adjacency
-		}
-
-		func compute() -> [[TypeDescription]] {
-			let nodes = Set(adjacency.keys)
-				.union(adjacency.values.flatMap(\.self))
-				.sorted { $0.asSource < $1.asSource }
-			for node in nodes where indices[node] == nil {
-				strongConnect(node)
-			}
-			return sccs
-		}
-
-		private let adjacency: [TypeDescription: Set<TypeDescription>]
-		private var index = 0
-		private var indices = [TypeDescription: Int]()
-		private var lowlinks = [TypeDescription: Int]()
-		private var onStack = Set<TypeDescription>()
-		private var stack = [TypeDescription]()
-		private var sccs = [[TypeDescription]]()
-
-		private func strongConnect(_ root: TypeDescription) {
-			// Iterative depth-first traversal: each frame holds a node and an
-			// iterator over its remaining successors. Tarjan's recursive update
-			// of `lowlinks[v] = min(lowlinks[v], lowlinks[w])` happens when we
-			// pop back from `w` to `v`.
-			var workStack: [(node: TypeDescription, successors: AnyIterator<TypeDescription>)] = []
-			indices[root] = index
-			lowlinks[root] = index
-			index += 1
-			stack.append(root)
-			onStack.insert(root)
-			workStack.append((root, makeSuccessorIterator(for: root)))
-
-			while !workStack.isEmpty {
-				let frame = workStack[workStack.count - 1]
-				if let next = frame.successors.next() {
-					if indices[next] == nil {
-						indices[next] = index
-						lowlinks[next] = index
-						index += 1
-						stack.append(next)
-						onStack.insert(next)
-						workStack.append((next, makeSuccessorIterator(for: next)))
-					} else if onStack.contains(next) {
-						lowlinks[frame.node] = min(lowlinks[frame.node]!, indices[next]!)
-					}
-				} else {
-					workStack.removeLast()
-					if lowlinks[frame.node] == indices[frame.node] {
-						var scc = [TypeDescription]()
-						while true {
-							let popped = stack.removeLast()
-							onStack.remove(popped)
-							scc.append(popped)
-							if popped == frame.node { break }
-						}
-						sccs.append(scc)
-					}
-					if let parent = workStack.last {
-						lowlinks[parent.node] = min(lowlinks[parent.node]!, lowlinks[frame.node]!)
-					}
-				}
-			}
-		}
-
-		private func makeSuccessorIterator(for node: TypeDescription) -> AnyIterator<TypeDescription> {
-			let neighbors = (adjacency[node] ?? []).sorted { $0.asSource < $1.asSource }
-			var iterator = neighbors.makeIterator()
-			return AnyIterator { iterator.next() }
-		}
 	}
 
 	public func generateDOTTree() async throws -> String {

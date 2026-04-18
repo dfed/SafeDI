@@ -1754,6 +1754,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				for: node,
 				nodePath: argumentNodePath,
 				sendableExtractionPrefix: sendableExtractionPrefix,
+				overrideReachable: thisOverrideReachable,
 			)
 			let argumentList = arguments.joined(separator: ", ")
 
@@ -1894,11 +1895,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for node: MockParameterNode,
 		nodePath: String,
 		sendableExtractionPrefix: String? = nil,
+		overrideReachable: Bool = true,
 	) -> [String] {
 		let dependenciesByLabel = Dictionary(
 			uniqueKeysWithValues: node.dependencies.map { ($0.property.label, $0) },
 		)
 		let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
+		let defaultExpressionsByLabel = Dictionary(
+			uniqueKeysWithValues: node.defaultParameters.map { ($0.label, $0.defaultExpression) },
+		)
 
 		let relativePath = nodePath
 			.replacingOccurrences(of: "safeDIOverrides.", with: "")
@@ -1908,7 +1913,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if dependenciesByLabel[argument.innerLabel] != nil {
 				argument.innerLabel
 			} else if defaultParameterLabels.contains(argument.label) {
-				if let sendableExtractionPrefix {
+				if !overrideReachable, let defaultExpression = defaultExpressionsByLabel[argument.label] {
+					// The override path was pruned by a back-edge — the slot for this
+					// node doesn't exist on its parent's config struct, so referencing
+					// `safeDIOverrides...<node>.<param>` would not compile. Inline the
+					// declared default expression instead.
+					defaultExpression
+				} else if let sendableExtractionPrefix {
 					"\(sendableExtractionPrefix)__\(relativePath)_\(argument.label)"
 				} else {
 					"\(nodePath).\(argument.label)"
