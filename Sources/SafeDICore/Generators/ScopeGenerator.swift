@@ -1185,9 +1185,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 
 			// Determine which initializer to use for construction arguments and defaults.
+			// When the child has a compatible mock method, it fully controls the
+			// construction signature — its parameter list wins even when empty.
+			// Init-only default-valued parameters are intentionally hidden behind
+			// the mock.
 			let useMockInitializer = childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childProperty.typeDescription)
 			let constructionInitializer: Initializer? = if useMockInitializer, let mockInitializer = childInstantiable.mockInitializer {
-				mockInitializer.arguments.isEmpty ? nil : mockInitializer
+				mockInitializer
 			} else {
 				childInstantiable.initializer
 			}
@@ -1217,14 +1221,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					.map(\.property),
 			)
 
-			// Gather all construction arguments from the appropriate initializer.
-			// The macro validates that an initializer always exists, so one of
-			// these will always be non-nil for well-formed types.
-			let constructionArguments: [Initializer.Argument] = if let constructionInitializer {
-				constructionInitializer.arguments
-			} else {
-				childInstantiable.initializer?.arguments ?? []
-			}
+			// Gather all construction arguments from the chosen initializer.
+			let constructionArguments: [Initializer.Argument] = constructionInitializer?.arguments ?? []
 
 			nodes.append(MockParameterNode(
 				propertyLabel: childProperty.label,
@@ -1852,15 +1850,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else {
 					"\(nodePath).\(argument.label)"
 				}
-			} else if argument.hasDefaultValue, argument.label != "_",
-			          let defaultExpression = argument.defaultValueExpression
-			{
-				// Argument has a default value but isn't tracked on the child's
-				// SafeDIMockConfiguration (e.g., when a zero-arg mock initializer
-				// overrides a production init that still carries default-valued
-				// non-dependency parameters). Pass the default expression inline
-				// so the builder call has the correct arity.
-				defaultExpression
 			} else {
 				// Unknown argument — use the label as a local variable reference.
 				argument.innerLabel
