@@ -8163,7 +8163,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service: LocalService? = safeDIOverrides.service
-		        let childA = (safeDIOverrides.childA ?? ChildA.init(service:))(service_ExternalService)
+		        func __safeDI_childA() -> ChildA {
+		            let service: ExternalService = service_ExternalService
+		            return (safeDIOverrides.childA ?? ChildA.init(service:))(service)
+		        }
+		        let childA: ChildA = __safeDI_childA()
 		        let childB = (safeDIOverrides.childB ?? ChildB.init(service:))(service)
 		        return Root(childA: childA, childB: childB)
 		    }
