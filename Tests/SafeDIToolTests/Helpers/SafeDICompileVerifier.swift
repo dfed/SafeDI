@@ -553,32 +553,57 @@ func runSwiftTypecheck(
 	process.standardOutput = stdoutPipe
 	process.standardError = stderrPipe
 
-	// Drain both pipes on background queues so a chatty `swiftc` failure
-	// (many diagnostics across generated files) can't deadlock the verifier
-	// by filling the OS pipe buffer before we get a chance to read it.
-	let stdoutQueue = DispatchQueue(label: "safedi.verifier.stdout")
-	let stderrQueue = DispatchQueue(label: "safedi.verifier.stderr")
-	let drainGroup = DispatchGroup()
-	var stdoutData = Data()
-	var stderrData = Data()
-	drainGroup.enter()
-	stdoutQueue.async {
-		stdoutData = (try? stdoutPipe.fileHandleForReading.readToEnd()) ?? Data()
-		drainGroup.leave()
+	// Drain both pipes via readability handlers into lock-protected
+	// accumulators so a chatty `swiftc` failure (many diagnostics across
+	// generated files) can't deadlock the verifier by filling the OS pipe
+	// buffer before we get a chance to read it. Mirrors the
+	// readability-handler-plus-lock pattern from swift-shell's `Process.swift`,
+	// which sidesteps Swift 6 strict-Sendable closure-capture errors that
+	// arise when accumulating into a captured `var`.
+	let stdoutData = LockedData()
+	let stderrData = LockedData()
+	stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+		stdoutData.append(handle.availableData)
 	}
-	drainGroup.enter()
-	stderrQueue.async {
-		stderrData = (try? stderrPipe.fileHandleForReading.readToEnd()) ?? Data()
-		drainGroup.leave()
+	stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+		stderrData.append(handle.availableData)
 	}
 
 	try process.run()
 	process.waitUntilExit()
-	drainGroup.wait()
+
+	stdoutPipe.fileHandleForReading.readabilityHandler = nil
+	stderrPipe.fileHandleForReading.readabilityHandler = nil
+	if let remaining = try? stdoutPipe.fileHandleForReading.readToEnd() {
+		stdoutData.append(remaining)
+	}
+	if let remaining = try? stderrPipe.fileHandleForReading.readToEnd() {
+		stderrData.append(remaining)
+	}
 
 	return SwiftTypecheckResult(
 		exitCode: process.terminationStatus,
-		stdout: String(data: stdoutData, encoding: .utf8) ?? "",
-		stderr: String(data: stderrData, encoding: .utf8) ?? "",
+		stdout: String(data: stdoutData.read(), encoding: .utf8) ?? "",
+		stderr: String(data: stderrData.read(), encoding: .utf8) ?? "",
 	)
+}
+
+/// Thread-safe `Data` accumulator used by `runSwiftTypecheck` to collect pipe
+/// output from a background readability handler without tripping Swift 6
+/// strict-Sendable closure-capture diagnostics.
+private final class LockedData: @unchecked Sendable {
+	private let lock = NSLock()
+	private var value = Data()
+
+	func append(_ other: Data) {
+		lock.lock()
+		defer { lock.unlock() }
+		value.append(other)
+	}
+
+	func read() -> Data {
+		lock.lock()
+		defer { lock.unlock() }
+		return value
+	}
 }
