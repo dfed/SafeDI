@@ -883,7 +883,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -4520,10 +4519,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// FIXME: Production generator passes `ConcreteService` where the parent
-			// init expects `AnyService`, omitting the existential wrap. Skipping
-			// compile verification until the generator wraps the concrete value.
-			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -7119,10 +7114,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// FIXME: Production generator passes `ConcreteService` where `self.init`
-			// expects `AnyService`, omitting the existential wrap. Skipping compile
-			// verification until the generator wraps the concrete value.
-			skipCompileVerification: true,
 		)
 
 		// Root @Instantiates AnyService via erasedToConcreteExistential wrapping ConcreteService.

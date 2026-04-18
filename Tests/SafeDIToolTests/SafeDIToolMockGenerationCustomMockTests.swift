@@ -1008,7 +1008,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true, generateMock: true)
+				@Instantiable(isRoot: true, generateMock: true) @MainActor
 				public struct Root: Instantiable {
 				    public init(service: Service) { self.service = service }
 				    @Instantiated let service: Service
@@ -1034,11 +1034,6 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// FIXME: Root's production code calls `Service()` synchronously in a
-			// nonisolated context, but Service is @MainActor. The production
-			// generator does not account for actor isolation when synthesizing
-			// Root's convenience initializer. Mock codegen is correct.
-			skipCompileVerification: true,
 		)
 
 		// Service has customMockName — generated mock calls through to customMock().

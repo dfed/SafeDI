@@ -540,6 +540,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				let initializer = if !hasGeneratedContent {
 					existentialWrappedReturn
+				} else if erasedToConcreteExistential {
+					"\(property.typeDescription.asSource)(\(functionName)())"
 				} else {
 					"\(functionName)()"
 				}
