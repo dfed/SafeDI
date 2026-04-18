@@ -1727,8 +1727,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 
 				if node.erasedToConcreteExistential {
-					// The config struct's safeDIBuilder returns the concrete type.
-					// Both paths must wrap to the property type (the wrapper).
+					// The default builder returns the concrete type and must be wrapped.
+					// The override closure's return type depends on whether the node has
+					// a configuration struct: the struct's `safeDIBuilder` returns the
+					// concrete type (must be wrapped), while the inline closure used
+					// when there is no struct already returns the property/wrapper type
+					// (wrapping it again is a double-wrap and won't compile for erasers
+					// that don't accept their own erased type).
 					// In sendable context, use the extracted local (builderExpression)
 					// instead of referencing safeDIOverrides directly.
 					// Note: constant erased cycles are rejected by mock validation
@@ -1740,7 +1745,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					lines.append(contentsOf: childBindings)
 					lines.append(contentsOf: receiverBindings.postChild)
 					lines.append("\(innerIndent)if let safeDIBuilder = \(overridePath) {")
-					lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(safeDIBuilder(\(argumentList)))")
+					if node.needsConfigurationStruct {
+						lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(safeDIBuilder(\(argumentList)))")
+					} else {
+						lines.append("\(innerIndent)\(standardIndent)return safeDIBuilder(\(argumentList))")
+					}
 					lines.append("\(innerIndent)} else {")
 					lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
 					lines.append("\(innerIndent)}")
