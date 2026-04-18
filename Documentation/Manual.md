@@ -330,22 +330,9 @@ A `@Forwarded` property is forwarded into the SafeDI dependency tree by an [`Ins
 
 Forwarded property types do not need to be decorated with the `@Instantiable` macro.
 
-Here’s an example showing how to forward a runtime value — an authenticated `User` — into an `@Instantiable` type:
+The [Macros intro](#macros) shows a `LoggedInView` with a `@Forwarded user: User`. The parent side — the root that actually passes the authenticated user in — uses the child’s `Instantiator` to forward the value:
 
 ```swift
-// A view that requires a runtime value (the authenticated user).
-@Instantiable
-public struct LoggedInView: View, Instantiable {
-    public init(user: User) {
-        self.user = user
-    }
-
-    // …
-
-    @Forwarded private let user: User
-}
-
-// The app’s root type forwards the authenticated `user` into the logged-in subtree.
 @Instantiable(isRoot: true) @main
 public struct NotesApp: App, Instantiable {
     public var body: some Scene {
@@ -369,20 +356,9 @@ public struct NotesApp: App, Instantiable {
 
 Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. Received properties must be `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree.
 
-Here we have a `LoggedInView` in which the forwarded `user` property is received by a `NoteStorage` further down the dependency tree:
+Continuing the [Macros intro](#macros) example: `LoggedInView` has a `@Forwarded user: User` and an `@Instantiated noteStorage: NoteStorage`. `NoteStorage` can `@Received` the same `user` instance from anywhere in the subtree below `LoggedInView`:
 
 ```swift
-@Instantiable
-public struct LoggedInView: View, Instantiable {
-    // …
-
-    @Forwarded private let user: User
-
-    // NoteStorage is instantiated by LoggedInView, so it lives for the
-    // lifetime of the logged-in subtree.
-    @Instantiated private let noteStorage: NoteStorage
-}
-
 @Instantiable
 public class NoteStorage: Instantiable {
     public init(user: User, stringStorage: StringStorage, defaultNote: String = "") {
@@ -391,15 +367,10 @@ public class NoteStorage: Instantiable {
         self.defaultNote = defaultNote
     }
 
-    public var note: String {
-        get { stringStorage.string(forKey: noteKey) ?? defaultNote }
-        set { stringStorage.setString(newValue, forKey: noteKey) }
-    }
-
-    // The user object is received from the LoggedInView.
+    // Forwarded into the tree by `LoggedInView`.
     @Received private let user: User
 
-    // The string storage is received from further up the tree.
+    // Instantiated further up the tree.
     @Received private let stringStorage: StringStorage
 
     private let defaultNote: String
@@ -409,131 +380,35 @@ public class NoteStorage: Instantiable {
 
 #### Renaming and retyping dependencies
 
-It is possible to rename or retype a dependency that is `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree with the `@Received(fulfilledByDependencyNamed:ofType:)` macro. Renamed or retyped dependencies are able to be received with their new name and type by objects instantiated further down the dependency tree.
+Use `@Received(fulfilledByDependencyNamed:ofType:)` to rename or retype a dependency that was `@Instantiated` or `@Forwarded` higher up the tree. Types further down the tree can then `@Received` the dependency under its new name and type.
 
-Here we have an example of a `UserManager` type that is received as a `UserVendor` further down the dependency tree.
+Here, a parent instantiates a read-write `UserManager` and also renames the object to make it available a `UserVendor`. A child receives the same instance as the read-only `UserVendor`:
 
 ```swift
-public struct User {
-    … // User information.
-}
-
-public protocol UserVendor {
-    var user: User { … }
-}
-
-public protocol UserManager: UserVendor {
-    var user: User { get set }
-}
-
-public final class DefaultUserManager: UserManager {
-    public init(user: User) {
-        self.user = user
-    }
-
-    public var user: User
-}
-
-import SwiftUI
+public protocol UserVendor { var user: User { get } }
+public protocol UserManager: UserVendor { var user: User { get set } }
 
 @Instantiable
-public struct LoggedInView: View, Instantiable {
-    public init(userManager: UserManager, profileViewBuilder: Instantiator<ProfileView>) {
-        self.userManager = userManager
-        self.profileViewBuilder = profileViewBuilder
-    }
-
-    public var body: some View {
-        … // A logged in user experience
-    }
-
-    @Forwarded private let userManager: UserManager
-
+public struct LoggedInView: Instantiable {
+    @Instantiated private let userManager: UserManager
+    @Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self) private let userVendor: UserVendor
     @Instantiated private let profileViewBuilder: Instantiator<ProfileView>
 }
 
 @Instantiable
-public struct ProfileView: View, Instantiable {
-    public init(userVendor: UserVendor, editProfileViewBuilder: Instantiator<EditProfileView>) {
-        self.userVendor = userVendor
-        self.editProfileViewBuilder = editProfileViewBuilder
-    }
-
-    public var body: some View {
-        … // A profile viewing experience
-    }
-
-    @Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self) private let userVendor: UserVendor
-
-    @Instantiated private let editProfileViewBuilder: Instantiator<EditProfileView>
-}
-
-@Instantiable
-public struct EditProfileView: View, Instantiable {
-    public init(userVendor: UserVendor) {
-        self.userVendor = userVendor
-    }
-
-    public var body: some View {
-        … // A profile editing experience
-    }
-
+public struct ProfileView: Instantiable {
     @Received private let userVendor: UserVendor
 }
 ```
 
 #### Conditionally receiving dependencies
 
-It is possible to receive an optional dependency only when that dependency has been `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree with the `@Received(onlyIfAvailable: true)` macro. This functionality is particularly useful when `@Instantiable` types are created by multiple `@Instantiable` parents with different available dependencies.
-
-Here’s an example of a feed view in a social app that optionally receives a `user` object:
+Use `@Received(onlyIfAvailable: true)` to receive an optional dependency only when a parent has `@Instantiated` or `@Forwarded` it. This is useful when a type is instantiated by multiple parents with different available dependencies — for example, a `FeedView` used by both a logged-in and logged-out parent:
 
 ```swift
-public struct User {
-    … // User information.
-}
-
-import SwiftUI
-
 @Instantiable
-public struct LoggedOutView: View, Instantiable {
-    public init(feedViewBuilder: Instantiator<FeedView>) {
-        self.feedViewBuilder = feedViewBuilder
-    }
-
-    public var body: some View {
-        … // A logged out user experience that shows a feed
-    }
-
-    @Instantiated private let feedViewBuilder: Instantiator<FeedView>
-}
-
-@Instantiable
-public struct LoggedInView: View, Instantiable {
-    public init(user: User, feedViewBuilder: Instantiator<FeedView>) {
-        self.user = user
-        self.feedViewBuilder = feedViewBuilder
-    }
-
-    public var body: some View {
-        … // A logged in user experience that shows a feed customized for this user
-    }
-
-    @Forwarded private let user: User
-
-    @Instantiated private let feedViewBuilder: Instantiator<FeedView>
-}
-
-@Instantiable
-public struct FeedView: View, Instantiable {
-    public init(user: User?) {
-        self.user = user
-    }
-
-    public var body: some View {
-        … // A feed experience that is customized when a user is present.
-    }
-
+public struct FeedView: Instantiable {
+    // Populated when reached from `LoggedInView`; `nil` when reached from `LoggedOutView`.
     @Received(onlyIfAvailable: true) private let user: User?
 }
 ```
@@ -771,44 +646,28 @@ Generated mocks have `internal` visibility. They are accessible within the modul
 
 To use a mock from another module in your tests, see [Cross-module mock generation](#cross-module-mock-generation).
 
-### @Forwarded properties in mocks
+### Dependency kinds in the generated mock
 
-`@Forwarded` properties become parameters on the mock method since they represent runtime input. By default they are required (no default value):
+Each dependency kind surfaces in a predictable place on `mock()` and `SafeDIOverrides`:
+
+| Dependency kind | Shape in the mock | Default |
+| --- | --- | --- |
+| Required `@Received` | Flat `mock()` parameter | Required |
+| `@Forwarded` | Flat `mock()` parameter | Required, unless the root provides a default or the forwarded type has a [`mockOnly`](#the-mockonly-parameter) provider (which defaults the parameter to `Type.mock()`) |
+| `@Instantiated` | Entry on `SafeDIOverrides` | Built from the real subtree — see [Overriding dependencies](#overriding-dependencies) |
+| `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
+| Default-valued non-DI init parameter | Flat `mock()` parameter on a direct mock, or a nested `SafeDIMockConfiguration` field when reached through a parent | The parameter’s original default expression |
 
 ```swift
+// @Forwarded → flat parameter:
 let view = LoggedInView.mock(user: User(name: "dfed"))
-```
 
-A forwarded parameter gets a default value when:
-- The root type’s own initializer or custom mock provides a default for the parameter
-- The forwarded type has a `mockOnly` provider — the parameter defaults to `Type.mock()` (or the `customMockName` method)
+// @Received(onlyIfAvailable: true) → SafeDIOverrides, defaults to nil:
+FeedView.mock(safeDIOverrides: .init(
+    user: .mock()
+))
 
-### Default-valued init parameters in mocks
-
-If an `@Instantiable` type’s initializer has parameters with default values that are not annotated with `@Instantiated`, `@Received`, or `@Forwarded`, those parameters are automatically exposed in the generated mock. This lets you override values like seed data or feature flags in tests and previews while keeping the original defaults for production code.
-
-```swift
-@Instantiable(generateMock: true)
-public class NoteStorage: Instantiable {
-    public init(user: User, stringStorage: StringStorage, defaultNote: String = "") { … }
-    @Received let user: User
-    @Received let stringStorage: StringStorage
-}
-```
-
-When mocking `NoteStorage` directly, pass the override as a flat parameter:
-
-```swift
-NoteStorage.mock(
-    user: User(name: "dfed"),
-    stringStorage: InMemoryStorage(),
-    defaultNote: "dfed says hello"
-)
-```
-
-When mocking a parent of `NoteStorage`, the default-valued parameter appears on `NoteStorage`’s nested `SafeDIMockConfiguration`:
-
-```swift
+// Default-valued init parameter → nested SafeDIMockConfiguration when mocking a parent:
 LoggedInView.mock(
     user: User(name: "dfed"),
     safeDIOverrides: .init(
@@ -816,34 +675,6 @@ LoggedInView.mock(
     )
 )
 ```
-
-When no override is provided, the original default expression (`""`) is used.
-
-Default-valued parameters do **not** bubble through `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, or `SendableErasedInstantiator` boundaries, since those represent user-provided closures that control construction at runtime.
-
-### `@Received(onlyIfAvailable: true)` properties in mocks
-
-When a type has a `@Received(onlyIfAvailable: true)` dependency, the generated mock places that dependency inside the `SafeDIOverrides` struct as a plain optional property (defaulting to `nil`) rather than exposing it as a top-level `mock()` parameter. When `nil`, the dependency is absent. When provided (e.g., `.mock()`), the value is used.
-
-```swift
-@Instantiable(generateMock: true)
-public struct ImageService: Instantiable {
-    public init(cacheService: CacheService?) {
-        self.cacheService = cacheService
-    }
-    @Received(onlyIfAvailable: true) let cacheService: CacheService?
-}
-```
-
-Provide the dependency via `SafeDIOverrides`:
-
-```swift
-ImageService.mock(safeDIOverrides: .init(
-    cacheService: .mock()
-))
-```
-
-When no value is provided, the dependency defaults to `nil`.
 
 ### The `mockAttributes` parameter
 
@@ -981,25 +812,18 @@ We’ve tied everything together with an example multi-user notes application ba
 
 ## Under the hood
 
-SafeDI has a `SafeDITool` executable that the `SafeDIGenerator` plugin utilizes to read code and generate a dependency tree. The tool has two subcommands:
-
-- **`generate`** (default): Parses Swift source files, builds a dependency graph, validates it, and generates per-root output files and mock code. This is the subcommand used when invoking `SafeDITool` without an explicit subcommand, making it backward compatible with existing prebuild scripts.
-- **`scan`**: Scans Swift source files and produces a manifest JSON describing the `@Instantiable` types found. This manifest is used by the `SafeDIGenerator` plugin to coordinate builds across modules.
-
-Both subcommands utilize Apple’s [SwiftSyntax](https://github.com/apple/swift-syntax) library to parse your code and find your `@Instantiable` types’ initializers and dependencies. With this information, SafeDI generates a graph of your project’s dependencies, validates it during `SafeDITool` execution, and provides clear, human-readable error messages if the graph is invalid. Source code is only generated if the dependency graph is valid.
-
-The executable heavily utilizes asynchronous processing to avoid `SafeDITool` becoming a bottleneck in your build. Additionally, we only parse a Swift file with `SwiftSyntax` when the file contains the string `Instantiable`.
+SafeDI has a `SafeDITool` executable that the `SafeDIGenerator` plugin utilizes to read code and generate a dependency tree. The executable heavily utilizes asynchronous processing to avoid `SafeDITool` becoming a bottleneck in your build. Additionally, we only parse a Swift file with `SwiftSyntax` when the file contains the string `Instantiable`.
 
 The `SafeDIGenerator` plugin is the only build tool plugin and uses a prebuilt binary by default for fast builds without compiling SwiftSyntax. Due to limitations in Apple’s [Swift Package Manager Plugins](https://github.com/swiftlang/swift-package-manager/blob/main/Sources/PackageManagerDocs/Documentation.docc/Plugins.md), the plugin parses all of your first-party Swift files in a single pass. Projects that utilize `SafeDITool` directly can process Swift files on a per-module basis to further reduce the build-time bottleneck.
 
 ### Custom build system integration
 
-If you are integrating SafeDI with a build system other than SPM (e.g. Bazel, Buck, or a prebuild script), you can invoke `SafeDITool` directly. The tool has two subcommands:
+If you are integrating SafeDI with a build system other than SPM (e.g. Bazel, Buck, or a prebuild script), you can invoke `SafeDITool` directly using the `scan` and `generate` subcommands:
 
-- **`SafeDITool scan`**: Scans Swift source files and produces a manifest JSON describing the `@Instantiable` types found. This is useful for per-module scanning in multi-module builds.
-- **`SafeDITool generate`** (default): Takes a JSON manifest file that describes the desired outputs. The manifest uses the [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) format, mapping input Swift files containing `@Instantiable(isRoot: true)` to output file paths. Paths are relative to the working directory.
+- **`generate`** (default): Parses Swift source files, builds a dependency graph, validates it, and generates per-root output files and mock code. `generate` takes a JSON manifest file describing the desired outputs — the manifest uses the [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) format, mapping input Swift files containing `@Instantiable(isRoot: true)` to output file paths (relative to the working directory). This is the default subcommand, making it backward compatible with existing prebuild scripts that invoke `SafeDITool` without an explicit subcommand.
+- **`scan`**: Scans Swift source files and produces a manifest JSON describing the `@Instantiable` types found. This is used by the `SafeDIGenerator` plugin to coordinate builds across modules, and is also useful for per-module scanning in custom build systems.
 
-Since `generate` is the default subcommand, existing prebuild scripts that invoke `SafeDITool` without a subcommand continue to work. See the [example prebuild script](../Examples/PrebuildScript/safeditool.sh) for a working example.
+Both subcommands utilize Apple’s [SwiftSyntax](https://github.com/apple/swift-syntax) library to parse your code and find your `@Instantiable` types’ initializers and dependencies. With this information, SafeDI generates a graph of your project’s dependencies, validates it during `SafeDITool` execution, and provides clear, human-readable error messages if the graph is invalid. Source code is only generated if the dependency graph is valid.
 
 Run `swift run SafeDITool --help`, `swift run SafeDITool scan --help`, or `swift run SafeDITool generate --help` to see documentation of all supported arguments.
 

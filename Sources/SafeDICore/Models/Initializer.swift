@@ -229,8 +229,6 @@ public struct Initializer: Codable, Hashable, Sendable {
 			.map {
 				if let unavailableProperties, unavailableProperties.contains($0.dependency.property) {
 					"\($0.argument.label): nil"
-				} else if $0.dependency.source == .forwarded {
-					"\($0.argument.label): \($0.argument.innerLabel)"
 				} else {
 					"\($0.argument.label): \($0.argument.innerLabel)"
 				}

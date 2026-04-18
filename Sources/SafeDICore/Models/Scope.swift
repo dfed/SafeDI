@@ -29,7 +29,7 @@ final class Scope: Hashable {
 	// MARK: Equatable
 
 	static func == (lhs: Scope, rhs: Scope) -> Bool {
-		// Scopes are only identicial if they are the same object
+		// Scopes are only identical if they are the same object
 		lhs === rhs
 	}
 

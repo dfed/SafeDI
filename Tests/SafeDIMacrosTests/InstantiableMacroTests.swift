@@ -41,7 +41,7 @@ import Testing
 		}
 
 		@Test
-		func extension_expandsWithoutIssueOnTypeDeclarationWhenInstantiableConformanceMissingAndConformsElsewhereIsTrue() {
+		func declaration_expandsWithoutIssueWhenInstantiableConformanceMissingAndConformsElsewhereIsTrue() {
 			assertMacroExpansion(
 				"""
 				@Instantiable(conformsElsewhere: true)
@@ -1285,7 +1285,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenOnlyDependencyMissingFromInit() {
+		func declaration_fixit_updatesRequiredInitializerWhenOnlyDependencyMissingFromInitializer() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -1336,7 +1336,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenSecondDependencyMissingFromInit() {
+		func declaration_fixit_updatesRequiredInitializerWhenSecondDependencyMissingFromInitializer() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -1396,7 +1396,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenSecondDependencyMissingFromInitAndNewlinesInArgumentList() {
+		func declaration_fixit_updatesRequiredInitializerWhenSecondDependencyMissingFromInitializerAndNewlinesInArgumentList() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -1460,7 +1460,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenFirstDependencyMissingFromInit() {
+		func declaration_fixit_updatesRequiredInitializerWhenFirstDependencyMissingFromInitializer() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -1520,7 +1520,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenMiddleDependencyMissingFromInit() {
+		func declaration_fixit_updatesRequiredInitializerWhenMiddleDependencyMissingFromInitializer() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -1580,7 +1580,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenMiddleDependencyMissingFromInitAndArgumentAlreadySet() {
+		func declaration_fixit_updatesRequiredInitializerWhenMiddleDependencyMissingFromInitializerAndArgumentAlreadySet() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -1642,7 +1642,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenLastDependencyMissingFromInit() {
+		func declaration_fixit_updatesRequiredInitializerWhenLastDependencyMissingFromInitializer() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -1712,7 +1712,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenFirstDependencyMissingFromInitAndNonDependencyParameterExists() {
+		func declaration_fixit_updatesRequiredInitializerWhenFirstDependencyMissingFromInitializerAndNonDependencyParameterExists() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -1772,7 +1772,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenMiddleDependencyMissingFromInitAndNonDependencyParameterExists() {
+		func declaration_fixit_updatesRequiredInitializerWhenMiddleDependencyMissingFromInitializerAndNonDependencyParameterExists() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -1845,7 +1845,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenLastDependencyMissingFromInitAndNonDependencyParameterExists() {
+		func declaration_fixit_updatesRequiredInitializerWhenLastDependencyMissingFromInitializerAndNonDependencyParameterExists() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -1905,7 +1905,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenLastDependencyMissingFromInitAndEscapingDependencyParameterExists() {
+		func declaration_fixit_updatesRequiredInitializerWhenLastDependencyMissingFromInitializerAndEscapingDependencyParameterExists() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -1971,7 +1971,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenAllDependenciesMissingFromInit() {
+		func declaration_fixit_updatesRequiredInitializerWhenAllDependenciesMissingFromInitializer() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -2031,7 +2031,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenIncorrectAccessibilityOnInitAndOtherNonConformingInitializersExist() {
+		func declaration_fixit_updatesRequiredInitializerWhenIncorrectAccessibilityOnInitializerAndOtherNonConformingInitializersExist() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -2150,7 +2150,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenDependencyMissingFromInitAndOtherNonConformingInitializersExist() {
+		func declaration_fixit_updatesRequiredInitializerWhenDependencyMissingFromInitializerAndOtherNonConformingInitializersExist() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -2255,7 +2255,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesRequiredInitializerWhenDependencyMissingFromInitAndAccessibilityModifierMissing() {
+		func declaration_fixit_updatesRequiredInitializerWhenDependencyMissingFromInitializerAndAccessibilityModifierMissing() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -2315,7 +2315,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_generatesInitWithForwardedPropertiesWhenThereAreMultipleForwardedProperties() {
+		func declaration_fixit_generatesInitializerWithForwardedPropertiesWhenThereAreMultipleForwardedProperties() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -2451,7 +2451,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_generatesRequiredInitializerWhenInstantiatorDependencyMissingFromInit() {
+		func declaration_fixit_generatesRequiredInitializerWhenInstantiatorDependencyMissingFromInitializer() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -2493,7 +2493,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesInitWhenExistingInitIsMissingAccessModifier() {
+		func declaration_fixit_updatesInitializerWhenExistingInitializerIsMissingAccessModifier() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -2555,7 +2555,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesInitWhenExistingInitIsMissingAccessModifierWithOtherModifier() {
+		func declaration_fixit_updatesInitializerWhenExistingInitializerIsMissingAccessModifierWithOtherModifier() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -2617,7 +2617,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesInitWhenExistingInitHasIncorrectAccessModifier() {
+		func declaration_fixit_updatesInitializerWhenExistingInitializerHasIncorrectAccessModifier() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -2679,7 +2679,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesInitWhenExistingInitHasIncorrectAccessModifierWithCorrectEarlierModifier() {
+		func declaration_fixit_updatesInitializerWhenExistingInitializerHasIncorrectAccessModifierWithCorrectEarlierModifier() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -2741,7 +2741,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesInitWhenExistingInitHasIncorrectAccessModifierWithCorrectLaterModifier() {
+		func declaration_fixit_updatesInitializerWhenExistingInitializerHasIncorrectAccessModifierWithCorrectLaterModifier() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -2803,7 +2803,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesInitWhenExistingInitIsMissingAccessModifierAndAnotherInitializerWithMissingArgument() {
+		func declaration_fixit_updatesInitializerWhenExistingInitializerIsMissingAccessModifierAndAnotherInitializerWithMissingArgument() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -2883,7 +2883,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesInitWhenExistingInitIsMissingAccessModifierAndAnotherInitializerExistsWithExtraArgument() {
+		func declaration_fixit_updatesInitializerWhenExistingInitializerIsMissingAccessModifierAndAnotherInitializerExistsWithExtraArgument() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -5519,7 +5519,7 @@ import Testing
 		}
 
 		@Test
-		func mockMethodWithPartialDepsProducesFixItPreservingExistingParams() {
+		func mockMethodWithPartialDependenciesProducesFixItPreservingExistingParameters() {
 			// mock() already has depA but is missing depB.
 			// Fix-it should reorder: depA first, then add depB, preserving existing extra default params.
 			assertMacroExpansion(
@@ -6456,7 +6456,7 @@ import Testing
 		// MARK: mockOnly Tests
 
 		@Test
-		func extension_expandsWithoutIssueOnTypeDeclarationWhenMockOnlyIsTrue() {
+		func declaration_expandsWithoutIssueWhenMockOnlyIsTrue() {
 			assertMacroExpansion(
 				"""
 				@Instantiable(mockOnly: true)

@@ -20,15 +20,12 @@
 
 import Foundation
 
-/// Lightweight text-based scanner used by the Xcode plugin to discover output
-/// files without needing SwiftSyntax. This runs in the plugin process during
-/// `createBuildCommands` and only determines what output files will be generated.
-/// The actual code generation is done by SafeDITool at build time.
-///
-/// This scanner intentionally over-matches (may declare outputs that SafeDITool
-/// won't actually write). SafeDITool creates empty files for declared outputs it
-/// doesn't need, so over-matching is safe. Under-matching would cause Xcode to
-/// skip compiling generated files, which is worse.
+/// Lightweight text-based scanner used to discover output files without needing
+/// SwiftSyntax. It runs in-process during `createBuildCommands` when the plugin
+/// cannot shell out to `SafeDITool scan` (the XcodeProjectPlugin path, and the
+/// SPM fallback when `context.tool(named:)` returns an unresolved path). Only
+/// output-file discovery happens here — the real parse and code generation are
+/// performed by SafeDITool at build time via the `--output-directory` flag.
 enum PluginScanner {
 	struct ScanResult {
 		var outputFiles: [URL]
@@ -83,7 +80,6 @@ enum PluginScanner {
 		let mockFiles = sortedMockFiles.filter { fileContainsGenerateMockTrue(at: $0) }
 		let mockOutputFileNames = outputFileNames(for: mockFiles, relativeTo: projectRoot, suffix: "+SafeDIMock.swift")
 
-		// Build additional mock output entries from additionalMocksToGenerate.
 		let additionalMockOutputFiles = additionalMocksToGenerate.map {
 			outputDirectory.appendingPathComponent("\($0)+SafeDIMock.swift")
 		}
@@ -92,7 +88,6 @@ enum PluginScanner {
 			+ mockOutputFileNames.map { outputDirectory.appendingPathComponent($0) }
 			+ additionalMockOutputFiles
 
-		// Add mock configuration file when any mock entries exist.
 		let hasMockEntries = !mockFiles.isEmpty || !additionalMocksToGenerate.isEmpty
 		if hasMockEntries {
 			outputFiles.append(outputDirectory.appendingPathComponent("SafeDIMockConfiguration.swift"))
@@ -189,12 +184,10 @@ enum PluginScanner {
 	private static func extractArrayArgument(named argumentLabel: String, in source: String) -> [String] {
 		guard let labelRange = source.range(of: argumentLabel) else { return [] }
 		var index = labelRange.upperBound
-		// Find opening bracket.
 		while index < source.endIndex, source[index] != "[" {
 			index = source.index(after: index)
 		}
 		guard index < source.endIndex else { return [] }
-		// Find closing bracket.
 		var depth = 0
 		var closingIndex = index
 		while closingIndex < source.endIndex {

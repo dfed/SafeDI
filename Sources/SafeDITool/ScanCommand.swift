@@ -97,7 +97,8 @@ func performScan(
 		return mockScopedFilePaths.contains(sourceFilePath)
 	}
 
-	// Find configuration from the scoped files (first one only, matching current behavior).
+	// Find configuration from the scoped files. Generate validates at most one exists;
+	// here we take the first to drive directory/mocks expansion for the manifest.
 	let configuration = mockScopedConfigurations.first
 
 	// Discover additional directories from configuration.
