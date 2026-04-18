@@ -3,7 +3,7 @@ description: Cache the SwiftPM artifact bundle and dependency cache to avoid re-
 
 inputs:
   key-suffix:
-    description: Optional suffix appended to the cache key to scope the cache to a specific job.
+    description: Optional suffix appended to the cache key to further scope the cache (in addition to the per-job scope).
     default: ''
 
 runs:
@@ -16,7 +16,12 @@ runs:
           ~/Library/Caches/org.swift.swiftpm
           ~/Library/org.swift.swiftpm
           ~/.cache/org.swift.swiftpm
-        key: ${{ runner.os }}-spm-${{ hashFiles('Package.swift', 'CLI/Package.swift') }}${{ inputs.key-suffix && format('-{0}', inputs.key-suffix) || '' }}
+        # Each job resolves a different Package.swift (root vs. the various
+        # Examples/* integrations), so keying solely on OS + manifest hashes
+        # would let the first job to save poison the shared cache for every
+        # other job — leaving them with an exact-key hit they cannot update.
+        # Scope by `github.job` so each job owns its own cache entry.
+        key: ${{ runner.os }}-spm-${{ github.job }}-${{ hashFiles('Package.swift', 'CLI/Package.swift') }}${{ inputs.key-suffix && format('-{0}', inputs.key-suffix) || '' }}
         restore-keys: |
-          ${{ runner.os }}-spm-${{ hashFiles('Package.swift', 'CLI/Package.swift') }}-
-          ${{ runner.os }}-spm-
+          ${{ runner.os }}-spm-${{ github.job }}-${{ hashFiles('Package.swift', 'CLI/Package.swift') }}-
+          ${{ runner.os }}-spm-${{ github.job }}-
