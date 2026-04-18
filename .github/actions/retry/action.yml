@@ -1,5 +1,5 @@
 name: Retry
-description: Run a command with retries and delay between attempts.
+description: Run a command with retries and exponential backoff between attempts.
 
 inputs:
   command:
@@ -7,21 +7,30 @@ inputs:
     required: true
   attempts:
     description: Maximum number of attempts.
-    default: '3'
+    default: '6'
   delay:
-    description: Seconds to wait between retries.
-    default: '10'
+    description: Initial seconds to wait between retries. Doubles after each failure, capped at max-delay.
+    default: '15'
+  max-delay:
+    description: Maximum seconds to wait between retries.
+    default: '240'
 
 runs:
   using: composite
   steps:
     - shell: bash
       run: |
+        delay=${{ inputs.delay }}
+        max_delay=${{ inputs.max-delay }}
         for attempt in $(seq 1 ${{ inputs.attempts }}); do
           ${{ inputs.command }} && break
           if [ $attempt -lt ${{ inputs.attempts }} ]; then
-            echo "Attempt $attempt failed, retrying in ${{ inputs.delay }}s..."
-            sleep ${{ inputs.delay }}
+            echo "Attempt $attempt failed, retrying in ${delay}s..."
+            sleep $delay
+            delay=$(( delay * 2 ))
+            if [ $delay -gt $max_delay ]; then
+              delay=$max_delay
+            fi
           else
             echo "All ${{ inputs.attempts }} attempts failed"
             exit 1

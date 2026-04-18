@@ -56,6 +56,8 @@ jobs:
           sudo xcrun simctl list
           PLATFORM=$(echo "${{ matrix.platforms }}" | sed 's|generic/platform=||')
           sudo xcodebuild -downloadPlatform "$PLATFORM"
+      - name: Cache SwiftPM
+        uses: ./.github/actions/cache-swiftpm
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -73,6 +75,8 @@ jobs:
         uses: actions/checkout@v6
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+      - name: Cache SwiftPM
+        uses: ./.github/actions/cache-swiftpm
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -93,6 +97,8 @@ jobs:
       - name: Replace 'main' branch with the current branch
         if: github.event.pull_request.head.repo.full_name == github.repository # Only do this if the branch is from our repo.
         run: sed -i '' "s#branch = main;#branch = ${{ github.head_ref || github.ref_name }};#" "Examples/ExampleProjectIntegration/ExampleProjectIntegration.xcodeproj/project.pbxproj"
+      - name: Cache SwiftPM
+        uses: ./.github/actions/cache-swiftpm
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -113,6 +119,8 @@ jobs:
       - name: Replace 'main' branch with the current branch
         if: github.event.pull_request.head.repo.full_name == github.repository # Only do this if the branch is from our repo.
         run: sed -i '' "s#branch = main;#branch = ${{ github.head_ref || github.ref_name }};#" "Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration.xcodeproj/project.pbxproj"
+      - name: Cache SwiftPM
+        uses: ./.github/actions/cache-swiftpm
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -130,6 +138,8 @@ jobs:
         uses: actions/checkout@v6
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+      - name: Cache SwiftPM
+        uses: ./.github/actions/cache-swiftpm
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -158,6 +168,8 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
+      - name: Cache SwiftPM
+        uses: ./.github/actions/cache-swiftpm
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -199,6 +211,10 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
+      - name: Cache SwiftPM
+        uses: ./.github/actions/cache-swiftpm
+        with:
+          key-suffix: cli
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
