@@ -838,11 +838,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Every dependency is resolved via its own label at the current scope —
 	/// aliased deps have been emitted as `let <alias>: <Type> = <fulfilling>`
 	/// bindings earlier in the body, so they reference the alias name directly.
-	/// Root-scope flat parameters use their labels as-is: validation guarantees
-	/// that a root's own `@Received` dep cannot share a label with another
-	/// `@Received` elsewhere in the tree (the collision would fail to resolve),
-	/// so `flatParameterDisambiguationMap` never contains an entry for a label
-	/// that appears in the root's init.
+	/// When root's own `.instantiated` dep label collided with a promoted
+	/// sibling, the root-sibling disambiguation in `disambiguationMap` remaps
+	/// the reference to the disambiguated binding name.
 	private func generateReturnArgumentList(
 		instantiable: Instantiable,
 		disambiguationMap: [String: [String: String]] = [:],
