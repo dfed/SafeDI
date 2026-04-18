@@ -5015,18 +5015,18 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				@Instantiable
 				public final class Child {
-				    public init(inner: Inner) {
+				    public init(inner: Child.Inner) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
 
 				    public protocol Inner {}
 
-				    @Instantiable(fulfillingAdditionalTypes: [Inner.self])
+				    @Instantiable(fulfillingAdditionalTypes: [Child.Inner.self])
 				    public final class DefaultInner: Inner {
 				        public init() {}
 				    }
 
-				    @Instantiated private let inner: Inner
+				    @Instantiated private let inner: Child.Inner
 				}
 				""",
 				"""
@@ -5042,12 +5042,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// FIXME: When `fulfillingAdditionalTypes: [Inner.self]` is written with
-			// the short (unqualified) name inside Child, the generator emits
-			// `let inner: Inner = ...` at root scope where `Inner` is not in scope.
-			// Should qualify to `Child.Inner`. Skipping compile verification until
-			// the generator qualifies nested types consistently.
-			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -5062,7 +5056,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_child() -> Child {
-		            let inner: Inner = Child.DefaultInner()
+		            let inner: Child.Inner = Child.DefaultInner()
 		            return Child(inner: inner)
 		        }
 		        let child: Child = __safeDI_child()
