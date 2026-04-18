@@ -785,12 +785,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(indent)) -> \(typeName) {")
 
 		// Generate mock body.
-		// Fold root-sibling disambiguation into the receiver map so that:
-		// (a) the root-return call below can reference disambiguated names when
-		//     a root `.instantiated` dep label collided with a promoted sibling;
-		// (b) `emitReceiverBindings` for root's own deps sees the merged map.
+		// Sibling-disambig map renames local `let` bindings when the root's own
+		// `.instantiated` dep label collides with a promoted sibling — the return
+		// call must reference the renamed local.
+		var siblingDisambiguationMap = [String: [String: String]]()
+		Self.mergeSiblingDisambiguations(into: &siblingDisambiguationMap, for: parameterTree)
+		// `emitReceiverBindings` also needs the flat-received renames so it can
+		// rebind disambiguated flat params back to their natural labels at child
+		// scopes. The return call must NOT apply flat-received renames: they
+		// target a separate mock parameter, and the root's own `.instantiated`
+		// dep must reference its own parameter — not the renamed flat-received.
 		var rootDisambiguationMap = flatParameterDisambiguationMap
-		Self.mergeSiblingDisambiguations(into: &rootDisambiguationMap, for: parameterTree)
+		for (label, typeMap) in siblingDisambiguationMap {
+			for (typeSource, name) in typeMap {
+				rootDisambiguationMap[label, default: [:]][typeSource] = name
+			}
+		}
 
 		// Emit the root's own receiver bindings (aliases + disambiguated
 		// `.received` deps). `preChild` goes BEFORE tree bindings so nested
@@ -829,7 +839,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Generate return statement.
 		let returnArgumentList = try generateReturnArgumentList(
 			instantiable: instantiable,
-			disambiguationMap: rootDisambiguationMap,
+			disambiguationMap: siblingDisambiguationMap,
 		)
 		let mockMethodName = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 		let returnConstruction = if instantiable.mockInitializer != nil {
@@ -851,9 +861,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Every dependency is resolved via its own label at the current scope —
 	/// aliased deps have been emitted as `let <alias>: <Type> = <fulfilling>`
 	/// bindings earlier in the body, so they reference the alias name directly.
-	/// When root's own `.instantiated` dep label collided with a promoted
-	/// sibling, the root-sibling disambiguation in `disambiguationMap` remaps
-	/// the reference to the disambiguated binding name.
+	/// `disambiguationMap` must contain ONLY sibling-disambiguation entries
+	/// (from `mergeSiblingDisambiguations`). When a root's own `.instantiated`
+	/// dep label collided with a promoted sibling, the bound `let` uses the
+	/// disambiguated name and this map remaps the reference. Flat-received
+	/// parameter renames must NOT be merged in: they target a separate mock
+	/// parameter, and the root's own dep must reference its own parameter.
 	private func generateReturnArgumentList(
 		instantiable: Instantiable,
 		disambiguationMap: [String: [String: String]] = [:],
