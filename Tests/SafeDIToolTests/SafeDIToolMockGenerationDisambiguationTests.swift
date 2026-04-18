@@ -1738,8 +1738,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    ) -> Root {
 		        let service = (safeDIOverrides.service_TypeB ?? TypeB.init)()
 		        func __safeDI_child() -> Child {
+		            let serviceAlias: TypeB = service
 		            let service = (safeDIOverrides.child.service ?? TypeB.init)()
-		            return (safeDIOverrides.child.safeDIBuilder ?? Child.init(service:serviceAlias:))(service, service)
+		            return (safeDIOverrides.child.safeDIBuilder ?? Child.init(service:serviceAlias:))(service, serviceAlias)
 		        }
 		        let child: Child = __safeDI_child()
 		        let service = (safeDIOverrides.service_TypeA ?? TypeA.init)()
@@ -1843,7 +1844,11 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
 		            let service = (safeDIOverrides.childA.service ?? SharedService.init)()
-		            let consumer = (safeDIOverrides.childA.consumer ?? Consumer.init(serviceAlias:))(service)
+		            func __safeDI_consumer() -> Consumer {
+		                let serviceAlias: SharedService = service
+		                return (safeDIOverrides.childA.consumer ?? Consumer.init(serviceAlias:))(serviceAlias)
+		            }
+		            let consumer: Consumer = __safeDI_consumer()
 		            return (safeDIOverrides.childA.safeDIBuilder ?? ChildA.init(service:consumer:))(service, consumer)
 		        }
 		        let childA: ChildA = __safeDI_childA()

@@ -779,52 +779,71 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append(mockParameters.joined(separator: ",\n"))
 		lines.append("\(indent)) -> \(typeName) {")
 
+		// Seed the root scope's bound-labels set. `rootBoundLabels` names every
+		// identifier bound at the mock body's top level. Descendants (and the
+		// root's own return statement) that reference these labels resolve via
+		// Swift lexical scoping, so flat-parameter disambiguation must NOT
+		// rewrite them.
+		var rootBoundLabels: LocallyBoundLabels = [:]
+		for entry in onlyIfAvailableSafeDIParameterEntries {
+			rootBoundLabels[entry.label] = entry.typeSource
+		}
+		for dependency in forwardedDependencies {
+			rootBoundLabels[dependency.property.label] = dependency.property.typeDescription.asSource
+		}
+		for rootDefault in rootDefaultParameters {
+			rootBoundLabels[rootDefault.label] = rootDefault.typeSource
+		}
+		for parameter in flatReceivedParameters {
+			rootBoundLabels[parameter.label] = parameter.typeSource
+		}
+		for parameter in flatUncoveredParameters {
+			rootBoundLabels[parameter.label] = parameter.typeSource
+		}
+
 		// Generate mock body.
+		// Tree-node bindings at this level include the `propertyLabel` of every
+		// top-level parameterTree node, so extend `rootBoundLabels` with them
+		// up front. Descendants generated inside `__safeDI_*` wrapper functions
+		// capture their enclosing scope lazily — they can see tree-bound labels
+		// regardless of whether the reference appears before or after the
+		// binding in source.
+		for node in parameterTree {
+			rootBoundLabels[node.propertyLabel] = node.typeDescription.asSource
+		}
 		if hasTree {
 			// Bind onlyIfAvailable entries first — tree bindings may reference them.
 			for entry in onlyIfAvailableSafeDIParameterEntries {
 				lines.append("\(bodyIndent)let \(entry.label): \(entry.typeSource) = safeDIOverrides.\(entry.label)")
-			}
-			// Seed the root scope's enclosing context:
-			//  - `rootAliasMap` carries the root type's own `.aliased` deps so
-			//    descendants that reference the receiver label translate to the
-			//    fulfilling (root-bound) identifier.
-			//  - `rootBoundLabels` names every identifier bound at the mock body's
-			//    top level. Descendants that reference these labels resolve to the
-			//    root bindings via Swift lexical scoping, so flat-parameter
-			//    disambiguation must NOT rewrite them.
-			let rootAliasMap = Self.mergeAliasMap(parent: [:], dependencies: instantiable.dependencies)
-			var rootBoundLabels: LocallyBoundLabels = [:]
-			for entry in onlyIfAvailableSafeDIParameterEntries {
-				rootBoundLabels[entry.label] = entry.typeSource
-			}
-			for dependency in forwardedDependencies {
-				rootBoundLabels[dependency.property.label] = dependency.property.typeDescription.asSource
-			}
-			for rootDefault in rootDefaultParameters {
-				rootBoundLabels[rootDefault.label] = rootDefault.typeSource
-			}
-			for parameter in flatReceivedParameters {
-				rootBoundLabels[parameter.label] = parameter.typeSource
-			}
-			for parameter in flatUncoveredParameters {
-				rootBoundLabels[parameter.label] = parameter.typeSource
 			}
 			let bodyBindings = Self.generateMockBodyBindings(
 				nodes: parameterTree,
 				parentPath: "safeDIOverrides",
 				indent: bodyIndent,
 				flatParameterDisambiguationMap: flatParameterDisambiguationMap,
-				enclosingAliasMap: rootAliasMap,
 				enclosingBoundLabels: rootBoundLabels,
 			)
 			lines.append(contentsOf: bodyBindings)
+		}
+		// Emit the root's own `.aliased` dependencies AFTER tree bindings —
+		// the fulfilling label may be a tree-bound `let`, so tree bindings
+		// must be in scope first. The return statement that follows references
+		// the aliased name directly via Swift lexical scoping (matches
+		// production's `.alias` scope case).
+		let rootAliasBindings = Self.emitAliasBindings(
+			for: instantiable.dependencies,
+			boundLabels: rootBoundLabels,
+			flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+			indent: bodyIndent,
+		)
+		lines.append(contentsOf: rootAliasBindings.lines)
+		for (label, typeSource) in rootAliasBindings.bindings {
+			rootBoundLabels[label] = typeSource
 		}
 
 		// Generate return statement.
 		let returnArgumentList = try generateReturnArgumentList(
 			instantiable: instantiable,
-			flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 		)
 		let mockMethodName = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 		let returnConstruction = if instantiable.mockInitializer != nil {
@@ -843,9 +862,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Generates the labeled argument list for the return statement in the mock body.
+	/// Every dependency is resolved via its own label at the current scope —
+	/// aliased deps have been emitted as `let <alias>: <Type> = <fulfilling>`
+	/// bindings earlier in the body, so they reference the alias name directly.
+	/// Root-scope flat parameters use their labels as-is: validation guarantees
+	/// that a root's own `@Received` dep cannot share a label with another
+	/// `@Received` elsewhere in the tree (the collision would fail to resolve),
+	/// so `flatParameterDisambiguationMap` never contains an entry for a label
+	/// that appears in the root's init.
 	private func generateReturnArgumentList(
 		instantiable: Instantiable,
-		flatParameterDisambiguationMap: [String: [String: String]] = [:],
 	) throws -> String {
 		let constructionInitializer: Initializer? = if let mockInitializer = instantiable.mockInitializer {
 			mockInitializer
@@ -860,22 +886,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 		var parts = [String]()
 		for argument in constructionInitializer.arguments {
-			if let dependency = dependenciesByLabel[argument.innerLabel] {
-				// Aliased deps reference their fulfilling property's label. Any
-				// (label, type) that matches a disambiguated flat parameter on
-				// mock() resolves to the disambiguated name.
-				let resolvedLabel: String
-				let resolvedTypeSource: String
-				switch dependency.source {
-				case let .aliased(fulfillingProperty, _, _):
-					resolvedLabel = fulfillingProperty.label
-					resolvedTypeSource = fulfillingProperty.typeDescription.asSource
-				case .instantiated, .received, .forwarded:
-					resolvedLabel = argument.innerLabel
-					resolvedTypeSource = dependency.property.typeDescription.asSource
-				}
-				let finalLabel = flatParameterDisambiguationMap[resolvedLabel]?[resolvedTypeSource] ?? resolvedLabel
-				parts.append("\(argument.label): \(finalLabel)")
+			if dependenciesByLabel[argument.innerLabel] != nil {
+				parts.append("\(argument.label): \(argument.innerLabel)")
 			} else if argument.hasDefaultValue, argument.label != "_" {
 				parts.append("\(argument.label): \(argument.label)")
 			}
@@ -884,15 +896,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	// MARK: Mock scope context
-
-	/// Alias translations inherited from ancestor scopes.
-	///
-	/// `M[L]` gives the `(label, typeSource)` actually bound in the enclosing Swift
-	/// scope chain when a descendant references label `L`. Populated by
-	/// `mergeAliasMap` as we descend through each `@Instantiable` whose dependencies
-	/// include `.aliased` entries; ancestor alias chains are collapsed into a
-	/// single-hop lookup.
-	fileprivate typealias MockAliasMap = [String: (label: String, typeSource: String)]
 
 	/// Labels that are `let`-bound (or forwarded as function parameters) somewhere
 	/// in the enclosing Swift scope chain, mapped to the typeSource of the binding.
@@ -904,25 +907,40 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// disambiguated flat parameter.
 	fileprivate typealias LocallyBoundLabels = [String: String]
 
-	/// Extends a parent scope's alias map with the aliased dependencies of the
-	/// current scope. For each `.aliased(fulfillingProperty, _, _)` dep `L → F`,
-	/// the returned map contains `L → parentMap[F] ?? (F, F's type)`, collapsing
-	/// any ancestor alias chain on `F` into a single-hop lookup.
-	fileprivate static func mergeAliasMap(
-		parent: MockAliasMap,
-		dependencies: [Dependency],
-	) -> MockAliasMap {
-		var result = parent
+	/// Emits `let <alias>: <Type> = <fulfillingLabel>` lines for each
+	/// `.aliased(fulfilling, _, _)` dependency in `dependencies`. Mirrors the
+	/// production `.alias` scope case: every aliased receiver becomes a real
+	/// Swift binding so descendants (and the current scope's own constructor
+	/// call) resolve the aliased name via lexical scoping. The fulfilling
+	/// reference is resolved against `boundLabels` (a same-label, same-type
+	/// local binding wins) and falls back to
+	/// `flatParameterDisambiguationMap` for disambiguated flat parameters.
+	/// Returns the emitted lines alongside the alias labels and their types so
+	/// callers can extend their bound-labels set for subsequent siblings and
+	/// descendants.
+	fileprivate static func emitAliasBindings(
+		for dependencies: [Dependency],
+		boundLabels: LocallyBoundLabels,
+		flatParameterDisambiguationMap: [String: [String: String]],
+		indent: String,
+	) -> (lines: [String], bindings: LocallyBoundLabels) {
+		var lines = [String]()
+		var bindings = LocallyBoundLabels()
 		for dependency in dependencies {
 			guard case let .aliased(fulfillingProperty, _, _) = dependency.source else { continue }
+			let aliasLabel = dependency.property.label
+			let aliasTypeSource = dependency.property.typeDescription.asSource
 			let fulfillingLabel = fulfillingProperty.label
 			let fulfillingTypeSource = fulfillingProperty.typeDescription.asSource
-			result[dependency.property.label] = parent[fulfillingLabel] ?? (
-				label: fulfillingLabel,
-				typeSource: fulfillingTypeSource,
-			)
+			let resolvedFulfilling: String = if boundLabels[fulfillingLabel] == fulfillingTypeSource {
+				fulfillingLabel
+			} else {
+				flatParameterDisambiguationMap[fulfillingLabel]?[fulfillingTypeSource] ?? fulfillingLabel
+			}
+			lines.append("\(indent)let \(aliasLabel): \(aliasTypeSource) = \(resolvedFulfilling)")
+			bindings[aliasLabel] = aliasTypeSource
 		}
-		return result
+		return (lines, bindings)
 	}
 
 	// MARK: MockParameterNode
@@ -975,6 +993,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// a property cycle (the struct may exist from a non-cycle instance of the same type).
 		var needsConfigurationStruct: Bool {
 			!children.isEmpty || !defaultParameters.isEmpty || isPropertyCycle
+		}
+
+		/// Whether this node declares any `@Received(fulfilledByDependencyNamed:)`
+		/// dependencies. Aliases require a dedicated Swift scope to emit their
+		/// `let <alias>: <Type> = <fulfilling>` bindings so descendants (and the
+		/// node's own constructor) resolve them via lexical scoping.
+		var hasAliasedDependencies: Bool {
+			dependencies.contains {
+				if case .aliased = $0.source { true } else { false }
+			}
+		}
+
+		/// True when this node must be wrapped in a `__safeDI_<label>()` helper
+		/// function — either because it needs a configuration struct or because
+		/// it has aliased dependencies whose bindings must live in a local scope.
+		var requiresFunctionWrapper: Bool {
+			needsConfigurationStruct || hasAliasedDependencies
 		}
 
 		/// The nested configuration struct name (used in struct definitions).
@@ -1530,7 +1565,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ancestorTypes: Set<String> = [],
 		sendableExtractionPrefix: String? = nil,
 		flatParameterDisambiguationMap: [String: [String: String]] = [:],
-		enclosingAliasMap: MockAliasMap = [:],
 		enclosingBoundLabels: LocallyBoundLabels = [:],
 	) -> [String] {
 		var lines = [String]()
@@ -1592,10 +1626,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					nodePath: argumentNodePath,
 					sendableExtractionPrefix: sendableExtractionPrefix,
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
-					enclosingAliasMap: enclosingAliasMap,
 					enclosingBoundLabels: boundLabels,
 				)
-				let nodeAliasMap = mergeAliasMap(parent: enclosingAliasMap, dependencies: node.dependencies)
 				lines.append(contentsOf: generateInstantiatorBinding(
 					for: node,
 					nodePath: nodePath,
@@ -1606,87 +1638,109 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indent: indent,
 					ancestorTypes: childAncestors,
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
-					enclosingAliasMap: nodeAliasMap,
 					enclosingBoundLabels: boundLabels,
 				))
-			} else {
+			} else if node.requiresFunctionWrapper {
+				// Constant node with children, default params, cycles, OR aliased
+				// deps — scoped construction via helper function. A function scope
+				// prevents child bindings from colliding with siblings' child
+				// bindings that share the same property label, and gives alias
+				// bindings a dedicated scope.
+				let functionName = "__safeDI_\(node.propertyLabel)"
+				let propertyTypeName = node.instantiatedTypeDescription.asSource
+				let innerIndent = "\(indent)\(standardIndent)"
+
+				// Emit the node's aliased deps as `let <alias>: <Type> = <fulfilling>`
+				// bindings at the top of the function body — resolved against the
+				// parent scope (boundLabels) so fulfilling labels route through any
+				// disambiguated flat parameter or ancestor scope binding.
+				let aliasBindings = emitAliasBindings(
+					for: node.dependencies,
+					boundLabels: boundLabels,
+					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+					indent: innerIndent,
+				)
+				var innerBoundLabels = boundLabels
+				for (label, typeSource) in aliasBindings.bindings {
+					innerBoundLabels[label] = typeSource
+				}
+
 				let arguments = resolveBuilderArguments(
 					for: node,
 					nodePath: argumentNodePath,
 					sendableExtractionPrefix: sendableExtractionPrefix,
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
-					enclosingAliasMap: enclosingAliasMap,
+					enclosingBoundLabels: innerBoundLabels,
+				)
+				let argumentList = arguments.joined(separator: ", ")
+
+				var childAncestors = ancestorTypes
+				childAncestors.insert(nodeTypeKey)
+				let childBindings = generateMockBodyBindings(
+					nodes: node.children,
+					parentPath: nodePath,
+					indent: innerIndent,
+					ancestorTypes: childAncestors,
+					sendableExtractionPrefix: sendableExtractionPrefix,
+					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+					enclosingBoundLabels: innerBoundLabels,
+				)
+
+				if node.erasedToConcreteExistential {
+					// The config struct's safeDIBuilder returns the concrete type.
+					// Both paths must wrap to the property type (the wrapper).
+					// In sendable context, use the extracted local (builderExpression)
+					// instead of referencing safeDIOverrides directly.
+					// Note: constant erased cycles are rejected by mock validation
+					// before reaching this point, so isCycleNode is always false here.
+					let wrapperType = node.typeDescription.asSource
+					let overridePath = optionalBuilderPath ?? builderExpression
+					lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
+					lines.append(contentsOf: aliasBindings.lines)
+					lines.append(contentsOf: childBindings)
+					lines.append("\(innerIndent)if let safeDIBuilder = \(overridePath) {")
+					lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(safeDIBuilder(\(argumentList)))")
+					lines.append("\(innerIndent)} else {")
+					lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+					lines.append("\(innerIndent)}")
+					lines.append("\(indent)}")
+				} else {
+					lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
+					lines.append(contentsOf: aliasBindings.lines)
+					lines.append(contentsOf: childBindings)
+					lines.append("\(innerIndent)return \(builderExpression)(\(argumentList))")
+					lines.append("\(indent)}")
+				}
+
+				lines.append("\(indent)let \(node.propertyLabel): \(propertyTypeName) = \(functionName)()")
+			} else {
+				// Leaf constant node — flat binding, no scoping needed.
+				let arguments = resolveBuilderArguments(
+					for: node,
+					nodePath: argumentNodePath,
+					sendableExtractionPrefix: sendableExtractionPrefix,
+					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 					enclosingBoundLabels: boundLabels,
 				)
 				let argumentList = arguments.joined(separator: ", ")
 
-				if !node.needsConfigurationStruct {
-					// Leaf constant node — flat binding, no scoping needed.
-					if let optionalBuilderPath {
-						if node.erasedToConcreteExistential {
-							// The override closure returns the property type directly.
-							// The default builder returns the concrete type, which must
-							// be wrapped. Use optional chaining + ?? to split the paths.
-							let wrapperType = node.typeDescription.asSource
-							lines.append("\(indent)let \(node.propertyLabel) = \(optionalBuilderPath)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
-						} else {
-							let leafBuilderExpression = "(\(optionalBuilderPath) ?? \(node.defaultBuilderExpression))"
-							lines.append("\(indent)let \(node.propertyLabel) = \(leafBuilderExpression)(\(argumentList))")
-						}
-					} else if node.erasedToConcreteExistential {
-						// Sendable context: extracted local is optional.
-						let wrapperType = node.typeDescription.asSource
-						lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
-					} else {
-						lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)(\(argumentList))")
-					}
-				} else {
-					// Constant node with children — scoped construction via helper function.
-					// A function scope prevents child bindings from colliding with
-					// siblings' child bindings that share the same property label.
-					let functionName = "__safeDI_\(node.propertyLabel)"
-					let propertyTypeName = node.instantiatedTypeDescription.asSource
-					let innerIndent = "\(indent)\(standardIndent)"
-
-					var childAncestors = ancestorTypes
-					childAncestors.insert(nodeTypeKey)
-					let nodeAliasMap = mergeAliasMap(parent: enclosingAliasMap, dependencies: node.dependencies)
-					let childBindings = generateMockBodyBindings(
-						nodes: node.children,
-						parentPath: nodePath,
-						indent: innerIndent,
-						ancestorTypes: childAncestors,
-						sendableExtractionPrefix: sendableExtractionPrefix,
-						flatParameterDisambiguationMap: flatParameterDisambiguationMap,
-						enclosingAliasMap: nodeAliasMap,
-						enclosingBoundLabels: boundLabels,
-					)
-
+				if let optionalBuilderPath {
 					if node.erasedToConcreteExistential {
-						// The config struct's safeDIBuilder returns the concrete type.
-						// Both paths must wrap to the property type (the wrapper).
-						// In sendable context, use the extracted local (builderExpression)
-						// instead of referencing safeDIOverrides directly.
-						// Note: constant erased cycles are rejected by mock validation
-						// before reaching this point, so isCycleNode is always false here.
+						// The override closure returns the property type directly.
+						// The default builder returns the concrete type, which must
+						// be wrapped. Use optional chaining + ?? to split the paths.
 						let wrapperType = node.typeDescription.asSource
-						let overridePath = optionalBuilderPath ?? builderExpression
-						lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
-						lines.append(contentsOf: childBindings)
-						lines.append("\(innerIndent)if let safeDIBuilder = \(overridePath) {")
-						lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(safeDIBuilder(\(argumentList)))")
-						lines.append("\(innerIndent)} else {")
-						lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
-						lines.append("\(innerIndent)}")
-						lines.append("\(indent)}")
+						lines.append("\(indent)let \(node.propertyLabel) = \(optionalBuilderPath)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
 					} else {
-						lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
-						lines.append(contentsOf: childBindings)
-						lines.append("\(innerIndent)return \(builderExpression)(\(argumentList))")
-						lines.append("\(indent)}")
+						let leafBuilderExpression = "(\(optionalBuilderPath) ?? \(node.defaultBuilderExpression))"
+						lines.append("\(indent)let \(node.propertyLabel) = \(leafBuilderExpression)(\(argumentList))")
 					}
-
-					lines.append("\(indent)let \(node.propertyLabel): \(propertyTypeName) = \(functionName)()")
+				} else if node.erasedToConcreteExistential {
+					// Sendable context: extracted local is optional.
+					let wrapperType = node.typeDescription.asSource
+					lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+				} else {
+					lines.append("\(indent)let \(node.propertyLabel) = \(builderExpression)(\(argumentList))")
 				}
 			}
 
@@ -1711,7 +1765,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		nodePath: String,
 		sendableExtractionPrefix: String? = nil,
 		flatParameterDisambiguationMap: [String: [String: String]] = [:],
-		enclosingAliasMap: MockAliasMap = [:],
 		enclosingBoundLabels: LocallyBoundLabels = [:],
 	) -> [String] {
 		let dependenciesByLabel = Dictionary(
@@ -1725,49 +1778,31 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		return node.constructionArguments.compactMap { argument in
 			if let dependency = dependenciesByLabel[argument.innerLabel] {
-				// Resolve the label and type a caller at this scope would use to
-				// reference the value. Aliased deps resolve to their fulfilling
-				// property; other deps resolve to the dep's own label and type.
-				// `.instantiated` and `.forwarded` children are bound inside the
-				// inner builder function (as local `let`s or function parameters),
-				// so they reference their own label directly — skip ancestor-scope
-				// alias translation and root-level flat-parameter disambiguation.
-				var resolvedLabel: String
-				var resolvedTypeSource: String
-				let consultsEnclosingScope: Bool
+				// Every dep references its own property label at this scope:
+				// `.aliased` deps are bound by a `let <alias>: <Type> = <fulfilling>`
+				// line emitted in the wrapping function; `.instantiated` and
+				// `.forwarded` are bound as local `let`s or function parameters;
+				// `.received` is bound in some ancestor scope and reached through
+				// Swift lexical scoping. Only `.received` needs to consult the
+				// enclosing scope to detect whether a flat-parameter disambiguation
+				// rewrite applies.
+				let resolvedLabel = argument.innerLabel
+				let resolvedTypeSource = dependency.property.typeDescription.asSource
 				switch dependency.source {
-				case let .aliased(fulfillingProperty, _, _):
-					resolvedLabel = fulfillingProperty.label
-					resolvedTypeSource = fulfillingProperty.typeDescription.asSource
-					consultsEnclosingScope = true
-				case .received:
-					resolvedLabel = argument.innerLabel
-					resolvedTypeSource = dependency.property.typeDescription.asSource
-					consultsEnclosingScope = true
-				case .instantiated, .forwarded:
-					resolvedLabel = argument.innerLabel
-					resolvedTypeSource = dependency.property.typeDescription.asSource
-					consultsEnclosingScope = false
-				}
-				guard consultsEnclosingScope else { return resolvedLabel }
-				// A nearer `let <label> = ...` in the enclosing Swift scope wins
-				// over both ancestor aliases and root-level disambiguation — Swift
-				// lexical scoping resolves the bare identifier correctly. The local
-				// binding must match the expected type; a same-label binding with a
-				// different type (e.g., `service: LocalService?` shadowing a dep
-				// that expects `service: ExternalService`) does NOT shadow the
-				// disambiguated flat parameter, since resolving to the local would
-				// produce a type error.
-				if enclosingBoundLabels[resolvedLabel] == resolvedTypeSource {
+				case .aliased, .instantiated, .forwarded:
 					return resolvedLabel
+				case .received:
+					// A nearer `let <label> = ...` in the enclosing Swift scope wins
+					// over root-level disambiguation — Swift lexical scoping resolves
+					// the bare identifier correctly. The local binding must match the
+					// expected type; a same-label binding with a different type does
+					// NOT shadow the disambiguated flat parameter, since resolving
+					// to the local would produce a type error.
+					if enclosingBoundLabels[resolvedLabel] == resolvedTypeSource {
+						return resolvedLabel
+					}
+					return flatParameterDisambiguationMap[resolvedLabel]?[resolvedTypeSource] ?? resolvedLabel
 				}
-				// If an ancestor aliased this label, translate to the identifier
-				// actually bound in that ancestor's scope.
-				if let translation = enclosingAliasMap[resolvedLabel] {
-					resolvedLabel = translation.label
-					resolvedTypeSource = translation.typeSource
-				}
-				return flatParameterDisambiguationMap[resolvedLabel]?[resolvedTypeSource] ?? resolvedLabel
 			} else if defaultParameterLabels.contains(argument.label) {
 				if let sendableExtractionPrefix {
 					return "\(sendableExtractionPrefix)__\(relativePath)_\(argument.label)"
@@ -1803,7 +1838,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 		ancestorTypes: Set<String> = [],
 		flatParameterDisambiguationMap: [String: [String: String]] = [:],
-		enclosingAliasMap: MockAliasMap = [:],
 		enclosingBoundLabels: LocallyBoundLabels = [:],
 	) -> [String] {
 		let functionName = "__safeDI_\(node.propertyLabel)"
@@ -1816,6 +1850,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var innerBoundLabels = enclosingBoundLabels
 		for property in forwardedProperties {
 			innerBoundLabels[property.label] = property.typeDescription.asSource
+		}
+
+		// Emit aliased dependencies of the instantiated type as `let <alias>: <Type> = <fulfilling>`
+		// bindings inside the inner builder function. Fulfillings are resolved
+		// against `innerBoundLabels` (forwarded args + enclosing scope).
+		let aliasBindings = emitAliasBindings(
+			for: node.dependencies,
+			boundLabels: innerBoundLabels,
+			flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+			indent: innerIndent,
+		)
+		for (label, typeSource) in aliasBindings.bindings {
+			innerBoundLabels[label] = typeSource
 		}
 
 		// Build the inner function parameter list (forwarded properties).
@@ -1901,6 +1948,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let functionReturnType = node.instantiatedTypeDescription.asSource
 				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
 
+				lines.append(contentsOf: aliasBindings.lines)
+
 				// Generate children using extracted locals.
 				// Include this node's type in ancestors for cycle detection.
 				var functionAncestors = ancestorTypes
@@ -1912,15 +1961,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					ancestorTypes: functionAncestors,
 					sendableExtractionPrefix: functionName,
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
-					enclosingAliasMap: enclosingAliasMap,
 					enclosingBoundLabels: innerBoundLabels,
 				)
 				lines.append(contentsOf: childBindings)
 
+				// Swift's implicit-return rule only applies when the function
+				// body is a single expression. Alias bindings and child bindings
+				// both add extra statements, so either one forces an explicit
+				// `return`.
+				let hasPreamble = !childBindings.isEmpty || !aliasBindings.lines.isEmpty
+
 				if node.erasedToConcreteExistential {
 					let wrapperType = node.typeDescription.unwrapped.asInstantiatedType.asSource
-					let hasReturn = !childBindings.isEmpty
-					let returnKeyword = hasReturn ? "return " : ""
+					let returnKeyword = hasPreamble ? "return " : ""
 					lines.append("\(innerIndent)if let \(extractedBuilderName) {")
 					if node.needsConfigurationStruct {
 						// Config struct's safeDIBuilder returns the concrete type — wrap.
@@ -1932,7 +1985,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					lines.append("\(innerIndent)} else {")
 					lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
 					lines.append("\(innerIndent)}")
-				} else if childBindings.isEmpty {
+				} else if !hasPreamble {
 					lines.append("\(innerIndent)\(extractedBuilderName)(\(builderCallArguments))")
 				} else {
 					lines.append("\(innerIndent)return \(extractedBuilderName)(\(builderCallArguments))")
@@ -1942,6 +1995,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let functionReturnType = node.instantiatedTypeDescription.asSource
 
 				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
+
+				lines.append(contentsOf: aliasBindings.lines)
 
 				// Generate children's bindings inside the function body.
 				// Include this node's type in ancestors so self-referencing
@@ -1954,15 +2009,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indent: innerIndent,
 					ancestorTypes: functionAncestors,
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
-					enclosingAliasMap: enclosingAliasMap,
 					enclosingBoundLabels: innerBoundLabels,
 				)
 				lines.append(contentsOf: childBindings)
 
+				// Swift's implicit-return rule only applies when the function
+				// body is a single expression. Alias bindings and child bindings
+				// both add extra statements, so either one forces an explicit
+				// `return`.
+				let hasPreamble = !childBindings.isEmpty || !aliasBindings.lines.isEmpty
+
 				if node.erasedToConcreteExistential, let optionalBuilderPath {
 					let wrapperType = node.typeDescription.unwrapped.asInstantiatedType.asSource
-					let hasReturn = !childBindings.isEmpty
-					let returnKeyword = hasReturn ? "return " : ""
+					let returnKeyword = hasPreamble ? "return " : ""
 					lines.append("\(innerIndent)if let safeDIBuilder = \(optionalBuilderPath) {")
 					if node.needsConfigurationStruct {
 						// Config struct's safeDIBuilder returns the concrete type — wrap.
@@ -1978,8 +2037,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// Sendable-extracted context: builderExpression is the extracted
 					// optional local.
 					let wrapperType = node.typeDescription.unwrapped.asInstantiatedType.asSource
-					let hasReturn = !childBindings.isEmpty
-					let returnKeyword = hasReturn ? "return " : ""
+					let returnKeyword = hasPreamble ? "return " : ""
 					lines.append("\(innerIndent)if let \(builderExpression) {")
 					if node.needsConfigurationStruct {
 						lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(wrapperType)(\(builderExpression)(\(builderCallArguments)))")
@@ -1991,12 +2049,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					lines.append("\(innerIndent)}")
 				} else if let optionalBuilderPath {
 					let nilCoalescingExpression = "(\(optionalBuilderPath) ?? \(node.defaultBuilderExpression))"
-					if childBindings.isEmpty {
+					if !hasPreamble {
 						lines.append("\(innerIndent)\(nilCoalescingExpression)(\(builderCallArguments))")
 					} else {
 						lines.append("\(innerIndent)return \(nilCoalescingExpression)(\(builderCallArguments))")
 					}
-				} else if childBindings.isEmpty {
+				} else if !hasPreamble {
 					lines.append("\(innerIndent)\(builderExpression)(\(builderCallArguments))")
 				} else {
 					lines.append("\(innerIndent)return \(builderExpression)(\(builderCallArguments))")
