@@ -2936,7 +2936,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        let user = (safeDIOverrides.user ?? User.init)()
-		        return Child(userType: userType)
+		        return Child(userType: user)
 		    }
 		}
 		#endif
@@ -2967,7 +2967,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let user = (safeDIOverrides.user ?? User.init)()
-		        let child = (safeDIOverrides.child ?? Child.init(userType:))(userType)
+		        let child = (safeDIOverrides.child ?? Child.init(userType:))(user)
 		        return Root(child: child, user: user)
 		    }
 		}
@@ -3177,7 +3177,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let defaultUserService = (safeDIOverrides.defaultUserService ?? DefaultUserService.init)()
-		        return Root(defaultUserService: defaultUserService, userService: userService)
+		        return Root(defaultUserService: defaultUserService, userService: defaultUserService)
 		    }
 		}
 		#endif
@@ -3822,10 +3822,10 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		                (safeDIOverrides.profileViewControllerBuilder.editProfileViewControllerBuilder ?? EditProfileViewController.init(userVendor:userManager:userNetworkService:))(userVendor, userManager, userNetworkService)
 		            }
 		            let editProfileViewControllerBuilder = Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
-		            return (safeDIOverrides.profileViewControllerBuilder.safeDIBuilder ?? ProfileViewController.init(userVendor:editProfileViewControllerBuilder:))(userVendor, editProfileViewControllerBuilder)
+		            return (safeDIOverrides.profileViewControllerBuilder.safeDIBuilder ?? ProfileViewController.init(userVendor:editProfileViewControllerBuilder:))(userManager, editProfileViewControllerBuilder)
 		        }
 		        let profileViewControllerBuilder = Instantiator<ProfileViewController>(__safeDI_profileViewControllerBuilder)
-		        return LoggedInViewController(userManager: userManager, userNetworkService: userNetworkService, profileViewControllerBuilder: profileViewControllerBuilder)
+		        return LoggedInViewController(userManager: userManager, userNetworkService: networkService, profileViewControllerBuilder: profileViewControllerBuilder)
 		    }
 		}
 		#endif
@@ -3883,7 +3883,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            (safeDIOverrides.editProfileViewControllerBuilder ?? EditProfileViewController.init(userVendor:userManager:userNetworkService:))(userVendor, userManager, userNetworkService)
 		        }
 		        let editProfileViewControllerBuilder = Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
-		        return ProfileViewController(userVendor: userVendor, editProfileViewControllerBuilder: editProfileViewControllerBuilder)
+		        return ProfileViewController(userVendor: userManager, editProfileViewControllerBuilder: editProfileViewControllerBuilder)
 		    }
 		}
 		#endif
@@ -3943,10 +3943,10 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		                    (safeDIOverrides.loggedInViewControllerBuilder.profileViewControllerBuilder.editProfileViewControllerBuilder ?? EditProfileViewController.init(userVendor:userManager:userNetworkService:))(userVendor, userManager, userNetworkService)
 		                }
 		                let editProfileViewControllerBuilder = Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
-		                return (safeDIOverrides.loggedInViewControllerBuilder.profileViewControllerBuilder.safeDIBuilder ?? ProfileViewController.init(userVendor:editProfileViewControllerBuilder:))(userVendor, editProfileViewControllerBuilder)
+		                return (safeDIOverrides.loggedInViewControllerBuilder.profileViewControllerBuilder.safeDIBuilder ?? ProfileViewController.init(userVendor:editProfileViewControllerBuilder:))(userManager, editProfileViewControllerBuilder)
 		            }
 		            let profileViewControllerBuilder = Instantiator<ProfileViewController>(__safeDI_profileViewControllerBuilder)
-		            return (safeDIOverrides.loggedInViewControllerBuilder.safeDIBuilder ?? LoggedInViewController.init(userManager:userNetworkService:profileViewControllerBuilder:))(userManager, userNetworkService, profileViewControllerBuilder)
+		            return (safeDIOverrides.loggedInViewControllerBuilder.safeDIBuilder ?? LoggedInViewController.init(userManager:userNetworkService:profileViewControllerBuilder:))(userManager, networkService, profileViewControllerBuilder)
 		        }
 		        let loggedInViewControllerBuilder = Instantiator<LoggedInViewController> {
 		            __safeDI_loggedInViewControllerBuilder(userManager: $0)
@@ -4039,7 +4039,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        func __safeDI_grandchildBuilder() -> Grandchild {
-		            (safeDIOverrides.grandchildBuilder ?? Grandchild.init(anyIterator:))(anyIterator)
+		            (safeDIOverrides.grandchildBuilder ?? Grandchild.init(anyIterator:))(iterator)
 		        }
 		        let grandchildBuilder = Instantiator<Grandchild>(__safeDI_grandchildBuilder)
 		        return Child(iterator: iterator, grandchildBuilder: grandchildBuilder)
@@ -4077,7 +4077,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    static func mock(
 		        iterator: IndexingIterator<Array<Element>>
 		    ) -> Grandchild {
-		        return Grandchild(anyIterator: anyIterator)
+		        return Grandchild(anyIterator: iterator)
 		    }
 		}
 		#endif
@@ -4106,7 +4106,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        func __safeDI_childBuilder(iterator: IndexingIterator<Array<Element>>) -> Child {
 		            func __safeDI_grandchildBuilder() -> Grandchild {
-		                (safeDIOverrides.childBuilder.grandchildBuilder ?? Grandchild.init(anyIterator:))(anyIterator)
+		                (safeDIOverrides.childBuilder.grandchildBuilder ?? Grandchild.init(anyIterator:))(iterator)
 		            }
 		            let grandchildBuilder = Instantiator<Grandchild>(__safeDI_grandchildBuilder)
 		            return (safeDIOverrides.childBuilder.safeDIBuilder ?? Child.init(iterator:grandchildBuilder:))(iterator, grandchildBuilder)
@@ -4727,7 +4727,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> DefaultAuthService {
 		        let networkService = (safeDIOverrides.networkService ?? DefaultNetworkService.init)()
-		        return DefaultAuthService(networkService: networkService, renamedNetworkService: renamedNetworkService)
+		        return DefaultAuthService(networkService: networkService, renamedNetworkService: networkService)
 		    }
 		}
 		#endif
@@ -4793,7 +4793,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let networkService = (safeDIOverrides.networkService ?? DefaultNetworkService.init)()
 		        func __safeDI_authService() -> AuthService {
 		            let networkService = (safeDIOverrides.authService.networkService ?? DefaultNetworkService.init)()
-		            return (safeDIOverrides.authService.safeDIBuilder ?? DefaultAuthService.init(networkService:renamedNetworkService:))(networkService, renamedNetworkService)
+		            return (safeDIOverrides.authService.safeDIBuilder ?? DefaultAuthService.init(networkService:renamedNetworkService:))(networkService, networkService)
 		        }
 		        let authService: AuthService = __safeDI_authService()
 		        return RootViewController(authService: authService)
@@ -5538,7 +5538,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let concreteService = (safeDIOverrides.concreteService ?? ConcreteService.init)()
 		        func __safeDI_consumerBuilder() -> Consumer {
-		            (safeDIOverrides.consumerBuilder ?? Consumer.init(service:))(service)
+		            (safeDIOverrides.consumerBuilder ?? Consumer.init(service:))(concreteService)
 		        }
 		        let consumerBuilder = Instantiator<Consumer>(__safeDI_consumerBuilder)
 		        return Root(consumerBuilder: consumerBuilder, concreteService: concreteService)
@@ -7722,7 +7722,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let concreteService: ConcreteService? = safeDIOverrides.concreteService
-		        let consumer = (safeDIOverrides.consumer ?? Consumer.init(service:))(service)
+		        let consumer = (safeDIOverrides.consumer ?? Consumer.init(service:))(concreteService)
 		        return Parent(consumer: consumer)
 		    }
 		}
@@ -8141,7 +8141,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service: LocalService? = safeDIOverrides.service
-		        let childA = (safeDIOverrides.childA ?? ChildA.init(service:))(service)
+		        let childA = (safeDIOverrides.childA ?? ChildA.init(service:))(service_ExternalService)
 		        let childB = (safeDIOverrides.childB ?? ChildB.init(service:))(service)
 		        return Root(childA: childA, childB: childB)
 		    }

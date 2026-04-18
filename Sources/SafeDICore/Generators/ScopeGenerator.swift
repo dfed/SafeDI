@@ -681,11 +681,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for label in allFlatLabels {
 			flatLabelCounts[label, default: 0] += 1
 		}
+		// Map of (label → (typeSource → disambiguatedLabel)) for flat received
+		// parameters whose label collided with another flat parameter. Builder calls
+		// for child nodes that would reference the original label must substitute
+		// the disambiguated name so the generated code references a real binding.
+		var flatParameterDisambiguationMap = [String: [String: String]]()
 		flatReceivedParameters = flatReceivedParameters.map { parameter in
 			guard let count = flatLabelCounts[parameter.label], count > 1 else {
 				return parameter
 			}
 			let disambiguatedLabel = "\(parameter.label)_\(parameter.typeSource.replacingOccurrences(of: "?", with: ""))"
+			flatParameterDisambiguationMap[parameter.label, default: [:]][parameter.typeSource] = disambiguatedLabel
 			return (label: disambiguatedLabel, typeSource: parameter.typeSource)
 		}
 		// 3. Simple mock case — no tree, no flat parameters.
@@ -783,6 +789,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				nodes: parameterTree,
 				parentPath: "safeDIOverrides",
 				indent: bodyIndent,
+				flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 			)
 			lines.append(contentsOf: bodyBindings)
 		}
@@ -790,6 +797,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Generate return statement.
 		let returnArgumentList = try generateReturnArgumentList(
 			instantiable: instantiable,
+			flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 		)
 		let mockMethodName = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 		let returnConstruction = if instantiable.mockInitializer != nil {
@@ -810,6 +818,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Generates the labeled argument list for the return statement in the mock body.
 	private func generateReturnArgumentList(
 		instantiable: Instantiable,
+		flatParameterDisambiguationMap: [String: [String: String]] = [:],
 	) throws -> String {
 		let constructionInitializer: Initializer? = if let mockInitializer = instantiable.mockInitializer {
 			mockInitializer
@@ -823,7 +832,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var parts = [String]()
 		for argument in constructionInitializer.arguments {
 			if dependencyLabels.contains(argument.innerLabel) {
-				parts.append("\(argument.label): \(argument.innerLabel)")
+				// Aliased deps reference their fulfilling property's label. Any
+				// (label, type) that matches a disambiguated flat parameter on
+				// mock() resolves to the disambiguated name.
+				let resolvedLabel: String
+				let resolvedTypeSource: String
+				if let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }) {
+					switch dependency.source {
+					case let .aliased(fulfillingProperty, _, _):
+						resolvedLabel = fulfillingProperty.label
+						resolvedTypeSource = fulfillingProperty.typeDescription.asSource
+					case .instantiated, .received, .forwarded:
+						resolvedLabel = argument.innerLabel
+						resolvedTypeSource = dependency.property.typeDescription.asSource
+					}
+				} else {
+					resolvedLabel = argument.innerLabel
+					resolvedTypeSource = argument.typeDescription.asSource
+				}
+				let finalLabel = flatParameterDisambiguationMap[resolvedLabel]?[resolvedTypeSource] ?? resolvedLabel
+				parts.append("\(argument.label): \(finalLabel)")
 			} else if argument.hasDefaultValue, argument.label != "_" {
 				parts.append("\(argument.label): \(argument.label)")
 			}
@@ -1435,6 +1463,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 		ancestorTypes: Set<String> = [],
 		sendableExtractionPrefix: String? = nil,
+		flatParameterDisambiguationMap: [String: [String: String]] = [:],
 	) -> [String] {
 		var lines = [String]()
 
@@ -1489,6 +1518,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					for: node,
 					nodePath: argumentNodePath,
 					sendableExtractionPrefix: sendableExtractionPrefix,
+					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 				)
 				lines.append(contentsOf: generateInstantiatorBinding(
 					for: node,
@@ -1499,12 +1529,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 					indent: indent,
 					ancestorTypes: childAncestors,
+					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 				))
 			} else {
 				let arguments = resolveBuilderArguments(
 					for: node,
 					nodePath: argumentNodePath,
 					sendableExtractionPrefix: sendableExtractionPrefix,
+					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 				)
 				let argumentList = arguments.joined(separator: ", ")
 
@@ -1544,6 +1576,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						indent: innerIndent,
 						ancestorTypes: childAncestors,
 						sendableExtractionPrefix: sendableExtractionPrefix,
+						flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 					)
 
 					if node.erasedToConcreteExistential {
@@ -1589,6 +1622,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for node: MockParameterNode,
 		nodePath: String,
 		sendableExtractionPrefix: String? = nil,
+		flatParameterDisambiguationMap: [String: [String: String]] = [:],
 	) -> [String] {
 		let dependencyLabels = Set(node.dependencies.map(\.property.label))
 		let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
@@ -1599,12 +1633,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		return node.constructionArguments.compactMap { argument in
 			if dependencyLabels.contains(argument.innerLabel) {
-				argument.innerLabel
+				// Resolve the label and type a caller at this scope would use to
+				// reference the value. Aliased deps resolve to their fulfilling
+				// property; other deps resolve to the dep's own label and type.
+				// When the resolved (label, type) matches a disambiguated flat
+				// parameter on the root mock(), substitute the disambiguated name.
+				let resolvedLabel: String
+				let resolvedTypeSource: String
+				if let dependency = node.dependencies.first(where: { $0.property.label == argument.innerLabel }) {
+					switch dependency.source {
+					case let .aliased(fulfillingProperty, _, _):
+						resolvedLabel = fulfillingProperty.label
+						resolvedTypeSource = fulfillingProperty.typeDescription.asSource
+					case .instantiated, .received, .forwarded:
+						resolvedLabel = argument.innerLabel
+						resolvedTypeSource = dependency.property.typeDescription.asSource
+					}
+				} else {
+					resolvedLabel = argument.innerLabel
+					resolvedTypeSource = argument.typeDescription.asSource
+				}
+				return flatParameterDisambiguationMap[resolvedLabel]?[resolvedTypeSource] ?? resolvedLabel
 			} else if defaultParameterLabels.contains(argument.label) {
 				if let sendableExtractionPrefix {
-					"\(sendableExtractionPrefix)__\(relativePath)_\(argument.label)"
+					return "\(sendableExtractionPrefix)__\(relativePath)_\(argument.label)"
 				} else {
-					"\(nodePath).\(argument.label)"
+					return "\(nodePath).\(argument.label)"
 				}
 			} else if argument.hasDefaultValue, argument.label != "_",
 			          let defaultExpression = argument.defaultValueExpression
@@ -1614,10 +1668,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// overrides a production init that still carries default-valued
 				// non-dependency parameters). Pass the default expression inline
 				// so the builder call has the correct arity.
-				defaultExpression
+				return defaultExpression
 			} else {
 				// Unknown argument — use the label as a local variable reference.
-				argument.innerLabel
+				return argument.innerLabel
 			}
 		}
 	}
@@ -1634,6 +1688,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		arguments: [String],
 		indent: String,
 		ancestorTypes: Set<String> = [],
+		flatParameterDisambiguationMap: [String: [String: String]] = [:],
 	) -> [String] {
 		let functionName = "__safeDI_\(node.propertyLabel)"
 		let forwardedProperties = node.forwardedProperties.sorted()
@@ -1733,6 +1788,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indent: innerIndent,
 					ancestorTypes: functionAncestors,
 					sendableExtractionPrefix: functionName,
+					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 				)
 				lines.append(contentsOf: childBindings)
 
@@ -1772,6 +1828,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					parentPath: nodePath,
 					indent: innerIndent,
 					ancestorTypes: functionAncestors,
+					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 				)
 				lines.append(contentsOf: childBindings)
 
