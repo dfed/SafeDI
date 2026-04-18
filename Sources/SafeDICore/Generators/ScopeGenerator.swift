@@ -1852,6 +1852,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else {
 					"\(nodePath).\(argument.label)"
 				}
+			} else if argument.label == "_", let defaultExpression = argument.defaultValueExpression {
+				// Underscore-labeled default-valued parameters are not bubbled as
+				// overrides (they have no label to surface on the config struct),
+				// so inline the default expression at the call site.
+				defaultExpression
 			} else {
 				// Unknown argument — use the label as a local variable reference.
 				argument.innerLabel
