@@ -303,7 +303,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedAny_throwsError() async {
+	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToUnexpectedAny_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `erasedType: any ErasedType` is not @Instantiated or @Forwarded in chain:
@@ -349,7 +349,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedAny_throwsError() async {
+	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToDroppedAny_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `erasedType: ErasedType` is not @Instantiated or @Forwarded in chain:
@@ -395,7 +395,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedForceUnwrap_throwsError() async {
+	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToUnexpectedForceUnwrap_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `thing: Thing!` is not @Instantiated or @Forwarded in chain:
@@ -439,7 +439,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedForceUnwrap_throwsError() async {
+	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToDroppedForceUnwrap_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `thing: Thing` is not @Instantiated or @Forwarded in chain:
@@ -483,7 +483,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToUnexpectedOptional_throwsError() async {
+	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToUnexpectedOptional_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain:
@@ -526,7 +526,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToDroppedOptional_throwsError() async {
+	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToDroppedOptional_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `thing: Thing` is not @Instantiated or @Forwarded in chain:
@@ -570,7 +570,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToIncorrectType_throwsError() async {
+	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToIncorrectType_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain:
@@ -617,7 +617,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithUnfulfillableInstantiatedPropertyDueToIncorrectTypeOrLabel_throwsError() async {
+	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToIncorrectTypeOrLabel_throwsError() async {
 		await assertThrowsError(
 			"""
 			@Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain:
@@ -1736,7 +1736,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_OnCodeWithOptionalPropertyAliasAndMarkedOnlyIfAvailableAndItIsOnlyAvialableViaCircularDependency_throws_error() async {
+	mutating func run_onCodeWithOptionalPropertyAliasAndMarkedOnlyIfAvailableAndItIsOnlyAvailableViaCircularDependency_throwsError() async {
 		await assertThrowsError(
 			"""
 			Dependency cycle detected:
