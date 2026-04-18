@@ -272,6 +272,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Maps types with hand-written mock methods to their mock method name (e.g. "mock" or a custom name).
 		/// Used to provide default values for forwarded dependencies whose type has a hand-written mock.
 		let forwardedParameterMockDefaults: [TypeDescription: String]
+		/// Type-graph back-edges to skip when emitting `safeDIOverrides` paths in
+		/// builder code. Computed once globally so the override-path navigation
+		/// matches the configuration-struct shape produced by `generateConfigurationStruct`.
+		let cycleEdges: Set<CycleEdge>
 	}
 
 	private let scopeData: ScopeData
@@ -830,6 +834,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				indent: bodyIndent,
 				flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 				postChildBindingsByFulfilling: rootReceiverBindings.postChildByFulfilling,
+				cycleEdges: context.cycleEdges,
 			)
 			lines.append(contentsOf: bodyBindings)
 		} else {
@@ -1153,16 +1158,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Collects all unique configuration types from this scope's mock parameter tree.
-	func collectConfigurationTypes() async -> [(typeName: String, structCode: String)] {
+	/// Children edges are filtered against `cycleEdges` so the same back-edges are
+	/// removed across every root's view of a given type — required for type-level
+	/// consistency, since per-tree cycle detection (`isPropertyCycle`) breaks at
+	/// different edges depending on which root is being walked.
+	func collectConfigurationTypes(
+		cycleEdges: Set<CycleEdge>,
+	) async -> [(typeName: String, structCode: String)] {
 		let parameterTree = await collectMockParameterTree()
 		let uniqueTypes = Self.collectUniqueConfigurationTypes(from: parameterTree)
 		let indent = Self.standardIndent
 		return uniqueTypes.map { node in
 			(
 				typeName: node.concreteType.asSource,
-				structCode: Self.generateConfigurationStruct(for: node, indent: indent),
+				structCode: Self.generateConfigurationStruct(
+					for: node,
+					indent: indent,
+					cycleEdges: cycleEdges,
+				),
 			)
 		}
+	}
+
+	/// A directed edge in the global type-reference graph that, when removed,
+	/// breaks a cycle. Computed once globally (one back-edge per strongly-connected
+	/// component of size > 1) and applied uniformly when generating every type's
+	/// configuration struct.
+	struct CycleEdge: Hashable {
+		let parent: String
+		let child: String
 	}
 
 	/// Walks the dependency tree and builds a `[MockParameterNode]` tree representing
@@ -1373,6 +1397,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			// Skip leaf nodes that don't need a SafeDIMockConfiguration struct.
 			guard node.needsConfigurationStruct else { return }
+			// Skip cycle-closer nodes — their subtree was zeroed by Scope, so they'd
+			// register an empty placeholder that shadows the real (non-cycle) version
+			// of the same type emitted by another root's walk. With first-wins dedup,
+			// alphabetical traversal makes "first" deterministic, but a cycle leaf is
+			// never the right "first".
+			guard !node.isPropertyCycle else { return }
 			if seen.contains(key) {
 				// If this node requires sendable and the existing one doesn't,
 				// replace it — @Sendable closures are compatible in both contexts.
@@ -1462,6 +1492,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func generateConfigurationStruct(
 		for node: MockParameterNode,
 		indent: String,
+		cycleEdges: Set<CycleEdge>,
 	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
 		let sendableAnnotation = node.requiresSendable ? "@Sendable " : ""
@@ -1476,10 +1507,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var storedProperties = [String]()
 
 		// Child edge parameters (disambiguated if labels collide).
-		// Exclude children whose type matches this node — they'd create a recursive
-		// value type. These are self-referencing Instantiators (lazy cycles).
-		let nonCycleChildren = node.children.filter {
-			$0.concreteType != node.concreteType
+		// Exclude back-edges from `cycleEdges` — including them would nest a
+		// configuration struct that transitively contains itself, which Swift
+		// rejects as an infinite-size value type. `cycleEdges` is computed once
+		// globally (one back-edge set per strongly-connected component), so the
+		// same edges are filtered no matter which root contributes the struct —
+		// every root produces the same struct shape for a given type.
+		let parentTypeName = node.concreteType.asSource
+		let nonCycleChildren = node.children.filter { child in
+			!cycleEdges.contains(CycleEdge(
+				parent: parentTypeName,
+				child: child.concreteType.asSource,
+			))
 		}
 		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
 		for child in nonCycleChildren {
@@ -1637,6 +1676,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		sendableExtractionPrefix: String? = nil,
 		flatParameterDisambiguationMap: [String: [String: String]] = [:],
 		postChildBindingsByFulfilling: [String: [String: [String]]] = [:],
+		parentConcreteType: String? = nil,
+		cycleEdges: Set<CycleEdge> = [],
+		overridePathReachable: Bool = true,
 	) -> [String] {
 		var lines = [String]()
 
@@ -1653,6 +1695,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for node in nodes {
 			let nodeTypeKey = node.instantiatedTypeDescription.asSource
 			let isCycleNode = ancestorTypes.contains(nodeTypeKey)
+
+			// A back-edge from parentConcreteType to this node means this node
+			// was filtered out of the parent's SafeDIMockConfiguration struct —
+			// so its override path is unreachable here. Descendants of an
+			// unreachable node stay unreachable (path can't be recovered).
+			let nodeConcreteType = node.concreteType.asSource
+			let isBackEdge = parentConcreteType.map {
+				cycleEdges.contains(CycleEdge(parent: $0, child: nodeConcreteType))
+			} ?? false
+			let thisOverrideReachable = overridePathReachable && !isBackEdge
 
 			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			let nodePath = "\(parentPath).\(disambiguated)"
@@ -1675,6 +1727,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let optionalBuilderPath: String?
 			let argumentNodePath: String
 			if isCycleNode {
+				builderExpression = defaultBuilder
+				optionalBuilderPath = nil
+				argumentNodePath = nodePath
+			} else if !thisOverrideReachable {
 				builderExpression = defaultBuilder
 				optionalBuilderPath = nil
 				argumentNodePath = nodePath
@@ -1718,6 +1774,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indent: indent,
 					ancestorTypes: childAncestors,
 					flatParameterDisambiguationMap: combinedDisambiguationMap,
+					cycleEdges: cycleEdges,
+					overridePathReachable: thisOverrideReachable,
 				))
 			} else if node.requiresFunctionWrapper || hasDisambiguatedReceiver(node, flatParameterDisambiguationMap: combinedDisambiguationMap) {
 				// Constant node that needs a dedicated Swift scope — either for its
@@ -1748,6 +1806,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					sendableExtractionPrefix: sendableExtractionPrefix,
 					flatParameterDisambiguationMap: combinedDisambiguationMap,
 					postChildBindingsByFulfilling: receiverBindings.postChildByFulfilling,
+					parentConcreteType: nodeConcreteType,
+					cycleEdges: cycleEdges,
+					overridePathReachable: thisOverrideReachable,
 				)
 
 				if node.erasedToConcreteExistential {
@@ -1877,6 +1938,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 		ancestorTypes: Set<String> = [],
 		flatParameterDisambiguationMap: [String: [String: String]] = [:],
+		cycleEdges: Set<CycleEdge> = [],
+		overridePathReachable: Bool = true,
 	) -> [String] {
 		let functionName = "__safeDI_\(outerBindingName)"
 		let forwardedProperties = node.forwardedProperties.sorted()
@@ -1993,6 +2056,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					sendableExtractionPrefix: functionName,
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 					postChildBindingsByFulfilling: receiverBindings.postChildByFulfilling,
+					parentConcreteType: node.concreteType.asSource,
+					cycleEdges: cycleEdges,
+					overridePathReachable: overridePathReachable,
 				)
 				lines.append(contentsOf: childBindings)
 
@@ -2042,6 +2108,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					ancestorTypes: functionAncestors,
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 					postChildBindingsByFulfilling: receiverBindings.postChildByFulfilling,
+					parentConcreteType: node.concreteType.asSource,
+					cycleEdges: cycleEdges,
+					overridePathReachable: overridePathReachable,
 				)
 				lines.append(contentsOf: childBindings)
 
