@@ -802,7 +802,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let rootReceiverBindings = Self.emitReceiverBindings(
 			for: instantiable.dependencies,
 			flatParameterDisambiguationMap: rootDisambiguationMap,
-			localChildLabelAndTypes: Set(parameterTree.map { "\($0.propertyLabel):\($0.instantiatedTypeDescription.asSource)" }),
+			localChildLabelAndTypes: Set(parameterTree.map { "\($0.propertyLabel):\($0.typeDescription.asSource)" }),
 			indent: bodyIndent,
 		)
 
@@ -1721,7 +1721,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let receiverBindings = emitReceiverBindings(
 					for: node.dependencies,
 					flatParameterDisambiguationMap: combinedDisambiguationMap,
-					localChildLabelAndTypes: Set(node.children.map { "\($0.propertyLabel):\($0.instantiatedTypeDescription.asSource)" }),
+					localChildLabelAndTypes: Set(node.children.map { "\($0.propertyLabel):\($0.typeDescription.asSource)" }),
 					indent: innerIndent,
 				)
 
@@ -1800,7 +1800,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// than after all siblings) keeps the alias in scope for any
 			// subsequent sibling nested functions, which Swift forbids from
 			// forward-referencing later-declared locals.
-			if let postChild = postChildBindingsByFulfilling[node.propertyLabel]?[node.instantiatedTypeDescription.asSource] {
+			if let postChild = postChildBindingsByFulfilling[node.propertyLabel]?[node.typeDescription.asSource] {
 				lines.append(contentsOf: postChild)
 			}
 		}
@@ -1884,7 +1884,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let receiverBindings = emitReceiverBindings(
 			for: node.dependencies,
 			flatParameterDisambiguationMap: flatParameterDisambiguationMap,
-			localChildLabelAndTypes: Set(node.children.map { "\($0.propertyLabel):\($0.instantiatedTypeDescription.asSource)" }),
+			localChildLabelAndTypes: Set(node.children.map { "\($0.propertyLabel):\($0.typeDescription.asSource)" }),
 			indent: innerIndent,
 		)
 
