@@ -1810,15 +1810,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else {
 					"\(nodePath).\(argument.label)"
 				}
-			} else if argument.hasDefaultValue, argument.label != "_",
-			          let defaultExpression = argument.defaultValueExpression
-			{
-				// Argument has a default value but isn't tracked on the child's
-				// SafeDIMockConfiguration (e.g., when a zero-arg mock initializer
-				// overrides a production init that still carries default-valued
-				// non-dependency parameters). Pass the default expression inline
-				// so the builder call has the correct arity.
-				defaultExpression
 			} else {
 				// Unknown argument — use the label as a local variable reference.
 				argument.innerLabel
