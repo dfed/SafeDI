@@ -21,7 +21,12 @@ runs:
         # would let the first job to save poison the shared cache for every
         # other job — leaving them with an exact-key hit they cannot update.
         # Scope by `github.job` so each job owns its own cache entry.
-        key: ${{ runner.os }}-spm-${{ github.job }}-${{ hashFiles('Package.swift', 'CLI/Package.swift') }}${{ inputs.key-suffix && format('-{0}', inputs.key-suffix) || '' }}
+        # Hash every manifest CI resolves against (root, CLI, all Examples
+        # Package.swift, and the Xcode project files used by the Examples
+        # integrations) so changing any of them rotates the key — otherwise
+        # an unhashed manifest change leaves the workflow on a stale exact hit
+        # that it cannot update.
+        key: ${{ runner.os }}-spm-${{ github.job }}-${{ hashFiles('**/Package.swift', '**/*.xcodeproj/project.pbxproj') }}${{ inputs.key-suffix && format('-{0}', inputs.key-suffix) || '' }}
         restore-keys: |
-          ${{ runner.os }}-spm-${{ github.job }}-${{ hashFiles('Package.swift', 'CLI/Package.swift') }}-
+          ${{ runner.os }}-spm-${{ github.job }}-${{ hashFiles('**/Package.swift', '**/*.xcodeproj/project.pbxproj') }}-
           ${{ runner.os }}-spm-${{ github.job }}-
