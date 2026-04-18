@@ -802,7 +802,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let rootReceiverBindings = Self.emitReceiverBindings(
 			for: instantiable.dependencies,
 			flatParameterDisambiguationMap: rootDisambiguationMap,
-			localChildLabels: Set(parameterTree.map(\.propertyLabel)),
+			localChildLabelAndTypes: Set(parameterTree.map { "\($0.propertyLabel):\($0.instantiatedTypeDescription.asSource)" }),
 			indent: bodyIndent,
 		)
 
@@ -919,20 +919,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   nested builder functions emitted among those children can reference
 	///   them (Swift does not allow nested functions to forward-reference
 	///   `let`s declared later in the same scope).
-	/// - `postChildByFulfilling`: aliases whose fulfilling label IS bound as a
-	///   local child, keyed by that fulfilling label. Callers emit each alias
-	///   immediately after the fulfilling child's own binding so subsequent
-	///   sibling nested functions can capture the alias without
-	///   forward-referencing (Swift rejects nested-function captures of locals
-	///   declared later in the same scope).
+	/// - `postChildByFulfilling`: aliases whose fulfilling `(label, typeSource)`
+	///   IS bound as a local child, keyed by that specific pair. Sibling
+	///   disambiguation allows multiple children to share a `propertyLabel`
+	///   (distinguished by type), so keying by label alone would emit the alias
+	///   after every same-labeled sibling. Callers emit each alias immediately
+	///   after the specific fulfilling child's own binding so subsequent sibling
+	///   nested functions can capture the alias without forward-referencing
+	///   (Swift rejects nested-function captures of locals declared later in
+	///   the same scope).
 	fileprivate static func emitReceiverBindings(
 		for dependencies: [Dependency],
 		flatParameterDisambiguationMap: [String: [String: String]],
-		localChildLabels: Set<String> = [],
+		localChildLabelAndTypes: Set<String> = [],
 		indent: String,
-	) -> (preChild: [String], postChildByFulfilling: [String: [String]]) {
+	) -> (preChild: [String], postChildByFulfilling: [String: [String: [String]]]) {
 		var preChild = [String]()
-		var postChildByFulfilling = [String: [String]]()
+		var postChildByFulfilling = [String: [String: [String]]]()
 		for dependency in dependencies {
 			switch dependency.source {
 			case let .aliased(fulfillingProperty, _, _):
@@ -942,8 +945,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let fulfillingTypeSource = fulfillingProperty.typeDescription.asSource
 				let resolvedFulfilling = flatParameterDisambiguationMap[fulfillingLabel]?[fulfillingTypeSource] ?? fulfillingLabel
 				let line = "\(indent)let \(aliasLabel): \(aliasTypeSource) = \(resolvedFulfilling)"
-				if localChildLabels.contains(fulfillingLabel) {
-					postChildByFulfilling[fulfillingLabel, default: []].append(line)
+				let fulfillingKey = "\(fulfillingLabel):\(fulfillingTypeSource)"
+				if localChildLabelAndTypes.contains(fulfillingKey) {
+					postChildByFulfilling[fulfillingLabel, default: [:]][fulfillingTypeSource, default: []].append(line)
 				} else {
 					preChild.append(line)
 				}
@@ -1619,7 +1623,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ancestorTypes: Set<String> = [],
 		sendableExtractionPrefix: String? = nil,
 		flatParameterDisambiguationMap: [String: [String: String]] = [:],
-		postChildBindingsByFulfilling: [String: [String]] = [:],
+		postChildBindingsByFulfilling: [String: [String: [String]]] = [:],
 	) -> [String] {
 		var lines = [String]()
 
@@ -1717,7 +1721,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let receiverBindings = emitReceiverBindings(
 					for: node.dependencies,
 					flatParameterDisambiguationMap: combinedDisambiguationMap,
-					localChildLabels: Set(node.children.map(\.propertyLabel)),
+					localChildLabelAndTypes: Set(node.children.map { "\($0.propertyLabel):\($0.instantiatedTypeDescription.asSource)" }),
 					indent: innerIndent,
 				)
 
@@ -1796,7 +1800,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// than after all siblings) keeps the alias in scope for any
 			// subsequent sibling nested functions, which Swift forbids from
 			// forward-referencing later-declared locals.
-			if let postChild = postChildBindingsByFulfilling[node.propertyLabel] {
+			if let postChild = postChildBindingsByFulfilling[node.propertyLabel]?[node.instantiatedTypeDescription.asSource] {
 				lines.append(contentsOf: postChild)
 			}
 		}
@@ -1880,7 +1884,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let receiverBindings = emitReceiverBindings(
 			for: node.dependencies,
 			flatParameterDisambiguationMap: flatParameterDisambiguationMap,
-			localChildLabels: Set(node.children.map(\.propertyLabel)),
+			localChildLabelAndTypes: Set(node.children.map { "\($0.propertyLabel):\($0.instantiatedTypeDescription.asSource)" }),
 			indent: innerIndent,
 		)
 
