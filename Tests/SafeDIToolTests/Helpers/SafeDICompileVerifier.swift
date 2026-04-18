@@ -106,12 +106,29 @@ func verifyGeneratedCodeCompiles(
 
 	// First pass: typecheck inputs alone. If the inputs can't compile on their
 	// own (broken-on-purpose fixtures, cross-module references, etc.), skip
-	// the output verification entirely.
+	// the output verification entirely — but if the failure looks like a
+	// verifier infrastructure problem (missing SafeDI module, macro plugin
+	// load failure, ABI mismatch), surface it so a regression in the verifier
+	// itself doesn't silently disable compile checking everywhere.
 	let inputsOnlyResult = try runSwiftTypecheck(
 		sources: inputCompileFiles,
 		artifacts: artifacts,
 	)
-	if inputsOnlyResult.exitCode != 0 { return }
+	if inputsOnlyResult.exitCode != 0 {
+		if looksLikeVerifierInfrastructureFailure(inputsOnlyResult.stderr) {
+			Issue.record(
+				"""
+				Compile verifier could not typecheck even minimal inputs — this looks \
+				like a verifier infrastructure failure (e.g., SafeDI module missing, \
+				macro plugin failed to load, toolchain mismatch) rather than a \
+				broken fixture. Set SAFEDI_SKIP_COMPILE_CHECK=1 to bypass.
+				\(inputsOnlyResult.stderr)
+				""",
+				sourceLocation: sourceLocation,
+			)
+		}
+		return
+	}
 
 	var combinedCompileFiles = inputCompileFiles
 	for (fileName, contents) in generatedFiles {
@@ -140,15 +157,16 @@ func verifyGeneratedCodeCompiles(
 	}
 }
 
-/// Returns the set of type names that already declare conformance to
+/// Returns the set of base type names that already declare conformance to
 /// `Instantiable` somewhere in any fixture file. Covers both primary
 /// declarations (`struct X: Instantiable`) and extensions
-/// (`extension X: Foo, Instantiable`).
+/// (`extension X: Foo, Instantiable`). Handles generic declarations
+/// (`struct Foo<T>: Instantiable`) and module-qualified extensions
+/// (`extension MyModule.Container: Instantiable`) by reducing to the bare
+/// trailing identifier so the result keys match what
+/// `injectInstantiableConformance` looks up.
 func collectTypesDeclaringConformance(in fixtureContents: [String]) -> Set<String> {
-	// Match any `struct/class/actor/extension X: <conformance-list including Instantiable>`.
-	// The capture isolates the type name; we keep the match broad so we pick up
-	// conformance declared in either a primary type or an extension.
-	let pattern = #"(?:struct|final\s+class|class|actor|extension)\s+(\w+)\s*:\s*([^{]*)\{"#
+	let pattern = #"(?:struct|final\s+class|class|actor|extension)\s+((?:\w+\.)*\w+)(?:\s*<[^>]*>)?\s*:\s*([^{]*)\{"#
 	guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else {
 		return []
 	}
@@ -164,10 +182,130 @@ func collectTypesDeclaringConformance(in fixtureContents: [String]) -> Set<Strin
 			guard nameRange.location != NSNotFound, conformanceRange.location != NSNotFound else { return }
 			let conformance = nsSource.substring(with: conformanceRange)
 			guard conformance.range(of: #"\bInstantiable\b"#, options: .regularExpression) != nil else { return }
-			result.insert(nsSource.substring(with: nameRange))
+			let qualifiedName = nsSource.substring(with: nameRange)
+			result.insert(extractBaseTypeName(from: qualifiedName))
 		}
 	}
 	return result
+}
+
+/// Strips a module qualifier and any generic parameter list from a captured
+/// type-declaration name, leaving the bare identifier (`MyModule.Container<T>`
+/// → `Container`). Used as the canonical key for the
+/// `typesAlreadyDeclaringConformance` skip set.
+private func extractBaseTypeName(from qualified: String) -> String {
+	let withoutGenerics = qualified.split(separator: "<", maxSplits: 1, omittingEmptySubsequences: false)[0]
+	if let lastDot = withoutGenerics.lastIndex(of: ".") {
+		return String(withoutGenerics[withoutGenerics.index(after: lastDot)...])
+	}
+	return String(withoutGenerics)
+}
+
+/// Returns a copy of `source` where the inner contents of every
+/// `@Instantiable(...)` argument list are replaced with spaces (newlines
+/// preserved). Lengths are preserved so any regex match on the result maps
+/// back to the original by NSRange. This lets the conformance-injection
+/// regex use a simple `\([^)]*\)` matcher even when arguments contain
+/// nested parentheses (e.g.,
+/// `@Instantiable(fulfillingAdditionalTypes: [(any P).self])`).
+private func scrubInstantiableArguments(_ source: String) -> String {
+	let attributeName = "@Instantiable"
+	var scalars = Array(source.unicodeScalars)
+	let attributeScalars = Array(attributeName.unicodeScalars)
+	var index = 0
+	while index <= scalars.count - attributeScalars.count {
+		var matches = true
+		for offset in 0..<attributeScalars.count where scalars[index + offset] != attributeScalars[offset] {
+			matches = false
+			break
+		}
+		guard matches else {
+			index += 1
+			continue
+		}
+		// Word boundary check on both ends.
+		if index > 0, isIdentifierContinuation(scalars[index - 1]) {
+			index += 1
+			continue
+		}
+		var cursor = index + attributeScalars.count
+		if cursor < scalars.count, isIdentifierContinuation(scalars[cursor]) {
+			index += 1
+			continue
+		}
+		// Skip whitespace between `@Instantiable` and an optional `(`.
+		while cursor < scalars.count, isWhitespaceScalar(scalars[cursor]) {
+			cursor += 1
+		}
+		guard cursor < scalars.count, scalars[cursor] == "(" else {
+			index += attributeScalars.count
+			continue
+		}
+		let argumentListStart = cursor
+		var depth = 1
+		cursor += 1
+		while cursor < scalars.count, depth > 0 {
+			let scalar = scalars[cursor]
+			if scalar == "(" {
+				depth += 1
+			} else if scalar == ")" {
+				depth -= 1
+			}
+			cursor += 1
+		}
+		guard depth == 0 else {
+			index += attributeScalars.count
+			continue
+		}
+		let argumentListEnd = cursor - 1
+		if argumentListEnd > argumentListStart + 1 {
+			for replaceIndex in (argumentListStart + 1)..<argumentListEnd where !isNewlineScalar(scalars[replaceIndex]) {
+				scalars[replaceIndex] = Unicode.Scalar(" ")
+			}
+		}
+		index = cursor
+	}
+	return String(String.UnicodeScalarView(scalars))
+}
+
+private func isIdentifierContinuation(_ scalar: Unicode.Scalar) -> Bool {
+	if scalar == "_" { return true }
+	if scalar.value < 128 {
+		let asciiValue = scalar.value
+		return (asciiValue >= 0x30 && asciiValue <= 0x39) // 0-9
+			|| (asciiValue >= 0x41 && asciiValue <= 0x5A) // A-Z
+			|| (asciiValue >= 0x61 && asciiValue <= 0x7A) // a-z
+	}
+	return false
+}
+
+private func isWhitespaceScalar(_ scalar: Unicode.Scalar) -> Bool {
+	scalar == " " || scalar == "\t" || scalar == "\n" || scalar == "\r"
+}
+
+private func isNewlineScalar(_ scalar: Unicode.Scalar) -> Bool {
+	scalar == "\n" || scalar == "\r"
+}
+
+/// Heuristic detector for verifier infrastructure failures (vs. fixture-only
+/// compile errors). Catches the common "verifier is broken" symptoms — missing
+/// SafeDI module, macro plugin failed to load, toolchain ABI mismatch — so
+/// they surface as test failures instead of being silently swallowed by the
+/// inputs-only early-return path.
+private func looksLikeVerifierInfrastructureFailure(_ stderr: String) -> Bool {
+	let signals = [
+		"no such module 'SafeDI'",
+		"failed to load plugin",
+		"could not load plugin",
+		"could not be found in plugin",
+		"compiler plugin",
+		"module compiled with Swift",
+		"unable to find module dependency",
+	]
+	for signal in signals where stderr.contains(signal) {
+		return true
+	}
+	return false
 }
 
 /// Rewrites test-fixture source so that `@Instantiable`-decorated types and
@@ -182,25 +320,39 @@ func injectInstantiableConformance(
 	// Matches:
 	//   @Instantiable[(optional arg list)]
 	//   [attributes/whitespace/newlines]
-	//   [access modifier] [final] (class|struct|actor|extension) TypeName[: conformances]? {
+	//   [access modifier] [final] (class|struct|actor|extension) TypeName[<...>][: conformances][where ...] {
 	//
-	// Captures the header up through the opening `{` so we can inspect the
-	// conformance clause without swallowing the body.
-	let pattern = #"(@Instantiable(?:\s*\([^)]*\))?)(\s+(?:[^{]*?))((?:public|internal|open|package|fileprivate|private)?\s*(?:final\s+)?(?:class|struct|actor|extension)\s+(\w+)(\s*:\s*[^{]*)?\s*\{)"#
+	// We match against a *scrubbed* copy of the source where `@Instantiable`
+	// arg-list contents have been replaced with spaces, so the simple
+	// `\([^)]*\)` matcher works even when arguments contain nested parens
+	// (e.g., `@Instantiable(fulfillingAdditionalTypes: [(any P).self])`).
+	// Length is preserved by the scrubber so NSRange offsets map back to the
+	// original `source` directly.
+	//
+	// The type-name capture admits module qualifiers (`MyModule.Container`)
+	// and a trailing single-level generic parameter list (`Foo<T>`) so we can
+	// inject conformance on generic and module-qualified declarations.
+	let pattern = #"(@Instantiable(?:\s*\([^)]*\))?)(\s+(?:[^{]*?))((?:public|internal|open|package|fileprivate|private)?\s*(?:final\s+)?(?:class|struct|actor|extension)\s+((?:\w+\.)*\w+(?:\s*<[^>]*>)?)(\s*:\s*[^{]*)?\s*\{)"#
 	let regex = try NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators])
+	let scrubbedSource = scrubInstantiableArguments(source)
+	let nsScrubbed = scrubbedSource as NSString
 	let nsSource = source as NSString
-	let fullRange = NSRange(location: 0, length: nsSource.length)
+	let fullRange = NSRange(location: 0, length: nsScrubbed.length)
 
 	var result = source
 	var offset = 0
-	regex.enumerateMatches(in: source, options: [], range: fullRange) { match, _, _ in
+	regex.enumerateMatches(in: scrubbedSource, options: [], range: fullRange) { match, _, _ in
 		guard let match else { return }
 		let headerRange = match.range(at: 3)
 		let typeNameRange = match.range(at: 4)
 		let conformanceRange = match.range(at: 5)
 
+		// Pull the captures from the *original* source so we preserve exact
+		// argument-list text in the rewritten header (the scrubbed copy is
+		// only used to anchor the regex match positions).
 		let header = nsSource.substring(with: headerRange)
-		let typeName = nsSource.substring(with: typeNameRange)
+		let qualifiedTypeName = nsSource.substring(with: typeNameRange)
+		let baseTypeName = extractBaseTypeName(from: qualifiedTypeName)
 		let conformanceText = conformanceRange.location == NSNotFound
 			? nil
 			: nsSource.substring(with: conformanceRange)
@@ -208,18 +360,25 @@ func injectInstantiableConformance(
 		guard !alreadyConforms else { return }
 		// Don't inject when conformance has already been declared on the same
 		// type in another fixture file — Swift would treat it as redundant.
-		guard !skippingTypes.contains(typeName) else { return }
+		guard !skippingTypes.contains(baseTypeName) else { return }
 
 		var rewrittenHeader = header
 		if let conformanceText {
-			// Append ", Instantiable" to the existing conformance list.
-			let trimmed = conformanceText.trimmingCharacters(in: .whitespaces)
-			let replacement = trimmed + ", Instantiable "
+			// Conformance text may carry a trailing `where` clause; the new
+			// conformance has to be inserted into the conformance list itself
+			// (before any `where`), not appended after it.
+			let (conformanceList, trailingClause) = splitConformanceAndWhereClause(conformanceText)
+			let trimmedList = conformanceList.trimmingCharacters(in: .whitespaces)
+			let replacement = trimmedList + ", Instantiable" + (trailingClause.isEmpty ? "" : " " + trailingClause) + " "
 			guard let replaceRange = rewrittenHeader.range(of: conformanceText) else { return }
 			rewrittenHeader.replaceSubrange(replaceRange, with: replacement)
 		} else {
-			// No conformance clause: insert one after `TypeName`.
-			guard let nameRange = rewrittenHeader.range(of: typeName) else { return }
+			// No conformance clause: insert one after `TypeName[<...>]`. We
+			// search for the captured qualifiedTypeName so we land *after*
+			// any generic parameter list, which keeps the resulting header
+			// well-formed (`Container<T>: Instantiable {`, not
+			// `Container: Instantiable <T> {`).
+			guard let nameRange = rewrittenHeader.range(of: qualifiedTypeName) else { return }
 			let insertIndex = nameRange.upperBound
 			rewrittenHeader.insert(contentsOf: ": Instantiable ", at: insertIndex)
 		}
@@ -233,6 +392,27 @@ func injectInstantiableConformance(
 		offset += (rewrittenHeader as NSString).length - headerRange.length
 	}
 	return result
+}
+
+/// Splits a captured conformance clause (everything from the leading `:` up
+/// to the opening `{`) into the conformance list portion and any trailing
+/// generic `where` clause. New conformances must be appended to the list
+/// portion; appending after the `where` clause would produce invalid Swift
+/// (`: Foo where T: Sendable, Instantiable`).
+private func splitConformanceAndWhereClause(_ conformanceText: String) -> (list: String, whereClause: String) {
+	guard let whereRange = conformanceText.range(of: #"(?:^|\s)where\s"#, options: .regularExpression) else {
+		return (conformanceText, "")
+	}
+	// The match begins on either start-of-string or the whitespace preceding
+	// `where`; advance past leading whitespace so the trailing clause begins
+	// with the `where` keyword itself.
+	var keywordStart = whereRange.lowerBound
+	while keywordStart < whereRange.upperBound, conformanceText[keywordStart].isWhitespace {
+		keywordStart = conformanceText.index(after: keywordStart)
+	}
+	let listPortion = String(conformanceText[..<keywordStart])
+	let wherePortion = String(conformanceText[keywordStart...]).trimmingCharacters(in: .whitespaces)
+	return (listPortion, wherePortion)
 }
 
 struct SafeDIBuildArtifacts {
@@ -373,11 +553,29 @@ func runSwiftTypecheck(
 	process.standardOutput = stdoutPipe
 	process.standardError = stderrPipe
 
+	// Drain both pipes on background queues so a chatty `swiftc` failure
+	// (many diagnostics across generated files) can't deadlock the verifier
+	// by filling the OS pipe buffer before we get a chance to read it.
+	let stdoutQueue = DispatchQueue(label: "safedi.verifier.stdout")
+	let stderrQueue = DispatchQueue(label: "safedi.verifier.stderr")
+	let drainGroup = DispatchGroup()
+	var stdoutData = Data()
+	var stderrData = Data()
+	drainGroup.enter()
+	stdoutQueue.async {
+		stdoutData = (try? stdoutPipe.fileHandleForReading.readToEnd()) ?? Data()
+		drainGroup.leave()
+	}
+	drainGroup.enter()
+	stderrQueue.async {
+		stderrData = (try? stderrPipe.fileHandleForReading.readToEnd()) ?? Data()
+		drainGroup.leave()
+	}
+
 	try process.run()
 	process.waitUntilExit()
+	drainGroup.wait()
 
-	let stdoutData = try stdoutPipe.fileHandleForReading.readToEnd() ?? Data()
-	let stderrData = try stderrPipe.fileHandleForReading.readToEnd() ?? Data()
 	return SwiftTypecheckResult(
 		exitCode: process.terminationStatus,
 		stdout: String(data: stdoutData, encoding: .utf8) ?? "",
