@@ -390,7 +390,7 @@ public protocol UserManager: UserVendor { var user: User { get set } }
 
 @Instantiable
 public struct LoggedInView: Instantiable {
-    @Instantaited private let userManager: UserManager
+    @Instantiated private let userManager: UserManager
     @Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self) private let userVendor: UserVendor
     @Instantiated private let profileViewBuilder: Instantiator<ProfileView>
 }
