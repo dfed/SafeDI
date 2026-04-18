@@ -5832,24 +5832,31 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_whenAliasedReceivedIsFulfilledByLocalInstantiatedSibling() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenAliasedReceivedIsFulfilledByLocalInstantiatedSibling_andRootDeclaresMatchingLabel() async throws {
 		// Regression coverage for the `propertiesToDeclare.contains(fulfillingProperty)`
 		// guard in `ScopeGenerator.init`'s `receivedProperties` computation.
-		// Consumer declares both an @Instantiated `service: Service` AND an alias
-		// `alias: Service` fulfilled by that local `service`. The alias must bind
-		// to the locally-declared sibling — Consumer must NOT receive `service`
-		// from Root. Without the guard, `service` would be promoted up to Root,
-		// producing a second Service instance and disturbing the emission order.
+		// Consumer declares both `@Instantiated service: Service` AND an alias
+		// `alias: Service` fulfilled by the local `service`. Root also has its
+		// own `@Instantiated service: Service` sibling of `consumer`.
+		//
+		// Without the guard, Consumer's `receivedProperties` would include
+		// `service` (from the alias's fulfilling). Root's `orderedPropertiesToGenerate`
+		// would then order Root's `service` BEFORE `consumer` — but Consumer
+		// does NOT actually depend on Root's `service` (it binds its own local
+		// instance). The guard suppresses the spurious dependency so `consumer`
+		// emits in natural declaration order relative to Root's `service`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
 				public struct Root {
-				    public init(consumer: Consumer) {
+				    public init(consumer: Consumer, service: Service) {
 				        self.consumer = consumer
+				        self.service = service
 				    }
 
 				    @Instantiated let consumer: Consumer
+				    @Instantiated let service: Service
 				}
 				""",
 				"""
@@ -5888,7 +5895,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		            return Consumer(service: service, alias: alias)
 		        }
 		        let consumer: Consumer = __safeDI_consumer()
-		        self.init(consumer: consumer)
+		        let service = Service()
+		        self.init(consumer: consumer, service: service)
 		    }
 		}
 		""")
@@ -5896,24 +5904,30 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_whenOnlyIfAvailableAliasedReceivedIsFulfilledByLocalInstantiatedSibling() async throws {
+	mutating func run_writesConvenienceExtensionOnRootOfTree_whenOnlyIfAvailableAliasedReceivedIsFulfilledByLocalInstantiatedSibling_andRootDeclaresMatchingLabel() async throws {
 		// Regression coverage for the `propertiesToDeclare.contains(fulfillingProperty)`
 		// guard in `ScopeGenerator.init`'s `onlyIfAvailableUnwrappedReceivedProperties`
-		// computation. The alias is marked `onlyIfAvailable: true` but its
-		// fulfilling property is locally @Instantiated — the guard prevents the
-		// fulfillingProperty's unwrapped form from being added to the
-		// onlyIfAvailable received set (which would otherwise cause the parent
-		// to believe it must promote `service` as an unwrapped receiver).
+		// computation. Consumer has an `onlyIfAvailable: true` alias whose
+		// fulfilling property is locally @Instantiated, and Root declares its
+		// own matching-label sibling.
+		//
+		// Without the guard, Consumer's `onlyIfAvailableUnwrappedReceivedProperties`
+		// would include `service.asUnwrappedProperty`. Root's ordering would
+		// then place Root's `service` BEFORE `consumer`. The guard keeps natural
+		// declaration order since Consumer doesn't actually depend on Root's
+		// `service`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
 				public struct Root {
-				    public init(consumer: Consumer) {
+				    public init(consumer: Consumer, service: Service) {
 				        self.consumer = consumer
+				        self.service = service
 				    }
 
 				    @Instantiated let consumer: Consumer
+				    @Instantiated let service: Service
 				}
 				""",
 				"""
@@ -5952,7 +5966,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		            return Consumer(service: service, alias: alias)
 		        }
 		        let consumer: Consumer = __safeDI_consumer()
-		        self.init(consumer: consumer)
+		        let service = Service()
+		        self.init(consumer: consumer, service: service)
 		    }
 		}
 		""")
