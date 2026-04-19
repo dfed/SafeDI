@@ -51,11 +51,9 @@ final class Scope: Hashable {
 		case aliased(Property, fulfilledBy: Property, erasedToConcreteExistential: Bool, onlyIfAvailable: Bool)
 	}
 
-	var properties: [Property] {
-		instantiable
-			.dependencies
-			.map(\.property)
-	}
+	private(set) lazy var properties: [Property] = instantiable
+		.dependencies
+		.map(\.property)
 
 	private(set) lazy var createdProperties = Set(
 		instantiable
@@ -75,29 +73,27 @@ final class Scope: Hashable {
 			.map(\.property),
 	)
 
-	var requiredReceivedProperties: [Property] {
-		instantiable
-			.dependencies
-			.compactMap {
-				switch $0.source {
-				case let .received(onlyIfAvailable):
-					if onlyIfAvailable {
-						nil
-					} else {
-						$0.property
-					}
-				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-					if onlyIfAvailable {
-						nil
-					} else {
-						fulfillingProperty
-					}
-				case .forwarded,
-				     .instantiated:
+	private(set) lazy var requiredReceivedProperties: [Property] = instantiable
+		.dependencies
+		.compactMap {
+			switch $0.source {
+			case let .received(onlyIfAvailable):
+				if onlyIfAvailable {
 					nil
+				} else {
+					$0.property
 				}
+			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+				if onlyIfAvailable {
+					nil
+				} else {
+					fulfillingProperty
+				}
+			case .forwarded,
+			     .instantiated:
+				nil
 			}
-	}
+		}
 
 	func createScopeGenerator(
 		for property: Property?,

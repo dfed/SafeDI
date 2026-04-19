@@ -24,6 +24,7 @@
 --disable blankLineAfterSwitchCase
 --disable hoistTry
 --disable docComments
+--disable redundantSendable
 
 # global
 --swiftversion 6.3
