@@ -224,11 +224,18 @@ public struct InstantiableMacro: MemberMacro {
 					diagnosticNode: Syntax(initializerSyntax),
 					context: context,
 				)
-				Self.validateDefaultExpressions(
-					functionSyntax: initializerSyntax.signature,
-					dependencies: visitor.dependencies,
-					context: context,
-				)
+				// Only check init defaults when no custom mock method exists —
+				// SafeDI prefers `mockInitializer` over the init for mock
+				// construction (see `generateMockRootCode` and
+				// `generateReturnArgumentList`), so init defaults never reach
+				// the override surface when a mock method is present.
+				if visitor.mockInitializer == nil {
+					Self.validateDefaultExpressions(
+						functionSyntax: initializerSyntax.signature,
+						dependencies: visitor.dependencies,
+						context: context,
+					)
+				}
 			}
 			if let mockInitializer = visitor.mockInitializer,
 			   let mockSyntax = visitor.mockFunctionSyntax

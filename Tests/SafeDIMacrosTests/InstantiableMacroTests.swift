@@ -5129,6 +5129,38 @@ import Testing
 		}
 
 		@Test
+		func producesNoDiagnostic_whenInitDefaultReferencesSelfButCustomMockExists() {
+			// When the type has a `customMock` method, SafeDI uses the mock
+			// method (not the init) to construct the instance for mocks, so
+			// init defaults never reach the override surface. `Self.*` in an
+			// init default is safe in that case.
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyType: Instantiable {
+				    public init(name: String = Self.defaultName) {
+				        self.name = name
+				    }
+				    public static let defaultName = "fallback"
+				    public static func customMock() -> MyType { MyType() }
+				    let name: String
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init(name: String = Self.defaultName) {
+				        self.name = name
+				    }
+				    public static let defaultName = "fallback"
+				    public static func customMock() -> MyType { MyType() }
+				    let name: String
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func producesNoDiagnostic_whenDefaultExpressionReferencesSelfOnUnlabeledNonDependency() {
 			// `_`-labeled non-dependency defaults are elided from the mock
 			// call site (`ScopeGenerator.callSiteArguments` filters them and
