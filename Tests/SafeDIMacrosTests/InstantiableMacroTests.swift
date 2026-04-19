@@ -5049,6 +5049,9 @@ import Testing
 						message: "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `leaf: Leaf`. SafeDI cannot generate a mock for this signature: the default cannot be elided from the mock's override surface (Swift requires the earlier positional slot to be passed when a later unlabeled parameter is required), and an unlabeled parameter cannot be exposed as a labeled field on `SafeDIMockConfiguration`. Either add an external label to the defaulted parameter, reorder so unlabeled defaults come last, or remove the default.",
 						line: 3,
 						column: 5,
+						fixIts: [
+							FixItSpec(message: "Promote `enabled` to an external label (rewrite `_ enabled:` as `enabled:`)"),
+						],
 					),
 				],
 				macros: instantiableTestMacros,

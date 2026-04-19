@@ -893,7 +893,7 @@ public struct InstantiableMacro: MemberMacro {
 				Self.validateUnlabeledDefaultShape(
 					functionSyntax: mockFunction.signature,
 					arguments: mockFunctionInitializer.arguments,
-					dependencies: visitor.dependencies,
+					dependencies: extensionDependencies,
 					diagnosticNode: Syntax(mockFunction),
 					context: context,
 				)
@@ -1062,21 +1062,11 @@ public struct InstantiableMacro: MemberMacro {
 				}
 			}
 
-			// Diagnose unmockable shapes on extension `instantiate(...)`
-			// methods. Matches the concrete-type validation above.
-			for member in extensionDeclaration.memberBlock.members {
-				guard let function = FunctionDeclSyntax(member.decl),
-				      function.name.text == InstantiableVisitor.instantiateMethodName
-				else { continue }
-				let initializer = Initializer(function)
-				Self.validateUnlabeledDefaultShape(
-					functionSyntax: function.signature,
-					arguments: initializer.arguments,
-					dependencies: visitor.dependencies,
-					diagnosticNode: Syntax(function),
-					context: context,
-				)
-			}
+			// Every argument on an extension's `instantiate()` method is
+			// treated as a dependency, so the "unmockable unlabeled default"
+			// shape can't occur there — it requires a non-dependency
+			// defaulted parameter. We only validate the extension's mock
+			// methods (below), not `instantiate`.
 
 			let instantiables = visitor.instantiables
 			if instantiables.count > 1 {
@@ -1173,13 +1163,14 @@ public struct InstantiableMacro: MemberMacro {
 	/// block elision — they're elided together as a trailing run — so
 	/// signatures like `init(_ a: Int = 0, _ b: Int = 1)` are fine.
 	private static func validateUnlabeledDefaultShape(
-		functionSyntax _: FunctionSignatureSyntax,
+		functionSyntax: FunctionSignatureSyntax,
 		arguments: [Initializer.Argument],
 		dependencies: [Dependency],
 		diagnosticNode: Syntax,
 		context: some MacroExpansionContext,
 	) {
 		let dependencyLabels = Set(dependencies.map(\.property.label))
+		let parameterSyntaxes = Array(functionSyntax.parameterClause.parameters)
 		for (index, argument) in arguments.enumerated() {
 			guard argument.label == "_",
 			      argument.hasDefaultValue,
@@ -1188,13 +1179,36 @@ public struct InstantiableMacro: MemberMacro {
 			guard let following = arguments[(index + 1)...].first(where: {
 				$0.label == "_" && !$0.hasDefaultValue
 			}) else { continue }
+
+			// Fix-it: promote the inner label to the external label by
+			// rewriting `_ x: T = …` to `x: T = …`. That makes the parameter
+			// callable by keyword, so eliding it from the mock override
+			// surface becomes safe. Reordering or removing the default are
+			// the other two resolutions the diagnostic message mentions;
+			// users can apply those manually.
+			var changes: [FixIt.Change] = []
+			if index < parameterSyntaxes.count {
+				let parameter = parameterSyntaxes[index]
+				var fixedParameter = parameter
+				fixedParameter.firstName = TokenSyntax.identifier(
+					argument.innerLabel,
+					leadingTrivia: parameter.firstName.leadingTrivia,
+					trailingTrivia: parameter.firstName.trailingTrivia,
+				)
+				fixedParameter.secondName = nil
+				changes.append(.replace(
+					oldNode: Syntax(parameter),
+					newNode: Syntax(fixedParameter),
+				))
+			}
+
 			context.diagnose(Diagnostic(
 				node: diagnosticNode,
 				error: FixableInstantiableError.unlabeledDefaultBeforeUnlabeledParameter(
 					defaultedParameter: argument.asProperty,
 					followingParameter: following.asProperty,
 				),
-				changes: [],
+				changes: changes,
 			))
 		}
 	}

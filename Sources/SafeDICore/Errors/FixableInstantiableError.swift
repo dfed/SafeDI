@@ -227,7 +227,7 @@ public enum FixableInstantiableError: DiagnosticError {
 			case let .mockOnlyMissingMockMethod(typeName, methodName):
 				"Add `public static func \(methodName)(…) -> \(typeName)` method"
 			case let .unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter, _):
-				"Add an external label to `\(defaultedParameter.label)` or remove its default value"
+				"Promote `\(defaultedParameter.label)` to an external label (rewrite `_ \(defaultedParameter.label):` as `\(defaultedParameter.label):`)"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}
