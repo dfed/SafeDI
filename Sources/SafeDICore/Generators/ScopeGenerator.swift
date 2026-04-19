@@ -1037,33 +1037,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"\(concreteType.asSource).\(Self.configurationStructName)"
 		}
 
-		/// Construction arguments surfaced at the mock call site. Non-dependency
-		/// unlabeled parameters with defaults are omitted so Swift's
-		/// default-argument thunk fires in the callee's declaration context,
-		/// preserving resolution of `Self.*`, private members, and file-scoped
-		/// symbols in the default expression that would otherwise fail when
-		/// inlined at the caller. Dependency parameters are always retained even
-		/// when shaped `_ dep: Dep = …`, since the override flow must thread the
-		/// resolved binding through to the callee.
+		/// Whether this argument is a non-dependency `_`-labeled defaulted
+		/// parameter that the mock call site elides. Elided parameters are
+		/// filled in by Swift's default-argument thunk in the callee's
+		/// declaration context, which preserves `Self`-binding and unqualified
+		/// name lookup inside the default expression. Dependency parameters
+		/// (even when shaped `_ dep: Dep = …`) are never elided — the override
+		/// flow must thread the resolved binding through to the callee.
+		/// `validateMockableInitializerShapes` rejects the shapes where
+		/// eliding would produce an uncallable signature (non-trailing
+		/// `_`-labeled default).
+		private func isElidedInCallSite(_ argument: Initializer.Argument, dependencyInnerLabels: Set<String>) -> Bool {
+			argument.label == "_"
+				&& argument.hasDefaultValue
+				&& !dependencyInnerLabels.contains(argument.innerLabel)
+		}
+
+		/// Construction arguments surfaced at the mock call site, with elided
+		/// non-dependency unlabeled defaults removed.
 		var callSiteArguments: [Initializer.Argument] {
 			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
-			return constructionArguments.filter { argument in
-				!(argument.label == "_"
-					&& argument.hasDefaultValue
-					&& !dependencyInnerLabels.contains(argument.innerLabel))
-			}
+			return constructionArguments.filter { !isElidedInCallSite($0, dependencyInnerLabels: dependencyInnerLabels) }
 		}
 
 		/// Whether any construction argument is a non-dependency unlabeled
-		/// defaulted parameter that is hidden from the mock API and filled in by
+		/// defaulted parameter hidden from the mock API and filled in by
 		/// Swift's default thunk.
 		var hasHiddenUnlabeledDefaults: Bool {
 			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
-			return constructionArguments.contains { argument in
-				argument.label == "_"
-					&& argument.hasDefaultValue
-					&& !dependencyInnerLabels.contains(argument.innerLabel)
-			}
+			return constructionArguments.contains { isElidedInCallSite($0, dependencyInnerLabels: dependencyInnerLabels) }
 		}
 
 		/// The builder closure type as a Swift source string (unlabeled parameters).
@@ -1109,20 +1111,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"init"
 			}
+			// In the hidden-defaults closure-wrap case, the body is a CALL
+			// expression where `init` has no `.init` suffix — `Type($0)` not
+			// `Type.init($0)`. Everywhere else we emit a function reference,
+			// which requires `.init` to disambiguate from the type itself.
 			if hasHiddenUnlabeledDefaults {
 				let labeledArguments = callSiteArguments.enumerated()
 					.map { index, argument in
 						argument.label == "_" ? "$\(index)" : "\(argument.label): $\(index)"
 					}
 					.joined(separator: ", ")
-				let callExpression = if methodName == "init" {
-					"\(concreteType.asSource)(\(labeledArguments))"
-				} else {
-					"\(concreteType.asSource).\(methodName)(\(labeledArguments))"
-				}
+				let callExpression = methodName == "init"
+					? "\(concreteType.asSource)(\(labeledArguments))"
+					: "\(concreteType.asSource).\(methodName)(\(labeledArguments))"
 				return "{ \(callExpression) }"
-			}
-			if callSiteArguments.isEmpty {
+			} else if callSiteArguments.isEmpty {
 				return "\(concreteType.asSource).\(methodName)"
 			} else {
 				let labels = callSiteArguments
@@ -1950,29 +1953,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let dependenciesByLabel = Dictionary(
 			uniqueKeysWithValues: node.dependencies.map { ($0.property.label, $0) },
 		)
-		let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
 
 		let relativePath = nodePath
 			.replacingOccurrences(of: "safeDIOverrides.", with: "")
 			.replacingOccurrences(of: ".", with: "_")
 
+		// Every non-dependency arg surviving `callSiteArguments` is a labeled
+		// default — `_`-labeled defaults are either elided (trailing) or
+		// rejected at generator-validation time (non-trailing).
+		// `validateMockableInitializerShapes` enforces that; a required
+		// labeled non-dependency would be rejected earlier by the macro's
+		// `unexpectedArgument` check.
 		return node.callSiteArguments.map { argument in
 			if dependenciesByLabel[argument.innerLabel] != nil {
 				argument.innerLabel
-			} else if defaultParameterLabels.contains(argument.label) {
-				// Non-dependency default — surfaced on the override struct, so
-				// resolve against the override storage path (or its extracted
-				// sendable local).
-				if let sendableExtractionPrefix {
-					"\(sendableExtractionPrefix)__\(relativePath)_\(argument.label)"
-				} else {
-					"\(nodePath).\(argument.label)"
-				}
+			} else if let sendableExtractionPrefix {
+				"\(sendableExtractionPrefix)__\(relativePath)_\(argument.label)"
 			} else {
-				// Required non-dependency argument — resolve via lexical scope,
-				// since no override slot exists on the config struct. This covers
-				// runtime values that an ancestor has bound above this call site.
-				argument.innerLabel
+				"\(nodePath).\(argument.label)"
 			}
 		}
 	}
