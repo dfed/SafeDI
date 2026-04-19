@@ -36,7 +36,7 @@ extension Diagnostic {
 			message: error.diagnostic,
 			highlights: highlights,
 			notes: notes,
-			fixIts: changes.isEmpty ? [] : [
+			fixIts: [
 				FixIt(
 					message: error.fixIt,
 					changes: changes,
