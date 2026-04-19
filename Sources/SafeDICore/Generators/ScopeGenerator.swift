@@ -1007,15 +1007,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
-		/// Whether this node has any alias children. Aliases force the node into
-		/// a function wrapper so their `let <alias>: <Type> = <fulfilling>`
-		/// bindings land in a dedicated Swift scope.
-		var hasAliasChildren: Bool {
-			children.contains {
-				if case .alias = $0 { true } else { false }
-			}
-		}
-
 		/// Whether this node needs a full `SafeDIMockConfiguration` struct or can be
 		/// inlined as an optional builder closure on the parent. A node needs a struct
 		/// when it has property children (subtree customization), non-dependency
@@ -1028,8 +1019,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// True when this node must be wrapped in a `__safeDI_<label>()` helper
 		/// function — either because it needs a configuration struct or because
 		/// it has alias children whose bindings must live in a local scope.
+		/// When `needsConfigurationStruct` is false, `propertyChildren` is empty, so
+		/// any remaining children are aliases whose bindings require the function wrapper.
 		var requiresFunctionWrapper: Bool {
-			needsConfigurationStruct || hasAliasChildren
+			needsConfigurationStruct || !children.isEmpty
 		}
 
 		/// The nested configuration struct name (used in struct definitions).
@@ -1170,20 +1163,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) async -> [MockTreeItem] {
 		var items = [MockTreeItem]()
 
+		// Roots only appear at the top level, never as children here — so the
+		// `.root` case is not part of the reachable pattern space and is omitted.
 		for childGenerator in orderedPropertiesToGenerate {
-			switch childGenerator.scopeData {
-			case .root:
-				continue
-			case let .alias(property, fulfillingProperty, _, _):
+			if case let .alias(property, fulfillingProperty, _, _) = childGenerator.scopeData {
 				items.append(.alias(MockAliasNode(
 					propertyLabel: property.label,
 					typeDescription: property.typeDescription,
 					fulfillingLabel: fulfillingProperty.label,
 					fulfillingTypeDescription: fulfillingProperty.typeDescription,
 				)))
-			case let .property(childInstantiable, _, _, erasedToConcreteExistential, isPropertyCycle):
-				guard let childProperty = childGenerator.property else { continue }
-
+			} else if case let .property(childInstantiable, childProperty, _, erasedToConcreteExistential, isPropertyCycle) = childGenerator.scopeData {
 				let isInstantiator = !childProperty.propertyType.isConstant
 				let childInsideSendable = insideSendableScope || childProperty.propertyType.isSendable
 
@@ -1204,9 +1194,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					childInstantiable.initializer
 				}
 
-				// Collect non-dependency default-valued parameters.
+				// Collect non-dependency default-valued parameters and construction arguments.
 				var defaultParameters = [MockParameterNode.DefaultParameter]()
+				var constructionArguments = [Initializer.Argument]()
 				if let constructionInitializer {
+					constructionArguments = constructionInitializer.arguments
 					let dependencyLabels = Set(childInstantiable.dependencies.map(\.property.label))
 					for argument in constructionInitializer.arguments where argument.hasDefaultValue {
 						guard !dependencyLabels.contains(argument.innerLabel),
@@ -1228,9 +1220,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						.filter { $0.source == .forwarded }
 						.map(\.property),
 				)
-
-				// Gather all construction arguments from the chosen initializer.
-				let constructionArguments: [Initializer.Argument] = constructionInitializer?.arguments ?? []
 
 				items.append(.property(MockParameterNode(
 					propertyLabel: childProperty.label,
