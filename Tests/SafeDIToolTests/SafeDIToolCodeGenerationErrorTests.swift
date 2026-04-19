@@ -173,7 +173,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(conformsElsewhere: true)
-					extension Array: Instantiable {
+					extension Array {
 					    public static func instantiate() -> Container<Int> {
 					        .init(0)
 					    }
@@ -181,7 +181,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(conformsElsewhere: true)
-					extension Array: Instantiable {
+					extension Array {
 					    public static func instantiate() -> Container<Int> {
 					        .init(0)
 					    }
@@ -209,7 +209,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(conformsElsewhere: true)
-					extension Array: Instantiable {
+					extension Array {
 					    public static func instantiate() -> Container<Int> {
 					        .init(0)
 					    }
@@ -217,7 +217,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(conformsElsewhere: true)
-					extension Array: Instantiable {
+					extension Array {
 					    public static func instantiate(intValue: Int) -> Container<Int> {
 					        .init(intValue)
 					    }
