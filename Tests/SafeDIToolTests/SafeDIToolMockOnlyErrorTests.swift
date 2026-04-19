@@ -48,13 +48,13 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@Instantiable(mockOnly: true)
-					extension MyService: Instantiable {
+					extension MyService {
 					    public static func mock() -> MyService { fatalError() }
 					}
 					""",
 					"""
 					@Instantiable(mockOnly: true)
-					extension MyService: Instantiable {
+					extension MyService {
 					    public static func mock() -> MyService { fatalError() }
 					}
 					""",
@@ -217,7 +217,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(mockOnly: true)
-					extension MyService: Instantiable {
+					extension MyService {
 					    public static func mock() -> MyService { MyService() }
 					}
 					""",
@@ -296,7 +296,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(mockOnly: true)
-					extension MyService: Instantiable {
+					extension MyService {
 					    public static func mock() -> MyService { MyService() }
 					}
 					""",

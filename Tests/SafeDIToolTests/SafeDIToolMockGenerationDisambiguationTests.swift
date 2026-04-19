@@ -120,16 +120,16 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            childB: (() -> Other)? = nil,
-		            _ safeDIBuilder: ((Instantiator<Other>) -> ChildA)? = nil
+		            childB: (@Sendable () -> Other)? = nil,
+		            _ safeDIBuilder: (@Sendable (Instantiator<Other>) -> ChildA)? = nil
 		        ) {
 		            self.childB = childB
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let childB: (() -> Other)?
+		        let childB: (@Sendable () -> Other)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<Other>) -> ChildA)?
+		        let safeDIBuilder: (@Sendable (Instantiator<Other>) -> ChildA)?
 		    }
 		}
 		#endif

@@ -40,6 +40,7 @@ func executeSafeDIToolTest(
 	buildDOTFileOutput: Bool = false,
 	filesToDelete: inout [URL],
 	includeFolders: [String] = [],
+	skipCompileVerification: Bool = false,
 ) async throws -> TestOutput {
 	// Create additional directory first so its path can be substituted into target file content.
 	var additionalDirectoryFiles = [URL]()
@@ -177,6 +178,30 @@ func executeSafeDIToolTest(
 			}()
 		} else {
 			nil
+		}
+
+		if let generatedFiles, !generatedFiles.isEmpty {
+			// Skip compile verification when the test simulates cross-module
+			// scenarios (types declared in the main fixture reference types
+			// that only exist in a sibling module) or when the caller has
+			// explicitly opted out. The checker needs every referenced type
+			// to be defined in the compilation unit; cross-module fixtures
+			// violate that contract on purpose. Tests that pass
+			// `additionalImportedModules` with unresolvable names (e.g., the
+			// placeholder "Test" module) must opt out explicitly via
+			// `skipCompileVerification: true` — otherwise verification runs
+			// and catches regressions when real modules like Foundation are
+			// passed through.
+			let shouldVerify = !skipCompileVerification
+				&& dependentModuleInfoPaths.isEmpty
+			if shouldVerify {
+				try verifyGeneratedCodeCompiles(
+					inputSwiftFiles: swiftFiles,
+					additionalDirectorySwiftFiles: additionalDirectoryFiles,
+					generatedFiles: generatedFiles,
+					filesToDelete: &filesToDelete,
+				)
+			}
 		}
 
 		return try TestOutput(

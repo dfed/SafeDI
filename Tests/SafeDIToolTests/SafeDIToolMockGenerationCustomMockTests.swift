@@ -1008,7 +1008,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@Instantiable(isRoot: true, generateMock: true)
+				@Instantiable(isRoot: true, generateMock: true) @MainActor
 				public struct Root: Instantiable {
 				    public init(service: Service) { self.service = service }
 				    @Instantiated let service: Service
@@ -1107,6 +1107,8 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Service combines generateMock with a hand-written mock(), which the macro rejects as ambiguous
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -1363,6 +1365,9 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
+				public protocol ChildServiceProtocol {}
+				""",
+				"""
 				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childService: ChildServiceProtocol, engine: Engine) {
@@ -1392,6 +1397,8 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// customMock returns ChildServiceProtocol rather than Self, which the macro rejects
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -1437,6 +1444,9 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
+				public protocol ChildServiceProtocol {}
+				""",
+				"""
 				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childService: ChildService, engine: Engine) {
@@ -1466,6 +1476,8 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// customMock returns ChildServiceProtocol rather than Self, which the macro rejects
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -1510,6 +1522,12 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
+				public protocol ChildServiceProtocol {}
+				public struct ChildService: ChildServiceProtocol {
+				    public init() {}
+				}
+				""",
+				"""
 				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childService: ChildServiceProtocol, engine: Engine) {
@@ -1538,6 +1556,8 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// customMock returns ChildServiceProtocol rather than Self, which the macro rejects
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -1583,6 +1603,12 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
+				public protocol ChildServiceProtocol {}
+				public struct ChildService: ChildServiceProtocol {
+				    public init() {}
+				}
+				""",
+				"""
 				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childService: ChildService, engine: Engine) {
@@ -1611,6 +1637,8 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// customMock returns ChildServiceProtocol rather than Self, which the macro rejects
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -1713,16 +1741,16 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            engine: (() -> Engine)? = nil,
-		            _ safeDIBuilder: ((Engine) -> Service)? = nil
+		            engine: (@Sendable () -> Engine)? = nil,
+		            _ safeDIBuilder: (@Sendable (Engine) -> Service)? = nil
 		        ) {
 		            self.engine = engine
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let engine: (() -> Engine)?
+		        let engine: (@Sendable () -> Engine)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Engine) -> Service)?
+		        let safeDIBuilder: (@Sendable (Engine) -> Service)?
 		    }
 		}
 		#endif
@@ -1801,16 +1829,16 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            engine: (() -> Engine)? = nil,
-		            _ safeDIBuilder: ((Engine) -> Service)? = nil
+		            engine: (@Sendable () -> Engine)? = nil,
+		            _ safeDIBuilder: (@Sendable (Engine) -> Service)? = nil
 		        ) {
 		            self.engine = engine
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let engine: (() -> Engine)?
+		        let engine: (@Sendable () -> Engine)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Engine) -> Service)?
+		        let safeDIBuilder: (@Sendable (Engine) -> Service)?
 		    }
 		}
 		#endif
@@ -1925,19 +1953,19 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            engine: (() -> Engine)? = nil,
+		            engine: (@Sendable () -> Engine)? = nil,
 		            showDebugInfo: Bool = false,
-		            _ safeDIBuilder: ((Engine, Bool) -> Service)? = nil
+		            _ safeDIBuilder: (@Sendable (Engine, Bool) -> Service)? = nil
 		        ) {
 		            self.engine = engine
 		            self.showDebugInfo = showDebugInfo
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let engine: (() -> Engine)?
+		        let engine: (@Sendable () -> Engine)?
 		        let showDebugInfo: Bool
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Engine, Bool) -> Service)?
+		        let safeDIBuilder: (@Sendable (Engine, Bool) -> Service)?
 		    }
 		}
 		#endif
@@ -2045,6 +2073,8 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -2134,6 +2164,8 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -2226,6 +2258,8 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 4)
@@ -2295,6 +2329,8 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -2380,6 +2416,8 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// fixture shadows Swift.String / Swift.Int, so literal defaults no longer match the fixture's types
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 5)
@@ -2437,6 +2475,11 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
+				public struct Engine {
+				    public init() {}
+				}
+				""",
+				"""
 				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
@@ -2463,6 +2506,8 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Child combines generateMock with a hand-written mock(), which the macro rejects as ambiguous
+			skipCompileVerification: true,
 		)
 
 		// `engine` must appear as a flat required parameter on Root.mock() since it's

@@ -671,16 +671,16 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            leaf: (() -> Leaf)? = nil,
-		            _ safeDIBuilder: ((Leaf) -> Middle)? = nil
+		            leaf: (@Sendable () -> Leaf)? = nil,
+		            _ safeDIBuilder: (@Sendable (Leaf) -> Middle)? = nil
 		        ) {
 		            self.leaf = leaf
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let leaf: (() -> Leaf)?
+		        let leaf: (@Sendable () -> Leaf)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Leaf) -> Middle)?
+		        let safeDIBuilder: (@Sendable (Leaf) -> Middle)?
 		    }
 		}
 		#endif
@@ -811,16 +811,16 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            leaf: (() -> Leaf)? = nil,
-		            _ safeDIBuilder: ((Leaf) -> Middle)? = nil
+		            leaf: (@Sendable () -> Leaf)? = nil,
+		            _ safeDIBuilder: (@Sendable (Leaf) -> Middle)? = nil
 		        ) {
 		            self.leaf = leaf
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let leaf: (() -> Leaf)?
+		        let leaf: (@Sendable () -> Leaf)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Leaf) -> Middle)?
+		        let safeDIBuilder: (@Sendable (Leaf) -> Middle)?
 		    }
 		}
 		#endif

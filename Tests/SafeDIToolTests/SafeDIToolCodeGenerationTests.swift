@@ -1374,6 +1374,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Child is intentionally missing its initializer to exercise the misconfigured-stub path
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -1485,6 +1487,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Non-public Child used from public Root is inaccessible across modules, so the generated init won't compile
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -1539,6 +1543,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Non-public Child used from public Root is inaccessible across modules, so the generated init won't compile
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -2188,7 +2194,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root: Instantiable {
+				public final class Root: Instantiable, Sendable {
 				    public init(childABuilder: SendableErasedInstantiator<Recreated, ChildAProtocol>, childB: ChildB, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2200,7 +2206,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Recreated: Instantiable {
+				public final class Recreated: Instantiable, Sendable {
 				    public init() {}
 				}
 				""",
@@ -2219,7 +2225,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class ChildB: Instantiable {
+				public final class ChildB: Instantiable, Sendable {
 				    public init(grandchildA: GrandchildA, grandchildB: GrandchildB, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2231,7 +2237,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildA: Instantiable {
+				public final class GrandchildA: Instantiable, Sendable {
 				    public init(greatGrandchild: GreatGrandchild, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2242,7 +2248,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildB: Instantiable {
+				public final class GrandchildB: Instantiable, Sendable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2252,7 +2258,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild: Instantiable {
+				public final class GreatGrandchild: Instantiable, Sendable {
 				    public init(recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2493,6 +2499,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Fixture's UserDefaults extension contains nested stubs that aren't valid Swift on their own
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -2617,6 +2625,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Fixture stubs UIViewController and calls a failable UserDefaults init unconditionally
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["RootViewController+SafeDI.swift"]) == """
@@ -2931,6 +2941,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			includeFolders: ["Fake"],
+			// Generated output imports the placeholder "Test" module, which doesn't exist
+			skipCompileVerification: true,
 		)
 
 		#expect(output.dependencyTreeFiles.isEmpty)
@@ -5027,6 +5039,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Generated output references nested `Inner` unqualified, so the compiler can't resolve it
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -6031,6 +6045,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Fixture intentionally contains `:::brokenSyntax` to exercise the parse-error stub path
+			skipCompileVerification: true,
 		)
 
 		let rootFile = try #require(output.generatedFiles?["Root+SafeDI.swift"])
@@ -6588,6 +6604,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Generated output imports the placeholder "Test" module, which doesn't exist
+			skipCompileVerification: true,
 		)
 
 		#expect(output.dependencyTreeFiles.isEmpty)
