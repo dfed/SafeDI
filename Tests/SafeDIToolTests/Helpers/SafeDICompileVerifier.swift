@@ -94,10 +94,15 @@ func verifyGeneratedCodeCompiles(
 	if inputsOnlyResult.exitCode != 0 {
 		Issue.record(
 			"""
-			Test inputs failed to compile on their own. Make the fixture valid \
-			Swift against SafeDI alone — define stand-in types instead of \
-			importing platform frameworks that are unavailable on the host SDK \
-			(e.g., UIKit on macOS).
+			Test inputs failed to compile on their own (before SafeDI codegen \
+			runs). The fixture must be valid Swift against SafeDI alone. \
+			Common causes: referencing types that aren't declared in the \
+			fixture or stubbed out (define stand-ins instead of importing \
+			platform frameworks like UIKit that are unavailable on the host \
+			SDK), syntax errors in the fixture, or relying on symbols from \
+			modules that aren't imported. If the failure is unavoidable for \
+			the scenario under test, pass `skipCompileVerification: true` \
+			and add a comment explaining why.
 			\(inputsOnlyResult.stderr)
 			""",
 			sourceLocation: sourceLocation,
