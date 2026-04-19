@@ -5015,18 +5015,18 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				@Instantiable
 				public final class Child: Instantiable {
-				    public init(inner: Child.Inner) {
+				    public init(inner: Inner) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
 
 				    public protocol Inner {}
 
-				    @Instantiable(fulfillingAdditionalTypes: [Child.Inner.self])
+				    @Instantiable(fulfillingAdditionalTypes: [Inner.self])
 				    public final class DefaultInner: Inner, Instantiable {
 				        public init() {}
 				    }
 
-				    @Instantiated private let inner: Child.Inner
+				    @Instantiated private let inner: Inner
 				}
 				""",
 				"""
@@ -5056,7 +5056,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_child() -> Child {
-		            let inner: Child.Inner = Child.DefaultInner()
+		            let inner: Inner = Child.DefaultInner()
 		            return Child(inner: inner)
 		        }
 		        let child: Child = __safeDI_child()
