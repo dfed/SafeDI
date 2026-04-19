@@ -174,7 +174,7 @@ enum SafeDIBuildArtifactLocator {
 				// Xcode writes a `SafeDIMacros.swiftmodule` directory alongside
 				// the executable — skip directory matches so we only return the
 				// compiled plugin binary.
-				if isDirectory.boolValue { continue }
+				guard !isDirectory.boolValue else { continue }
 				return SafeDIBuildArtifacts(
 					swiftModuleSearchPath: moduleSearchPath,
 					safeDIMacrosToolPath: toolURL,

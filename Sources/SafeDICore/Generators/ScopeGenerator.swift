@@ -1075,19 +1075,33 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"\(concreteType.asSource).\(Self.configurationStructName)"
 		}
 
-		/// Construction arguments surfaced at the mock call site. Unlabeled
-		/// parameters with defaults are omitted so Swift's default-argument thunk
-		/// fires in the callee's declaration context, preserving resolution of
-		/// `Self.*`, private members, and file-scoped symbols in the default
-		/// expression that would otherwise fail when inlined at the caller.
+		/// Construction arguments surfaced at the mock call site. Non-dependency
+		/// unlabeled parameters with defaults are omitted so Swift's
+		/// default-argument thunk fires in the callee's declaration context,
+		/// preserving resolution of `Self.*`, private members, and file-scoped
+		/// symbols in the default expression that would otherwise fail when
+		/// inlined at the caller. Dependency parameters are always retained even
+		/// when shaped `_ dep: Dep = …`, since the override flow must thread the
+		/// resolved binding through to the callee.
 		var callSiteArguments: [Initializer.Argument] {
-			constructionArguments.filter { !($0.label == "_" && $0.hasDefaultValue) }
+			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
+			return constructionArguments.filter { argument in
+				!(argument.label == "_"
+					&& argument.hasDefaultValue
+					&& !dependencyInnerLabels.contains(argument.innerLabel))
+			}
 		}
 
-		/// Whether any construction argument is an unlabeled defaulted parameter
-		/// that is hidden from the mock API and filled in by Swift's default thunk.
+		/// Whether any construction argument is a non-dependency unlabeled
+		/// defaulted parameter that is hidden from the mock API and filled in by
+		/// Swift's default thunk.
 		var hasHiddenUnlabeledDefaults: Bool {
-			constructionArguments.contains { $0.label == "_" && $0.hasDefaultValue }
+			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
+			return constructionArguments.contains { argument in
+				argument.label == "_"
+					&& argument.hasDefaultValue
+					&& !dependencyInnerLabels.contains(argument.innerLabel)
+			}
 		}
 
 		/// The builder closure type as a Swift source string (unlabeled parameters).
@@ -1896,9 +1910,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					"\(nodePath).\(argument.label)"
 				}
 			} else {
-				// Labeled defaults without a bubbled override are unreachable here:
-				// `collectMockParameterTree` always registers them as default
-				// parameters (line 1202), so they must appear in
+				// Labeled defaults without a bubbled override are unreachable
+				// here: `collectMockParameterTree` always registers them as
+				// default parameters, so they must appear in
 				// `defaultParameterLabels` above.
 				argument.defaultValueExpression!
 			}
