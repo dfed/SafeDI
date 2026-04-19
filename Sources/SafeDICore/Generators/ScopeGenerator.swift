@@ -1843,7 +1843,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.replacingOccurrences(of: "safeDIOverrides.", with: "")
 			.replacingOccurrences(of: ".", with: "_")
 
-		return node.constructionArguments.compactMap { argument in
+		return node.constructionArguments.map { argument in
 			if dependenciesByLabel[argument.innerLabel] != nil {
 				argument.innerLabel
 			} else if defaultParameterLabels.contains(argument.label) {
@@ -1852,14 +1852,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else {
 					"\(nodePath).\(argument.label)"
 				}
-			} else if argument.label == "_", let defaultExpression = argument.defaultValueExpression {
+			} else {
 				// Underscore-labeled default-valued parameters are not bubbled as
 				// overrides (they have no label to surface on the config struct),
-				// so inline the default expression at the call site.
-				defaultExpression
-			} else {
-				// Unknown argument — use the label as a local variable reference.
-				argument.innerLabel
+				// so inline the default expression at the call site. The macro
+				// forbids non-dependency arguments without defaults, so any
+				// remaining argument is guaranteed to have a default expression.
+				argument.defaultValueExpression!
 			}
 		}
 	}
