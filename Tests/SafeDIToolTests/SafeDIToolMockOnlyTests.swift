@@ -132,7 +132,9 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public struct ExternalService { public init() {} }
+				public struct ExternalService {
+				    public init() {}
+				}
 				""",
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
@@ -1876,7 +1878,9 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				public protocol ServiceProtocol {}
 				""",
 				"""
-				public struct ConcreteService: ServiceProtocol { public init() {} }
+				public struct ConcreteService: ServiceProtocol {
+				    public init() {}
+				}
 				""",
 				"""
 				@Instantiable(isRoot: true, generateMock: true)

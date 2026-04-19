@@ -475,7 +475,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				public struct User { public init() {}; public init(username: String) {} }
+				public struct User {}
 				""",
 				"""
 				public protocol AuthService {
@@ -581,7 +581,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				public struct User { public init() {}; public init(username: String) {} }
+				public struct User {}
 				""",
 				"""
 				public protocol AuthService {
@@ -758,8 +758,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public struct User {
 				    public var id: String = ""
 				    public var name: String = ""
-				    public init() {}
-				    public init(id: String, name: String) { self.id = id; self.name = name }
 				}
 				""",
 				"""
@@ -886,8 +884,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public struct User {
 				    public var id: String = ""
 				    public var name: String = ""
-				    public init() {}
-				    public init(id: String, name: String) { self.id = id; self.name = name }
 				}
 				""",
 				"""
@@ -1114,7 +1110,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				public struct User { public init() {}; public init(username: String) {} }
+				public struct User {}
 				""",
 				"""
 				public protocol AuthService {
@@ -1233,7 +1229,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				public struct User { public init() {}; public init(username: String) {} }
+				public struct User {}
 				""",
 				"""
 				public protocol AuthService {
@@ -2978,7 +2974,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				public struct User { public init() {}; public init(username: String) {} }
+				public struct User {
+				    public init(username: String) {}
+				}
 				""",
 				"""
 				public protocol UserVendor {
@@ -3198,7 +3196,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				public struct User { public init() {}; public init(username: String) {} }
+				public struct User {
+				    public init(username: String) {}
+				}
 				""",
 				"""
 				public protocol UserVendor {
@@ -3353,7 +3353,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				public struct User { public init() {}; public init(username: String) {} }
+				public struct User {
+				    public init(username: String) {}
+				}
 				""",
 				"""
 				public protocol NetworkService {}
@@ -3430,7 +3432,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				public struct User { public init() {}; public init(username: String) {} }
+				public struct User {
+				    public init(username: String) {}
+				}
 				""",
 				"""
 				public protocol NetworkService {}
@@ -3512,7 +3516,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				public struct User { public init() {}; public init(username: String) {} }
+				public struct User {
+				    public init(username: String) {}
+				}
 				""",
 				"""
 				public protocol UserVendor {
@@ -3663,7 +3669,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				public struct User { public init() {}; public init(username: String) {} }
+				public struct User {
+				    public init(username: String) {}
+				}
 				""",
 				"""
 				public protocol UserVendor {

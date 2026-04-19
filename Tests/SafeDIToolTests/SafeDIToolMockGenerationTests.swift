@@ -3294,7 +3294,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				public struct User { public init() {}; public init(username: String) {} }
+				public struct User {}
 				""",
 				"""
 				public protocol AuthService {
@@ -3707,7 +3707,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public struct User { public init() {}; public init(username: String) {} }
+				public struct User {}
 				""",
 				"""
 				public protocol NetworkService {}
@@ -4761,7 +4761,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public struct User { public init() {}; public init(username: String) {} }
+				public struct User {}
 				""",
 				"""
 				public protocol NetworkService {}
@@ -9008,7 +9008,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public struct ExternalService { public init() {} }
+				public struct ExternalService {
+				    public init() {}
+				}
 				""",
 				"""
 				@Instantiable(generateMock: true)

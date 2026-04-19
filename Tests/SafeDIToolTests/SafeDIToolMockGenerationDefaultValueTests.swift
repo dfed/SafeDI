@@ -1153,10 +1153,14 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 				}
 				""",
 				"""
-				public struct ViewModelA { public init() {} }
+				public struct ViewModelA {
+				    public init() {}
+				}
 				""",
 				"""
-				public struct ViewModelB { public init() {} }
+				public struct ViewModelB {
+				    public init() {}
+				}
 				""",
 			],
 			buildSwiftOutputDirectory: true,

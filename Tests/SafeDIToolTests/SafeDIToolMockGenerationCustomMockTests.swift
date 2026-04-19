@@ -2465,7 +2465,9 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public struct Engine { public init() {} }
+				public struct Engine {
+				    public init() {}
+				}
 				""",
 				"""
 				@Instantiable(generateMock: true)
