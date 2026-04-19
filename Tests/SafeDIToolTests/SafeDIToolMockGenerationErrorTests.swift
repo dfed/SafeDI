@@ -124,50 +124,6 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenUnlabeledDefaultPrecedesUnlabeledRequiredParameter() async {
-		// `init(_ enabled: Bool = false, _ leaf: Leaf)` is a shape SafeDI can't
-		// mock: the `_ enabled = false` slot can't be elided from the override
-		// surface (Swift requires the positional value to be passed when the
-		// following arg is also unlabeled), and it can't be exposed as a
-		// labeled field on `SafeDIMockConfiguration` either (there's no
-		// external label). Generator should reject with a clear diagnostic
-		// rather than emit an uncallable `{ Child($0) }` builder.
-		await assertThrowsError(
-			"""
-			Property `enabled: Bool` on Child has an unlabeled default value followed by another unlabeled parameter `leaf: Leaf`, which SafeDI cannot mock. Either add an external label to `enabled`, reorder so defaulted unlabeled parameters come last, or move the default off of this parameter.
-			""",
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true, generateMock: true)
-					public struct Root: Instantiable {
-					    public init(child: Child) { self.child = child }
-					    @Instantiated let child: Child
-					}
-					""",
-					"""
-					@Instantiable(generateMock: true)
-					public struct Child: Instantiable {
-					    public init(_ enabled: Bool = false, _ leaf: Leaf) { self.leaf = leaf }
-					    @Instantiated let leaf: Leaf
-					}
-					""",
-					"""
-					@Instantiable(generateMock: true)
-					public struct Leaf: Instantiable {
-					    public init() {}
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenUnfulfillableInstantiatedPropertyExists() async {
 		await assertThrowsError(
 			"""

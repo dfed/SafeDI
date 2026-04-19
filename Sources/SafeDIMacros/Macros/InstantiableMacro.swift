@@ -210,6 +210,33 @@ public struct InstantiableMacro: MemberMacro {
 				.dependencies
 				.filter { $0.source == .forwarded }
 				.map(\.property)
+
+			// Diagnose unmockable init shapes (unlabeled default before an
+			// unlabeled required parameter) on every candidate initializer.
+			// Runs regardless of `generateMock`/`mockOnly` because the shape
+			// is awkward for any future mock use and the diagnostic is local.
+			for initializer in visitor.initializers {
+				guard let initializerSyntax = visitor.initializerToInitSyntaxMap[initializer] else { continue }
+				Self.validateUnlabeledDefaultShape(
+					functionSyntax: initializerSyntax.signature,
+					arguments: initializer.arguments,
+					dependencies: visitor.dependencies,
+					diagnosticNode: Syntax(initializerSyntax),
+					context: context,
+				)
+			}
+			if let mockInitializer = visitor.mockInitializer,
+			   let mockSyntax = visitor.mockFunctionSyntax
+			{
+				Self.validateUnlabeledDefaultShape(
+					functionSyntax: mockSyntax.signature,
+					arguments: mockInitializer.arguments,
+					dependencies: visitor.dependencies,
+					diagnosticNode: Syntax(mockSyntax),
+					context: context,
+				)
+			}
+
 			let hasMemberwiseInitializerForInjectableProperties = isMockOnly || visitor
 				.initializers
 				.contains(where: { $0.isValid(forFulfilling: visitor.dependencies) })
@@ -863,6 +890,13 @@ public struct InstantiableMacro: MemberMacro {
 			let dependencyLabels = Set(extensionDependencies.map(\.property.label))
 			for mockFunction in allMockFunctions {
 				let mockFunctionInitializer = Initializer(mockFunction)
+				Self.validateUnlabeledDefaultShape(
+					functionSyntax: mockFunction.signature,
+					arguments: mockFunctionInitializer.arguments,
+					dependencies: visitor.dependencies,
+					diagnosticNode: Syntax(mockFunction),
+					context: context,
+				)
 				let nonDependenciesWithoutDefaults = mockFunctionInitializer.arguments
 					.filter { !dependencyLabels.contains($0.innerLabel) && !$0.hasDefaultValue }
 					.map(\.asProperty)
@@ -1028,6 +1062,22 @@ public struct InstantiableMacro: MemberMacro {
 				}
 			}
 
+			// Diagnose unmockable shapes on extension `instantiate(...)`
+			// methods. Matches the concrete-type validation above.
+			for member in extensionDeclaration.memberBlock.members {
+				guard let function = FunctionDeclSyntax(member.decl),
+				      function.name.text == InstantiableVisitor.instantiateMethodName
+				else { continue }
+				let initializer = Initializer(function)
+				Self.validateUnlabeledDefaultShape(
+					functionSyntax: function.signature,
+					arguments: initializer.arguments,
+					dependencies: visitor.dependencies,
+					diagnosticNode: Syntax(function),
+					context: context,
+				)
+			}
+
 			let instantiables = visitor.instantiables
 			if instantiables.count > 1 {
 				var concreteInstantiables = Set<TypeDescription>()
@@ -1106,6 +1156,46 @@ public struct InstantiableMacro: MemberMacro {
 			return []
 		} else {
 			throw InstantiableError.decoratingIncompatibleType
+		}
+	}
+
+	/// Diagnoses initializer/mock signatures that SafeDI's mock override
+	/// surface cannot express: a non-dependency `_`-labeled defaulted
+	/// parameter followed by a required (non-defaulted) `_`-labeled
+	/// parameter. Eliding the earlier defaulted slot to let Swift's
+	/// default-argument thunk fire would produce an uncallable signature
+	/// (Swift requires the positional value when a later positional arg is
+	/// required); exposing the defaulted parameter on
+	/// `SafeDIMockConfiguration` isn't possible either because there's no
+	/// external label to use as a struct field name.
+	///
+	/// Subsequent `_`-labeled parameters that also have defaults don't
+	/// block elision — they're elided together as a trailing run — so
+	/// signatures like `init(_ a: Int = 0, _ b: Int = 1)` are fine.
+	private static func validateUnlabeledDefaultShape(
+		functionSyntax _: FunctionSignatureSyntax,
+		arguments: [Initializer.Argument],
+		dependencies: [Dependency],
+		diagnosticNode: Syntax,
+		context: some MacroExpansionContext,
+	) {
+		let dependencyLabels = Set(dependencies.map(\.property.label))
+		for (index, argument) in arguments.enumerated() {
+			guard argument.label == "_",
+			      argument.hasDefaultValue,
+			      !dependencyLabels.contains(argument.innerLabel)
+			else { continue }
+			guard let following = arguments[(index + 1)...].first(where: {
+				$0.label == "_" && !$0.hasDefaultValue
+			}) else { continue }
+			context.diagnose(Diagnostic(
+				node: diagnosticNode,
+				error: FixableInstantiableError.unlabeledDefaultBeforeUnlabeledParameter(
+					defaultedParameter: argument.asProperty,
+					followingParameter: following.asProperty,
+				),
+				changes: [],
+			))
 		}
 	}
 
