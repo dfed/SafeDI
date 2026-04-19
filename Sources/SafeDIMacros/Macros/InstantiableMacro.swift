@@ -224,6 +224,10 @@ public struct InstantiableMacro: MemberMacro {
 					diagnosticNode: Syntax(initializerSyntax),
 					context: context,
 				)
+				Self.validateDefaultExpressions(
+					functionSyntax: initializerSyntax.signature,
+					context: context,
+				)
 			}
 			if let mockInitializer = visitor.mockInitializer,
 			   let mockSyntax = visitor.mockFunctionSyntax
@@ -233,6 +237,10 @@ public struct InstantiableMacro: MemberMacro {
 					arguments: mockInitializer.arguments,
 					dependencies: visitor.dependencies,
 					diagnosticNode: Syntax(mockSyntax),
+					context: context,
+				)
+				Self.validateDefaultExpressions(
+					functionSyntax: mockSyntax.signature,
 					context: context,
 				)
 			}
@@ -897,6 +905,10 @@ public struct InstantiableMacro: MemberMacro {
 					diagnosticNode: Syntax(mockFunction),
 					context: context,
 				)
+				Self.validateDefaultExpressions(
+					functionSyntax: mockFunction.signature,
+					context: context,
+				)
 				let nonDependenciesWithoutDefaults = mockFunctionInitializer.arguments
 					.filter { !dependencyLabels.contains($0.innerLabel) && !$0.hasDefaultValue }
 					.map(\.asProperty)
@@ -1210,6 +1222,50 @@ public struct InstantiableMacro: MemberMacro {
 				),
 				changes: changes,
 			))
+		}
+	}
+
+	/// Walks each default-value expression on `functionSyntax`'s parameters and
+	/// diagnoses explicit `Self.*` / `self.*` member access. SafeDI's generated
+	/// mock surface may inline a default expression at the caller (inside the
+	/// parent type's override struct or mock body), where `Self` binds to the
+	/// parent type instead of the decorated type — silently producing the wrong
+	/// value or failing to typecheck. The diagnostic catches the syntactically
+	/// identifiable case so users get a compile error instead of a subtle
+	/// override-surface mismatch. Unqualified references to callee-scope
+	/// members can't be identified without type resolution and are not covered.
+	private static func validateDefaultExpressions(
+		functionSyntax: FunctionSignatureSyntax,
+		context: some MacroExpansionContext,
+	) {
+		for parameter in functionSyntax.parameterClause.parameters {
+			guard let defaultValue = parameter.defaultValue?.value else { continue }
+			let parameterLabel = parameter.secondName?.text ?? parameter.firstName.text
+			let finder = CalleeScopeReferenceFinder(viewMode: .sourceAccurate)
+			finder.walk(Syntax(defaultValue))
+			for reference in finder.references {
+				context.diagnose(Diagnostic(
+					node: Syntax(parameter),
+					message: FixableInstantiableError.calleeScopeReferenceInDefaultExpression(
+						parameterLabel: parameterLabel,
+						reference: reference,
+					).diagnostic,
+				))
+			}
+		}
+	}
+
+	private final class CalleeScopeReferenceFinder: SyntaxVisitor {
+		private(set) var references: [String] = []
+
+		override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
+			if let base = node.base?.as(DeclReferenceExprSyntax.self) {
+				let text = base.baseName.text
+				if text == "Self" || text == "self" {
+					references.append("\(text).\(node.declName.baseName.text)")
+				}
+			}
+			return .visitChildren
 		}
 	}
 

@@ -45,6 +45,7 @@ public enum FixableInstantiableError: DiagnosticError {
 	case mockOnlyWithIsRoot
 	case mockOnlyMissingMockMethod(typeName: String, methodName: String)
 	case unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter: Property, followingParameter: Property)
+	case calleeScopeReferenceInDefaultExpression(parameterLabel: String, reference: String)
 
 	public enum MissingInitializer: Sendable {
 		case hasOnlyInjectableProperties
@@ -115,6 +116,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			"@\(InstantiableVisitor.macroName)(mockOnly: true) requires a `public static func \(methodName)(…) -> \(typeName)` method."
 		case let .unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter, followingParameter):
 			"Unlabeled parameter `\(defaultedParameter.asSource)` has a default value but is followed by unlabeled required parameter `\(followingParameter.asSource)`. SafeDI cannot generate a mock for this signature: the default cannot be elided from the mock's override surface (Swift requires the earlier positional slot to be passed when a later unlabeled parameter is required), and an unlabeled parameter cannot be exposed as a labeled field on `SafeDIMockConfiguration`. Either add an external label to the defaulted parameter, reorder so unlabeled defaults come last, or remove the default."
+		case let .calleeScopeReferenceInDefaultExpression(parameterLabel, reference):
+			"Default expression for parameter `\(parameterLabel)` references `\(reference)`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `\(reference)` would resolve against the wrong type (or fail to resolve). Move the referenced value to a file-scoped or module-scoped symbol, or remove the default."
 		}
 	}
 
@@ -155,7 +158,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .mockOnlyWithGenerateMock,
 			     .mockOnlyWithIsRoot,
 			     .mockOnlyMissingMockMethod,
-			     .unlabeledDefaultBeforeUnlabeledParameter:
+			     .unlabeledDefaultBeforeUnlabeledParameter,
+			     .calleeScopeReferenceInDefaultExpression:
 				.error
 			}
 			message = error.description
@@ -228,6 +232,8 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Add `public static func \(methodName)(…) -> \(typeName)` method"
 			case let .unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter, _):
 				"Promote `\(defaultedParameter.label)` to an external label (rewrite `_ \(defaultedParameter.label):` as `\(defaultedParameter.label):`)"
+			case let .calleeScopeReferenceInDefaultExpression(parameterLabel, _):
+				"Remove the default from `\(parameterLabel)` or move the referenced value to a file-scoped or module-scoped symbol"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}
