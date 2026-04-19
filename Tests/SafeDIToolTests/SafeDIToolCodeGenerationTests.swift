@@ -1439,6 +1439,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Child is intentionally missing its initializer to exercise the misconfigured-stub path
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -1550,6 +1552,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Non-public Child used from public Root is inaccessible across modules, so the generated init won't compile
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -1604,6 +1608,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Non-public Child used from public Root is inaccessible across modules, so the generated init won't compile
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -2558,6 +2564,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Fixture's UserDefaults extension contains nested stubs that aren't valid Swift on their own
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -2682,6 +2690,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Fixture stubs UIViewController and calls a failable UserDefaults init unconditionally
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["RootViewController+SafeDI.swift"]) == """
@@ -2780,6 +2790,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			dependentModuleInfoPaths: [greatGrandchildModuleOutput.moduleInfoOutputPath],
 			buildSwiftOutputDirectory: false,
 			filesToDelete: &filesToDelete,
+			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
+			skipCompileVerification: true,
 		)
 
 		let childModuleOutput = try await executeSafeDIToolTest(
@@ -2819,6 +2831,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: false,
 			filesToDelete: &filesToDelete,
+			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
+			skipCompileVerification: true,
 		)
 
 		let topLevelModuleOutput = try await executeSafeDIToolTest(
@@ -2845,6 +2859,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(topLevelModuleOutput.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -2996,6 +3012,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			includeFolders: ["Fake"],
+			// Generated output imports the placeholder "Test" module, which doesn't exist
+			skipCompileVerification: true,
 		)
 
 		#expect(output.dependencyTreeFiles.isEmpty)
@@ -6096,6 +6114,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Fixture intentionally contains `:::brokenSyntax` to exercise the parse-error stub path
+			skipCompileVerification: true,
 		)
 
 		let rootFile = try #require(output.generatedFiles?["Root+SafeDI.swift"])

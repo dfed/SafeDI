@@ -40,6 +40,7 @@ func executeSafeDIToolTest(
 	buildDOTFileOutput: Bool = false,
 	filesToDelete: inout [URL],
 	includeFolders: [String] = [],
+	skipCompileVerification: Bool = false,
 ) async throws -> TestOutput {
 	// Create additional directory first so its path can be substituted into target file content.
 	var additionalDirectoryFiles = [URL]()
@@ -177,6 +178,15 @@ func executeSafeDIToolTest(
 			}()
 		} else {
 			nil
+		}
+
+		if let generatedFiles, !generatedFiles.isEmpty, !skipCompileVerification {
+			try verifyGeneratedCodeCompiles(
+				inputSwiftFiles: swiftFiles,
+				additionalDirectorySwiftFiles: additionalDirectoryFiles,
+				generatedFiles: generatedFiles,
+				filesToDelete: &filesToDelete,
+			)
 		}
 
 		return try TestOutput(
