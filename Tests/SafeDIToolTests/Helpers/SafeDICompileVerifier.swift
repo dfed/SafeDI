@@ -266,6 +266,7 @@ func runSwiftTypecheck(
 		"-I", artifacts.swiftModuleSearchPath.path,
 		"-load-plugin-executable", "\(artifacts.safeDIMacrosToolPath.path)#SafeDIMacros",
 		"-DDEBUG",
+		"-swift-version", "6",
 	])
 	arguments.append(contentsOf: sources.map(\.path))
 	process.arguments = arguments

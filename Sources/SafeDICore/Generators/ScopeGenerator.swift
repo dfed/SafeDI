@@ -1457,14 +1457,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Generates a single `SafeDIMockConfiguration` struct for a `MockParameterNode`.
-	/// When `node.requiresSendable` is `true`, the `safeDIBuilder` closure is marked
-	/// `@Sendable` (the node is inside a `SendableInstantiator` scope).
+	/// Closure fields are always marked `@Sendable`. The struct is a nested type that
+	/// may be referenced from any root's mock tree — including across a
+	/// `SendableInstantiator` boundary — and cross-root dedup (by type name) means a
+	/// single emitted struct must typecheck in both sendable and non-sendable contexts.
+	/// `@Sendable` closures are compatible with non-sendable contexts, so universal
+	/// annotation is the safe default. Users passing override closures must provide
+	/// `@Sendable` closures (default `Type.init` references already are).
 	private static func generateConfigurationStruct(
 		for node: MockParameterNode,
 		indent: String,
 	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
-		let sendableAnnotation = node.requiresSendable ? "@Sendable " : ""
 		var lines = [String]()
 
 		lines.append("\(indent)/// Configuration for how this type is constructed within a mock tree.")
@@ -1488,9 +1492,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.configurationTypeName) = .init()")
 				storedProperties.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
 			} else {
-				let childSendable = child.requiresSendable ? "@Sendable " : ""
-				initParameters.append("\(innerIndent)\(standardIndent)\(label): (\(childSendable)\(child.builderClosureType))? = nil")
-				storedProperties.append("\(innerIndent)let \(label): (\(childSendable)\(child.builderClosureType))?")
+				initParameters.append("\(innerIndent)\(standardIndent)\(label): (@Sendable \(child.builderClosureType))? = nil")
+				storedProperties.append("\(innerIndent)let \(label): (@Sendable \(child.builderClosureType))?")
 			}
 			assignments.append("\(innerIndent)\(standardIndent)self.\(label) = \(label)")
 		}
@@ -1499,7 +1502,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for defaultParameter in node.defaultParameters {
 			let typeSource = defaultParameter.typeDescription.asSource
 			// Only add @Sendable if the type doesn't already have it.
-			let closureSendable = (node.requiresSendable && !typeSource.contains("@Sendable")) ? "@Sendable " : ""
+			let closureSendable = typeSource.contains("@Sendable") ? "" : "@Sendable "
 			if defaultParameter.isClosureType {
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(closureSendable)@escaping \(typeSource) = \(defaultParameter.defaultExpression)")
 				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(closureSendable)\(typeSource)")
@@ -1514,10 +1517,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// the default function reference (which may be @MainActor) is resolved in mock()
 		// rather than in this nonisolated init.
 		let closureType = node.concreteBuilderClosureType
-		initParameters.append("\(innerIndent)\(standardIndent)_ safeDIBuilder: (\(sendableAnnotation)\(closureType))? = nil")
+		initParameters.append("\(innerIndent)\(standardIndent)_ safeDIBuilder: (@Sendable \(closureType))? = nil")
 		assignments.append("\(innerIndent)\(standardIndent)self.safeDIBuilder = safeDIBuilder")
 		storedProperties.append("\(innerIndent)/// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.")
-		storedProperties.append("\(innerIndent)let safeDIBuilder: (\(sendableAnnotation)\(closureType))?")
+		storedProperties.append("\(innerIndent)let safeDIBuilder: (@Sendable \(closureType))?")
 
 		// Emit init.
 		lines.append("\(innerIndent)init(")

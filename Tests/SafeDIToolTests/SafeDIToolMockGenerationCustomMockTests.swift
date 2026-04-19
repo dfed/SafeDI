@@ -1741,16 +1741,16 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            engine: (() -> Engine)? = nil,
-		            _ safeDIBuilder: ((Engine) -> Service)? = nil
+		            engine: (@Sendable () -> Engine)? = nil,
+		            _ safeDIBuilder: (@Sendable (Engine) -> Service)? = nil
 		        ) {
 		            self.engine = engine
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let engine: (() -> Engine)?
+		        let engine: (@Sendable () -> Engine)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Engine) -> Service)?
+		        let safeDIBuilder: (@Sendable (Engine) -> Service)?
 		    }
 		}
 		#endif
@@ -1829,16 +1829,16 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            engine: (() -> Engine)? = nil,
-		            _ safeDIBuilder: ((Engine) -> Service)? = nil
+		            engine: (@Sendable () -> Engine)? = nil,
+		            _ safeDIBuilder: (@Sendable (Engine) -> Service)? = nil
 		        ) {
 		            self.engine = engine
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let engine: (() -> Engine)?
+		        let engine: (@Sendable () -> Engine)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Engine) -> Service)?
+		        let safeDIBuilder: (@Sendable (Engine) -> Service)?
 		    }
 		}
 		#endif
@@ -1953,19 +1953,19 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            engine: (() -> Engine)? = nil,
+		            engine: (@Sendable () -> Engine)? = nil,
 		            showDebugInfo: Bool = false,
-		            _ safeDIBuilder: ((Engine, Bool) -> Service)? = nil
+		            _ safeDIBuilder: (@Sendable (Engine, Bool) -> Service)? = nil
 		        ) {
 		            self.engine = engine
 		            self.showDebugInfo = showDebugInfo
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let engine: (() -> Engine)?
+		        let engine: (@Sendable () -> Engine)?
 		        let showDebugInfo: Bool
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Engine, Bool) -> Service)?
+		        let safeDIBuilder: (@Sendable (Engine, Bool) -> Service)?
 		    }
 		}
 		#endif

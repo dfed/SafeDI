@@ -2194,7 +2194,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root: Instantiable {
+				public final class Root: Instantiable, Sendable {
 				    public init(childABuilder: SendableErasedInstantiator<Recreated, ChildAProtocol>, childB: ChildB, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2206,7 +2206,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Recreated: Instantiable {
+				public final class Recreated: Instantiable, Sendable {
 				    public init() {}
 				}
 				""",
@@ -2225,7 +2225,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class ChildB: Instantiable {
+				public final class ChildB: Instantiable, Sendable {
 				    public init(grandchildA: GrandchildA, grandchildB: GrandchildB, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2237,7 +2237,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildA: Instantiable {
+				public final class GrandchildA: Instantiable, Sendable {
 				    public init(greatGrandchild: GreatGrandchild, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2248,7 +2248,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildB: Instantiable {
+				public final class GrandchildB: Instantiable, Sendable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2258,7 +2258,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild: Instantiable {
+				public final class GreatGrandchild: Instantiable, Sendable {
 				    public init(recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }

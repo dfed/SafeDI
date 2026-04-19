@@ -373,16 +373,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            grandchild: ((SharedThing) -> Grandchild)? = nil,
-		            _ safeDIBuilder: ((SharedThing, Grandchild) -> ChildA)? = nil
+		            grandchild: (@Sendable (SharedThing) -> Grandchild)? = nil,
+		            _ safeDIBuilder: (@Sendable (SharedThing, Grandchild) -> ChildA)? = nil
 		        ) {
 		            self.grandchild = grandchild
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let grandchild: ((SharedThing) -> Grandchild)?
+		        let grandchild: (@Sendable (SharedThing) -> Grandchild)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((SharedThing, Grandchild) -> ChildA)?
+		        let safeDIBuilder: (@Sendable (SharedThing, Grandchild) -> ChildA)?
 		    }
 		}
 		#endif
@@ -1042,19 +1042,19 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            grandchildAA: ((Shared) -> GrandchildAA)? = nil,
-		            grandchildAB: ((Shared) -> GrandchildAB)? = nil,
-		            _ safeDIBuilder: ((GrandchildAA, GrandchildAB) -> ChildA)? = nil
+		            grandchildAA: (@Sendable (Shared) -> GrandchildAA)? = nil,
+		            grandchildAB: (@Sendable (Shared) -> GrandchildAB)? = nil,
+		            _ safeDIBuilder: (@Sendable (GrandchildAA, GrandchildAB) -> ChildA)? = nil
 		        ) {
 		            self.grandchildAA = grandchildAA
 		            self.grandchildAB = grandchildAB
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let grandchildAA: ((Shared) -> GrandchildAA)?
-		        let grandchildAB: ((Shared) -> GrandchildAB)?
+		        let grandchildAA: (@Sendable (Shared) -> GrandchildAA)?
+		        let grandchildAB: (@Sendable (Shared) -> GrandchildAB)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((GrandchildAA, GrandchildAB) -> ChildA)?
+		        let safeDIBuilder: (@Sendable (GrandchildAA, GrandchildAB) -> ChildA)?
 		    }
 		}
 		#endif
@@ -1617,7 +1617,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    struct SafeDIMockConfiguration {
 		        init(
 		            grandchild: Grandchild.SafeDIMockConfiguration = .init(),
-		            _ safeDIBuilder: ((Grandchild, Leaf) -> Child)? = nil
+		            _ safeDIBuilder: (@Sendable (Grandchild, Leaf) -> Child)? = nil
 		        ) {
 		            self.grandchild = grandchild
 		            self.safeDIBuilder = safeDIBuilder
@@ -1625,7 +1625,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		        let grandchild: Grandchild.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Grandchild, Leaf) -> Child)?
+		        let safeDIBuilder: (@Sendable (Grandchild, Leaf) -> Child)?
 		    }
 		}
 		#endif
@@ -1667,16 +1667,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            greatGrandchild: ((Leaf) -> GreatGrandchild)? = nil,
-		            _ safeDIBuilder: ((GreatGrandchild, Leaf) -> Grandchild)? = nil
+		            greatGrandchild: (@Sendable (Leaf) -> GreatGrandchild)? = nil,
+		            _ safeDIBuilder: (@Sendable (GreatGrandchild, Leaf) -> Grandchild)? = nil
 		        ) {
 		            self.greatGrandchild = greatGrandchild
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let greatGrandchild: ((Leaf) -> GreatGrandchild)?
+		        let greatGrandchild: (@Sendable (Leaf) -> GreatGrandchild)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((GreatGrandchild, Leaf) -> Grandchild)?
+		        let safeDIBuilder: (@Sendable (GreatGrandchild, Leaf) -> Grandchild)?
 		    }
 		}
 		#endif
@@ -2047,7 +2047,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public class UserDefaults {
+				public final class UserDefaults: @unchecked Sendable {
 				    public static let standard = UserDefaults()
 				    public init() {}
 				}
@@ -2427,7 +2427,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    struct SafeDIMockConfiguration {
 		        init(
 		            flag: Bool = false,
-		            _ safeDIBuilder: ((String, Shared, Bool) -> Child)? = nil
+		            _ safeDIBuilder: (@Sendable (String, Shared, Bool) -> Child)? = nil
 		        ) {
 		            self.flag = flag
 		            self.safeDIBuilder = safeDIBuilder
@@ -2435,7 +2435,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		        let flag: Bool
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((String, Shared, Bool) -> Child)?
+		        let safeDIBuilder: (@Sendable (String, Shared, Bool) -> Child)?
 		    }
 		}
 		#endif
@@ -2669,13 +2669,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            _ safeDIBuilder: ((Instantiator<Root>) -> Root)? = nil
+		            _ safeDIBuilder: (@Sendable (Instantiator<Root>) -> Root)? = nil
 		        ) {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<Root>) -> Root)?
+		        let safeDIBuilder: (@Sendable (Instantiator<Root>) -> Root)?
 		    }
 		}
 		#endif
@@ -3629,16 +3629,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            grandchildBuilder: ((Int) -> Grandchild)? = nil,
-		            _ safeDIBuilder: ((String, Instantiator<Grandchild>) -> Child)? = nil
+		            grandchildBuilder: (@Sendable (Int) -> Grandchild)? = nil,
+		            _ safeDIBuilder: (@Sendable (String, Instantiator<Grandchild>) -> Child)? = nil
 		        ) {
 		            self.grandchildBuilder = grandchildBuilder
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let grandchildBuilder: ((Int) -> Grandchild)?
+		        let grandchildBuilder: (@Sendable (Int) -> Grandchild)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((String, Instantiator<Grandchild>) -> Child)?
+		        let safeDIBuilder: (@Sendable (String, Instantiator<Grandchild>) -> Child)?
 		    }
 		}
 		#endif
@@ -3923,7 +3923,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    struct SafeDIMockConfiguration {
 		        init(
 		            profileViewControllerBuilder: ProfileViewController.SafeDIMockConfiguration = .init(),
-		            _ safeDIBuilder: ((UserManager, NetworkService, Instantiator<ProfileViewController>) -> LoggedInViewController)? = nil
+		            _ safeDIBuilder: (@Sendable (UserManager, NetworkService, Instantiator<ProfileViewController>) -> LoggedInViewController)? = nil
 		        ) {
 		            self.profileViewControllerBuilder = profileViewControllerBuilder
 		            self.safeDIBuilder = safeDIBuilder
@@ -3931,7 +3931,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		        let profileViewControllerBuilder: ProfileViewController.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((UserManager, NetworkService, Instantiator<ProfileViewController>) -> LoggedInViewController)?
+		        let safeDIBuilder: (@Sendable (UserManager, NetworkService, Instantiator<ProfileViewController>) -> LoggedInViewController)?
 		    }
 		}
 		#endif
@@ -3981,16 +3981,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            editProfileViewControllerBuilder: ((UserVendor, UserManager, NetworkService) -> EditProfileViewController)? = nil,
-		            _ safeDIBuilder: ((UserVendor, Instantiator<EditProfileViewController>) -> ProfileViewController)? = nil
+		            editProfileViewControllerBuilder: (@Sendable (UserVendor, UserManager, NetworkService) -> EditProfileViewController)? = nil,
+		            _ safeDIBuilder: (@Sendable (UserVendor, Instantiator<EditProfileViewController>) -> ProfileViewController)? = nil
 		        ) {
 		            self.editProfileViewControllerBuilder = editProfileViewControllerBuilder
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let editProfileViewControllerBuilder: ((UserVendor, UserManager, NetworkService) -> EditProfileViewController)?
+		        let editProfileViewControllerBuilder: (@Sendable (UserVendor, UserManager, NetworkService) -> EditProfileViewController)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((UserVendor, Instantiator<EditProfileViewController>) -> ProfileViewController)?
+		        let safeDIBuilder: (@Sendable (UserVendor, Instantiator<EditProfileViewController>) -> ProfileViewController)?
 		    }
 		}
 		#endif
@@ -4147,16 +4147,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            grandchildBuilder: ((AnyIterator) -> Grandchild)? = nil,
-		            _ safeDIBuilder: ((IndexingIterator<Array<Element>>, Instantiator<Grandchild>) -> Child)? = nil
+		            grandchildBuilder: (@Sendable (AnyIterator) -> Grandchild)? = nil,
+		            _ safeDIBuilder: (@Sendable (IndexingIterator<Array<Element>>, Instantiator<Grandchild>) -> Child)? = nil
 		        ) {
 		            self.grandchildBuilder = grandchildBuilder
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let grandchildBuilder: ((AnyIterator) -> Grandchild)?
+		        let grandchildBuilder: (@Sendable (AnyIterator) -> Grandchild)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((IndexingIterator<Array<Element>>, Instantiator<Grandchild>) -> Child)?
+		        let safeDIBuilder: (@Sendable (IndexingIterator<Array<Element>>, Instantiator<Grandchild>) -> Child)?
 		    }
 		}
 		#endif
@@ -4835,16 +4835,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            networkService: (() -> NetworkService)? = nil,
-		            _ safeDIBuilder: ((NetworkService, NetworkService) -> DefaultAuthService)? = nil
+		            networkService: (@Sendable () -> NetworkService)? = nil,
+		            _ safeDIBuilder: (@Sendable (NetworkService, NetworkService) -> DefaultAuthService)? = nil
 		        ) {
 		            self.networkService = networkService
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let networkService: (() -> NetworkService)?
+		        let networkService: (@Sendable () -> NetworkService)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((NetworkService, NetworkService) -> DefaultAuthService)?
+		        let safeDIBuilder: (@Sendable (NetworkService, NetworkService) -> DefaultAuthService)?
 		    }
 		}
 		#endif
@@ -5019,16 +5019,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            service: (() -> Service)? = nil,
-		            _ safeDIBuilder: ((Service, Service) -> Consumer)? = nil
+		            service: (@Sendable () -> Service)? = nil,
+		            _ safeDIBuilder: (@Sendable (Service, Service) -> Consumer)? = nil
 		        ) {
 		            self.service = service
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let service: (() -> Service)?
+		        let service: (@Sendable () -> Service)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Service, Service) -> Consumer)?
+		        let safeDIBuilder: (@Sendable (Service, Service) -> Consumer)?
 		    }
 		}
 		#endif
@@ -10379,8 +10379,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		// The Grandchild behind the Instantiator boundary also requires it.
 		let childAMockFile = try #require(output.mockFiles["ChildA+SafeDIMock.swift"])
 		// ChildA's configuration struct should use non-optional Service in closure types
-		#expect(childAMockFile.contains("grandchildBuilder: ((Service, String) -> Grandchild)?"), "ChildA configuration should have non-optional Service in grandchildBuilder closure type. Config:\n\(childAMockFile)")
-		#expect(childAMockFile.contains("((Service, Instantiator<Grandchild>) -> ChildA)?"), "ChildA configuration should have non-optional Service in safeDIBuilder closure type. Config:\n\(childAMockFile)")
+		#expect(childAMockFile.contains("grandchildBuilder: (@Sendable (Service, String) -> Grandchild)?"), "ChildA configuration should have non-optional Service in grandchildBuilder closure type. Config:\n\(childAMockFile)")
+		#expect(childAMockFile.contains("(@Sendable (Service, Instantiator<Grandchild>) -> ChildA)?"), "ChildA configuration should have non-optional Service in safeDIBuilder closure type. Config:\n\(childAMockFile)")
 	}
 
 	@Test
@@ -10829,13 +10829,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            _ safeDIBuilder: ((Instantiator<Child>, Service) -> Child)? = nil
+		            _ safeDIBuilder: (@Sendable (Instantiator<Child>, Service) -> Child)? = nil
 		        ) {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<Child>, Service) -> Child)?
+		        let safeDIBuilder: (@Sendable (Instantiator<Child>, Service) -> Child)?
 		    }
 		}
 		#endif
@@ -11130,16 +11130,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            cachedPlayerBuilder: ((Player) -> CachedPlayer)? = nil,
-		            _ safeDIBuilder: ((Instantiator<CachedPlayer>) -> Player)? = nil
+		            cachedPlayerBuilder: (@Sendable (Player) -> CachedPlayer)? = nil,
+		            _ safeDIBuilder: (@Sendable (Instantiator<CachedPlayer>) -> Player)? = nil
 		        ) {
 		            self.cachedPlayerBuilder = cachedPlayerBuilder
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let cachedPlayerBuilder: ((Player) -> CachedPlayer)?
+		        let cachedPlayerBuilder: (@Sendable (Player) -> CachedPlayer)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<CachedPlayer>) -> Player)?
+		        let safeDIBuilder: (@Sendable (Instantiator<CachedPlayer>) -> Player)?
 		    }
 		}
 		#endif
@@ -11316,19 +11316,19 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            optionalChild: ((Service?) -> OptionalChild)? = nil,
-		            requiredChild: ((Service) -> RequiredChild)? = nil,
-		            _ safeDIBuilder: ((OptionalChild, RequiredChild) -> Parent)? = nil
+		            optionalChild: (@Sendable (Service?) -> OptionalChild)? = nil,
+		            requiredChild: (@Sendable (Service) -> RequiredChild)? = nil,
+		            _ safeDIBuilder: (@Sendable (OptionalChild, RequiredChild) -> Parent)? = nil
 		        ) {
 		            self.optionalChild = optionalChild
 		            self.requiredChild = requiredChild
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let optionalChild: ((Service?) -> OptionalChild)?
-		        let requiredChild: ((Service) -> RequiredChild)?
+		        let optionalChild: (@Sendable (Service?) -> OptionalChild)?
+		        let requiredChild: (@Sendable (Service) -> RequiredChild)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((OptionalChild, RequiredChild) -> Parent)?
+		        let safeDIBuilder: (@Sendable (OptionalChild, RequiredChild) -> Parent)?
 		    }
 		}
 		#endif
@@ -11688,16 +11688,16 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            leaf: (() -> Leaf)? = nil,
-		            _ safeDIBuilder: ((Leaf) -> Child)? = nil
+		            leaf: (@Sendable () -> Leaf)? = nil,
+		            _ safeDIBuilder: (@Sendable (Leaf) -> Child)? = nil
 		        ) {
 		            self.leaf = leaf
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let leaf: (() -> Leaf)?
+		        let leaf: (@Sendable () -> Leaf)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Leaf) -> Child)?
+		        let safeDIBuilder: (@Sendable (Leaf) -> Child)?
 		    }
 		}
 		#endif

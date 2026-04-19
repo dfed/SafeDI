@@ -109,7 +109,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    struct SafeDIMockConfiguration {
 		        init(
 		            flag: Bool = false,
-		            _ safeDIBuilder: ((Shared, Bool) -> Child)? = nil
+		            _ safeDIBuilder: (@Sendable (Shared, Bool) -> Child)? = nil
 		        ) {
 		            self.flag = flag
 		            self.safeDIBuilder = safeDIBuilder
@@ -117,7 +117,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 
 		        let flag: Bool
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Shared, Bool) -> Child)?
+		        let safeDIBuilder: (@Sendable (Shared, Bool) -> Child)?
 		    }
 		}
 		#endif
@@ -219,7 +219,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    struct SafeDIMockConfiguration {
 		        init(
 		            config: String = "hello",
-		            _ safeDIBuilder: ((String) -> Child)? = nil
+		            _ safeDIBuilder: (@Sendable (String) -> Child)? = nil
 		        ) {
 		            self.config = config
 		            self.safeDIBuilder = safeDIBuilder
@@ -227,7 +227,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 
 		        let config: String
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((String) -> Child)?
+		        let safeDIBuilder: (@Sendable (String) -> Child)?
 		    }
 		}
 		#endif
@@ -346,7 +346,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    struct SafeDIMockConfiguration {
 		        init(
 		            flag: Bool = false,
-		            _ safeDIBuilder: ((String, Bool) -> Child)? = nil
+		            _ safeDIBuilder: (@Sendable (String, Bool) -> Child)? = nil
 		        ) {
 		            self.flag = flag
 		            self.safeDIBuilder = safeDIBuilder
@@ -354,7 +354,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 
 		        let flag: Bool
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((String, Bool) -> Child)?
+		        let safeDIBuilder: (@Sendable (String, Bool) -> Child)?
 		    }
 		}
 		#endif
@@ -462,7 +462,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    struct SafeDIMockConfiguration {
 		        init(
 		            grandchild: Grandchild.SafeDIMockConfiguration = .init(),
-		            _ safeDIBuilder: ((Grandchild) -> Child)? = nil
+		            _ safeDIBuilder: (@Sendable (Grandchild) -> Child)? = nil
 		        ) {
 		            self.grandchild = grandchild
 		            self.safeDIBuilder = safeDIBuilder
@@ -470,7 +470,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 
 		        let grandchild: Grandchild.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Grandchild) -> Child)?
+		        let safeDIBuilder: (@Sendable (Grandchild) -> Child)?
 		    }
 		}
 		#endif
@@ -499,7 +499,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    struct SafeDIMockConfiguration {
 		        init(
 		            viewModel: String = "default",
-		            _ safeDIBuilder: ((String) -> Grandchild)? = nil
+		            _ safeDIBuilder: (@Sendable (String) -> Grandchild)? = nil
 		        ) {
 		            self.viewModel = viewModel
 		            self.safeDIBuilder = safeDIBuilder
@@ -507,7 +507,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 
 		        let viewModel: String
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((String) -> Grandchild)?
+		        let safeDIBuilder: (@Sendable (String) -> Grandchild)?
 		    }
 		}
 		#endif
@@ -777,7 +777,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    struct SafeDIMockConfiguration {
 		        init(
 		            viewModel: String? = nil,
-		            _ safeDIBuilder: ((String?) -> Child)? = nil
+		            _ safeDIBuilder: (@Sendable (String?) -> Child)? = nil
 		        ) {
 		            self.viewModel = viewModel
 		            self.safeDIBuilder = safeDIBuilder
@@ -785,7 +785,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 
 		        let viewModel: String?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((String?) -> Child)?
+		        let safeDIBuilder: (@Sendable (String?) -> Child)?
 		    }
 		}
 		#endif
@@ -1464,19 +1464,19 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            onCancel: @escaping @MainActor (String) -> Void = { _ in },
-		            onSubmit: @escaping @MainActor (String) throws -> Void = { _ in },
-		            _ safeDIBuilder: ((@escaping @MainActor (String) -> Void, @escaping @MainActor (String) throws -> Void) -> Child)? = nil
+		            onCancel: @Sendable @escaping @MainActor (String) -> Void = { _ in },
+		            onSubmit: @Sendable @escaping @MainActor (String) throws -> Void = { _ in },
+		            _ safeDIBuilder: (@Sendable (@escaping @MainActor (String) -> Void, @escaping @MainActor (String) throws -> Void) -> Child)? = nil
 		        ) {
 		            self.onCancel = onCancel
 		            self.onSubmit = onSubmit
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let onCancel: @MainActor (String) -> Void
-		        let onSubmit: @MainActor (String) throws -> Void
+		        let onCancel: @Sendable @MainActor (String) -> Void
+		        let onSubmit: @Sendable @MainActor (String) throws -> Void
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((@escaping @MainActor (String) -> Void, @escaping @MainActor (String) throws -> Void) -> Child)?
+		        let safeDIBuilder: (@Sendable (@escaping @MainActor (String) -> Void, @escaping @MainActor (String) throws -> Void) -> Child)?
 		    }
 		}
 		#endif
@@ -1773,7 +1773,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    struct SafeDIMockConfiguration {
 		        init(
 		            isLoggingEnabled: Bool = false,
-		            _ safeDIBuilder: ((Bool) -> Child)? = nil
+		            _ safeDIBuilder: (@Sendable (Bool) -> Child)? = nil
 		        ) {
 		            self.isLoggingEnabled = isLoggingEnabled
 		            self.safeDIBuilder = safeDIBuilder
@@ -1781,7 +1781,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 
 		        let isLoggingEnabled: Bool
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Bool) -> Child)?
+		        let safeDIBuilder: (@Sendable (Bool) -> Child)?
 		    }
 		}
 		#endif
