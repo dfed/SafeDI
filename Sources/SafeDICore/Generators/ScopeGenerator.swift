@@ -1950,6 +1950,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let dependenciesByLabel = Dictionary(
 			uniqueKeysWithValues: node.dependencies.map { ($0.property.label, $0) },
 		)
+		let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
 
 		let relativePath = nodePath
 			.replacingOccurrences(of: "safeDIOverrides.", with: "")
@@ -1958,10 +1959,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return node.callSiteArguments.map { argument in
 			if dependenciesByLabel[argument.innerLabel] != nil {
 				argument.innerLabel
-			} else if let sendableExtractionPrefix {
-				"\(sendableExtractionPrefix)__\(relativePath)_\(argument.label)"
+			} else if defaultParameterLabels.contains(argument.label) {
+				// Non-dependency default — surfaced on the override struct, so
+				// resolve against the override storage path (or its extracted
+				// sendable local).
+				if let sendableExtractionPrefix {
+					"\(sendableExtractionPrefix)__\(relativePath)_\(argument.label)"
+				} else {
+					"\(nodePath).\(argument.label)"
+				}
 			} else {
-				"\(nodePath).\(argument.label)"
+				// Required non-dependency argument — resolve via lexical scope,
+				// since no override slot exists on the config struct. This covers
+				// runtime values that an ancestor has bound above this call site.
+				argument.innerLabel
 			}
 		}
 	}
