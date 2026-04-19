@@ -54,7 +54,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true)
-				extension String {
+				extension String: Instantiable {
 				    public static func mock() -> String { "" }
 				}
 				""",
@@ -97,7 +97,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true)
-				extension Int {
+				extension Int: Instantiable {
 				    public static func mock() -> Int { 0 }
 				}
 				""",
@@ -140,7 +140,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true)
-				extension ExternalService {
+				extension ExternalService: Instantiable {
 				    public static func mock() -> ExternalService { fatalError() }
 				}
 				""",
@@ -195,7 +195,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "testValue")
-				extension String {
+				extension String: Instantiable {
 				    public static func testValue() -> String { "test" }
 				}
 				""",
@@ -238,7 +238,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true)
-				public struct MyService {
+				public struct MyService: Instantiable {
 				    public static func mock() -> MyService { MyService() }
 				}
 				""",
@@ -305,7 +305,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true)
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func mock() -> MyService { MyService() }
 				}
 				""",
@@ -366,7 +366,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true)
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func mock() -> MyService { MyService() }
 				}
 				""",
@@ -415,7 +415,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -464,7 +464,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -532,7 +532,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -619,7 +619,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension Child {
+				extension Child: Instantiable {
 				    public static func preview() -> Child { Child() }
 				}
 				""",
@@ -681,7 +681,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, mockAttributes: "@MainActor")
-				extension Child {
+				extension Child: Instantiable {
 				    @MainActor public static func mock() -> Child { Child() }
 				}
 				""",
@@ -1129,7 +1129,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true, customMockName: "preview")
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1186,7 +1186,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true, customMockName: "preview")
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1235,7 +1235,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1305,7 +1305,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1393,7 +1393,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true, customMockName: "preview")
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1472,7 +1472,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1550,7 +1550,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1629,7 +1629,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true, customMockName: "preview")
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1748,7 +1748,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1799,7 +1799,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func preview(database: Database = Database()) -> MyService {
 				        MyService(database: database)
 				    }
@@ -2331,7 +2331,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func mock() -> MyService { MyService() }
 				}
 				""",
@@ -2400,7 +2400,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true, customMockName: "preview")
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -2487,7 +2487,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
-				extension MyService {
+				extension MyService: Instantiable {
 				    public static func mock() -> ServiceProtocol { MyService() }
 				}
 				""",

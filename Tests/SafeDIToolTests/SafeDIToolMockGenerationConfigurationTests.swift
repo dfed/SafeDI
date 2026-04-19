@@ -260,7 +260,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 				public class ExternalService {}
 
 				@Instantiable(mockAttributes: "@MainActor", generateMock: true)
-				extension ExternalService {
+				extension ExternalService: Instantiable {
 				    public static func instantiate() -> ExternalService {
 				        ExternalService()
 				    }
