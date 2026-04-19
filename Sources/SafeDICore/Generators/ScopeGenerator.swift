@@ -571,6 +571,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let indent = Self.standardIndent
 		let bodyIndent = "\(indent)\(indent)"
 
+		// The generated `mock()` method's return type matches the construction
+		// call site: if `customMock` returns an additional type (e.g. the type
+		// fulfills a protocol and `customMock` returns that protocol), returning
+		// `typeName` here would be a type error because `customMock`'s result
+		// cannot be downcast implicitly. Use `mockReturnType` for those cases,
+		// and fall back to `typeName` when there is no custom mock or the custom
+		// mock already returns the concrete type / `Self`.
+		let mockMethodReturnType: String = {
+			guard let mockReturnType = instantiable.mockReturnType,
+			      !instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiable.concreteInstantiable)
+			else { return typeName }
+			return mockReturnType.asSource
+		}()
+
 		// 1. Build the parameter tree.
 		let parameterTree = await collectMockParameterTree()
 
@@ -728,7 +742,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			let code = """
 			extension \(typeName) {
-			    \(mockAttributesPrefix)static func mock() -> \(typeName) {
+			    \(mockAttributesPrefix)static func mock() -> \(mockMethodReturnType) {
 			        \(construction)
 			    }
 			}
@@ -789,7 +803,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
 		lines.append(mockParameters.joined(separator: ",\n"))
-		lines.append("\(indent)) -> \(typeName) {")
+		lines.append("\(indent)) -> \(mockMethodReturnType) {")
 
 		// Generate mock body.
 		// Sibling-disambig map renames local `let` bindings when the root's own
