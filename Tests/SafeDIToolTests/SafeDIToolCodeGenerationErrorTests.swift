@@ -817,7 +817,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
-					public struct User {}
+					public struct User { public init() {}; public init(username: String) {} }
 					""",
 					"""
 					public protocol NetworkService {}
@@ -876,7 +876,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
-					public struct User {}
+					public struct User { public init() {}; public init(username: String) {} }
 					""",
 					"""
 					public protocol NetworkService {}
@@ -1045,7 +1045,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
-					public struct User {}
+					public struct User { public init() {}; public init(username: String) {} }
 					""",
 					"""
 					public protocol NetworkService {}
@@ -1803,7 +1803,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
-					public struct User {}
+					public struct User { public init() {}; public init(username: String) {} }
 					""",
 					"""
 					public protocol AuthService {
@@ -1885,7 +1885,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
-					public struct User {}
+					public struct User { public init() {}; public init(username: String) {} }
 					""",
 					"""
 					public protocol AuthService {

@@ -880,7 +880,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 				    public init(childBuilder: ErasedInstantiator<String, Child>) {
 				        self.childBuilder = childBuilder
 				    }
-				    @Instantiated let childBuilder: ErasedInstantiator<String, Child>
+				    @Instantiated(fulfilledByType: "Child") let childBuilder: ErasedInstantiator<String, Child>
 				}
 				""",
 				"""
@@ -943,7 +943,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 				    public init(childBuilder: SendableErasedInstantiator<String, Child>) {
 				        self.childBuilder = childBuilder
 				    }
-				    @Instantiated let childBuilder: SendableErasedInstantiator<String, Child>
+				    @Instantiated(fulfilledByType: "Child") let childBuilder: SendableErasedInstantiator<String, Child>
 				}
 				""",
 				"""
@@ -1083,6 +1083,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Parent+SafeDIMock.swift"] == """
@@ -1152,10 +1153,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 				}
 				""",
 				"""
-				public struct ViewModelA {}
+				public struct ViewModelA { public init() {} }
 				""",
 				"""
-				public struct ViewModelB {}
+				public struct ViewModelB { public init() {} }
 				""",
 			],
 			buildSwiftOutputDirectory: true,
@@ -1652,6 +1653,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		// name (forwarded, bare) stays as-is. name_String (bubbled default) is disambiguated.

@@ -1107,6 +1107,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -1363,6 +1364,9 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
+				public protocol ChildServiceProtocol {}
+				""",
+				"""
 				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childService: ChildServiceProtocol, engine: Engine) {
@@ -1392,6 +1396,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -1437,6 +1442,9 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
+				public protocol ChildServiceProtocol {}
+				""",
+				"""
 				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childService: ChildService, engine: Engine) {
@@ -1466,6 +1474,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -1510,6 +1519,12 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
+				public protocol ChildServiceProtocol {}
+				public struct ChildService: ChildServiceProtocol {
+				    public init() {}
+				}
+				""",
+				"""
 				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childService: ChildServiceProtocol, engine: Engine) {
@@ -1538,6 +1553,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -1583,6 +1599,12 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
+				public protocol ChildServiceProtocol {}
+				public struct ChildService: ChildServiceProtocol {
+				    public init() {}
+				}
+				""",
+				"""
 				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(childService: ChildService, engine: Engine) {
@@ -1611,6 +1633,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -2045,6 +2068,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -2134,6 +2158,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 3)
@@ -2226,6 +2251,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 4)
@@ -2295,6 +2321,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 2)
@@ -2380,6 +2407,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 5)
@@ -2437,6 +2465,9 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
+				public struct Engine { public init() {} }
+				""",
+				"""
 				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child) { self.child = child }
@@ -2463,6 +2494,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		// `engine` must appear as a flat required parameter on Root.mock() since it's

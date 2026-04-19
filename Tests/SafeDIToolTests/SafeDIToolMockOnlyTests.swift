@@ -61,6 +61,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 1)
@@ -104,6 +105,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 1)
@@ -130,6 +132,9 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
+				public struct ExternalService { public init() {} }
+				""",
+				"""
 				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
 				    public init(service: ExternalService) {
@@ -147,6 +152,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 1)
@@ -202,6 +208,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 1)
@@ -244,7 +251,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(conformsElsewhere: true)
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func instantiate() -> MyService { MyService() }
 				}
 				""",
@@ -305,7 +312,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true)
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func mock() -> MyService { MyService() }
 				}
 				""",
@@ -366,13 +373,14 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true)
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func mock() -> MyService { MyService() }
 				}
 				""",
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 1)
@@ -415,13 +423,14 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 1)
@@ -464,7 +473,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -532,7 +541,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -619,7 +628,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension Child: Instantiable {
+				extension Child {
 				    public static func preview() -> Child { Child() }
 				}
 				""",
@@ -681,7 +690,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, mockAttributes: "@MainActor")
-				extension Child: Instantiable {
+				extension Child {
 				    @MainActor public static func mock() -> Child { Child() }
 				}
 				""",
@@ -724,6 +733,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 1)
@@ -1134,7 +1144,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true, customMockName: "preview")
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1191,7 +1201,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true, customMockName: "preview")
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1240,7 +1250,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1310,7 +1320,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1398,7 +1408,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true, customMockName: "preview")
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1477,7 +1487,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1555,7 +1565,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -1634,13 +1644,14 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true, customMockName: "preview")
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -1697,6 +1708,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -1753,13 +1765,14 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -1804,7 +1817,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(mockOnly: true, customMockName: "preview")
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func preview(database: Database = Database()) -> MyService {
 				        MyService(database: database)
 				    }
@@ -1861,6 +1874,9 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				public protocol ServiceProtocol {}
+				""",
+				"""
+				public struct ConcreteService: ServiceProtocol { public init() {} }
 				""",
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
@@ -1946,6 +1962,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
@@ -2068,6 +2085,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
@@ -2336,7 +2354,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func mock() -> MyService { MyService() }
 				}
 				""",
@@ -2405,7 +2423,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true, customMockName: "preview")
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func preview() -> MyService { MyService() }
 				}
 				""",
@@ -2492,7 +2510,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
-				extension MyService: Instantiable {
+				extension MyService {
 				    public static func mock() -> ServiceProtocol { MyService() }
 				}
 				""",

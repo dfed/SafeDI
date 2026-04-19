@@ -377,6 +377,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		// Child's hand-written mock() takes no arguments, so the generated mock must
@@ -442,6 +443,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		// Both dependency tree AND mock outputs should have the error.

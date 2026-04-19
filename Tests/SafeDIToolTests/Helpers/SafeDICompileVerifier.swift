@@ -28,11 +28,14 @@ import Testing
 ///
 /// Verification runs in two passes: the test inputs alone are typechecked
 /// first, and only if they succeed does the verifier typecheck inputs plus
-/// generated outputs. When the inputs are intentionally invalid (e.g.,
-/// fixtures exercising SafeDITool's error-reporting paths, fixtures
-/// referencing types declared in another module), the first pass fails and
-/// the verifier exits silently — the point of the check is to guard against
-/// regressions in *generated* code, not to police fixture hygiene.
+/// generated outputs. Splitting the passes lets failure messages pinpoint
+/// whether the regression is in the fixture or in the generated code.
+///
+/// Fixtures must be self-contained Swift that compiles against SafeDI alone —
+/// define stand-in types rather than importing platform frameworks that
+/// aren't available on the host SDK (e.g., UIKit on macOS). Tests that rely
+/// on cross-module references should opt out at the call site via
+/// `skipCompileVerification` or by declaring additional imported modules.
 ///
 /// Set the `SAFEDI_SKIP_COMPILE_CHECK` environment variable (to any value) to
 /// disable the verification pass for faster local iteration.
@@ -46,19 +49,7 @@ func verifyGeneratedCodeCompiles(
 ) throws {
 	guard ProcessInfo.processInfo.environment["SAFEDI_SKIP_COMPILE_CHECK"] == nil else { return }
 
-	// Skip fixtures that depend on platform-specific frameworks (UIKit, SwiftUI,
-	// AppKit, WatchKit) — the SafeDI artifacts are built for the host macOS
-	// target, and retargeting the verifier for iOS/watchOS/etc. would require
-	// re-compiling the package for every OS in CI. The production user's build
-	// (which has the right SDK) will still catch framework-level issues.
-	let platformFrameworks = ["UIKit", "SwiftUI", "AppKit", "WatchKit", "Cocoa"]
 	let inputURLs = inputSwiftFiles + additionalDirectorySwiftFiles
-	for sourceFile in inputURLs {
-		let contents = try String(contentsOf: sourceFile, encoding: .utf8)
-		for framework in platformFrameworks {
-			if contents.contains("import \(framework)") { return }
-		}
-	}
 
 	guard let artifacts = SafeDIBuildArtifactLocator.locate() else {
 		Issue.record(
@@ -93,29 +84,24 @@ func verifyGeneratedCodeCompiles(
 		inputCompileFiles.append(destination)
 	}
 
-	// First pass: typecheck inputs alone. If the inputs can't compile on their
-	// own (broken-on-purpose fixtures, cross-module references, etc.), skip
-	// the output verification entirely — but if the failure looks like a
-	// verifier infrastructure problem (missing SafeDI module, macro plugin
-	// load failure, ABI mismatch), surface it so a regression in the verifier
-	// itself doesn't silently disable compile checking everywhere.
+	// First pass: typecheck inputs alone. Isolating the fixture failure makes
+	// it obvious whether the regression is in the test source or in the
+	// generated output that follows in the second pass.
 	let inputsOnlyResult = try runSwiftTypecheck(
 		sources: inputCompileFiles,
 		artifacts: artifacts,
 	)
 	if inputsOnlyResult.exitCode != 0 {
-		if looksLikeVerifierInfrastructureFailure(inputsOnlyResult.stderr) {
-			Issue.record(
-				"""
-				Compile verifier could not typecheck even minimal inputs — this looks \
-				like a verifier infrastructure failure (e.g., SafeDI module missing, \
-				macro plugin failed to load, toolchain mismatch) rather than a \
-				broken fixture. Set SAFEDI_SKIP_COMPILE_CHECK=1 to bypass.
-				\(inputsOnlyResult.stderr)
-				""",
-				sourceLocation: sourceLocation,
-			)
-		}
+		Issue.record(
+			"""
+			Test inputs failed to compile on their own. Make the fixture valid \
+			Swift against SafeDI alone — define stand-in types instead of \
+			importing platform frameworks that are unavailable on the host SDK \
+			(e.g., UIKit on macOS).
+			\(inputsOnlyResult.stderr)
+			""",
+			sourceLocation: sourceLocation,
+		)
 		return
 	}
 
@@ -144,27 +130,6 @@ func verifyGeneratedCodeCompiles(
 			sourceLocation: sourceLocation,
 		)
 	}
-}
-
-/// Heuristic detector for verifier infrastructure failures (vs. fixture-only
-/// compile errors). Catches the common "verifier is broken" symptoms — missing
-/// SafeDI module, macro plugin failed to load, toolchain ABI mismatch — so
-/// they surface as test failures instead of being silently swallowed by the
-/// inputs-only early-return path.
-private func looksLikeVerifierInfrastructureFailure(_ stderr: String) -> Bool {
-	let signals = [
-		"no such module 'SafeDI'",
-		"failed to load plugin",
-		"could not load plugin",
-		"could not be found in plugin",
-		"compiler plugin",
-		"module compiled with Swift",
-		"unable to find module dependency",
-	]
-	for signal in signals where stderr.contains(signal) {
-		return true
-	}
-	return false
 }
 
 struct SafeDIBuildArtifacts {
