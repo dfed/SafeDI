@@ -226,6 +226,7 @@ public struct InstantiableMacro: MemberMacro {
 				)
 				Self.validateDefaultExpressions(
 					functionSyntax: initializerSyntax.signature,
+					dependencies: visitor.dependencies,
 					context: context,
 				)
 			}
@@ -241,6 +242,7 @@ public struct InstantiableMacro: MemberMacro {
 				)
 				Self.validateDefaultExpressions(
 					functionSyntax: mockSyntax.signature,
+					dependencies: visitor.dependencies,
 					context: context,
 				)
 			}
@@ -907,6 +909,7 @@ public struct InstantiableMacro: MemberMacro {
 				)
 				Self.validateDefaultExpressions(
 					functionSyntax: mockFunction.signature,
+					dependencies: extensionDependencies,
 					context: context,
 				)
 				let nonDependenciesWithoutDefaults = mockFunctionInitializer.arguments
@@ -1234,13 +1237,21 @@ public struct InstantiableMacro: MemberMacro {
 	/// identifiable case so users get a compile error instead of a subtle
 	/// override-surface mismatch. Unqualified references to callee-scope
 	/// members can't be identified without type resolution and are not covered.
+	///
+	/// Dependency parameters are exempt: SafeDI always threads dependency
+	/// arguments explicitly at the call site, so a dependency's default
+	/// expression is never surfaced on the caller's override struct and its
+	/// `Self.*` / `self.*` refs resolve correctly in the callee.
 	private static func validateDefaultExpressions(
 		functionSyntax: FunctionSignatureSyntax,
+		dependencies: [Dependency],
 		context: some MacroExpansionContext,
 	) {
+		let dependencyLabels = Set(dependencies.map(\.property.label))
 		for parameter in functionSyntax.parameterClause.parameters {
 			guard let defaultValue = parameter.defaultValue?.value else { continue }
 			let parameterLabel = parameter.secondName?.text ?? parameter.firstName.text
+			guard !dependencyLabels.contains(parameterLabel) else { continue }
 			let finder = CalleeScopeReferenceFinder(viewMode: .sourceAccurate)
 			finder.walk(Syntax(defaultValue))
 			for reference in finder.references {

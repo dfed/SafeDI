@@ -5129,6 +5129,35 @@ import Testing
 		}
 
 		@Test
+		func producesNoDiagnostic_whenDefaultExpressionReferencesSelfOnDependencyParameter() {
+			// Dependency parameters are always threaded explicitly at the mock
+			// call site — their default expressions never reach the override
+			// surface — so `Self.*` inside a dep default is safe.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyType: Instantiable {
+				    public init(service: Service = Self.makeService()) {
+				        self.service = service
+				    }
+				    public static func makeService() -> Service { Service() }
+				    @Instantiated let service: Service
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init(service: Service = Self.makeService()) {
+				        self.service = service
+				    }
+				    public static func makeService() -> Service { Service() }
+				    let service: Service
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func producesNoDiagnostic_whenDefaultExpressionReferencesFileScopedSymbol() {
 			// Module-scoped and file-scoped references are fine — they resolve
 			// the same way from any caller, including the generated override
