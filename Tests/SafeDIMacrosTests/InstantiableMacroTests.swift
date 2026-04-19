@@ -5020,6 +5020,65 @@ import Testing
 			)
 		}
 
+		@Test
+		func producesDiagnostic_whenUnlabeledDefaultPrecedesUnlabeledRequiredParameterOnInit() {
+			// Mock override surface can't elide the earlier `_`-labeled default
+			// (Swift requires the positional slot to be filled when the later
+			// unlabeled param is required) and can't expose an unlabeled
+			// parameter as a labeled field on `SafeDIMockConfiguration`.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init(_ enabled: Bool = false, _ leaf: Leaf) {
+				        self.leaf = leaf
+				    }
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				expandedSource: """
+				public struct Child: Instantiable {
+				    public init(_ enabled: Bool = false, _ leaf: Leaf) {
+				        self.leaf = leaf
+				    }
+				    let leaf: Leaf
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `leaf: Leaf`. SafeDI cannot generate a mock for this signature: the default cannot be elided from the mock's override surface (Swift requires the earlier positional slot to be passed when a later unlabeled parameter is required), and an unlabeled parameter cannot be exposed as a labeled field on `SafeDIMockConfiguration`. Either add an external label to the defaulted parameter, reorder so unlabeled defaults come last, or remove the default.",
+						line: 3,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Promote `enabled` to an external label (rewrite `_ enabled:` as `enabled:`)"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesNoDiagnostic_whenTrailingUnlabeledParametersAllHaveDefaults() {
+			// `init(_ a: Int = 0, _ b: Int = 1)` is fine — both trailing `_`
+			// defaults are elided together as a suffix, call site becomes
+			// `Type()`.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyType: Instantiable {
+				    public init(_ a: Int = 0, _ b: Int = 1) {}
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init(_ a: Int = 0, _ b: Int = 1) {}
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
 		// MARK: generateMock + Hand-Written Mock Coexistence Tests
 
 		@Test

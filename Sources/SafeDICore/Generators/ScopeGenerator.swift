@@ -540,6 +540,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				let initializer = if !hasGeneratedContent {
 					existentialWrappedReturn
+				} else if erasedToConcreteExistential {
+					"\(property.typeDescription.asSource)(\(functionName)())"
 				} else {
 					"\(functionName)()"
 				}
@@ -1035,13 +1037,44 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"\(concreteType.asSource).\(Self.configurationStructName)"
 		}
 
+		/// Whether this argument is a non-dependency `_`-labeled defaulted
+		/// parameter that the mock call site elides. Elided parameters are
+		/// filled in by Swift's default-argument thunk in the callee's
+		/// declaration context, which preserves `Self`-binding and unqualified
+		/// name lookup inside the default expression. Dependency parameters
+		/// (even when shaped `_ dep: Dep = …`) are never elided — the override
+		/// flow must thread the resolved binding through to the callee.
+		/// `validateMockableInitializerShapes` rejects the shapes where
+		/// eliding would produce an uncallable signature (non-trailing
+		/// `_`-labeled default).
+		private func isElidedInCallSite(_ argument: Initializer.Argument, dependencyInnerLabels: Set<String>) -> Bool {
+			argument.label == "_"
+				&& argument.hasDefaultValue
+				&& !dependencyInnerLabels.contains(argument.innerLabel)
+		}
+
+		/// Construction arguments surfaced at the mock call site, with elided
+		/// non-dependency unlabeled defaults removed.
+		var callSiteArguments: [Initializer.Argument] {
+			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
+			return constructionArguments.filter { !isElidedInCallSite($0, dependencyInnerLabels: dependencyInnerLabels) }
+		}
+
+		/// Whether any construction argument is a non-dependency unlabeled
+		/// defaulted parameter hidden from the mock API and filled in by
+		/// Swift's default thunk.
+		var hasHiddenUnlabeledDefaults: Bool {
+			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
+			return constructionArguments.contains { isElidedInCallSite($0, dependencyInnerLabels: dependencyInnerLabels) }
+		}
+
 		/// The builder closure type as a Swift source string (unlabeled parameters).
 		/// Uses the property type (not the concrete fulfilling type) so the override
 		/// closure matches what the parent init expects. Swift covariant return types
 		/// ensure a concrete builder (e.g., `ConcreteService.init`) is assignable to
 		/// a closure returning the property type (e.g., `() -> ServiceProtocol`).
 		var builderClosureType: String {
-			let parameterTypes = constructionArguments
+			let parameterTypes = callSiteArguments
 				.map(\.typeDescription.asFunctionParameter.asSource)
 				.joined(separator: ", ")
 			return "(\(parameterTypes)) -> \(instantiatedTypeDescription.asSource)"
@@ -1051,14 +1084,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Used in `SafeDIMockConfiguration` structs which are deduplicated by
 		/// concrete type and must have a single consistent builder signature.
 		var concreteBuilderClosureType: String {
-			let parameterTypes = constructionArguments
+			let parameterTypes = callSiteArguments
 				.map(\.typeDescription.asFunctionParameter.asSource)
 				.joined(separator: ", ")
 			return "(\(parameterTypes)) -> \(concreteType.asSource)"
 		}
 
-		/// The default builder expression as a direct function reference.
-		/// e.g., `Grandchild.customMock(service:style:)` or `Service.init`.
+		/// The default builder expression used on the right-hand side of `??`
+		/// when no override closure is supplied. Emits a function reference —
+		/// e.g., `Grandchild.customMock(service:style:)` or `Service.init` —
+		/// which pairs with `(optRef ?? defaultRef)(args)` at the call site.
+		///
+		/// When the callee has hidden unlabeled defaults (filtered out of the
+		/// override signature), Swift cannot coerce a full init reference to
+		/// the narrower closure type, so this returns a `{ Type(label: $0) }`
+		/// closure instead. The closure body's call form lets Swift's
+		/// default-argument thunk fire in the callee's declaration context,
+		/// preserving resolution of `Self.*`, private members, and file-scoped
+		/// symbols in the default expression that would otherwise fail when
+		/// inlined at the caller.
 		var defaultBuilderExpression: String {
 			let methodName: String = if useMockInitializer {
 				customMockName ?? InstantiableVisitor.mockMethodName
@@ -1067,10 +1111,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"init"
 			}
-			if constructionArguments.isEmpty {
+			// In the hidden-defaults closure-wrap case, the body is a CALL
+			// expression where `init` has no `.init` suffix — `Type($0)` not
+			// `Type.init($0)`. Everywhere else we emit a function reference,
+			// which requires `.init` to disambiguate from the type itself.
+			if hasHiddenUnlabeledDefaults {
+				let labeledArguments = callSiteArguments.enumerated()
+					.map { index, argument in
+						argument.label == "_" ? "$\(index)" : "\(argument.label): $\(index)"
+					}
+					.joined(separator: ", ")
+				let callExpression = methodName == "init"
+					? "\(concreteType.asSource)(\(labeledArguments))"
+					: "\(concreteType.asSource).\(methodName)(\(labeledArguments))"
+				return "{ \(callExpression) }"
+			} else if callSiteArguments.isEmpty {
 				return "\(concreteType.asSource).\(methodName)"
 			} else {
-				let labels = constructionArguments
+				let labels = callSiteArguments
 					.map { "\($0.label):" }
 					.joined()
 				return "\(concreteType.asSource).\(methodName)(\(labels))"
@@ -1089,7 +1147,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"init"
 			}
-			let labeledArguments = zip(constructionArguments, arguments)
+			let labeledArguments = zip(callSiteArguments, arguments)
 				.map { $0.0.label == "_" ? $0.1 : "\($0.0.label): \($0.1)" }
 				.joined(separator: ", ")
 			if methodName == "init" {
@@ -1140,16 +1198,49 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Collects all unique configuration types from this scope's mock parameter tree.
-	func collectConfigurationTypes() async -> [(typeName: String, structCode: String)] {
+	/// `sendableConfigurationTypeNames` lists the concrete types whose configuration
+	/// struct must be `@Sendable`-typed because some root references them from a
+	/// `SendableInstantiator` scope. The set is computed once across all roots so
+	/// struct-per-type dedup remains consistent.
+	func collectConfigurationTypes(
+		sendableConfigurationTypeNames: Set<String>,
+	) async -> [(typeName: String, structCode: String)] {
 		let parameterTree = await collectMockParameterTree()
 		let uniqueTypes = Self.collectUniqueConfigurationTypes(from: parameterTree.propertyNodes)
 		let indent = Self.standardIndent
 		return uniqueTypes.map { node in
 			(
 				typeName: node.concreteType.asSource,
-				structCode: Self.generateConfigurationStruct(for: node, indent: indent),
+				structCode: Self.generateConfigurationStruct(
+					for: node,
+					indent: indent,
+					requiresSendable: sendableConfigurationTypeNames.contains(node.concreteType.asSource),
+				),
 			)
 		}
+	}
+
+	/// Concrete type names referenced by this scope's mock parameter tree from a
+	/// `SendableInstantiator` scope. Aggregated across all roots before generation
+	/// so every root emits consistent `@Sendable`-ness for a given type's
+	/// `SafeDIMockConfiguration` struct.
+	func collectSendableConfigurationTypeNames() async -> Set<String> {
+		let parameterTree = await collectMockParameterTree()
+		var result = Set<String>()
+
+		func walk(_ node: MockParameterNode) {
+			if node.requiresSendable, node.needsConfigurationStruct {
+				result.insert(node.concreteType.asSource)
+			}
+			for child in node.propertyChildren {
+				walk(child)
+			}
+		}
+
+		for node in parameterTree.propertyNodes {
+			walk(node)
+		}
+		return result
 	}
 
 	/// Walks the dependency tree and builds a `[MockTreeItem]` tree representing
@@ -1455,14 +1546,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Generates a single `SafeDIMockConfiguration` struct for a `MockParameterNode`.
-	/// When `node.requiresSendable` is `true`, the `safeDIBuilder` closure is marked
-	/// `@Sendable` (the node is inside a `SendableInstantiator` scope).
+	/// Closure fields are marked `@Sendable` only when `requiresSendable` is `true` —
+	/// i.e., the struct's concrete type is referenced from a `SendableInstantiator`
+	/// scope in at least one root. The flag is computed once across all roots so
+	/// cross-root struct-per-type dedup produces a consistent annotation.
 	private static func generateConfigurationStruct(
 		for node: MockParameterNode,
 		indent: String,
+		requiresSendable: Bool,
 	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
-		let sendableAnnotation = node.requiresSendable ? "@Sendable " : ""
+		let sendableAnnotation = requiresSendable ? "@Sendable " : ""
 		var lines = [String]()
 
 		lines.append("\(indent)/// Configuration for how this type is constructed within a mock tree.")
@@ -1488,7 +1582,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.configurationTypeName) = .init()")
 				storedProperties.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
 			} else {
-				let childSendable = child.requiresSendable ? "@Sendable " : ""
+				// A leaf child field also needs `@Sendable` when the child itself
+				// is reached sendably — e.g. a `SendableInstantiator` dependency on
+				// a non-sendable parent. `generateInstantiatorBinding` later wraps
+				// such children in a `@Sendable` local function, which would fail
+				// to capture a non-sendable override closure.
+				let childSendable = (requiresSendable || child.requiresSendable) ? "@Sendable " : ""
 				initParameters.append("\(innerIndent)\(standardIndent)\(label): (\(childSendable)\(child.builderClosureType))? = nil")
 				storedProperties.append("\(innerIndent)let \(label): (\(childSendable)\(child.builderClosureType))?")
 			}
@@ -1498,8 +1597,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Default-valued parameters.
 		for defaultParameter in node.defaultParameters {
 			let typeSource = defaultParameter.typeDescription.asSource
-			// Only add @Sendable if the type doesn't already have it.
-			let closureSendable = (node.requiresSendable && !typeSource.contains("@Sendable")) ? "@Sendable " : ""
+			// Only add @Sendable if this struct requires it AND the type doesn't already have it.
+			let closureSendable = (requiresSendable && !typeSource.contains("@Sendable")) ? "@Sendable " : ""
 			if defaultParameter.isClosureType {
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(closureSendable)@escaping \(typeSource) = \(defaultParameter.defaultExpression)")
 				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(closureSendable)\(typeSource)")
@@ -1844,7 +1943,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// as a sibling `let`; `.forwarded` is bound as a function parameter;
 	/// undisambiguated `.received` labels reach a flat mock parameter (or
 	/// ancestor tree binding) via Swift lexical scoping. Non-dependency
-	/// arguments come from `SafeDIOverrides` storage or their inline default.
+	/// arguments come from `SafeDIOverrides` storage. Unlabeled defaults are
+	/// omitted entirely so Swift's default-argument thunk fires in the callee.
 	private static func resolveBuilderArguments(
 		for node: MockParameterNode,
 		nodePath: String,
@@ -1853,24 +1953,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let dependenciesByLabel = Dictionary(
 			uniqueKeysWithValues: node.dependencies.map { ($0.property.label, $0) },
 		)
-		let defaultParameterLabels = Set(node.defaultParameters.map(\.label))
 
 		let relativePath = nodePath
 			.replacingOccurrences(of: "safeDIOverrides.", with: "")
 			.replacingOccurrences(of: ".", with: "_")
 
-		return node.constructionArguments.compactMap { argument in
+		// Every non-dependency arg surviving `callSiteArguments` is a labeled
+		// default — `_`-labeled defaults are either elided (trailing) or
+		// rejected at generator-validation time (non-trailing).
+		// `validateMockableInitializerShapes` enforces that; a required
+		// labeled non-dependency would be rejected earlier by the macro's
+		// `unexpectedArgument` check.
+		return node.callSiteArguments.map { argument in
 			if dependenciesByLabel[argument.innerLabel] != nil {
 				argument.innerLabel
-			} else if defaultParameterLabels.contains(argument.label) {
-				if let sendableExtractionPrefix {
-					"\(sendableExtractionPrefix)__\(relativePath)_\(argument.label)"
-				} else {
-					"\(nodePath).\(argument.label)"
-				}
+			} else if let sendableExtractionPrefix {
+				"\(sendableExtractionPrefix)__\(relativePath)_\(argument.label)"
 			} else {
-				// Unknown argument — use the label as a local variable reference.
-				argument.innerLabel
+				"\(nodePath).\(argument.label)"
 			}
 		}
 	}
