@@ -2936,6 +2936,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			includeFolders: ["Fake"],
+			skipCompileVerification: true,
 		)
 
 		#expect(output.dependencyTreeFiles.isEmpty)
@@ -6595,6 +6596,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
 		)
 
 		#expect(output.dependencyTreeFiles.isEmpty)

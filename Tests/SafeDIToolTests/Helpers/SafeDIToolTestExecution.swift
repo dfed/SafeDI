@@ -186,10 +186,14 @@ func executeSafeDIToolTest(
 			// that only exist in a sibling module) or when the caller has
 			// explicitly opted out. The checker needs every referenced type
 			// to be defined in the compilation unit; cross-module fixtures
-			// violate that contract on purpose.
+			// violate that contract on purpose. Tests that pass
+			// `additionalImportedModules` with unresolvable names (e.g., the
+			// placeholder "Test" module) must opt out explicitly via
+			// `skipCompileVerification: true` — otherwise verification runs
+			// and catches regressions when real modules like Foundation are
+			// passed through.
 			let shouldVerify = !skipCompileVerification
 				&& dependentModuleInfoPaths.isEmpty
-				&& additionalImportedModules.isEmpty
 			if shouldVerify {
 				try verifyGeneratedCodeCompiles(
 					inputSwiftFiles: swiftFiles,
