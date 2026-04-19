@@ -1107,6 +1107,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Service combines generateMock with a hand-written mock(), which the macro rejects as ambiguous
 			skipCompileVerification: true,
 		)
 
@@ -1396,6 +1397,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// customMock returns ChildServiceProtocol rather than Self, which the macro rejects
 			skipCompileVerification: true,
 		)
 
@@ -1474,6 +1476,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// customMock returns ChildServiceProtocol rather than Self, which the macro rejects
 			skipCompileVerification: true,
 		)
 
@@ -1553,6 +1556,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// customMock returns ChildServiceProtocol rather than Self, which the macro rejects
 			skipCompileVerification: true,
 		)
 
@@ -1633,6 +1637,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// customMock returns ChildServiceProtocol rather than Self, which the macro rejects
 			skipCompileVerification: true,
 		)
 
@@ -2068,6 +2073,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
 			skipCompileVerification: true,
 		)
 
@@ -2158,6 +2164,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
 			skipCompileVerification: true,
 		)
 
@@ -2251,6 +2258,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
 			skipCompileVerification: true,
 		)
 
@@ -2321,6 +2329,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
 			skipCompileVerification: true,
 		)
 
@@ -2407,6 +2416,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// fixture shadows Swift.String / Swift.Int, so literal defaults no longer match the fixture's types
 			skipCompileVerification: true,
 		)
 
@@ -2496,6 +2506,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Child combines generateMock with a hand-written mock(), which the macro rejects as ambiguous
 			skipCompileVerification: true,
 		)
 

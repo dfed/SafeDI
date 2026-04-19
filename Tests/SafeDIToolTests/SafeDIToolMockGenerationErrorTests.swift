@@ -377,6 +377,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Child combines generateMock with a hand-written mock(), which the macro rejects as ambiguous
 			skipCompileVerification: true,
 		)
 
@@ -443,6 +444,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Fixture intentionally contains `:::brokenSyntax` to exercise the parse-error stub path
 			skipCompileVerification: true,
 		)
 

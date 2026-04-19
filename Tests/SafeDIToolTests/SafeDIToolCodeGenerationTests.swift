@@ -1374,6 +1374,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Child is intentionally missing its initializer to exercise the misconfigured-stub path
 			skipCompileVerification: true,
 		)
 
@@ -1486,6 +1487,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Non-public Child used from public Root is inaccessible across modules, so the generated init won't compile
 			skipCompileVerification: true,
 		)
 
@@ -1541,6 +1543,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Non-public Child used from public Root is inaccessible across modules, so the generated init won't compile
 			skipCompileVerification: true,
 		)
 
@@ -2496,6 +2499,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Fixture's UserDefaults extension contains nested stubs that aren't valid Swift on their own
 			skipCompileVerification: true,
 		)
 
@@ -2621,6 +2625,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Fixture stubs UIViewController and calls a failable UserDefaults init unconditionally
 			skipCompileVerification: true,
 		)
 
@@ -2936,6 +2941,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			includeFolders: ["Fake"],
+			// Generated output imports the placeholder "Test" module, which doesn't exist
 			skipCompileVerification: true,
 		)
 
@@ -5033,6 +5039,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Generated output references nested `Inner` unqualified, so the compiler can't resolve it
 			skipCompileVerification: true,
 		)
 
@@ -6038,6 +6045,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Fixture intentionally contains `:::brokenSyntax` to exercise the parse-error stub path
 			skipCompileVerification: true,
 		)
 
@@ -6596,6 +6604,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Generated output imports the placeholder "Test" module, which doesn't exist
 			skipCompileVerification: true,
 		)
 

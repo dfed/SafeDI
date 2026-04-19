@@ -1083,6 +1083,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Parent declares @Received on an isRoot type, which the macro forbids
 			skipCompileVerification: true,
 		)
 
@@ -1657,6 +1658,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
 			skipCompileVerification: true,
 		)
 

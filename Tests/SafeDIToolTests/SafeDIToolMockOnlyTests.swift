@@ -61,6 +61,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
 			skipCompileVerification: true,
 		)
 
@@ -105,6 +106,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
 			skipCompileVerification: true,
 		)
 
@@ -154,6 +156,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// ExternalService has only a mockOnly provider, so the production tree emits .instantiate()
 			skipCompileVerification: true,
 		)
 
@@ -210,6 +213,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
 			skipCompileVerification: true,
 		)
 
@@ -382,6 +386,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
 			skipCompileVerification: true,
 		)
 
@@ -432,6 +437,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
 			skipCompileVerification: true,
 		)
 
@@ -735,6 +741,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
 			skipCompileVerification: true,
 		)
 
@@ -1653,6 +1660,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
 			skipCompileVerification: true,
 		)
 
@@ -1710,6 +1718,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// ConcreteService sets customMockName without generateMock/mockOnly, which the macro rejects
 			skipCompileVerification: true,
 		)
 
@@ -1774,6 +1783,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded, which the macro forbids on isRoot types
 			skipCompileVerification: true,
 		)
 
@@ -1966,6 +1976,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Root declares @Forwarded and the extension mock() returns a protocol, both of which the macro rejects
 			skipCompileVerification: true,
 		)
 
@@ -2089,6 +2100,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// MockBoth.mock() returns ServiceProtocol rather than Self, which the macro rejects
 			skipCompileVerification: true,
 		)
 

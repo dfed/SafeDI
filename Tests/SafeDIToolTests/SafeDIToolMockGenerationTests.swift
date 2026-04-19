@@ -803,6 +803,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// DefaultMyService combines generateMock with a hand-written mock(), which the macro rejects as ambiguous
 			skipCompileVerification: true,
 		)
 
@@ -8130,6 +8131,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Fixture stores a non-escaping closure in a let property, which the macro rejects
 			skipCompileVerification: true,
 		)
 
