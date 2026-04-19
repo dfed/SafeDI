@@ -69,8 +69,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// URLSession lives in FoundationNetworking on Linux, not Foundation.
-			skipCompileVerification: true,
 		)
 
 		let content = try #require(output.generatedFiles?["DefaultNetworkService+SafeDI.swift"])
@@ -114,8 +112,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// URLSession lives in FoundationNetworking on Linux, not Foundation.
-			skipCompileVerification: true,
 		)
 
 		#expect(output.generatedFiles?["RootViewController+SafeDI.swift"] == """
@@ -166,8 +162,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// URLSession lives in FoundationNetworking on Linux, not Foundation.
-			skipCompileVerification: true,
 		)
 
 		#expect(output.generatedFiles?["Root+SafeDI.swift"] == """
@@ -218,8 +212,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// URLSession lives in FoundationNetworking on Linux, not Foundation.
-			skipCompileVerification: true,
 		)
 
 		#expect(output.generatedFiles?["Root+SafeDI.swift"] == """
@@ -280,8 +272,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// URLSession lives in FoundationNetworking on Linux, not Foundation.
-			skipCompileVerification: true,
 		)
 
 		#expect(output.generatedFiles?["Root1+SafeDI.swift"] == """
@@ -1034,8 +1024,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// SwiftUI is unavailable on Linux.
-			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["RootView+SafeDI.swift"]) == """
@@ -1085,8 +1073,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// SwiftUI is unavailable on Linux.
-			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["RootView+SafeDI.swift"]) == """
