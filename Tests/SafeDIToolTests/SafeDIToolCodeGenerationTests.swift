@@ -2974,7 +2974,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public struct User {}
+				public struct User {
+				    public init(username: String) {}
+				}
 				""",
 				"""
 				public protocol UserVendor {
@@ -3196,7 +3198,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public struct User {}
+				public struct User {
+				    public init(username: String) {}
+				}
 				""",
 				"""
 				public protocol UserVendor {
@@ -3357,7 +3361,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public struct User {}
+				public struct User {
+				    public init(username: String) {}
+				}
 				""",
 				"""
 				public protocol NetworkService {}
@@ -3434,7 +3440,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public struct User {}
+				public struct User {
+				    public init(username: String) {}
+				}
 				""",
 				"""
 				public protocol NetworkService {}
@@ -3516,7 +3524,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public struct User {}
+				public struct User {
+				    public init(username: String) {}
+				}
 				""",
 				"""
 				public protocol UserVendor {
@@ -3673,7 +3683,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public struct User {}
+				public struct User {
+				    public init(username: String) {}
+				}
 				""",
 				"""
 				public protocol UserVendor {
