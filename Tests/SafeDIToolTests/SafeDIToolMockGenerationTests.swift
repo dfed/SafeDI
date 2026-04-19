@@ -10859,7 +10859,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        init(
 		            bBuilder: B.SafeDIMockConfiguration = .init(),
 		            label: String = "default",
-		            _ safeDIBuilder: ((Instantiator<B>, String) -> A)? = nil
+		            _ safeDIBuilder: (@Sendable (Instantiator<B>, String) -> A)? = nil
 		        ) {
 		            self.bBuilder = bBuilder
 		            self.label = label
@@ -10869,7 +10869,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let bBuilder: B.SafeDIMockConfiguration
 		        let label: String
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<B>, String) -> A)?
+		        let safeDIBuilder: (@Sendable (Instantiator<B>, String) -> A)?
 		    }
 		}
 		#endif
