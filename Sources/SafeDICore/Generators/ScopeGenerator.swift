@@ -1075,13 +1075,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"\(concreteType.asSource).\(Self.configurationStructName)"
 		}
 
+		/// Construction arguments surfaced at the mock call site. Unlabeled
+		/// parameters with defaults are omitted so Swift's default-argument thunk
+		/// fires in the callee's declaration context, preserving resolution of
+		/// `Self.*`, private members, and file-scoped symbols in the default
+		/// expression that would otherwise fail when inlined at the caller.
+		var callSiteArguments: [Initializer.Argument] {
+			constructionArguments.filter { !($0.label == "_" && $0.hasDefaultValue) }
+		}
+
+		/// Whether any construction argument is an unlabeled defaulted parameter
+		/// that is hidden from the mock API and filled in by Swift's default thunk.
+		var hasHiddenUnlabeledDefaults: Bool {
+			constructionArguments.contains { $0.label == "_" && $0.hasDefaultValue }
+		}
+
 		/// The builder closure type as a Swift source string (unlabeled parameters).
 		/// Uses the property type (not the concrete fulfilling type) so the override
 		/// closure matches what the parent init expects. Swift covariant return types
 		/// ensure a concrete builder (e.g., `ConcreteService.init`) is assignable to
 		/// a closure returning the property type (e.g., `() -> ServiceProtocol`).
 		var builderClosureType: String {
-			let parameterTypes = constructionArguments
+			let parameterTypes = callSiteArguments
 				.map(\.typeDescription.asFunctionParameter.asSource)
 				.joined(separator: ", ")
 			return "(\(parameterTypes)) -> \(instantiatedTypeDescription.asSource)"
@@ -1091,14 +1106,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Used in `SafeDIMockConfiguration` structs which are deduplicated by
 		/// concrete type and must have a single consistent builder signature.
 		var concreteBuilderClosureType: String {
-			let parameterTypes = constructionArguments
+			let parameterTypes = callSiteArguments
 				.map(\.typeDescription.asFunctionParameter.asSource)
 				.joined(separator: ", ")
 			return "(\(parameterTypes)) -> \(concreteType.asSource)"
 		}
 
-		/// The default builder expression as a direct function reference.
-		/// e.g., `Grandchild.customMock(service:style:)` or `Service.init`.
+		/// The default builder expression used on the right-hand side of `??`
+		/// when no override closure is supplied. Emits a function reference —
+		/// e.g., `Grandchild.customMock(service:style:)` or `Service.init` —
+		/// which pairs with `(optRef ?? defaultRef)(args)` at the call site.
+		///
+		/// When the callee has hidden unlabeled defaults (filtered out of the
+		/// override signature), Swift cannot coerce a full init reference to
+		/// the narrower closure type, so this returns a `{ Type(label: $0) }`
+		/// closure instead. The closure body's call form lets Swift's
+		/// default-argument thunk fire in the callee's declaration context,
+		/// preserving resolution of `Self.*`, private members, and file-scoped
+		/// symbols in the default expression that would otherwise fail when
+		/// inlined at the caller.
 		var defaultBuilderExpression: String {
 			let methodName: String = if useMockInitializer {
 				customMockName ?? InstantiableVisitor.mockMethodName
@@ -1107,10 +1133,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"init"
 			}
-			if constructionArguments.isEmpty {
+			if hasHiddenUnlabeledDefaults {
+				let labeledArguments = callSiteArguments.enumerated()
+					.map { index, argument in
+						argument.label == "_" ? "$\(index)" : "\(argument.label): $\(index)"
+					}
+					.joined(separator: ", ")
+				let callExpression = if methodName == "init" {
+					"\(concreteType.asSource)(\(labeledArguments))"
+				} else {
+					"\(concreteType.asSource).\(methodName)(\(labeledArguments))"
+				}
+				return "{ \(callExpression) }"
+			}
+			if callSiteArguments.isEmpty {
 				return "\(concreteType.asSource).\(methodName)"
 			} else {
-				let labels = constructionArguments
+				let labels = callSiteArguments
 					.map { "\($0.label):" }
 					.joined()
 				return "\(concreteType.asSource).\(methodName)(\(labels))"
@@ -1129,7 +1168,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"init"
 			}
-			let labeledArguments = zip(constructionArguments, arguments)
+			let labeledArguments = zip(callSiteArguments, arguments)
 				.map { $0.0.label == "_" ? $0.1 : "\($0.0.label): \($0.1)" }
 				.joined(separator: ", ")
 			if methodName == "init" {
@@ -1831,7 +1870,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// as a sibling `let`; `.forwarded` is bound as a function parameter;
 	/// undisambiguated `.received` labels reach a flat mock parameter (or
 	/// ancestor tree binding) via Swift lexical scoping. Non-dependency
-	/// arguments come from `SafeDIOverrides` storage or their inline default.
+	/// arguments come from `SafeDIOverrides` storage. Unlabeled defaults are
+	/// omitted entirely so Swift's default-argument thunk fires in the callee.
 	private static func resolveBuilderArguments(
 		for node: MockParameterNode,
 		nodePath: String,
@@ -1846,7 +1886,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.replacingOccurrences(of: "safeDIOverrides.", with: "")
 			.replacingOccurrences(of: ".", with: "_")
 
-		return node.constructionArguments.map { argument in
+		return node.callSiteArguments.map { argument in
 			if dependenciesByLabel[argument.innerLabel] != nil {
 				argument.innerLabel
 			} else if defaultParameterLabels.contains(argument.label) {
@@ -1856,11 +1896,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					"\(nodePath).\(argument.label)"
 				}
 			} else {
-				// Underscore-labeled default-valued parameters are not bubbled as
-				// overrides (they have no label to surface on the config struct),
-				// so inline the default expression at the call site. The macro
-				// forbids non-dependency arguments without defaults, so any
-				// remaining argument is guaranteed to have a default expression.
+				// Labeled defaults without a bubbled override are unreachable here:
+				// `collectMockParameterTree` always registers them as default
+				// parameters (line 1202), so they must appear in
+				// `defaultParameterLabels` above.
 				argument.defaultValueExpression!
 			}
 		}
