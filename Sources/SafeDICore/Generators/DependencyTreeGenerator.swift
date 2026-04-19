@@ -110,6 +110,15 @@ public actor DependencyTreeGenerator {
 			cyclesOnly: true,
 		)
 
+		// Reject initializer shapes that SafeDI's mock override surface cannot
+		// express. A non-dependency `_`-labeled defaulted parameter is normally
+		// elided so Swift's default-argument thunk fires in the callee; but if
+		// any subsequent parameter is also `_`-labeled, Swift still requires the
+		// positional slot to be passed, so eliding would generate an uncallable
+		// signature. Exposing it on `SafeDIMockConfiguration` isn't an option
+		// either — there's no external label to use as a struct field name.
+		try validateMockableInitializerShapes(typeDescriptionToScopeMap: typeDescriptionToScopeMap)
+
 		// Compute types with hand-written mocks that can be called with zero arguments,
 		// suitable for use as default values in forwarded mock parameters. This includes
 		// standalone mockOnly types AND merged entries where a mockOnly declaration's mock
@@ -338,6 +347,7 @@ public actor DependencyTreeGenerator {
 		case partiallyLazyDependencyCycleDetected([TypeDescription])
 		case receivedInstantiatorDependencyCycleDetected(property: Property, directParent: TypeDescription, cycle: [TypeDescription])
 		case receivedConstantCycleDetected(instantiated: Property, receivedPropertyChain: [Property])
+		case unlabeledDefaultBeforeUnlabeledParameter(type: TypeDescription, defaultedParameter: Initializer.Argument, followingParameter: Initializer.Argument)
 
 		var description: String {
 			switch self {
@@ -404,6 +414,8 @@ public actor DependencyTreeGenerator {
 					.map { "@\(Dependency.Source.receivedRawValue) \($0.asSource)" }
 					.joined(separator: " -> "))
 				"""
+			case let .unlabeledDefaultBeforeUnlabeledParameter(type, defaultedParameter, followingParameter):
+				"Property `\(defaultedParameter.innerLabel): \(defaultedParameter.typeDescription.asSource)` on \(type.asSource) has an unlabeled default value followed by another unlabeled parameter `\(followingParameter.innerLabel): \(followingParameter.typeDescription.asSource)`, which SafeDI cannot mock. Either add an external label to `\(defaultedParameter.innerLabel)`, reorder so defaulted unlabeled parameters come last, or move the default off of this parameter."
 			}
 		}
 
@@ -981,6 +993,41 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// Validates scopes for cycles and optionally for unfulfillable properties.
+	/// Rejects initializer shapes the mock override surface can't express: a
+	/// non-dependency `_`-labeled defaulted parameter followed (anywhere later
+	/// in the signature) by another `_`-labeled parameter. Eliding the
+	/// defaulted slot would produce an uncallable signature (Swift requires
+	/// the positional value when a later positional arg exists); exposing it
+	/// on `SafeDIMockConfiguration` isn't possible either, since there's no
+	/// external label to use as a field name.
+	///
+	/// We check each mock-reachable type's chosen construction initializer
+	/// (mock method if present, else production init) because those are the
+	/// signatures the mock call site emits against.
+	private func validateMockableInitializerShapes(
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+	) throws {
+		for scope in typeDescriptionToScopeMap.values {
+			let instantiable = scope.instantiable
+			let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
+			let initializer = instantiable.mockInitializer ?? instantiable.initializer
+			guard let arguments = initializer?.arguments else { continue }
+			for (index, argument) in arguments.enumerated() {
+				guard argument.label == "_",
+				      argument.hasDefaultValue,
+				      !dependencyLabels.contains(argument.innerLabel)
+				else { continue }
+				if let following = arguments[(index + 1)...].first(where: { $0.label == "_" }) {
+					throw DependencyTreeGeneratorError.unlabeledDefaultBeforeUnlabeledParameter(
+						type: instantiable.concreteInstantiable,
+						defaultedParameter: argument,
+						followingParameter: following,
+					)
+				}
+			}
+		}
+	}
+
 	/// When `cyclesOnly` is true, unfulfillable property collection is skipped —
 	/// used for mock-only types where unfulfillable received properties are expected
 	/// (they become required mock parameters).
