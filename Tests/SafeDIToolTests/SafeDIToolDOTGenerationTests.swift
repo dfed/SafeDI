@@ -315,8 +315,8 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				public struct User {
-				    public var id: String
-				    public var name: String
+				    public var id: String = ""
+				    public var name: String = ""
 				}
 				""",
 				"""
@@ -416,8 +416,8 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				public struct User {
-				    public var id: String
-				    public var name: String
+				    public var id: String = ""
+				    public var name: String = ""
 				}
 				""",
 				"""
@@ -1151,7 +1151,9 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public struct User {}
+				public struct User {
+				    public init(username: String) {}
+				}
 				""",
 				"""
 				public protocol NetworkService {}

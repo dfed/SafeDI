@@ -173,7 +173,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(conformsElsewhere: true)
-					extension Array: Instantiable {
+					extension Array {
 					    public static func instantiate() -> Container<Int> {
 					        .init(0)
 					    }
@@ -181,7 +181,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(conformsElsewhere: true)
-					extension Array: Instantiable {
+					extension Array {
 					    public static func instantiate() -> Container<Int> {
 					        .init(0)
 					    }
@@ -209,7 +209,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(conformsElsewhere: true)
-					extension Array: Instantiable {
+					extension Array {
 					    public static func instantiate() -> Container<Int> {
 					        .init(0)
 					    }
@@ -217,7 +217,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(conformsElsewhere: true)
-					extension Array: Instantiable {
+					extension Array {
 					    public static func instantiate(intValue: Int) -> Container<Int> {
 					        .init(intValue)
 					    }
@@ -817,7 +817,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
-					public struct User {}
+					public struct User {
+					    public init(username: String) {}
+					}
 					""",
 					"""
 					public protocol NetworkService {}
@@ -876,7 +878,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
-					public struct User {}
+					public struct User {
+					    public init(username: String) {}
+					}
 					""",
 					"""
 					public protocol NetworkService {}
@@ -1045,7 +1049,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
-					public struct User {}
+					public struct User {
+					    public init(username: String) {}
+					}
 					""",
 					"""
 					public protocol NetworkService {}
