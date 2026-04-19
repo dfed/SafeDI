@@ -186,6 +186,14 @@ public actor DependencyTreeGenerator {
 			mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
 		}
 
+		// Compute the global cycle edges across all mock-reachable types. Per-tree
+		// cycle detection (`isPropertyCycle`) breaks at a different edge depending
+		// on which root is being walked — fine for breaking infinite tree descent
+		// but not for `SafeDIMockConfiguration` struct shape, which must agree
+		// across every root's view of a given type. The SCC-derived feedback arc
+		// set guarantees the same back-edges are filtered everywhere.
+		let cycleEdges = Self.computeCycleEdges(in: typeDescriptionToScopeMap)
+
 		// Generate mock code and collect configuration types in parallel.
 		let generatedRoots = try await withThrowingTaskGroup(
 			of: (root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)]).self,
@@ -197,9 +205,10 @@ public actor DependencyTreeGenerator {
 						codeGeneration: .mock(ScopeGenerator.MockContext(
 							mockConditionalCompilation: mockConditionalCompilation,
 							forwardedParameterMockDefaults: forwardedParameterMockDefaults,
+							cycleEdges: cycleEdges,
 						)),
 					)
-					async let configurationTypes = mockRoot.collectConfigurationTypes()
+					async let configurationTypes = mockRoot.collectConfigurationTypes(cycleEdges: cycleEdges)
 					return try await (
 						root: GeneratedRoot(
 							typeDescription: instantiable.concreteInstantiable,
@@ -219,6 +228,8 @@ public actor DependencyTreeGenerator {
 
 		let rootedTypeNames = Set(generatedRoots.map(\.root.typeDescription.asSource))
 		// Deduplicate configuration types by type name across all roots.
+		// With cycleEdges applied uniformly, every root produces the same struct
+		// for a given type, so first-wins by alphabetical root order is stable.
 		var seenTypeNames = Set<String>()
 		var rootedConfigurationExtensions = [String: String]()
 		var sharedConfigurationExtensions = [(typeName: String, structCode: String)]()
@@ -281,6 +292,59 @@ public actor DependencyTreeGenerator {
 		} else {
 			return "\(body)\n"
 		}
+	}
+
+	/// Computes the set of `(parent, child)` type-reference edges that, when removed,
+	/// makes the global type graph acyclic. Walks the graph with a recursive DFS,
+	/// starting from each node in alphabetical order; any edge into a node already
+	/// on the active DFS stack is recorded as a back-edge. Determinism comes from
+	/// sorted iteration over both roots and successors. Type graphs are typically
+	/// shallow, so a recursive driver is fine; if very deep graphs surface in the
+	/// future, switch to an iterative driver.
+	private static func computeCycleEdges(
+		in scopeMap: [TypeDescription: Scope],
+	) -> Set<ScopeGenerator.CycleEdge> {
+		var adjacency = [TypeDescription: [TypeDescription]]()
+		for scope in Set(scopeMap.values) {
+			let parent = scope.instantiable.concreteInstantiable
+			for property in scope.propertiesToGenerate {
+				if case let .instantiated(_, childScope, _) = property {
+					adjacency[parent, default: []].append(childScope.instantiable.concreteInstantiable)
+				}
+			}
+		}
+		for key in adjacency.keys {
+			adjacency[key] = adjacency[key]!.sorted { $0.asSource < $1.asSource }
+		}
+
+		let allNodes = Set(adjacency.keys)
+			.union(adjacency.values.flatMap(\.self))
+			.sorted { $0.asSource < $1.asSource }
+
+		var visited = Set<TypeDescription>()
+		var onStack = Set<TypeDescription>()
+		var edges = Set<ScopeGenerator.CycleEdge>()
+
+		func visit(_ node: TypeDescription) {
+			visited.insert(node)
+			onStack.insert(node)
+			for neighbor in adjacency[node] ?? [] {
+				if onStack.contains(neighbor) {
+					edges.insert(ScopeGenerator.CycleEdge(
+						parent: node.asSource,
+						child: neighbor.asSource,
+					))
+				} else if !visited.contains(neighbor) {
+					visit(neighbor)
+				}
+			}
+			onStack.remove(node)
+		}
+
+		for node in allNodes where !visited.contains(node) {
+			visit(node)
+		}
+		return edges
 	}
 
 	public func generateDOTTree() async throws -> String {
