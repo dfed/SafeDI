@@ -647,7 +647,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				flatReceivedParameters.append((
 					label: receivedProperty.label,
-					typeSource: receivedProperty.typeDescription.asSource,
+					typeSource: receivedProperty.typeDescription.asFunctionParameter.asSource,
 				))
 			}
 		}
