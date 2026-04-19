@@ -5129,6 +5129,37 @@ import Testing
 		}
 
 		@Test
+		func producesNoDiagnostic_whenDefaultExpressionReferencesSelfOnUnlabeledNonDependency() {
+			// `_`-labeled non-dependency defaults are elided from the mock
+			// call site (`ScopeGenerator.callSiteArguments` filters them and
+			// `rootDefaultParameters` excludes them), so Swift's default-
+			// argument thunk fires in the callee's scope where `Self.*`
+			// resolves correctly.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyType: Instantiable {
+				    public init(_ value: Int = Self.defaultValue) {
+				        self.value = value
+				    }
+				    public static let defaultValue = 42
+				    let value: Int
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init(_ value: Int = Self.defaultValue) {
+				        self.value = value
+				    }
+				    public static let defaultValue = 42
+				    let value: Int
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func producesNoDiagnostic_whenDefaultExpressionReferencesSelfOnDependencyParameter() {
 			// Dependency parameters are always threaded explicitly at the mock
 			// call site — their default expressions never reach the override

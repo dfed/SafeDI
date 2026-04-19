@@ -1229,19 +1229,27 @@ public struct InstantiableMacro: MemberMacro {
 	}
 
 	/// Walks each default-value expression on `functionSyntax`'s parameters and
-	/// diagnoses explicit `Self.*` / `self.*` member access. SafeDI's generated
-	/// mock surface may inline a default expression at the caller (inside the
-	/// parent type's override struct or mock body), where `Self` binds to the
-	/// parent type instead of the decorated type — silently producing the wrong
-	/// value or failing to typecheck. The diagnostic catches the syntactically
-	/// identifiable case so users get a compile error instead of a subtle
-	/// override-surface mismatch. Unqualified references to callee-scope
-	/// members can't be identified without type resolution and are not covered.
+	/// diagnoses explicit `Self.*` member access. SafeDI's generated mock surface
+	/// may promote the default onto the caller's override struct (inside another
+	/// type's extension), where `Self` binds to the caller's type instead of the
+	/// decorated type — silently producing the wrong value or failing to
+	/// typecheck. The diagnostic catches the syntactically identifiable case so
+	/// users get a compile error instead of a subtle override-surface mismatch.
 	///
-	/// Dependency parameters are exempt: SafeDI always threads dependency
-	/// arguments explicitly at the call site, so a dependency's default
-	/// expression is never surfaced on the caller's override struct and its
-	/// `Self.*` / `self.*` refs resolve correctly in the callee.
+	/// `self.` is not checked because Swift already rejects `self.` in default
+	/// expressions on `init` (self isn't constructed yet) and on static
+	/// functions (no instance) — the only parameter shapes SafeDI encounters.
+	/// Unqualified references to callee-scope members can't be identified
+	/// without type resolution and are not covered.
+	///
+	/// Two exemptions skip parameters whose defaults never reach the override
+	/// surface:
+	/// - Dependency parameters, which are always threaded explicitly at the
+	///   mock call site.
+	/// - `_`-labeled non-dependency parameters, which `ScopeGenerator` elides
+	///   from call-site arguments and excludes from `rootDefaultParameters`,
+	///   so Swift's default-argument thunk fires in the callee where `Self.*`
+	///   resolves correctly.
 	private static func validateDefaultExpressions(
 		functionSyntax: FunctionSignatureSyntax,
 		dependencies: [Dependency],
@@ -1250,15 +1258,19 @@ public struct InstantiableMacro: MemberMacro {
 		let dependencyLabels = Set(dependencies.map(\.property.label))
 		for parameter in functionSyntax.parameterClause.parameters {
 			guard let defaultValue = parameter.defaultValue?.value else { continue }
-			let parameterLabel = parameter.secondName?.text ?? parameter.firstName.text
-			guard !dependencyLabels.contains(parameterLabel) else { continue }
-			let finder = CalleeScopeReferenceFinder(viewMode: .sourceAccurate)
+			let firstName = parameter.firstName.text
+			let innerLabel = parameter.secondName?.text ?? firstName
+			guard !dependencyLabels.contains(innerLabel) else { continue }
+			// `_`-labeled non-dependency defaults are elided from the mock
+			// call site, so the default is evaluated in the callee's scope.
+			guard firstName != "_" else { continue }
+			let finder = SelfReferenceFinder(viewMode: .sourceAccurate)
 			finder.walk(Syntax(defaultValue))
 			for reference in finder.references {
 				context.diagnose(Diagnostic(
 					node: Syntax(parameter),
 					message: FixableInstantiableError.calleeScopeReferenceInDefaultExpression(
-						parameterLabel: parameterLabel,
+						parameterLabel: innerLabel,
 						reference: reference,
 					).diagnostic,
 				))
@@ -1266,15 +1278,14 @@ public struct InstantiableMacro: MemberMacro {
 		}
 	}
 
-	private final class CalleeScopeReferenceFinder: SyntaxVisitor {
+	private final class SelfReferenceFinder: SyntaxVisitor {
 		private(set) var references: [String] = []
 
 		override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
-			if let base = node.base?.as(DeclReferenceExprSyntax.self) {
-				let text = base.baseName.text
-				if text == "Self" || text == "self" {
-					references.append("\(text).\(node.declName.baseName.text)")
-				}
+			if let base = node.base?.as(DeclReferenceExprSyntax.self),
+			   base.baseName.text == "Self"
+			{
+				references.append("Self.\(node.declName.baseName.text)")
 			}
 			return .visitChildren
 		}
