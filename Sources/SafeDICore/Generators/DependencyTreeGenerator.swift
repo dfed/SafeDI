@@ -186,6 +186,27 @@ public actor DependencyTreeGenerator {
 			mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
 		}
 
+		// Pre-pass: union the set of concrete type names whose
+		// `SafeDIMockConfiguration` struct must be `@Sendable`-typed. A struct is
+		// shared across every root that references the type, so the annotation
+		// has to agree — union all roots' sendable references once, then pass it
+		// down to each root's emission.
+		let sendableConfigurationTypeNames: Set<String> = await withTaskGroup(
+			of: Set<String>.self,
+			returning: Set<String>.self,
+		) { taskGroup in
+			for (_, mockRoot) in mockRoots {
+				taskGroup.addTask {
+					await mockRoot.collectSendableConfigurationTypeNames()
+				}
+			}
+			var union = Set<String>()
+			for await result in taskGroup {
+				union.formUnion(result)
+			}
+			return union
+		}
+
 		// Generate mock code and collect configuration types in parallel.
 		let generatedRoots = try await withThrowingTaskGroup(
 			of: (root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)]).self,
@@ -199,7 +220,9 @@ public actor DependencyTreeGenerator {
 							forwardedParameterMockDefaults: forwardedParameterMockDefaults,
 						)),
 					)
-					async let configurationTypes = mockRoot.collectConfigurationTypes()
+					async let configurationTypes = mockRoot.collectConfigurationTypes(
+						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+					)
 					return try await (
 						root: GeneratedRoot(
 							typeDescription: instantiable.concreteInstantiable,

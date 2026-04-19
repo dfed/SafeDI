@@ -638,6 +638,8 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 `SafeDIMockConfiguration` exposes an optional override for each of the child’s own `@Instantiated` dependencies and each default-valued init parameter, plus a trailing `safeDIBuilder` closure. The `safeDIBuilder` parameters match the type’s `customMockName` method signature if one is defined, or its `init` parameters otherwise. When no `safeDIBuilder` is provided, the generated mock calls the type’s `customMockName` method or `init` directly.
 
+Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator` (or `SendableErasedInstantiator`) anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
+
 A type generates its own `SafeDIOverrides` struct when it has `@Instantiated` dependencies or `@Received(onlyIfAvailable: true)` dependencies. A type whose only dependencies are required `@Received` or `@Forwarded` uses flat parameters on its `mock()` method.
 
 ### Mock visibility
