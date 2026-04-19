@@ -52,7 +52,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true)
-					public final class RootViewController: UIViewController {
+					public final class RootViewController: UIViewController, Instantiable {
 					    @Instantiated(fulfilledByType: "DoesNotExist")
 					    let networkService: NetworkService
 					}
@@ -82,7 +82,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 					    @Instantiated let childBuilder: Instantiator<Child>
 					}
 					""",
@@ -90,7 +90,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable
-					public final class Child {
+					public final class Child: Instantiable {
 					    @Forwarded let value: Grandchild.NestedType
 					    @Instantiated let grandchild: Grandchild
 					}
@@ -99,7 +99,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable
-					public final class Grandchild {
+					public final class Grandchild: Instantiable {
 					    public struct NestedType {}
 					    @Received let value: NestedType
 					}
@@ -129,7 +129,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 					    @Instantiated let childBuilder: Instantiator<Child>
 					}
 					""",
@@ -137,7 +137,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable
-					public final class Child {
+					public final class Child: Instantiable {
 					    public struct NestedType {}
 					    @Forwarded let value: NestedType
 					    @Instantiated let grandchild: Grandchild
@@ -147,7 +147,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable
-					public final class Grandchild {
+					public final class Grandchild: Instantiable {
 					    @Received let value: Root.NestedType
 					}
 					""",
@@ -173,7 +173,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(conformsElsewhere: true)
-					extension Array {
+					extension Array: Instantiable {
 					    public static func instantiate() -> Container<Int> {
 					        .init(0)
 					    }
@@ -181,7 +181,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(conformsElsewhere: true)
-					extension Array {
+					extension Array: Instantiable {
 					    public static func instantiate() -> Container<Int> {
 					        .init(0)
 					    }
@@ -209,7 +209,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(conformsElsewhere: true)
-					extension Array {
+					extension Array: Instantiable {
 					    public static func instantiate() -> Container<Int> {
 					        .init(0)
 					    }
@@ -217,7 +217,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable(conformsElsewhere: true)
-					extension Array {
+					extension Array: Instantiable {
 					    public static func instantiate(intValue: Int) -> Container<Int> {
 					        .init(intValue)
 					    }
@@ -246,7 +246,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public protocol NetworkService {}
 
 					@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-					public final class DefaultNetworkService: NetworkService {
+					public final class DefaultNetworkService: NetworkService, Instantiable {
 					    @Instantiated let urlSession: URLSession // URLSession is not `@Instantiable`! This will fail!
 					}
 					""",
@@ -254,7 +254,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true)
-					public final class RootViewController: UIViewController {
+					public final class RootViewController: UIViewController, Instantiable {
 					    @Instantiated let networkService: NetworkService
 					}
 					""",
@@ -282,7 +282,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public protocol NetworkService {}
 
 					@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-					public final class DefaultNetworkService: NetworkService {
+					public final class DefaultNetworkService: NetworkService, Instantiable {
 					    @Received let urlSession: URLSession // URLSession is not `@Instantiable`! This will fail!
 					}
 					""",
@@ -290,7 +290,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true)
-					public final class RootViewController: UIViewController {
+					public final class RootViewController: UIViewController, Instantiable {
 					    @Instantiated let networkService: NetworkService
 					}
 					""",
@@ -319,7 +319,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 					    @Instantiated(fulfilledByType: "SomeErasedType") let erasedType: ErasedType
 					    @Instantiated let child: Child
 					}
@@ -330,13 +330,13 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public protocol ErasedType {}
 
 					@Instantiable
-					public final class SomeErasedType: ErasedType {}
+					public final class SomeErasedType: ErasedType, Instantiable {}
 					""",
 					"""
 					import SafeDI
 
 					@Instantiable
-					public final class Child {
+					public final class Child: Instantiable {
 					    @Received let erasedType: any ErasedType
 					}
 					""",
@@ -365,7 +365,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 					    @Instantiated(fulfilledByType: "SomeErasedType") let erasedType: any ErasedType
 					    @Instantiated let child: Child
 					}
@@ -376,13 +376,13 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public protocol ErasedType {}
 
 					@Instantiable
-					public final class SomeErasedType: ErasedType {}
+					public final class SomeErasedType: ErasedType, Instantiable {}
 					""",
 					"""
 					import SafeDI
 
 					@Instantiable
-					public final class Child {
+					public final class Child: Instantiable {
 					    @Received let erasedType: ErasedType
 					}
 					""",
@@ -411,7 +411,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 					    @Instantiated let thing: Thing
 					    @Instantiated let child: Child
 					}
@@ -420,13 +420,13 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable
-					public final class Thing {}
+					public final class Thing: Instantiable {}
 					""",
 					"""
 					import SafeDI
 
 					@Instantiable
-					public final class Child {
+					public final class Child: Instantiable {
 					    @Received let thing: Thing!
 					}
 					""",
@@ -455,7 +455,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 					    @Instantiated let thing: Thing!
 					    @Instantiated let child: Child
 					}
@@ -464,13 +464,13 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable
-					public final class Thing {}
+					public final class Thing: Instantiable {}
 					""",
 					"""
 					import SafeDI
 
 					@Instantiable
-					public final class Child {
+					public final class Child: Instantiable {
 					    @Received let thing: Thing
 					}
 					""",
@@ -498,7 +498,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 					    @Instantiated let thing: Thing
 					    @Instantiated let child: Child
 					}
@@ -507,13 +507,13 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable
-					public final class Thing {}
+					public final class Thing: Instantiable {}
 					""",
 					"""
 					import SafeDI
 
 					@Instantiable
-					public final class Child {
+					public final class Child: Instantiable {
 					    @Received let thing: Thing?
 					}
 					""",
@@ -542,7 +542,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 					    @Instantiated let thing: Thing?
 					    @Instantiated let child: Child
 					}
@@ -551,13 +551,13 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable
-					public final class Thing {}
+					public final class Thing: Instantiable {}
 					""",
 					"""
 					import SafeDI
 
 					@Instantiable
-					public final class Child {
+					public final class Child: Instantiable {
 					    @Received let thing: Thing
 					}
 					""",
@@ -586,7 +586,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 					    @Instantiated let thing: Thing
 					    @Instantiated let child: Child
 					}
@@ -595,16 +595,16 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable
-					public final class Thing {}
+					public final class Thing: Instantiable {}
 
 					@Instantiable
-					public final class OtherThing {}
+					public final class OtherThing: Instantiable {}
 					""",
 					"""
 					import SafeDI
 
 					@Instantiable
-					public final class Child {
+					public final class Child: Instantiable {
 					    @Received let thing: OtherThing
 					}
 					""",
@@ -634,7 +634,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 					    @Instantiated let thing: Thing
 					    @Instantiated let otherThing: OtherThing
 					    @Instantiated let child: Child
@@ -644,16 +644,16 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import SafeDI
 
 					@Instantiable
-					public final class Thing {}
+					public final class Thing: Instantiable {}
 
 					@Instantiable
-					public final class OtherThing {}
+					public final class OtherThing: Instantiable {}
 					""",
 					"""
 					import SafeDI
 
 					@Instantiable
-					public final class Child {
+					public final class Child: Instantiable {
 					    @Received let thing: OtherThing
 					}
 					""",
@@ -680,7 +680,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public protocol NetworkService {}
 
 					@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-					public final class DefaultNetworkService: NetworkService {
+					public final class DefaultNetworkService: NetworkService, Instantiable {
 					    @Forwarded let urlSession: URLSession
 					}
 					""",
@@ -688,7 +688,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true)
-					public final class RootViewController: UIViewController {
+					public final class RootViewController: UIViewController, Instantiable {
 					    @Instantiated let networkService: NetworkService
 					}
 					""",
@@ -712,33 +712,33 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 					    @Instantiated let childA: ChildA
 					    @Instantiated let childB: ChildB
 					}
 					""",
 					"""
 					@Instantiable
-					public final class ChildA {
+					public final class ChildA: Instantiable {
 					    @Instantiated let grandchild: Grandchild
 					    @Instantiated let blankie: Blankie
 					}
 					""",
 					"""
 					@Instantiable
-					public final class ChildB {
+					public final class ChildB: Instantiable {
 					    @Instantiated let grandchild: Grandchild
 					}
 					""",
 					"""
 					@Instantiable
-					public final class Grandchild {
+					public final class Grandchild: Instantiable {
 					    @Received let blankie: Blankie
 					}
 					""",
 					"""
 					@Instantiable
-					public final class Blankie {}
+					public final class Blankie: Instantiable {}
 					""",
 				],
 				buildSwiftOutputDirectory: true,
@@ -769,34 +769,34 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 					    @Instantiated let childA: ChildA
 					    @Instantiated let childB: ChildB
 					}
 					""",
 					"""
 					@Instantiable
-					public final class ChildA {
+					public final class ChildA: Instantiable {
 					    @Instantiated let grandchild: Grandchild
 					    @Instantiated let blankie: Blankie
 					}
 					""",
 					"""
 					@Instantiable
-					public final class ChildB {
+					public final class ChildB: Instantiable {
 					    @Instantiated let grandchild: Grandchild
 					}
 					""",
 					"""
 					@Instantiable
-					public final class Grandchild {
+					public final class Grandchild: Instantiable {
 					    @Received let blankie: Blankie
 					    @Received let blankie2: Blankie
 					}
 					""",
 					"""
 					@Instantiable
-					public final class Blankie {}
+					public final class Blankie: Instantiable {}
 					""",
 				],
 				buildSwiftOutputDirectory: true,
@@ -823,7 +823,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public protocol NetworkService {}
 
 					@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-					public final class DefaultNetworkService: NetworkService {
+					public final class DefaultNetworkService: NetworkService, Instantiable {
 					    public init() {}
 					}
 					""",
@@ -833,7 +833,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 
 					@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-					public final class DefaultAuthService: AuthService {
+					public final class DefaultAuthService: AuthService, Instantiable {
 					    public func login(username: String, password: String) async -> User {
 					        User(username: username)
 					    }
@@ -847,7 +847,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true)
-					public final class RootViewController: UIViewController {
+					public final class RootViewController: UIViewController, Instantiable {
 					    public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 					        self.authService = authService
 					        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -882,7 +882,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public protocol NetworkService {}
 
 					@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-					public final class DefaultNetworkService: NetworkService {
+					public final class DefaultNetworkService: NetworkService, Instantiable {
 					    public init() {}
 					}
 					""",
@@ -892,7 +892,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 
 					@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-					public final class DefaultAuthService: AuthService {
+					public final class DefaultAuthService: AuthService, Instantiable {
 					    public func login(username: String, password: String) async -> User {
 					        User(username: username)
 					    }
@@ -906,7 +906,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true)
-					public final class RootViewController: UIViewController {
+					public final class RootViewController: UIViewController, Instantiable {
 					    public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 					        self.authService = authService
 					        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -943,7 +943,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public protocol NetworkService {}
 
 					@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-					public final class DefaultNetworkService: NetworkService {
+					public final class DefaultNetworkService: NetworkService, Instantiable {
 					    public init() {}
 					}
 					""",
@@ -951,7 +951,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true)
-					public final class RootViewController: UIViewController {
+					public final class RootViewController: UIViewController, Instantiable {
 					    @Instantiated let networkService: NetworkService
 
 					    @Instantiated let authService: AuthService
@@ -963,7 +963,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 
 					@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-					public final class DefaultAuthService: AuthService {
+					public final class DefaultAuthService: AuthService, Instantiable {
 					    public func login(username: String, password: String) async -> User {
 					        User(username: username)
 					    }
@@ -998,7 +998,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public protocol NetworkService {}
 
 					@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-					public final class DefaultNetworkService: NetworkService {
+					public final class DefaultNetworkService: NetworkService, Instantiable {
 					    public init() {}
 					}
 					""",
@@ -1006,7 +1006,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true)
-					public final class RootViewController: UIViewController {
+					public final class RootViewController: UIViewController, Instantiable {
 					    @Instantiated let networkService: NetworkService
 
 					    @Instantiated let authService: AuthService
@@ -1018,7 +1018,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 
 					@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-					public final class DefaultAuthService: AuthService {
+					public final class DefaultAuthService: AuthService, Instantiable {
 					    public func login(username: String, password: String) async -> User {
 					        User(username: username)
 					    }
@@ -1051,7 +1051,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public protocol NetworkService {}
 
 					@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-					public final class DefaultNetworkService: NetworkService {
+					public final class DefaultNetworkService: NetworkService, Instantiable {
 					    public init() {}
 					}
 					""",
@@ -1061,7 +1061,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 
 					@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-					public final class DefaultAuthService: AuthService {
+					public final class DefaultAuthService: AuthService, Instantiable {
 					    public func login(username: String, password: String) async -> User {
 					        User(username: username)
 					    }
@@ -1075,7 +1075,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true)
-					public final class RootViewController: UIViewController {
+					public final class RootViewController: UIViewController, Instantiable {
 					    public init(authService: AuthService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 					        self.authService = authService
 					        self.loggedInViewControllerBuilder = loggedInViewControllerBuilder
@@ -1117,7 +1117,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true)
-					public final class RootViewController: UIViewController {
+					public final class RootViewController: UIViewController, Instantiable {
 					    @Instantiated let urlSessionWrapper: URLSessionWrapper
 					}
 					""",
@@ -1142,13 +1142,13 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable
-					public final class RootViewController: UIViewController {}
+					public final class RootViewController: UIViewController, Instantiable {}
 					""",
 					"""
 					import UIKit
 
 					@Instantiable
-					public final class RootViewController: UIViewController {}
+					public final class RootViewController: UIViewController, Instantiable {}
 					""",
 				],
 				buildSwiftOutputDirectory: true,
@@ -1171,13 +1171,13 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true)
-					public final class RootViewController: UIViewController {}
+					public final class RootViewController: UIViewController, Instantiable {}
 					""",
 					"""
 					import UIKit
 
 					@Instantiable
-					public final class RootViewController: UIViewController {}
+					public final class RootViewController: UIViewController, Instantiable {}
 					""",
 				],
 				buildSwiftOutputDirectory: true,
@@ -1200,7 +1200,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable
-					public final class RootViewController: UIViewController {}
+					public final class RootViewController: UIViewController, Instantiable {}
 					""",
 					"""
 					import UIKit
@@ -1233,7 +1233,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true)
-					public final class RootViewController: UIViewController {}
+					public final class RootViewController: UIViewController, Instantiable {}
 					""",
 					"""
 					import UIKit
@@ -1266,7 +1266,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable
-					public final class RootViewController: UIViewController {}
+					public final class RootViewController: UIViewController, Instantiable {}
 					""",
 					"""
 					import UIKit
@@ -1336,13 +1336,13 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true, fulfillingAdditionalTypes: [UIViewController.self])
-					public final class RootViewController: UIViewController {}
+					public final class RootViewController: UIViewController, Instantiable {}
 					""",
 					"""
 					import UIKit
 
 					@Instantiable(fulfillingAdditionalTypes: [UIViewController.self])
-					public final class SplashViewController: UIViewController {}
+					public final class SplashViewController: UIViewController, Instantiable {}
 					""",
 				],
 				buildSwiftOutputDirectory: true,
@@ -1364,25 +1364,25 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 					    @Instantiated let a: A
 					}
 					""",
 					"""
 					@Instantiable
-					public final class A {
+					public final class A: Instantiable {
 					    @Instantiated let b: B
 					}
 					""",
 					"""
 					@Instantiable
-					public final class B {
+					public final class B: Instantiable {
 					    @Instantiated let c: C
 					}
 					""",
 					"""
 					@Instantiable
-					public final class C {
+					public final class C: Instantiable {
 					    @Instantiated let a: A
 					}
 					""",
@@ -1406,23 +1406,23 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 						@Instantiated public let a: A // A -> C -> Received B
 						@Instantiated public let b: B // B -> Received A
 					}
 
 					@Instantiable
-					public final class A {
+					public final class A: Instantiable {
 						@Instantiated let c: C
 					}
 
 					@Instantiable
-					public final class B {
+					public final class B: Instantiable {
 						@Received public let a: A
 					}
 
 					@Instantiable
-					public final class C {
+					public final class C: Instantiable {
 						@Received public let b: B
 					}
 					""",
@@ -1446,25 +1446,25 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 					    @Instantiated let a: A
 					}
 					""",
 					"""
 					@Instantiable
-					public final class A {
+					public final class A: Instantiable {
 					    @Instantiated let b: B
 					}
 					""",
 					"""
 					@Instantiable
-					public final class B {
+					public final class B: Instantiable {
 					    @Instantiated let c: C
 					}
 					""",
 					"""
 					@Instantiable
-					public final class C {
+					public final class C: Instantiable {
 					    @Received let a: A
 					}
 					""",
@@ -1488,25 +1488,25 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
-					public struct Root {
+					public struct Root: Instantiable {
 					    @Instantiated let aBuilder: Instantiator<A>
 					}
 					""",
 					"""
 					@Instantiable
-					public struct A {
+					public struct A: Instantiable {
 					    @Instantiated let bBuilder: Instantiator<B>
 					}
 					""",
 					"""
 					@Instantiable
-					public struct B {
+					public struct B: Instantiable {
 					    @Instantiated let cBuilder: Instantiator<C>
 					}
 					""",
 					"""
 					@Instantiable
-					public struct C {
+					public struct C: Instantiable {
 					    @Received let aBuilder: Instantiator<A>
 					}
 					""",
@@ -1530,25 +1530,25 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
-					public struct Root {
+					public struct Root: Instantiable {
 					    @Instantiated let aBuilder: Instantiator<A>?
 					}
 					""",
 					"""
 					@Instantiable
-					public struct A {
+					public struct A: Instantiable {
 					    @Instantiated let bBuilder: Instantiator<B>
 					}
 					""",
 					"""
 					@Instantiable
-					public struct B {
+					public struct B: Instantiable {
 					    @Instantiated let cBuilder: Instantiator<C>
 					}
 					""",
 					"""
 					@Instantiable
-					public struct C {
+					public struct C: Instantiable {
 					    @Received(onlyIfAvailable: true) let aBuilder: Instantiator<A>?
 					}
 					""",
@@ -1572,25 +1572,25 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
-					public struct Root {
+					public struct Root: Instantiable {
 					    @Instantiated let a: A
 					}
 					""",
 					"""
 					@Instantiable
-					public struct A {
+					public struct A: Instantiable {
 					    @Instantiated let b: B
 					}
 					""",
 					"""
 					@Instantiable
-					public struct B {
+					public struct B: Instantiable {
 					    @Instantiated let c: C
 					}
 					""",
 					"""
 					@Instantiable
-					public struct C {
+					public struct C: Instantiable {
 					    @Instantiated let a2: A
 					}
 					""",
@@ -1614,7 +1614,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
-					public struct Root {
+					public struct Root: Instantiable {
 					    @Instantiated private let a: A
 					    @Instantiated private let b: B
 					    @Instantiated private let c: C
@@ -1622,19 +1622,19 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable
-					public struct A {
+					public struct A: Instantiable {
 					    @Received private let b: B
 					}
 					""",
 					"""
 					@Instantiable
-					public struct B {
+					public struct B: Instantiable {
 					    @Received private let c: C
 					}
 					""",
 					"""
 					@Instantiable
-					public struct C {
+					public struct C: Instantiable {
 					    @Received private let a: A
 					}
 					""",
@@ -1658,7 +1658,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
-					public struct Root {
+					public struct Root: Instantiable {
 					    @Instantiated private let a: A
 					    @Instantiated private let b: B
 					    @Received(fulfilledByDependencyNamed: "b", ofType: B.self) private let renamedB: B
@@ -1667,19 +1667,19 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable
-					public struct A {
+					public struct A: Instantiable {
 					    @Received private let renamedB: B
 					}
 					""",
 					"""
 					@Instantiable
-					public struct B {
+					public struct B: Instantiable {
 					    @Received private let c: C
 					}
 					""",
 					"""
 					@Instantiable
-					public struct C {
+					public struct C: Instantiable {
 					    @Received private let a: A
 					}
 					""",
@@ -1703,13 +1703,13 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
-					public struct Root {
+					public struct Root: Instantiable {
 					    @Instantiated private let a: A
 					}
 					""",
 					"""
 					@Instantiable
-					public struct A {
+					public struct A: Instantiable {
 					    @Instantiated private let b: B
 					    @Received(fulfilledByDependencyNamed: "b", ofType: B.self) private let renamedB: B
 					    @Instantiated private let c: C
@@ -1717,13 +1717,13 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable
-					public struct B {
+					public struct B: Instantiable {
 					    @Received private let c: C
 					}
 					""",
 					"""
 					@Instantiable
-					public struct C {
+					public struct C: Instantiable {
 					    @Received private let renamedB: B
 					}
 					""",
@@ -1747,7 +1747,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
-					public final class Root {
+					public final class Root: Instantiable {
 						public init(aBuilder: Instantiator<A>) {
 							fatalError("SafeDI doesn't inspect the initializer body")
 						}
@@ -1757,7 +1757,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable
-					public final class A {
+					public final class A: Instantiable {
 						public init(c: C) {
 							fatalError("SafeDI doesn't inspect the initializer body")
 						}
@@ -1767,7 +1767,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable
-					public final class B {
+					public final class B: Instantiable {
 						public init(cRenamed: CRenamed?) {
 							fatalError("SafeDI doesn't inspect the initializer body")
 						}
@@ -1777,7 +1777,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable
-					public final class C {
+					public final class C: Instantiable {
 						public init(b: B) {
 							fatalError("SafeDI doesn't inspect the initializer body")
 						}
@@ -1811,7 +1811,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 
 					@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-					public final class DefaultAuthService: AuthService {
+					public final class DefaultAuthService: AuthService, Instantiable {
 					    public func login(username: String, password: String) async -> User {
 					        User()
 					    }
@@ -1823,7 +1823,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public protocol NetworkService {}
 
 					@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-					public final class DefaultNetworkService: NetworkService {
+					public final class DefaultNetworkService: NetworkService, Instantiable {
 					    public init() {}
 					}
 					""",
@@ -1831,7 +1831,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true)
-					public final class RootViewController: UIViewController {
+					public final class RootViewController: UIViewController, Instantiable {
 					    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>) {
 					        self.authService = authService
 					        self.networkService = networkService
@@ -1861,7 +1861,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable
-					public final class LoggedInViewController: UIViewController {
+					public final class LoggedInViewController: UIViewController, Instantiable {
 					    @Forwarded private let user: User
 
 					    @Received let networkService: NetworkService
@@ -1893,7 +1893,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 
 					@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-					public final class DefaultAuthService: AuthService {
+					public final class DefaultAuthService: AuthService, Instantiable {
 					    public func login(username: String, password: String) async -> User {
 					        User()
 					    }
@@ -1905,7 +1905,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public protocol NetworkService {}
 
 					@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-					public final class DefaultNetworkService: NetworkService {
+					public final class DefaultNetworkService: NetworkService, Instantiable {
 					    public init() {}
 					}
 					""",
@@ -1913,7 +1913,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable(isRoot: true)
-					public final class RootViewController: UIViewController {
+					public final class RootViewController: UIViewController, Instantiable {
 					    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>) {
 					        self.authService = authService
 					        self.networkService = networkService
@@ -1943,7 +1943,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					import UIKit
 
 					@Instantiable
-					public final class LoggedInViewController: UIViewController {
+					public final class LoggedInViewController: UIViewController, Instantiable {
 					    @Forwarded private let user: User
 
 					    @Forwarded private let userManager: UserManager
@@ -2012,7 +2012,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		let swiftFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".swift")
 		try """
 		@Instantiable
-		public struct NotRoot {
+		public struct NotRoot: Instantiable {
 		    public init() {}
 		}
 		""".write(to: swiftFile, atomically: true, encoding: .utf8)
@@ -2044,12 +2044,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		let swiftFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".swift")
 		try """
 		@Instantiable(isRoot: true)
-		public struct Root {
+		public struct Root: Instantiable {
 		    public init(dep: Dep) { self.dep = dep }
 		    @Instantiated let dep: Dep
 		}
 		@Instantiable
-		public struct Dep {
+		public struct Dep: Instantiable {
 		    public init() {}
 		}
 		""".write(to: swiftFile, atomically: true, encoding: .utf8)
@@ -2120,7 +2120,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
-					public struct Root {
+					public struct Root: Instantiable {
 					    public init(a: A) {
 					        fatalError("SafeDI doesn't inspect the initializer body")
 					    }
@@ -2130,7 +2130,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable
-					public struct A {
+					public struct A: Instantiable {
 					    public init(b: B) {
 					        fatalError("SafeDI doesn't inspect the initializer body")
 					    }
@@ -2140,7 +2140,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable
-					public struct B {
+					public struct B: Instantiable {
 					    public init(cBuilder: Instantiator<C>) {
 					        fatalError("SafeDI doesn't inspect the initializer body")
 					    }
@@ -2150,7 +2150,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					""",
 					"""
 					@Instantiable
-					public struct C {
+					public struct C: Instantiable {
 					    public init(a: A) {
 					        fatalError("SafeDI doesn't inspect the initializer body")
 					    }

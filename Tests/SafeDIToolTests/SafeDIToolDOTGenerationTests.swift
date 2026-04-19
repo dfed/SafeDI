@@ -66,13 +66,13 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    let urlSession: URLSession = .shared
 				}
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    @Instantiated let networkService: NetworkService
 				}
 				""",
@@ -100,19 +100,19 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    let urlSession: URLSession = .shared
 				}
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root1 {
+				public struct Root1: Instantiable {
 				    @Instantiated let networkService: NetworkService
 				}
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root2 {
+				public struct Root2: Instantiable {
 				    @Instantiated let networkService: NetworkService
 				}
 				""",
@@ -145,7 +145,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public func login(username: String, password: String) async -> User {
 				        User()
 				    }
@@ -156,7 +156,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -164,7 +164,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -194,7 +194,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    @Forwarded private let user: User
 
 				    @Received let networkService: NetworkService                }
@@ -229,7 +229,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public func login(username: String, password: String) async -> User {
 				        User()
 				    }
@@ -240,7 +240,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -248,7 +248,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -276,7 +276,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class UserService {
+				public final class UserService: Instantiable {
 				    @Received let user: User
 				}
 				""",
@@ -284,7 +284,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    @Forwarded private let user: User
 
 				    @Received let networkService: NetworkService
@@ -325,7 +325,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public func login(username: String, password: String) async -> User {
 				        User()
 				    }
@@ -336,7 +336,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -344,7 +344,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -372,7 +372,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class UserService {
+				public final class UserService: Instantiable {
 				    @Received let userName: String
 
 				    @Received let userID: String
@@ -382,7 +382,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    @Forwarded private let userName: String
 
 				    @Forwarded private let userID: String
@@ -426,7 +426,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public func login(username: String, password: String) async -> User {
 				        User()
 				    }
@@ -437,7 +437,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -445,7 +445,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -473,7 +473,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class UserService {
+				public final class UserService: Instantiable {
 				    @Received let userName: String
 
 				    @Received let userID: String
@@ -483,7 +483,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    @Forwarded private let userName: String
 
 				    @Forwarded private let userID: String
@@ -524,7 +524,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public func login(username: String, password: String) async -> User {
 				        User()
 				    }
@@ -535,7 +535,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -543,7 +543,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -571,7 +571,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class UserService {
+				public final class UserService: Instantiable {
 				    @Received let user: User
 
 				    @Received private let networkService: NetworkService
@@ -581,7 +581,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    @Forwarded private let user: User
 
 				    @Instantiated let userService: UserService
@@ -618,7 +618,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public func login(username: String, password: String) async -> User {
 				        User()
 				    }
@@ -629,7 +629,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -637,7 +637,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -665,7 +665,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class UserService {
+				public final class UserService: Instantiable {
 				    @Received let user: User
 
 				    @Received private let networkService: NetworkService
@@ -675,7 +675,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    @Forwarded private let user: User
 
 				    @Instantiated let userServiceInstantiator: Instantiator<UserService>
@@ -705,7 +705,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    @Instantiated let childA: ChildA
 				    @Instantiated let childB: ChildB
 				    @Instantiated let greatGrandchild: GreatGrandchild
@@ -713,45 +713,45 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class ChildA {
+				public final class ChildA: Instantiable {
 				    @Instantiated let grandchildAA: GrandchildAA
 				    @Instantiated let grandchildAB: GrandchildAB
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildAA {
+				public final class GrandchildAA: Instantiable {
 				    @Received let greatGrandchild: GreatGrandchild
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildAB {
+				public final class GrandchildAB: Instantiable {
 				    @Received let greatGrandchild: GreatGrandchild
 				}
 				""",
 				"""
 				@Instantiable
-				public final class ChildB {
+				public final class ChildB: Instantiable {
 				    @Instantiated let grandchildBA: GrandchildBA
 				    @Instantiated let grandchildBB: GrandchildBB
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildBA {
+				public final class GrandchildBA: Instantiable {
 				    @Received let greatGrandchild: GreatGrandchild
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildBB {
+				public final class GrandchildBB: Instantiable {
 				    @Received let greatGrandchild: GreatGrandchild
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild {}
+				public final class GreatGrandchild: Instantiable {}
 				""",
 
 			],
@@ -780,14 +780,14 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    @Instantiated let childA: ChildA
 				    @Instantiated let childB: ChildB
 				}
 				""",
 				"""
 				@Instantiable
-				public final class ChildA {
+				public final class ChildA: Instantiable {
 				    @Instantiated let grandchildAA: GrandchildAA
 				    @Instantiated let grandchildAB: GrandchildAB
 				    @Instantiated let greatGrandchild: GreatGrandchild
@@ -795,19 +795,19 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildAA {
+				public final class GrandchildAA: Instantiable {
 				    @Received let greatGrandchild: GreatGrandchild
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildAB {
+				public final class GrandchildAB: Instantiable {
 				    @Received let greatGrandchild: GreatGrandchild
 				}
 				""",
 				"""
 				@Instantiable
-				public final class ChildB {
+				public final class ChildB: Instantiable {
 				    @Instantiated let grandchildBA: GrandchildBA
 				    @Instantiated let grandchildBB: GrandchildBB
 				    @Instantiated let greatGrandchild: GreatGrandchild
@@ -815,19 +815,19 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildBA {
+				public final class GrandchildBA: Instantiable {
 				    @Received let greatGrandchild: GreatGrandchild
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildBB {
+				public final class GrandchildBB: Instantiable {
 				    @Received let greatGrandchild: GreatGrandchild
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild {}
+				public final class GreatGrandchild: Instantiable {}
 				""",
 
 			],
@@ -857,31 +857,31 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
 				@Instantiable
-				public final class Recreated {}
+				public final class Recreated: Instantiable {}
 				""",
 				"""
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    @Instantiated let grandchild: Grandchild
 				    @Instantiated let recreated: Recreated
 				}
 				""",
 				"""
 				@Instantiable
-				public final class Grandchild {
+				public final class Grandchild: Instantiable {
 				    @Instantiated let greatGrandchild: GreatGrandchild
 				    @Instantiated let recreated: Recreated
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild {
+				public final class GreatGrandchild: Instantiable {
 				    @Received let recreated: Recreated
 				}
 				""",
@@ -910,52 +910,52 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    @Instantiated let childA: ChildA
 				    @Instantiated let childB: ChildB
 				}
 				""",
 				"""
 				@Instantiable
-				public final class ChildA {
+				public final class ChildA: Instantiable {
 				    @Instantiated let grandchildAA: GrandchildAA
 				    @Instantiated let grandchildAB: GrandchildAB
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildAA {
+				public final class GrandchildAA: Instantiable {
 				    @Instantiated let greatGrandchild: GreatGrandchild
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildAB {
+				public final class GrandchildAB: Instantiable {
 				    @Instantiated let greatGrandchild: GreatGrandchild
 				}
 				""",
 				"""
 				@Instantiable
-				public final class ChildB {
+				public final class ChildB: Instantiable {
 				    @Instantiated let grandchildBA: GrandchildBA
 				    @Instantiated let grandchildBB: GrandchildBB
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildBA {
+				public final class GrandchildBA: Instantiable {
 				    @Instantiated let greatGrandchild: GreatGrandchild
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildBB {
+				public final class GrandchildBB: Instantiable {
 				    @Instantiated let greatGrandchild: GreatGrandchild
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild {}
+				public final class GreatGrandchild: Instantiable {}
 				""",
 
 			],
@@ -987,7 +987,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable
-				public final class GreatGrandchild: Sendable {}
+				public final class GreatGrandchild: Sendable, Instantiable {}
 				""",
 			],
 			buildDOTFileOutput: false,
@@ -1000,7 +1000,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import GreatGrandchildModule
 
 				@Instantiable
-				public final class GrandchildAA {
+				public final class GrandchildAA: Instantiable {
 				    @Instantiated let greatGrandchild: GreatGrandchild
 				}
 				""",
@@ -1008,7 +1008,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import GreatGrandchildModule
 
 				@Instantiable
-				public final class GrandchildAB {
+				public final class GrandchildAB: Instantiable {
 				    @Instantiated let greatGrandchild: GreatGrandchild
 				}
 				""",
@@ -1016,7 +1016,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import GreatGrandchildModule
 
 				@Instantiable
-				public final class GrandchildBA {
+				public final class GrandchildBA: Instantiable {
 				    @Instantiated var greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>
 				}
 				""",
@@ -1024,7 +1024,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import GreatGrandchildModule
 
 				@Instantiable
-				public final class GrandchildBB {
+				public final class GrandchildBB: Instantiable {
 				    @Instantiated greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>
 				}
 				""",
@@ -1042,7 +1042,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 
 				@MainActor
 				@Instantiable
-				public final class ChildA {
+				public final class ChildA: Instantiable {
 				    @Instantiated let grandchildAA: GrandchildAA
 				    @Instantiated let grandchildAB: GrandchildAB
 				}
@@ -1051,7 +1051,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				@preconcurrency import GrandchildModule
 
 				@Instantiable
-				public final class ChildB {
+				public final class ChildB: Instantiable {
 				    @Instantiated let grandchildBA: GrandchildBA
 				    @Instantiated let grandchildBB: GrandchildBB
 				}
@@ -1072,7 +1072,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 
 				@MainActor
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    @Instantiated let childA: ChildA
 				    @Instantiated let childB: ChildB
 				}
@@ -1111,7 +1111,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    @Instantiated private let defaultUserService: DefaultUserService
 
 				    @Received(fulfilledByDependencyNamed: "defaultUserService", ofType: DefaultUserService.self) private let userService: any UserService
@@ -1125,7 +1125,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [UserService.self])
-				public final class DefaultUserService: UserService {
+				public final class DefaultUserService: UserService, Instantiable {
 				    public init() {}
 
 				    public var userName: String?
@@ -1157,7 +1157,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -1167,7 +1167,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public func login(username: String, password: String) async -> User {
 				        User(username: username)
 				    }
@@ -1184,7 +1184,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -1220,30 +1220,30 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    @Instantiated let child: Child
 				}
 				""",
 				"""
 				@Instantiable
-				public final class Unrelated {}
+				public final class Unrelated: Instantiable {}
 				""",
 				"""
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    @Instantiated let grandchild: Grandchild
 				    @Instantiated let unrelated: Unrelated @Instantiated let greatGrandchild: GreatGrandchild
 				}
 				""",
 				"""
 				@Instantiable
-				public final class Grandchild {
+				public final class Grandchild: Instantiable {
 				    @Received let greatGrandchild: GreatGrandchild
 				}
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild {}
+				public final class GreatGrandchild: Instantiable {}
 				""",
 			],
 			buildDOTFileOutput: true,
@@ -1268,7 +1268,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    @Instantiated let a: A
 				    @Instantiated let b: B
 				    @Instantiated let c: C
@@ -1299,13 +1299,13 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class A {
+				public final class A: Instantiable {
 				    @Received let x: X
 				}
 				""",
 				"""
 				@Instantiable
-				public final class B {
+				public final class B: Instantiable {
 				    @Received let a: A
 				    @Received let d: D
 				    @Received let t: T
@@ -1316,7 +1316,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class C {
+				public final class C: Instantiable {
 				    @Received let u: U
 				    @Received let n: N
 				    @Received let y: Y
@@ -1324,58 +1324,58 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class D {
+				public final class D: Instantiable {
 				    @Received let o: O
 				    @Received let g: G
 				}
 				""",
 				"""
 				@Instantiable
-				public final class E {
+				public final class E: Instantiable {
 				    @Received let g: G
 				}
 				""",
 				"""
 				@Instantiable
-				public final class F {
+				public final class F: Instantiable {
 				    @Received let a: A
 				    @Received let x: X
 				}
 				""",
 				"""
 				@Instantiable
-				public final class G {}
+				public final class G: Instantiable {}
 				""",
 				"""
 				@Instantiable
-				public final class H {
+				public final class H: Instantiable {
 				    @Received let u: U
 				    @Received let g: G
 				}
 				""",
 				"""
 				@Instantiable
-				public final class I {
+				public final class I: Instantiable {
 				    @Received let f: F
 				}
 				""",
 				"""
 				@Instantiable
-				public final class J {
+				public final class J: Instantiable {
 				    @Received let a: A
 				    @Received let g: G
 				}
 				""",
 				"""
 				@Instantiable
-				public final class K {
+				public final class K: Instantiable {
 				    @Received let i: I
 				    @Received let t: T
 				}
 				""",
 				"""
 				@Instantiable
-				public final class L {
+				public final class L: Instantiable {
 				    @Received let o: O
 				    @Received let v: V
 				    @Received let e: E
@@ -1383,13 +1383,13 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class M {
+				public final class M: Instantiable {
 				    @Received let e: E
 				}
 				""",
 				"""
 				@Instantiable
-				public final class N {
+				public final class N: Instantiable {
 				    @Received let o: O
 				    @Received let p: P
 				    @Received let e: E
@@ -1397,7 +1397,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class O {
+				public final class O: Instantiable {
 				    @Received let m: M
 				    @Received let e: E
 				    @Received let g: G
@@ -1406,14 +1406,14 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class P {
+				public final class P: Instantiable {
 				    @Received let i: I
 				    @Received let x: X
 				}
 				""",
 				"""
 				@Instantiable
-				public final class Q {
+				public final class Q: Instantiable {
 				    @Received let u: U
 				    @Received let t: T
 				    @Received let e: E
@@ -1421,7 +1421,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class R {
+				public final class R: Instantiable {
 				    @Received let a: A
 				    @Received let m: M
 				    @Received let o: O
@@ -1431,7 +1431,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class S {
+				public final class S: Instantiable {
 				    @Received let a: A
 				    @Received let t: T
 				    @Received let o: O
@@ -1440,14 +1440,14 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class T {
+				public final class T: Instantiable {
 				    @Received let e: E
 				    @Received let n: N
 				}
 				""",
 				"""
 				@Instantiable
-				public final class U {
+				public final class U: Instantiable {
 				    @Received let p: P
 				    @Received let d: D
 				    @Received let o: O
@@ -1457,7 +1457,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class V {
+				public final class V: Instantiable {
 				    @Received let a: A
 				    @Received let t: T
 				    @Received let o: O
@@ -1469,7 +1469,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class W {
+				public final class W: Instantiable {
 				    @Received let a: A
 				    @Received let x: X
 				    @Received let o: O
@@ -1478,18 +1478,18 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class X {}
+				public final class X: Instantiable {}
 				""",
 				"""
 				@Instantiable
-				public final class Y {
+				public final class Y: Instantiable {
 				    @Received let u: U
 				    @Received let p: P
 				}
 				""",
 				"""
 				@Instantiable
-				public final class Z {
+				public final class Z: Instantiable {
 				    @Received let e: E
 				    @Received let p: P
 				    @Received let l: L
@@ -1542,25 +1542,25 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    @Instantiated let aBuilder: Instantiator<A>
 				}
 				""",
 				"""
 				@Instantiable
-				public struct A {
+				public struct A: Instantiable {
 				    @Instantiated let bBuilder: Instantiator<B>
 				}
 				""",
 				"""
 				@Instantiable
-				public struct B {
+				public struct B: Instantiable {
 				    @Instantiated let cBuilder: Instantiator<C>
 				}
 				""",
 				"""
 				@Instantiable
-				public struct C {
+				public struct C: Instantiable {
 				    @Instantiated let aBuilder: Instantiator<A>
 				}
 				""",
@@ -1587,13 +1587,13 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    @Instantiated let a: A
 				}
 				""",
 				"""
 				@Instantiable
-				public struct A {
+				public struct A: Instantiable {
 				    @Instantiated let aBuilder: Instantiator<A>
 				}
 				""",
@@ -1619,13 +1619,13 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    @Instantiated let aBuilder: Instantiator<A>
 				}
 				""",
 				"""
 				@Instantiable
-				public struct A {
+				public struct A: Instantiable {
 				    @Instantiated let aBuilder: Instantiator<A>
 				    @Forwarded let context: String
 				}
@@ -1653,7 +1653,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    @Instantiated let stringContainer: Container<String>
 				    @Instantiated let intContainer: Container<Int>
 				    @Instantiated let floatContainer: Container<Float>
@@ -1703,7 +1703,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    @Instantiated let stringContainer: MyModule.Container<String>
 				    @Instantiated let intContainer: MyModule.Container<Int>
 				    @Instantiated let floatContainer: MyModule.Container<Float>

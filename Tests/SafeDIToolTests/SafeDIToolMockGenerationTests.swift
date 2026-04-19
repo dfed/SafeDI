@@ -3092,7 +3092,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(a: A?, b: B) {
 				        self.a = a
 				        self.b = b
@@ -3104,13 +3104,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(generateMock: true)
-				public final class A {
+				public final class A: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable(generateMock: true)
-				public final class B {
+				public final class B: Instantiable {
 				    public init(a: A?) {
 				        self.a = a
 				    }
@@ -3206,7 +3206,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    public init(defaultUserService: DefaultUserService, userService: any UserService) {
 				        self.defaultUserService = defaultUserService
 				        self.userService = userService
@@ -3223,7 +3223,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [UserService.self], generateMock: true)
-				public final class DefaultUserService: UserService {
+				public final class DefaultUserService: UserService, Instantiable {
 				    public init() {}
 
 				    public var userName: String?
@@ -3293,7 +3293,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self], generateMock: true)
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3309,7 +3309,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self], generateMock: true)
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -3317,7 +3317,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true, generateMock: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -3336,7 +3336,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(generateMock: true)
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    public init(user: User, networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3724,7 +3724,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self], generateMock: true)
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -3732,7 +3732,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public protocol AuthService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self], generateMock: true)
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3744,13 +3744,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public protocol UserVendor {}
 
 				@Instantiable(fulfillingAdditionalTypes: [UserVendor.self], generateMock: true)
-				public final class UserManager: UserVendor {
+				public final class UserManager: UserVendor, Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
-				public final class RootViewController {
+				public final class RootViewController: Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -3766,7 +3766,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(generateMock: true)
-				public final class LoggedInViewController {
+				public final class LoggedInViewController: Instantiable {
 				    public init(userManager: UserManager, userNetworkService: NetworkService, profileViewControllerBuilder: Instantiator<ProfileViewController>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3780,7 +3780,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(generateMock: true)
-				public final class ProfileViewController {
+				public final class ProfileViewController: Instantiable {
 				    public init(userVendor: UserVendor, editProfileViewControllerBuilder: Instantiator<EditProfileViewController>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3792,7 +3792,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(generateMock: true)
-				public final class EditProfileViewController {
+				public final class EditProfileViewController: Instantiable {
 				    public init(userVendor: UserVendor, userManager: UserManager, userNetworkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4081,7 +4081,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(childBuilder: Instantiator<Child>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4091,7 +4091,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(generateMock: true)
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(iterator: IndexingIterator<Array<Element>>, grandchildBuilder: Instantiator<Grandchild>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4102,7 +4102,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(generateMock: true)
-				public final class Grandchild {
+				public final class Grandchild: Instantiable {
 				    public init(anyIterator: AnyIterator) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4242,7 +4242,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ChildAProtocol.self], generateMock: true)
-				public final class ChildA: ChildAProtocol, Sendable {
+				public final class ChildA: ChildAProtocol, Sendable, Instantiable {
 				    @Sendable public init(recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4251,7 +4251,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(generateMock: true)
-				public final class ChildB {
+				public final class ChildB: Instantiable {
 				    public init(recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4260,7 +4260,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(childABuilder: SendableErasedInstantiator<Recreated, ChildAProtocol>, childB: ChildB, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4774,7 +4774,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self], generateMock: true)
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -4782,7 +4782,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public protocol AuthService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self], generateMock: true)
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService, renamedNetworkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4794,7 +4794,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
-				public final class RootViewController {
+				public final class RootViewController: Instantiable {
 				    public init(authService: AuthService) {
 				        self.authService = authService
 				    }
@@ -5050,7 +5050,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				public struct ExternalType {}
 
 				@Instantiable(generateMock: true)
-				extension ExternalType {
+				extension ExternalType: Instantiable {
 				    public static func instantiate() -> ExternalType {
 				        ExternalType()
 				    }
@@ -5379,13 +5379,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(generateMock: true)
-				public final class ConcreteService {
+				public final class ConcreteService: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable(generateMock: true)
-				public final class Consumer {
+				public final class Consumer: Instantiable {
 				    public init(service: ConcreteService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -5710,13 +5710,13 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], generateMock: true)
-				public final class ConcreteService: ServiceProtocol {
+				public final class ConcreteService: ServiceProtocol, Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable(generateMock: true)
-				public final class Consumer {
+				public final class Consumer: Instantiable {
 				    public init(service: ServiceProtocol) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -10387,7 +10387,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(generateMock: true)
-				public struct Root {
+				public struct Root: Instantiable {
 					public init(aBuilder: Instantiator<A>) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -10397,7 +10397,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct A {
+				public struct A: Instantiable {
 					public init(root: Root) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}

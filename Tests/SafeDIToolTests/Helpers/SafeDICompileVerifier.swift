@@ -53,13 +53,11 @@ func verifyGeneratedCodeCompiles(
 	// (which has the right SDK) will still catch framework-level issues.
 	let platformFrameworks = ["UIKit", "SwiftUI", "AppKit", "WatchKit", "Cocoa"]
 	let inputURLs = inputSwiftFiles + additionalDirectorySwiftFiles
-	var originalInputContents = [String]()
 	for sourceFile in inputURLs {
 		let contents = try String(contentsOf: sourceFile, encoding: .utf8)
 		for framework in platformFrameworks {
 			if contents.contains("import \(framework)") { return }
 		}
-		originalInputContents.append(contents)
 	}
 
 	guard let artifacts = SafeDIBuildArtifactLocator.locate() else {
@@ -78,27 +76,18 @@ func verifyGeneratedCodeCompiles(
 	try FileManager.default.createDirectory(at: scratchDirectory, withIntermediateDirectories: true)
 	filesToDelete.append(scratchDirectory)
 
-	// Figure out which `@Instantiable` types already declare conformance to
-	// `Instantiable` somewhere in the fixture set. We only inject conformance
-	// where neither the type's primary declaration nor any of its extensions
-	// already declares it — otherwise we'd produce redundant conformance errors
-	// when the same type is decorated from multiple files.
-	let typesAlreadyDeclaringConformance = collectTypesDeclaringConformance(in: originalInputContents)
-
-	// Prepend `import SafeDI` to inputs so that test-fixture sources — which
-	// are authored without imports — can resolve the @Instantiable / @Received
-	// / @Forwarded / @Instantiated macros and the Instantiable protocol. Test
-	// fixtures also frequently omit the `: Instantiable` conformance on types
-	// decorated with `@Instantiable` (SafeDITool's parser doesn't require it);
-	// inject the conformance so the macro's conformance check passes.
+	// Prepend `import SafeDI` to each fixture file so test sources — which are
+	// authored without imports to keep them compact — can resolve the
+	// @Instantiable / @Received / @Forwarded / @Instantiated macros and the
+	// Instantiable protocol. The import is added at the wrapper layer (rather
+	// than inside the fixture string itself) because SafeDITool propagates
+	// user imports into generated output, and adding `import SafeDI` to the
+	// fixture string would rewrite every test's expected output to include a
+	// `#if canImport(SafeDI)` block.
 	var inputCompileFiles = [URL]()
 	for (index, sourceFile) in inputURLs.enumerated() {
-		let contents = originalInputContents[index]
-		let adjusted = try injectInstantiableConformance(
-			in: contents,
-			skippingTypes: typesAlreadyDeclaringConformance,
-		)
-		let wrapped = "import SafeDI\n" + adjusted
+		let contents = try String(contentsOf: sourceFile, encoding: .utf8)
+		let wrapped = "import SafeDI\n" + contents
 		let destination = scratchDirectory.appendingPathComponent("input_\(index)_\(sourceFile.lastPathComponent)")
 		try wrapped.write(to: destination, atomically: true, encoding: .utf8)
 		inputCompileFiles.append(destination)
@@ -157,136 +146,6 @@ func verifyGeneratedCodeCompiles(
 	}
 }
 
-/// Returns the set of base type names that already declare conformance to
-/// `Instantiable` somewhere in any fixture file. Covers both primary
-/// declarations (`struct X: Instantiable`) and extensions
-/// (`extension X: Foo, Instantiable`). Handles generic declarations
-/// (`struct Foo<T>: Instantiable`) and module-qualified extensions
-/// (`extension MyModule.Container: Instantiable`) by reducing to the bare
-/// trailing identifier so the result keys match what
-/// `injectInstantiableConformance` looks up.
-func collectTypesDeclaringConformance(in fixtureContents: [String]) -> Set<String> {
-	let pattern = #"(?:struct|final\s+class|class|actor|extension)\s+((?:\w+\.)*\w+)(?:\s*<[^>]*>)?\s*:\s*([^{]*)\{"#
-	guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else {
-		return []
-	}
-
-	var result = Set<String>()
-	for source in fixtureContents {
-		let nsSource = source as NSString
-		let fullRange = NSRange(location: 0, length: nsSource.length)
-		regex.enumerateMatches(in: source, options: [], range: fullRange) { match, _, _ in
-			guard let match else { return }
-			let nameRange = match.range(at: 1)
-			let conformanceRange = match.range(at: 2)
-			guard nameRange.location != NSNotFound, conformanceRange.location != NSNotFound else { return }
-			let conformance = nsSource.substring(with: conformanceRange)
-			guard conformance.range(of: #"\bInstantiable\b"#, options: .regularExpression) != nil else { return }
-			let qualifiedName = nsSource.substring(with: nameRange)
-			result.insert(extractBaseTypeName(from: qualifiedName))
-		}
-	}
-	return result
-}
-
-/// Strips a module qualifier and any generic parameter list from a captured
-/// type-declaration name, leaving the bare identifier (`MyModule.Container<T>`
-/// → `Container`). Used as the canonical key for the
-/// `typesAlreadyDeclaringConformance` skip set.
-private func extractBaseTypeName(from qualified: String) -> String {
-	let withoutGenerics = qualified.split(separator: "<", maxSplits: 1, omittingEmptySubsequences: false)[0]
-	if let lastDot = withoutGenerics.lastIndex(of: ".") {
-		return String(withoutGenerics[withoutGenerics.index(after: lastDot)...])
-	}
-	return String(withoutGenerics)
-}
-
-/// Returns a copy of `source` where the inner contents of every
-/// `@Instantiable(...)` argument list are replaced with spaces (newlines
-/// preserved). Lengths are preserved so any regex match on the result maps
-/// back to the original by NSRange. This lets the conformance-injection
-/// regex use a simple `\([^)]*\)` matcher even when arguments contain
-/// nested parentheses (e.g.,
-/// `@Instantiable(fulfillingAdditionalTypes: [(any P).self])`).
-private func scrubInstantiableArguments(_ source: String) -> String {
-	let attributeName = "@Instantiable"
-	var scalars = Array(source.unicodeScalars)
-	let attributeScalars = Array(attributeName.unicodeScalars)
-	var index = 0
-	while index <= scalars.count - attributeScalars.count {
-		var matches = true
-		for offset in 0..<attributeScalars.count where scalars[index + offset] != attributeScalars[offset] {
-			matches = false
-			break
-		}
-		guard matches else {
-			index += 1
-			continue
-		}
-		// Word boundary check on both ends.
-		if index > 0, isIdentifierContinuation(scalars[index - 1]) {
-			index += 1
-			continue
-		}
-		var cursor = index + attributeScalars.count
-		if cursor < scalars.count, isIdentifierContinuation(scalars[cursor]) {
-			index += 1
-			continue
-		}
-		// Skip whitespace between `@Instantiable` and an optional `(`.
-		while cursor < scalars.count, isWhitespaceScalar(scalars[cursor]) {
-			cursor += 1
-		}
-		guard cursor < scalars.count, scalars[cursor] == "(" else {
-			index += attributeScalars.count
-			continue
-		}
-		let argumentListStart = cursor
-		var depth = 1
-		cursor += 1
-		while cursor < scalars.count, depth > 0 {
-			let scalar = scalars[cursor]
-			if scalar == "(" {
-				depth += 1
-			} else if scalar == ")" {
-				depth -= 1
-			}
-			cursor += 1
-		}
-		guard depth == 0 else {
-			index += attributeScalars.count
-			continue
-		}
-		let argumentListEnd = cursor - 1
-		if argumentListEnd > argumentListStart + 1 {
-			for replaceIndex in (argumentListStart + 1)..<argumentListEnd where !isNewlineScalar(scalars[replaceIndex]) {
-				scalars[replaceIndex] = Unicode.Scalar(" ")
-			}
-		}
-		index = cursor
-	}
-	return String(String.UnicodeScalarView(scalars))
-}
-
-private func isIdentifierContinuation(_ scalar: Unicode.Scalar) -> Bool {
-	if scalar == "_" { return true }
-	if scalar.value < 128 {
-		let asciiValue = scalar.value
-		return (asciiValue >= 0x30 && asciiValue <= 0x39) // 0-9
-			|| (asciiValue >= 0x41 && asciiValue <= 0x5A) // A-Z
-			|| (asciiValue >= 0x61 && asciiValue <= 0x7A) // a-z
-	}
-	return false
-}
-
-private func isWhitespaceScalar(_ scalar: Unicode.Scalar) -> Bool {
-	scalar == " " || scalar == "\t" || scalar == "\n" || scalar == "\r"
-}
-
-private func isNewlineScalar(_ scalar: Unicode.Scalar) -> Bool {
-	scalar == "\n" || scalar == "\r"
-}
-
 /// Heuristic detector for verifier infrastructure failures (vs. fixture-only
 /// compile errors). Catches the common "verifier is broken" symptoms — missing
 /// SafeDI module, macro plugin failed to load, toolchain ABI mismatch — so
@@ -306,113 +165,6 @@ private func looksLikeVerifierInfrastructureFailure(_ stderr: String) -> Bool {
 		return true
 	}
 	return false
-}
-
-/// Rewrites test-fixture source so that `@Instantiable`-decorated types and
-/// extensions explicitly declare conformance to `Instantiable`. SafeDITool's
-/// parser does not require the conformance, so many fixtures omit it — but
-/// the macro enforces it. Injecting here keeps fixtures terse while letting
-/// the verifier compile them.
-func injectInstantiableConformance(
-	in source: String,
-	skippingTypes: Set<String> = [],
-) throws -> String {
-	// Matches:
-	//   @Instantiable[(optional arg list)]
-	//   [attributes/whitespace/newlines]
-	//   [access modifier] [final] (class|struct|actor|extension) TypeName[<...>][: conformances][where ...] {
-	//
-	// We match against a *scrubbed* copy of the source where `@Instantiable`
-	// arg-list contents have been replaced with spaces, so the simple
-	// `\([^)]*\)` matcher works even when arguments contain nested parens
-	// (e.g., `@Instantiable(fulfillingAdditionalTypes: [(any P).self])`).
-	// Length is preserved by the scrubber so NSRange offsets map back to the
-	// original `source` directly.
-	//
-	// The type-name capture admits module qualifiers (`MyModule.Container`)
-	// and a trailing single-level generic parameter list (`Foo<T>`) so we can
-	// inject conformance on generic and module-qualified declarations.
-	let pattern = #"(@Instantiable(?:\s*\([^)]*\))?)(\s+(?:[^{]*?))((?:public|internal|open|package|fileprivate|private)?\s*(?:final\s+)?(?:class|struct|actor|extension)\s+((?:\w+\.)*\w+(?:\s*<[^>]*>)?)(\s*:\s*[^{]*)?\s*\{)"#
-	let regex = try NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators])
-	let scrubbedSource = scrubInstantiableArguments(source)
-	let nsScrubbed = scrubbedSource as NSString
-	let nsSource = source as NSString
-	let fullRange = NSRange(location: 0, length: nsScrubbed.length)
-
-	var result = source
-	var offset = 0
-	regex.enumerateMatches(in: scrubbedSource, options: [], range: fullRange) { match, _, _ in
-		guard let match else { return }
-		let headerRange = match.range(at: 3)
-		let typeNameRange = match.range(at: 4)
-		let conformanceRange = match.range(at: 5)
-
-		// Pull the captures from the *original* source so we preserve exact
-		// argument-list text in the rewritten header (the scrubbed copy is
-		// only used to anchor the regex match positions).
-		let header = nsSource.substring(with: headerRange)
-		let qualifiedTypeName = nsSource.substring(with: typeNameRange)
-		let baseTypeName = extractBaseTypeName(from: qualifiedTypeName)
-		let conformanceText = conformanceRange.location == NSNotFound
-			? nil
-			: nsSource.substring(with: conformanceRange)
-		let alreadyConforms = conformanceText?.range(of: #"\bInstantiable\b"#, options: .regularExpression) != nil
-		guard !alreadyConforms else { return }
-		// Don't inject when conformance has already been declared on the same
-		// type in another fixture file — Swift would treat it as redundant.
-		guard !skippingTypes.contains(baseTypeName) else { return }
-
-		var rewrittenHeader = header
-		if let conformanceText {
-			// Conformance text may carry a trailing `where` clause; the new
-			// conformance has to be inserted into the conformance list itself
-			// (before any `where`), not appended after it.
-			let (conformanceList, trailingClause) = splitConformanceAndWhereClause(conformanceText)
-			let trimmedList = conformanceList.trimmingCharacters(in: .whitespaces)
-			let replacement = trimmedList + ", Instantiable" + (trailingClause.isEmpty ? "" : " " + trailingClause) + " "
-			guard let replaceRange = rewrittenHeader.range(of: conformanceText) else { return }
-			rewrittenHeader.replaceSubrange(replaceRange, with: replacement)
-		} else {
-			// No conformance clause: insert one after `TypeName[<...>]`. We
-			// search for the captured qualifiedTypeName so we land *after*
-			// any generic parameter list, which keeps the resulting header
-			// well-formed (`Container<T>: Instantiable {`, not
-			// `Container: Instantiable <T> {`).
-			guard let nameRange = rewrittenHeader.range(of: qualifiedTypeName) else { return }
-			let insertIndex = nameRange.upperBound
-			rewrittenHeader.insert(contentsOf: ": Instantiable ", at: insertIndex)
-		}
-
-		let adjustedHeaderRange = NSRange(
-			location: headerRange.location + offset,
-			length: headerRange.length,
-		)
-		let nsResult = result as NSString
-		result = nsResult.replacingCharacters(in: adjustedHeaderRange, with: rewrittenHeader)
-		offset += (rewrittenHeader as NSString).length - headerRange.length
-	}
-	return result
-}
-
-/// Splits a captured conformance clause (everything from the leading `:` up
-/// to the opening `{`) into the conformance list portion and any trailing
-/// generic `where` clause. New conformances must be appended to the list
-/// portion; appending after the `where` clause would produce invalid Swift
-/// (`: Foo where T: Sendable, Instantiable`).
-private func splitConformanceAndWhereClause(_ conformanceText: String) -> (list: String, whereClause: String) {
-	guard let whereRange = conformanceText.range(of: #"(?:^|\s)where\s"#, options: .regularExpression) else {
-		return (conformanceText, "")
-	}
-	// The match begins on either start-of-string or the whitespace preceding
-	// `where`; advance past leading whitespace so the trailing clause begins
-	// with the `where` keyword itself.
-	var keywordStart = whereRange.lowerBound
-	while keywordStart < whereRange.upperBound, conformanceText[keywordStart].isWhitespace {
-		keywordStart = conformanceText.index(after: keywordStart)
-	}
-	let listPortion = String(conformanceText[..<keywordStart])
-	let wherePortion = String(conformanceText[keywordStart...]).trimmingCharacters(in: .whitespaces)
-	return (listPortion, wherePortion)
 }
 
 struct SafeDIBuildArtifacts {

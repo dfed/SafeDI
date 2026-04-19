@@ -61,7 +61,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(isRoot: true, fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    let urlSession: URLSession = .shared
 				}
 				""",
@@ -86,7 +86,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 
 				    let urlSession: URLSession = .shared
@@ -94,7 +94,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -136,7 +136,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 
 				    let urlSession: URLSession = .shared
@@ -144,7 +144,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public actor Root {
+				public actor Root: Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -186,7 +186,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 
 				    let urlSession: URLSession = .shared
@@ -194,7 +194,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -236,7 +236,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 
 				    let urlSession: URLSession = .shared
@@ -244,7 +244,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root1 {
+				public struct Root1: Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -254,7 +254,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root2 {
+				public struct Root2: Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -309,7 +309,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    public init(userService: any UserService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -325,7 +325,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [UserService.self])
-				public final class DefaultUserService: UserService {
+				public final class DefaultUserService: UserService, Instantiable {
 				    public init() {}
 
 				    public var userName: String?
@@ -366,7 +366,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [(any SomeProtocol<OtherType>).self])
-				public final class SomeClass: SomeProtocol {
+				public final class SomeClass: SomeProtocol, Instantiable {
 				    public init() {}
 
 				    public typealias SomeAssociatedType = OtherType
@@ -411,7 +411,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    public init(userService: UserService?) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -427,7 +427,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [UserService.self])
-				public final class DefaultUserService: UserService {
+				public final class DefaultUserService: UserService, Instantiable {
 				    public init() {}
 
 				    public var userName: String?
@@ -470,7 +470,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -486,7 +486,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -494,7 +494,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -524,7 +524,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    public init(user: User, networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -578,7 +578,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -594,7 +594,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -602,7 +602,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -630,7 +630,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class UserService {
+				public final class UserService: Instantiable {
 				    public init(user: User) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -642,7 +642,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    public init(user: User, networkService: NetworkService, userService: UserService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -703,7 +703,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(networkServiceBuilder: Instantiator<NetworkService>) {
 				        self.networkServiceBuilder = networkServiceBuilder
 				        super.init(nibName: nil, bundle: nil)
@@ -757,7 +757,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -773,7 +773,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -781,7 +781,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<(userID: String, userName: String), UIViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -809,7 +809,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class UserService {
+				public final class UserService: Instantiable {
 				    public init(userName: String, userID: String) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -823,7 +823,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    public init(userName: String, userID: String, networkService: NetworkService, userService: UserService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -885,7 +885,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -901,7 +901,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -909,7 +909,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -937,7 +937,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class UserService {
+				public final class UserService: Instantiable {
 				    public init(userName: String, userID: String) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -951,7 +951,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    public init(userName: String, userID: String, networkService: NetworkService, userService: UserService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1005,7 +1005,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import SwiftUI
 
 				@Instantiable(isRoot: true)
-				public struct RootView: View {
+				public struct RootView: View, Instantiable {
 				    public init(splashScreenView: AnyView) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1021,7 +1021,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import SwiftUI
 
 				@Instantiable
-				public struct SplashScreenView: View {
+				public struct SplashScreenView: View, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -1057,7 +1057,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import SwiftUI
 
 				@Instantiable(isRoot: true)
-				public struct RootView: View {
+				public struct RootView: View, Instantiable {
 				    public init(splashScreenViewBuilder: ErasedInstantiator<(), AnyView>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1073,7 +1073,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import SwiftUI
 
 				@Instantiable
-				public struct SplashScreenView: View {
+				public struct SplashScreenView: View, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -1119,7 +1119,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1135,7 +1135,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -1143,7 +1143,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -1171,7 +1171,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class UserService {
+				public final class UserService: Instantiable {
 				    public init(user: User, networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1185,7 +1185,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    public init(user: User, userService: UserService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1240,7 +1240,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1255,7 +1255,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -1263,7 +1263,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -1291,7 +1291,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class UserService {
+				public final class UserService: Instantiable {
 				    public init(user: User, networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1305,7 +1305,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    public init(user: User, userServiceInstantiator: Instantiator<UserService>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1356,7 +1356,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1366,7 +1366,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    // This Child is incorrectly configured! It is missing the required initializer.
 
 				    @Instantiated let grandchild: Grandchild
@@ -1376,7 +1376,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Grandchild {
+				public final class Grandchild: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -1410,7 +1410,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1420,7 +1420,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(grandchild: Grandchild, nonInjectedProperty: Int = 5) {
 				        self.grandchild = grandchild
 				        self.nonInjectedProperty = nonInjectedProperty
@@ -1433,7 +1433,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Grandchild {
+				public final class Grandchild: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -1467,7 +1467,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1477,7 +1477,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				final class Child {
+				final class Child: Instantiable {
 				    public init(grandchild: Grandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1487,7 +1487,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Grandchild {
+				public final class Grandchild: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -1521,7 +1521,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1531,7 +1531,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				final class Child {
+				final class Child: Instantiable {
 				    public init(grandchild: Grandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1541,7 +1541,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Grandchild {
+				public final class Grandchild: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -1575,7 +1575,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB, greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1587,7 +1587,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class ChildA {
+				public final class ChildA: Instantiable {
 				    public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1598,7 +1598,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildAA {
+				public final class GrandchildAA: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1608,7 +1608,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildAB {
+				public final class GrandchildAB: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1618,7 +1618,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class ChildB {
+				public final class ChildB: Instantiable {
 				    public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1629,7 +1629,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildBA {
+				public final class GrandchildBA: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1639,7 +1639,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildBB {
+				public final class GrandchildBB: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1649,7 +1649,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild {
+				public final class GreatGrandchild: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -1692,7 +1692,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1703,7 +1703,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class ChildA {
+				public final class ChildA: Instantiable {
 				    public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB, greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1715,7 +1715,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildAA {
+				public final class GrandchildAA: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1725,7 +1725,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildAB {
+				public final class GrandchildAB: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1735,7 +1735,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class ChildB {
+				public final class ChildB: Instantiable {
 				    public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB, greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1747,7 +1747,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildBA {
+				public final class GrandchildBA: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1757,7 +1757,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildBB {
+				public final class GrandchildBB: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1767,7 +1767,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild {
+				public final class GreatGrandchild: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -1811,7 +1811,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1821,13 +1821,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Recreated {
+				public final class Recreated: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(grandchild: Grandchild, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1838,7 +1838,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Grandchild {
+				public final class Grandchild: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1849,7 +1849,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild {
+				public final class GreatGrandchild: Instantiable {
 				    public init(recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1894,7 +1894,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1905,13 +1905,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Recreated {
+				public final class Recreated: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(grandchild: Grandchild, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1922,7 +1922,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Grandchild {
+				public final class Grandchild: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1932,7 +1932,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild {
+				public final class GreatGrandchild: Instantiable {
 				    public init(recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1979,7 +1979,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -1990,13 +1990,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Recreated {
+				public final class Recreated: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(grandchild: Grandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2006,7 +2006,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Grandchild {
+				public final class Grandchild: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2016,7 +2016,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild {
+				public final class GreatGrandchild: Instantiable {
 				    public init(greatGreatGrandchild: GreatGreatGrandchild, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2027,7 +2027,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GreatGreatGrandchild {
+				public final class GreatGreatGrandchild: Instantiable {
 				    public init(recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2078,7 +2078,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2088,13 +2088,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Recreated: Sendable {
+				public final class Recreated: Sendable, Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(grandchild: Grandchild, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2105,7 +2105,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Grandchild {
+				public final class Grandchild: Instantiable {
 				    public init(greatGrandchildA: GreatGrandchildA, greatGrandchildB: GreatGrandchildB) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2116,7 +2116,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchildA {
+				public final class GreatGrandchildA: Instantiable {
 				    public init(greatGreatGrandchild: GreatGreatGrandchild, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2127,7 +2127,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchildB {
+				public final class GreatGrandchildB: Instantiable {
 				    public init(greatGreatGrandchild: GreatGreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2137,7 +2137,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GreatGreatGrandchild {
+				public final class GreatGreatGrandchild: Instantiable {
 				    public init(recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2197,7 +2197,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(childABuilder: SendableErasedInstantiator<Recreated, ChildAProtocol>, childB: ChildB, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2209,14 +2209,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Recreated {
+				public final class Recreated: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				public protocol ChildAProtocol: Sendable {}
 				@Instantiable
-				public final class ChildA: ChildAProtocol {
+				public final class ChildA: ChildAProtocol, Instantiable {
 				    public init(grandchildA: GrandchildA, grandchildB: GrandchildB, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2228,7 +2228,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class ChildB {
+				public final class ChildB: Instantiable {
 				    public init(grandchildA: GrandchildA, grandchildB: GrandchildB, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2240,7 +2240,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildA {
+				public final class GrandchildA: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild, recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2251,7 +2251,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildB {
+				public final class GrandchildB: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2261,7 +2261,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild {
+				public final class GreatGrandchild: Instantiable {
 				    public init(recreated: Recreated) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2327,7 +2327,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2338,7 +2338,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class ChildA {
+				public final class ChildA: Instantiable {
 				    public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2349,7 +2349,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildAA {
+				public final class GrandchildAA: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2359,7 +2359,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildAB {
+				public final class GrandchildAB: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2369,7 +2369,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class ChildB {
+				public final class ChildB: Instantiable {
 				    public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2380,7 +2380,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildBA {
+				public final class GrandchildBA: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2390,7 +2390,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildBB {
+				public final class GrandchildBB: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2400,7 +2400,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild {
+				public final class GreatGrandchild: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -2458,7 +2458,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child, keyValueStore: KeyValueStore) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2469,7 +2469,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(keyValueStore: KeyValueStore) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2539,7 +2539,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2554,7 +2554,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -2562,7 +2562,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: ErasedInstantiator<User, UIViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -2592,7 +2592,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    public init(user: User, networkService: NetworkService, keyValueStore: KeyValueStore) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2661,7 +2661,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable
-				public final class GreatGrandchild: Sendable {
+				public final class GreatGrandchild: Sendable, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -2676,7 +2676,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import GreatGrandchildModule
 
 				@Instantiable
-				public final class GrandchildAA {
+				public final class GrandchildAA: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2688,7 +2688,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import GreatGrandchildModule
 
 				@Instantiable
-				public final class GrandchildAB {
+				public final class GrandchildAB: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2700,7 +2700,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import GreatGrandchildModule
 
 				@Instantiable
-				public final class GrandchildBA {
+				public final class GrandchildBA: Instantiable {
 				    public init(greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2712,7 +2712,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import GreatGrandchildModule
 
 				@Instantiable
-				public final class GrandchildBB {
+				public final class GrandchildBB: Instantiable {
 				    public init(greatGrandchildInstantiator: SendableInstantiator<GreatGrandchild>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2734,7 +2734,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				@MainActor
 				@Instantiable
-				public final class ChildA {
+				public final class ChildA: Instantiable {
 				    public init(grandchildAA: GrandchildAA, grandchildAB: GrandchildAB) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2747,7 +2747,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				@preconcurrency import GrandchildModule
 
 				@Instantiable
-				public final class ChildB {
+				public final class ChildB: Instantiable {
 				    public init(grandchildBA: GrandchildBA, grandchildBB: GrandchildBB) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2772,7 +2772,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				@MainActor
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(childA: ChildA, childB: ChildB) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2855,7 +2855,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    public init(defaultUserService: DefaultUserService, userService: any UserService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -2873,7 +2873,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [UserService.self])
-				public final class DefaultUserService: UserService {
+				public final class DefaultUserService: UserService, Instantiable {
 				    public init() {}
 
 				    public var userName: String?
@@ -2910,7 +2910,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable
-				public struct NotRoot {
+				public struct NotRoot: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -2931,7 +2931,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable
-				public struct NotRoot {
+				public struct NotRoot: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -2954,7 +2954,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: false)
-				public struct NotRoot {
+				public struct NotRoot: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -2997,7 +2997,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -3007,7 +3007,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3022,7 +3022,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -3049,7 +3049,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    public init(userManager: UserManager, profileViewControllerBuilder: Instantiator<ProfileViewController>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3063,7 +3063,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class ProfileViewController: UIViewController {
+				public final class ProfileViewController: UIViewController, Instantiable {
 				    public init(userVendor: UserVendor, editProfileViewControllerBuilder: Instantiator<EditProfileViewController>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3077,7 +3077,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class EditProfileViewController: UIViewController {
+				public final class EditProfileViewController: UIViewController, Instantiable {
 				    public init(userVendor: UserVendor, userManager: UserManager) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3132,7 +3132,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(childBuilder: Instantiator<Child>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3142,7 +3142,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(iterator: IndexingIterator<Array<Element>>, grandchildBuilder: Instantiator<Grandchild>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3153,7 +3153,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Grandchild {
+				public final class Grandchild: Instantiable {
 				    public init(anyIterator: AnyIterator) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3219,7 +3219,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -3229,7 +3229,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3244,7 +3244,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -3271,7 +3271,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    public init(userManager: UserManager, userNetworkService: NetworkService, profileViewControllerBuilder: Instantiator<ProfileViewController>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3287,7 +3287,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class ProfileViewController: UIViewController {
+				public final class ProfileViewController: UIViewController, Instantiable {
 				    public init(userVendor: UserVendor, editProfileViewControllerBuilder: Instantiator<EditProfileViewController>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3301,7 +3301,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class EditProfileViewController: UIViewController {
+				public final class EditProfileViewController: UIViewController, Instantiable {
 				    public init(userVendor: UserVendor, userManager: UserManager, userNetworkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3363,7 +3363,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -3373,7 +3373,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService, renamedNetworkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3391,7 +3391,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService) {
 				        self.authService = authService
 				        super.init(nibName: nil, bundle: nil)
@@ -3440,7 +3440,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -3450,7 +3450,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService, renamedNetworkService: NetworkService, renamedAgainNetworkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3469,7 +3469,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -3539,7 +3539,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -3549,7 +3549,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3564,7 +3564,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -3591,7 +3591,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    public init(userManager: UserManager, userVendor: UserVendor, profileViewControllerBuilder: Instantiator<ProfileViewController>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3607,7 +3607,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class ProfileViewController: UIViewController {
+				public final class ProfileViewController: UIViewController, Instantiable {
 				    public init(editProfileViewControllerBuilder: Instantiator<EditProfileViewController>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3619,7 +3619,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class EditProfileViewController: UIViewController {
+				public final class EditProfileViewController: UIViewController, Instantiable {
 				    public init(userVendor: UserVendor, userManager: UserManager) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3696,7 +3696,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol NetworkService {}
 
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				""",
@@ -3706,7 +3706,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(fulfillingAdditionalTypes: [AuthService.self])
-				public final class DefaultAuthService: AuthService {
+				public final class DefaultAuthService: AuthService, Instantiable {
 				    public init(networkService: NetworkService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3721,7 +3721,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable(isRoot: true)
-				public final class RootViewController: UIViewController {
+				public final class RootViewController: UIViewController, Instantiable {
 				    public init(authService: AuthService, networkService: NetworkService, loggedInViewControllerBuilder: Instantiator<LoggedInViewController>) {
 				        self.authService = authService
 				        self.networkService = networkService
@@ -3748,7 +3748,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class LoggedInViewController: UIViewController {
+				public final class LoggedInViewController: UIViewController, Instantiable {
 				    public init(userManager: UserManager, profileViewControllerBuilder: Instantiator<ProfileViewController>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3762,7 +3762,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class ProfileViewController: UIViewController {
+				public final class ProfileViewController: UIViewController, Instantiable {
 				    public init(editProfileViewControllerBuilder: Instantiator<EditProfileViewController>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3774,7 +3774,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import UIKit
 
 				@Instantiable
-				public final class EditProfileViewController: UIViewController {
+				public final class EditProfileViewController: UIViewController, Instantiable {
 				    public init(userVendor: UserVendor, userManager: UserManager) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3829,7 +3829,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3839,13 +3839,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Unrelated {
+				public final class Unrelated: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(grandchild: Grandchild, unrelated: Unrelated, greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3857,7 +3857,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Grandchild {
+				public final class Grandchild: Instantiable {
 				    public init(greatGrandchild: GreatGrandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3867,7 +3867,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GreatGrandchild {
+				public final class GreatGrandchild: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -3903,7 +3903,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(a: A, b: B, c: C, d: D, e: E, f: F, g: G, h: H, i: I, j: J, k: K, l: L, m: M, n: N, o: O, p: P, q: Q, r: R, s: S, t: T, u: U, v: V, w: W, x: X, y: Y, z: Z) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3938,7 +3938,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class A {
+				public final class A: Instantiable {
 				    public init(x: X) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3948,7 +3948,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class B {
+				public final class B: Instantiable {
 				    public init(a: A, d: D, t: T, o: O, y: Y, s: S) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3963,7 +3963,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class C {
+				public final class C: Instantiable {
 				    public init(u: U, n: N, y: Y) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3975,7 +3975,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class D {
+				public final class D: Instantiable {
 				    public init(o: O, g: G) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3986,7 +3986,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class E {
+				public final class E: Instantiable {
 				    public init(g: G) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -3996,7 +3996,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class F {
+				public final class F: Instantiable {
 				    public init(a: A, x: X) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4007,13 +4007,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class G {
+				public final class G: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable
-				public final class H {
+				public final class H: Instantiable {
 				    public init(u: U, g: G) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4024,7 +4024,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class I {
+				public final class I: Instantiable {
 				    public init(f: F) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4034,7 +4034,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class J {
+				public final class J: Instantiable {
 				    public init(a: A, g: G) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4045,7 +4045,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class K {
+				public final class K: Instantiable {
 				    public init(i: I, t: T) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4056,7 +4056,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class L {
+				public final class L: Instantiable {
 				    public init(o: O, v: V, e: E) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4068,7 +4068,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class M {
+				public final class M: Instantiable {
 				    public init(e: E) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4078,7 +4078,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class N {
+				public final class N: Instantiable {
 				    public init(o: O, p: P, e: E) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4090,7 +4090,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class O {
+				public final class O: Instantiable {
 				    public init(m: M, e: E, g: G, a: A) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4103,7 +4103,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class P {
+				public final class P: Instantiable {
 				    public init(i: I, x: X) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4114,7 +4114,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Q {
+				public final class Q: Instantiable {
 				    public init(u: U, t: T, e: E) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4126,7 +4126,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class R {
+				public final class R: Instantiable {
 				    public init(a: A, m: M, o: O, n: N, e: E) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4140,7 +4140,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class S {
+				public final class S: Instantiable {
 				    public init(a: A, t: T, o: O, r: R) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4153,7 +4153,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class T {
+				public final class T: Instantiable {
 				    public init(e: E, n: N) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4164,7 +4164,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class U {
+				public final class U: Instantiable {
 				    public init(p: P, d: D, o: O, w: W, n: N) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4178,7 +4178,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class V {
+				public final class V: Instantiable {
 				    public init(a: A, t: T, o: O, f: F, c: C, i: I, d: D) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4194,7 +4194,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class W {
+				public final class W: Instantiable {
 				    public init(a: A, x: X, o: O, n: N) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4207,13 +4207,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class X {
+				public final class X: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable
-				public final class Y {
+				public final class Y: Instantiable {
 				    public init(u: U, p: P) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4224,7 +4224,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Z {
+				public final class Z: Instantiable {
 				    public init(e: E, p: P, l: L, i: I, n: N) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4287,7 +4287,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(childBuilder: Instantiator<Child>?) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4297,7 +4297,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -4330,7 +4330,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    public init(aBuilder: Instantiator<A>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4340,7 +4340,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct A {
+				public struct A: Instantiable {
 				    public init(bBuilder: Instantiator<B>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4350,7 +4350,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct B {
+				public struct B: Instantiable {
 				    public init(cBuilder: Instantiator<C>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4360,7 +4360,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct C {
+				public struct C: Instantiable {
 				    public init(aBuilder: Instantiator<A>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4406,7 +4406,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    public init(a: A) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4416,7 +4416,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct A {
+				public struct A: Instantiable {
 				    public init(aBuilder: Instantiator<A>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4458,7 +4458,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    public init(aBuilder: Instantiator<A>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4468,7 +4468,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct A {
+				public struct A: Instantiable {
 				    public init(aBuilder: Instantiator<A>, context: String) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4511,7 +4511,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 					public init(aBuilder: Instantiator<A>) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -4521,7 +4521,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct A {
+				public struct A: Instantiable {
 					public init(root: Root) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -4560,7 +4560,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    public init(stringContainer: Container<String>, intContainer: Container<Int>, floatContainer: Container<Float>, voidContainer: Container<Void>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4620,7 +4620,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    public init(stringContainer: MyModule.Container<String>, intContainer: MyModule.Container<Int>, floatContainer: MyModule.Container<Float>, voidContainer: MyModule.Container<Void>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4682,13 +4682,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import Foundation
 
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(inner: Inner) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
 
 				    @Instantiable
-				    public final class Inner {
+				    public final class Inner: Instantiable {
 				        public init() {}
 				    }
 
@@ -4697,7 +4697,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4741,13 +4741,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import Foundation
 
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(grandchild: Grandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
 
 				    @Instantiable
-				    public final class Grandchild {
+				    public final class Grandchild: Instantiable {
 				        public init(greatGrandchild: GreatGrandchild, pathalogical: Pathalogical) {
 				            fatalError("SafeDI doesn't inspect the initializer body")
 				        }
@@ -4756,7 +4756,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				        @Instantiated let pathalogical: Pathalogical
 
 				        @Instantiable
-				        public final class GreatGrandchild {
+				        public final class GreatGrandchild: Instantiable {
 				            public init(pathalogical: Pathalogical) {
 				                fatalError("SafeDI doesn't inspect the initializer body")
 				            }
@@ -4764,13 +4764,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				            @Instantiated let pathalogical: Pathalogical
 
 				            @Instantiable
-				            public final class Pathalogical {
+				            public final class Pathalogical: Instantiable {
 				                public init() {}
 				            }
 				        }
 
 				        @Instantiable
-				        public final class Pathalogical {
+				        public final class Pathalogical: Instantiable {
 				            public init() {}
 				        }
 				    }
@@ -4780,7 +4780,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4833,13 +4833,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import Foundation
 
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(grandchild: Grandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
 
 				    @Instantiable
-				    public final class Grandchild {
+				    public final class Grandchild: Instantiable {
 				        public init(greatGrandchild: GreatGrandchild, pathalogical: Grandchild.Pathalogical) {
 				            fatalError("SafeDI doesn't inspect the initializer body")
 				        }
@@ -4848,7 +4848,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				        @Instantiated let pathalogical: Grandchild.Pathalogical
 
 				        @Instantiable
-				        public final class GreatGrandchild {
+				        public final class GreatGrandchild: Instantiable {
 				            public init(pathalogical: Child.Grandchild.GreatGrandchild.Pathalogical) {
 				                fatalError("SafeDI doesn't inspect the initializer body")
 				            }
@@ -4856,13 +4856,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				            @Instantiated let pathalogical: Child.Grandchild.GreatGrandchild.Pathalogical
 
 				            @Instantiable
-				            public final class Pathalogical {
+				            public final class Pathalogical: Instantiable {
 				                public init() {}
 				            }
 				        }
 
 				        @Instantiable
-				        public final class Pathalogical {
+				        public final class Pathalogical: Instantiable {
 				            public init() {}
 				        }
 				    }
@@ -4872,7 +4872,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -4925,14 +4925,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import Foundation
 
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(pathalogical: Child.Grandchild.Pathalogical, grandchild: Grandchild) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
 				    @Instantiated let pathalogical: Child.Grandchild.Pathalogical
 
 				    @Instantiable
-				    public final class Grandchild {
+				    public final class Grandchild: Instantiable {
 				        public init(greatGrandchild: GreatGrandchild, pathalogical: Pathalogical) {
 				            fatalError("SafeDI doesn't inspect the initializer body")
 				        }
@@ -4941,7 +4941,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				        @Received let pathalogical: Pathalogical
 
 				        @Instantiable
-				        public final class GreatGrandchild {
+				        public final class GreatGrandchild: Instantiable {
 				            public init(pathalogical: Grandchild.Pathalogical) {
 				                fatalError("SafeDI doesn't inspect the initializer body")
 				            }
@@ -4949,13 +4949,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				            @Received let pathalogical: Grandchild.Pathalogical
 
 				            @Instantiable
-				            public final class Pathalogical {
+				            public final class Pathalogical: Instantiable {
 				                public init() {}
 				            }
 				        }
 
 				        @Instantiable
-				        public final class Pathalogical {
+				        public final class Pathalogical: Instantiable {
 				            public init() {}
 				        }
 				    }
@@ -4965,7 +4965,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -5014,7 +5014,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import Foundation
 
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(inner: Child.Inner) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -5022,7 +5022,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				    public protocol Inner {}
 
 				    @Instantiable(fulfillingAdditionalTypes: [Child.Inner.self])
-				    public final class DefaultInner: Inner {
+				    public final class DefaultInner: Inner, Instantiable {
 				        public init() {}
 				    }
 
@@ -5031,7 +5031,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -5075,7 +5075,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				import Foundation
 
 				@Instantiable
-				public final class Child {
+				public final class Child: Instantiable {
 				    public init(inner: Inner) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -5083,7 +5083,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				    public protocol Inner {}
 
 				    @Instantiable(fulfillingAdditionalTypes: [Child.Inner.self])
-				    public final class DefaultInner: Inner {
+				    public final class DefaultInner: Inner, Instantiable {
 				        public init() {}
 				    }
 
@@ -5092,7 +5092,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 				    public init(child: Child) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -5137,14 +5137,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				public final class EnclosingType {
 				    @Instantiable
-				    public final class SomeType: ErasedType {
+				    public final class SomeType: ErasedType, Instantiable {
 				        public init() {}
 				    }
 				}
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public final class TypeWithDependency {
+				public final class TypeWithDependency: Instantiable {
 				    public init(erasedType: ErasedType ) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -5185,7 +5185,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				public final class EnclosingType {
 				    @Instantiable
-				    public final class SomeType: ErasedType {
+				    public final class SomeType: ErasedType, Instantiable {
 				        public init() {}
 				    }
 				}
@@ -5196,7 +5196,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 
 				@Instantiable(isRoot: true)
-				public final class TypeWithDependency {
+				public final class TypeWithDependency: Instantiable {
 				    public init(erasedType: ErasedType ) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
@@ -5230,7 +5230,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 					public init(a: A, b: B) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5241,7 +5241,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class A {
+				public final class A: Instantiable {
 					public init() {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5249,7 +5249,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class B {
+				public final class B: Instantiable {
 					public init(a: A?) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5284,7 +5284,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 					public init(a: A?, b: B) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5295,7 +5295,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class A {
+				public final class A: Instantiable {
 					public init() {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5303,7 +5303,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class B {
+				public final class B: Instantiable {
 					public init(a: A?) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5338,7 +5338,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 					public init(b: B) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5348,7 +5348,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class A {
+				public final class A: Instantiable {
 					public init() {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5356,7 +5356,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class B {
+				public final class B: Instantiable {
 					public init(a: A?) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5390,7 +5390,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 					public init(aBuilder: Instantiator<A>) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5400,7 +5400,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class A {
+				public final class A: Instantiable {
 					public init(b: B, c: C) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5411,7 +5411,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class B {
+				public final class B: Instantiable {
 					public init(c: C?) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5421,7 +5421,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class C {
+				public final class C: Instantiable {
 					public init() {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5458,7 +5458,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 					public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5469,7 +5469,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class A {
+				public final class A: Instantiable {
 					public init(c: C, d: D) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5480,7 +5480,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class B {
+				public final class B: Instantiable {
 					public init(c: C?) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5490,7 +5490,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class C {
+				public final class C: Instantiable {
 					public init() {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5498,7 +5498,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class D {
+				public final class D: Instantiable {
 					public init(b: B) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5545,7 +5545,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 					public init(aBuilder: Instantiator<A>) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5555,7 +5555,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class A {
+				public final class A: Instantiable {
 					public init(c: C) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5565,7 +5565,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class B {
+				public final class B: Instantiable {
 					public init(c: C?) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5575,7 +5575,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class C {
+				public final class C: Instantiable {
 					public init(b: B) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5617,7 +5617,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 					public init(b: B) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5627,7 +5627,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class A {
+				public final class A: Instantiable {
 					public init() {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5635,7 +5635,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class B {
+				public final class B: Instantiable {
 					public init(aRenamed: ARenamed?) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5673,7 +5673,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 					public init(aBuilder: Instantiator<A>) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5683,7 +5683,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class A {
+				public final class A: Instantiable {
 					public init(b: B, c: C) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5694,7 +5694,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class B {
+				public final class B: Instantiable {
 					public init(cRenamed: CRenamed?) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5704,7 +5704,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class C {
+				public final class C: Instantiable {
 					public init() {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5745,7 +5745,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 					public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5756,7 +5756,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class A {
+				public final class A: Instantiable {
 					public init(c: C, d: D) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5767,7 +5767,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class B {
+				public final class B: Instantiable {
 					public init(cRenamed: CRenamed?) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5777,7 +5777,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class C {
+				public final class C: Instantiable {
 					public init() {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5785,7 +5785,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class D {
+				public final class D: Instantiable {
 					public init(b: B) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -5849,7 +5849,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    public init(consumer: Consumer, service: Service) {
 				        self.consumer = consumer
 				        self.service = service
@@ -5861,7 +5861,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct Consumer {
+				public struct Consumer: Instantiable {
 				    public init(service: Service, alias: Service) {
 				        self.service = service
 				        self.alias = alias
@@ -5873,7 +5873,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct Service {
+				public struct Service: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -5920,7 +5920,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    public init(consumer: Consumer, service: Service) {
 				        self.consumer = consumer
 				        self.service = service
@@ -5932,7 +5932,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct Consumer {
+				public struct Consumer: Instantiable {
 				    public init(service: Service, alias: Service?) {
 				        self.service = service
 				        self.alias = alias
@@ -5944,7 +5944,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct Service {
+				public struct Service: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -6051,20 +6051,20 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable
-				public struct Dep {
+				public struct Dep: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root1 {
+				public struct Root1: Instantiable {
 				    public init(dep: Dep) {
 				        self.dep = dep
 				    }
 				    @Instantiated let dep: Dep
 				}
 				@Instantiable(isRoot: true)
-				public struct Root2 {
+				public struct Root2: Instantiable {
 				    public init(dep: Dep) {
 				        self.dep = dep
 				    }
@@ -6108,7 +6108,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -6140,7 +6140,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let depFile = rootDirectory.appendingPathComponent("Dep.swift")
 		try """
 		@Instantiable
-		public struct Dep {
+		public struct Dep: Instantiable {
 		    public init() {}
 		}
 		""".write(to: depFile, atomically: true, encoding: .utf8)
@@ -6148,7 +6148,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let featureARootFile = featureADirectory.appendingPathComponent("Root.swift")
 		try """
 		@Instantiable(isRoot: true)
-		public struct FeatureARoot {
+		public struct FeatureARoot: Instantiable {
 		    public init(dep: Dep) {
 		        self.dep = dep
 		    }
@@ -6159,7 +6159,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let featureBRootFile = featureBDirectory.appendingPathComponent("Root.swift")
 		try """
 		@Instantiable(isRoot: true)
-		public struct FeatureBRoot {
+		public struct FeatureBRoot: Instantiable {
 		    public init(dep: Dep) {
 		        self.dep = dep
 		    }
@@ -6239,14 +6239,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let rootFile = rootDirectory.appendingPathComponent("Root.swift")
 		try """
 		@Instantiable(isRoot: true)
-		public struct Root {
+		public struct Root: Instantiable {
 		    public init(dep: Dep) {
 		        self.dep = dep
 		    }
 		    @Instantiated let dep: Dep
 		}
 		@Instantiable
-		public struct Dep {
+		public struct Dep: Instantiable {
 		    public init() {}
 		}
 		""".write(to: rootFile, atomically: true, encoding: .utf8)
@@ -6289,7 +6289,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let depFile = rootDirectory.appendingPathComponent("Dep.swift")
 		try """
 		@Instantiable
-		public struct Dep {
+		public struct Dep: Instantiable {
 		    public init() {}
 		}
 		""".write(to: depFile, atomically: true, encoding: .utf8)
@@ -6297,7 +6297,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let featureARootFile = featureADirectory.appendingPathComponent("Root.swift")
 		try """
 		@Instantiable(isRoot: true)
-		public struct FeatureARoot {
+		public struct FeatureARoot: Instantiable {
 		    public init(dep: Dep) {
 		        self.dep = dep
 		    }
@@ -6308,7 +6308,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let featureBRootFile = featureBDirectory.appendingPathComponent("Root.swift")
 		try """
 		@Instantiable(isRoot: true)
-		public struct FeatureBRoot {
+		public struct FeatureBRoot: Instantiable {
 		    public init(dep: Dep) {
 		        self.dep = dep
 		    }
@@ -6413,14 +6413,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let swiftFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".swift")
 		try """
 		@Instantiable(isRoot: true)
-		public struct Root {
+		public struct Root: Instantiable {
 		    public init(dep: Dep) {
 		        self.dep = dep
 		    }
 		    @Instantiated let dep: Dep
 		}
 		@Instantiable
-		public struct Dep {
+		public struct Dep: Instantiable {
 		    public init() {}
 		}
 		""".write(to: swiftFile, atomically: true, encoding: .utf8)
@@ -6475,14 +6475,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [NetworkService.self])
-				public final class DefaultNetworkService: NetworkService {
+				public final class DefaultNetworkService: NetworkService, Instantiable {
 				    public init() {}
 				}
 				public protocol NetworkService {}
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root {
+				public struct Root: Instantiable {
 				    public init(networkService: NetworkService) {
 				        self.networkService = networkService
 				    }
@@ -6511,7 +6511,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public final class Root {
+				public final class Root: Instantiable {
 					public init(childVCBuilder: Instantiator<ChildVC>, service: Service) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -6522,7 +6522,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class ChildVC {
+				public final class ChildVC: Instantiable {
 					public init(grandchildVCBuilder: Instantiator<GrandchildVC>) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -6532,7 +6532,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class GrandchildVC {
+				public final class GrandchildVC: Instantiable {
 					public init(service: Service?) {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -6542,7 +6542,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class Service {
+				public final class Service: Instantiable {
 					public init() {
 						fatalError("SafeDI doesn't inspect the initializer body")
 					}
@@ -6587,7 +6587,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct NotRoot {
+				public struct NotRoot: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -6636,13 +6636,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct Dep {
+				public struct Dep: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public struct TargetRoot {
+				public struct TargetRoot: Instantiable {
 				    public init(dep: Dep) {
 				        self.dep = dep
 				    }
@@ -6653,7 +6653,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			additionalDirectorySwiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct AdditionalRoot {
+				public struct AdditionalRoot: Instantiable {
 				    public init(dep: Dep) {
 				        self.dep = dep
 				    }
@@ -6684,13 +6684,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct Dep {
+				public struct Dep: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public struct TargetRoot {
+				public struct TargetRoot: Instantiable {
 				    public init(dep: Dep) {
 				        self.dep = dep
 				    }
@@ -6701,7 +6701,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			additionalDirectorySwiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct AdditionalRootA {
+				public struct AdditionalRootA: Instantiable {
 				    public init(dep: Dep) {
 				        self.dep = dep
 				    }
@@ -6710,7 +6710,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public struct AdditionalRootB {
+				public struct AdditionalRootB: Instantiable {
 				    public init(dep: Dep) {
 				        self.dep = dep
 				    }
@@ -6746,7 +6746,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct Dep {
+				public struct Dep: Instantiable {
 				    public init() {}
 				}
 				""",
@@ -6754,7 +6754,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			additionalDirectorySwiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct AdditionalRoot {
+				public struct AdditionalRoot: Instantiable {
 				    public init(dep: Dep) {
 				        self.dep = dep
 				    }
@@ -6785,13 +6785,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public struct SharedDep {
+				public struct SharedDep: Instantiable {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable
-				public struct TargetOnlyDep {
+				public struct TargetOnlyDep: Instantiable {
 				    public init(shared: SharedDep) {
 				        self.shared = shared
 				    }
@@ -6800,7 +6800,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(isRoot: true)
-				public struct TargetRoot {
+				public struct TargetRoot: Instantiable {
 				    public init(dep: TargetOnlyDep) {
 				        self.dep = dep
 				    }
@@ -6811,7 +6811,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			additionalDirectorySwiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct AdditionalRoot {
+				public struct AdditionalRoot: Instantiable {
 				    public init(shared: SharedDep) {
 				        self.shared = shared
 				    }
@@ -6838,14 +6838,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let rootFile = rootDirectory.appendingPathComponent("Root.swift")
 		try """
 		@Instantiable(isRoot: true)
-		public struct Root {
+		public struct Root: Instantiable {
 		    public init(dep: Dep) {
 		        self.dep = dep
 		    }
 		    @Instantiated let dep: Dep
 		}
 		@Instantiable
-		public struct Dep {
+		public struct Dep: Instantiable {
 		    public init() {}
 		}
 		""".write(to: rootFile, atomically: true, encoding: .utf8)
@@ -6883,7 +6883,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let rootFile = rootDirectory.appendingPathComponent("Root.swift")
 		try """
 		@Instantiable(isRoot: true)
-		public struct Root {
+		public struct Root: Instantiable {
 		    public init() {}
 		}
 		""".write(to: rootFile, atomically: true, encoding: .utf8)
