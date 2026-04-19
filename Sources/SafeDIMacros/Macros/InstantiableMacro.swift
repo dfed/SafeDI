@@ -900,6 +900,21 @@ public struct InstantiableMacro: MemberMacro {
 			let dependencyLabels = Set(extensionDependencies.map(\.property.label))
 			for mockFunction in allMockFunctions {
 				let mockFunctionInitializer = Initializer(mockFunction)
+				// For per-overload default-expression checks, resolve this mock's
+				// dependencies from the matching `instantiate()` return type — not
+				// the union across all overloads. Otherwise a label that is a
+				// non-dependency default for *this* overload but a dependency for
+				// another would incorrectly skip the callee-scope check. Falls
+				// back to the union when the return type doesn't match any known
+				// Instantiable (e.g. unknown `Self`-returning shape).
+				let mockReturnType = mockFunction.signature.returnClause?.type.typeDescription
+				let dependenciesForMock: [Dependency] = if let mockReturnType,
+				                                           let matchingInstantiable = visitor.instantiables.first(where: { $0.concreteInstantiable == mockReturnType })
+				{
+					matchingInstantiable.dependencies
+				} else {
+					extensionDependencies
+				}
 				Self.validateUnlabeledDefaultShape(
 					functionSyntax: mockFunction.signature,
 					arguments: mockFunctionInitializer.arguments,
@@ -909,7 +924,7 @@ public struct InstantiableMacro: MemberMacro {
 				)
 				Self.validateDefaultExpressions(
 					functionSyntax: mockFunction.signature,
-					dependencies: extensionDependencies,
+					dependencies: dependenciesForMock,
 					context: context,
 				)
 				let nonDependenciesWithoutDefaults = mockFunctionInitializer.arguments
