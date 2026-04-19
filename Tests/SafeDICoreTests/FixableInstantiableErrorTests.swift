@@ -175,4 +175,22 @@ struct FixableInstantiableErrorTests {
 		let error = FixableInstantiableError.mockOnlyMissingMockMethod(typeName: "MyService", methodName: "mock")
 		#expect(error.fixIt.message == "Add `public static func mock(…) -> MyService` method")
 	}
+
+	@Test
+	func unlabeledDefaultBeforeUnlabeledParameter_description_mentionsBothParametersAndRemediations() {
+		let error = FixableInstantiableError.unlabeledDefaultBeforeUnlabeledParameter(
+			defaultedParameter: Property(label: "enabled", typeDescription: .simple(name: "Bool")),
+			followingParameter: Property(label: "leaf", typeDescription: .simple(name: "Leaf")),
+		)
+		#expect(error.description == "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `leaf: Leaf`. SafeDI cannot generate a mock for this signature: the default cannot be elided from the mock's override surface (Swift requires the earlier positional slot to be passed when a later unlabeled parameter is required), and an unlabeled parameter cannot be exposed as a labeled field on `SafeDIMockConfiguration`. Either add an external label to the defaulted parameter, reorder so unlabeled defaults come last, or remove the default.")
+	}
+
+	@Test
+	func unlabeledDefaultBeforeUnlabeledParameter_fixIt_describesLabelPromotion() {
+		let error = FixableInstantiableError.unlabeledDefaultBeforeUnlabeledParameter(
+			defaultedParameter: Property(label: "enabled", typeDescription: .simple(name: "Bool")),
+			followingParameter: Property(label: "leaf", typeDescription: .simple(name: "Leaf")),
+		)
+		#expect(error.fixIt.message == "Promote `enabled` to an external label (rewrite `_ enabled:` as `enabled:`)")
+	}
 }
