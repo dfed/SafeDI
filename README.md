@@ -109,12 +109,12 @@ For previews and tests that need real data, pass forwarded values directly and u
 
 ## Features
 
-| | | |
-|---|---|---|
-| ✓ Compile-time safe | ✓ Thread safe | ✓ Hierarchical dependency scoping |
-| ✓ Constructor injection | ✓ Multi-module support | ✓ Dependency inversion support |
-| ✓ Transitive dependency solving | ✓ Cycle detection | ✓ Architecture independent |
-| ✓ No DI-specific types or generics required | ✓ Full-graph mocks | ✓ Clear errors: never debug generated code |
+<table>
+<tr><td>✓ Compile-time safe</td><td>✓ Thread safe</td><td>✓ Hierarchical dependency scoping</td></tr>
+<tr><td>✓ Constructor injection</td><td>✓ Multi-module support</td><td>✓ Dependency inversion support</td></tr>
+<tr><td>✓ Transitive dependency solving</td><td>✓ Cycle detection</td><td>✓ Architecture independent</td></tr>
+<tr><td>✓ No DI-specific types or generics required</td><td>✓ Full-graph mocks</td><td>✓ Clear errors: never debug generated code</td></tr>
+</table>
 
 ## Getting started
 
