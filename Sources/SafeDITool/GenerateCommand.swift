@@ -406,27 +406,32 @@ struct Generate: AsyncParsableCommand {
 		      let cacheModifiedAt = cacheAttributes[.modificationDate] as? Date
 		else { return nil }
 
-		// Bypass the cache if any input Swift file was modified after the
-		// cache was written. Scan's output reflects the source set at
-		// scan-time; if sources have since changed, re-parsing is required
-		// for correctness.
-		let sourceFiles = try await findGenerateSwiftFiles()
-		for filePath in sourceFiles where !filePath.isEmpty {
-			if let attributes = try? fileManager.attributesOfItem(atPath: filePath),
-			   let modifiedAt = attributes[.modificationDate] as? Date,
-			   modifiedAt > cacheModifiedAt
-			{
-				return nil
-			}
-		}
-
 		// Treat decode failures as cache misses, not hard errors — the
 		// cache may have been truncated by an interrupted write or carry
 		// an older schema that a newer SafeDITool can no longer read.
 		guard let data = try? Data(contentsOf: cacheURL),
-		      let decoded = try? JSONDecoder().decode(ModuleInfo.self, from: data)
+		      let cached = try? JSONDecoder().decode(CachedScannedModuleInfo.self, from: data)
 		else { return nil }
-		return decoded
+
+		// Bypass the cache if any input file scan observed has changed
+		// since the cache was written — newer mtime OR missing-from-disk
+		// both invalidate. We check every path scan parsed (including
+		// files reached through `#SafeDIConfiguration.additionalDirectoriesToInclude`,
+		// which don't appear in `findGenerateSwiftFiles()`'s output).
+		for filePath in cached.scannedInputPaths where !filePath.isEmpty {
+			guard let attributes = try? fileManager.attributesOfItem(atPath: filePath),
+			      let modifiedAt = attributes[.modificationDate] as? Date
+			else {
+				// File missing or unreadable — the scan-observed input set
+				// doesn't match disk, so a fresh parse is safer than
+				// trusting stale parse results.
+				return nil
+			}
+			if modifiedAt > cacheModifiedAt {
+				return nil
+			}
+		}
+		return cached.moduleInfo
 	}
 
 	private var moduleInfoURLs: Set<URL> {

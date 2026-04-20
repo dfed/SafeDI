@@ -243,8 +243,34 @@ func performScan(
 		},
 		filesWithUnexpectedNodes: combinedModuleInfo.filesWithUnexpectedNodes?.compactMap(normalize),
 	)
+	// Every path scan parsed for this module — CSV inputs plus any files
+	// reached through `#SafeDIConfiguration.additionalDirectoriesToInclude`.
+	// `generate` uses this list to validate cache freshness against the
+	// exact file set `scan` observed, so edits to additional-directory
+	// files correctly invalidate the cache too.
+	let allScannedFilePaths = (allFilePaths.union(
+		// `allFilePaths` stores project-relative or absolute paths from
+		// the CSV — mirror that for additional files.
+		Set(additionalInputFiles.map {
+			URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL.relativePath
+		}),
+	)).sorted()
+	let cached = CachedScannedModuleInfo(
+		moduleInfo: normalizedModuleInfo,
+		scannedInputPaths: allScannedFilePaths,
+	)
 	let scannedModuleInfoURL = scannedModuleInfoURL(forManifestPath: manifestFile)
-	try encoder.encode(normalizedModuleInfo).write(to: scannedModuleInfoURL)
+	try encoder.encode(cached).write(to: scannedModuleInfoURL)
+}
+
+/// Wrapper persisted alongside the manifest so `generate` can both
+/// consume the parsed `ModuleInfo` AND validate cache freshness against
+/// the exact file set `scan` observed (including
+/// `additionalDirectoriesToInclude` files, which don't appear in the
+/// `generate` CSV).
+struct CachedScannedModuleInfo: Codable {
+	let moduleInfo: ModuleInfo
+	let scannedInputPaths: [String]
 }
 
 /// Path alongside the manifest where `scan` persists the parsed
