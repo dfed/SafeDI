@@ -77,7 +77,7 @@ struct Generate: AsyncParsableCommand {
 			loadSafeDIModuleInfo(),
 			parsedModule(),
 		)
-		let initialModule = parsed.0
+		let initialModule = parsed.module
 		let initialModuleIsFromCache = parsed.isFromCache
 
 		// In multi-module builds, the CSV includes all modules' files, so multiple
@@ -389,7 +389,7 @@ struct Generate: AsyncParsableCommand {
 	/// cross-version schema drift, etc.) fall through to a fresh parse
 	/// rather than aborting the build — the cache is an optimization
 	/// sidecar, not a correctness requirement.
-	private func parsedModule() async throws -> (ModuleInfo, isFromCache: Bool) {
+	private func parsedModule() async throws -> (module: ModuleInfo, isFromCache: Bool) {
 		if include.isEmpty,
 		   let swiftManifest,
 		   let cached = try await loadCachedModuleInfo(manifestPath: swiftManifest)

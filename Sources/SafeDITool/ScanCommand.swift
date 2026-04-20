@@ -275,7 +275,10 @@ func performScan(
 	// Cache write is best-effort. A full disk or other transient FS
 	// failure shouldn't block the build — `generate` always falls back
 	// to a fresh parse when the cache is missing or can't be decoded.
-	try? encoder.encode(cached).write(to: scannedModuleInfoURL)
+	// Fresh encoder rather than reusing the manifest's — the cache is
+	// machine-read only, so the `.sortedKeys` formatting the manifest
+	// needs for determinism isn't load-bearing here.
+	try? JSONEncoder().encode(cached).write(to: scannedModuleInfoURL)
 }
 
 /// Wrapper persisted alongside the manifest so `generate` can both
