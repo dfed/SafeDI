@@ -1159,11 +1159,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Emits `{ @Sendable … }` when the node is reached through a sendable
 		/// instantiator, so the closure can be captured inside `@Sendable` funcs
 		/// without `SendableClosureCaptures` errors.
+		///
+		/// Extension-based (`instantiate()`) callees never reach this helper:
+		/// every `instantiate()` parameter is a dependency, so
+		/// `callSiteArgumentsForPrunedOverride == callSiteArguments` and the
+		/// caller falls through to the default-builder function reference
+		/// instead. Extensions with `customMock` take the `customMockName`
+		/// branch (`useMockInitializer == true`).
 		var defaultBuilderExpressionForPrunedOverride: String {
 			let methodName: String = if useMockInitializer {
 				customMockName ?? InstantiableVisitor.mockMethodName
-			} else if isExtensionBased {
-				InstantiableVisitor.instantiateMethodName
 			} else {
 				"init"
 			}
