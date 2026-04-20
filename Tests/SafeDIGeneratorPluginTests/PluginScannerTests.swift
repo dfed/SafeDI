@@ -174,6 +174,26 @@ struct PluginScannerStripCommentsAndStringsTests {
 	}
 
 	@Test
+	func preservesInstantiable_whenSimpleRegexContainsSlashStarAndLaterStringContainsStarSlash() {
+		// Codex P1 on PR #271: the `*/` that satisfies a naive
+		// matching-closer lookahead lives inside a string literal, so
+		// treating the `/*` in the regex as a real block-comment opener
+		// would runaway-consume real code between them.
+		// `blockCommentHasCloser` must skip string literals when scanning.
+		let source = """
+		let pattern = /\\/*/
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {}
+
+		let s = "*/"
+		"""
+		let stripped = stripSwiftCommentsAndStrings(from: source)
+		#expect(stripped.contains("@Instantiable(isRoot: true)"))
+		#expect(stripped.contains("public struct Root"))
+	}
+
+	@Test
 	func doesNotEnterBlockComment_whenSlashStarHasNoMatchingCloser() {
 		// Pathological: the stripper must not runaway-consume. If `/*` has
 		// no matching `*/`, treat it as regular text.

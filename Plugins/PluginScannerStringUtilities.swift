@@ -158,14 +158,85 @@ func stripSwiftCommentsAndStrings(from source: String) -> String {
 }
 
 /// Returns `true` if a `/*` at `start` has a matching `*/` at balanced
-/// depth somewhere later in `chars`. Used to skip block-comment mode
-/// when the `/*` is unterminated — defangs the case where `/*` appears
-/// inside a `/.../` regex literal with no later `*/` in the file.
+/// depth somewhere later in `chars`, ignoring `*/` tokens that appear
+/// inside string literals or other comment forms.
+///
+/// Without string-awareness, a valid simple regex literal like `/\/*/`
+/// followed later by a string containing `"*/"` would still fool the
+/// stripper into block-comment mode and eat real code between them.
 private func blockCommentHasCloser(chars: [Character], start: Int) -> Bool {
 	var index = start + 2
 	var depth = 1
 	while index < chars.count, depth > 0 {
 		let openerNext: Character? = index + 1 < chars.count ? chars[index + 1] : nil
+		// Line comment — skip to end of line.
+		if chars[index] == "/", openerNext == "/" {
+			while index < chars.count, chars[index] != "\n" {
+				index += 1
+			}
+			continue
+		}
+		// Triple-quoted string — skip through closing `"""`.
+		if chars[index] == "\"", openerNext == "\"",
+		   index + 2 < chars.count, chars[index + 2] == "\""
+		{
+			index += 3
+			while index < chars.count {
+				if chars[index] == "\\", index + 1 < chars.count {
+					index += 2
+					continue
+				}
+				if chars[index] == "\"",
+				   index + 2 < chars.count,
+				   chars[index + 1] == "\"",
+				   chars[index + 2] == "\""
+				{
+					index += 3
+					break
+				}
+				index += 1
+			}
+			continue
+		}
+		// Single-quoted string — skip through closing `"` or end of line
+		// (matches the single-line semantics the stripper uses above).
+		if chars[index] == "\"" {
+			index += 1
+			while index < chars.count {
+				if chars[index] == "\\", index + 1 < chars.count {
+					index += 2
+					continue
+				}
+				if chars[index] == "\"" || chars[index] == "\n" {
+					if chars[index] == "\"" {
+						index += 1
+					}
+					break
+				}
+				index += 1
+			}
+			continue
+		}
+		// Extended regex literal `#/.../#` — skip whole span.
+		if chars[index] == "#", openerNext == "/" {
+			index += 2
+			while index < chars.count {
+				if chars[index] == "\\", index + 1 < chars.count {
+					index += 2
+					continue
+				}
+				if chars[index] == "/",
+				   index + 1 < chars.count,
+				   chars[index + 1] == "#"
+				{
+					index += 2
+					break
+				}
+				index += 1
+			}
+			continue
+		}
+		// Block comment delimiters at code level.
 		if chars[index] == "/", openerNext == "*" {
 			depth += 1
 			index += 2
