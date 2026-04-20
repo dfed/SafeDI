@@ -2101,14 +2101,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let dependenciesByLabel = Dictionary(
 			uniqueKeysWithValues: node.dependencies.map { ($0.property.label, $0) },
 		)
-		let defaultExpressionsByLabel = Dictionary(
-			uniqueKeysWithValues: node.defaultParameters.map { ($0.label, $0.defaultExpression) },
-		)
-
 		let relativePath = nodePath
 			.replacingOccurrences(of: "safeDIOverrides.", with: "")
 			.replacingOccurrences(of: ".", with: "_")
-
 		let argumentsToSurface = overrideReachable
 			? node.callSiteArguments
 			: node.callSiteArgumentsForPrunedOverride
