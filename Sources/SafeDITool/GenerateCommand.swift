@@ -394,9 +394,10 @@ struct Generate: AsyncParsableCommand {
 		   let swiftManifest,
 		   let cached = try await loadCachedModuleInfo(manifestPath: swiftManifest)
 		{
-			return (cached, true)
+			(cached, true)
+		} else {
+			try await (parseSwiftFiles(findGenerateSwiftFiles()), false)
 		}
-		return await (try parseSwiftFiles(findGenerateSwiftFiles()), false)
 	}
 
 	private func loadCachedModuleInfo(manifestPath: String) async throws -> ModuleInfo? {
