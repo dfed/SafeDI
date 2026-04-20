@@ -26,10 +26,10 @@ import Testing
 /// module is typechecked against the already-built `SafeDI` module and the
 /// `SafeDIMacros` compiler plugin.
 ///
-/// Verification runs in two passes: the test inputs alone are typechecked
-/// first, and only if they succeed does the verifier typecheck inputs plus
-/// generated outputs. Splitting the passes lets failure messages pinpoint
-/// whether the regression is in the fixture or in the generated code.
+/// On the green path the verifier issues a single `swiftc -typecheck` for
+/// inputs + generated output together. When that pass fails, the verifier
+/// typechecks the inputs alone as a fallback so the diagnostic can attribute
+/// the failure to the fixture vs. the generated code.
 ///
 /// Fixtures must be self-contained Swift that compiles against SafeDI alone —
 /// define stand-in types rather than importing platform frameworks that
@@ -84,9 +84,26 @@ func verifyGeneratedCodeCompiles(
 		inputCompileFiles.append(destination)
 	}
 
-	// First pass: typecheck inputs alone. Isolating the fixture failure makes
-	// it obvious whether the regression is in the test source or in the
-	// generated output that follows in the second pass.
+	var combinedCompileFiles = inputCompileFiles
+	for (fileName, contents) in generatedFiles {
+		let destination = scratchDirectory.appendingPathComponent(fileName)
+		// Generated files reference SafeDI types (Instantiator, SendableInstantiator,
+		// etc.) but do not carry their own imports in production — they sit in the
+		// same target as the user's code, which imports SafeDI once. Inject the
+		// import here so each file typechecks in isolation.
+		let wrapped = "import SafeDI\n" + contents
+		try wrapped.write(to: destination, atomically: true, encoding: .utf8)
+		combinedCompileFiles.append(destination)
+	}
+
+	let combinedResult = try runSwiftTypecheck(
+		sources: combinedCompileFiles,
+		artifacts: artifacts,
+	)
+	guard combinedResult.exitCode != 0 else { return }
+
+	// Combined pass failed. Re-run inputs alone to attribute the failure.
+	// The extra subprocess is only paid when something is broken.
 	let inputsOnlyResult = try runSwiftTypecheck(
 		sources: inputCompileFiles,
 		artifacts: artifacts,
@@ -110,31 +127,13 @@ func verifyGeneratedCodeCompiles(
 		return
 	}
 
-	var combinedCompileFiles = inputCompileFiles
-	for (fileName, contents) in generatedFiles {
-		let destination = scratchDirectory.appendingPathComponent(fileName)
-		// Generated files reference SafeDI types (Instantiator, SendableInstantiator,
-		// etc.) but do not carry their own imports in production — they sit in the
-		// same target as the user's code, which imports SafeDI once. Inject the
-		// import here so each file typechecks in isolation.
-		let wrapped = "import SafeDI\n" + contents
-		try wrapped.write(to: destination, atomically: true, encoding: .utf8)
-		combinedCompileFiles.append(destination)
-	}
-
-	let combinedResult = try runSwiftTypecheck(
-		sources: combinedCompileFiles,
-		artifacts: artifacts,
+	Issue.record(
+		"""
+		Generated code failed to compile alongside test inputs.
+		\(combinedResult.stderr)
+		""",
+		sourceLocation: sourceLocation,
 	)
-	if combinedResult.exitCode != 0 {
-		Issue.record(
-			"""
-			Generated code failed to compile alongside test inputs.
-			\(combinedResult.stderr)
-			""",
-			sourceLocation: sourceLocation,
-		)
-	}
 }
 
 struct SafeDIBuildArtifacts {
