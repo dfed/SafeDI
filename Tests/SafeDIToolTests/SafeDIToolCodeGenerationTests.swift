@@ -7151,6 +7151,104 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_bypassesCachedModuleInfo_whenAdditionalDirectoryFileSetChanges() async throws {
+		// Scan records the set of files it saw in each
+		// `additionalDirectoriesToInclude`. `generate` re-enumerates those
+		// directories on cache read; a mismatch (file added, removed, or
+		// renamed) must bypass so we don't emit output from a stale
+		// ModuleInfo. We observe the bypass by deleting a file from the
+		// additional directory — the fresh parse then misses a type the
+		// cached ModuleInfo would have had, causing validation to throw.
+		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+		let targetDirectory = projectRoot.appendingPathComponent("Target")
+		try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
+		let extraDirectory = projectRoot.appendingPathComponent("Extra")
+		try FileManager.default.createDirectory(at: extraDirectory, withIntermediateDirectories: true)
+		filesToDelete += [projectRoot]
+
+		let configFile = targetDirectory.appendingPathComponent("Config.swift")
+		try """
+		import SafeDI
+
+		#SafeDIConfiguration(
+		    additionalDirectoriesToInclude: ["\(extraDirectory.path)"]
+		)
+		""".write(to: configFile, atomically: true, encoding: .utf8)
+
+		// Root depends on a type that lives in the additional directory.
+		// Cache hit: that type is in the cached ModuleInfo → validation
+		// passes. Cache miss: the type's defining file was deleted →
+		// fresh parse doesn't find it → validation throws.
+		let rootFile = targetDirectory.appendingPathComponent("Root.swift")
+		try """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init(helper: ExtraHelper) {
+		        self.helper = helper
+		    }
+		    @Instantiated let helper: ExtraHelper
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+
+		let extraHelperFile = extraDirectory.appendingPathComponent("ExtraHelper.swift")
+		try """
+		import SafeDI
+
+		@Instantiable
+		public struct ExtraHelper: Instantiable {
+		    public init() {}
+		}
+		""".write(to: extraHelperFile, atomically: true, encoding: .utf8)
+
+		// A second additional file so the on-disk set stays non-empty after
+		// we delete the first — covers the `currentAdditionalFiles.map { ... }`
+		// branch that executes for every file still on disk.
+		let siblingFile = extraDirectory.appendingPathComponent("Sibling.swift")
+		try """
+		import SafeDI
+
+		@Instantiable
+		public struct Sibling: Instantiable {
+		    public init() {}
+		}
+		""".write(to: siblingFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try "\(configFile.path),\(rootFile.path)"
+			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		filesToDelete += [swiftFileCSV, outputDirectory, manifestFile]
+
+		try await (Scan.parse([
+			"--input-sources-file", swiftFileCSV.path,
+			"--project-root", projectRoot.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+		])).run()
+
+		// Delete the additional-directory file that defines `ExtraHelper`.
+		// The current enumeration of the additional dir is now `[Sibling]`,
+		// while the cache's `additionalInputAbsolutePaths` is
+		// `[ExtraHelper, Sibling]`. Set mismatch → bypass. Fresh parse on
+		// the CSV + live additional dir no longer finds `ExtraHelper`, so
+		// generation fails on the unfulfillable dependency.
+		try FileManager.default.removeItem(at: extraHelperFile)
+
+		await #expect(throws: (any Error).self) {
+			try await (Generate.parse([
+				swiftFileCSV.path,
+				"--swift-manifest", manifestFile.path,
+			])).run()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_parsesAdditionalDirectoryFiles_whenCSVDoesNotIncludeThem() async throws {
 		// Mirrors real plugin flow (CSV = target files only, additional
 		// directories discovered via #SafeDIConfiguration at parse time).
