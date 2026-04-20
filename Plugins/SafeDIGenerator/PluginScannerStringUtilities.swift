@@ -1,0 +1,1 @@
+../PluginScannerStringUtilities.swift

@@ -109,12 +109,12 @@ For previews and tests that need real data, pass forwarded values directly and u
 
 ## Features
 
-| | | |
-|---|---|---|
-| ✓ Compile-time safe | ✓ Thread safe | ✓ Hierarchical dependency scoping |
-| ✓ Constructor injection | ✓ Multi-module support | ✓ Dependency inversion support |
-| ✓ Transitive dependency solving | ✓ Cycle detection | ✓ Architecture independent |
-| ✓ No DI-specific types or generics required | ✓ Full-graph mocks | ✓ Clear errors: never debug generated code |
+<table>
+<tr><td>✓ Compile-time safe</td><td>✓ Thread safe</td><td>✓ Hierarchical dependency scoping</td></tr>
+<tr><td>✓ Constructor injection</td><td>✓ Multi-module support</td><td>✓ Dependency inversion support</td></tr>
+<tr><td>✓ Transitive dependency solving</td><td>✓ Cycle detection</td><td>✓ Architecture independent</td></tr>
+<tr><td>✓ No DI-specific types or generics required</td><td>✓ Full-graph mocks</td><td>✓ Clear errors: never debug generated code</td></tr>
+</table>
 
 ## Getting started
 
@@ -124,7 +124,7 @@ Three steps to integrate:
 2. Attach the `SafeDIGenerator` build tool plugin to your first-party target(s).
 3. Decorate your app’s root type with `@Instantiable(isRoot: true)` and add `@Instantiable` to the dependencies it reaches.
 
-Or skip ahead: working sample projects live in the [Examples folder](Examples/) — clone, open, and build. The [Manual](Documentation/Manual.md#installation) covers Xcode projects, multi-module packages, custom build systems, and prebuild scripts in depth.
+Working sample projects live in the [Examples folder](Examples/) — clone, open, and build. The [Manual](Documentation/Manual.md#installation) covers Xcode projects, multi-module packages, custom build systems, and prebuild scripts in depth.
 
 If you are migrating an existing project to SafeDI, follow our [migration guide](Documentation/Manual.md#migrating-to-safedi). If you are upgrading from SafeDI 1.x, follow the [1.x → 2.x migration guide](Documentation/Manual.md#migrating-from-safedi-1x-to-2x).
 
