@@ -35,6 +35,10 @@ let package = Package(
 			name: "MigrateSafeDIFromVersionOne",
 			targets: ["MigrateSafeDIFromVersionOne"],
 		),
+		.plugin(
+			name: "InstallSafeDITool",
+			targets: ["InstallSafeDITool"],
+		),
 	],
 	traits: [
 		.default(enabledTraits: ["prebuilt"]),
@@ -95,6 +99,28 @@ let package = Package(
 				),
 				permissions: [
 					.writeToPackageDirectory(reason: "Creates a SafeDIConfiguration.swift file and removes obsolete CSV configuration files."),
+				],
+			),
+			dependencies: [],
+		),
+
+		// Downloads the prebuilt SafeDITool release binary into
+		// `<package>/.safedi/<version>/safeditool`. The build plugin prefers
+		// that path over the SPM-provided tool — it avoids the
+		// `${BUILD_DIR}`-in-tool-path problem that forces Xcode sourceBuild
+		// users onto the regex-based `PluginScanner` fallback, and it avoids
+		// the ~15× slower debug build that SPM produces when sourceBuild is
+		// active.
+		.plugin(
+			name: "InstallSafeDITool",
+			capability: .command(
+				intent: .custom(
+					verb: "safedi-install-tool",
+					description: "Downloads the SafeDITool prebuilt release binary for the current SafeDI version.",
+				),
+				permissions: [
+					.writeToPackageDirectory(reason: "Downloads the SafeDITool binary into .safedi/<version>/safeditool."),
+					.allowNetworkConnections(scope: .all(ports: []), reason: "Downloads SafeDITool from the SafeDI GitHub release."),
 				],
 			),
 			dependencies: [],

@@ -19,6 +19,102 @@
 // SOFTWARE.
 
 import Foundation
+import PackagePlugin
+
+// MARK: - Prebuilt Tool Location
+
+// Plugin context helpers for locating a prebuilt SafeDITool binary at a
+// fixed per-project path (`.safedi/<version>/safeditool`). Consumers of
+// SafeDI in Xcode hit a `context.tool(named:)` template-path problem when
+// the `sourceBuild` trait is active — the plugin-setup phase can't execute
+// the tool. A user-downloaded prebuilt at the known location sidesteps that
+// and also speeds up plugin-setup scans. See `InstallSafeDITool` for the
+// companion command plugin that downloads the binary.
+
+#if canImport(XcodeProjectPlugin)
+	import XcodeProjectPlugin
+
+	extension XcodeProjectPlugin.XcodePluginContext {
+		/// Hardcoded because Xcode command plugins can't read the package
+		/// manifest. OK to lag behind the latest release as long as
+		/// SafeDITool's CLI surface hasn't changed in ways that break older
+		/// callers — the binary format is forward-compatible within a minor
+		/// release line.
+		var safeDIVersion: String {
+			"2.0.0-beta-4"
+		}
+
+		/// Hardcoded source repo (forks must update this to point at their
+		/// own releases for the downloader to work for their users).
+		var safeDIOrigin: URL {
+			URL(string: "https://github.com/dfed/SafeDI")!
+		}
+
+		var safediFolder: URL {
+			xcodeProject.directoryURL.appending(component: ".safedi")
+		}
+
+		var expectedToolFolder: URL {
+			safediFolder.appending(component: safeDIVersion)
+		}
+
+		var expectedToolLocation: URL {
+			expectedToolFolder.appending(component: "safeditool")
+		}
+
+		var downloadedToolLocation: URL? {
+			guard FileManager.default.fileExists(atPath: expectedToolLocation.path(percentEncoded: false)) else { return nil }
+			return expectedToolLocation
+		}
+	}
+#endif
+
+extension PackagePlugin.PluginContext {
+	/// Pulls the SafeDI version from the resolved package graph. Returns
+	/// `nil` when the package is consumed via a non-versioned reference
+	/// (local path, root package) — in those cases the downloader can't
+	/// pick a matching release and the build plugin skips the prebuilt
+	/// path entirely.
+	var safeDIVersion: String? {
+		guard let safeDIOrigin = package.dependencies.first(where: { $0.package.displayName == "SafeDI" })?.package.origin else {
+			return nil
+		}
+		switch safeDIOrigin {
+		case let .repository(_, displayVersion, _):
+			// As of Xcode 16.0 Beta 6, the display version is of the form "Optional(version)".
+			guard let versionMatch = try? /Optional\((.*?)\)|^(.*?)$/.firstMatch(in: displayVersion),
+			      let version = versionMatch.output.1 ?? versionMatch.output.2
+			else {
+				return nil
+			}
+			return String(version)
+		case .registry, .root, .local:
+			fallthrough
+		@unknown default:
+			return nil
+		}
+	}
+
+	var safediFolder: URL {
+		package.directoryURL.appending(component: ".safedi")
+	}
+
+	var expectedToolFolder: URL? {
+		guard let safeDIVersion else { return nil }
+		return safediFolder.appending(component: safeDIVersion)
+	}
+
+	var expectedToolLocation: URL? {
+		expectedToolFolder?.appending(component: "safeditool")
+	}
+
+	var downloadedToolLocation: URL? {
+		guard let expectedToolLocation,
+		      FileManager.default.fileExists(atPath: expectedToolLocation.path(percentEncoded: false))
+		else { return nil }
+		return expectedToolLocation
+	}
+}
 
 // MARK: - CSV Writing
 

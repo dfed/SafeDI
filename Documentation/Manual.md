@@ -42,6 +42,23 @@ import SafeDI
 
 The `additionalDirectoriesToInclude` parameter specifies folders outside of your module that SafeDI will scan for Swift source files. Paths must be relative to the project directory. Use this parameter to specify the paths to dependent modules' source directories, since Xcode project plugins cannot discover these automatically. You can see [an example of this configuration](../Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](../Examples/ExampleMultiProjectIntegration) project.
 
+##### Installing the prebuilt SafeDITool binary
+
+If you see a build warning that starts with **"SafeDI's build-tool plugin is falling back to a regex-based output scanner..."** — or **"SafeDI is running a locally-built SafeDITool in the debug configuration..."** — installing the prebuilt tool fixes it:
+
+```
+swift package --package-path "/path/to/YourXcodeProject" \
+    --allow-network-connections all \
+    --allow-writing-to-package-directory \
+    safedi-install-tool
+```
+
+This downloads the prebuilt SafeDITool release binary for your SafeDI version into `.safedi/<version>/safeditool` next to your `.xcodeproj`. The build plugin picks it up automatically on subsequent builds.
+
+**Why this step is required in Xcode:** Swift package build-tool plugins are told the SafeDITool location via an Xcode build-variable template (`${BUILD_DIR}/${CONFIGURATION}/SafeDITool`) whose values aren't exposed to the plugin's process environment at plugin-setup time. SafeDI's plugin therefore can't execute the real parser during setup and falls back to a regex-based output scanner. A prebuilt binary at a known path sidesteps the template entirely. The install command is a one-time step per project (re-run it after a SafeDI version bump if the warning reappears).
+
+**What to commit:** the command writes a `.safedi/.gitignore` that excludes the per-version binary from source control — the binary is host-specific (arm64 vs x86_64) and per-version, so it shouldn't be committed. Developers new to the project re-run the install command once after cloning.
+
 #### Swift package
 
 If your first-party code is entirely contained in a Swift Package with one or more modules, you can add the following lines to your root target’s definition:
