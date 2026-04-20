@@ -532,6 +532,8 @@ public struct NetworkClient: Instantiable {
 
 The `customMockName` parameter requires `generateMock: true` or `mockOnly: true`.
 
+When the hand-written method returns an additional type the `@Instantiable` declaration fulfills (for example, a protocol declared in `fulfillingAdditionalTypes`), the generated `mock()` method also returns that type. This keeps the signatures type-compatible on extension-based declarations where a concrete `Self` return wouldn’t line up with a protocol-returning `customMock`. Concrete-type declarations are required to return `Self` or the concrete type from their `customMock`.
+
 If you provide a mock method without `generateMock: true`, parent types that instantiate the child will call `ChildType.mock(…)` (or `ChildType.customMock(…)`) instead of `ChildType(…)` when constructing it, threading mock parameters through your custom method.
 
 ### The `mockOnly` parameter
