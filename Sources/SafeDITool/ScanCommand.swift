@@ -248,17 +248,28 @@ func performScan(
 	// `generate` uses this list to validate cache freshness against the
 	// exact file set `scan` observed, so edits to additional-directory
 	// files correctly invalidate the cache too.
-	let allScannedFilePaths = (allFilePaths.union(
-		// `allFilePaths` stores project-relative or absolute paths from
-		// the CSV — mirror that for additional files.
-		Set(additionalInputFiles.map {
-			URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL.relativePath
-		}),
+	//
+	// Normalized to absolute paths so `generate`'s freshness check works
+	// regardless of its CWD — `FileManager.attributesOfItem(atPath:)`
+	// resolves relative paths against the process's CWD, which would
+	// silently fail and invalidate the cache if `generate` runs from a
+	// different directory than `scan`.
+	let absoluteCSVPaths = allFilePaths.map { filePath in
+		URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path
+	}.sorted()
+	let allScannedFilePaths = (Set(absoluteCSVPaths).union(
+		// `additionalInputFiles` is already normalized to `.standardizedFileURL.path`.
+		Set(additionalInputFiles),
 	)).sorted()
+	let additionalDirectories = configuration?.additionalDirectoriesToInclude.map { directory in
+		URL(fileURLWithPath: directory, relativeTo: directoryBaseURL).standardizedFileURL.path
+	}.sorted() ?? []
 	let cached = CachedScannedModuleInfo(
 		moduleInfo: normalizedModuleInfo,
 		scannedInputPaths: allScannedFilePaths,
 		csvInputPaths: inputFilePaths.sorted(),
+		additionalInputAbsolutePaths: additionalInputFiles.sorted(),
+		additionalDirectories: additionalDirectories,
 	)
 	let scannedModuleInfoURL = scannedModuleInfoURL(forManifestPath: manifestFile)
 	// Cache write is best-effort. A full disk or other transient FS
@@ -274,12 +285,21 @@ func performScan(
 /// `generate` CSV).
 struct CachedScannedModuleInfo: Codable {
 	let moduleInfo: ModuleInfo
-	/// Union of CSV file paths and additional-directory file paths, in the
-	/// URL-normalized form `scan` uses. Drives the mtime freshness check.
+	/// Absolute paths of every file `scan` observed — CSV inputs plus
+	/// additional-directory files. Drives the mtime freshness check.
 	let scannedInputPaths: [String]
 	/// Raw CSV file paths as `scan` read them. Drives the "current generate
 	/// CSV matches the CSV that scan observed" check.
 	let csvInputPaths: [String]
+	/// Absolute paths of just the additional-directory files scan observed.
+	/// Used by `generate`'s additional-directory freshness check to compare
+	/// against the current on-disk enumeration without re-sorting the CSV.
+	let additionalInputAbsolutePaths: [String]
+	/// Absolute paths of `additionalDirectoriesToInclude` from the
+	/// configuration that drove this scan. `generate` re-enumerates these
+	/// during freshness checks so files added to those directories
+	/// between scan and generate correctly invalidate the cache.
+	let additionalDirectories: [String]
 }
 
 /// Path alongside the manifest where `scan` persists the parsed

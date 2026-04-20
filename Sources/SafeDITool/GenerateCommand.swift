@@ -431,6 +431,21 @@ struct Generate: AsyncParsableCommand {
 			}
 		}
 
+		// Bypass the cache if new Swift files have been added to any of the
+		// `additionalDirectoriesToInclude` directories since scan ran. The
+		// mtime loop below only checks files scan already knew about — it
+		// would miss a newly-added file whose path doesn't appear in
+		// `cached.scannedInputPaths`.
+		if !cached.additionalDirectories.isEmpty {
+			let currentAdditionalFiles = await (try? findSwiftFiles(inDirectories: cached.additionalDirectories)) ?? []
+			let currentAdditionalAbsolute = Set(currentAdditionalFiles.map { filePath in
+				URL(fileURLWithPath: filePath).standardizedFileURL.path
+			})
+			if currentAdditionalAbsolute != Set(cached.additionalInputAbsolutePaths) {
+				return nil
+			}
+		}
+
 		// Bypass the cache if any input file scan observed has changed
 		// since the cache was written — newer mtime OR missing-from-disk
 		// both invalidate. We check every path scan parsed (including
