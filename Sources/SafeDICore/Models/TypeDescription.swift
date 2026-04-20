@@ -477,6 +477,42 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// Whether `Self` appears anywhere inside this type. Walks recursively
+	/// into generics, wrappers, and composed sub-types. Used by the
+	/// `@Instantiable` macro to diagnose default expressions whose type
+	/// references — e.g. `Optional<Self>`, `Result<Self, E>`, `[Self]` —
+	/// would resolve against the caller's scope if the default were promoted
+	/// onto another type's `SafeDIOverrides` struct.
+	public var containsSelf: Bool {
+		switch self {
+		case let .simple(name, generics):
+			name == "Self" || generics.contains(where: \.containsSelf)
+		case let .nested(_, parentType, generics):
+			parentType.containsSelf || generics.contains(where: \.containsSelf)
+		case let .any(wrapped),
+		     let .implicitlyUnwrappedOptional(wrapped),
+		     let .optional(wrapped),
+		     let .some(wrapped):
+			wrapped.containsSelf
+		case let .array(element):
+			element.containsSelf
+		case let .dictionary(key, value):
+			key.containsSelf || value.containsSelf
+		case let .tuple(elements):
+			elements.contains(where: \.typeDescription.containsSelf)
+		case let .composition(elements):
+			elements.contains(where: \.containsSelf)
+		case let .closure(arguments, _, _, returnType):
+			arguments.contains(where: \.containsSelf) || returnType.containsSelf
+		case let .metatype(wrapped, _):
+			wrapped.containsSelf
+		case let .attributed(wrapped, _, _):
+			wrapped.containsSelf
+		case .unknown, .void:
+			false
+		}
+	}
+
 	/// The name of a simple type sans nesting, with associated generics.
 	var simpleNameAndGenerics: (name: String, generics: [TypeDescription])? {
 		switch self {

@@ -193,4 +193,16 @@ struct FixableInstantiableErrorTests {
 		)
 		#expect(error.fixIt.message == "Promote `enabled` to an external label (rewrite `_ enabled:` as `enabled:`)")
 	}
+
+	@Test
+	func calleeScopeReferenceInDefaultExpression_description_mentionsParameter() {
+		let error = FixableInstantiableError.calleeScopeReferenceInDefaultExpression(parameterLabel: "name")
+		#expect(error.description == "Default expression for parameter `name` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.")
+	}
+
+	@Test
+	func calleeScopeReferenceInDefaultExpression_fixIt_describesRemediation() {
+		let error = FixableInstantiableError.calleeScopeReferenceInDefaultExpression(parameterLabel: "name")
+		#expect(error.fixIt.message == "Remove the default from `name` or move the referenced value to a file-scoped or module-scoped symbol")
+	}
 }

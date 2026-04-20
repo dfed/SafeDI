@@ -5059,6 +5059,447 @@ import Testing
 		}
 
 		@Test
+		func producesDiagnostic_whenDefaultExpressionReferencesSelfOnInit() {
+			// `Self.defaultName` binds to the type under decoration inside the
+			// init, but SafeDI's generated mock may inline the default
+			// expression inside another type's override struct, where `Self`
+			// would bind to the wrong type.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyType: Instantiable {
+				    public init(name: String = Self.defaultName) {
+				        self.name = name
+				    }
+				    public static let defaultName = "fallback"
+				    let name: String
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init(name: String = Self.defaultName) {
+				        self.name = name
+				    }
+				    public static let defaultName = "fallback"
+				    let name: String
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Default expression for parameter `name` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						line: 3,
+						column: 17,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesDiagnostic_whenDefaultExpressionReferencesSelfOnCustomMock() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyType: Instantiable {
+				    public init() {}
+				    public static let defaultName = "fallback"
+				    public static func customMock(name: String = Self.defaultName) -> MyType {
+				        MyType()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init() {}
+				    public static let defaultName = "fallback"
+				    public static func customMock(name: String = Self.defaultName) -> MyType {
+				        MyType()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Default expression for parameter `name` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						line: 5,
+						column: 35,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesNoDiagnostic_whenInitDefaultReferencesSelfButCustomMockExists() {
+			// When the type has a `customMock` method, SafeDI uses the mock
+			// method (not the init) to construct the instance for mocks, so
+			// init defaults never reach the override surface. `Self.*` in an
+			// init default is safe in that case.
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyType: Instantiable {
+				    public init(name: String = Self.defaultName) {
+				        self.name = name
+				    }
+				    public static let defaultName = "fallback"
+				    public static func customMock() -> MyType { MyType() }
+				    let name: String
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init(name: String = Self.defaultName) {
+				        self.name = name
+				    }
+				    public static let defaultName = "fallback"
+				    public static func customMock() -> MyType { MyType() }
+				    let name: String
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesNoDiagnostic_whenDefaultExpressionReferencesSelfOnUnlabeledNonDependency() {
+			// `_`-labeled non-dependency defaults are elided from the mock
+			// call site (`ScopeGenerator.callSiteArguments` filters them and
+			// `rootDefaultParameters` excludes them), so Swift's default-
+			// argument thunk fires in the callee's scope where `Self.*`
+			// resolves correctly.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyType: Instantiable {
+				    public init(_ value: Int = Self.defaultValue) {
+				        self.value = value
+				    }
+				    public static let defaultValue = 42
+				    let value: Int
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init(_ value: Int = Self.defaultValue) {
+				        self.value = value
+				    }
+				    public static let defaultValue = 42
+				    let value: Int
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesNoDiagnostic_whenDefaultExpressionReferencesSelfOnDependencyParameter() {
+			// Dependency parameters are always threaded explicitly at the mock
+			// call site — their default expressions never reach the override
+			// surface — so `Self.*` inside a dep default is safe.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyType: Instantiable {
+				    public init(service: Service = Self.makeService()) {
+				        self.service = service
+				    }
+				    public static func makeService() -> Service { Service() }
+				    @Instantiated let service: Service
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init(service: Service = Self.makeService()) {
+				        self.service = service
+				    }
+				    public static func makeService() -> Service { Service() }
+				    let service: Service
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesNoDiagnostic_whenDefaultExpressionReferencesFileScopedSymbol() {
+			// Module-scoped and file-scoped references are fine — they resolve
+			// the same way from any caller, including the generated override
+			// struct.
+			assertMacroExpansion(
+				"""
+				public let sharedDefaultName = "fallback"
+
+				@Instantiable
+				public struct MyType: Instantiable {
+				    public init(name: String = sharedDefaultName) {
+				        self.name = name
+				    }
+				    let name: String
+				}
+				""",
+				expandedSource: """
+				public let sharedDefaultName = "fallback"
+				public struct MyType: Instantiable {
+				    public init(name: String = sharedDefaultName) {
+				        self.name = name
+				    }
+				    let name: String
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesDiagnostic_whenDefaultExpressionCallsSelfAsConstructor() {
+			// `Self()` as a default binds to the decorated type in the callee
+			// but to the caller's type if the default is inlined at the call
+			// site — same failure mode as `Self.member`, caught via the bare
+			// `Self` DeclReferenceExpr match.
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyType: Instantiable {
+				    public init() {}
+				    public static func customMock(fallback: MyType = Self()) -> MyType {
+				        MyType()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init() {}
+				    public static func customMock(fallback: MyType = Self()) -> MyType {
+				        MyType()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Default expression for parameter `fallback` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						line: 4,
+						column: 35,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesNoDiagnostic_whenSecondaryInitDefaultReferencesSelf() {
+			// Only the first `isValid(forFulfilling:)` init is used for mock
+			// construction (see `InstantiableVisitor:377`). Secondary inits
+			// with `Self.*` defaults never reach the override surface, so
+			// diagnosing them would be a false positive.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyType: Instantiable {
+				    public init(service: Service) {
+				        self.service = service
+				    }
+				    public convenience init(title: String = Self.defaultTitle) {
+				        self.init(service: Service())
+				    }
+				    public static let defaultTitle = "fallback"
+				    @Instantiated let service: Service
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init(service: Service) {
+				        self.service = service
+				    }
+				    public convenience init(title: String = Self.defaultTitle) {
+				        self.init(service: Service())
+				    }
+				    public static let defaultTitle = "fallback"
+				    let service: Service
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesDiagnostic_whenDefaultExpressionReferencesSelfInArrayGeneric() {
+			// `[Self]()` places `Self` inside an `ArrayTypeSyntax` nested in an
+			// expression — caught via `TypeDescription.containsSelf`'s `.array`
+			// recursion.
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyType: Instantiable {
+				    public init() {}
+				    public static func customMock(fallback: [MyType] = [Self]()) -> MyType {
+				        MyType()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init() {}
+				    public static func customMock(fallback: [MyType] = [Self]()) -> MyType {
+				        MyType()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Default expression for parameter `fallback` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						line: 4,
+						column: 35,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesDiagnostic_whenDefaultExpressionReferencesSelfDotSelf() {
+			// `Self.self` parses as a member access on a `DeclReferenceExpr` —
+			// caught by the `DeclReferenceExprSyntax` visitor.
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyType: Instantiable {
+				    public init() {}
+				    public static func customMock(metatype: MyType.Type = Self.self) -> MyType {
+				        MyType()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init() {}
+				    public static func customMock(metatype: MyType.Type = Self.self) -> MyType {
+				        MyType()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Default expression for parameter `metatype` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						line: 4,
+						column: 35,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesDiagnostic_whenDefaultExpressionReferencesSelfInTypeExpression() {
+			// `Optional<Self>.none`, `Result<Self, E>.failure(...)`, and
+			// similar defaults place `Self` inside an `IdentifierTypeSyntax`
+			// in a generic argument clause — not an expression-level
+			// `DeclReferenceExpr`. Those must still be flagged so the
+			// override struct's caller-scope `Self` binding doesn't silently
+			// produce the wrong type.
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyType: Instantiable {
+				    public init() {}
+				    public static func customMock(fallback: Optional<MyType> = Optional<Self>.none) -> MyType {
+				        MyType()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init() {}
+				    public static func customMock(fallback: Optional<MyType> = Optional<Self>.none) -> MyType {
+				        MyType()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Default expression for parameter `fallback` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						line: 4,
+						column: 35,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesDiagnostic_whenExtensionCustomMockDefaultReferencesSelf() {
+			// Extension-based customMock goes through a different validation
+			// branch than concrete customMock. `Self` on a non-dependency
+			// default must be caught there too.
+			assertMacroExpansion(
+				"""
+				public struct MyType {}
+
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				extension MyType: Instantiable {
+				    public static func instantiate() -> MyType { MyType() }
+				    public static func customMock(fallback: String = Self.defaultName) -> MyType {
+				        MyType()
+				    }
+				    public static let defaultName = "fallback"
+				}
+				""",
+				expandedSource: """
+				public struct MyType {}
+				extension MyType: Instantiable {
+				    public static func instantiate() -> MyType { MyType() }
+				    public static func customMock(fallback: String = Self.defaultName) -> MyType {
+				        MyType()
+				    }
+				    public static let defaultName = "fallback"
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Default expression for parameter `fallback` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						line: 6,
+						column: 35,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesNoDiagnostic_whenDefaultExpressionReferencesMemberOfModuleType() {
+			// Member access whose base isn't `Self` — e.g., `Config.fallback` —
+			// resolves identically at the caller and the callee, so the
+			// diagnostic must not fire. Exercises the non-`Self` branch of
+			// the MemberAccessExpr visitor.
+			assertMacroExpansion(
+				"""
+				public enum Config {
+				    public static let fallback = "fallback"
+				}
+
+				@Instantiable
+				public struct MyType: Instantiable {
+				    public init(name: String = Config.fallback) {
+				        self.name = name
+				    }
+				    let name: String
+				}
+				""",
+				expandedSource: """
+				public enum Config {
+				    public static let fallback = "fallback"
+				}
+				public struct MyType: Instantiable {
+				    public init(name: String = Config.fallback) {
+				        self.name = name
+				    }
+				    let name: String
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func producesNoDiagnostic_whenTrailingUnlabeledParametersAllHaveDefaults() {
 			// `init(_ a: Int = 0, _ b: Int = 1)` is fine — both trailing `_`
 			// defaults are elided together as a suffix, call site becomes

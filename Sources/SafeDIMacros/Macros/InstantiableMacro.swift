@@ -225,6 +225,24 @@ public struct InstantiableMacro: MemberMacro {
 					context: context,
 				)
 			}
+			// Only check init defaults on the initializer SafeDI actually uses
+			// for mock construction — `InstantiableVisitor` selects the first
+			// initializer that fulfills the dependencies (see
+			// `InstantiableVisitor:377`), and `generateMockRootCode` reads that
+			// same initializer. Convenience or secondary inits with `Self.*`
+			// defaults never reach the override surface, so diagnosing them
+			// would be a false positive. Also skipped when a custom mock
+			// exists — then SafeDI prefers `mockInitializer` over any init.
+			if visitor.mockInitializer == nil,
+			   let selectedInitializer = visitor.initializers.first(where: { $0.isValid(forFulfilling: visitor.dependencies) }),
+			   let selectedInitializerSyntax = visitor.initializerToInitSyntaxMap[selectedInitializer]
+			{
+				Self.validateDefaultExpressions(
+					functionSyntax: selectedInitializerSyntax.signature,
+					dependencies: visitor.dependencies,
+					context: context,
+				)
+			}
 			if let mockInitializer = visitor.mockInitializer,
 			   let mockSyntax = visitor.mockFunctionSyntax
 			{
@@ -233,6 +251,11 @@ public struct InstantiableMacro: MemberMacro {
 					arguments: mockInitializer.arguments,
 					dependencies: visitor.dependencies,
 					diagnosticNode: Syntax(mockSyntax),
+					context: context,
+				)
+				Self.validateDefaultExpressions(
+					functionSyntax: mockSyntax.signature,
+					dependencies: visitor.dependencies,
 					context: context,
 				)
 			}
@@ -890,11 +913,40 @@ public struct InstantiableMacro: MemberMacro {
 			let dependencyLabels = Set(extensionDependencies.map(\.property.label))
 			for mockFunction in allMockFunctions {
 				let mockFunctionInitializer = Initializer(mockFunction)
+				// For per-overload default-expression checks, resolve this mock's
+				// dependencies from the matching `instantiate()` return type — not
+				// the union across all overloads. Otherwise a label that is a
+				// non-dependency default for *this* overload but a dependency for
+				// another would incorrectly skip the callee-scope check.
+				//
+				// `Self` return types are mapped to the extended type so the
+				// match succeeds: the visitor records instantiables by the actual
+				// extended type, not literal `Self`. Falls back to the union
+				// only when the return type is unknown (shouldn't happen for
+				// well-formed input).
+				let rawMockReturnType = mockFunction.signature.returnClause?.type.typeDescription
+				let mockReturnType: TypeDescription? = if rawMockReturnType == .simple(name: "Self", generics: []) {
+					extendedTypeDescription
+				} else {
+					rawMockReturnType
+				}
+				let dependenciesForMock: [Dependency] = if let mockReturnType,
+				                                           let matchingInstantiable = visitor.instantiables.first(where: { $0.concreteInstantiable == mockReturnType })
+				{
+					matchingInstantiable.dependencies
+				} else {
+					extensionDependencies
+				}
 				Self.validateUnlabeledDefaultShape(
 					functionSyntax: mockFunction.signature,
 					arguments: mockFunctionInitializer.arguments,
 					dependencies: extensionDependencies,
 					diagnosticNode: Syntax(mockFunction),
+					context: context,
+				)
+				Self.validateDefaultExpressions(
+					functionSyntax: mockFunction.signature,
+					dependencies: dependenciesForMock,
 					context: context,
 				)
 				let nonDependenciesWithoutDefaults = mockFunctionInitializer.arguments
@@ -1210,6 +1262,74 @@ public struct InstantiableMacro: MemberMacro {
 				),
 				changes: changes,
 			))
+		}
+	}
+
+	/// Walks each default-value expression on `functionSyntax`'s parameters and
+	/// diagnoses any explicit reference to `Self`. SafeDI's generated mock
+	/// surface may promote the default onto the caller's override struct
+	/// (inside another type's extension), where `Self` binds to the caller's
+	/// type instead of the decorated type — silently producing the wrong value
+	/// or failing to typecheck. Unqualified references to callee-scope members
+	/// can't be identified without type resolution and are not covered.
+	///
+	/// Two exemptions skip parameters whose defaults never reach the override
+	/// surface:
+	/// - Dependency parameters, which are always threaded explicitly at the
+	///   mock call site.
+	/// - `_`-labeled non-dependency parameters, which `ScopeGenerator` elides
+	///   from call-site arguments and excludes from `rootDefaultParameters`,
+	///   so Swift's default-argument thunk fires in the callee where `Self`
+	///   resolves correctly.
+	private static func validateDefaultExpressions(
+		functionSyntax: FunctionSignatureSyntax,
+		dependencies: [Dependency],
+		context: some MacroExpansionContext,
+	) {
+		let dependencyLabels = Set(dependencies.map(\.property.label))
+		for parameter in functionSyntax.parameterClause.parameters {
+			guard let defaultValue = parameter.defaultValue?.value else { continue }
+			let firstName = parameter.firstName.text
+			let innerLabel = parameter.secondName?.text ?? firstName
+			guard !dependencyLabels.contains(innerLabel) else { continue }
+			// `_`-labeled non-dependency defaults are elided from the mock
+			// call site, so the default is evaluated in the callee's scope.
+			guard firstName != "_" else { continue }
+			let finder = SelfReferenceFinder(viewMode: .sourceAccurate)
+			finder.walk(Syntax(defaultValue))
+			guard finder.containsSelfReference else { continue }
+			context.diagnose(Diagnostic(
+				node: Syntax(parameter),
+				message: FixableInstantiableError.calleeScopeReferenceInDefaultExpression(
+					parameterLabel: innerLabel,
+				).diagnostic,
+			))
+		}
+	}
+
+	/// Walks a default-value expression and sets `containsSelfReference` if
+	/// any `Self` reference is encountered — expression-level (bare `Self`,
+	/// `Self.member`, `Self(...)`) or type-level (`Optional<Self>`, `[Self]`,
+	/// `(Self, T)`, etc.). Type-level occurrences are checked via
+	/// `TypeDescription.containsSelf`, which recurses through generics,
+	/// wrappers, composed types, tuples, and closures; expression-level
+	/// occurrences are caught by matching any `DeclReferenceExprSyntax` whose
+	/// name is `Self`.
+	private final class SelfReferenceFinder: SyntaxVisitor {
+		private(set) var containsSelfReference = false
+
+		override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
+			if node.baseName.text == "Self" {
+				containsSelfReference = true
+			}
+			return .visitChildren
+		}
+
+		override func visit(_ node: IdentifierTypeSyntax) -> SyntaxVisitorContinueKind {
+			if TypeSyntax(node).typeDescription.containsSelf {
+				containsSelfReference = true
+			}
+			return .visitChildren
 		}
 	}
 

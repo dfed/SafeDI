@@ -1562,6 +1562,167 @@ struct TypeDescriptionTests {
 			return .skipChildren
 		}
 	}
+
+	// MARK: - containsSelf
+
+	@Test
+	func containsSelf_whenTypeIsBareSelf_returnsTrue() throws {
+		let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: Self"))
+		let typeDescription = try #require(visitor.typeIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenTypeIsSimpleNonSelf_returnsFalse() throws {
+		let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: Int"))
+		let typeDescription = try #require(visitor.typeIdentifier)
+		#expect(!typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenSelfIsNestedInGenerics_returnsTrue() throws {
+		let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: Optional<Self>"))
+		let typeDescription = try #require(visitor.typeIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenNestedTypeHasSelfParent_returnsTrue() throws {
+		let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: Self.Element"))
+		let typeDescription = try #require(visitor.nestedType)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenNestedTypeHasSelfInGenerics_returnsTrue() throws {
+		let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: Tree.Node<Self>"))
+		let typeDescription = try #require(visitor.nestedType)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenTypeIsOptionalSelf_returnsTrue() throws {
+		let visitor = OptionalTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: Self?"))
+		let typeDescription = try #require(visitor.optionalTypeIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenTypeIsImplicitlyUnwrappedOptionalSelf_returnsTrue() throws {
+		let visitor = ImplicitlyUnwrappedOptionalTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: Self!"))
+		let typeDescription = try #require(visitor.implictlyUnwrappedOptionalTypeIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenTypeIsSomeSelf_returnsTrue() throws {
+		let visitor = SomeOrAnyTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: some Self"))
+		let typeDescription = try #require(visitor.someOrAnyTypeIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenTypeIsAnySelf_returnsTrue() throws {
+		let visitor = SomeOrAnyTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: any Self"))
+		let typeDescription = try #require(visitor.someOrAnyTypeIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenTypeIsArrayOfSelf_returnsTrue() throws {
+		let visitor = ArrayTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: [Self]"))
+		let typeDescription = try #require(visitor.arrayTypeIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenTypeIsDictionaryWithSelfKey_returnsTrue() throws {
+		let visitor = DictionaryTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: [Self: Int]"))
+		let typeDescription = try #require(visitor.dictionaryTypeIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenTypeIsDictionaryWithSelfValue_returnsTrue() throws {
+		let visitor = DictionaryTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: [Int: Self]"))
+		let typeDescription = try #require(visitor.dictionaryTypeIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenTypeIsTupleContainingSelf_returnsTrue() throws {
+		let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: (Int, Self)"))
+		let typeDescription = try #require(visitor.tupleTypeIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenTypeIsCompositionContainingSelf_returnsTrue() throws {
+		let visitor = CompositionTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "protocol P: Hashable & Self {}"))
+		let typeDescription = try #require(visitor.composedTypeIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenClosureReturnsSelf_returnsTrue() throws {
+		let visitor = FunctionTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: (Int) -> Self"))
+		let typeDescription = try #require(visitor.functionIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenClosureArgumentIsSelf_returnsTrue() throws {
+		let visitor = FunctionTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: (Self) -> Void"))
+		let typeDescription = try #require(visitor.functionIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenTypeIsSelfMetatype_returnsTrue() throws {
+		let visitor = MetatypeTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: Self.Type"))
+		let typeDescription = try #require(visitor.metatypeTypeIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenTypeIsAttributedSelf_returnsTrue() throws {
+		let visitor = AttributedTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: @escaping (Int) -> Self"))
+		let typeDescription = try #require(visitor.attributedTypeIdentifier)
+		#expect(typeDescription.containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenTypeIsUnknown_returnsFalse() {
+		// `.unknown` is created for type syntax the parser can't categorize.
+		// The stored `text` is incidental — `containsSelf` never inspects it.
+		#expect(!TypeDescription.unknown(text: "Self").containsSelf)
+	}
+
+	@Test
+	func containsSelf_whenTypeIsVoid_returnsFalse() throws {
+		let visitor = TypeIdentifierSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: Void"))
+		let typeDescription = try #require(visitor.typeIdentifier)
+		#expect(!typeDescription.containsSelf)
+	}
 }
 
 extension TypeDescription {
