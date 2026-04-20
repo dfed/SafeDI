@@ -2024,19 +2024,29 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						// Note: constant erased cycles are rejected by mock validation
 						// before reaching this point, so isCycleNode is always false here.
 						let wrapperType = node.typeDescription.asSource
-						let overridePath = optionalBuilderPath ?? builderExpression
 						lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
 						lines.append(contentsOf: receiverBindings)
 						lines.append(contentsOf: childBindings)
-						lines.append("\(innerIndent)if let safeDIBuilder = \(overridePath) {")
-						if node.needsConfigurationStruct {
-							lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(safeDIBuilder(\(argumentList)))")
+						if !thisOverrideReachable {
+							// Pruned back-edge — no optional override path exists.
+							// `builderExpression` is a non-optional default builder, so
+							// emit a direct construction rather than an `if let` dance
+							// (which would fail to typecheck against a non-optional RHS).
+							lines.append("\(innerIndent)return \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
 						} else {
-							lines.append("\(innerIndent)\(standardIndent)return safeDIBuilder(\(argumentList))")
+							// In sendable context, `builderExpression` is an optional
+							// extracted local; otherwise `optionalBuilderPath` exists.
+							let overridePath = optionalBuilderPath ?? builderExpression
+							lines.append("\(innerIndent)if let safeDIBuilder = \(overridePath) {")
+							if node.needsConfigurationStruct {
+								lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(safeDIBuilder(\(argumentList)))")
+							} else {
+								lines.append("\(innerIndent)\(standardIndent)return safeDIBuilder(\(argumentList))")
+							}
+							lines.append("\(innerIndent)} else {")
+							lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+							lines.append("\(innerIndent)}")
 						}
-						lines.append("\(innerIndent)} else {")
-						lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
-						lines.append("\(innerIndent)}")
 						lines.append("\(indent)}")
 					} else {
 						lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
@@ -2061,9 +2071,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							lines.append("\(indent)let \(outerBindingName) = \(leafBuilderExpression)(\(argumentList))")
 						}
 					} else if node.erasedToConcreteExistential {
-						// Sendable context: extracted local is optional.
 						let wrapperType = node.typeDescription.asSource
-						lines.append("\(indent)let \(outerBindingName) = \(builderExpression)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+						if !thisOverrideReachable {
+							// Pruned back-edge — `builderExpression` is a non-optional
+							// default builder. Optional chaining would fail to typecheck;
+							// emit direct construction.
+							lines.append("\(indent)let \(outerBindingName) = \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+						} else {
+							// Sendable context: extracted local is optional.
+							lines.append("\(indent)let \(outerBindingName) = \(builderExpression)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+						}
 					} else {
 						lines.append("\(indent)let \(outerBindingName) = \(builderExpression)(\(argumentList))")
 					}
