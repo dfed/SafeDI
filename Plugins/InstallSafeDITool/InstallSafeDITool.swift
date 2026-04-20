@@ -95,10 +95,12 @@ struct InstallSafeDITool: CommandPlugin {
 
 			// `XcodeCommandPlugin.performCommand` is synchronous. Bridge to
 			// the async `downloadTool` helper via a dispatch group so the
-			// command doesn't return until the download finishes.
+			// command doesn't return until the download finishes. Errors
+			// are reported and the process exits inside the task — avoids
+			// capturing a mutable `Error?` across a Sendable boundary,
+			// which Swift 6 rejects as a data race.
 			let dispatchGroup = DispatchGroup()
 			dispatchGroup.enter()
-			var capturedError: Error?
 			Task.detached {
 				defer { dispatchGroup.leave() }
 				do {
@@ -110,14 +112,11 @@ struct InstallSafeDITool: CommandPlugin {
 						safediFolder: safediFolder,
 					)
 				} catch {
-					capturedError = error
+					Diagnostics.error("\(error)")
+					exit(1)
 				}
 			}
 			dispatchGroup.wait()
-			if let capturedError {
-				Diagnostics.error("\(capturedError)")
-				exit(1)
-			}
 		}
 	}
 #endif
