@@ -91,6 +91,13 @@ struct InstallSafeDITool: CommandPlugin {
 /// per-version location. Also writes a `.gitignore` inside `.safedi/`
 /// (on first run) that excludes the per-version binaries from source
 /// control — the binary is per-machine and shouldn't be committed.
+///
+/// Entire body gated on macOS — Linux Foundation doesn't ship
+/// `URLSession.shared` without `FoundationNetworking`, and the Xcode
+/// template-path problem this plugin exists to work around is
+/// macOS-only anyway. The whole plugin can't be excluded from the
+/// build (the `.command` target in Package.swift is unconditional),
+/// so non-macOS compilation produces a function that just throws.
 private func downloadTool(
 	originURL: URL,
 	version: String,
@@ -98,11 +105,11 @@ private func downloadTool(
 	expectedToolLocation: URL,
 	safediFolder: URL,
 ) async throws {
-	// GitHub releases publish `SafeDITool-macos-<arch>` assets. Pick the
-	// one matching the host the installer runs on — consumers invoke
-	// this command on their dev machine, and the resulting binary has
-	// to run on that same host later when the build plugin launches it.
 	#if os(macOS)
+		// GitHub releases publish `SafeDITool-macos-<arch>` assets. Pick the
+		// one matching the host the installer runs on — consumers invoke
+		// this command on their dev machine, and the resulting binary has
+		// to run on that same host later when the build plugin launches it.
 		#if arch(arm64)
 			let toolName = "SafeDITool-macos-arm64"
 		#elseif arch(x86_64)
@@ -110,55 +117,55 @@ private func downloadTool(
 		#else
 			throw UnsupportedHostError()
 		#endif
+
+		let githubDownloadURL = originURL.appending(
+			components: "releases",
+			"download",
+			version,
+			toolName,
+		)
+		let (downloadedURL, response) = try await URLSession.shared.download(
+			for: URLRequest(url: githubDownloadURL),
+		)
+		// `URLSession.download(for:)` reports success for HTTP error pages
+		// (404, 500, etc.), so without this check we'd `chmod +x` and install
+		// the error body as the tool — the next build would fail opaquely.
+		if let httpResponse = response as? HTTPURLResponse,
+		   !(200..<300).contains(httpResponse.statusCode)
+		{
+			try? FileManager.default.removeItem(at: downloadedURL)
+			throw DownloadFailedError(
+				url: githubDownloadURL,
+				statusCode: httpResponse.statusCode,
+			)
+		}
+		let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path(percentEncoded: false))
+		guard let currentPermissions = downloadedFileAttributes[.posixPermissions] as? NSNumber,
+		      chmod(downloadedURL.path(percentEncoded: false), mode_t(currentPermissions.uint32Value) | S_IXUSR | S_IXGRP | S_IXOTH) == 0
+		else {
+			throw CouldNotMakeExecutableError(path: downloadedURL.path(percentEncoded: false))
+		}
+		try FileManager.default.createDirectory(at: expectedToolFolder, withIntermediateDirectories: true)
+		if FileManager.default.fileExists(atPath: expectedToolLocation.path(percentEncoded: false)) {
+			try FileManager.default.removeItem(at: expectedToolLocation)
+		}
+		try FileManager.default.moveItem(at: downloadedURL, to: expectedToolLocation)
+
+		let gitIgnoreLocation = safediFolder.appending(component: ".gitignore")
+		if !FileManager.default.fileExists(atPath: gitIgnoreLocation.path(percentEncoded: false)) {
+			// Each version gets its own subfolder (`<version>/safeditool`) so
+			// the glob `*/safeditool` catches every installed binary.
+			try """
+			*/\(expectedToolLocation.lastPathComponent)
+			""".write(
+				to: gitIgnoreLocation,
+				atomically: true,
+				encoding: .utf8,
+			)
+		}
 	#else
 		throw UnsupportedHostError()
 	#endif
-
-	let githubDownloadURL = originURL.appending(
-		components: "releases",
-		"download",
-		version,
-		toolName,
-	)
-	let (downloadedURL, response) = try await URLSession.shared.download(
-		for: URLRequest(url: githubDownloadURL),
-	)
-	// `URLSession.download(for:)` reports success for HTTP error pages
-	// (404, 500, etc.), so without this check we'd `chmod +x` and install
-	// the error body as the tool — the next build would fail opaquely.
-	if let httpResponse = response as? HTTPURLResponse,
-	   !(200..<300).contains(httpResponse.statusCode)
-	{
-		try? FileManager.default.removeItem(at: downloadedURL)
-		throw DownloadFailedError(
-			url: githubDownloadURL,
-			statusCode: httpResponse.statusCode,
-		)
-	}
-	let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path(percentEncoded: false))
-	guard let currentPermissions = downloadedFileAttributes[.posixPermissions] as? NSNumber,
-	      chmod(downloadedURL.path(percentEncoded: false), mode_t(currentPermissions.uint32Value) | S_IXUSR | S_IXGRP | S_IXOTH) == 0
-	else {
-		throw CouldNotMakeExecutableError(path: downloadedURL.path(percentEncoded: false))
-	}
-	try FileManager.default.createDirectory(at: expectedToolFolder, withIntermediateDirectories: true)
-	if FileManager.default.fileExists(atPath: expectedToolLocation.path(percentEncoded: false)) {
-		try FileManager.default.removeItem(at: expectedToolLocation)
-	}
-	try FileManager.default.moveItem(at: downloadedURL, to: expectedToolLocation)
-
-	let gitIgnoreLocation = safediFolder.appending(component: ".gitignore")
-	if !FileManager.default.fileExists(atPath: gitIgnoreLocation.path(percentEncoded: false)) {
-		// Each version gets its own subfolder (`<version>/safeditool`) so
-		// the glob `*/safeditool` catches every installed binary.
-		try """
-		*/\(expectedToolLocation.lastPathComponent)
-		""".write(
-			to: gitIgnoreLocation,
-			atomically: true,
-			encoding: .utf8,
-		)
-	}
 }
 
 private struct UnsupportedHostError: Error, CustomStringConvertible {
