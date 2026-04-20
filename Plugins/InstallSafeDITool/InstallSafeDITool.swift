@@ -59,11 +59,12 @@ struct InstallSafeDITool: CommandPlugin {
 			let safeDIOrigin = context.safeDIOrigin
 
 			// `XcodeCommandPlugin.performCommand` is synchronous. Bridge to
-			// the async `downloadTool` helper via a dispatch group so the
-			// command doesn't return until the download finishes. Errors
-			// are reported and the process exits inside the task — avoids
-			// capturing a mutable `Error?` across a Sendable boundary,
-			// which Swift 6 rejects as a data race.
+			// the async `downloadTool` helper via a dispatch group. On
+			// failure the task reports the diagnostic and calls `exit(1)`,
+			// which terminates the process — the `defer { dispatchGroup.leave() }`
+			// never runs in that path, but the hard kill makes that moot.
+			// The indirection (vs. capturing a mutable `Error?` across
+			// Sendable) sidesteps Swift 6 data-race diagnostics.
 			let dispatchGroup = DispatchGroup()
 			dispatchGroup.enter()
 			Task.detached {
@@ -124,9 +125,19 @@ private func downloadTool(
 			version,
 			toolName,
 		)
-		let (downloadedURL, response) = try await URLSession.shared.download(
-			for: URLRequest(url: githubDownloadURL),
-		)
+		let downloadedURL: URL
+		let response: URLResponse
+		do {
+			(downloadedURL, response) = try await URLSession.shared.download(
+				for: URLRequest(url: githubDownloadURL),
+			)
+		} catch {
+			// URLSession errors stringify to a useless Foundation
+			// generic (`The operation couldn't be completed. ...`).
+			// Wrap with the URL + the underlying message so offline /
+			// GitHub-down / DNS cases surface something actionable.
+			throw DownloadRequestFailedError(url: githubDownloadURL, underlying: error)
+		}
 		// `URLSession.download(for:)` reports success for HTTP error pages
 		// (404, 500, etc.), so without this check we'd `chmod +x` and install
 		// the error body as the tool — the next build would fail opaquely.
@@ -147,9 +158,16 @@ private func downloadTool(
 		}
 		try FileManager.default.createDirectory(at: expectedToolFolder, withIntermediateDirectories: true)
 		if FileManager.default.fileExists(atPath: expectedToolLocation.path(percentEncoded: false)) {
-			try FileManager.default.removeItem(at: expectedToolLocation)
+			// `replaceItemAt` is atomic on HFS+/APFS: the new inode replaces
+			// the old via rename, so concurrent installs can't leave the
+			// destination in a half-replaced state. `moveItem` + prior
+			// `removeItem` is a two-step race — two processes interleaving
+			// could both `removeItem`, then one `moveItem` wins and the
+			// other fails because the destination exists again.
+			_ = try FileManager.default.replaceItemAt(expectedToolLocation, withItemAt: downloadedURL)
+		} else {
+			try FileManager.default.moveItem(at: downloadedURL, to: expectedToolLocation)
 		}
-		try FileManager.default.moveItem(at: downloadedURL, to: expectedToolLocation)
 
 		let gitIgnoreLocation = safediFolder.appending(component: ".gitignore")
 		if !FileManager.default.fileExists(atPath: gitIgnoreLocation.path(percentEncoded: false)) {
@@ -186,5 +204,13 @@ private struct CouldNotMakeExecutableError: Error, CustomStringConvertible {
 	let path: String
 	var description: String {
 		"Could not make downloaded file executable: \(path)"
+	}
+}
+
+private struct DownloadRequestFailedError: Error, CustomStringConvertible {
+	let url: URL
+	let underlying: any Error
+	var description: String {
+		"Failed to reach \(url.absoluteString): \(underlying.localizedDescription). Check network connectivity and that the release tag exists."
 	}
 }

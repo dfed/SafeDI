@@ -44,20 +44,13 @@ The `additionalDirectoriesToInclude` parameter specifies folders outside of your
 
 ##### Installing the prebuilt SafeDITool binary
 
-If you see a build warning that starts with **"SafeDI's build-tool plugin is falling back to a regex-based output scanner..."** — or **"SafeDI is running a locally-built SafeDITool in the debug configuration..."** — installing the prebuilt tool fixes it:
+If you see a build warning that starts with **"SafeDI's build-tool plugin is falling back to a regex-based output scanner..."** — installing the prebuilt tool fixes it.
 
-```
-swift package --package-path "/path/to/YourXcodeProject" \
-    --allow-network-connections all \
-    --allow-writing-to-package-directory \
-    safedi-install-tool
-```
+In Xcode, right-click your project in the navigator and choose **SafeDI → Safedi Install Tool**. Approve the network-access and write-to-package-directory prompts. Xcode runs the command and downloads the prebuilt SafeDITool release binary for your SafeDI version into `.safedi/<version>/safeditool` next to your `.xcodeproj`. The build plugin picks it up automatically on subsequent builds.
 
-This downloads the prebuilt SafeDITool release binary for your SafeDI version into `.safedi/<version>/safeditool` next to your `.xcodeproj`. The build plugin picks it up automatically on subsequent builds.
+**Why this step is required in Xcode:** Swift package build-tool plugins are told the SafeDITool location via an Xcode build-variable template (`${BUILD_DIR}/${CONFIGURATION}/SafeDITool`) whose values aren't exposed to the plugin's process environment at plugin-setup time. SafeDI's plugin therefore can't execute the real parser during setup and falls back to a regex-based output scanner. A prebuilt binary at a known path sidesteps the template entirely. The install command is a one-time step per project (re-run it after a SafeDI version bump if the warning reappears). The plugin only runs inside Xcode — `swift build` users get the prebuilt binary through the default `prebuilt` trait already.
 
-**Why this step is required in Xcode:** Swift package build-tool plugins are told the SafeDITool location via an Xcode build-variable template (`${BUILD_DIR}/${CONFIGURATION}/SafeDITool`) whose values aren't exposed to the plugin's process environment at plugin-setup time. SafeDI's plugin therefore can't execute the real parser during setup and falls back to a regex-based output scanner. A prebuilt binary at a known path sidesteps the template entirely. The install command is a one-time step per project (re-run it after a SafeDI version bump if the warning reappears).
-
-**What to commit:** the command writes a `.safedi/.gitignore` that excludes the per-version binary from source control — the binary is host-specific (arm64 vs x86_64) and per-version, so it shouldn't be committed. Developers new to the project re-run the install command once after cloning.
+**What to commit:** the install command writes `.safedi/.gitignore` on first run with the single glob `*/safeditool`, which ignores `.safedi/<version>/safeditool` on every machine. **Commit `.safedi/.gitignore` itself.** The binary it ignores is host-specific (arm64 vs x86_64) and per-version, so it's meant to be re-downloaded per-machine. Developers new to the project re-run the install command once after cloning.
 
 #### Swift package
 
