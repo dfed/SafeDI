@@ -1549,12 +1549,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			// Skip leaf nodes that don't need a SafeDIMockConfiguration struct.
 			guard node.needsConfigurationStruct else { return }
-			// Skip cycle-closer nodes — their subtree was zeroed by Scope, so they'd
-			// register an empty placeholder that shadows the real (non-cycle) version
-			// of the same type emitted by another root's walk. With first-wins dedup,
-			// alphabetical traversal makes "first" deterministic, but a cycle leaf is
-			// never the right "first".
-			guard !node.isPropertyCycle else { return }
+			// No cycle-closer guard here: a cycle-closer (isPropertyCycle == true)
+			// is always reached at a deeper DFS level than its matching non-cycle
+			// occurrence (the property must appear earlier in the stack for
+			// `isPropertyCycle` to fire), so the `seen` dedup below catches it
+			// after the real version has already been recorded.
 			if seen.contains(key) {
 				// If this node requires sendable and the existing one doesn't,
 				// replace it — @Sendable closures are compatible in both contexts.
@@ -2041,32 +2040,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						// that don't accept their own erased type).
 						// In sendable context, use the extracted local (builderExpression)
 						// instead of referencing safeDIOverrides directly.
-						// Note: constant erased cycles are rejected by mock validation
-						// before reaching this point, so isCycleNode is always false here.
+						// `thisOverrideReachable` is always true here: this branch handles
+						// non-Instantiator (constant-typed) erased children, and
+						// `validateMockRootScopeForCycles` rejects any cycle containing a
+						// constant edge via `throwIfInvalidCycle`'s "partially-lazy" /
+						// "constant" checks. Pruned back-edges on erased children only
+						// occur on `ErasedInstantiator`-typed properties, which are handled
+						// by `generateInstantiatorBinding`.
 						let wrapperType = node.typeDescription.asSource
+						let overridePath = optionalBuilderPath ?? builderExpression
 						lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
 						lines.append(contentsOf: receiverBindings)
 						lines.append(contentsOf: childBindings)
-						if !thisOverrideReachable {
-							// Pruned back-edge — no optional override path exists.
-							// `builderExpression` is a non-optional default builder, so
-							// emit a direct construction rather than an `if let` dance
-							// (which would fail to typecheck against a non-optional RHS).
-							lines.append("\(innerIndent)return \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments, overrideReachable: false)))")
+						lines.append("\(innerIndent)if let safeDIBuilder = \(overridePath) {")
+						if node.needsConfigurationStruct {
+							lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(safeDIBuilder(\(argumentList)))")
 						} else {
-							// In sendable context, `builderExpression` is an optional
-							// extracted local; otherwise `optionalBuilderPath` exists.
-							let overridePath = optionalBuilderPath ?? builderExpression
-							lines.append("\(innerIndent)if let safeDIBuilder = \(overridePath) {")
-							if node.needsConfigurationStruct {
-								lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(safeDIBuilder(\(argumentList)))")
-							} else {
-								lines.append("\(innerIndent)\(standardIndent)return safeDIBuilder(\(argumentList))")
-							}
-							lines.append("\(innerIndent)} else {")
-							lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
-							lines.append("\(innerIndent)}")
+							lines.append("\(innerIndent)\(standardIndent)return safeDIBuilder(\(argumentList))")
 						}
+						lines.append("\(innerIndent)} else {")
+						lines.append("\(innerIndent)\(standardIndent)return \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+						lines.append("\(innerIndent)}")
 						lines.append("\(indent)}")
 					} else {
 						lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
@@ -2091,16 +2085,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							lines.append("\(indent)let \(outerBindingName) = \(leafBuilderExpression)(\(argumentList))")
 						}
 					} else if node.erasedToConcreteExistential {
+						// Sendable-extracted context: builderExpression is the extracted
+						// optional local. `thisOverrideReachable` is always true here —
+						// constant-typed erased children cannot be on a pruned back-edge
+						// because `validateMockRootScopeForCycles` rejects any cycle
+						// containing a constant edge. `ErasedInstantiator`-typed erased
+						// children go through `generateInstantiatorBinding`.
 						let wrapperType = node.typeDescription.asSource
-						if !thisOverrideReachable {
-							// Pruned back-edge — `builderExpression` is a non-optional
-							// default builder. Optional chaining would fail to typecheck;
-							// emit direct construction.
-							lines.append("\(indent)let \(outerBindingName) = \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments, overrideReachable: false)))")
-						} else {
-							// Sendable context: extracted local is optional.
-							lines.append("\(indent)let \(outerBindingName) = \(builderExpression)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
-						}
+						lines.append("\(indent)let \(outerBindingName) = \(builderExpression)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
 					} else {
 						lines.append("\(indent)let \(outerBindingName) = \(builderExpression)(\(argumentList))")
 					}
