@@ -5286,6 +5286,43 @@ import Testing
 		}
 
 		@Test
+		func producesDiagnostic_whenDefaultExpressionReferencesSelfInTypeExpression() {
+			// `Optional<Self>.none`, `Result<Self, E>.failure(...)`, and
+			// similar defaults place `Self` inside an `IdentifierTypeSyntax`
+			// in a generic argument clause — not an expression-level
+			// `DeclReferenceExpr`. Those must still be flagged so the
+			// override struct's caller-scope `Self` binding doesn't silently
+			// produce the wrong type.
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyType: Instantiable {
+				    public init() {}
+				    public static func customMock(fallback: Optional<MyType> = Optional<Self>.none) -> MyType {
+				        MyType()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init() {}
+				    public static func customMock(fallback: Optional<MyType> = Optional<Self>.none) -> MyType {
+				        MyType()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Default expression for parameter `fallback` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type (or fail to resolve). Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						line: 4,
+						column: 35,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func producesDiagnostic_whenExtensionCustomMockDefaultReferencesSelf() {
 			// Extension-based customMock goes through a different validation
 			// branch than concrete customMock. `Self` on a non-dependency

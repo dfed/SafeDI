@@ -1335,6 +1335,20 @@ public struct InstantiableMacro: MemberMacro {
 			}
 			return .visitChildren
 		}
+
+		override func visit(_ node: IdentifierTypeSyntax) -> SyntaxVisitorContinueKind {
+			// Catches `Self` when it appears inside a type expression — e.g.
+			// `Optional<Self>.none`, `Result<Self, E>.failure(...)`, or
+			// `[Self]` — by parsing the type syntax into a `TypeDescription`
+			// and asking it whether `Self` appears anywhere in the structure.
+			// `skipChildren` because `containsSelf` already recurses, so
+			// descending into nested type syntax would double-report.
+			if TypeSyntax(node).typeDescription.containsSelf {
+				references.append("Self")
+				return .skipChildren
+			}
+			return .visitChildren
+		}
 	}
 
 	private static func generateForwardedProperties(
