@@ -148,9 +148,21 @@ private func downloadTool(
 		version,
 		toolName,
 	)
-	let (downloadedURL, _) = try await URLSession.shared.download(
+	let (downloadedURL, response) = try await URLSession.shared.download(
 		for: URLRequest(url: githubDownloadURL),
 	)
+	// `URLSession.download(for:)` reports success for HTTP error pages
+	// (404, 500, etc.), so without this check we'd `chmod +x` and install
+	// the error body as the tool — the next build would fail opaquely.
+	if let httpResponse = response as? HTTPURLResponse,
+	   !(200..<300).contains(httpResponse.statusCode)
+	{
+		try? FileManager.default.removeItem(at: downloadedURL)
+		throw DownloadFailedError(
+			url: githubDownloadURL,
+			statusCode: httpResponse.statusCode,
+		)
+	}
 	let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path(percentEncoded: false))
 	guard let currentPermissions = downloadedFileAttributes[.posixPermissions] as? NSNumber,
 	      chmod(downloadedURL.path(percentEncoded: false), mode_t(currentPermissions.uint32Value) | S_IXUSR | S_IXGRP | S_IXOTH) == 0
@@ -180,6 +192,14 @@ private func downloadTool(
 private struct UnsupportedArchitectureError: Error, CustomStringConvertible {
 	var description: String {
 		"Unsupported host architecture for SafeDITool download."
+	}
+}
+
+private struct DownloadFailedError: Error, CustomStringConvertible {
+	let url: URL
+	let statusCode: Int
+	var description: String {
+		"Failed to download SafeDITool from \(url.absoluteString): HTTP \(statusCode). Verify the SafeDI version matches a published release."
 	}
 }
 
