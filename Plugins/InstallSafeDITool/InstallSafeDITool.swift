@@ -141,14 +141,14 @@ private func downloadTool(
 		// `URLSession.download(for:)` reports success for HTTP error pages
 		// (404, 500, etc.), so without this check we'd `chmod +x` and install
 		// the error body as the tool — the next build would fail opaquely.
-		if let httpResponse = response as? HTTPURLResponse,
-		   !(200..<300).contains(httpResponse.statusCode)
-		{
-			try? FileManager.default.removeItem(at: downloadedURL)
-			throw DownloadFailedError(
-				url: githubDownloadURL,
-				statusCode: httpResponse.statusCode,
-			)
+		if let httpResponse = response as? HTTPURLResponse {
+			guard (200..<300).contains(httpResponse.statusCode) else {
+				try? FileManager.default.removeItem(at: downloadedURL)
+				throw DownloadFailedError(
+					url: githubDownloadURL,
+					statusCode: httpResponse.statusCode,
+				)
+			}
 		}
 		let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path(percentEncoded: false))
 		guard let currentPermissions = downloadedFileAttributes[.posixPermissions] as? NSNumber,

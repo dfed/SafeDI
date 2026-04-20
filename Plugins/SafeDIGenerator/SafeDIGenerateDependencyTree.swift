@@ -234,69 +234,107 @@ extension Target {
 			let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
 
 			// With a downloaded prebuilt tool we can invoke the real scan
-			// subcommand, which produces an authoritative manifest. Without
-			// one, fall through to the lightweight PluginScanner.
-			if runsRealScan {
-				do {
-					try runSafeDITool(
-						at: tool,
-						arguments: [
-							"scan",
-							"--input-sources-file", inputSourcesFile.path(percentEncoded: false),
-							"--project-root", projectRoot.path(percentEncoded: false),
-							"--output-directory", outputDirectory.path(percentEncoded: false),
-							"--manifest-file", manifestFile.path(percentEncoded: false),
-							"--mock-scoped-files",
-						] + inputSwiftFiles.map { $0.path(percentEncoded: false) },
-					)
-					let manifest = try JSONDecoder().decode(
-						ScanManifest.self,
-						from: Data(contentsOf: manifestFile),
-					)
-					let outputFiles = (manifest.dependencyTreeGeneration + manifest.mockGeneration)
-						.map { URL(fileURLWithPath: $0.outputFilePath) }
-						+ (manifest.mockConfigurationOutputFilePath.map { [URL(fileURLWithPath: $0)] } ?? [])
-					let additionalInputFiles = manifest.additionalInputFiles.map { URL(fileURLWithPath: $0) }
-					guard !outputFiles.isEmpty else {
-						return []
-					}
-					return [
-						.buildCommand(
-							displayName: "SafeDIGenerateDependencyTree",
-							executable: tool,
-							arguments: [
-								inputSourcesFile.path(percentEncoded: false),
-								"--swift-manifest",
-								manifestFile.path(percentEncoded: false),
-							],
-							environment: [:],
-							inputFiles: inputSwiftFiles + additionalInputFiles,
-							outputFiles: outputFiles,
-						),
-					]
-				} catch let error as SafeDIToolLaunchError {
-					// Binary couldn't launch (wrong platform, corrupted, etc).
-					// This is the recoverable case — fall through to the
-					// in-process `PluginScanner` below.
-					Diagnostics.warning("SafeDITool could not be launched during plugin setup (\(error)). Falling back to in-process scan.")
-				}
-				// SafeDIToolProcessError (scan ran but exited non-zero —
-				// parse errors, validation failures, etc.) intentionally
-				// bubbles up. Falling back to a regex-based scanner would
-				// mask the real error and produce silently-wrong output.
+			// subcommand, which produces an authoritative manifest.
+			// `buildCommandsUsingRealScan` returns nil on a recoverable
+			// launch failure (wrong platform, corrupted binary) — in that
+			// case we fall back to the lightweight in-process `PluginScanner`.
+			// SafeDITool process-level errors (parse / validation failures)
+			// bubble up from the helper without masking.
+			if runsRealScan,
+			   let commands = try buildCommandsUsingRealScan(
+			   	tool: tool,
+			   	inputSwiftFiles: inputSwiftFiles,
+			   	inputSourcesFile: inputSourcesFile,
+			   	projectRoot: projectRoot,
+			   	outputDirectory: outputDirectory,
+			   	manifestFile: manifestFile,
+			   )
+			{
+				return commands
+			} else {
+				return buildCommandsUsingPluginScanner(
+					tool: tool,
+					inputSwiftFiles: inputSwiftFiles,
+					inputSourcesFile: inputSourcesFile,
+					projectRoot: projectRoot,
+					outputDirectory: outputDirectory,
+				)
 			}
+		}
 
+		private func buildCommandsUsingRealScan(
+			tool: URL,
+			inputSwiftFiles: [URL],
+			inputSourcesFile: URL,
+			projectRoot: URL,
+			outputDirectory: URL,
+			manifestFile: URL,
+		) throws -> [PackagePlugin.Command]? {
+			do {
+				try runSafeDITool(
+					at: tool,
+					arguments: [
+						"scan",
+						"--input-sources-file", inputSourcesFile.path(percentEncoded: false),
+						"--project-root", projectRoot.path(percentEncoded: false),
+						"--output-directory", outputDirectory.path(percentEncoded: false),
+						"--manifest-file", manifestFile.path(percentEncoded: false),
+						"--mock-scoped-files",
+					] + inputSwiftFiles.map { $0.path(percentEncoded: false) },
+				)
+			} catch let error as SafeDIToolLaunchError {
+				// Binary couldn't launch (wrong platform, corrupted, etc).
+				// Signal to the caller that the PluginScanner fallback
+				// should run by returning nil. SafeDIToolProcessError
+				// (scan exited non-zero — parse/validation error) is not
+				// caught here; it propagates so real errors surface
+				// instead of being masked by a regex-based fallback.
+				Diagnostics.warning("SafeDITool could not be launched during plugin setup (\(error)). Falling back to in-process scan.")
+				return nil
+			}
+			let manifest = try JSONDecoder().decode(
+				ScanManifest.self,
+				from: Data(contentsOf: manifestFile),
+			)
+			let outputFiles = (manifest.dependencyTreeGeneration + manifest.mockGeneration)
+				.map { URL(fileURLWithPath: $0.outputFilePath) }
+				+ (manifest.mockConfigurationOutputFilePath.map { [URL(fileURLWithPath: $0)] } ?? [])
+			let additionalInputFiles = manifest.additionalInputFiles.map { URL(fileURLWithPath: $0) }
+			guard !outputFiles.isEmpty else {
+				return []
+			}
+			return [
+				.buildCommand(
+					displayName: "SafeDIGenerateDependencyTree",
+					executable: tool,
+					arguments: [
+						inputSourcesFile.path(percentEncoded: false),
+						"--swift-manifest",
+						manifestFile.path(percentEncoded: false),
+					],
+					environment: [:],
+					inputFiles: inputSwiftFiles + additionalInputFiles,
+					outputFiles: outputFiles,
+				),
+			]
+		}
+
+		private func buildCommandsUsingPluginScanner(
+			tool: URL,
+			inputSwiftFiles: [URL],
+			inputSourcesFile: URL,
+			projectRoot: URL,
+			outputDirectory: URL,
+		) -> [PackagePlugin.Command] {
 			let scanResult = PluginScanner.scan(
 				swiftFiles: inputSwiftFiles,
 				mockScopedSwiftFiles: inputSwiftFiles,
 				relativeTo: projectRoot,
 				outputDirectory: outputDirectory,
 			)
-
 			guard !scanResult.outputFiles.isEmpty else {
 				return []
 			}
-
 			return [
 				.buildCommand(
 					displayName: "SafeDIGenerateDependencyTree",
