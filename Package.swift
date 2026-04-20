@@ -105,12 +105,9 @@ let package = Package(
 		),
 
 		// Downloads the prebuilt SafeDITool release binary into
-		// `<package>/.safedi/<version>/safeditool`. The build plugin prefers
-		// that path over the SPM-provided tool — it avoids the
-		// `${BUILD_DIR}`-in-tool-path problem that forces Xcode sourceBuild
-		// users onto the regex-based `PluginScanner` fallback, and it avoids
-		// the ~15× slower debug build that SPM produces when sourceBuild is
-		// active.
+		// `<xcodeProject>/.safedi/<version>/safeditool`. Xcode-only — avoids
+		// the `${BUILD_DIR}`-in-tool-path problem that forces Xcode users
+		// onto the regex-based `PluginScanner` fallback.
 		.plugin(
 			name: "InstallSafeDITool",
 			capability: .command(
