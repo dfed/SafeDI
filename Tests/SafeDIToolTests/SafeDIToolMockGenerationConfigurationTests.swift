@@ -467,6 +467,8 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
+			skipCompileVerification: true,
 		)
 
 		// Root mock should exist.
@@ -869,6 +871,8 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
+			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["CrossModuleService+SafeDIMock.swift"] == """

@@ -1439,6 +1439,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Child is intentionally missing its initializer to exercise the misconfigured-stub path
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -1550,6 +1552,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Internal Child referenced from public Root's init signature — Swift's same-module access-control rule rejects the public init's signature.
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -1604,6 +1608,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Internal Child referenced from public Root's init signature — Swift's same-module access-control rule rejects the public init's signature.
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -2539,17 +2545,17 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol KeyValueStore {}
 
 				@Instantiable(fulfillingAdditionalTypes: [KeyValueStore.self])
-				extension UserDefaults: @retroactive Instantiable, @retroactive KeyValueStore {
+				extension UserDefaults: Instantiable, KeyValueStore {
 				    public static func instantiate() -> UserDefaults {
 				        getShared()
 				    }
 
-				    private func getShared() -> UserDefaults { .standard }
+				    private static func getShared() -> UserDefaults { .standard }
 
 				    final class NestedClass {}
 				    actor NestedActor {}
 				    struct NestedStruct {
-				        public func instantiate() -> NestedStruct { init() }
+				        public func instantiate() -> NestedStruct { .init() }
 				    }
 				    typealias NestedTypealias = ()
 				    private var sessionType: String { "foreground" }
@@ -2668,14 +2674,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol KeyValueStore {}
 
 				@Instantiable(fulfillingAdditionalTypes: [KeyValueStore.self])
-				extension UserDefaults: Instantiable {
+				extension UserDefaults: Instantiable, KeyValueStore {
 				    public static func instantiate(user: User) -> UserDefaults {
 				        UserDefaults(user: user)
 				    }
 
 				    convenience
 				    init(user: User) {
-				        self.init(suiteName: user.username)
+				        self.init(suiteName: user.username)!
 				    }
 				}
 				""",
@@ -2845,6 +2851,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(topLevelModuleOutput.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -6096,6 +6104,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			// Fixture intentionally contains `:::brokenSyntax` to exercise the parse-error stub path
+			skipCompileVerification: true,
 		)
 
 		let rootFile = try #require(output.generatedFiles?["Root+SafeDI.swift"])

@@ -1032,6 +1032,8 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			dependentModuleInfoPaths: [greatGrandchildModuleOutput.moduleInfoOutputPath],
 			buildDOTFileOutput: false,
 			filesToDelete: &filesToDelete,
+			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
+			skipCompileVerification: true,
 		)
 
 		let childModuleOutput = try await executeSafeDIToolTest(
@@ -1063,6 +1065,8 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			],
 			buildDOTFileOutput: false,
 			filesToDelete: &filesToDelete,
+			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
+			skipCompileVerification: true,
 		)
 
 		let topLevelModuleOutput = try await executeSafeDIToolTest(
@@ -1085,6 +1089,8 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			],
 			buildDOTFileOutput: true,
 			filesToDelete: &filesToDelete,
+			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
+			skipCompileVerification: true,
 		)
 
 		#expect(try #require(topLevelModuleOutput.dotTree) == """
