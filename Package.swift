@@ -37,7 +37,9 @@ let package = Package(
 		),
 	],
 	traits: [
-		.trait(name: "sourceBuild", description: "Build SafeDITool from source instead of using the prebuilt release binary. Off by default — builds-from-main users and docs tooling (swift-docc-plugin) get the prebuilt binary."),
+		.default(enabledTraits: ["prebuilt"]),
+		.trait(name: "prebuilt", description: "Use a prebuilt SafeDITool binary from the artifact bundle (default)."),
+		.trait(name: "sourceBuild", description: "Build SafeDITool from source. Intended for local development and adopting unreleased changes; typically set via `--traits sourceBuild` which replaces the default `prebuilt`."),
 	],
 	dependencies: [
 		.package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.4.0"),
@@ -103,12 +105,7 @@ let package = Package(
 			name: "SafeDIGenerator",
 			capability: .buildTool(),
 			dependencies: [
-				// `SafeDIToolBinary` is unconditional because SPM traits
-				// can't express "when this trait is NOT active." When
-				// `sourceBuild` is on the plugin uses the source-built
-				// `SafeDITool`; otherwise it picks the prebuilt binary
-				// out of the artifact bundle.
-				.target(name: "SafeDIToolBinary"),
+				.target(name: "SafeDIToolBinary", condition: .when(traits: ["prebuilt"])),
 				.target(name: "SafeDITool", condition: .when(traits: ["sourceBuild"])),
 			],
 		),
