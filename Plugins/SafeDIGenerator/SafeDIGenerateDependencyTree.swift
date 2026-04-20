@@ -274,10 +274,16 @@ extension Target {
 							outputFiles: outputFiles,
 						),
 					]
-				} catch {
-					Diagnostics.warning("SafeDITool scan failed (\(error)). Falling back to in-process scan.")
-					// fall through to PluginScanner below
+				} catch let error as SafeDIToolLaunchError {
+					// Binary couldn't launch (wrong platform, corrupted, etc).
+					// This is the recoverable case — fall through to the
+					// in-process `PluginScanner` below.
+					Diagnostics.warning("SafeDITool could not be launched during plugin setup (\(error)). Falling back to in-process scan.")
 				}
+				// SafeDIToolProcessError (scan ran but exited non-zero —
+				// parse errors, validation failures, etc.) intentionally
+				// bubbles up. Falling back to a regex-based scanner would
+				// mask the real error and produce silently-wrong output.
 			}
 
 			let scanResult = PluginScanner.scan(

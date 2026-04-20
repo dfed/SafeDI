@@ -87,7 +87,11 @@ import PackagePlugin
 		process.arguments = ["--version"]
 		let outPipe = Pipe()
 		process.standardOutput = outPipe
-		process.standardError = Pipe()
+		// Discard stderr instead of piping it — an unread pipe deadlocks
+		// `waitUntilExit()` once its buffer fills (~64 KB), and this
+		// helper blocks the plugin-setup thread. `FileHandle.nullDevice`
+		// routes stderr to /dev/null without any read-side coupling.
+		process.standardError = FileHandle.nullDevice
 		do {
 			try process.run()
 		} catch {
