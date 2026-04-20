@@ -297,6 +297,29 @@ func assertThrowsError(
 	}
 }
 
+/// Variant of `assertThrowsError` that checks for a substring of the
+/// thrown error's description. Use when the error surfaces through a
+/// Foundation-level `NSError` whose string includes a per-run tmpdir
+/// path — the stable part (e.g. "couldn't be opened") is still a
+/// meaningful assertion, while the exact string isn't testable.
+func assertThrowsError(
+	containing substring: String,
+	sourceLocation: SourceLocation = #_sourceLocation,
+	block: () async throws -> some Sendable,
+) async {
+	do {
+		_ = try await block()
+		Issue.record("Did not throw error!", sourceLocation: sourceLocation)
+	} catch {
+		let description = "\(error)"
+		#expect(
+			description.contains(substring),
+			"Expected error description to contain \"\(substring)\" but got: \(description)",
+			sourceLocation: sourceLocation,
+		)
+	}
+}
+
 private func createSwiftFixtureFiles(
 	from swiftFileContent: [String],
 	in directory: URL,

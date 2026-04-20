@@ -418,9 +418,14 @@ struct Generate: AsyncParsableCommand {
 		// changed CSV, in which case the cached ModuleInfo is for the wrong
 		// input set. Plugin-driven builds always pair scan+generate with the
 		// same CSV, so this check is effectively free on the fast path.
-		if let swiftSourcesFilePath,
-		   let currentCSVContent = try? String(contentsOfFile: swiftSourcesFilePath, encoding: .utf8)
-		{
+		//
+		// Failure to read the CSV also invalidates: we can't prove the
+		// inputs match, and the fresh-parse fallback will surface a clearer
+		// error (missing file) than silently reusing stale parse results.
+		if let swiftSourcesFilePath {
+			guard let currentCSVContent = try? String(contentsOfFile: swiftSourcesFilePath, encoding: .utf8) else {
+				return nil
+			}
 			let currentCSVPaths = Set(
 				currentCSVContent
 					.components(separatedBy: CharacterSet(arrayLiteral: ","))
@@ -451,7 +456,7 @@ struct Generate: AsyncParsableCommand {
 		// both invalidate. We check every path scan parsed (including
 		// files reached through `#SafeDIConfiguration.additionalDirectoriesToInclude`,
 		// which don't appear in `findGenerateSwiftFiles()`'s output).
-		for filePath in cached.scannedInputPaths where !filePath.isEmpty {
+		for filePath in cached.scannedInputPaths {
 			guard let attributes = try? fileManager.attributesOfItem(atPath: filePath),
 			      let modifiedAt = attributes[.modificationDate] as? Date
 			else {
