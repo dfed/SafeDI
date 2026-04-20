@@ -704,9 +704,28 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
-	/// Throws the appropriate cycle error based on the property types in the cycle.
-	/// For fully-lazy cycles (all Instantiator hops, no constant entry point), does nothing —
-	/// those are valid and produce compilable code.
+	/// Classifies a detected cycle and throws the appropriate error, or
+	/// returns silently if the cycle is valid. Called from both
+	/// `validatePropertiesAreFulfillable` (production graph) and
+	/// `validateMockRootScopeForCycles` (mock graph after `@Received`
+	/// promotion) — the two validation entry points share this classifier.
+	///
+	/// Rejected:
+	/// - Constant entry point in a fully-constant cycle → `.constantDependencyCycleDetected`.
+	/// - Constant entry point with any lazy hop → `.partiallyLazyDependencyCycleDetected`.
+	/// - Non-constant entry point that originated from an `@Received` → `.receivedInstantiatorDependencyCycleDetected`.
+	///
+	/// Accepted (returns without throwing):
+	/// - Fully-lazy cycles entered via an `Instantiator` that is NOT received.
+	///   The cycle compiles because each hop defers construction; pruning via
+	///   `cycleEdges` is what breaks the self-referencing config-struct shape
+	///   so the generated code typechecks.
+	///
+	/// Key implication for downstream code: any mock tree node reached
+	/// through a constant-typed property CANNOT be on a pruned back-edge —
+	/// this function would have rejected the cycle before code generation.
+	/// See the `erasedToConcreteExistential` matrix in CLAUDE.md's "Common
+	/// Pitfalls" for how this interacts with erased properties.
 	private static func throwIfInvalidCycle(
 		typesInCycle: [TypeDescription],
 		property: Property,

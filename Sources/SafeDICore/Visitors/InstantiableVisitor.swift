@@ -327,6 +327,17 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var diagnostics = [Diagnostic]()
 	public private(set) var uninitializedNonOptionalPropertyNames = [String]()
 
+	/// The initializer SafeDI selects for construction — the first in source
+	/// order that fulfills this type's dependencies. `Instantiable.initializer`
+	/// is populated from this, and mock generation emits construction code
+	/// against this initializer's signature. Validation that only matters for
+	/// the path SafeDI actually uses (e.g., diagnosing `Self.*` in default
+	/// expressions) should gate on this initializer rather than walking
+	/// `initializers`, which would false-positive on unused overloads.
+	public var canonicalConstructionInitializer: Initializer? {
+		initializers.first(where: { $0.isValid(forFulfilling: dependencies) })
+	}
+
 	public static let macroName = "Instantiable"
 	public static let instantiateMethodName = "instantiate"
 	public static let mockMethodName = "mock"
@@ -374,7 +385,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					Instantiable(
 						instantiableType: instantiableType,
 						isRoot: isRoot,
-						initializer: initializers.first(where: { $0.isValid(forFulfilling: dependencies) }),
+						initializer: canonicalConstructionInitializer,
 						additionalInstantiables: additionalInstantiables,
 						dependencies: dependencies,
 						declarationType: instantiableDeclarationType.asDeclarationType,

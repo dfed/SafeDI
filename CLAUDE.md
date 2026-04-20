@@ -50,9 +50,28 @@ Mock generation follows this pipeline:
 
 The production code path (`generatePropertyCode` with `.dependencyTree`) and mock path (`.mock`) share the same `ScopeGenerator` but diverge at `generatePropertyCode`. Mock fields (`mockInitializer`, `mockReturnType`, `customMockName`) are only accessed in mock code paths — never in production paths.
 
+### Cycle mechanisms
+
+Multiple cycle-related mechanisms coexist — keep them distinct:
+
+| Name | Scope | Set by / when | Role |
+|------|-------|---------------|------|
+| `isPropertyCycle` on a scope/node | Per-root, syntactic | `Scope.createScopeGenerator` when a property label repeats in the ancestor stack | Terminates infinite descent during a single root's walk; differs between roots for the same underlying cycle. |
+| `cycleEdges` (set of `CycleEdge`) | Global | `DependencyTreeGenerator.computeCycleEdges`, alphabetical-DFS feedback arc set | Chooses a single back-edge per cycle consistently across all roots — required because shared `SafeDIMockConfiguration` structs must have one shape. Consumed by struct generation AND override-path navigation in mock bodies. |
+| `throwIfInvalidCycle` | Shared classifier | Called from `validatePropertiesAreFulfillable` (production) and `validateMockRootScopeForCycles` (mock) | Rejects constant + partially-lazy + received-lazy cycles. Accepts fully-lazy non-received cycles (those compile as long as pruning breaks the config-struct recursion). |
+| `validateMockRootScopeForCycles` | Mock graph | Called after `@Received` promotion in `createMockRootScopeGenerator` | Walks the post-promotion scope to catch cycles that only surface once received deps are promoted to mock-root children. |
+
+Key consequence: if `throwIfInvalidCycle` accepts a cycle, every hop in it is non-constant (Instantiator/ErasedInstantiator-typed). Any code that assumes "a cycle node reached through a constant-typed property" is reasoning about something impossible.
+
 ### Mock generation specifics
 
 - **Share logic between production and mock paths where possible.** Validation, scope population, and other shared concerns should live in common helpers rather than being duplicated between `createTypeDescriptionToScopeMapping` and `createMockTypeDescriptionToScopeMapping`. When adding validation to one path, check whether the other path needs it too.
+- **Selected construction initializer.** `InstantiableVisitor.canonicalConstructionInitializer` is the single initializer SafeDI selects for construction (first init that fulfills the type's dependencies). `Instantiable.initializer` is populated from it, and mock generation emits against its signature. Validation that only matters for the path SafeDI uses (e.g., diagnosing `Self.*` in default expressions) should gate on this — walking every entry in `visitor.initializers` false-positives on unused overloads.
+- **Two-layer mock return type** (extension-based `customMockName` only). When a `customMock` method returns a type different from `Self` (permitted via `fulfillingAdditionalTypes`), two concerns have to agree:
+  1. **Inner closure type** (`MockParameterNode.builderClosureType`) — the type of the override closure stored in the parent's `SafeDIMockConfiguration`. Uses the property type so callers writing overrides match the receiving slot. Fixed in #251.
+  2. **Outer `mock()` return type** — the generated `mock()` wrapper must return whatever the user's `customMock` returns. Fixed in #266.
+
+  When touching extension-based types with `customMockName`, confirm both layers. `mockReturnTypeIsCompatible(withPropertyType: concreteInstantiable)` distinguishes genuine hand-written mocks from mockOnly-inherited ones.
 - `MockParameterIdentifier` (propertyLabel + sourceType) is the key type for tracking parameters throughout mock gen
 - `resolvedParameters` tracks which deps are already bound — prevents duplicate bindings across scopes
 - `parameterLabelMap` maps identifiers to disambiguated parameter names
@@ -93,6 +112,7 @@ The `Instantiable` struct conforms to `Codable` and is serialized as JSON in `.s
 - **Code generation tests should only test paths where the macro would not emit an error.** Test inputs must be valid under `@Instantiable` macro validation — every `mockOnly: true` type needs a `mock()` method (or `customMockName` method), mock method names on the same type must not collide, and production types need `init` or `instantiate()`.
 - **Test titles must be observably verified.** When a test title says "prefers X over Y", the assertion must verify X is used — not just that the test doesn't crash. Add a parent type with `generateMock: true` that instantiates the type under test, and assert the full mock output shows X's method name.
 - **If code can't be covered by a test with real parsed input, remove the code.** Dead branches and defensive fallbacks for structurally unreachable paths should not exist.
+- **"Structurally unreachable" claims need a failing test.** Before removing defensive branches on the grounds that they can't be reached, write a test that tries to reach them with valid input. If the test can't be written, cite the specific rejection (file:line) and the input shape it rejects — a structural argument alone is not evidence. Structural arguments are easy to get wrong: e.g., `erasedToConcreteExistential: true` does NOT imply a constant property type, so "erased + cycle is rejected as constant" was wrong and cost a round trip when the branches had to be restored.
 - **Test fixture file naming affects processing order.** `executeSafeDIToolTest` names fixture files by extracting the type name from `@Instantiable` in the source content. Files are processed alphabetically, so the order types appear in `resolveSafeDIFulfilledTypes` depends on these names. When testing ordering-sensitive behavior (e.g., duplicate detection), be aware that a `struct MyService` file sorts differently than an `extension MyService` file (which falls back to `"File"`).
 
 ## Common Pitfalls
@@ -105,3 +125,13 @@ The `Instantiable` struct conforms to `Codable` and is serialized as JSON in `.s
 - `typeDescriptionToFulfillingInstantiableMap` is a dictionary — iterating `.values` has non-deterministic order. Any code that reduces, sorts, or builds state from `.values` must produce the same result regardless of iteration order. CI runs tests 5 times specifically to catch non-determinism.
 - `resolveSafeDIFulfilledTypes` can produce multiple map entries with the same `concreteInstantiable` under different keys (e.g., a merged entry under `MyService` and an unmerged entry under `ServiceProtocol`). These entries may have different mock info. The mock scope map uses scope-reuse by `concreteInstantiable` and a deterministic sort to handle this.
 - `mockInitializer` on an `Instantiable` can be inherited from a mockOnly merge — it doesn't always mean the type declared its own mock. `generateMock` is never inherited. Use `mockReturnTypeIsCompatible(withPropertyType: concreteInstantiable)` to distinguish genuine hand-written mocks from inherited ones.
+- **`erasedToConcreteExistential: true` is orthogonal to the property's `PropertyType`.** The flag controls whether SafeDI wraps the concrete in the property's existential type at the call site; it does not determine whether the property itself is constant or lazy. The four combinations:
+
+  | Decorator + property | `Property.PropertyType` | `isConstant` | Can be in an accepted cycle? |
+  |----------------------|-------------------------|--------------|------------------------------|
+  | `@Instantiated let x: Concrete` | `.constant` | `true` | No — `throwIfInvalidCycle` rejects. |
+  | `@Instantiated let x: Instantiator<T>` | `.instantiator` | `false` | Yes. |
+  | `@Instantiated(erasedToConcreteExistential: true) let x: AnyProto` | `.constant` | `true` | No — `throwIfInvalidCycle` rejects. |
+  | `@Instantiated(erasedToConcreteExistential: true) let x: ErasedInstantiator<A, AnyP>` | `.erasedInstantiator` | `false` | Yes. |
+
+  When reasoning about whether an erased node can appear on a pruned back-edge, check `propertyType.isConstant` — don't short-circuit on the erasure flag.
