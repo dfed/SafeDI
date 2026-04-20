@@ -377,15 +377,56 @@ struct Generate: AsyncParsableCommand {
 	/// Cache is only consulted when `include` is empty — CLI callers who
 	/// pass `--include` expect those directories scanned afresh, and scan
 	/// doesn't see `--include`.
+	///
+	/// The cache is also bypassed when any source file's mtime is newer
+	/// than the cache file — e.g. a manual `generate` invocation after a
+	/// source edit without rerunning `scan` would otherwise consume stale
+	/// parse results and emit stale code. Plugin-driven builds rerun
+	/// `scan` every build, so this check is effectively free on the fast
+	/// path.
+	///
+	/// Decode failures (truncated file from an interrupted write,
+	/// cross-version schema drift, etc.) fall through to a fresh parse
+	/// rather than aborting the build — the cache is an optimization
+	/// sidecar, not a correctness requirement.
 	private func parsedModule() async throws -> (ModuleInfo, isFromCache: Bool) {
-		if include.isEmpty, let swiftManifest {
-			let cacheURL = scannedModuleInfoURL(forManifestPath: swiftManifest)
-			if let cachedData = try? Data(contentsOf: cacheURL) {
-				let cached = try JSONDecoder().decode(ModuleInfo.self, from: cachedData)
-				return (cached, true)
-			}
+		if include.isEmpty,
+		   let swiftManifest,
+		   let cached = try await loadCachedModuleInfo(manifestPath: swiftManifest)
+		{
+			return (cached, true)
 		}
 		return await (try parseSwiftFiles(findGenerateSwiftFiles()), false)
+	}
+
+	private func loadCachedModuleInfo(manifestPath: String) async throws -> ModuleInfo? {
+		let cacheURL = scannedModuleInfoURL(forManifestPath: manifestPath)
+		let fileManager = FileManager.default
+		guard let cacheAttributes = try? fileManager.attributesOfItem(atPath: cacheURL.path),
+		      let cacheModifiedAt = cacheAttributes[.modificationDate] as? Date
+		else { return nil }
+
+		// Bypass the cache if any input Swift file was modified after the
+		// cache was written. Scan's output reflects the source set at
+		// scan-time; if sources have since changed, re-parsing is required
+		// for correctness.
+		let sourceFiles = try await findGenerateSwiftFiles()
+		for filePath in sourceFiles where !filePath.isEmpty {
+			if let attributes = try? fileManager.attributesOfItem(atPath: filePath),
+			   let modifiedAt = attributes[.modificationDate] as? Date,
+			   modifiedAt > cacheModifiedAt
+			{
+				return nil
+			}
+		}
+
+		// Treat decode failures as cache misses, not hard errors — the
+		// cache may have been truncated by an interrupted write or carry
+		// an older schema that a newer SafeDITool can no longer read.
+		guard let data = try? Data(contentsOf: cacheURL),
+		      let decoded = try? JSONDecoder().decode(ModuleInfo.self, from: data)
+		else { return nil }
+		return decoded
 	}
 
 	private var moduleInfoURLs: Set<URL> {
