@@ -348,7 +348,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable(generateMock: true)
+				@Instantiable(generateMock: true, customMock: "customMock")
 				public struct Child: Instantiable {
 				    public init(unrelated: Unrelated?, shared: Shared?) {
 				        self.unrelated = unrelated
@@ -357,7 +357,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 				    @Received(onlyIfAvailable: true) let unrelated: Unrelated?
 				    @Received(onlyIfAvailable: true) let shared: Shared?
 
-				    public static func mock() -> Child {
+				    public static func customMock() -> Child {
 				        Child(unrelated: nil, shared: nil)
 				    }
 				}

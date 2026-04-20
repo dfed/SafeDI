@@ -2545,17 +2545,17 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol KeyValueStore {}
 
 				@Instantiable(fulfillingAdditionalTypes: [KeyValueStore.self])
-				extension UserDefaults: @retroactive Instantiable, @retroactive KeyValueStore {
+				extension UserDefaults: Instantiable, KeyValueStore {
 				    public static func instantiate() -> UserDefaults {
 				        getShared()
 				    }
 
-				    private func getShared() -> UserDefaults { .standard }
+				    private static func getShared() -> UserDefaults { .standard }
 
 				    final class NestedClass {}
 				    actor NestedActor {}
 				    struct NestedStruct {
-				        public func instantiate() -> NestedStruct { init() }
+				        public func instantiate() -> NestedStruct { .init() }
 				    }
 				    typealias NestedTypealias = ()
 				    private var sessionType: String { "foreground" }
@@ -2564,8 +2564,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// Fixture's UserDefaults extension contains nested stubs that aren't valid Swift on their own
-			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
@@ -2676,22 +2674,20 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				public protocol KeyValueStore {}
 
 				@Instantiable(fulfillingAdditionalTypes: [KeyValueStore.self])
-				extension UserDefaults: Instantiable {
+				extension UserDefaults: Instantiable, KeyValueStore {
 				    public static func instantiate(user: User) -> UserDefaults {
 				        UserDefaults(user: user)
 				    }
 
 				    convenience
 				    init(user: User) {
-				        self.init(suiteName: user.username)
+				        self.init(suiteName: user.username)!
 				    }
 				}
 				""",
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// Fixture stubs UIViewController and calls a failable UserDefaults init unconditionally
-			skipCompileVerification: true,
 		)
 
 		#expect(try #require(output.generatedFiles?["RootViewController+SafeDI.swift"]) == """
@@ -2790,8 +2786,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			dependentModuleInfoPaths: [greatGrandchildModuleOutput.moduleInfoOutputPath],
 			buildSwiftOutputDirectory: false,
 			filesToDelete: &filesToDelete,
-			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
-			skipCompileVerification: true,
 		)
 
 		let childModuleOutput = try await executeSafeDIToolTest(
@@ -2831,8 +2825,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: false,
 			filesToDelete: &filesToDelete,
-			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
-			skipCompileVerification: true,
 		)
 
 		let topLevelModuleOutput = try await executeSafeDIToolTest(
@@ -3012,8 +3004,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			includeFolders: ["Fake"],
-			// Generated output imports the placeholder "Test" module, which doesn't exist
-			skipCompileVerification: true,
 		)
 
 		#expect(output.dependencyTreeFiles.isEmpty)
