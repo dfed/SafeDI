@@ -21,14 +21,21 @@
 import Foundation
 
 /// Removes Swift line comments (`//`…EOL), block comments (`/* … */`,
-/// nesting supported), and string literals (single and triple-quoted),
-/// preserving line structure so regex line anchors still behave.
-/// Non-comment/non-string characters and newlines pass through unchanged.
+/// nesting supported), string literals (single and triple-quoted), and
+/// extended regex literals (`#/…/#`), preserving line structure so regex
+/// line anchors still behave. Non-comment/non-string characters and
+/// newlines pass through unchanged.
 ///
 /// This is deliberately a lexer-lite: it matches Swift tokens well enough
 /// that a mention of `@Instantiable(...)` inside a comment or string is
 /// excluded from the scanner's regex. It is NOT a full Swift parser — but
 /// the real parser (`SafeDITool`) runs at build time and is authoritative.
+///
+/// Known limitation: simple `/.../` regex literals are ambiguous with
+/// division in a tokenless scan, so they are not recognized. Block-comment
+/// detection includes a lookahead that bails on unterminated `/*` — that
+/// defangs runaway consumption when a `/*` appears inside a simple regex
+/// and no later `*/` exists in the file.
 func stripSwiftCommentsAndStrings(from source: String) -> String {
 	var result = ""
 	result.reserveCapacity(source.count)
@@ -46,8 +53,11 @@ func stripSwiftCommentsAndStrings(from source: String) -> String {
 			continue
 		}
 
-		// Block comment (nested): skip through the matching `*/`.
-		if character == "/", next == "*" {
+		// Block comment (nested): skip through the matching `*/`. First verify
+		// a matching `*/` exists at balanced depth; otherwise this `/*` isn't
+		// really a block comment (e.g., it's inside a `/.../` regex literal)
+		// and treating it as one would runaway-consume real code.
+		if character == "/", next == "*", blockCommentHasCloser(chars: chars, start: index) {
 			index += 2
 			var depth = 1
 			while index < chars.count, depth > 0 {
@@ -64,6 +74,30 @@ func stripSwiftCommentsAndStrings(from source: String) -> String {
 					}
 					index += 1
 				}
+			}
+			continue
+		}
+
+		// Extended regex literal `#/.../#`: delimited unambiguously, so skip
+		// the entire span. Preserves newlines for regex line-anchor parity.
+		if character == "#", next == "/" {
+			index += 2
+			while index < chars.count {
+				if chars[index] == "\\", index + 1 < chars.count {
+					if chars[index + 1] == "\n" {
+						result.append("\n")
+					}
+					index += 2
+					continue
+				}
+				if chars[index] == "/", index + 1 < chars.count, chars[index + 1] == "#" {
+					index += 2
+					break
+				}
+				if chars[index] == "\n" {
+					result.append("\n")
+				}
+				index += 1
 			}
 			continue
 		}
@@ -121,4 +155,26 @@ func stripSwiftCommentsAndStrings(from source: String) -> String {
 		index += 1
 	}
 	return result
+}
+
+/// Returns `true` if a `/*` at `start` has a matching `*/` at balanced
+/// depth somewhere later in `chars`. Used to skip block-comment mode
+/// when the `/*` is unterminated — defangs the case where `/*` appears
+/// inside a `/.../` regex literal with no later `*/` in the file.
+private func blockCommentHasCloser(chars: [Character], start: Int) -> Bool {
+	var index = start + 2
+	var depth = 1
+	while index < chars.count, depth > 0 {
+		let openerNext: Character? = index + 1 < chars.count ? chars[index + 1] : nil
+		if chars[index] == "/", openerNext == "*" {
+			depth += 1
+			index += 2
+		} else if chars[index] == "*", openerNext == "/" {
+			depth -= 1
+			index += 2
+		} else {
+			index += 1
+		}
+	}
+	return depth == 0
 }

@@ -144,6 +144,48 @@ struct PluginScannerStripCommentsAndStringsTests {
 		#expect(stripped.contains("@Instantiable(isRoot: true)"))
 	}
 
+	// MARK: Regex literals
+
+	@Test
+	func stripsExtendedRegexLiteral_whenInstantiableIsInsideHashSlashRegex() {
+		let source = #"let r = #/@Instantiable\(isRoot: true\)/#"#
+		let stripped = stripSwiftCommentsAndStrings(from: source)
+		#expect(!stripped.contains("@Instantiable"))
+		#expect(stripped.contains("let r ="))
+	}
+
+	@Test
+	func preservesSubsequentInstantiable_whenSimpleRegexContainsSlashStarAndNoLaterStarSlashExists() {
+		// Swift simple regex literal `/\/*/` contains `/*`. A naive stripper
+		// would enter block-comment mode and consume real code that follows.
+		// The lookahead guard bails because there is no matching `*/`,
+		// preserving the @Instantiable declaration below.
+		let source = """
+		let pattern = /\\/*/
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init() {}
+		}
+		"""
+		let stripped = stripSwiftCommentsAndStrings(from: source)
+		#expect(stripped.contains("@Instantiable(isRoot: true)"))
+		#expect(stripped.contains("public struct Root"))
+	}
+
+	@Test
+	func doesNotEnterBlockComment_whenSlashStarHasNoMatchingCloser() {
+		// Pathological: the stripper must not runaway-consume. If `/*` has
+		// no matching `*/`, treat it as regular text.
+		let source = """
+		let x = 1 /* unterminated
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {}
+		"""
+		let stripped = stripSwiftCommentsAndStrings(from: source)
+		#expect(stripped.contains("@Instantiable(isRoot: true)"))
+	}
+
 	// MARK: Regression — the exact shape that caused PR #271
 
 	@Test
