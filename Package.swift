@@ -114,7 +114,7 @@ let package = Package(
 			capability: .command(
 				intent: .custom(
 					verb: "safedi-install-tool",
-					description: "Downloads the SafeDITool prebuilt release binary for the current SafeDI version.",
+					description: "Xcode-only: downloads the SafeDITool prebuilt release binary for the current SafeDI version into .safedi/<version>/safeditool next to the .xcodeproj. swift build users get the prebuilt tool via the default `prebuilt` trait and don't need this.",
 				),
 				permissions: [
 					.writeToPackageDirectory(reason: "Downloads the SafeDITool binary into .safedi/<version>/safeditool."),
