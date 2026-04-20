@@ -911,10 +911,19 @@ public struct InstantiableMacro: MemberMacro {
 				// dependencies from the matching `instantiate()` return type — not
 				// the union across all overloads. Otherwise a label that is a
 				// non-dependency default for *this* overload but a dependency for
-				// another would incorrectly skip the callee-scope check. Falls
-				// back to the union when the return type doesn't match any known
-				// Instantiable (e.g. unknown `Self`-returning shape).
-				let mockReturnType = mockFunction.signature.returnClause?.type.typeDescription
+				// another would incorrectly skip the callee-scope check.
+				//
+				// `Self` return types are mapped to the extended type so the
+				// match succeeds: the visitor records instantiables by the actual
+				// extended type, not literal `Self`. Falls back to the union
+				// only when the return type is unknown (shouldn't happen for
+				// well-formed input).
+				let rawMockReturnType = mockFunction.signature.returnClause?.type.typeDescription
+				let mockReturnType: TypeDescription? = if rawMockReturnType == .simple(name: "Self", generics: []) {
+					extendedTypeDescription
+				} else {
+					rawMockReturnType
+				}
 				let dependenciesForMock: [Dependency] = if let mockReturnType,
 				                                           let matchingInstantiable = visitor.instantiables.first(where: { $0.concreteInstantiable == mockReturnType })
 				{
@@ -1308,6 +1317,21 @@ public struct InstantiableMacro: MemberMacro {
 			   base.baseName.text == "Self"
 			{
 				references.append("Self.\(node.declName.baseName.text)")
+				// Skip descent so the bare-`Self` visitor below doesn't
+				// double-report the base — we've already captured the full
+				// `Self.member` reference.
+				return .skipChildren
+			}
+			return .visitChildren
+		}
+
+		override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
+			// Catches bare `Self` in contexts that aren't member access:
+			// `Self()` constructor calls, `Self` as a function argument,
+			// `Self[…]` subscripts. Member-access `Self.foo` is captured by
+			// the visitor above (which skips descent to avoid double counting).
+			if node.baseName.text == "Self" {
+				references.append("Self")
 			}
 			return .visitChildren
 		}
