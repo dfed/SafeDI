@@ -1552,7 +1552,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// Non-public Child used from public Root is inaccessible across modules, so the generated init won't compile
+			// Internal Child referenced from public Root's init signature — Swift's same-module access-control rule rejects the public init's signature.
 			skipCompileVerification: true,
 		)
 
@@ -1608,7 +1608,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// Non-public Child used from public Root is inaccessible across modules, so the generated init won't compile
+			// Internal Child referenced from public Root's init signature — Swift's same-module access-control rule rejects the public init's signature.
 			skipCompileVerification: true,
 		)
 
