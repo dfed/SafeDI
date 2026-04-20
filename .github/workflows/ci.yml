@@ -63,6 +63,25 @@ jobs:
       - name: Build Framework
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
 
+  docc:
+    name: Build DocC on Xcode 26
+    runs-on: macos-26
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+      # `swift-docc-plugin`'s `--warnings-as-errors` scopes to a single
+      # target, so swift-syntax's internal DocC noise stays out of our
+      # strict build. That scoping isn't available via `xcodebuild
+      # docbuild`, which analyzes the whole target graph.
+      - name: Build DocC
+        uses: ./.github/actions/retry
+        with:
+          command: swift package generate-documentation --target SafeDI --warnings-as-errors
+
   spm-package-integration:
     name: Build Package Integration on Xcode 26
     runs-on: macos-26

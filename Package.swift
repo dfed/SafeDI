@@ -39,10 +39,11 @@ let package = Package(
 	traits: [
 		.default(enabledTraits: ["prebuilt"]),
 		.trait(name: "prebuilt", description: "Use a prebuilt SafeDITool binary from the artifact bundle (default)."),
-		.trait(name: "sourceBuild", description: "Build SafeDITool from source. Mutually exclusive with 'prebuilt'."),
+		.trait(name: "sourceBuild", description: "Build SafeDITool from source. Intended for local development and adopting unreleased changes; typically set via `--traits sourceBuild` which replaces the default `prebuilt`."),
 	],
 	dependencies: [
 		.package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.4.0"),
+		.package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.3.0"),
 		.package(url: "https://github.com/swiftlang/swift-syntax.git", "603.0.0"..<"605.0.0"),
 	],
 	targets: [
