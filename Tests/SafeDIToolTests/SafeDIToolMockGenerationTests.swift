@@ -8383,7 +8383,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_receivedClosureParameterHasEscapingAnnotation() async throws {
-		// Parent @Forwards a closure to Child via @Received. Child's init
+		// Root @Forwards a closure to Child via @Received. Child's init
 		// requires @escaping (stores the closure), so the flat received
 		// parameter on Child's generated mock must also be @escaping —
 		// otherwise `Child(callback: callback)` inside the mock body fails
@@ -8393,6 +8393,15 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
+				public struct App: Instantiable {
+				    public init(rootBuilder: Instantiator<Root>) {
+				        self.rootBuilder = rootBuilder
+				    }
+				    @Instantiated let rootBuilder: Instantiator<Root>
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
 				public struct Root: Instantiable {
 				    public init(child: Child, callback: @escaping () -> Void) {
 				        self.child = child
