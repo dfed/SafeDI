@@ -1130,8 +1130,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					"\(concreteType.asSource).\(methodName)(\(labeledArguments))"
 				}
 				return "{ \(callExpression) }"
-			}
-			if callSiteArguments.isEmpty {
+			} else if callSiteArguments.isEmpty {
 				return "\(concreteType.asSource).\(methodName)"
 			} else {
 				let labels = callSiteArguments
