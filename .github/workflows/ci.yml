@@ -31,8 +31,10 @@ jobs:
       - name: Verify Plugins/Shared.swift safeDIVersion was updated
         # Match the literal within 3 lines after the `safeDIVersion`
         # getter declaration so a future test-string in an unrelated
-        # spot can't satisfy a bare file-wide grep.
-        run: grep -A 2 'var safeDIVersion: String {' Plugins/Shared.swift | grep -q '"99.99.99-test"'
+        # spot can't satisfy a bare file-wide grep. Block scalar because
+        # an unquoted inline `{` trips the YAML parser.
+        run: |
+          grep -A 2 'var safeDIVersion: String {' Plugins/Shared.swift | grep -q '"99.99.99-test"'
 
   xcodebuild:
     name: Build with xcodebuild on Xcode 26
