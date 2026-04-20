@@ -31,30 +31,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			return []
 		}
 
-		// Prefer the user-downloaded prebuilt tool at `.safedi/<version>/safeditool`
-		// when available AND runnable on this host. Two reasons: (1) it sidesteps
-		// the `${BUILD_DIR}`-in-tool-path plugin-setup problem for Xcode-driven
-		// `sourceBuild` builds, and (2) the release build is ~15× faster than
-		// the debug build that SPM produces for source-built tools.
-		//
-		// Falling back when the file exists but can't execute (wrong platform,
-		// corrupted, missing exec bit) avoids an opaque-launch-failure loop
-		// where every build keeps invoking the broken binary.
-		let tool: URL
-		if let downloaded = verifiedDownloadedToolLocation(context.downloadedToolLocation) {
-			tool = downloaded
-		} else {
-			tool = try context.tool(named: "SafeDITool").url
-			if let version = context.safeDIVersion {
-				Diagnostics.warning("""
-				SafeDI is running a locally-built SafeDITool in the debug configuration, \
-				which is ~15× slower than the prebuilt release binary. To install the \
-				release binary for version \(version), run:
-
-				\tswift package --package-path "\(context.package.directoryURL.path(percentEncoded: false))" --allow-network-connections all --allow-writing-to-package-directory safedi-install-tool
-				""")
-			}
-		}
+		let tool = try context.tool(named: "SafeDITool").url
 		let outputDirectory = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutput")
 		let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.url)
 		let dependenciesSourceFiles = sourceTarget
@@ -233,12 +210,8 @@ extension Target {
 				SafeDI's build-tool plugin is falling back to a regex-based output \
 				scanner because the SPM-provided SafeDITool path contains unresolved \
 				Xcode build variables at plugin-setup time. To install the prebuilt \
-				SafeDITool binary for version \(context.safeDIVersion), run:
-
-				\tswift package --package-path "\(context.xcodeProject.directoryURL.path(percentEncoded: false))" --allow-network-connections all --allow-writing-to-package-directory safedi-install-tool
-
-				You may need to create a Package.swift at that path first, or run \
-				the command from a directory that contains one.
+				SafeDITool binary for version \(context.safeDIVersion), right-click \
+				the project in Xcode and choose SafeDI → Safedi Install Tool.
 				""")
 			}
 			let inputSwiftFiles = target

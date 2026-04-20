@@ -29,7 +29,7 @@ import PackagePlugin
 // the `sourceBuild` trait is active — the plugin-setup phase can't execute
 // the tool. A user-downloaded prebuilt at the known location sidesteps that
 // and also speeds up plugin-setup scans. See `InstallSafeDITool` for the
-// companion command plugin that downloads the binary.
+// companion Xcode command plugin that downloads the binary.
 
 #if canImport(XcodeProjectPlugin)
 	import XcodeProjectPlugin
@@ -67,76 +67,29 @@ import PackagePlugin
 			return expectedToolLocation
 		}
 	}
+
+	/// Verifies a cached SafeDITool binary actually runs on the host by
+	/// launching it with `--version` and checking it exits cleanly. Returns
+	/// the URL when the binary is usable, or `nil` when it can't launch
+	/// (wrong platform, corrupted, missing exec bit, etc.) so callers can
+	/// fall back to the SPM-provided tool.
+	func verifiedDownloadedToolLocation(_ toolURL: URL?) -> URL? {
+		guard let toolURL else { return nil }
+		let process = Process()
+		process.executableURL = toolURL
+		process.arguments = ["--version"]
+		process.standardOutput = Pipe()
+		process.standardError = Pipe()
+		do {
+			try process.run()
+		} catch {
+			return nil
+		}
+		process.waitUntilExit()
+		guard process.terminationStatus == 0 else { return nil }
+		return toolURL
+	}
 #endif
-
-extension PackagePlugin.PluginContext {
-	/// Pulls the SafeDI version from the resolved package graph. Returns
-	/// `nil` when the package is consumed via a non-versioned reference
-	/// (local path, root package) — in those cases the downloader can't
-	/// pick a matching release and the build plugin skips the prebuilt
-	/// path entirely.
-	var safeDIVersion: String? {
-		guard let safeDIOrigin = package.dependencies.first(where: { $0.package.displayName == "SafeDI" })?.package.origin else {
-			return nil
-		}
-		switch safeDIOrigin {
-		case let .repository(_, displayVersion, _):
-			// As of Xcode 16.0 Beta 6, the display version is of the form "Optional(version)".
-			guard let versionMatch = try? /Optional\((.*?)\)|^(.*?)$/.firstMatch(in: displayVersion),
-			      let version = versionMatch.output.1 ?? versionMatch.output.2
-			else {
-				return nil
-			}
-			return String(version)
-		case .registry, .root, .local:
-			fallthrough
-		@unknown default:
-			return nil
-		}
-	}
-
-	var safediFolder: URL {
-		package.directoryURL.appending(component: ".safedi")
-	}
-
-	var expectedToolFolder: URL? {
-		guard let safeDIVersion else { return nil }
-		return safediFolder.appending(component: safeDIVersion)
-	}
-
-	var expectedToolLocation: URL? {
-		expectedToolFolder?.appending(component: "safeditool")
-	}
-
-	var downloadedToolLocation: URL? {
-		guard let expectedToolLocation,
-		      FileManager.default.fileExists(atPath: expectedToolLocation.path(percentEncoded: false))
-		else { return nil }
-		return expectedToolLocation
-	}
-}
-
-/// Verifies a cached SafeDITool binary actually runs on the host by
-/// launching it with `--version` and checking it exits cleanly. Returns
-/// the URL when the binary is usable, or `nil` when it can't launch
-/// (wrong platform, corrupted, missing exec bit, etc.) so callers can
-/// fall back to the SPM-provided tool.
-func verifiedDownloadedToolLocation(_ toolURL: URL?) -> URL? {
-	guard let toolURL else { return nil }
-	let process = Process()
-	process.executableURL = toolURL
-	process.arguments = ["--version"]
-	process.standardOutput = Pipe()
-	process.standardError = Pipe()
-	do {
-		try process.run()
-	} catch {
-		return nil
-	}
-	process.waitUntilExit()
-	guard process.terminationStatus == 0 else { return nil }
-	return toolURL
-}
 
 // MARK: - CSV Writing
 

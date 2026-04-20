@@ -19,63 +19,28 @@
 // SOFTWARE.
 
 import Foundation
-#if canImport(FoundationNetworking)
-	import FoundationNetworking
-#endif
 import PackagePlugin
 
 /// Downloads the prebuilt SafeDITool release binary for the current SafeDI
-/// version into `<package>/.safedi/<version>/safeditool` (or the Xcode
-/// project's equivalent directory). The build plugin prefers this path over
-/// the SPM-provided tool because:
+/// version into `<xcodeProject>/.safedi/<version>/safeditool`. The Xcode
+/// build plugin prefers this path over the SPM-provided tool because
+/// `context.tool(named:)` returns an unresolved
+/// `${BUILD_DIR}/${CONFIGURATION}/SafeDITool` template path at plugin-setup
+/// time that can't be executed, forcing a fall back to the lossy
+/// regex-based `PluginScanner`. A downloaded prebuilt gives the
+/// plugin-setup scan the real parser's output.
 ///
-/// 1. **Xcode + sourceBuild trait**: `context.tool(named:)` returns an
-///    unresolved `${BUILD_DIR}/${CONFIGURATION}/SafeDITool` template path
-///    at plugin-setup time that can't be executed, forcing a fall back to
-///    the lossy regex-based `PluginScanner`. A downloaded prebuilt gives
-///    the plugin-setup scan the real parser's output.
-/// 2. **swift build + sourceBuild trait**: SafeDITool is built in DEBUG
-///    config, which is ~15× slower than the release binary. Downloading
-///    the prebuilt release restores prod-speed codegen.
+/// This plugin is Xcode-only. Users who build via `swift build` already get
+/// the prebuilt binary through the default `prebuilt` trait (or
+/// intentionally build from source with `--traits sourceBuild`).
 @main
 struct InstallSafeDITool: CommandPlugin {
 	func performCommand(
-		context: PackagePlugin.PluginContext,
+		context _: PackagePlugin.PluginContext,
 		arguments _: [String],
 	) async throws {
-		guard let safeDIOrigin = context.package.dependencies.first(where: { $0.package.displayName == "SafeDI" })?.package.origin else {
-			Diagnostics.error("No package origin found for SafeDI package.")
-			exit(1)
-		}
-		guard let version = context.safeDIVersion,
-		      let expectedToolFolder = context.expectedToolFolder,
-		      let expectedToolLocation = context.expectedToolLocation
-		else {
-			Diagnostics.error("Could not extract version for SafeDI. The install plugin only works when SafeDI is consumed via a versioned release (not a local or root package reference).")
-			exit(1)
-		}
-
-		switch safeDIOrigin {
-		case let .repository(url, _, _):
-			guard let originURL = URL(string: url)?.deletingPathExtension() else {
-				Diagnostics.error("No package URL found for SafeDI package.")
-				exit(1)
-			}
-			try await downloadTool(
-				originURL: originURL,
-				version: version,
-				expectedToolFolder: expectedToolFolder,
-				expectedToolLocation: expectedToolLocation,
-				safediFolder: context.safediFolder,
-			)
-
-		case .registry, .root, .local:
-			fallthrough
-
-		@unknown default:
-			Diagnostics.error("Cannot download SafeDITool from \(safeDIOrigin) — downloading only works when using a versioned release of SafeDI.")
-			exit(1)
-		}
+		Diagnostics.error("safedi-install-tool is an Xcode-only command plugin. swift build users get the prebuilt binary via the default `prebuilt` trait, and `--traits sourceBuild` builds SafeDITool from source on purpose.")
+		exit(1)
 	}
 }
 
@@ -133,7 +98,7 @@ private func downloadTool(
 	expectedToolLocation: URL,
 	safediFolder: URL,
 ) async throws {
-	// GitHub releases publish `SafeDITool-<os>-<arch>` assets. Pick the
+	// GitHub releases publish `SafeDITool-macos-<arch>` assets. Pick the
 	// one matching the host the installer runs on — consumers invoke
 	// this command on their dev machine, and the resulting binary has
 	// to run on that same host later when the build plugin launches it.
@@ -142,14 +107,6 @@ private func downloadTool(
 			let toolName = "SafeDITool-macos-arm64"
 		#elseif arch(x86_64)
 			let toolName = "SafeDITool-macos-x86_64"
-		#else
-			throw UnsupportedHostError()
-		#endif
-	#elseif os(Linux)
-		#if arch(arm64)
-			let toolName = "SafeDITool-linux-arm64"
-		#elseif arch(x86_64)
-			let toolName = "SafeDITool-linux-x86_64"
 		#else
 			throw UnsupportedHostError()
 		#endif
@@ -206,7 +163,7 @@ private func downloadTool(
 
 private struct UnsupportedHostError: Error, CustomStringConvertible {
 	var description: String {
-		"Unsupported host OS/architecture for SafeDITool download. Supported: macOS and Linux on arm64 or x86_64."
+		"Unsupported host OS/architecture for SafeDITool download. Supported: macOS on arm64 or x86_64."
 	}
 }
 
