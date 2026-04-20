@@ -1,7 +1,9 @@
 #!/bin/bash
 
-# Updates the artifact bundle URL and checksum in Package.swift.
-# Used by the publish workflow after building the artifact bundle.
+# Updates the artifact bundle URL and checksum in Package.swift, and
+# the InstallSafeDITool plugin's hardcoded SafeDI version in
+# Plugins/Shared.swift. Used by the publish workflow after building the
+# artifact bundle.
 #
 # Usage: ./Scripts/update-version.sh <version> <checksum>
 # Example: ./Scripts/update-version.sh 2.0.0 abc123def456
@@ -25,4 +27,14 @@ sed -i '' "s|https://github.com/dfed/SafeDI/releases/download/[^\"]*|https://git
 sed -i '' "s|checksum: \"[^\"]*\"|checksum: \"${CHECKSUM}\"|" Package.swift
 
 echo "  Package.swift: URL and checksum updated"
+
+# Update the InstallSafeDITool XcodeCommandPlugin's hardcoded SafeDI
+# version (Xcode plugins can't read the package manifest at runtime, so
+# the version has to live in source). The declaration spans multiple
+# lines, so scope the replacement to the `safeDIVersion` getter body
+# via an address range — the only quoted string inside that range is
+# the version literal.
+sed -i '' -E "/var safeDIVersion: String \{/,/\}/ s|\"[^\"]+\"|\"${VERSION}\"|" Plugins/Shared.swift
+
+echo "  Plugins/Shared.swift: safeDIVersion updated"
 echo "Done."
