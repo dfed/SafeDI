@@ -99,9 +99,11 @@ enum PluginScanner {
 	// MARK: - Private
 
 	/// Checks whether a file likely contains `@Instantiable(isRoot: true)`.
-	/// Uses regex to reduce false positives from comments or strings compared
-	/// to raw `contains()` checks. The real parser in SafeDITool is authoritative;
-	/// this is only used to predict which output files will be generated.
+	/// Comments and string literals are stripped before matching so a mention
+	/// of `@Instantiable(isRoot: true)` in a doc comment or string doesn't
+	/// false-positive — the real parser in SafeDITool is authoritative, but
+	/// that parser only runs at build time; this scan determines what output
+	/// files the build is expected to produce.
 	///
 	/// The regex uses `(.|\n)*?` instead of `[^)]*` to handle parentheses inside
 	/// string literal arguments (e.g. `mockAttributes: "@available(iOS 17, *)"`).
@@ -109,7 +111,8 @@ enum PluginScanner {
 		guard let content = try? String(contentsOf: fileURL, encoding: .utf8),
 		      content.contains("@Instantiable")
 		else { return false }
-		return content.range(of: #"@Instantiable\s*\((.|\n)*?isRoot\s*:\s*true"#, options: .regularExpression) != nil
+		let stripped = stripSwiftCommentsAndStrings(from: content)
+		return stripped.range(of: #"@Instantiable\s*\((.|\n)*?isRoot\s*:\s*true"#, options: .regularExpression) != nil
 	}
 
 	/// Checks whether a file likely contains `@Instantiable(generateMock: true)`.
@@ -117,7 +120,111 @@ enum PluginScanner {
 		guard let content = try? String(contentsOf: fileURL, encoding: .utf8),
 		      content.contains("@Instantiable")
 		else { return false }
-		return content.range(of: #"@Instantiable\s*\((.|\n)*?generateMock\s*:\s*true"#, options: .regularExpression) != nil
+		let stripped = stripSwiftCommentsAndStrings(from: content)
+		return stripped.range(of: #"@Instantiable\s*\((.|\n)*?generateMock\s*:\s*true"#, options: .regularExpression) != nil
+	}
+
+	/// Removes Swift line comments (`//`…EOL), block comments (`/* … */`,
+	/// nesting supported), and string literals (single and triple-quoted),
+	/// preserving line structure so regex line anchors still behave.
+	/// Non-comment/non-string characters and newlines pass through unchanged.
+	///
+	/// This is deliberately a lexer-lite: it matches Swift tokens well enough
+	/// that a mention of `@Instantiable(...)` inside a comment or string is
+	/// excluded from the scanner's regex. It is NOT a full Swift parser — but
+	/// the real parser (`SafeDITool`) runs at build time and is authoritative.
+	static func stripSwiftCommentsAndStrings(from source: String) -> String {
+		var result = ""
+		result.reserveCapacity(source.count)
+		let chars = Array(source)
+		var index = 0
+		while index < chars.count {
+			let character = chars[index]
+			let next: Character? = index + 1 < chars.count ? chars[index + 1] : nil
+
+			// Line comment: skip through end-of-line, keeping the newline.
+			if character == "/", next == "/" {
+				while index < chars.count, chars[index] != "\n" {
+					index += 1
+				}
+				continue
+			}
+
+			// Block comment (nested): skip through the matching `*/`.
+			if character == "/", next == "*" {
+				index += 2
+				var depth = 1
+				while index < chars.count, depth > 0 {
+					let openerNext: Character? = index + 1 < chars.count ? chars[index + 1] : nil
+					if chars[index] == "/", openerNext == "*" {
+						depth += 1
+						index += 2
+					} else if chars[index] == "*", openerNext == "/" {
+						depth -= 1
+						index += 2
+					} else {
+						if chars[index] == "\n" {
+							result.append("\n")
+						}
+						index += 1
+					}
+				}
+				continue
+			}
+
+			// Triple-quoted string: skip through closing `"""`. Newlines inside
+			// are preserved so downstream regexes see consistent line positions.
+			if character == "\"", next == "\"", index + 2 < chars.count, chars[index + 2] == "\"" {
+				index += 3
+				while index < chars.count {
+					if chars[index] == "\\", index + 1 < chars.count {
+						if chars[index + 1] == "\n" {
+							result.append("\n")
+						}
+						index += 2
+						continue
+					}
+					if chars[index] == "\"",
+					   index + 2 < chars.count,
+					   chars[index + 1] == "\"",
+					   chars[index + 2] == "\""
+					{
+						index += 3
+						break
+					}
+					if chars[index] == "\n" {
+						result.append("\n")
+					}
+					index += 1
+				}
+				continue
+			}
+
+			// Single-quoted string: skip through closing `"` on the same line.
+			if character == "\"" {
+				index += 1
+				while index < chars.count {
+					if chars[index] == "\\", index + 1 < chars.count {
+						index += 2
+						continue
+					}
+					if chars[index] == "\"" || chars[index] == "\n" {
+						if chars[index] == "\n" {
+							result.append("\n")
+						} else {
+							index += 1
+						}
+						break
+					}
+					index += 1
+				}
+				continue
+			}
+
+			result.append(character)
+			index += 1
+		}
+		return result
 	}
 
 	private static func outputFileNames(
