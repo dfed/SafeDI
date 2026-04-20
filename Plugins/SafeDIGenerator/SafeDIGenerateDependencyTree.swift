@@ -32,12 +32,16 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		}
 
 		// Prefer the user-downloaded prebuilt tool at `.safedi/<version>/safeditool`
-		// when available. Two reasons: (1) it sidesteps the `${BUILD_DIR}`-in-tool-
-		// path plugin-setup problem for Xcode-driven `sourceBuild` builds, and
-		// (2) the release build is ~15× faster than the debug build that SPM
-		// produces for source-built tools.
+		// when available AND runnable on this host. Two reasons: (1) it sidesteps
+		// the `${BUILD_DIR}`-in-tool-path plugin-setup problem for Xcode-driven
+		// `sourceBuild` builds, and (2) the release build is ~15× faster than
+		// the debug build that SPM produces for source-built tools.
+		//
+		// Falling back when the file exists but can't execute (wrong platform,
+		// corrupted, missing exec bit) avoids an opaque-launch-failure loop
+		// where every build keeps invoking the broken binary.
 		let tool: URL
-		if let downloaded = context.downloadedToolLocation {
+		if let downloaded = verifiedDownloadedToolLocation(context.downloadedToolLocation) {
 			tool = downloaded
 		} else {
 			tool = try context.tool(named: "SafeDITool").url
@@ -210,13 +214,16 @@ extension Target {
 			target: XcodeProjectPlugin.XcodeTarget,
 		) throws -> [PackagePlugin.Command] {
 			// Prefer the user-downloaded prebuilt tool at
-			// `.safedi/<version>/safeditool` when available. The SPM-provided
-			// tool path arrives as `${BUILD_DIR}/${CONFIGURATION}/SafeDITool`
-			// in Xcode, which can't be executed at plugin-setup time and
-			// forces the regex-based PluginScanner fallback.
+			// `.safedi/<version>/safeditool` when available AND runnable on
+			// this host. The SPM-provided tool path arrives as
+			// `${BUILD_DIR}/${CONFIGURATION}/SafeDITool` in Xcode, which
+			// can't be executed at plugin-setup time and forces the
+			// regex-based PluginScanner fallback. Verifying runnability
+			// avoids trusting a cached binary that can't actually launch
+			// (wrong platform, corrupted, missing exec bit).
 			let tool: URL
 			let runsRealScan: Bool
-			if let downloaded = context.downloadedToolLocation {
+			if let downloaded = verifiedDownloadedToolLocation(context.downloadedToolLocation) {
 				tool = downloaded
 				runsRealScan = true
 			} else {
