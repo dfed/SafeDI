@@ -272,6 +272,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Maps types with hand-written mock methods to their mock method name (e.g. "mock" or a custom name).
 		/// Used to provide default values for forwarded dependencies whose type has a hand-written mock.
 		let forwardedParameterMockDefaults: [TypeDescription: String]
+		/// Type-graph back-edges to skip when emitting `safeDIOverrides` paths in
+		/// builder code. Computed once globally so the override-path navigation
+		/// matches the configuration-struct shape produced by `generateConfigurationStruct`.
+		let cycleEdges: Set<CycleEdge>
 	}
 
 	private let scopeData: ScopeData
@@ -845,6 +849,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				parentPath: "safeDIOverrides",
 				indent: bodyIndent,
 				flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+				parentConcreteType: nil,
+				cycleEdges: context.cycleEdges,
+				overridePathReachable: true,
 			)
 			lines.append(contentsOf: bodyBindings)
 		} else {
@@ -1058,8 +1065,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// name lookup inside the default expression. Dependency parameters
 		/// (even when shaped `_ dep: Dep = …`) are never elided — the override
 		/// flow must thread the resolved binding through to the callee.
-		/// `validateMockableInitializerShapes` rejects the shapes where
-		/// eliding would produce an uncallable signature (non-trailing
+		/// `validateUnlabeledDefaultShape` on the macro rejects the shapes
+		/// where eliding would produce an uncallable signature (non-trailing
 		/// `_`-labeled default).
 		private func isElidedInCallSite(_ argument: Initializer.Argument, dependencyInnerLabels: Set<String>) -> Bool {
 			argument.label == "_"
@@ -1125,19 +1132,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"init"
 			}
-			// In the hidden-defaults closure-wrap case, the body is a CALL
-			// expression where `init` has no `.init` suffix — `Type($0)` not
-			// `Type.init($0)`. Everywhere else we emit a function reference,
-			// which requires `.init` to disambiguate from the type itself.
 			if hasHiddenUnlabeledDefaults {
 				let labeledArguments = callSiteArguments.enumerated()
 					.map { index, argument in
 						argument.label == "_" ? "$\(index)" : "\(argument.label): $\(index)"
 					}
 					.joined(separator: ", ")
-				let callExpression = methodName == "init"
-					? "\(concreteType.asSource)(\(labeledArguments))"
-					: "\(concreteType.asSource).\(methodName)(\(labeledArguments))"
+				let callExpression = if methodName == "init" {
+					"\(concreteType.asSource)(\(labeledArguments))"
+				} else {
+					"\(concreteType.asSource).\(methodName)(\(labeledArguments))"
+				}
 				return "{ \(callExpression) }"
 			} else if callSiteArguments.isEmpty {
 				return "\(concreteType.asSource).\(methodName)"
@@ -1149,11 +1154,74 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
+		/// Call-site arguments with labeled non-dependency defaults also elided,
+		/// for the pruned-back-edge / unreachable-override case where Swift's
+		/// default-argument thunk must fire in the callee's scope. Elided
+		/// defaults preserve correct resolution of `Self.*`, private members,
+		/// and file-scoped helpers in the default expression, which would
+		/// otherwise resolve in the wrong context if inlined at the caller.
+		var callSiteArgumentsForPrunedOverride: [Initializer.Argument] {
+			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
+			return callSiteArguments.filter { argument in
+				dependencyInnerLabels.contains(argument.innerLabel) || !argument.hasDefaultValue
+			}
+		}
+
+		/// Closure-form default builder that accepts only the args surfaced by
+		/// `callSiteArgumentsForPrunedOverride`, so labeled non-dependency
+		/// defaults fire via Swift's default-argument thunk in the callee.
+		///
+		/// Pass `inSendableContext: true` when the caller will capture the
+		/// closure inside an `@Sendable` helper function — the emitted closure
+		/// then carries the `@Sendable` attribute so Swift 6 strict-checking
+		/// accepts it at the capture site. The closure body is inherently
+		/// sendable (no captures besides the init call), so `@Sendable` is
+		/// safe whenever asked for, but over-annotating makes the type differ
+		/// from the destination slot type in non-sendable contexts, so the
+		/// decision is left to the caller that knows the context.
+		///
+		/// Extension-based (`instantiate()`) callees never reach this helper:
+		/// every `instantiate()` parameter is a dependency, so
+		/// `callSiteArgumentsForPrunedOverride == callSiteArguments` and the
+		/// caller falls through to the default-builder function reference
+		/// instead. Extensions with `customMock` take the `customMockName`
+		/// branch (`useMockInitializer == true`).
+		func defaultBuilderExpressionForPrunedOverride(inSendableContext: Bool) -> String {
+			let methodName: String = if useMockInitializer {
+				customMockName ?? InstantiableVisitor.mockMethodName
+			} else {
+				"init"
+			}
+			let elided = callSiteArgumentsForPrunedOverride
+			let labeledArguments = elided.enumerated()
+				.map { index, argument in
+					argument.label == "_" ? "$\(index)" : "\(argument.label): $\(index)"
+				}
+				.joined(separator: ", ")
+			let callExpression = if methodName == "init" {
+				"\(concreteType.asSource)(\(labeledArguments))"
+			} else {
+				"\(concreteType.asSource).\(methodName)(\(labeledArguments))"
+			}
+			if inSendableContext {
+				return "{ @Sendable in \(callExpression) }"
+			} else {
+				return "{ \(callExpression) }"
+			}
+		}
+
 		/// A direct call expression using the default builder with labeled arguments.
 		/// e.g., `ConcreteService(helper: helper)` or `ConcreteService.instantiate(helper: helper)`.
 		/// Unlike `defaultBuilderExpression` (a function reference for `??` coalescing),
 		/// this produces a complete call that's faster for the compiler to type-check.
-		func defaultBuilderCall(arguments: [String]) -> String {
+		///
+		/// Pass `overrideReachable: false` when the call lives on a pruned
+		/// back-edge path where `resolveBuilderArguments` returned values for
+		/// `callSiteArgumentsForPrunedOverride` rather than `callSiteArguments`.
+		/// Zipping against the wrong signature would shift labels for arguments
+		/// that follow an elided default (e.g. `init(a: A, b: B = ..., c: C)`
+		/// with `b` elided would emit `C`'s value under label `b`).
+		func defaultBuilderCall(arguments: [String], overrideReachable: Bool = true) -> String {
 			let methodName: String = if useMockInitializer {
 				customMockName ?? InstantiableVisitor.mockMethodName
 			} else if isExtensionBased {
@@ -1161,7 +1229,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"init"
 			}
-			let labeledArguments = zip(callSiteArguments, arguments)
+			let surfacedArguments = overrideReachable ? callSiteArguments : callSiteArgumentsForPrunedOverride
+			let labeledArguments = zip(surfacedArguments, arguments)
 				.map { $0.0.label == "_" ? $0.1 : "\($0.0.label): \($0.1)" }
 				.joined(separator: ", ")
 			if methodName == "init" {
@@ -1211,12 +1280,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case alias(MockAliasNode)
 	}
 
+	/// A directed edge in the global type-reference graph that, when removed,
+	/// breaks a cycle. Computed once globally (one back-edge per strongly-connected
+	/// component of size > 1) and applied uniformly when generating every type's
+	/// configuration struct.
+	struct CycleEdge: Hashable {
+		let parent: String
+		let child: String
+	}
+
 	/// Collects all unique configuration types from this scope's mock parameter tree.
+	/// Children edges are filtered against `cycleEdges` so the same back-edges are
+	/// removed across every root's view of a given type — required for type-level
+	/// consistency, since per-tree cycle detection (`isPropertyCycle`) breaks at
+	/// different edges depending on which root is being walked.
 	/// `sendableConfigurationTypeNames` lists the concrete types whose configuration
 	/// struct must be `@Sendable`-typed because some root references them from a
 	/// `SendableInstantiator` scope. The set is computed once across all roots so
 	/// struct-per-type dedup remains consistent.
 	func collectConfigurationTypes(
+		cycleEdges: Set<CycleEdge>,
 		sendableConfigurationTypeNames: Set<String>,
 	) async -> [(typeName: String, structCode: String)] {
 		let parameterTree = await collectMockParameterTree()
@@ -1228,6 +1311,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				structCode: Self.generateConfigurationStruct(
 					for: node,
 					indent: indent,
+					cycleEdges: cycleEdges,
 					requiresSendable: sendableConfigurationTypeNames.contains(node.concreteType.asSource),
 				),
 			)
@@ -1479,6 +1563,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			// Skip leaf nodes that don't need a SafeDIMockConfiguration struct.
 			guard node.needsConfigurationStruct else { return }
+			// No cycle-closer guard here: a cycle-closer (isPropertyCycle == true)
+			// is always reached at a deeper DFS level than its matching non-cycle
+			// occurrence (the property must appear earlier in the stack for
+			// `isPropertyCycle` to fire), so the `seen` dedup below catches it
+			// after the real version has already been recorded.
 			if seen.contains(key) {
 				// If this node requires sendable and the existing one doesn't,
 				// replace it — @Sendable closures are compatible in both contexts.
@@ -1570,6 +1659,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func generateConfigurationStruct(
 		for node: MockParameterNode,
 		indent: String,
+		cycleEdges: Set<CycleEdge>,
 		requiresSendable: Bool,
 	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
@@ -1585,12 +1675,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var storedProperties = [String]()
 
 		// Child edge parameters (disambiguated if labels collide).
-		// Exclude children whose type matches this node — they'd create a recursive
-		// value type. These are self-referencing Instantiators (lazy cycles).
+		// Exclude back-edges from `cycleEdges` — including them would nest a
+		// configuration struct that transitively contains itself, which Swift
+		// rejects as an infinite-size value type. `cycleEdges` is computed once
+		// globally (one back-edge set per strongly-connected component), so the
+		// same edges are filtered no matter which root contributes the struct —
+		// every root produces the same struct shape for a given type.
 		// Only property children surface on the configuration struct; aliases
 		// are emitted as inline `let` bindings in the mock body.
-		let nonCycleChildren = node.propertyChildren.filter {
-			$0.concreteType != node.concreteType
+		let parentTypeName = node.concreteType.asSource
+		let nonCycleChildren = node.propertyChildren.filter { child in
+			!cycleEdges.contains(CycleEdge(
+				parent: parentTypeName,
+				child: child.concreteType.asSource,
+			))
 		}
 		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
 		for child in nonCycleChildren {
@@ -1664,6 +1762,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		parentPath: String,
 		functionName: String,
 		ancestorTypes: Set<String>,
+		parentConcreteType: String? = nil,
+		cycleEdges: Set<CycleEdge> = [],
+		overridePathReachable: Bool = true,
 		into extractions: inout [(localName: String, optionalPath: String?, defaultExpression: String)],
 	) {
 		let nodes = items.propertyNodes
@@ -1671,6 +1772,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for node in nodes {
 			let nodeTypeKey = node.instantiatedTypeDescription.asSource
 			let isCycleNode = ancestorTypes.contains(nodeTypeKey)
+			let nodeConcreteType = node.concreteType.asSource
+			// A back-edge from parentConcreteType to this node means this node
+			// was filtered out of the parent's SafeDIMockConfiguration struct —
+			// so its override path is unreachable here. Descendants of an
+			// unreachable node stay unreachable (path can't be recovered).
+			let isBackEdge = parentConcreteType.map {
+				cycleEdges.contains(CycleEdge(parent: $0, child: nodeConcreteType))
+			} ?? false
+			let thisOverrideReachable = overridePathReachable && !isBackEdge
+
 			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			let nodePath = "\(parentPath).\(disambiguated)"
 			// Convert nodePath to a local name: replace dots with underscores,
@@ -1679,7 +1790,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.replacingOccurrences(of: "safeDIOverrides.", with: "")
 				.replacingOccurrences(of: ".", with: "_")
 
-			if !isCycleNode {
+			if !isCycleNode, thisOverrideReachable {
 				let defaultBuilder = node.defaultBuilderExpression
 				if node.erasedToConcreteExistential {
 					// Erased wrappers: the override returns the property type but
@@ -1712,12 +1823,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 
 			// Extract default parameter references — direct assignment, no optional.
-			for defaultParameter in node.defaultParameters {
-				extractions.append((
-					localName: "\(functionName)__\(relativePath)_\(defaultParameter.label)",
-					optionalPath: nil,
-					defaultExpression: "\(nodePath).\(defaultParameter.label)",
-				))
+			// Skip when the override path is unreachable: the slot was pruned from
+			// the config struct, so `nodePath.<label>` would not compile.
+			// `resolveBuilderArguments` inlines the declared default expression in
+			// that case via its `!overrideReachable` branch.
+			if thisOverrideReachable {
+				for defaultParameter in node.defaultParameters {
+					extractions.append((
+						localName: "\(functionName)__\(relativePath)_\(defaultParameter.label)",
+						optionalPath: nil,
+						defaultExpression: "\(nodePath).\(defaultParameter.label)",
+					))
+				}
 			}
 
 			// Recurse into children (for constant node children inside the sendable function).
@@ -1729,6 +1846,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					parentPath: nodePath,
 					functionName: functionName,
 					ancestorTypes: childAncestors,
+					parentConcreteType: nodeConcreteType,
+					cycleEdges: cycleEdges,
+					overridePathReachable: thisOverrideReachable,
 					into: &extractions,
 				)
 			}
@@ -1755,6 +1875,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ancestorTypes: Set<String> = [],
 		sendableExtractionPrefix: String? = nil,
 		flatParameterDisambiguationMap: [String: [String: String]] = [:],
+		parentConcreteType: String?,
+		cycleEdges: Set<CycleEdge>,
+		overridePathReachable: Bool,
 	) -> [String] {
 		var lines = [String]()
 
@@ -1782,6 +1905,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let nodeTypeKey = node.instantiatedTypeDescription.asSource
 				let isCycleNode = ancestorTypes.contains(nodeTypeKey)
 
+				// A back-edge from parentConcreteType to this node means this node
+				// was filtered out of the parent's SafeDIMockConfiguration struct —
+				// so its override path is unreachable here. Descendants of an
+				// unreachable node stay unreachable (path can't be recovered).
+				let nodeConcreteType = node.concreteType.asSource
+				let isBackEdge = parentConcreteType.map {
+					cycleEdges.contains(CycleEdge(parent: $0, child: nodeConcreteType))
+				} ?? false
+				let thisOverrideReachable = overridePathReachable && !isBackEdge
+
 				let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 				let nodePath = "\(parentPath).\(disambiguated)"
 				// When this node's label collides with a sibling, use the
@@ -1802,7 +1935,36 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let builderExpression: String
 				let optionalBuilderPath: String?
 				let argumentNodePath: String
-				if isCycleNode {
+				// When the override path is pruned AND `resolveBuilderArguments`
+				// would elide labeled non-dep defaults (tracked by
+				// `callSiteArgumentsForPrunedOverride`), we must use a closure
+				// form that calls the callee with only deps + required non-deps
+				// so Swift's default-argument thunk fires in the callee's scope.
+				// Checked before `isCycleNode` because a cycle node can also be
+				// globally unreachable (self-cycle, or cycle-plus-back-edge),
+				// and taking the full-signature `defaultBuilder` there produces
+				// an arity mismatch against the elided argument list.
+				let argsElidedForPrunedOverride = node.callSiteArgumentsForPrunedOverride.count < node.callSiteArguments.count
+				if !thisOverrideReachable, argsElidedForPrunedOverride {
+					// The closure will be captured in a `@Sendable` func
+					// whenever the ancestor chain includes a sendable
+					// extraction OR the node itself lives inside a sendable
+					// wrapper — either case needs the `@Sendable` attribute
+					// on the closure literal so Swift 6 accepts the capture.
+					let inSendableContext = sendableExtractionPrefix != nil
+						|| node.typeDescription.propertyType.isSendable
+					builderExpression = node.defaultBuilderExpressionForPrunedOverride(
+						inSendableContext: inSendableContext,
+					)
+					optionalBuilderPath = nil
+					argumentNodePath = nodePath
+				} else if isCycleNode {
+					builderExpression = defaultBuilder
+					optionalBuilderPath = nil
+					argumentNodePath = nodePath
+				} else if !thisOverrideReachable {
+					// Pruned override, no labeled defaults to elide — the full
+					// default builder and the (non-elided) argument list line up.
 					builderExpression = defaultBuilder
 					optionalBuilderPath = nil
 					argumentNodePath = nodePath
@@ -1826,6 +1988,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					for: node,
 					nodePath: argumentNodePath,
 					sendableExtractionPrefix: sendableExtractionPrefix,
+					overrideReachable: thisOverrideReachable,
 				)
 				let argumentList = arguments.joined(separator: ", ")
 
@@ -1846,6 +2009,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						indent: indent,
 						ancestorTypes: childAncestors,
 						flatParameterDisambiguationMap: combinedDisambiguationMap,
+						cycleEdges: cycleEdges,
+						overridePathReachable: thisOverrideReachable,
 					))
 				} else if node.requiresFunctionWrapper || hasDisambiguatedReceiver(node, flatParameterDisambiguationMap: combinedDisambiguationMap) {
 					// Constant node that needs a dedicated Swift scope — either for its
@@ -1874,6 +2039,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						ancestorTypes: childAncestors,
 						sendableExtractionPrefix: sendableExtractionPrefix,
 						flatParameterDisambiguationMap: combinedDisambiguationMap,
+						parentConcreteType: node.concreteType.asSource,
+						cycleEdges: cycleEdges,
+						overridePathReachable: thisOverrideReachable,
 					)
 
 					if node.erasedToConcreteExistential {
@@ -1886,8 +2054,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						// that don't accept their own erased type).
 						// In sendable context, use the extracted local (builderExpression)
 						// instead of referencing safeDIOverrides directly.
-						// Note: constant erased cycles are rejected by mock validation
-						// before reaching this point, so isCycleNode is always false here.
+						// `thisOverrideReachable` is always true here: this branch handles
+						// non-Instantiator (constant-typed) erased children, and
+						// `validateMockRootScopeForCycles` rejects any cycle containing a
+						// constant edge via `throwIfInvalidCycle`'s "partially-lazy" /
+						// "constant" checks. Pruned back-edges on erased children only
+						// occur on `ErasedInstantiator`-typed properties, which are handled
+						// by `generateInstantiatorBinding`.
 						let wrapperType = node.typeDescription.asSource
 						let overridePath = optionalBuilderPath ?? builderExpression
 						lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
@@ -1926,7 +2099,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							lines.append("\(indent)let \(outerBindingName) = \(leafBuilderExpression)(\(argumentList))")
 						}
 					} else if node.erasedToConcreteExistential {
-						// Sendable context: extracted local is optional.
+						// Sendable-extracted context: builderExpression is the extracted
+						// optional local. `thisOverrideReachable` is always true here —
+						// constant-typed erased children cannot be on a pruned back-edge
+						// because `validateMockRootScopeForCycles` rejects any cycle
+						// containing a constant edge. `ErasedInstantiator`-typed erased
+						// children go through `generateInstantiatorBinding`.
 						let wrapperType = node.typeDescription.asSource
 						lines.append("\(indent)let \(outerBindingName) = \(builderExpression)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
 					} else {
@@ -1966,22 +2144,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for node: MockParameterNode,
 		nodePath: String,
 		sendableExtractionPrefix: String? = nil,
+		overrideReachable: Bool = true,
 	) -> [String] {
 		let dependenciesByLabel = Dictionary(
 			uniqueKeysWithValues: node.dependencies.map { ($0.property.label, $0) },
 		)
-
 		let relativePath = nodePath
 			.replacingOccurrences(of: "safeDIOverrides.", with: "")
 			.replacingOccurrences(of: ".", with: "_")
-
-		// Every non-dependency arg surviving `callSiteArguments` is a labeled
-		// default — `_`-labeled defaults are either elided (trailing) or
-		// rejected at generator-validation time (non-trailing).
-		// `validateMockableInitializerShapes` enforces that; a required
-		// labeled non-dependency would be rejected earlier by the macro's
-		// `unexpectedArgument` check.
-		return node.callSiteArguments.map { argument in
+		let argumentsToSurface = overrideReachable
+			? node.callSiteArguments
+			: node.callSiteArgumentsForPrunedOverride
+		return argumentsToSurface.map { argument in
 			if dependenciesByLabel[argument.innerLabel] != nil {
 				argument.innerLabel
 			} else if let sendableExtractionPrefix {
@@ -2006,6 +2180,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 		ancestorTypes: Set<String> = [],
 		flatParameterDisambiguationMap: [String: [String: String]] = [:],
+		cycleEdges: Set<CycleEdge> = [],
+		overridePathReachable: Bool = true,
 	) -> [String] {
 		let functionName = "__safeDI_\(outerBindingName)"
 		let forwardedProperties = node.forwardedProperties.sorted()
@@ -2068,6 +2244,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					parentPath: nodePath,
 					functionName: functionName,
 					ancestorTypes: ancestorTypes,
+					parentConcreteType: node.concreteType.asSource,
+					cycleEdges: cycleEdges,
+					overridePathReachable: overridePathReachable,
 					into: &extractions,
 				)
 				// Extract the node's own safeDIBuilder.
@@ -2119,6 +2298,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					ancestorTypes: functionAncestors,
 					sendableExtractionPrefix: functionName,
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+					parentConcreteType: node.concreteType.asSource,
+					cycleEdges: cycleEdges,
+					overridePathReachable: overridePathReachable,
 				)
 				lines.append(contentsOf: childBindings)
 
@@ -2167,6 +2349,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indent: innerIndent,
 					ancestorTypes: functionAncestors,
 					flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+					parentConcreteType: node.concreteType.asSource,
+					cycleEdges: cycleEdges,
+					overridePathReachable: overridePathReachable,
 				)
 				lines.append(contentsOf: childBindings)
 
@@ -2192,19 +2377,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
 					lines.append("\(innerIndent)}")
 				} else if node.erasedToConcreteExistential {
-					// Sendable-extracted context: builderExpression is the extracted
-					// optional local.
 					let wrapperType = node.typeDescription.unwrapped.asInstantiatedType.asSource
 					let returnKeyword = hasPreamble ? "return " : ""
-					lines.append("\(innerIndent)if let \(builderExpression) {")
-					if node.needsConfigurationStruct {
-						lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(wrapperType)(\(builderExpression)(\(builderCallArguments)))")
+					if !overridePathReachable {
+						// Pruned back-edge — `builderExpression` is a non-optional
+						// default builder. Optional binding would fail to typecheck;
+						// emit direct construction.
+						lines.append("\(innerIndent)\(returnKeyword)\(wrapperType)(\(node.defaultBuilderCall(arguments: arguments, overrideReachable: false)))")
 					} else {
-						lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(builderExpression)(\(builderCallArguments))")
+						// Sendable-extracted context: builderExpression is the extracted
+						// optional local.
+						lines.append("\(innerIndent)if let \(builderExpression) {")
+						if node.needsConfigurationStruct {
+							lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(wrapperType)(\(builderExpression)(\(builderCallArguments)))")
+						} else {
+							lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(builderExpression)(\(builderCallArguments))")
+						}
+						lines.append("\(innerIndent)} else {")
+						lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+						lines.append("\(innerIndent)}")
 					}
-					lines.append("\(innerIndent)} else {")
-					lines.append("\(innerIndent)\(standardIndent)\(returnKeyword)\(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
-					lines.append("\(innerIndent)}")
 				} else if let optionalBuilderPath {
 					let nilCoalescingExpression = "(\(optionalBuilderPath) ?? \(node.defaultBuilderExpression))"
 					if !hasPreamble {

@@ -804,9 +804,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public class AnyService {
-				    public init(_ value: some Any) {}
-				}
+				public protocol AnyService {}
 				""",
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
@@ -819,13 +817,13 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [AnyService.self])
-				public struct ConcreteService: Instantiable {
+				public struct ConcreteService: Instantiable, AnyService {
 				    public init() {}
 				}
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [AnyService.self], mockOnly: true)
-				public struct MockService: Instantiable {
+				public struct MockService: Instantiable, AnyService {
 				    public init() {}
 				    public static func mock() -> MockService { MockService() }
 				}
