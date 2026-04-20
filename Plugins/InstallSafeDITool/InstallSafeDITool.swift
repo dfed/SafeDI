@@ -133,12 +133,28 @@ private func downloadTool(
 	expectedToolLocation: URL,
 	safediFolder: URL,
 ) async throws {
-	#if arch(arm64)
-		let toolName = "SafeDITool-macos-arm64"
-	#elseif arch(x86_64)
-		let toolName = "SafeDITool-macos-x86_64"
+	// GitHub releases publish `SafeDITool-<os>-<arch>` assets. Pick the
+	// one matching the host the installer runs on — consumers invoke
+	// this command on their dev machine, and the resulting binary has
+	// to run on that same host later when the build plugin launches it.
+	#if os(macOS)
+		#if arch(arm64)
+			let toolName = "SafeDITool-macos-arm64"
+		#elseif arch(x86_64)
+			let toolName = "SafeDITool-macos-x86_64"
+		#else
+			throw UnsupportedHostError()
+		#endif
+	#elseif os(Linux)
+		#if arch(arm64)
+			let toolName = "SafeDITool-linux-arm64"
+		#elseif arch(x86_64)
+			let toolName = "SafeDITool-linux-x86_64"
+		#else
+			throw UnsupportedHostError()
+		#endif
 	#else
-		throw UnsupportedArchitectureError()
+		throw UnsupportedHostError()
 	#endif
 
 	let githubDownloadURL = originURL.appending(
@@ -188,9 +204,9 @@ private func downloadTool(
 	}
 }
 
-private struct UnsupportedArchitectureError: Error, CustomStringConvertible {
+private struct UnsupportedHostError: Error, CustomStringConvertible {
 	var description: String {
-		"Unsupported host architecture for SafeDITool download."
+		"Unsupported host OS/architecture for SafeDITool download. Supported: macOS and Linux on arm64 or x86_64."
 	}
 }
 

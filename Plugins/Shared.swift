@@ -116,6 +116,28 @@ extension PackagePlugin.PluginContext {
 	}
 }
 
+/// Verifies a cached SafeDITool binary actually runs on the host by
+/// launching it with `--version` and checking it exits cleanly. Returns
+/// the URL when the binary is usable, or `nil` when it can't launch
+/// (wrong platform, corrupted, missing exec bit, etc.) so callers can
+/// fall back to the SPM-provided tool.
+func verifiedDownloadedToolLocation(_ toolURL: URL?) -> URL? {
+	guard let toolURL else { return nil }
+	let process = Process()
+	process.executableURL = toolURL
+	process.arguments = ["--version"]
+	process.standardOutput = Pipe()
+	process.standardError = Pipe()
+	do {
+		try process.run()
+	} catch {
+		return nil
+	}
+	process.waitUntilExit()
+	guard process.terminationStatus == 0 else { return nil }
+	return toolURL
+}
+
 // MARK: - CSV Writing
 
 func writeInputSwiftFilesCSV(
