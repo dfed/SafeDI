@@ -99,9 +99,11 @@ enum PluginScanner {
 	// MARK: - Private
 
 	/// Checks whether a file likely contains `@Instantiable(isRoot: true)`.
-	/// Uses regex to reduce false positives from comments or strings compared
-	/// to raw `contains()` checks. The real parser in SafeDITool is authoritative;
-	/// this is only used to predict which output files will be generated.
+	/// Comments and string literals are stripped before matching so a mention
+	/// of `@Instantiable(isRoot: true)` in a doc comment or string doesn't
+	/// false-positive — the real parser in SafeDITool is authoritative, but
+	/// that parser only runs at build time; this scan determines what output
+	/// files the build is expected to produce.
 	///
 	/// The regex uses `(.|\n)*?` instead of `[^)]*` to handle parentheses inside
 	/// string literal arguments (e.g. `mockAttributes: "@available(iOS 17, *)"`).
@@ -109,7 +111,8 @@ enum PluginScanner {
 		guard let content = try? String(contentsOf: fileURL, encoding: .utf8),
 		      content.contains("@Instantiable")
 		else { return false }
-		return content.range(of: #"@Instantiable\s*\((.|\n)*?isRoot\s*:\s*true"#, options: .regularExpression) != nil
+		let stripped = stripSwiftCommentsAndStrings(from: content)
+		return stripped.range(of: #"@Instantiable\s*\((.|\n)*?isRoot\s*:\s*true"#, options: .regularExpression) != nil
 	}
 
 	/// Checks whether a file likely contains `@Instantiable(generateMock: true)`.
@@ -117,7 +120,8 @@ enum PluginScanner {
 		guard let content = try? String(contentsOf: fileURL, encoding: .utf8),
 		      content.contains("@Instantiable")
 		else { return false }
-		return content.range(of: #"@Instantiable\s*\((.|\n)*?generateMock\s*:\s*true"#, options: .regularExpression) != nil
+		let stripped = stripSwiftCommentsAndStrings(from: content)
+		return stripped.range(of: #"@Instantiable\s*\((.|\n)*?generateMock\s*:\s*true"#, options: .regularExpression) != nil
 	}
 
 	private static func outputFileNames(

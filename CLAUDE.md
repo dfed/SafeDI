@@ -13,7 +13,7 @@ swift test --traits sourceBuild    # Run all tests
 swift test --traits sourceBuild --enable-code-coverage  # Coverage report
 ```
 
-The `sourceBuild` trait is required for local development to compile SafeDITool from source. Without it, the default `prebuilt` trait downloads a prebuilt binary from the artifact bundle.
+The `sourceBuild` trait is required for local development to compile SafeDITool from source. Without it, the plugin uses the prebuilt binary from the artifact bundle.
 
 Always lint before pushing. Always run the full test suite after changes — don't rely on filtered runs alone.
 

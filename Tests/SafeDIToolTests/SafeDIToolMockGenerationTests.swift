@@ -8217,8 +8217,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// FIXME: @escaping not applied to mock method.
-			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles["Service+SafeDIMock.swift"] == """
@@ -10642,11 +10640,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			// FIXME: Fully lazy instantiation cycle produces `SafeDIMockConfiguration`
-			// structs whose default initializer references themselves via the cycle,
-			// which Swift flags as circular. Skipping compile verification until the
-			// generator breaks the cycle.
-			skipCompileVerification: true,
 		)
 
 		#expect(output.mockFiles.count == 4)

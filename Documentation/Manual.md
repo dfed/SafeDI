@@ -42,6 +42,16 @@ import SafeDI
 
 The `additionalDirectoriesToInclude` parameter specifies folders outside of your module that SafeDI will scan for Swift source files. Paths must be relative to the project directory. Use this parameter to specify the paths to dependent modules' source directories, since Xcode project plugins cannot discover these automatically. You can see [an example of this configuration](../Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](../Examples/ExampleMultiProjectIntegration) project.
 
+##### Installing the prebuilt SafeDITool binary
+
+If you see a build warning that starts with **"SafeDI's build-tool plugin is falling back to a regex-based output scanner..."** — installing the prebuilt tool fixes it.
+
+In Xcode, right-click your project in the navigator and choose **SafeDI → Safedi Install Tool**. Approve the network-access and write-to-package-directory prompts. Xcode runs the command and downloads the prebuilt SafeDITool release binary for your SafeDI version into `.safedi/<version>/safeditool` next to your `.xcodeproj`. The build plugin picks it up automatically on subsequent builds.
+
+**Why this step is required in Xcode:** Xcode’ implementation of Swift package build-tool plugins does not give plugins access to real tool locations within derived data – paths include placeholders whose values are not available to the plugin. SafeDI's plugin therefore can’t execute the real parser during setup and falls back to a regex-based output scanner. Installing the `SafeDITool` to a well-known location allows the plugin to execute the prebuilt tool. The install command is a one-time step per project (re-run it after a SafeDI version bump if the warning reappears). The plugin only runs inside Xcode — `swift build` users get the prebuilt binary through the default `prebuilt` trait already.
+
+**What to commit:** the install command writes `.safedi/.gitignore` on first run with the single glob `*/safeditool`, which ignores `.safedi/<version>/safeditool` on every machine. **Commit `.safedi/.gitignore` itself.** The binary it ignores is host-specific (arm64 vs x86_64) and per-version, so it's meant to be re-downloaded per-machine. Developers new to the project re-run the install command once after cloning.
+
 #### Swift package
 
 If your first-party code is entirely contained in a Swift Package with one or more modules, you can add the following lines to your root target’s definition:

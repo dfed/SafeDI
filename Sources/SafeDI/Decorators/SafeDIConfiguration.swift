@@ -19,7 +19,7 @@
 // SOFTWARE.
 
 #if prebuilt && sourceBuild
-	#error("The 'prebuilt' and 'sourceBuild' Package Traits are mutually exclusive. Enable only one.")
+	#warning("Both 'prebuilt' and 'sourceBuild' SafeDI Package Traits are enabled. The prebuilt binary will be used and changes to SafeDITool source will be ignored. Enable only one trait. (This warning also fires during swift-docc-plugin documentation builds, where it is harmless — DocC does not invoke the SafeDIGenerator build-tool plugin.)")
 #endif
 
 /// Provides build-time configuration for SafeDI's code generation plugin.

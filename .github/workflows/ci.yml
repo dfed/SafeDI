@@ -28,6 +28,13 @@ jobs:
         run: grep -q 'releases/download/99.99.99-test/SafeDITool.artifactbundle.zip' Package.swift
       - name: Verify checksum was updated
         run: grep -q 'checksum:.*abc123testchecksum456' Package.swift
+      - name: Verify Plugins/Shared.swift safeDIVersion was updated
+        # Match the literal within 3 lines after the `safeDIVersion`
+        # getter declaration so a future test-string in an unrelated
+        # spot can't satisfy a bare file-wide grep. Block scalar because
+        # an unquoted inline `{` trips the YAML parser.
+        run: |
+          grep -A 2 'var safeDIVersion: String {' Plugins/Shared.swift | grep -q '"99.99.99-test"'
 
   xcodebuild:
     name: Build with xcodebuild on Xcode 26
@@ -63,6 +70,25 @@ jobs:
       - name: Build Framework
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
 
+  docc:
+    name: Build DocC on Xcode 26
+    runs-on: macos-26
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+      # `swift-docc-plugin`'s `--warnings-as-errors` scopes to a single
+      # target, so swift-syntax's internal DocC noise stays out of our
+      # strict build. That scoping isn't available via `xcodebuild
+      # docbuild`, which analyzes the whole target graph.
+      - name: Build DocC
+        uses: ./.github/actions/retry
+        with:
+          command: swift package generate-documentation --target SafeDI --warnings-as-errors
+
   spm-package-integration:
     name: Build Package Integration on Xcode 26
     runs-on: macos-26
@@ -77,8 +103,14 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: xcrun swift package resolve --package-path "Examples/Example Package Integration"
-      - name: Build Package Integration
+      - name: Build Package Integration (swift build)
         run: xcrun swift build --package-path "Examples/Example Package Integration"
+      # Also build via xcodebuild — it exercises the plugin's in-process
+      # PluginScanner fallback, which `swift build` doesn't. A bug in that
+      # path would make Xcode IDE builds fail while the swift build above
+      # still passes.
+      - name: Build Package Integration (xcodebuild)
+        run: pushd "Examples/Example Package Integration"; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -destination "generic/platform=iOS"; popd
 
   spm-project-integration:
     name: Build Project Integration on Xcode 26
