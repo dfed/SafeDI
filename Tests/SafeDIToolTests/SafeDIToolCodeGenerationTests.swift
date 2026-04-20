@@ -7099,6 +7099,58 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_bypassesCachedModuleInfo_whenScannedInputFileMissingFromDisk() async throws {
+		// Scan records every input path it observed; if one of those files
+		// has been deleted before generate runs, `attributesOfItem` fails
+		// and the cache must bypass. The signal: a cache hit would skip
+		// parsing entirely and return `ManifestError.noRootFound` because
+		// the cached module (absolute paths) wouldn't match the manifest's
+		// relative `inputFilePath` once the file is gone. Instead the
+		// bypass forces a fresh parse of the CSV, which fails to read the
+		// missing file.
+		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+		let rootFile = projectRoot.appendingPathComponent("Root.swift")
+		try """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init() {}
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try rootFile.path
+			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		filesToDelete += [projectRoot, swiftFileCSV, outputDirectory, manifestFile]
+
+		try await (Scan.parse([
+			"--input-sources-file", swiftFileCSV.path,
+			"--project-root", projectRoot.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+		])).run()
+
+		// Delete the source after scan so its path is in the cache's
+		// scannedInputPaths but `attributesOfItem` fails for it. CSV is
+		// unchanged so the set-match check passes; the mtime loop's
+		// missing-file branch is what forces the bypass.
+		try FileManager.default.removeItem(at: rootFile)
+
+		await #expect(throws: (any Error).self) {
+			try await (Generate.parse([
+				swiftFileCSV.path,
+				"--swift-manifest", manifestFile.path,
+			])).run()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_parsesAdditionalDirectoryFiles_whenCSVDoesNotIncludeThem() async throws {
 		// Mirrors real plugin flow (CSV = target files only, additional
 		// directories discovered via #SafeDIConfiguration at parse time).
