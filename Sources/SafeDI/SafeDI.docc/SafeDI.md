@@ -30,7 +30,7 @@ public struct NotesApp: App, Instantiable {
 
 @Instantiable
 public struct LoggedInView: View, Instantiable {
-    public var body: some View { … }
+    public var body: some View { /* ... */ }
 
     // `user` is a runtime value forwarded in at this boundary.
     @Forwarded private let user: User
