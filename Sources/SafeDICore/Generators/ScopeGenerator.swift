@@ -1200,7 +1200,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// e.g., `ConcreteService(helper: helper)` or `ConcreteService.instantiate(helper: helper)`.
 		/// Unlike `defaultBuilderExpression` (a function reference for `??` coalescing),
 		/// this produces a complete call that's faster for the compiler to type-check.
-		func defaultBuilderCall(arguments: [String]) -> String {
+		///
+		/// Pass `overrideReachable: false` when the call lives on a pruned
+		/// back-edge path where `resolveBuilderArguments` returned values for
+		/// `callSiteArgumentsForPrunedOverride` rather than `callSiteArguments`.
+		/// Zipping against the wrong signature would shift labels for arguments
+		/// that follow an elided default (e.g. `init(a: A, b: B = ..., c: C)`
+		/// with `b` elided would emit `C`'s value under label `b`).
+		func defaultBuilderCall(arguments: [String], overrideReachable: Bool = true) -> String {
 			let methodName: String = if useMockInitializer {
 				customMockName ?? InstantiableVisitor.mockMethodName
 			} else if isExtensionBased {
@@ -1208,7 +1215,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"init"
 			}
-			let labeledArguments = zip(callSiteArguments, arguments)
+			let surfacedArguments = overrideReachable ? callSiteArguments : callSiteArgumentsForPrunedOverride
+			let labeledArguments = zip(surfacedArguments, arguments)
 				.map { $0.0.label == "_" ? $0.1 : "\($0.0.label): \($0.1)" }
 				.joined(separator: ", ")
 			if methodName == "init" {
@@ -2044,7 +2052,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							// `builderExpression` is a non-optional default builder, so
 							// emit a direct construction rather than an `if let` dance
 							// (which would fail to typecheck against a non-optional RHS).
-							lines.append("\(innerIndent)return \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+							lines.append("\(innerIndent)return \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments, overrideReachable: false)))")
 						} else {
 							// In sendable context, `builderExpression` is an optional
 							// extracted local; otherwise `optionalBuilderPath` exists.
@@ -2088,7 +2096,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							// Pruned back-edge — `builderExpression` is a non-optional
 							// default builder. Optional chaining would fail to typecheck;
 							// emit direct construction.
-							lines.append("\(indent)let \(outerBindingName) = \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
+							lines.append("\(indent)let \(outerBindingName) = \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments, overrideReachable: false)))")
 						} else {
 							// Sendable context: extracted local is optional.
 							lines.append("\(indent)let \(outerBindingName) = \(builderExpression)?(\(argumentList)) ?? \(wrapperType)(\(node.defaultBuilderCall(arguments: arguments)))")
