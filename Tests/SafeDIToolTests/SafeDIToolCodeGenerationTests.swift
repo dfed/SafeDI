@@ -7166,6 +7166,53 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_bypassesCachedModuleInfo_whenCSVIsUnreadable() async throws {
+		// `loadCachedModuleInfo` can't verify the current input set when
+		// the CSV file can't be read, so it must invalidate rather than
+		// silently reuse cached data. Delete the CSV after scan and
+		// confirm the fresh-parse fallback surfaces the missing-CSV
+		// NSError (rather than a successful cache hit).
+		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+		let rootFile = projectRoot.appendingPathComponent("Root.swift")
+		try """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init() {}
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try rootFile.path
+			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		filesToDelete += [projectRoot, outputDirectory, manifestFile]
+
+		try await (Scan.parse([
+			"--input-sources-file", swiftFileCSV.path,
+			"--project-root", projectRoot.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+		])).run()
+
+		// Delete the CSV so `String(contentsOfFile:)` fails in the cache
+		// freshness check — exercises the unreadable-CSV bypass branch.
+		try FileManager.default.removeItem(at: swiftFileCSV)
+
+		await assertThrowsError(containing: "NSCocoaErrorDomain Code=260") {
+			try await (Generate.parse([
+				swiftFileCSV.path,
+				"--swift-manifest", manifestFile.path,
+			])).run()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_bypassesCachedModuleInfo_whenScannedInputFileMissingFromDisk() async throws {
 		// Scan records every input path it observed; if one of those files
 		// has been deleted before generate runs, `attributesOfItem` fails
