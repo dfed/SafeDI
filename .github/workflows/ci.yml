@@ -77,8 +77,14 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: xcrun swift package resolve --package-path "Examples/Example Package Integration"
-      - name: Build Package Integration
+      - name: Build Package Integration (swift build)
         run: xcrun swift build --package-path "Examples/Example Package Integration"
+      # Also build via xcodebuild — it exercises the plugin's in-process
+      # PluginScanner fallback, which `swift build` doesn't. A bug in that
+      # path would make Xcode IDE builds fail while the swift build above
+      # still passes.
+      - name: Build Package Integration (xcodebuild)
+        run: pushd "Examples/Example Package Integration"; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -destination "generic/platform=iOS"; popd
 
   spm-project-integration:
     name: Build Project Integration on Xcode 26

@@ -135,6 +135,21 @@ let package = Package(
 			],
 		),
 
+		// Tests for the `SafeDIGenerator` build-tool plugin's in-process
+		// helpers. The plugin target itself cannot be a test dependency
+		// (SPM plugins can only depend on executable/binary targets), so
+		// this target compiles the plugin helpers via symlink:
+		// `Tests/SafeDIGeneratorPluginTests/PluginScannerStringUtilities.swift`
+		// → `Plugins/PluginScannerStringUtilities.swift`. The plugin target
+		// has the same symlink, so both targets share the source.
+		.testTarget(
+			name: "SafeDIGeneratorPluginTests",
+			path: "Tests/SafeDIGeneratorPluginTests",
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+
 		// Core
 		.target(
 			name: "SafeDICore",
