@@ -35,6 +35,10 @@ let package = Package(
 			name: "MigrateSafeDIFromVersionOne",
 			targets: ["MigrateSafeDIFromVersionOne"],
 		),
+		.plugin(
+			name: "InstallSafeDITool",
+			targets: ["InstallSafeDITool"],
+		),
 	],
 	traits: [
 		.default(enabledTraits: ["prebuilt"]),
@@ -96,6 +100,25 @@ let package = Package(
 				),
 				permissions: [
 					.writeToPackageDirectory(reason: "Creates a SafeDIConfiguration.swift file and removes obsolete CSV configuration files."),
+				],
+			),
+			dependencies: [],
+		),
+
+		// Downloads the prebuilt SafeDITool release binary into
+		// `<xcodeProject>/.safedi/<version>/safeditool`. Xcode-only — avoids
+		// the `${BUILD_DIR}`-in-tool-path problem that forces Xcode users
+		// onto the regex-based `PluginScanner` fallback.
+		.plugin(
+			name: "InstallSafeDITool",
+			capability: .command(
+				intent: .custom(
+					verb: "safedi-install-tool",
+					description: "Xcode-only: downloads the SafeDITool prebuilt release binary for the current SafeDI version into .safedi/<version>/safeditool next to the .xcodeproj. swift build users get the prebuilt tool via the default `prebuilt` trait and don't need this.",
+				),
+				permissions: [
+					.writeToPackageDirectory(reason: "Downloads the SafeDITool binary into .safedi/<version>/safeditool."),
+					.allowNetworkConnections(scope: .all(ports: []), reason: "Downloads SafeDITool from the SafeDI GitHub release."),
 				],
 			),
 			dependencies: [],

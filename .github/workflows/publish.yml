@@ -221,7 +221,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Package.swift
+          git add Package.swift Plugins/Shared.swift
           git commit -m "Release ${{ inputs.version }}"
 
       - name: Upload release commit patch (dry run)
