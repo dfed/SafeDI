@@ -260,9 +260,7 @@ public struct InstantiableMacro: MemberMacro {
 				)
 			}
 
-			let hasMemberwiseInitializerForInjectableProperties = isMockOnly || visitor
-				.initializers
-				.contains(where: { $0.isValid(forFulfilling: visitor.dependencies) })
+			let hasMemberwiseInitializerForInjectableProperties = isMockOnly || visitor.canonicalConstructionInitializer != nil
 			guard hasMemberwiseInitializerForInjectableProperties else {
 				func associatedError(for initializer: Initializer) -> (initializer: Initializer, syntax: InitializerDeclSyntax, error: Initializer.FixableError)? {
 					do {

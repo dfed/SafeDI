@@ -272,9 +272,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Maps types with hand-written mock methods to their mock method name (e.g. "mock" or a custom name).
 		/// Used to provide default values for forwarded dependencies whose type has a hand-written mock.
 		let forwardedParameterMockDefaults: [TypeDescription: String]
-		/// Type-graph back-edges to skip when emitting `safeDIOverrides` paths in
-		/// builder code. Computed once globally so the override-path navigation
-		/// matches the configuration-struct shape produced by `generateConfigurationStruct`.
+		/// Globally-computed feedback arc set (see
+		/// `DependencyTreeGenerator.computeCycleEdges`). Alphabetical-DFS
+		/// selection makes every root walking the same graph agree on which
+		/// back-edges are pruned — required because shared
+		/// `SafeDIMockConfiguration` structs are emitted once per type and
+		/// must have a consistent shape regardless of which root is being
+		/// generated. Consumed by both struct generation and override-path
+		/// navigation inside `mock()` bodies.
+		///
+		/// Contrast with `MockParameterNode.isPropertyCycle`, which is a
+		/// per-root syntactic flag and differs between roots for the same
+		/// underlying cycle.
 		let cycleEdges: Set<CycleEdge>
 	}
 
@@ -1015,7 +1024,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let concreteType: TypeDescription
 		/// Forwarded properties on this type (relevant for Instantiator edges).
 		let forwardedProperties: Set<Property>
-		/// Whether this node is part of a property cycle.
+		/// Set when this property's label repeats in the ancestor stack during
+		/// scope construction (`Scope.createScopeGenerator`). Per-root and
+		/// syntactic — different roots walking the same underlying cycle can
+		/// see it at different edges. Terminates infinite descent by zeroing
+		/// the cycle-closer's `propertiesToGenerate`.
+		///
+		/// For cross-root consistency (e.g., shared `SafeDIMockConfiguration`
+		/// struct shapes), use `cycleEdges` — the globally-computed feedback
+		/// arc set — instead.
 		let isPropertyCycle: Bool
 		/// Whether this node is inside a sendable scope (descendant of SendableInstantiator).
 		/// When `true`, the `safeDIBuilder` closure on `SafeDIMockConfiguration` is `@Sendable`.
