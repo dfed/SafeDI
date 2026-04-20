@@ -200,7 +200,7 @@ extension Target {
 			// (wrong platform, corrupted, missing exec bit).
 			let tool: URL
 			let runsRealScan: Bool
-			if let downloaded = verifiedDownloadedToolLocation(context.downloadedToolLocation) {
+			if let downloaded = verifiedDownloadedToolLocation(context.downloadedToolLocation, expectedVersion: context.safeDIVersion) {
 				tool = downloaded
 				runsRealScan = true
 			} else {

@@ -68,17 +68,25 @@ import PackagePlugin
 		}
 	}
 
-	/// Verifies a cached SafeDITool binary actually runs on the host by
-	/// launching it with `--version` and checking it exits cleanly. Returns
-	/// the URL when the binary is usable, or `nil` when it can't launch
-	/// (wrong platform, corrupted, missing exec bit, etc.) so callers can
-	/// fall back to the SPM-provided tool.
-	func verifiedDownloadedToolLocation(_ toolURL: URL?) -> URL? {
+	/// Verifies a cached SafeDITool binary both runs on the host AND
+	/// matches the expected SafeDI version. Launches it with `--version`
+	/// and compares the trimmed stdout to `expectedVersion`. Returns the
+	/// URL when the binary is usable and version-matched, or `nil`
+	/// otherwise — caller falls back to the SPM-provided tool.
+	///
+	/// The version check catches the "stale binary from an earlier
+	/// SafeDI version left in `.safedi/`" case: the binary might still
+	/// launch cleanly but produce output incompatible with the current
+	/// SafeDI release. Without this check, a user bumping SafeDI would
+	/// silently keep running the old tool until they re-ran the install
+	/// command or manually cleared `.safedi/`.
+	func verifiedDownloadedToolLocation(_ toolURL: URL?, expectedVersion: String) -> URL? {
 		guard let toolURL else { return nil }
 		let process = Process()
 		process.executableURL = toolURL
 		process.arguments = ["--version"]
-		process.standardOutput = Pipe()
+		let outPipe = Pipe()
+		process.standardOutput = outPipe
 		process.standardError = Pipe()
 		do {
 			try process.run()
@@ -87,6 +95,10 @@ import PackagePlugin
 		}
 		process.waitUntilExit()
 		guard process.terminationStatus == 0 else { return nil }
+		let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+		guard let reportedVersion = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+		      reportedVersion == expectedVersion
+		else { return nil }
 		return toolURL
 	}
 #endif
