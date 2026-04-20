@@ -1156,9 +1156,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Closure-form default builder that accepts only the args surfaced by
 		/// `callSiteArgumentsForPrunedOverride`, so labeled non-dependency
 		/// defaults fire via Swift's default-argument thunk in the callee.
-		/// Emits `{ @Sendable … }` when the node is reached through a sendable
-		/// instantiator, so the closure can be captured inside `@Sendable` funcs
-		/// without `SendableClosureCaptures` errors.
+		///
+		/// Pass `inSendableContext: true` when the caller will capture the
+		/// closure inside an `@Sendable` helper function — the emitted closure
+		/// then carries the `@Sendable` attribute so Swift 6 strict-checking
+		/// accepts it at the capture site. The closure body is inherently
+		/// sendable (no captures besides the init call), so `@Sendable` is
+		/// safe whenever asked for, but over-annotating makes the type differ
+		/// from the destination slot type in non-sendable contexts, so the
+		/// decision is left to the caller that knows the context.
 		///
 		/// Extension-based (`instantiate()`) callees never reach this helper:
 		/// every `instantiate()` parameter is a dependency, so
@@ -1166,7 +1172,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// caller falls through to the default-builder function reference
 		/// instead. Extensions with `customMock` take the `customMockName`
 		/// branch (`useMockInitializer == true`).
-		var defaultBuilderExpressionForPrunedOverride: String {
+		func defaultBuilderExpressionForPrunedOverride(inSendableContext: Bool) -> String {
 			let methodName: String = if useMockInitializer {
 				customMockName ?? InstantiableVisitor.mockMethodName
 			} else {
@@ -1183,10 +1189,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"\(concreteType.asSource).\(methodName)(\(labeledArguments))"
 			}
-			if typeDescription.propertyType.isSendable {
-				// `@Sendable` attribute forces the closure to satisfy
-				// `@Sendable` captures in parent functions. The `in` keyword
-				// separates the attribute from the body.
+			if inSendableContext {
 				return "{ @Sendable in \(callExpression) }"
 			} else {
 				return "{ \(callExpression) }"
@@ -1922,7 +1925,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// an arity mismatch against the elided argument list.
 				let argsElidedForPrunedOverride = node.callSiteArgumentsForPrunedOverride.count < node.callSiteArguments.count
 				if !thisOverrideReachable, argsElidedForPrunedOverride {
-					builderExpression = node.defaultBuilderExpressionForPrunedOverride
+					// The closure will be captured in a `@Sendable` func
+					// whenever the ancestor chain includes a sendable
+					// extraction OR the node itself lives inside a sendable
+					// wrapper — either case needs the `@Sendable` attribute
+					// on the closure literal so Swift 6 accepts the capture.
+					let inSendableContext = sendableExtractionPrefix != nil
+						|| node.typeDescription.propertyType.isSendable
+					builderExpression = node.defaultBuilderExpressionForPrunedOverride(
+						inSendableContext: inSendableContext,
+					)
 					optionalBuilderPath = nil
 					argumentNodePath = nodePath
 				} else if isCycleNode {
