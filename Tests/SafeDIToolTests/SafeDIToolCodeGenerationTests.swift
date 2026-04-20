@@ -7046,6 +7046,59 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_bypassesCachedModuleInfo_whenCSVInputPathsDifferFromScan() async throws {
+		// If a custom script reuses a manifest path with a changed CSV,
+		// the cached ModuleInfo is for the wrong input set and must be
+		// bypassed. We observe the bypass by adding an extra (nonexistent)
+		// path to the generate CSV — a cache hit would skip parsing entirely,
+		// so "couldn't open file" proves the bypass fired and fresh parse ran.
+		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+		let rootFile = projectRoot.appendingPathComponent("Root.swift")
+		try """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init() {}
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+
+		let scanCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try rootFile.path
+			.write(to: scanCSV, atomically: true, encoding: .utf8)
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		filesToDelete += [projectRoot, scanCSV, outputDirectory, manifestFile]
+
+		try await (Scan.parse([
+			"--input-sources-file", scanCSV.path,
+			"--project-root", projectRoot.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+		])).run()
+
+		// Generate CSV adds a bogus path — set mismatch forces bypass, and
+		// the fresh parse then fails to read the bogus file. A cache hit
+		// would skip parsing entirely, so this error is our bypass signal.
+		let bogusPath = URL(fileURLWithPath: NSTemporaryDirectory())
+			.appendingPathComponent("nonexistent-\(UUID().uuidString).swift").path
+		let generateCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try "\(rootFile.path),\(bogusPath)"
+			.write(to: generateCSV, atomically: true, encoding: .utf8)
+		filesToDelete += [generateCSV]
+
+		await #expect(throws: (any Error).self) {
+			try await (Generate.parse([
+				generateCSV.path,
+				"--swift-manifest", manifestFile.path,
+			])).run()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_parsesAdditionalDirectoryFiles_whenCSVDoesNotIncludeThem() async throws {
 		// Mirrors real plugin flow (CSV = target files only, additional
 		// directories discovered via #SafeDIConfiguration at parse time).

@@ -413,6 +413,24 @@ struct Generate: AsyncParsableCommand {
 		      let cached = try? JSONDecoder().decode(CachedScannedModuleInfo.self, from: data)
 		else { return nil }
 
+		// Bypass the cache if the current CSV's file set differs from what
+		// scan observed — a custom script could reuse a manifest path with a
+		// changed CSV, in which case the cached ModuleInfo is for the wrong
+		// input set. Plugin-driven builds always pair scan+generate with the
+		// same CSV, so this check is effectively free on the fast path.
+		if let swiftSourcesFilePath,
+		   let currentCSVContent = try? String(contentsOfFile: swiftSourcesFilePath, encoding: .utf8)
+		{
+			let currentCSVPaths = Set(
+				currentCSVContent
+					.components(separatedBy: CharacterSet(arrayLiteral: ","))
+					.removingEmpty(),
+			)
+			if currentCSVPaths != Set(cached.csvInputPaths) {
+				return nil
+			}
+		}
+
 		// Bypass the cache if any input file scan observed has changed
 		// since the cache was written — newer mtime OR missing-from-disk
 		// both invalidate. We check every path scan parsed (including

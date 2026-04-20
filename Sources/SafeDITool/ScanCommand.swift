@@ -258,9 +258,13 @@ func performScan(
 	let cached = CachedScannedModuleInfo(
 		moduleInfo: normalizedModuleInfo,
 		scannedInputPaths: allScannedFilePaths,
+		csvInputPaths: inputFilePaths.sorted(),
 	)
 	let scannedModuleInfoURL = scannedModuleInfoURL(forManifestPath: manifestFile)
-	try encoder.encode(cached).write(to: scannedModuleInfoURL)
+	// Cache write is best-effort. A full disk or other transient FS
+	// failure shouldn't block the build — `generate` always falls back
+	// to a fresh parse when the cache is missing or can't be decoded.
+	try? encoder.encode(cached).write(to: scannedModuleInfoURL)
 }
 
 /// Wrapper persisted alongside the manifest so `generate` can both
@@ -270,7 +274,12 @@ func performScan(
 /// `generate` CSV).
 struct CachedScannedModuleInfo: Codable {
 	let moduleInfo: ModuleInfo
+	/// Union of CSV file paths and additional-directory file paths, in the
+	/// URL-normalized form `scan` uses. Drives the mtime freshness check.
 	let scannedInputPaths: [String]
+	/// Raw CSV file paths as `scan` read them. Drives the "current generate
+	/// CSV matches the CSV that scan observed" check.
+	let csvInputPaths: [String]
 }
 
 /// Path alongside the manifest where `scan` persists the parsed
