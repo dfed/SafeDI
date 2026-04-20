@@ -106,20 +106,26 @@ func performScan(
 	var combinedModuleInfo = allModuleInfo
 	if let configuration, !configuration.additionalDirectoriesToInclude.isEmpty {
 		let additionalFiles = try await findSwiftFiles(inDirectories: configuration.additionalDirectoriesToInclude)
-		let additionalModuleInfo = try await parseSwiftFiles(additionalFiles)
 
 		// Record the additional files for the plugin to use as build inputs.
 		additionalInputFiles = additionalFiles.sorted().map { filePath in
 			URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path
 		}
 
-		// Merge additional roots/mocks into the combined results.
-		combinedModuleInfo = ModuleInfo(
-			imports: allModuleInfo.imports + additionalModuleInfo.imports,
-			instantiables: allModuleInfo.instantiables + additionalModuleInfo.instantiables,
-			configurations: allModuleInfo.configurations,
-			filesWithUnexpectedNodes: allModuleInfo.filesWithUnexpectedNodes.map { $0 + (additionalModuleInfo.filesWithUnexpectedNodes ?? []) } ?? additionalModuleInfo.filesWithUnexpectedNodes,
-		)
+		// Exclude files already parsed via the CSV — re-parsing them would
+		// produce duplicate `Instantiable` entries in `combinedModuleInfo`
+		// and trip "multiple types fulfilling" validation downstream.
+		let unparsedAdditionalFiles = additionalFiles.subtracting(allFilePaths)
+		if !unparsedAdditionalFiles.isEmpty {
+			let additionalModuleInfo = try await parseSwiftFiles(unparsedAdditionalFiles)
+			// Merge additional roots/mocks into the combined results.
+			combinedModuleInfo = ModuleInfo(
+				imports: allModuleInfo.imports + additionalModuleInfo.imports,
+				instantiables: allModuleInfo.instantiables + additionalModuleInfo.instantiables,
+				configurations: allModuleInfo.configurations,
+				filesWithUnexpectedNodes: allModuleInfo.filesWithUnexpectedNodes.map { $0 + (additionalModuleInfo.filesWithUnexpectedNodes ?? []) } ?? additionalModuleInfo.filesWithUnexpectedNodes,
+			)
+		}
 	}
 
 	// Collect root files and compute output file names.
@@ -210,4 +216,46 @@ func performScan(
 	let encoder = JSONEncoder()
 	encoder.outputFormatting = [.sortedKeys]
 	try encoder.encode(manifest).write(to: manifestFile.asFileURL)
+
+	// Also persist the parsed ModuleInfo next to the manifest so `generate`
+	// can skip re-parsing the same Swift files. Normalize sourceFilePath
+	// to project-relative form so the cached entries match both the
+	// manifest's `inputFilePath` (also project-relative) and what Generate
+	// would compute when parsing fresh from the same CSV.
+	func normalize(_ path: String?) -> String? {
+		guard let path else { return nil }
+		return relativePath(
+			for: URL(fileURLWithPath: path, relativeTo: directoryBaseURL).standardizedFileURL,
+			relativeTo: projectRootURL,
+		)
+	}
+	let normalizedModuleInfo = ModuleInfo(
+		imports: combinedModuleInfo.imports,
+		instantiables: combinedModuleInfo.instantiables.map { instantiable in
+			var updated = instantiable
+			updated.sourceFilePath = normalize(instantiable.sourceFilePath)
+			return updated
+		},
+		configurations: combinedModuleInfo.configurations.map { configuration in
+			var updated = configuration
+			updated.sourceFilePath = normalize(configuration.sourceFilePath)
+			return updated
+		},
+		filesWithUnexpectedNodes: combinedModuleInfo.filesWithUnexpectedNodes?.compactMap(normalize),
+	)
+	let scannedModuleInfoURL = scannedModuleInfoURL(forManifestPath: manifestFile)
+	try encoder.encode(normalizedModuleInfo).write(to: scannedModuleInfoURL)
+}
+
+/// Path alongside the manifest where `scan` persists the parsed
+/// `ModuleInfo` and `generate` reads it to skip re-parsing. Derived from
+/// the manifest path so concurrent runs writing to different manifests
+/// don't collide.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+func scannedModuleInfoURL(forManifestPath manifestPath: String) -> URL {
+	let manifestURL = manifestPath.asFileURL
+	let base = manifestURL.deletingPathExtension().lastPathComponent
+	return manifestURL
+		.deletingLastPathComponent()
+		.appendingPathComponent("\(base).safediScannedModuleInfo.json")
 }

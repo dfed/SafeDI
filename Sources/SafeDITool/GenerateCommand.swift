@@ -73,10 +73,12 @@ struct Generate: AsyncParsableCommand {
 			resolvedSwiftManifest = manifestPath
 		}
 
-		let (dependentModuleInfo, initialModule) = try await (
+		let (dependentModuleInfo, parsed) = try await (
 			loadSafeDIModuleInfo(),
 			parsedModule(),
 		)
+		let initialModule = parsed.0
+		let initialModuleIsFromCache = parsed.isFromCache
 
 		// In multi-module builds, the CSV includes all modules' files, so multiple
 		// configs may be present. Scope to the current module using the manifest's
@@ -108,9 +110,15 @@ struct Generate: AsyncParsableCommand {
 		}
 
 		// If the source configuration specifies additional directories to include,
-		// find and parse swift files in those directories and merge with initial results.
+		// find and parse swift files in those directories and merge with initial
+		// results. Skipped when the initial module came from scan's cache —
+		// scan already merged the additional directories into the cached
+		// ModuleInfo, so re-parsing would be wasted work.
 		let module: ModuleInfo
-		if let sourceConfiguration, !sourceConfiguration.additionalDirectoriesToInclude.isEmpty {
+		if !initialModuleIsFromCache,
+		   let sourceConfiguration,
+		   !sourceConfiguration.additionalDirectoriesToInclude.isEmpty
+		{
 			let additionalFiles = try await findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude)
 			let additionalModule = try await parseSwiftFiles(additionalFiles)
 			module = ModuleInfo(
@@ -356,8 +364,28 @@ struct Generate: AsyncParsableCommand {
 		return swiftFiles
 	}
 
-	private func parsedModule() async throws -> ModuleInfo {
-		try await parseSwiftFiles(findGenerateSwiftFiles())
+	/// Loads the parsed `ModuleInfo` for this module. When scan ran earlier
+	/// (plugin-setup subprocess of this same build), it persisted the parsed
+	/// result alongside the manifest; reading that JSON is dramatically
+	/// cheaper than re-parsing every Swift file through SwiftParser.
+	///
+	/// Returns `(module, isFromCache)`. On a cache hit the returned module
+	/// already includes files discovered through
+	/// `#SafeDIConfiguration.additionalDirectoriesToInclude`, so the caller
+	/// should skip its additional-directory re-parse.
+	///
+	/// Cache is only consulted when `include` is empty — CLI callers who
+	/// pass `--include` expect those directories scanned afresh, and scan
+	/// doesn't see `--include`.
+	private func parsedModule() async throws -> (ModuleInfo, isFromCache: Bool) {
+		if include.isEmpty, let swiftManifest {
+			let cacheURL = scannedModuleInfoURL(forManifestPath: swiftManifest)
+			if let cachedData = try? Data(contentsOf: cacheURL) {
+				let cached = try JSONDecoder().decode(ModuleInfo.self, from: cachedData)
+				return (cached, true)
+			}
+		}
+		return await (try parseSwiftFiles(findGenerateSwiftFiles()), false)
 	}
 
 	private var moduleInfoURLs: Set<URL> {
