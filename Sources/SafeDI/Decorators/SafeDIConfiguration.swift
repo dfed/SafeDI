@@ -18,6 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#if prebuilt && sourceBuild
+	#warning("Both 'prebuilt' and 'sourceBuild' SafeDI Package Traits are enabled. The prebuilt binary will be used and changes to SafeDITool source will be ignored. Enable only one trait. (This warning also fires during swift-docc-plugin documentation builds, where it is harmless — DocC does not invoke the SafeDIGenerator build-tool plugin.)")
+#endif
+
 /// Provides build-time configuration for SafeDI's code generation plugin.
 ///
 /// `#SafeDIConfiguration` is a freestanding declaration macro that must appear at the top level of a Swift file (not nested inside a type).
