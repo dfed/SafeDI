@@ -5325,6 +5325,41 @@ import Testing
 		}
 
 		@Test
+		func producesNoDiagnostic_whenDefaultExpressionReferencesMemberOfModuleType() {
+			// Member access whose base isn't `Self` — e.g., `Config.fallback` —
+			// resolves identically at the caller and the callee, so the
+			// diagnostic must not fire. Exercises the non-`Self` branch of
+			// the MemberAccessExpr visitor.
+			assertMacroExpansion(
+				"""
+				public enum Config {
+				    public static let fallback = "fallback"
+				}
+
+				@Instantiable
+				public struct MyType: Instantiable {
+				    public init(name: String = Config.fallback) {
+				        self.name = name
+				    }
+				    let name: String
+				}
+				""",
+				expandedSource: """
+				public enum Config {
+				    public static let fallback = "fallback"
+				}
+				public struct MyType: Instantiable {
+				    public init(name: String = Config.fallback) {
+				        self.name = name
+				    }
+				    let name: String
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func producesNoDiagnostic_whenTrailingUnlabeledParametersAllHaveDefaults() {
 			// `init(_ a: Int = 0, _ b: Int = 1)` is fine — both trailing `_`
 			// defaults are elided together as a suffix, call site becomes
