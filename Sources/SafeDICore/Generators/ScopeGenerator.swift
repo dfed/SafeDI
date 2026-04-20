@@ -1140,6 +1140,54 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
+		/// Call-site arguments with labeled non-dependency defaults also elided,
+		/// for the pruned-back-edge / unreachable-override case where Swift's
+		/// default-argument thunk must fire in the callee's scope. Elided
+		/// defaults preserve correct resolution of `Self.*`, private members,
+		/// and file-scoped helpers in the default expression, which would
+		/// otherwise resolve in the wrong context if inlined at the caller.
+		var callSiteArgumentsForPrunedOverride: [Initializer.Argument] {
+			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
+			return callSiteArguments.filter { argument in
+				dependencyInnerLabels.contains(argument.innerLabel) || !argument.hasDefaultValue
+			}
+		}
+
+		/// Closure-form default builder that accepts only the args surfaced by
+		/// `callSiteArgumentsForPrunedOverride`, so labeled non-dependency
+		/// defaults fire via Swift's default-argument thunk in the callee.
+		/// Emits `{ @Sendable … }` when the node is reached through a sendable
+		/// instantiator, so the closure can be captured inside `@Sendable` funcs
+		/// without `SendableClosureCaptures` errors.
+		var defaultBuilderExpressionForPrunedOverride: String {
+			let methodName: String = if useMockInitializer {
+				customMockName ?? InstantiableVisitor.mockMethodName
+			} else if isExtensionBased {
+				InstantiableVisitor.instantiateMethodName
+			} else {
+				"init"
+			}
+			let elided = callSiteArgumentsForPrunedOverride
+			let labeledArguments = elided.enumerated()
+				.map { index, argument in
+					argument.label == "_" ? "$\(index)" : "\(argument.label): $\(index)"
+				}
+				.joined(separator: ", ")
+			let callExpression = if methodName == "init" {
+				"\(concreteType.asSource)(\(labeledArguments))"
+			} else {
+				"\(concreteType.asSource).\(methodName)(\(labeledArguments))"
+			}
+			if typeDescription.propertyType.isSendable {
+				// `@Sendable` attribute forces the closure to satisfy
+				// `@Sendable` captures in parent functions. The `in` keyword
+				// separates the attribute from the body.
+				return "{ @Sendable in \(callExpression) }"
+			} else {
+				return "{ \(callExpression) }"
+			}
+		}
+
 		/// A direct call expression using the default builder with labeled arguments.
 		/// e.g., `ConcreteService(helper: helper)` or `ConcreteService.instantiate(helper: helper)`.
 		/// Unlike `defaultBuilderExpression` (a function reference for `??` coalescing),
@@ -1863,7 +1911,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					optionalBuilderPath = nil
 					argumentNodePath = nodePath
 				} else if !thisOverrideReachable {
-					builderExpression = defaultBuilder
+					// Pruned back-edge — the node's override slot is gone from
+					// its parent's config struct. Emit a closure that calls
+					// the callee with only deps + required non-deps so labeled
+					// non-dependency defaults fire via Swift's default-argument
+					// thunk in the callee's lexical scope, preserving `Self.*`,
+					// private members, and file-scoped helpers.
+					builderExpression = node.defaultBuilderExpressionForPrunedOverride
 					optionalBuilderPath = nil
 					argumentNodePath = nodePath
 				} else if let sendableExtractionPrefix {
@@ -2045,15 +2099,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.replacingOccurrences(of: "safeDIOverrides.", with: "")
 			.replacingOccurrences(of: ".", with: "_")
 
-		return node.callSiteArguments.map { argument in
+		let argumentsToSurface = overrideReachable
+			? node.callSiteArguments
+			: node.callSiteArgumentsForPrunedOverride
+		return argumentsToSurface.map { argument in
 			if dependenciesByLabel[argument.innerLabel] != nil {
 				argument.innerLabel
-			} else if !overrideReachable, let defaultExpression = defaultExpressionsByLabel[argument.label] {
-				// The override path was pruned by a back-edge — the slot for this
-				// node doesn't exist on its parent's config struct, so referencing
-				// `safeDIOverrides...<node>.<param>` would not compile. Inline the
-				// declared default expression instead.
-				defaultExpression
 			} else if let sendableExtractionPrefix {
 				"\(sendableExtractionPrefix)__\(relativePath)_\(argument.label)"
 			} else {

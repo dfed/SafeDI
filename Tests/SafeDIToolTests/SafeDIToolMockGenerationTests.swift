@@ -10991,7 +10991,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        func __safeDI_bBuilder() -> B {
 		            func __safeDI_aBuilder() -> A {
 		                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		                return A.init(bBuilder:label:)(bBuilder, "default")
+		                return { A(bBuilder: $0) }(bBuilder)
 		            }
 		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		            return (safeDIOverrides.bBuilder.safeDIBuilder ?? B.init(aBuilder:))(aBuilder)
