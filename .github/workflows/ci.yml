@@ -63,6 +63,44 @@ jobs:
       - name: Build Framework
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
 
+  docc:
+    name: Build DocC on Xcode 26
+    runs-on: macos-26
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+      - name: Resolve Package Dependencies
+        uses: ./.github/actions/retry
+        with:
+          command: xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme SafeDI-Package
+      # We can't use `OTHER_DOCC_FLAGS='--warnings-as-errors'` because
+      # DocC analyzes the whole target graph — noise from swift-syntax's
+      # internal API surface would always fail the build. And we can't
+      # depend on swift-docc-plugin (which supports per-target scoping)
+      # without exposing that dependency to every consumer of SafeDI.
+      # Instead, we capture the docbuild log and fail only when a warning
+      # points inside our own `.docc` bundle or sources.
+      - name: Build DocC
+        run: |
+          set -o pipefail
+          LOG="$RUNNER_TEMP/docbuild.log"
+          xcrun xcodebuild docbuild \
+            -scheme SafeDI-Package \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            -derivedDataPath "$RUNNER_TEMP/docc-dd" \
+            -destination 'platform=macOS' \
+            2>&1 | tee "$LOG"
+          # Fail on DocC warnings/errors that reference our own files.
+          if grep -E "(SafeDI\.docc/|/Sources/SafeDI/).*:.*(warning|error):" "$LOG"; then
+            echo "::error::DocC emitted warnings or errors in SafeDI's own docs; see log above."
+            exit 1
+          fi
+
   spm-package-integration:
     name: Build Package Integration on Xcode 26
     runs-on: macos-26
