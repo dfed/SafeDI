@@ -1906,18 +1906,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let builderExpression: String
 				let optionalBuilderPath: String?
 				let argumentNodePath: String
-				if isCycleNode {
+				// When the override path is pruned AND `resolveBuilderArguments`
+				// would elide labeled non-dep defaults (tracked by
+				// `callSiteArgumentsForPrunedOverride`), we must use a closure
+				// form that calls the callee with only deps + required non-deps
+				// so Swift's default-argument thunk fires in the callee's scope.
+				// Checked before `isCycleNode` because a cycle node can also be
+				// globally unreachable (self-cycle, or cycle-plus-back-edge),
+				// and taking the full-signature `defaultBuilder` there produces
+				// an arity mismatch against the elided argument list.
+				let argsElidedForPrunedOverride = node.callSiteArgumentsForPrunedOverride.count < node.callSiteArguments.count
+				if !thisOverrideReachable, argsElidedForPrunedOverride {
+					builderExpression = node.defaultBuilderExpressionForPrunedOverride
+					optionalBuilderPath = nil
+					argumentNodePath = nodePath
+				} else if isCycleNode {
 					builderExpression = defaultBuilder
 					optionalBuilderPath = nil
 					argumentNodePath = nodePath
 				} else if !thisOverrideReachable {
-					// Pruned back-edge — the node's override slot is gone from
-					// its parent's config struct. Emit a closure that calls
-					// the callee with only deps + required non-deps so labeled
-					// non-dependency defaults fire via Swift's default-argument
-					// thunk in the callee's lexical scope, preserving `Self.*`,
-					// private members, and file-scoped helpers.
-					builderExpression = node.defaultBuilderExpressionForPrunedOverride
+					// Pruned override, no labeled defaults to elide — the full
+					// default builder and the (non-elided) argument list line up.
+					builderExpression = defaultBuilder
 					optionalBuilderPath = nil
 					argumentNodePath = nodePath
 				} else if let sendableExtractionPrefix {
