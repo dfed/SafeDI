@@ -431,14 +431,14 @@ struct Generate: AsyncParsableCommand {
 					.components(separatedBy: CharacterSet(arrayLiteral: ","))
 					.removingEmpty(),
 			)
-			if currentCSVPaths != Set(cached.csvInputPaths) {
+			guard currentCSVPaths == Set(cached.csvInputPaths) else {
 				return nil
 			}
 		}
 
 		// Bypass the cache if new Swift files have been added to any of the
 		// `additionalDirectoriesToInclude` directories since scan ran. The
-		// mtime loop below only checks files scan already knew about — it
+		// mtime check below only catches files scan already knew about — it
 		// would miss a newly-added file whose path doesn't appear in
 		// `cached.scannedInputPaths`.
 		if !cached.additionalDirectories.isEmpty {
@@ -446,7 +446,7 @@ struct Generate: AsyncParsableCommand {
 			let currentAdditionalAbsolute = Set(currentAdditionalFiles.map { filePath in
 				URL(fileURLWithPath: filePath).standardizedFileURL.path
 			})
-			if currentAdditionalAbsolute != Set(cached.additionalInputAbsolutePaths) {
+			guard currentAdditionalAbsolute == Set(cached.additionalInputAbsolutePaths) else {
 				return nil
 			}
 		}
@@ -456,18 +456,18 @@ struct Generate: AsyncParsableCommand {
 		// both invalidate. We check every path scan parsed (including
 		// files reached through `#SafeDIConfiguration.additionalDirectoriesToInclude`,
 		// which don't appear in `findGenerateSwiftFiles()`'s output).
-		for filePath in cached.scannedInputPaths {
+		guard !cached.scannedInputPaths.contains(where: { filePath in
 			guard let attributes = try? fileManager.attributesOfItem(atPath: filePath),
 			      let modifiedAt = attributes[.modificationDate] as? Date
 			else {
 				// File missing or unreadable — the scan-observed input set
 				// doesn't match disk, so a fresh parse is safer than
 				// trusting stale parse results.
-				return nil
+				return true
 			}
-			if modifiedAt > cacheModifiedAt {
-				return nil
-			}
+			return modifiedAt > cacheModifiedAt
+		}) else {
+			return nil
 		}
 		return cached.moduleInfo
 	}
