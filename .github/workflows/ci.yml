@@ -28,6 +28,8 @@ jobs:
         run: grep -q 'releases/download/99.99.99-test/SafeDITool.artifactbundle.zip' Package.swift
       - name: Verify checksum was updated
         run: grep -q 'checksum:.*abc123testchecksum456' Package.swift
+      - name: Verify Plugins/Shared.swift safeDIVersion was updated
+        run: grep -q '"99.99.99-test"' Plugins/Shared.swift
 
   xcodebuild:
     name: Build with xcodebuild on Xcode 26
