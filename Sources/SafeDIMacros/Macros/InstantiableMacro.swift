@@ -1260,18 +1260,12 @@ public struct InstantiableMacro: MemberMacro {
 	}
 
 	/// Walks each default-value expression on `functionSyntax`'s parameters and
-	/// diagnoses explicit `Self.*` member access. SafeDI's generated mock surface
-	/// may promote the default onto the caller's override struct (inside another
-	/// type's extension), where `Self` binds to the caller's type instead of the
-	/// decorated type — silently producing the wrong value or failing to
-	/// typecheck. The diagnostic catches the syntactically identifiable case so
-	/// users get a compile error instead of a subtle override-surface mismatch.
-	///
-	/// `self.` is not checked because Swift already rejects `self.` in default
-	/// expressions on `init` (self isn't constructed yet) and on static
-	/// functions (no instance) — the only parameter shapes SafeDI encounters.
-	/// Unqualified references to callee-scope members can't be identified
-	/// without type resolution and are not covered.
+	/// diagnoses any explicit reference to `Self`. SafeDI's generated mock
+	/// surface may promote the default onto the caller's override struct
+	/// (inside another type's extension), where `Self` binds to the caller's
+	/// type instead of the decorated type — silently producing the wrong value
+	/// or failing to typecheck. Unqualified references to callee-scope members
+	/// can't be identified without type resolution and are not covered.
 	///
 	/// Two exemptions skip parameters whose defaults never reach the override
 	/// surface:
@@ -1279,7 +1273,7 @@ public struct InstantiableMacro: MemberMacro {
 	///   mock call site.
 	/// - `_`-labeled non-dependency parameters, which `ScopeGenerator` elides
 	///   from call-site arguments and excludes from `rootDefaultParameters`,
-	///   so Swift's default-argument thunk fires in the callee where `Self.*`
+	///   so Swift's default-argument thunk fires in the callee where `Self`
 	///   resolves correctly.
 	private static func validateDefaultExpressions(
 		functionSyntax: FunctionSignatureSyntax,
@@ -1297,55 +1291,37 @@ public struct InstantiableMacro: MemberMacro {
 			guard firstName != "_" else { continue }
 			let finder = SelfReferenceFinder(viewMode: .sourceAccurate)
 			finder.walk(Syntax(defaultValue))
-			for reference in finder.references {
-				context.diagnose(Diagnostic(
-					node: Syntax(parameter),
-					message: FixableInstantiableError.calleeScopeReferenceInDefaultExpression(
-						parameterLabel: innerLabel,
-						reference: reference,
-					).diagnostic,
-				))
-			}
+			guard finder.containsSelfReference else { continue }
+			context.diagnose(Diagnostic(
+				node: Syntax(parameter),
+				message: FixableInstantiableError.calleeScopeReferenceInDefaultExpression(
+					parameterLabel: innerLabel,
+				).diagnostic,
+			))
 		}
 	}
 
+	/// Walks a default-value expression and sets `containsSelfReference` if
+	/// any `Self` reference is encountered — expression-level (bare `Self`,
+	/// `Self.member`, `Self(...)`) or type-level (`Optional<Self>`, `[Self]`,
+	/// `(Self, T)`, etc.). Type-level occurrences are checked via
+	/// `TypeDescription.containsSelf`, which recurses through generics,
+	/// wrappers, composed types, tuples, and closures; expression-level
+	/// occurrences are caught by matching any `DeclReferenceExprSyntax` whose
+	/// name is `Self`.
 	private final class SelfReferenceFinder: SyntaxVisitor {
-		private(set) var references: [String] = []
-
-		override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
-			if let base = node.base?.as(DeclReferenceExprSyntax.self),
-			   base.baseName.text == "Self"
-			{
-				references.append("Self.\(node.declName.baseName.text)")
-				// Skip descent so the bare-`Self` visitor below doesn't
-				// double-report the base — we've already captured the full
-				// `Self.member` reference.
-				return .skipChildren
-			}
-			return .visitChildren
-		}
+		private(set) var containsSelfReference = false
 
 		override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
-			// Catches bare `Self` in contexts that aren't member access:
-			// `Self()` constructor calls, `Self` as a function argument,
-			// `Self[…]` subscripts. Member-access `Self.foo` is captured by
-			// the visitor above (which skips descent to avoid double counting).
 			if node.baseName.text == "Self" {
-				references.append("Self")
+				containsSelfReference = true
 			}
 			return .visitChildren
 		}
 
 		override func visit(_ node: IdentifierTypeSyntax) -> SyntaxVisitorContinueKind {
-			// Catches `Self` when it appears inside a type expression — e.g.
-			// `Optional<Self>.none`, `Result<Self, E>.failure(...)`, or
-			// `[Self]` — by parsing the type syntax into a `TypeDescription`
-			// and asking it whether `Self` appears anywhere in the structure.
-			// `skipChildren` because `containsSelf` already recurses, so
-			// descending into nested type syntax would double-report.
 			if TypeSyntax(node).typeDescription.containsSelf {
-				references.append("Self")
-				return .skipChildren
+				containsSelfReference = true
 			}
 			return .visitChildren
 		}

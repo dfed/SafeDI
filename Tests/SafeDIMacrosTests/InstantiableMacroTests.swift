@@ -5086,7 +5086,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Default expression for parameter `name` references `Self.defaultName`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self.defaultName` would resolve against the wrong type (or fail to resolve). Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						message: "Default expression for parameter `name` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
 						line: 3,
 						column: 17,
 					),
@@ -5119,7 +5119,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Default expression for parameter `name` references `Self.defaultName`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self.defaultName` would resolve against the wrong type (or fail to resolve). Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						message: "Default expression for parameter `name` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
 						line: 5,
 						column: 35,
 					),
@@ -5276,7 +5276,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Default expression for parameter `fallback` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type (or fail to resolve). Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						message: "Default expression for parameter `fallback` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
 						line: 4,
 						column: 35,
 					),
@@ -5313,7 +5313,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Default expression for parameter `fallback` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type (or fail to resolve). Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						message: "Default expression for parameter `fallback` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
 						line: 4,
 						column: 35,
 					),
@@ -5352,7 +5352,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Default expression for parameter `fallback` references `Self.defaultName`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self.defaultName` would resolve against the wrong type (or fail to resolve). Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						message: "Default expression for parameter `fallback` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
 						line: 6,
 						column: 35,
 					),
