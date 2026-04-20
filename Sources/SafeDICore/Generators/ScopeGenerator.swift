@@ -647,7 +647,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				flatReceivedParameters.append((
 					label: receivedProperty.label,
-					typeSource: receivedProperty.typeDescription.asSource,
+					typeSource: receivedProperty.typeDescription.asFunctionParameter.asSource,
 				))
 			}
 		}
@@ -659,8 +659,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			case .instantiated:
 				guard !treePropertyLabels.contains(dependency.property.label) else { continue }
 				let sourceType = dependency.property.propertyType.isConstant
-					? dependency.property.typeDescription.asInstantiatedType.asSource
-					: dependency.property.typeDescription.asSource
+					? dependency.property.typeDescription.asInstantiatedType.asFunctionParameter.asSource
+					: dependency.property.typeDescription.asFunctionParameter.asSource
 				flatUncoveredParameters.append((label: dependency.property.label, typeSource: sourceType))
 			case .received, .aliased, .forwarded:
 				break
@@ -1352,9 +1352,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				guard case .instantiated = dependency.source else { continue }
 				// Skip deps that are covered by a child node in the tree.
 				guard !childLabels.contains(dependency.property.label) else { continue }
+				// Route through `asFunctionParameter` so closure types surface
+				// as `@escaping` — matching the `rootDefaultParameters` and
+				// flat-received emission conventions. Idempotent for non-closures.
 				let sourceType = dependency.property.propertyType.isConstant
-					? dependency.property.typeDescription.asInstantiatedType.asSource
-					: dependency.property.typeDescription.asSource
+					? dependency.property.typeDescription.asInstantiatedType.asFunctionParameter.asSource
+					: dependency.property.typeDescription.asFunctionParameter.asSource
 				// Skip deps already collected (by label AND type).
 				let key = "\(dependency.property.label):\(sourceType)"
 				guard !collectedKeys.contains(key) else { continue }
