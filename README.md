@@ -124,7 +124,7 @@ Three steps to integrate:
 2. Attach the `SafeDIGenerator` build tool plugin to your first-party target(s).
 3. Decorate your app’s root type with `@Instantiable(isRoot: true)` and add `@Instantiable` to the dependencies it reaches.
 
-Or skip ahead: working sample projects live in the [Examples folder](Examples/) — clone, open, and build. The [Manual](Documentation/Manual.md#installation) covers Xcode projects, multi-module packages, custom build systems, and prebuild scripts in depth.
+Working sample projects live in the [Examples folder](Examples/) — clone, open, and build. The [Manual](Documentation/Manual.md#installation) covers Xcode projects, multi-module packages, custom build systems, and prebuild scripts in depth.
 
 If you are migrating an existing project to SafeDI, follow our [migration guide](Documentation/Manual.md#migrating-to-safedi). If you are upgrading from SafeDI 1.x, follow the [1.x → 2.x migration guide](Documentation/Manual.md#migrating-from-safedi-1x-to-2x).
 
