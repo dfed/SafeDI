@@ -348,7 +348,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable(generateMock: true, customMock: "customMock")
+				@Instantiable(generateMock: true, customMockName: "customMock")
 				public struct Child: Instantiable {
 				    public init(unrelated: Unrelated?, shared: Shared?) {
 				        self.unrelated = unrelated
