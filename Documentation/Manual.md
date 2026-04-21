@@ -548,25 +548,33 @@ If you provide a mock method without `generateMock: true`, parent types that ins
 
 ### The `mockOnly` parameter
 
-The `mockOnly` parameter lets you provide a hand-written `mock()` method for types that don’t need full `@Instantiable` infrastructure. Here’s an example providing a mock for a third-party type:
+The `mockOnly` parameter lets you provide a hand-written `mock()` method without providing a mechanism to instantiate the type in production. Here’s an example that provides a default mock for a protocol:
 
 ```swift
-@Instantiable(mockOnly: true)
-extension ExternalService {
-    public static func mock() -> ExternalService {
-        ExternalService(apiKey: "test-key")
+@Instantiable(fulfillingAdditionalTypes: [UserManager.self], mockOnly: true)
+public final class MockUserManager: UserManager {
+    public static func mock() -> MockUserManager {
+        .init(user: .init(name: "Mock User"))
     }
+
+    init(user: User) {
+        self.user = user
+    }
+
+    var user: User
 }
 ```
 
-This also works for types that are pure data and used as `@Forwarded` dependencies — for example, an authenticated `User`:
+This also works for types that are used as `@Forwarded` dependencies — for example, an authenticated `User`:
 
 ```swift
 @Instantiable(mockOnly: true)
-extension User {
+public final class User {
     public static func mock() -> User {
         User(name: "Mock User")
     }
+
+    // …
 }
 ```
 
@@ -574,8 +582,8 @@ When you provide a `mockOnly` extension for a type, SafeDI’s mock generator wi
 
 `mockOnly` is useful for:
 
-- Types defined in other modules (e.g., third-party dependencies) that need mocks in your tests
-- Primitive or Foundation types used as `@Forwarded` dependencies (e.g., `String`, `Int`, `UUID`)
+- Protocol that need mocks in your tests and previews
+- Types used as `@Forwarded` dependencies (e.g., `String`, `Int`, `UUID`, `User`)
 - Types whose `@Instantiable` declaration is in another module and isn’t in the current module’s dependency tree
 
 A `mockOnly` declaration requires a hand-written `mock()` method (or a method named by `customMockName`). No `init` (type declarations), `instantiate()` (extensions), or `Instantiable` conformance is required. `mockOnly` is mutually exclusive with `generateMock` and `isRoot`. `conformsElsewhere` has no effect when `mockOnly` is true.

@@ -804,27 +804,27 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				public protocol AnyService {}
+				public protocol Service {}
 				""",
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
 				public struct Root: Instantiable {
-				    public init(service: AnyService) {
+				    public init(service: Service) {
 				        self.service = service
 				    }
-				    @Instantiated let service: AnyService
+				    @Instantiated let service: Service
 				}
 				""",
 				"""
-				@Instantiable(fulfillingAdditionalTypes: [AnyService.self])
-				public struct ConcreteService: Instantiable, AnyService {
+				@Instantiable(fulfillingAdditionalTypes: [Service.self])
+				public struct ConcreteService: Instantiable, Service {
 				    public init() {}
 				}
 				""",
 				"""
-				@Instantiable(fulfillingAdditionalTypes: [AnyService.self], mockOnly: true)
-				public struct MockService: Instantiable, AnyService {
-				    public init() {}
+				@Instantiable(fulfillingAdditionalTypes: [Service.self], mockOnly: true)
+				public struct MockService: Instantiable, Service {
+				    init() {}
 				    public static func mock() -> MockService { MockService() }
 				}
 				""",
@@ -841,7 +841,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 
 		extension Root {
 		    public init() {
-		        let service: AnyService = ConcreteService()
+		        let service: Service = ConcreteService()
 		        self.init(service: service)
 		    }
 		}
@@ -859,12 +859,12 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> AnyService)? = nil
+		            service: (() -> Service)? = nil
 		        ) {
 		            self.service = service
 		        }
 
-		        let service: (() -> AnyService)?
+		        let service: (() -> Service)?
 		    }
 
 		    static func mock(

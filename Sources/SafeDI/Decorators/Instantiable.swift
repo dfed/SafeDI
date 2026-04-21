@@ -56,7 +56,7 @@
 ///   - mockOnly: Whether this declaration exists solely for mock generation. When `true`, you must provide a hand-written `mock()` method (or a method named by `customMockName`). No `init`/`instantiate()` or `Instantiable` conformance is required. Hand-written mocks take priority over generated ones — a `mockOnly` mock is used even when the production type has `generateMock: true`. A type can have at most one hand-written mock; if the production type also has a hand-written mock, SafeDI emits an error. Mutually exclusive with `generateMock` and `isRoot`. Defaults to `false`.
 ///   - mockAttributes: Attributes to add to the generated `mock()` method. Use this when the type’s initializer is bound to a global actor that the plugin cannot detect from source (e.g. inherited `@MainActor`). Example: `@Instantiable(mockAttributes: "@MainActor")`.
 ///   - generateMock: Whether to generate a `mock()` method for this type. Defaults to `false`.
-///   - customMockName: The name of a hand-written mock method. With `generateMock: true`, the generated `mock()` calls through to this method (it must have a different name to avoid ambiguity). With `mockOnly: true`, SafeDI uses this method as the mock provider for the type. Requires `generateMock: true` or `mockOnly: true`.
+///   - customMockName: The name of the canonical hand-written mock method. With `generateMock: true`, the generated `mock()` calls through to this method (it must have a different name to avoid ambiguity). With `mockOnly: true`, SafeDI uses this method as the mock provider for the type. Requires `generateMock: true` or `mockOnly: true`.
 @attached(member, names: named(ForwardedProperties))
 public macro Instantiable(
 	isRoot: Bool = false,

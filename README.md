@@ -83,7 +83,7 @@ If every dependency can be mocked, calling `mock()` with no arguments works:
     LoggedInView.mock()
 }
 
-// Types that are pure data give SafeDI a mock via `mockOnly`.
+// Types can give SafeDI a mock without providing a production implementation via `mockOnly`.
 @Instantiable(mockOnly: true)
 extension User {
     public static func mock() -> User {
