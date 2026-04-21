@@ -39,7 +39,7 @@ struct InstallSafeDITool: CommandPlugin {
 		context _: PackagePlugin.PluginContext,
 		arguments _: [String],
 	) async throws {
-		Diagnostics.error("safedi-install-tool is an Xcode-only command plugin. swift build users get the prebuilt binary via the default `prebuilt` trait, and `--traits sourceBuild` builds SafeDITool from source on purpose.")
+		Diagnostics.error("safedi-release-install is an Xcode-only command plugin. swift build users get the prebuilt binary via the default `prebuilt` trait, and `--traits sourceBuild` builds SafeDITool from source on purpose.")
 		exit(1)
 	}
 }
