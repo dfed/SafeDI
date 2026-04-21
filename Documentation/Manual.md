@@ -46,7 +46,7 @@ The `additionalDirectoriesToInclude` parameter specifies folders outside of your
 
 If you see a build warning that starts with **"SafeDI's build-tool plugin is falling back to a regex-based output scanner..."** — installing the prebuilt tool fixes it.
 
-In Xcode, right-click your project in the navigator and choose **SafeDI → Safedi Install Tool**. Approve the network-access and write-to-package-directory prompts. Xcode runs the command and downloads the prebuilt SafeDITool release binary for your SafeDI version into `.safedi/<version>/safeditool` next to your `.xcodeproj`. The build plugin picks it up automatically on subsequent builds.
+In Xcode, right-click your project in the navigator and choose **SafeDI → Safedi Release Install**. Approve the network-access and write-to-package-directory prompts. Xcode runs the command and downloads the prebuilt SafeDITool release binary for your SafeDI version into `.safedi/<version>/safeditool` next to your `.xcodeproj`. The build plugin picks it up automatically on subsequent builds.
 
 **Why this step is required in Xcode:** Xcode’ implementation of Swift package build-tool plugins does not give plugins access to real tool locations within derived data – paths include placeholders whose values are not available to the plugin. SafeDI's plugin therefore can’t execute the real parser during setup and falls back to a regex-based output scanner. Installing the `SafeDITool` to a well-known location allows the plugin to execute the prebuilt tool. The install command is a one-time step per project (re-run it after a SafeDI version bump if the warning reappears). The plugin only runs inside Xcode — `swift build` users get the prebuilt binary through the default `prebuilt` trait already.
 
@@ -793,7 +793,7 @@ This plugin will:
 
 ### Plugin changes
 
-The `SafeDIPrebuiltGenerator` plugin and `InstallSafeDITool` command plugin have been removed in SafeDI 2.x. `SafeDIGenerator` is now the only build tool plugin and uses a prebuilt binary by default. If you were previously using `SafeDIPrebuiltGenerator` or the `safedi-release-install` command, switch to `SafeDIGenerator`.
+The `SafeDIPrebuiltGenerator` plugin has been removed in SafeDI 2.x. `SafeDIGenerator` is now the only build tool plugin and uses a prebuilt binary by default. If you were previously using `SafeDIPrebuiltGenerator`, switch to `SafeDIGenerator`. The `InstallSafeDITool` command plugin (verb `safedi-release-install`, matching 1.x) still exists as an Xcode-only helper for the prebuilt-tool install flow described under _Installing the prebuilt SafeDITool binary_ above.
 
 ### Migrating prebuild scripts or custom build system integrations
 

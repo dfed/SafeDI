@@ -211,7 +211,7 @@ extension Target {
 				scanner because the SPM-provided SafeDITool path contains unresolved \
 				Xcode build variables at plugin-setup time. To install the prebuilt \
 				SafeDITool binary for version \(context.safeDIVersion), right-click \
-				the project in Xcode and choose SafeDI → Safedi Install Tool.
+				the project in Xcode and choose SafeDI → Safedi Release Install.
 				""")
 			}
 			let inputSwiftFiles = target
