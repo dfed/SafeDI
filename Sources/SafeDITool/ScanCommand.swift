@@ -106,20 +106,26 @@ func performScan(
 	var combinedModuleInfo = allModuleInfo
 	if let configuration, !configuration.additionalDirectoriesToInclude.isEmpty {
 		let additionalFiles = try await findSwiftFiles(inDirectories: configuration.additionalDirectoriesToInclude)
-		let additionalModuleInfo = try await parseSwiftFiles(additionalFiles)
 
 		// Record the additional files for the plugin to use as build inputs.
 		additionalInputFiles = additionalFiles.sorted().map { filePath in
 			URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path
 		}
 
-		// Merge additional roots/mocks into the combined results.
-		combinedModuleInfo = ModuleInfo(
-			imports: allModuleInfo.imports + additionalModuleInfo.imports,
-			instantiables: allModuleInfo.instantiables + additionalModuleInfo.instantiables,
-			configurations: allModuleInfo.configurations,
-			filesWithUnexpectedNodes: allModuleInfo.filesWithUnexpectedNodes.map { $0 + (additionalModuleInfo.filesWithUnexpectedNodes ?? []) } ?? additionalModuleInfo.filesWithUnexpectedNodes,
-		)
+		// Exclude files already parsed via the CSV — re-parsing them would
+		// produce duplicate `Instantiable` entries in `combinedModuleInfo`
+		// and trip "multiple types fulfilling" validation downstream.
+		let unparsedAdditionalFiles = additionalFiles.subtracting(allFilePaths)
+		if !unparsedAdditionalFiles.isEmpty {
+			let additionalModuleInfo = try await parseSwiftFiles(unparsedAdditionalFiles)
+			// Merge additional roots/mocks into the combined results.
+			combinedModuleInfo = ModuleInfo(
+				imports: allModuleInfo.imports + additionalModuleInfo.imports,
+				instantiables: allModuleInfo.instantiables + additionalModuleInfo.instantiables,
+				configurations: allModuleInfo.configurations,
+				filesWithUnexpectedNodes: allModuleInfo.filesWithUnexpectedNodes.map { $0 + (additionalModuleInfo.filesWithUnexpectedNodes ?? []) } ?? additionalModuleInfo.filesWithUnexpectedNodes,
+			)
+		}
 	}
 
 	// Collect root files and compute output file names.
@@ -210,4 +216,104 @@ func performScan(
 	let encoder = JSONEncoder()
 	encoder.outputFormatting = [.sortedKeys]
 	try encoder.encode(manifest).write(to: manifestFile.asFileURL)
+
+	// Also persist the parsed ModuleInfo next to the manifest so `generate`
+	// can skip re-parsing the same Swift files. Normalize sourceFilePath
+	// to project-relative form so the cached entries match both the
+	// manifest's `inputFilePath` (also project-relative) and what Generate
+	// would compute when parsing fresh from the same CSV.
+	func normalize(_ path: String?) -> String? {
+		guard let path else { return nil }
+		return relativePath(
+			for: URL(fileURLWithPath: path, relativeTo: directoryBaseURL).standardizedFileURL,
+			relativeTo: projectRootURL,
+		)
+	}
+	let normalizedModuleInfo = ModuleInfo(
+		imports: combinedModuleInfo.imports,
+		instantiables: combinedModuleInfo.instantiables.map { instantiable in
+			var updated = instantiable
+			updated.sourceFilePath = normalize(instantiable.sourceFilePath)
+			return updated
+		},
+		configurations: combinedModuleInfo.configurations.map { configuration in
+			var updated = configuration
+			updated.sourceFilePath = normalize(configuration.sourceFilePath)
+			return updated
+		},
+		filesWithUnexpectedNodes: combinedModuleInfo.filesWithUnexpectedNodes?.compactMap(normalize),
+	)
+	// Every path scan parsed for this module — CSV inputs plus any files
+	// reached through `#SafeDIConfiguration.additionalDirectoriesToInclude`.
+	// `generate` uses this list to validate cache freshness against the
+	// exact file set `scan` observed, so edits to additional-directory
+	// files correctly invalidate the cache too.
+	//
+	// Normalized to absolute paths so `generate`'s freshness check works
+	// regardless of its CWD — `FileManager.attributesOfItem(atPath:)`
+	// resolves relative paths against the process's CWD, which would
+	// silently fail and invalidate the cache if `generate` runs from a
+	// different directory than `scan`.
+	let absoluteCSVPaths = allFilePaths.map { filePath in
+		URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path
+	}.sorted()
+	let allScannedFilePaths = (Set(absoluteCSVPaths).union(
+		// `additionalInputFiles` is already normalized to `.standardizedFileURL.path`.
+		Set(additionalInputFiles),
+	)).sorted()
+	let additionalDirectories = configuration?.additionalDirectoriesToInclude.map { directory in
+		URL(fileURLWithPath: directory, relativeTo: directoryBaseURL).standardizedFileURL.path
+	}.sorted() ?? []
+	let cached = CachedScannedModuleInfo(
+		moduleInfo: normalizedModuleInfo,
+		scannedInputPaths: allScannedFilePaths,
+		csvInputPaths: inputFilePaths.sorted(),
+		additionalInputAbsolutePaths: additionalInputFiles.sorted(),
+		additionalDirectories: additionalDirectories,
+	)
+	let scannedModuleInfoURL = scannedModuleInfoURL(forManifestPath: manifestFile)
+	// Cache write is best-effort. A full disk or other transient FS
+	// failure shouldn't block the build — `generate` always falls back
+	// to a fresh parse when the cache is missing or can't be decoded.
+	// Fresh encoder rather than reusing the manifest's — the cache is
+	// machine-read only, so the `.sortedKeys` formatting the manifest
+	// needs for determinism isn't load-bearing here.
+	try? JSONEncoder().encode(cached).write(to: scannedModuleInfoURL)
+}
+
+/// Wrapper persisted alongside the manifest so `generate` can both
+/// consume the parsed `ModuleInfo` AND validate cache freshness against
+/// the exact file set `scan` observed (including
+/// `additionalDirectoriesToInclude` files, which don't appear in the
+/// `generate` CSV).
+struct CachedScannedModuleInfo: Codable {
+	let moduleInfo: ModuleInfo
+	/// Absolute paths of every file `scan` observed — CSV inputs plus
+	/// additional-directory files. Drives the mtime freshness check.
+	let scannedInputPaths: [String]
+	/// Raw CSV file paths as `scan` read them. Drives the "current generate
+	/// CSV matches the CSV that scan observed" check.
+	let csvInputPaths: [String]
+	/// Absolute paths of just the additional-directory files scan observed.
+	/// Used by `generate`'s additional-directory freshness check to compare
+	/// against the current on-disk enumeration without re-sorting the CSV.
+	let additionalInputAbsolutePaths: [String]
+	/// Absolute paths of `additionalDirectoriesToInclude` from the
+	/// configuration that drove this scan. `generate` re-enumerates these
+	/// during freshness checks so files added to those directories
+	/// between scan and generate correctly invalidate the cache.
+	let additionalDirectories: [String]
+}
+
+/// Path alongside the manifest where `scan` persists the parsed
+/// `ModuleInfo` and `generate` reads it to skip re-parsing. Derived from
+/// the manifest path so concurrent runs writing to different manifests
+/// don't collide.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+func scannedModuleInfoURL(forManifestPath manifestPath: String) -> URL {
+	let manifestURL = manifestPath.asFileURL
+	let base = manifestURL.deletingPathExtension().lastPathComponent
+	return manifestURL
+		.deletingLastPathComponent()
+		.appendingPathComponent("\(base).safediScannedModuleInfo.json")
 }

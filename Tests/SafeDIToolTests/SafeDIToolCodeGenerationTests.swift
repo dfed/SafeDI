@@ -6981,6 +6981,469 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		#expect(manifest.dependencyTreeGeneration.count == 1)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_bypassesStaleCachedModuleInfo_whenSourceEditedAfterScan() async throws {
+		// `scan` writes a cached ModuleInfo alongside its manifest.
+		// `generate`'s cache-read path must bypass that cache when any
+		// source file's mtime exceeds the cache mtime — otherwise a
+		// manual `generate --swift-manifest` after source edits would
+		// emit output derived from stale parse results.
+		//
+		// Because fresh parse produces absolute `sourceFilePath` values
+		// while scan's manifest stores project-relative `inputFilePath`
+		// values, bypass → fresh parse → `ManifestError.noRootFound`,
+		// which is our observable signal that the bypass fired.
+		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+		let rootFile = projectRoot.appendingPathComponent("Root.swift")
+		try """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init() {}
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try rootFile.path
+			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		filesToDelete += [projectRoot, swiftFileCSV, outputDirectory, manifestFile]
+
+		try await (Scan.parse([
+			"--input-sources-file", swiftFileCSV.path,
+			"--project-root", projectRoot.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+		])).run()
+
+		// Touch the source AFTER scan so its mtime postdates the cache.
+		try FileManager.default.setAttributes(
+			[.modificationDate: Date().addingTimeInterval(60)],
+			ofItemAtPath: rootFile.path,
+		)
+
+		// Generate should bypass the stale cache and re-parse. The fresh
+		// parse produces an absolute `sourceFilePath` that doesn't match
+		// the manifest's relative `inputFilePath`, so we expect a
+		// `ManifestError.noRootFound`. That error is exactly what
+		// confirms the bypass fired — on a cache-hit, the normalized
+		// cached paths would match the manifest and generate would
+		// succeed.
+		await assertThrowsError(
+			"Manifest lists \'Root.swift\' as containing a dependency tree root, but no @\(InstantiableVisitor.macroName)(isRoot: true) was found in that file.",
+		) {
+			try await (Generate.parse([
+				swiftFileCSV.path,
+				"--swift-manifest", manifestFile.path,
+			])).run()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_consumesCachedModuleInfo_whenScanAndGenerateShareManifest() async throws {
+		// Happy path: scan persists a cache sidecar, generate consumes it.
+		// All freshness checks (CSV set, additional-directory set, mtime
+		// loop) pass, so `parsedModule()` takes the cache branch and skips
+		// re-parsing the Swift source files. We verify scan wrote the cache
+		// file at the expected location and that generate produces the
+		// expected `Root+SafeDI.swift` output from the cached ModuleInfo.
+		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+		let helperFile = projectRoot.appendingPathComponent("Helper.swift")
+		try """
+		import SafeDI
+
+		@Instantiable
+		public struct Helper: Instantiable {
+		    public init() {}
+		}
+		""".write(to: helperFile, atomically: true, encoding: .utf8)
+		let rootFile = projectRoot.appendingPathComponent("Root.swift")
+		try """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init(helper: Helper) {
+		        self.helper = helper
+		    }
+		    @Instantiated let helper: Helper
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try "\(helperFile.path),\(rootFile.path)"
+			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		filesToDelete += [projectRoot, swiftFileCSV, outputDirectory, manifestFile]
+
+		try await (Scan.parse([
+			"--input-sources-file", swiftFileCSV.path,
+			"--project-root", projectRoot.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+		])).run()
+
+		// Scan must have persisted the cache sidecar.
+		let cacheURL = scannedModuleInfoURL(forManifestPath: manifestFile.path)
+		filesToDelete += [cacheURL]
+		#expect(FileManager.default.fileExists(atPath: cacheURL.path))
+
+		try await (Generate.parse([
+			swiftFileCSV.path,
+			"--swift-manifest", manifestFile.path,
+		])).run()
+
+		// The generated output exists and contains the expected extension —
+		// proves the cache path wired through end-to-end.
+		let manifest = try JSONDecoder().decode(
+			SafeDIToolManifest.self,
+			from: Data(contentsOf: manifestFile),
+		)
+		let rootOutputPath = try #require(manifest.dependencyTreeGeneration.first?.outputFilePath)
+		let generated = try String(contentsOfFile: rootOutputPath, encoding: .utf8)
+		#expect(generated.contains("extension Root"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_bypassesCachedModuleInfo_whenCSVInputPathsDifferFromScan() async throws {
+		// If a custom script reuses a manifest path with a changed CSV,
+		// the cached ModuleInfo is for the wrong input set and must be
+		// bypassed. Signal: an empty generate CSV forces bypass, then
+		// fresh parse produces an empty module, and the manifest-driven
+		// root lookup fails with `ManifestError.noRootFound`. A cache
+		// hit would return the cached Root and succeed.
+		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+		let rootFile = projectRoot.appendingPathComponent("Root.swift")
+		try """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init() {}
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+
+		let scanCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try rootFile.path
+			.write(to: scanCSV, atomically: true, encoding: .utf8)
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		filesToDelete += [projectRoot, scanCSV, outputDirectory, manifestFile]
+
+		try await (Scan.parse([
+			"--input-sources-file", scanCSV.path,
+			"--project-root", projectRoot.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+		])).run()
+
+		// Empty generate CSV — set differs from scan's CSV, forcing bypass.
+		let generateCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try "".write(to: generateCSV, atomically: true, encoding: .utf8)
+		filesToDelete += [generateCSV]
+
+		await assertThrowsError(
+			"Manifest lists \'Root.swift\' as containing a dependency tree root, but no @\(InstantiableVisitor.macroName)(isRoot: true) was found in that file.",
+		) {
+			try await (Generate.parse([
+				generateCSV.path,
+				"--swift-manifest", manifestFile.path,
+			])).run()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_bypassesCachedModuleInfo_whenCSVIsUnreadable() async throws {
+		// `loadCachedModuleInfo` can't verify the current input set when
+		// the CSV file can't be read, so it must invalidate rather than
+		// silently reuse cached data. Delete the CSV after scan and
+		// confirm the fresh-parse fallback surfaces the missing-CSV
+		// NSError (rather than a successful cache hit).
+		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+		let rootFile = projectRoot.appendingPathComponent("Root.swift")
+		try """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init() {}
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try rootFile.path
+			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		filesToDelete += [projectRoot, outputDirectory, manifestFile]
+
+		try await (Scan.parse([
+			"--input-sources-file", swiftFileCSV.path,
+			"--project-root", projectRoot.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+		])).run()
+
+		// Delete the CSV so `String(contentsOfFile:)` fails in the cache
+		// freshness check — exercises the unreadable-CSV bypass branch.
+		try FileManager.default.removeItem(at: swiftFileCSV)
+
+		await assertThrowsError(containing: "NSCocoaErrorDomain Code=260") {
+			try await (Generate.parse([
+				swiftFileCSV.path,
+				"--swift-manifest", manifestFile.path,
+			])).run()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_bypassesCachedModuleInfo_whenScannedInputFileMissingFromDisk() async throws {
+		// Scan records every input path it observed; if one of those files
+		// has been deleted before generate runs, `attributesOfItem` fails
+		// and the cache must bypass. The signal: a cache hit would skip
+		// parsing entirely and return `ManifestError.noRootFound` because
+		// the cached module (absolute paths) wouldn't match the manifest's
+		// relative `inputFilePath` once the file is gone. Instead the
+		// bypass forces a fresh parse of the CSV, which fails to read the
+		// missing file.
+		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+		let rootFile = projectRoot.appendingPathComponent("Root.swift")
+		try """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init() {}
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try rootFile.path
+			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		filesToDelete += [projectRoot, swiftFileCSV, outputDirectory, manifestFile]
+
+		try await (Scan.parse([
+			"--input-sources-file", swiftFileCSV.path,
+			"--project-root", projectRoot.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+		])).run()
+
+		// Delete the source after scan so its path is in the cache's
+		// scannedInputPaths but `attributesOfItem` fails for it. CSV is
+		// unchanged so the set-match check passes; the mtime loop's
+		// missing-file branch is what forces the bypass.
+		try FileManager.default.removeItem(at: rootFile)
+
+		// Fresh parse hits the missing file and throws a Foundation
+		// NSError. Its human-readable description differs between Darwin
+		// Foundation and swift-corelibs-foundation (Linux), but both
+		// platforms emit the same domain+code prefix
+		// (`NSCocoaErrorDomain Code=260` = `NSFileReadNoSuchFileError`).
+		// A cache hit would return the cached Root successfully instead
+		// of throwing.
+		await assertThrowsError(containing: "NSCocoaErrorDomain Code=260") {
+			try await (Generate.parse([
+				swiftFileCSV.path,
+				"--swift-manifest", manifestFile.path,
+			])).run()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_bypassesCachedModuleInfo_whenAdditionalDirectoryFileSetChanges() async throws {
+		// Scan records the set of files it saw in each
+		// `additionalDirectoriesToInclude`. `generate` re-enumerates those
+		// directories on cache read; a mismatch (file added, removed, or
+		// renamed) must bypass so we don't emit output from a stale
+		// ModuleInfo. We observe the bypass by deleting a file from the
+		// additional directory — the fresh parse then misses a type the
+		// cached ModuleInfo would have had, causing validation to throw.
+		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+		let targetDirectory = projectRoot.appendingPathComponent("Target")
+		try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
+		let extraDirectory = projectRoot.appendingPathComponent("Extra")
+		try FileManager.default.createDirectory(at: extraDirectory, withIntermediateDirectories: true)
+		filesToDelete += [projectRoot]
+
+		let configFile = targetDirectory.appendingPathComponent("Config.swift")
+		try """
+		import SafeDI
+
+		#SafeDIConfiguration(
+		    additionalDirectoriesToInclude: ["\(extraDirectory.path)"]
+		)
+		""".write(to: configFile, atomically: true, encoding: .utf8)
+
+		// Root depends on a type that lives in the additional directory.
+		// Cache hit: that type is in the cached ModuleInfo → validation
+		// passes. Cache miss: the type's defining file was deleted →
+		// fresh parse doesn't find it → validation throws.
+		let rootFile = targetDirectory.appendingPathComponent("Root.swift")
+		try """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init(helper: ExtraHelper) {
+		        self.helper = helper
+		    }
+		    @Instantiated let helper: ExtraHelper
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+
+		let extraHelperFile = extraDirectory.appendingPathComponent("ExtraHelper.swift")
+		try """
+		import SafeDI
+
+		@Instantiable
+		public struct ExtraHelper: Instantiable {
+		    public init() {}
+		}
+		""".write(to: extraHelperFile, atomically: true, encoding: .utf8)
+
+		// A second additional file so the on-disk set stays non-empty after
+		// we delete the first — covers the `currentAdditionalFiles.map { ... }`
+		// branch that executes for every file still on disk.
+		let siblingFile = extraDirectory.appendingPathComponent("Sibling.swift")
+		try """
+		import SafeDI
+
+		@Instantiable
+		public struct Sibling: Instantiable {
+		    public init() {}
+		}
+		""".write(to: siblingFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try "\(configFile.path),\(rootFile.path)"
+			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		filesToDelete += [swiftFileCSV, outputDirectory, manifestFile]
+
+		try await (Scan.parse([
+			"--input-sources-file", swiftFileCSV.path,
+			"--project-root", projectRoot.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+		])).run()
+
+		// Delete the additional-directory file that defines `ExtraHelper`.
+		// The current enumeration of the additional directory is now
+		// `[Sibling]`, while the cache's `additionalInputAbsolutePaths` is
+		// `[ExtraHelper, Sibling]`. Set mismatch → bypass. Fresh parse on
+		// the CSV + live additional directory no longer finds `ExtraHelper`,
+		// so generation fails on the unfulfillable dependency.
+		try FileManager.default.removeItem(at: extraHelperFile)
+
+		await assertThrowsError(
+			"No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `ExtraHelper`",
+		) {
+			try await (Generate.parse([
+				swiftFileCSV.path,
+				"--swift-manifest", manifestFile.path,
+			])).run()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_parsesAdditionalDirectoryFiles_whenCSVDoesNotIncludeThem() async throws {
+		// Mirrors real plugin flow (CSV = target files only, additional
+		// directories discovered via #SafeDIConfiguration at parse time).
+		// Exercises scan's `unparsedAdditionalFiles` parse branch — the
+		// executeSafeDIToolTest helper puts all files in the CSV, so that
+		// branch isn't reached from the default test path.
+		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+		let targetDirectory = projectRoot.appendingPathComponent("Target")
+		try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
+		let extraDirectory = projectRoot.appendingPathComponent("Extra")
+		try FileManager.default.createDirectory(at: extraDirectory, withIntermediateDirectories: true)
+		filesToDelete += [projectRoot]
+
+		let targetConfigFile = targetDirectory.appendingPathComponent("Config.swift")
+		try """
+		import SafeDI
+
+		#SafeDIConfiguration(
+		    additionalDirectoriesToInclude: ["\(extraDirectory.path)"]
+		)
+		""".write(to: targetConfigFile, atomically: true, encoding: .utf8)
+
+		let targetRootFile = targetDirectory.appendingPathComponent("Root.swift")
+		try """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init() {}
+		}
+		""".write(to: targetRootFile, atomically: true, encoding: .utf8)
+
+		let extraFile = extraDirectory.appendingPathComponent("ExtraRoot.swift")
+		try """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public struct ExtraRoot: Instantiable {
+		    public init() {}
+		}
+		""".write(to: extraFile, atomically: true, encoding: .utf8)
+
+		// CSV contains only target files (absolute paths) — extra directory
+		// is reached via the #SafeDIConfiguration's
+		// `additionalDirectoriesToInclude`.
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try "\(targetConfigFile.path),\(targetRootFile.path)"
+			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		filesToDelete += [swiftFileCSV, outputDirectory, manifestFile]
+
+		try await (Scan.parse([
+			"--input-sources-file", swiftFileCSV.relativePath,
+			"--project-root", projectRoot.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+		])).run()
+
+		// Scan should have discovered BOTH Root (in CSV) and ExtraRoot
+		// (reached via additionalDirectoriesToInclude).
+		let manifest = try JSONDecoder().decode(
+			SafeDIToolManifest.self,
+			from: Data(contentsOf: manifestFile),
+		)
+		let rootFileNames = Set(manifest.dependencyTreeGeneration.map { ($0.inputFilePath as NSString).lastPathComponent })
+		#expect(rootFileNames == ["Root.swift", "ExtraRoot.swift"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

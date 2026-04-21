@@ -73,10 +73,12 @@ struct Generate: AsyncParsableCommand {
 			resolvedSwiftManifest = manifestPath
 		}
 
-		let (dependentModuleInfo, initialModule) = try await (
+		let (dependentModuleInfo, parsed) = try await (
 			loadSafeDIModuleInfo(),
 			parsedModule(),
 		)
+		let initialModule = parsed.module
+		let initialModuleIsFromCache = parsed.isFromCache
 
 		// In multi-module builds, the CSV includes all modules' files, so multiple
 		// configs may be present. Scope to the current module using the manifest's
@@ -108,9 +110,15 @@ struct Generate: AsyncParsableCommand {
 		}
 
 		// If the source configuration specifies additional directories to include,
-		// find and parse swift files in those directories and merge with initial results.
+		// find and parse swift files in those directories and merge with initial
+		// results. Skipped when the initial module came from scan's cache —
+		// scan already merged the additional directories into the cached
+		// ModuleInfo, so re-parsing would be wasted work.
 		let module: ModuleInfo
-		if let sourceConfiguration, !sourceConfiguration.additionalDirectoriesToInclude.isEmpty {
+		if !initialModuleIsFromCache,
+		   let sourceConfiguration,
+		   !sourceConfiguration.additionalDirectoriesToInclude.isEmpty
+		{
 			let additionalFiles = try await findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude)
 			let additionalModule = try await parseSwiftFiles(additionalFiles)
 			module = ModuleInfo(
@@ -356,8 +364,113 @@ struct Generate: AsyncParsableCommand {
 		return swiftFiles
 	}
 
-	private func parsedModule() async throws -> ModuleInfo {
-		try await parseSwiftFiles(findGenerateSwiftFiles())
+	/// Loads the parsed `ModuleInfo` for this module. When scan ran earlier
+	/// (plugin-setup subprocess of this same build), it persisted the parsed
+	/// result alongside the manifest; reading that JSON is dramatically
+	/// cheaper than re-parsing every Swift file through SwiftParser.
+	///
+	/// Returns `(module, isFromCache)`. On a cache hit the returned module
+	/// already includes files discovered through
+	/// `#SafeDIConfiguration.additionalDirectoriesToInclude`, so the caller
+	/// should skip its additional-directory re-parse.
+	///
+	/// Cache is only consulted when `include` is empty — CLI callers who
+	/// pass `--include` expect those directories scanned afresh, and scan
+	/// doesn't see `--include`.
+	///
+	/// The cache is also bypassed when any source file's mtime is newer
+	/// than the cache file — e.g. a manual `generate` invocation after a
+	/// source edit without rerunning `scan` would otherwise consume stale
+	/// parse results and emit stale code. Plugin-driven builds rerun
+	/// `scan` every build, so this check is effectively free on the fast
+	/// path.
+	///
+	/// Decode failures (truncated file from an interrupted write,
+	/// cross-version schema drift, etc.) fall through to a fresh parse
+	/// rather than aborting the build — the cache is an optimization
+	/// sidecar, not a correctness requirement.
+	private func parsedModule() async throws -> (module: ModuleInfo, isFromCache: Bool) {
+		if include.isEmpty,
+		   let swiftManifest,
+		   let cached = try await loadCachedModuleInfo(manifestPath: swiftManifest)
+		{
+			(cached, true)
+		} else {
+			try await (parseSwiftFiles(findGenerateSwiftFiles()), false)
+		}
+	}
+
+	private func loadCachedModuleInfo(manifestPath: String) async throws -> ModuleInfo? {
+		let cacheURL = scannedModuleInfoURL(forManifestPath: manifestPath)
+		let fileManager = FileManager.default
+		guard let cacheAttributes = try? fileManager.attributesOfItem(atPath: cacheURL.path),
+		      let cacheModifiedAt = cacheAttributes[.modificationDate] as? Date
+		else { return nil }
+
+		// Treat decode failures as cache misses, not hard errors — the
+		// cache may have been truncated by an interrupted write or carry
+		// an older schema that a newer SafeDITool can no longer read.
+		guard let data = try? Data(contentsOf: cacheURL),
+		      let cached = try? JSONDecoder().decode(CachedScannedModuleInfo.self, from: data)
+		else { return nil }
+
+		// Bypass the cache if the current CSV's file set differs from what
+		// scan observed — a custom script could reuse a manifest path with a
+		// changed CSV, in which case the cached ModuleInfo is for the wrong
+		// input set. Plugin-driven builds always pair scan+generate with the
+		// same CSV, so this check is effectively free on the fast path.
+		//
+		// Failure to read the CSV also invalidates: we can't prove the
+		// inputs match, and the fresh-parse fallback will surface a clearer
+		// error (missing file) than silently reusing stale parse results.
+		if let swiftSourcesFilePath {
+			guard let currentCSVContent = try? String(contentsOfFile: swiftSourcesFilePath, encoding: .utf8) else {
+				return nil
+			}
+			let currentCSVPaths = Set(
+				currentCSVContent
+					.components(separatedBy: CharacterSet(arrayLiteral: ","))
+					.removingEmpty(),
+			)
+			guard currentCSVPaths == Set(cached.csvInputPaths) else {
+				return nil
+			}
+		}
+
+		// Bypass the cache if new Swift files have been added to any of the
+		// `additionalDirectoriesToInclude` directories since scan ran. The
+		// mtime check below only catches files scan already knew about — it
+		// would miss a newly-added file whose path doesn't appear in
+		// `cached.scannedInputPaths`.
+		if !cached.additionalDirectories.isEmpty {
+			let currentAdditionalFiles = await (try? findSwiftFiles(inDirectories: cached.additionalDirectories)) ?? []
+			let currentAdditionalAbsolute = Set(currentAdditionalFiles.map { filePath in
+				URL(fileURLWithPath: filePath).standardizedFileURL.path
+			})
+			guard currentAdditionalAbsolute == Set(cached.additionalInputAbsolutePaths) else {
+				return nil
+			}
+		}
+
+		// Bypass the cache if any input file scan observed has changed
+		// since the cache was written — newer mtime OR missing-from-disk
+		// both invalidate. We check every path scan parsed (including
+		// files reached through `#SafeDIConfiguration.additionalDirectoriesToInclude`,
+		// which don't appear in `findGenerateSwiftFiles()`'s output).
+		guard !cached.scannedInputPaths.contains(where: { filePath in
+			guard let attributes = try? fileManager.attributesOfItem(atPath: filePath),
+			      let modifiedAt = attributes[.modificationDate] as? Date
+			else {
+				// File missing or unreadable — the scan-observed input set
+				// doesn't match disk, so a fresh parse is safer than
+				// trusting stale parse results.
+				return true
+			}
+			return modifiedAt > cacheModifiedAt
+		}) else {
+			return nil
+		}
+		return cached.moduleInfo
 	}
 
 	private var moduleInfoURLs: Set<URL> {
