@@ -66,7 +66,7 @@ public struct LoggedInView: Instantiable, View {
 	#Preview("Customized") {
 		LoggedInView.mock(
 			user: User(name: "dfed"),
-			safeDIOverrides: .init(
+			overrides: .init(
 				noteStorage: .init(defaultNote: "dfed says hello"),
 			),
 		)

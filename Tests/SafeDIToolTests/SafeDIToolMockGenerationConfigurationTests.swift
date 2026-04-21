@@ -171,7 +171,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let dependency = (safeDIOverrides.dependency ?? Dependency.init)()
 		        return Root(dependency: dependency)
@@ -491,7 +491,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let crossModuleService = (safeDIOverrides.crossModuleService ?? CrossModuleService.init)()
 		        return Root(crossModuleService: crossModuleService)
@@ -563,7 +563,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
 		            let leaf = (safeDIOverrides.child.leaf ?? Leaf.init)()
@@ -634,7 +634,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> RootA {
 		        func __safeDI_middle() -> Middle {
 		            let leaf = (safeDIOverrides.middle.leaf ?? Leaf.init)()
@@ -756,7 +756,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> RootA {
 		        func __safeDI_middle() -> Middle {
 		            let leaf = (safeDIOverrides.middle.leaf ?? Leaf.init)()
@@ -788,7 +788,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> RootB {
 		        func __safeDI_middle() -> Middle {
 		            let leaf = (safeDIOverrides.middle.leaf ?? Leaf.init)()
@@ -908,7 +908,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let crossModuleService = (safeDIOverrides.crossModuleService ?? CrossModuleService.init)()
 		        return Root(crossModuleService: crossModuleService)

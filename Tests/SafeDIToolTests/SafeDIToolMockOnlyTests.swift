@@ -191,7 +191,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? ExternalService.mock)()
 		        return Root(service: service)
@@ -303,7 +303,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.mock)()
 		        return Root(service: service)
@@ -364,7 +364,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.mock)()
 		        return Root(service: service)
@@ -539,7 +539,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.preview)()
 		        return Root(service: service)
@@ -607,7 +607,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.preview)()
 		        return Root(service: service)
@@ -868,7 +868,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MockService.mock)()
 		        return Root(service: service)
@@ -948,7 +948,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MockService.mock)()
 		        return Root(service: service)
@@ -1013,7 +1013,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = safeDIOverrides.service?() ?? AnyService(MockService.mock())
 		        return Root(service: service)
@@ -1084,7 +1084,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = safeDIOverrides.service?() ?? AnyService(MockService.mock())
 		        return Root(service: service)
@@ -1146,7 +1146,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = safeDIOverrides.service?() ?? AnyService(ConcreteService())
 		        return Root(service: service)
@@ -1210,7 +1210,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.preview)()
 		        return Root(service: service)
@@ -1330,7 +1330,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.preview)()
 		        return Root(service: service)
@@ -1405,7 +1405,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.preview)()
 		        return Root(service: service)
@@ -1487,7 +1487,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.preview)()
 		        return Root(service: service)
@@ -1566,7 +1566,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.preview)()
 		        return Root(service: service)
@@ -1644,7 +1644,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.preview)()
 		        return Root(service: service)
@@ -1774,7 +1774,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? ConcreteService.customMock)()
 		        return Root(service: service)
@@ -1905,7 +1905,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_service() -> MyService {
 		            let database = (safeDIOverrides.service.database ?? Database.init)()
@@ -1979,7 +1979,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? ConcreteService.mock)()
 		        return Root(service: service)
@@ -2100,7 +2100,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let other = (safeDIOverrides.other ?? MockService.mock)()
 		        return Root(other: other)
@@ -2232,7 +2232,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.init)()
 		        return Root(service: service)
@@ -2310,7 +2310,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.init)()
 		        return Root(service: service)
@@ -2381,7 +2381,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.init)()
 		        return Root(service: service)
@@ -2450,7 +2450,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.mock)()
 		        return Root(service: service)
@@ -2535,7 +2535,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MyService.preview)()
 		        return Root(service: service)
@@ -2663,7 +2663,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? MockService.mock)()
 		        return Root(service: service)
@@ -2736,7 +2736,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let other = (safeDIOverrides.other ?? MyService.init)()
 		        return Root(other: other)

@@ -448,7 +448,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let bar = (safeDIOverrides.bar ?? Bar.init)()
 		        return Root(/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */)

@@ -153,7 +153,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let dependency = (safeDIOverrides.dependency ?? Dependency.init)()
 		        return Root(dependency: dependency)
@@ -233,7 +233,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        let shared = (safeDIOverrides.shared ?? SharedThing.init)()
 		        return Child(shared: shared)
@@ -264,7 +264,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let shared = (safeDIOverrides.shared ?? SharedThing.init)()
 		        let child = (safeDIOverrides.child ?? Child.init(shared:))(shared)
@@ -359,7 +359,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> ChildA {
 		        let shared = (safeDIOverrides.shared ?? SharedThing.init)()
 		        let grandchild = (safeDIOverrides.grandchild ?? Grandchild.init(shared:))(shared)
@@ -407,7 +407,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Grandchild {
 		        let shared = (safeDIOverrides.shared ?? SharedThing.init)()
 		        return Grandchild(shared: shared)
@@ -438,7 +438,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let shared = (safeDIOverrides.shared ?? SharedThing.init)()
 		        func __safeDI_childA() -> ChildA {
@@ -571,7 +571,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        let myService = safeDIOverrides.myService?() ?? AnyService(ConcreteService())
 		        return Child(myService: myService)
@@ -616,7 +616,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let myService = safeDIOverrides.myService?() ?? AnyService(ConcreteService())
 		        let child = (safeDIOverrides.child ?? Child.init(myService:))(myService)
@@ -692,7 +692,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let myService = safeDIOverrides.myService?() ?? AnyMyService(DefaultMyService())
 		        return Root(myService: myService)
@@ -757,7 +757,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let myService = safeDIOverrides.myService?() ?? AnyMyService(DefaultMyService.instantiate())
 		        return Root(myService: myService)
@@ -824,7 +824,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_myService() -> AnyMyService {
 		            if let safeDIBuilder = safeDIOverrides.myService.safeDIBuilder {
@@ -911,7 +911,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let providerService = (safeDIOverrides.providerService ?? Provider.init)()
 		        func __safeDI_myService() -> AnyMyService {
@@ -1025,7 +1025,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> ChildA {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        let grandchildAA = (safeDIOverrides.grandchildAA ?? GrandchildAA.init(shared:))(shared)
@@ -1077,7 +1077,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> ChildB {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        return ChildB(shared: shared)
@@ -1105,7 +1105,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> GrandchildAA {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        return GrandchildAA(shared: shared)
@@ -1133,7 +1133,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> GrandchildAB {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        return GrandchildAB(shared: shared)
@@ -1167,7 +1167,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        func __safeDI_childA() -> ChildA {
@@ -1261,7 +1261,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let networkService = (safeDIOverrides.networkService ?? DefaultNetworkService.init)()
 		        return Root(networkService: networkService)
@@ -1326,7 +1326,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> RootA {
 		        let dependency = (safeDIOverrides.dependency ?? Dependency.init)()
 		        return RootA(dependency: dependency)
@@ -1353,7 +1353,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> RootB {
 		        let dependency = (safeDIOverrides.dependency ?? Dependency.init)()
 		        return RootB(dependency: dependency)
@@ -1441,7 +1441,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> ChildA {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        return ChildA(shared: shared)
@@ -1489,7 +1489,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        let childA = (safeDIOverrides.childA ?? ChildA.init(shared:))(shared)
@@ -1596,7 +1596,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        let leaf = (safeDIOverrides.leaf ?? Leaf.init)()
 		        func __safeDI_grandchild() -> Grandchild {
@@ -1651,7 +1651,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Grandchild {
 		        let leaf = (safeDIOverrides.leaf ?? Leaf.init)()
 		        let greatGrandchild = (safeDIOverrides.greatGrandchild ?? GreatGrandchild.init(leaf:))(leaf)
@@ -1699,7 +1699,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> GreatGrandchild {
 		        let leaf = (safeDIOverrides.leaf ?? Leaf.init)()
 		        return GreatGrandchild(leaf: leaf)
@@ -1744,7 +1744,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let leaf = (safeDIOverrides.leaf ?? Leaf.init)()
 		        func __safeDI_child() -> Child {
@@ -1824,7 +1824,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        name: String,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        return Child(name: name, shared: shared)
@@ -1855,7 +1855,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        func __safeDI_childBuilder(name: String) -> Child {
@@ -1930,7 +1930,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_viewBuilder() -> SimpleView {
 		            (safeDIOverrides.viewBuilder ?? SimpleView.init)()
@@ -2024,7 +2024,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childBuilder(age: Int, name: String) -> Child {
 		            (safeDIOverrides.childBuilder ?? Child.init(name:age:))(name, age)
@@ -2096,7 +2096,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> DefaultUserService {
 		        let stringStorage = (safeDIOverrides.stringStorage ?? UserDefaults.instantiate)()
 		        return DefaultUserService(stringStorage: stringStorage)
@@ -2196,7 +2196,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let helper = (safeDIOverrides.helper ?? Helper.init)()
 		        let thirdParty = (safeDIOverrides.thirdParty ?? ThirdParty.instantiate(helper:))(helper)
@@ -2225,7 +2225,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> ThirdParty {
 		        let helper = (safeDIOverrides.helper ?? Helper.init)()
 		        return ThirdParty.instantiate(helper: helper)
@@ -2295,7 +2295,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        let dep = (safeDIOverrides.dep ?? ThirdPartyDep.instantiate)()
 		        return Child(dep: dep)
@@ -2326,7 +2326,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let dep = (safeDIOverrides.dep ?? ThirdPartyDep.instantiate)()
 		        let child = (safeDIOverrides.child ?? Child.init(dep:))(dep)
@@ -2411,7 +2411,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    static func mock(
 		        name: String,
 		        flag: Bool = false,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        return Child(name: name, shared: shared, flag: flag)
@@ -2461,7 +2461,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        func __safeDI_childBuilder(name: String) -> Child {
@@ -2551,7 +2551,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        func __safeDI_thirdPartyBuilder() -> ThirdParty {
@@ -2597,7 +2597,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> ThirdParty {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        return ThirdParty.instantiate(shared: shared)
@@ -2650,7 +2650,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_selfBuilder() -> Root {
 		            let selfBuilder = Instantiator<Root>(__safeDI_selfBuilder)
@@ -2745,7 +2745,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? Service.init)()
 		        func __safeDI_child() -> Child {
@@ -2835,7 +2835,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let presenter = (safeDIOverrides.presenter ?? RootPresenter.init)()
 		        func __safeDI_child() -> Child {
@@ -2924,7 +2924,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> B {
 		        let a: A? = safeDIOverrides.a
 		        return B(a: a)
@@ -2955,7 +2955,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let a = (safeDIOverrides.a ?? A.init)()
 		        let b = (safeDIOverrides.b ?? B.init(a:))(a)
@@ -3024,7 +3024,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        let user = (safeDIOverrides.user ?? User.init)()
 		        let userType: UserType = user
@@ -3056,7 +3056,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let user = (safeDIOverrides.user ?? User.init)()
 		        func __safeDI_child() -> Child {
@@ -3159,7 +3159,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> B {
 		        let a: A? = safeDIOverrides.a
 		        return B(a: a)
@@ -3190,7 +3190,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let a = (safeDIOverrides.a ?? A.init)()
 		        let b = (safeDIOverrides.b ?? B.init(a:))(a)
@@ -3270,7 +3270,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let defaultUserService = (safeDIOverrides.defaultUserService ?? DefaultUserService.init)()
 		        let userService: any UserService = defaultUserService
@@ -3375,7 +3375,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> DefaultAuthService {
 		        let networkService = (safeDIOverrides.networkService ?? DefaultNetworkService.init)()
 		        return DefaultAuthService(networkService: networkService)
@@ -3418,7 +3418,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        user: User,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> LoggedInViewController {
 		        let networkService = (safeDIOverrides.networkService ?? DefaultNetworkService.init)()
 		        return LoggedInViewController(user: user, networkService: networkService)
@@ -3452,7 +3452,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> RootViewController {
 		        let networkService = (safeDIOverrides.networkService ?? DefaultNetworkService.init)()
 		        let authService = (safeDIOverrides.authService ?? DefaultAuthService.init(networkService:))(networkService)
@@ -3533,7 +3533,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder ?? Child.init(name:)
 		        @Sendable func __safeDI_childBuilder(name: String) -> Child {
@@ -3609,7 +3609,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        name: String,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        func __safeDI_grandchildBuilder(age: Int) -> Grandchild {
 		            (safeDIOverrides.grandchildBuilder ?? Grandchild.init(age:))(age)
@@ -3677,7 +3677,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childBuilder(name: String) -> Child {
 		            func __safeDI_grandchildBuilder(age: Int) -> Grandchild {
@@ -3815,7 +3815,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> DefaultAuthService {
 		        let networkService = (safeDIOverrides.networkService ?? DefaultNetworkService.init)()
 		        return DefaultAuthService(networkService: networkService)
@@ -3863,7 +3863,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> EditProfileViewController {
 		        let userManager = (safeDIOverrides.userManager ?? UserManager.init)()
 		        let userNetworkService = (safeDIOverrides.userNetworkService ?? DefaultNetworkService.init)()
@@ -3897,7 +3897,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        userManager: UserManager,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> LoggedInViewController {
 		        let networkService = (safeDIOverrides.networkService ?? DefaultNetworkService.init)()
 		        let userNetworkService: NetworkService = networkService
@@ -3960,7 +3960,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> ProfileViewController {
 		        let userManager = (safeDIOverrides.userManager ?? UserManager.init)()
 		        let userVendor: UserVendor = userManager
@@ -4019,7 +4019,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> RootViewController {
 		        let networkService = (safeDIOverrides.networkService ?? DefaultNetworkService.init)()
 		        let authService = (safeDIOverrides.authService ?? DefaultAuthService.init(networkService:))(networkService)
@@ -4128,7 +4128,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        iterator: IndexingIterator<Array<Element>>,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        func __safeDI_grandchildBuilder() -> Grandchild {
 		            let anyIterator: AnyIterator = iterator
@@ -4196,7 +4196,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childBuilder(iterator: IndexingIterator<Array<Element>>) -> Child {
 		            func __safeDI_grandchildBuilder() -> Grandchild {
@@ -4302,7 +4302,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> ChildB {
 		        let recreated = (safeDIOverrides.recreated ?? Recreated.init)()
 		        return ChildB(recreated: recreated)
@@ -4350,7 +4350,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_childABuilder__safeDIBuilder = safeDIOverrides.childABuilder ?? ChildA.init(recreated:)
 		        @Sendable func __safeDI_childABuilder(recreated: Recreated) -> ChildAProtocol {
@@ -4430,7 +4430,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
 		        @Sendable func __safeDI_childBuilder(name: String) -> AnyChild {
@@ -4527,7 +4527,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_childBuilder__childBuilder_service_safeDIBuilder = safeDIOverrides.childBuilder.service.safeDIBuilder
 		        let __safeDI_childBuilder__childBuilder_service_helper_safeDIBuilder = safeDIOverrides.childBuilder.service.helper ?? Helper.init
@@ -4623,7 +4623,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_parentBuilder__parentBuilder_childBuilder_safeDIBuilder = safeDIOverrides.parentBuilder.childBuilder
 		        let __safeDI_parentBuilder__safeDIBuilder = safeDIOverrides.parentBuilder.safeDIBuilder ?? Parent.init(childBuilder:)
@@ -4728,7 +4728,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_parentBuilder__parentBuilder_childBuilder_safeDIBuilder = safeDIOverrides.parentBuilder.childBuilder.safeDIBuilder
 		        let __safeDI_parentBuilder__safeDIBuilder = safeDIOverrides.parentBuilder.safeDIBuilder ?? Parent.init(childBuilder:)
@@ -4819,7 +4819,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> DefaultAuthService {
 		        let networkService = (safeDIOverrides.networkService ?? DefaultNetworkService.init)()
 		        let renamedNetworkService: NetworkService = networkService
@@ -4881,7 +4881,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> RootViewController {
 		        func __safeDI_authService() -> AuthService {
 		            let networkService = (safeDIOverrides.authService.networkService ?? DefaultNetworkService.init)()
@@ -4969,7 +4969,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_consumer() -> Consumer {
 		            let service = (safeDIOverrides.consumer.service ?? Service.init)()
@@ -5003,7 +5003,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Consumer {
 		        let service = (safeDIOverrides.service ?? Service.init)()
 		        let alias: Service = service
@@ -5099,7 +5099,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let externalType = (safeDIOverrides.externalType ?? ExternalType.instantiate)()
 		        return Root(externalType: externalType)
@@ -5176,7 +5176,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_parentBuilder(config: Config) -> Parent {
 		            func __safeDI_childBuilder() -> Child {
@@ -5265,7 +5265,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let receivedValue = (safeDIOverrides.receivedValue ?? ReceivedValue.init)()
 		        func __safeDI_service() -> Service {
@@ -5346,7 +5346,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_parentBuilder(token: Token) -> Parent {
 		            let child = (safeDIOverrides.parentBuilder.child ?? Child.init(token:))(token)
@@ -5425,7 +5425,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? ConcreteService.init)()
 		        let consumer = (safeDIOverrides.consumer ?? Consumer.init(service:))(service)
@@ -5510,7 +5510,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        func __safeDI_service() -> Service {
@@ -5580,7 +5580,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder ?? Child.init
 		        @Sendable func __safeDI_childBuilder() -> Child {
@@ -5670,7 +5670,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_parentBuilder(token: Token) -> Parent {
 		            func __safeDI_child() -> Child {
@@ -5756,7 +5756,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let concreteService = (safeDIOverrides.concreteService ?? ConcreteService.init)()
 		        func __safeDI_consumerBuilder() -> Consumer {
@@ -5831,7 +5831,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Consumer {
 		        let idProvider: IDProvider? = safeDIOverrides.idProvider
 		        let dependency = (safeDIOverrides.dependency ?? Dependency.init)()
@@ -5902,7 +5902,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let transitiveDep = (safeDIOverrides.transitiveDep ?? TransitiveDep.init)()
 		        let child = (safeDIOverrides.child ?? Child.init(transitiveDep:))(transitiveDep)
@@ -6008,7 +6008,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        client: ExternalClient,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let child = (safeDIOverrides.child ?? Child.init(client:))(client)
 		        return Parent(child: child)
@@ -6079,7 +6079,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let idProvider: IDProvider? = safeDIOverrides.idProvider
 		        let child = (safeDIOverrides.child ?? Child.init(idProvider:))(idProvider)
@@ -6142,7 +6142,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        name: String,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> DeviceService {
 		        let appClipService: AppClipService? = safeDIOverrides.appClipService
 		        return DeviceService(appClipService: appClipService, name: name)
@@ -6207,7 +6207,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_interceptorBuilder__interceptorBuilder_loggingService_safeDIBuilder = safeDIOverrides.interceptorBuilder.loggingService ?? LoggingService.init
 		        let __safeDI_interceptorBuilder__safeDIBuilder = safeDIOverrides.interceptorBuilder.safeDIBuilder ?? Interceptor.init(loggingService:)
@@ -6293,7 +6293,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_interceptorBuilder__interceptorBuilder_handler_safeDIBuilder = safeDIOverrides.interceptorBuilder.handler.safeDIBuilder ?? Handler.init(logger:logLevel:)
 		        let __safeDI_interceptorBuilder__interceptorBuilder_handler_logLevel = safeDIOverrides.interceptorBuilder.handler.logLevel
@@ -6386,7 +6386,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? Service.init)()
 		        let __safeDI_interceptorBuilder__interceptorBuilder_logger_safeDIBuilder = safeDIOverrides.interceptorBuilder.logger ?? Logger.init
@@ -6459,7 +6459,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder ?? Child.init
 		        @Sendable func __safeDI_childBuilder() -> Child {
@@ -6548,7 +6548,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childBuilder(name: String) -> Child {
 		            let service = (safeDIOverrides.childBuilder.service ?? Service.init)()
@@ -6648,7 +6648,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        name: String,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
 		        let externalEngine = (safeDIOverrides.externalEngine ?? ExternalEngine.instantiate)()
 		        return Service(externalEngine: externalEngine, name: name)
@@ -6736,7 +6736,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
 		        let externalEngine = (safeDIOverrides.externalEngine ?? ExternalEngine.instantiate)()
 		        return Service(externalEngine: externalEngine)
@@ -6809,7 +6809,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        service: ExternalService,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        func __safeDI_child() -> Child {
 		            let service = (safeDIOverrides.child.service ?? InternalService.init)()
@@ -6879,7 +6879,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
 		        let installScopedDefaultsService = (safeDIOverrides.installScopedDefaultsService ?? UserDefaultsService.init)()
 		        let userScopedDefaultsService = (safeDIOverrides.userScopedDefaultsService ?? UserDefaultsService.init)()
@@ -6966,7 +6966,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        userName: String,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> NoteView {
 		        let userService = safeDIOverrides.userService?() ?? AnyUserService(DefaultUserService())
 		        return NoteView(userName: userName, userService: userService)
@@ -7050,7 +7050,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let shared = (safeDIOverrides.shared ?? SharedThing.init)()
 		        let childA = (safeDIOverrides.childA ?? ChildA.init(shared:))(shared)
@@ -7138,7 +7138,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> NameEntry {
 		        let stringStorage = (safeDIOverrides.stringStorage ?? SomeExternalType.instantiate)()
 		        let userService = (safeDIOverrides.userService ?? UserService.init(stringStorage:))(stringStorage)
@@ -7216,7 +7216,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_service() -> AnyService {
 		            let helper = (safeDIOverrides.service.helper ?? Helper.init)()
@@ -7302,7 +7302,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childBuilder(name: String) -> AnyChild {
 		            if let safeDIBuilder = safeDIOverrides.childBuilder {
@@ -7390,7 +7390,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childBuilder(name: String) -> AnyChild {
 		            let helper = (safeDIOverrides.childBuilder.helper ?? Helper.init)()
@@ -7478,7 +7478,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_childBuilder__childBuilder_helper_safeDIBuilder = safeDIOverrides.childBuilder.helper ?? Helper.init
 		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
@@ -7575,7 +7575,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let appClipService: AppClipService? = safeDIOverrides.appClipService
 		        let childA = (safeDIOverrides.childA ?? ChildA.init(appClipService:))(appClipService)
@@ -7662,7 +7662,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Container {
 		        let stateService = (safeDIOverrides.stateService ?? StateService.init)()
 		        let imageLoader = (safeDIOverrides.imageLoader ?? ImageLoader.init(stateService:))(stateService)
@@ -7808,7 +7808,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        user: User,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let childA = (safeDIOverrides.childA ?? ChildA.init(user:))(user)
 		        let childB = (safeDIOverrides.childB ?? ChildB.init(user:))(user)
@@ -8034,7 +8034,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let concreteService: ConcreteService? = safeDIOverrides.concreteService
 		        func __safeDI_consumer() -> Consumer {
@@ -8122,7 +8122,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> ProfileService {
 		        let applicationStateService: ApplicationStateService? = safeDIOverrides.applicationStateService
 		        let imageService = (safeDIOverrides.imageService ?? ImageService.init(applicationStateService:))(applicationStateService)
@@ -8183,7 +8183,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        func __safeDI_presenterBuilder(onDismiss: @escaping () -> Void) -> Presenter {
 		            (safeDIOverrides.presenterBuilder ?? Presenter.init(onDismiss:))(onDismiss)
@@ -8423,7 +8423,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        service: ExternalService,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
 		            let service = (safeDIOverrides.childA.service ?? LocalService.init)()
@@ -8517,7 +8517,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        service_ExternalService: ExternalService,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service: LocalService? = safeDIOverrides.service
 		        func __safeDI_childA() -> ChildA {
@@ -8592,7 +8592,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_parent() -> Parent {
 		            func __safeDI_child() -> Child {
@@ -8680,7 +8680,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_widgetService() -> WidgetService {
 		            let config = (safeDIOverrides.widgetService.config ?? Config.init)()
@@ -8775,7 +8775,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_widgetService() -> WidgetService {
 		            let config = (safeDIOverrides.widgetService.config ?? Config.init)()
@@ -8874,7 +8874,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_parent() -> Parent {
 		            func __safeDI_grandchild() -> Grandchild {
@@ -8968,7 +8968,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childBuilder(name: String) -> Child {
 		            (safeDIOverrides.childBuilder ?? Child.init(name:))(name)
@@ -9053,7 +9053,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
 		            let localService = (safeDIOverrides.child.localService ?? LocalService.init)()
@@ -9135,7 +9135,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        parallelModuleType: ParallelModuleType,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let dependentService = (safeDIOverrides.dependentService ?? DependentService.init(parallelModuleType:))(parallelModuleType)
 		        return Root(dependentService: dependentService)
@@ -9221,7 +9221,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        service: ExternalService,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
 		            func __safeDI_grandchild() -> Grandchild {
@@ -9304,7 +9304,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let shared = (safeDIOverrides.shared ?? SharedThing.init)()
 		        func __safeDI_parentBuilder(name: String) -> Parent {
@@ -9384,7 +9384,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childBuilder(name: String) -> Item {
 		            (safeDIOverrides.childBuilder ?? Item.init(name:))(name)
@@ -9483,7 +9483,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childABuilder(name: String) -> ChildA {
 		            let shared = (safeDIOverrides.childABuilder.shared ?? Shared.init)()
@@ -9580,7 +9580,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        func __safeDI_child() -> Child {
@@ -9679,7 +9679,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_builderA(name: String) -> ChildA {
 		            let shared = (safeDIOverrides.builderA.shared ?? Shared.init)()
@@ -9785,7 +9785,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childA() -> ChildA {
 		            let shared = (safeDIOverrides.childA.shared ?? Shared.init)()
@@ -9891,7 +9891,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_serviceA() -> ServiceA {
 		            let serviceB = (safeDIOverrides.serviceA.serviceB ?? ServiceB.init)()
@@ -10006,7 +10006,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let shared = (safeDIOverrides.shared ?? Shared.init)()
 		        func __safeDI_childA() -> ChildA {
@@ -10110,7 +10110,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? Service.init)()
 		        let childA = (safeDIOverrides.childA ?? ChildA.init(service:))(service)
@@ -10437,7 +10437,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? Service.init)()
 		        func __safeDI_flowVC() -> FlowVC {
@@ -10581,7 +10581,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_aBuilder(root: Root) -> A {
 		            (safeDIOverrides.aBuilder ?? A.init(root:))(root)
@@ -10662,7 +10662,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_aBuilder() -> A {
 		            func __safeDI_bBuilder() -> B {
@@ -10764,7 +10764,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_aBuilder() -> A {
 		            func __safeDI_bBuilder() -> B {
@@ -10860,7 +10860,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_aBuilder() -> A {
 		            func __safeDI_bBuilder() -> B {
@@ -10948,7 +10948,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_aBuilder() -> A {
 		            func __safeDI_bBuilder() -> B {
@@ -10984,7 +10984,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        label: String = "default",
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> A {
 		        func __safeDI_bBuilder() -> B {
 		            func __safeDI_aBuilder() -> A {
@@ -11100,7 +11100,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        label: String = "mocked",
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> A {
 		        func __safeDI_bBuilder() -> B {
 		            func __safeDI_aBuilder() -> A {
@@ -11207,7 +11207,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        label: String = "default",
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> A {
 		        let __safeDI_bBuilder__safeDIBuilder = safeDIOverrides.bBuilder.safeDIBuilder ?? B.init(aBuilder:)
 		        @Sendable func __safeDI_bBuilder() -> B {
@@ -11323,7 +11323,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_aBuilder__aBuilder_bBuilder_safeDIBuilder = safeDIOverrides.aBuilder.bBuilder.safeDIBuilder ?? B.init(cBuilder:)
 		        let __safeDI_aBuilder__safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder ?? A.init(bBuilder:)
@@ -11373,7 +11373,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> C {
 		        let __safeDI_aBuilder__aBuilder_bBuilder_safeDIBuilder = safeDIOverrides.aBuilder.bBuilder.safeDIBuilder ?? B.init(cBuilder:)
 		        let __safeDI_aBuilder__safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder ?? A.init(bBuilder:)
@@ -11466,7 +11466,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_aBuilder(context: String) -> A {
 		            let aBuilder = Instantiator<A> {
@@ -11597,7 +11597,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_childBuilder(configuration: Configuration) -> Child {
 		            let presenter = (safeDIOverrides.childBuilder.presenter ?? Presenter.init(configuration:))(configuration)
@@ -11684,7 +11684,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        let service = (safeDIOverrides.service ?? Service.init)()
 		        func __safeDI_selfBuilder() -> Child {
@@ -11736,7 +11736,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? Service.init)()
 		        func __safeDI_childBuilder() -> Child {
@@ -11845,7 +11845,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        flag: Bool = false,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        let service = (safeDIOverrides.service ?? Service.init)()
 		        return Child.customMock(service: service, flag: flag)
@@ -11876,7 +11876,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? Service.init)()
 		        func __safeDI_childBuilder(flag: Bool) -> Child {
@@ -11985,7 +11985,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Player {
 		        func __safeDI_cachedPlayerBuilder(player: Player) -> CachedPlayer {
 		            (safeDIOverrides.cachedPlayerBuilder ?? CachedPlayer.init(player:))(player)
@@ -12037,7 +12037,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_player() -> Player {
 		            func __safeDI_cachedPlayerBuilder(player: Player) -> CachedPlayer {
@@ -12140,7 +12140,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OptionalChild {
 		        let service: Service? = safeDIOverrides.service
 		        return OptionalChild(service: service)
@@ -12174,7 +12174,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let service = (safeDIOverrides.service ?? Service.init)()
 		        let optionalChild = (safeDIOverrides.optionalChild ?? OptionalChild.init(service:))(service)
@@ -12226,7 +12226,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> RequiredChild {
 		        let service = (safeDIOverrides.service ?? Service.init)()
 		        return RequiredChild(service: service)
@@ -12257,7 +12257,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = (safeDIOverrides.service ?? Service.init)()
 		        func __safeDI_parent() -> Parent {
@@ -12360,7 +12360,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_factory__factory_service_safeDIBuilder = safeDIOverrides.factory.service
 		        let __safeDI_factory__safeDIBuilder = safeDIOverrides.factory.safeDIBuilder ?? Parent.init(service:name:)
@@ -12450,7 +12450,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
 		            let leaf = (safeDIOverrides.child.leaf ?? Leaf.init)()
@@ -12497,7 +12497,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        name: String,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        func __safeDI_child() -> Child {
 		            let leaf = (safeDIOverrides.child.leaf ?? Leaf.init)()
@@ -12548,7 +12548,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        let leaf = (safeDIOverrides.leaf ?? Leaf.init)()
 		        return Child(leaf: leaf)
@@ -12652,7 +12652,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_outerFactory__outerFactory_innerFactory_safeDIBuilder = safeDIOverrides.outerFactory.innerFactory ?? Leaf.init(id:)
 		        let __safeDI_outerFactory__safeDIBuilder = safeDIOverrides.outerFactory.safeDIBuilder ?? Parent.init(innerFactory:name:)
@@ -12695,7 +12695,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        name: String,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let __safeDI_innerFactory__safeDIBuilder = safeDIOverrides.innerFactory ?? Leaf.init(id:)
 		        @Sendable func __safeDI_innerFactory(id: Int) -> Leaf {
@@ -12807,7 +12807,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_outerFactory__outerFactory_innerFactory_safeDIBuilder = safeDIOverrides.outerFactory.innerFactory ?? Leaf.init(id:)
 		        let __safeDI_outerFactory__safeDIBuilder = safeDIOverrides.outerFactory.safeDIBuilder ?? Parent.init(innerFactory:name:)
@@ -12849,7 +12849,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    static func mock(
 		        name: String,
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        func __safeDI_innerFactory(id: Int) -> Leaf {
 		            (safeDIOverrides.innerFactory ?? Leaf.init(id:))(id)
@@ -12965,7 +12965,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_a() -> A {
 		            func __safeDI_bBuilder() -> B {
@@ -13058,7 +13058,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_zBuilder() -> Z {
 		            func __safeDI_viewBuilder() -> AnyEraser {
@@ -13119,7 +13119,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        overrides safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> A {
 		        func __safeDI_aBuilder() -> A {
 		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)

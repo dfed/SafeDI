@@ -811,7 +811,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			mockParameters.append("\(bodyIndent)\(flatUncovered.label): \(flatUncovered.typeSource)")
 		}
 		if hasOverridableTree {
-			mockParameters.append("\(bodyIndent)safeDIOverrides: SafeDIOverrides = .init()")
+			mockParameters.append("\(bodyIndent)overrides safeDIOverrides: SafeDIOverrides = .init()")
 		}
 
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")

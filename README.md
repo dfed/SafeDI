@@ -92,20 +92,20 @@ extension User {
 }
 ```
 
-For previews and tests that need real data, pass forwarded values directly and use `safeDIOverrides` to reach into the subtree:
+For previews and tests that need real data, pass forwarded values directly and use `overrides` to reach into the subtree:
 
 ```swift
 #Preview {
     LoggedInView.mock(
         user: User(name: "dfed"),
-        safeDIOverrides: .init(
+        overrides: .init(
             noteStorage: .init(defaultNote: "dfed says hello")
         )
     )
 }
 ```
 
-`safeDIOverrides` is a generated `struct` whose fields mirror the subtree SafeDI built. SafeDI still wires the rest of the graph around each override, so customizations compose with the subtree instead of replacing it.
+`SafeDIOverrides` is a generated `struct` whose fields mirror the subtree SafeDI built. SafeDI still wires the rest of the graph around each override, so customizations compose with the subtree instead of replacing it.
 
 ## Features
 

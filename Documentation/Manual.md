@@ -623,19 +623,19 @@ Your user-defined `mock()` method must be `public` (or `open`) and must accept p
 
 ### Overriding dependencies
 
-When a type has `@Instantiated` dependencies, the generated `mock()` accepts a `safeDIOverrides` argument that lets you override any dependency in the tree. Each entry on `SafeDIOverrides` is either a closure whose parameters match the resolved values of that dependency’s own inputs, or a nested `SafeDIMockConfiguration` struct when the dependency has its own `@Instantiated` subtree or default-valued init parameters.
+When a type has `@Instantiated` dependencies, the generated `mock()` accepts an `overrides` argument that lets you override any dependency in the tree. Each entry on `SafeDIOverrides` is either a closure whose parameters match the resolved values of that dependency’s own inputs, or a nested `SafeDIMockConfiguration` struct when the dependency has its own `@Instantiated` subtree or default-valued init parameters.
 
 Closure-shaped entries apply when the dependency has nothing further to configure:
 
 ```swift
 // Override a leaf dependency — UserDefaults.instantiate() takes nothing, so its closure takes nothing:
-LoggedInView.mock(safeDIOverrides: .init(
+LoggedInView.mock(overrides: .init(
     stringStorage: { InMemoryStorage() }
 ))
 
 // `StubUserService.init(stringStorage:)` already matches the override closure's shape
 // — `(StringStorage) -> UserService` — so the initializer can be passed directly:
-LoggedInView.mock(safeDIOverrides: .init(
+LoggedInView.mock(overrides: .init(
     userService: StubUserService.init
 ))
 ```
@@ -644,14 +644,14 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 ```swift
 // Tweak `defaultNote` without replacing how NoteStorage is built:
-LoggedInView.mock(safeDIOverrides: .init(
+LoggedInView.mock(overrides: .init(
     noteStorage: .init(defaultNote: "Welcome back")
 ))
 
 // Replace how NoteStorage itself is built. `StubNoteStorage` is a subclass of
 // `NoteStorage` whose `init` matches the signature of `NoteStorage.init`, so we
 // can pass its initializer directly as the trailing builder:
-LoggedInView.mock(safeDIOverrides: .init(
+LoggedInView.mock(overrides: .init(
     noteStorage: .init(StubNoteStorage.init)
 ))
 ```
@@ -685,14 +685,14 @@ Each dependency kind surfaces in a predictable place on `mock()` and `SafeDIOver
 let view = LoggedInView.mock(user: User(name: "dfed"))
 
 // @Received(onlyIfAvailable: true) → SafeDIOverrides, defaults to nil:
-FeedView.mock(safeDIOverrides: .init(
+FeedView.mock(overrides: .init(
     user: .mock()
 ))
 
 // Default-valued init parameter → nested SafeDIMockConfiguration when mocking a parent:
 LoggedInView.mock(
     user: User(name: "dfed"),
-    safeDIOverrides: .init(
+    overrides: .init(
         noteStorage: .init(defaultNote: "dfed says hello")
     )
 )
