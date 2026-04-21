@@ -625,17 +625,13 @@ Your user-defined `mock()` method must be `public` (or `open`) and must accept p
 
 When a type has `@Instantiated` dependencies, the generated `mock()` accepts a `safeDIOverrides` argument that lets you override any dependency in the tree. Each entry on `SafeDIOverrides` is either a closure whose parameters match the resolved values of that dependency’s own inputs, or a nested `SafeDIMockConfiguration` struct when the dependency has its own `@Instantiated` subtree or default-valued init parameters.
 
-Closure-shaped entries apply when the dependency has nothing further to configure:
+Closure-shaped entries apply when the dependency has nothing further to configure. Pass any closure whose parameters match the dependency's resolved inputs — a literal, or an `init` reference when its signature already matches:
 
 ```swift
-// Override a leaf dependency — UserDefaults.instantiate() takes nothing, so its closure takes nothing:
 LoggedInView.mock(safeDIOverrides: .init(
-    stringStorage: { InMemoryStorage() }
-))
-
-// `StubUserService.init(stringStorage:)` already matches the override closure's shape
-// — `(StringStorage) -> UserService` — so the initializer can be passed directly:
-LoggedInView.mock(safeDIOverrides: .init(
+    // Literal closure — `StringStorage` has no inputs of its own, so its closure has no parameters:
+    stringStorage: { InMemoryStorage() },
+    // Init reference — `StubUserService.init(stringStorage:)` is already `(StringStorage) -> UserService`:
     userService: StubUserService.init
 ))
 ```
