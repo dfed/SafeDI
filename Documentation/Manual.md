@@ -642,13 +642,13 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 // Replace how NoteStorage itself is built. `StubNoteStorage` is a subclass of
 // `NoteStorage` whose `init` matches the signature of `NoteStorage.init`, so we
-// can pass its initializer directly as the `safeDIBuilder`:
+// can pass its initializer directly as the trailing builder:
 LoggedInView.mock(safeDIOverrides: .init(
-    noteStorage: .init(safeDIBuilder: StubNoteStorage.init)
+    noteStorage: .init(StubNoteStorage.init)
 ))
 ```
 
-`SafeDIMockConfiguration` exposes an optional override for each of the child’s own `@Instantiated` dependencies and each default-valued init parameter, plus a trailing `safeDIBuilder` closure. The `safeDIBuilder` parameters match the type’s `customMockName` method signature if one is defined, or its `init` parameters otherwise. When no `safeDIBuilder` is provided, the generated mock calls the type’s `customMockName` method or `init` directly.
+`SafeDIMockConfiguration` exposes an optional override for each of the child’s own `@Instantiated` dependencies and each default-valued init parameter, plus a trailing builder closure. The builder’s parameters match the type’s hand-written `mock` method signature if one is defined, or its `init` parameters otherwise. When no builder is provided, the generated mock calls the type’s hand-written `mock` method or `init` directly.
 
 Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator` (or `SendableErasedInstantiator`) anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
 
