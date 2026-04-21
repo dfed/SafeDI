@@ -629,7 +629,7 @@ Closure-shaped entries apply when the dependency has nothing further to configur
 
 ```swift
 LoggedInView.mock(safeDIOverrides: .init(
-    // Literal closure — `StringStorage` has no inputs of its own, so its closure takes nothing:
+    // Literal closure — `StringStorage` has no inputs of its own, so its closure has no parameters:
     stringStorage: { InMemoryStorage() },
     // Init reference — `StubUserService.init(stringStorage:)` is already `(StringStorage) -> UserService`:
     userService: StubUserService.init
