@@ -793,7 +793,7 @@ This plugin will:
 
 ### Plugin changes
 
-The `SafeDIPrebuiltGenerator` plugin has been removed in SafeDI 2.x. `SafeDIGenerator` is now the only build tool plugin and uses a prebuilt binary by default. If you were previously using `SafeDIPrebuiltGenerator`, switch to `SafeDIGenerator`. The `InstallSafeDITool` command plugin (verb `safedi-release-install`, matching 1.x) still exists as an Xcode-only helper for the prebuilt-tool install flow described under _Installing the prebuilt SafeDITool binary_ above.
+The `SafeDIPrebuiltGenerator` plugin has been removed in SafeDI 2.x. `SafeDIGenerator` is now the only build tool plugin and uses a prebuilt binary by default. If you were previously using `SafeDIPrebuiltGenerator`, switch to `SafeDIGenerator`. For users of the Xcode build plugin: the `InstallSafeDITool` command plugin still exists as an Xcode-only helper for the prebuilt-tool install flow described under _Installing the prebuilt SafeDITool binary_ above.
 
 ### Migrating prebuild scripts or custom build system integrations
 
