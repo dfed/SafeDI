@@ -46,7 +46,7 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Swift file paths scoped to the current target for mock generation. Only used when --output-directory is provided without --swift-manifest.") var mockScopedFiles: [String] = []
 
-	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path instead of emitting the per-root / per-mock files a manifest describes. Useful for build systems that need rule outputs statically declared at analysis time (Bazel, Buck2). Requires 'swift-sources-file-path' or '--include'. May be combined with '--swift-manifest' (manifest drives discovery; combined file gets written) or '--module-info-output'. Cannot be combined with '--output-directory' — use one or the other.") var combinedOutput: String?
+	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path — one header, bodies joined in source-file order, deterministic for stable inputs. Intended for build systems that need rule outputs statically declared at analysis time (Bazel, Buck2). Requires 'swift-sources-file-path' or '--include'. Cannot be combined with '--output-directory' or '--swift-manifest' — those are per-file emission modes. May be combined with '--module-info-output'. The combined file is always rewritten on every run, even when content would be unchanged — Bazel/Buck2 content-hash their inputs and a stat-identical re-write costs them nothing.") var combinedOutput: String?
 
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
 
@@ -57,72 +57,26 @@ struct Generate: AsyncParsableCommand {
 			throw ValidationError("Must provide 'swift-sources-file-path' or '--include'.")
 		}
 
-		// --combined-output is the "one emitted file" mode; --output-directory
-		// is the "one emitted file per root/mock" mode. Mixing them is
-		// ambiguous and would leave scan's scratch JSON in --output-directory
-		// without emitting any of the Swift files it listed there. Fail loud.
-		if combinedOutput != nil, outputDirectory != nil {
-			throw ValidationError("--combined-output cannot be combined with --output-directory. Use --combined-output alone (optionally with --swift-manifest) to emit a single file, or --output-directory to emit per-file outputs.")
-		}
-
-		// When --combined-output is the only emission flag, synthesize a
-		// scratch output directory so the inline-scan path below can
-		// fire. The manifest's per-entry outputFilePath values are
-		// discarded in favor of the combined file anyway, so the
-		// scratch location is ephemeral.
-		var syntheticOutputDirectory: String?
-		if combinedOutput != nil, outputDirectory == nil, swiftManifest == nil {
-			let scratch = FileManager.default.temporaryDirectory
-				.appendingPathComponent("SafeDITool-\(UUID().uuidString)")
-				.path
-			try FileManager.default.createDirectory(
-				atPath: scratch,
-				withIntermediateDirectories: true,
-			)
-			syntheticOutputDirectory = scratch
-		}
-		// Register cleanup before any throwing work below so a
-		// failure in the inline scan doesn't leak the scratch dir.
-		defer {
-			if let syntheticOutputDirectory {
-				try? FileManager.default.removeItem(atPath: syntheticOutputDirectory)
-			}
+		// --combined-output is a single-file emission mode. The other
+		// emission flags (--output-directory, --swift-manifest) are
+		// per-file modes, and the manifest-per-file-paths aren't
+		// needed (or meaningful) when the whole output is one file.
+		if combinedOutput != nil, outputDirectory != nil || swiftManifest != nil {
+			throw ValidationError("--combined-output is mutually exclusive with --output-directory and --swift-manifest. Use --combined-output alone for a single output file, or one of the others for per-file outputs.")
 		}
 
 		// When --output-directory is provided without --swift-manifest, run an
 		// inline scan to discover roots/mocks and build the manifest automatically.
 		var resolvedSwiftManifest = swiftManifest
-		let resolvedOutputDirectory = outputDirectory ?? syntheticOutputDirectory
-		if resolvedSwiftManifest == nil, let resolvedOutputDirectory {
-			// Inline scan needs a CSV. Prefer an explicit
-			// --swift-sources-file-path. When running on the
-			// synthetic scratch directory (i.e. `--combined-output`
-			// is driving the flow), also allow `--include` to seed
-			// the inputs — enumerate the included directories and
-			// write a scratch CSV so directory-driven workflows
-			// (`generate --include src/ --combined-output out.swift`)
-			// don't require the caller to pre-build a CSV. The
-			// explicit `--output-directory` path still requires a
-			// CSV so existing behavior is unchanged.
-			let inputSourcesFilePath: String
-			if let swiftSourcesFilePath {
-				inputSourcesFilePath = swiftSourcesFilePath
-			} else if syntheticOutputDirectory != nil, !include.isEmpty {
-				let includedFiles = try await findSwiftFiles(inDirectories: include)
-				let scratchCSV = (resolvedOutputDirectory as NSString).appendingPathComponent("SafeDIToolInputSources.csv")
-				try includedFiles
-					.sorted()
-					.joined(separator: ",")
-					.write(toPath: scratchCSV)
-				inputSourcesFilePath = scratchCSV
-			} else {
+		if resolvedSwiftManifest == nil, let outputDirectory {
+			guard let swiftSourcesFilePath else {
 				throw ValidationError("--output-directory requires 'swift-sources-file-path'.")
 			}
-			let manifestPath = (resolvedOutputDirectory as NSString).appendingPathComponent("SafeDIManifest.json")
+			let manifestPath = (outputDirectory as NSString).appendingPathComponent("SafeDIManifest.json")
 			try await performScan(
-				inputSourcesFile: inputSourcesFilePath,
+				inputSourcesFile: swiftSourcesFilePath,
 				projectRoot: FileManager.default.currentDirectoryPath,
-				outputDirectory: resolvedOutputDirectory,
+				outputDirectory: outputDirectory,
 				manifestFile: manifestPath,
 				mockScopedFiles: mockScopedFiles,
 			)
@@ -255,15 +209,18 @@ struct Generate: AsyncParsableCommand {
 			try JSONEncoder().encode(module).write(toPath: moduleInfoOutput)
 		}
 
-		if let resolvedSwiftManifest {
-			let manifest = try JSONDecoder().decode(
-				SafeDIToolManifest.self,
-				from: Data(contentsOf: resolvedSwiftManifest.asFileURL),
-			)
+		if resolvedSwiftManifest != nil || combinedOutput != nil {
+			let manifest: SafeDIToolManifest? = try resolvedSwiftManifest.map { manifestPath in
+				try JSONDecoder().decode(
+					SafeDIToolManifest.self,
+					from: Data(contentsOf: manifestPath.asFileURL),
+				)
+			}
 
 			let filesWithUnexpectedNodes = dependentModuleInfo.compactMap(\.filesWithUnexpectedNodes).flatMap(\.self) + (module.filesWithUnexpectedNodes ?? [])
 			if !filesWithUnexpectedNodes.isEmpty {
-				// Write error to all manifest output files (dependency tree AND mock).
+				// Write `#error(…)` instead of generated Swift so the
+				// build surfaces the parse failure at the compile step.
 				let errorContent = """
 				// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
 				// Any modifications made to this file will be overwritten on subsequent builds.
@@ -275,11 +232,9 @@ struct Generate: AsyncParsableCommand {
 				\""")
 				"""
 				if let combinedOutput {
-					// In combined-output mode the build system only
-					// declared this one path, so route the `#error(…)`
-					// here instead of the manifest's per-entry paths.
+					// Combined mode: the build system only declared this one path.
 					try errorContent.write(toPath: combinedOutput)
-				} else {
+				} else if let manifest {
 					for entry in manifest.dependencyTreeGeneration {
 						try errorContent.write(toPath: entry.outputFilePath)
 					}
@@ -299,52 +254,84 @@ struct Generate: AsyncParsableCommand {
 					}
 				}
 
-				// Validate manifest and roots are in sync before writing any output.
-				// Only check current-module roots (not dependent-module roots, which
-				// don't belong in this target's manifest).
-				let currentModuleRootSourceFiles = Set(
-					module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath),
-				)
-				let manifestInputPaths = Set(manifest.dependencyTreeGeneration.map(\.inputFilePath))
-				for entry in manifest.dependencyTreeGeneration {
-					guard currentModuleRootSourceFiles.contains(entry.inputFilePath) else {
-						throw ManifestError.noRootFound(inputPath: entry.inputFilePath)
-					}
-				}
-				for sourceFile in currentModuleRootSourceFiles {
-					if !manifestInputPaths.contains(sourceFile) {
-						throw ManifestError.rootNotInManifest(sourceFilePath: sourceFile)
-					}
-				}
-
-				// Accumulates body blocks for `--combined-output`. One
-				// shared fileHeader is emitted at the top of the
-				// combined file; each entry's body (sans its own
-				// duplicate header) is appended in discovery order —
-				// roots first, then mocks, then mock configuration —
-				// so the output layout mirrors what a reader would see
-				// if they concatenated the per-file outputs by hand.
-				var combinedOutputBodies: [String] = []
-
-				// Write dependency tree output files.
-				for entry in manifest.dependencyTreeGeneration {
-					let body = sourceFileToExtensions[entry.inputFilePath]?.sorted().joined(separator: "\n\n") ?? ""
-					if combinedOutput != nil {
-						if !body.isEmpty {
-							combinedOutputBodies.append(body)
+				// Validate manifest and roots are in sync before writing any
+				// output (manifest mode only). Combined mode has no manifest
+				// to validate against.
+				if let manifest {
+					let currentModuleRootSourceFiles = Set(
+						module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath),
+					)
+					let manifestInputPaths = Set(manifest.dependencyTreeGeneration.map(\.inputFilePath))
+					for entry in manifest.dependencyTreeGeneration {
+						guard currentModuleRootSourceFiles.contains(entry.inputFilePath) else {
+							throw ManifestError.noRootFound(inputPath: entry.inputFilePath)
 						}
-					} else {
-						let code = body.isEmpty ? fileHeader : fileHeader + body
-						// Only update the file if the content has changed.
-						let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
-						if existingContent != code {
-							try code.write(toPath: entry.outputFilePath)
+					}
+					for sourceFile in currentModuleRootSourceFiles {
+						if !manifestInputPaths.contains(sourceFile) {
+							throw ManifestError.rootNotInManifest(sourceFilePath: sourceFile)
 						}
 					}
 				}
 
-				// Generate and write mock output files.
-				if !manifest.mockGeneration.isEmpty {
+				// Accumulate every emission as a `(destination, content)`
+				// pair. `destination == nil` means the write is combined-
+				// only (no standalone file). A manifest-driven run
+				// populates destinations from the manifest; a
+				// combined-output run leaves them all nil and lets the
+				// concat step below do the emission.
+				var writes: [(destination: URL?, content: String)] = []
+
+				// ---- Dependency tree ----
+				let dependencyTreeDestinationsBySource: [String: URL]
+				let dependencyTreeSourcesInOrder: [String]
+				if let manifest {
+					dependencyTreeDestinationsBySource = Dictionary(
+						uniqueKeysWithValues: manifest.dependencyTreeGeneration.map {
+							($0.inputFilePath, URL(fileURLWithPath: $0.outputFilePath))
+						},
+					)
+					dependencyTreeSourcesInOrder = manifest.dependencyTreeGeneration.map(\.inputFilePath)
+				} else {
+					// Combined mode: enumerate current-module roots.
+					// Sort by source file path so the concatenated
+					// output is stable for stable inputs.
+					dependencyTreeDestinationsBySource = [:]
+					dependencyTreeSourcesInOrder = Array(Set(
+						module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath),
+					)).sorted()
+				}
+				for sourceFile in dependencyTreeSourcesInOrder {
+					let body = sourceFileToExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? ""
+					let content = body.isEmpty ? fileHeader : fileHeader + body
+					writes.append((
+						destination: dependencyTreeDestinationsBySource[sourceFile],
+						content: content,
+					))
+				}
+
+				// ---- Mocks ----
+				let additionalMocksToGenerate: [String] = if let manifest {
+					manifest.additionalMocksToGenerate
+				} else {
+					sourceConfiguration?.additionalMocksToGenerate ?? []
+				}
+				let currentModuleMockSourceFiles: [String]
+				if let manifest {
+					let additionalMockTypeNames = Set(manifest.additionalMocksToGenerate)
+					currentModuleMockSourceFiles = manifest.mockGeneration
+						.map(\.inputFilePath)
+						.filter { !additionalMockTypeNames.contains($0) }
+				} else {
+					// Sorted for deterministic combined output.
+					currentModuleMockSourceFiles = Array(Set(
+						module.instantiables.filter(\.generateMock).compactMap(\.sourceFilePath),
+					)).sorted()
+				}
+				let hasAnyMockGeneration = !currentModuleMockSourceFiles.isEmpty
+					|| !additionalMocksToGenerate.isEmpty
+
+				if hasAnyMockGeneration {
 					// Use the config's mockConditionalCompilation if a config exists;
 					// default to "DEBUG" when no config exists (per-type opt-in without config).
 					let mockConditionalCompilation: String? = if let sourceConfiguration {
@@ -352,11 +339,15 @@ struct Generate: AsyncParsableCommand {
 					} else {
 						"DEBUG"
 					}
-					let currentModuleSourceFilePaths = Set(manifest.mockGeneration.map(\.inputFilePath))
+					let currentModuleSourceFilePaths: Set<String> = if let manifest {
+						Set(manifest.mockGeneration.map(\.inputFilePath))
+					} else {
+						Set(currentModuleMockSourceFiles)
+					}
 					let mockResult = try await generator.generateMockCode(
 						mockConditionalCompilation: mockConditionalCompilation,
 						currentModuleSourceFilePaths: currentModuleSourceFilePaths,
-						additionalMocksToGenerate: Set(manifest.additionalMocksToGenerate),
+						additionalMocksToGenerate: Set(additionalMocksToGenerate),
 					)
 
 					var sourceFileToMockExtensions = [String: [String]]()
@@ -368,58 +359,74 @@ struct Generate: AsyncParsableCommand {
 						typeNameToMockExtensions[mock.typeDescription.asSource, default: []].append(mock.code)
 					}
 
-					let additionalMockTypeNames = Set(manifest.additionalMocksToGenerate)
-					for entry in manifest.mockGeneration {
-						let extensions: [String]? = if additionalMockTypeNames.contains(entry.inputFilePath) {
-							// Additional mock: inputFilePath is the type name.
-							typeNameToMockExtensions[entry.inputFilePath]
-						} else {
-							sourceFileToMockExtensions[entry.inputFilePath]
+					if let manifest {
+						let additionalMockTypeNames = Set(manifest.additionalMocksToGenerate)
+						for entry in manifest.mockGeneration {
+							let extensions: [String]? = if additionalMockTypeNames.contains(entry.inputFilePath) {
+								typeNameToMockExtensions[entry.inputFilePath]
+							} else {
+								sourceFileToMockExtensions[entry.inputFilePath]
+							}
+							let body = extensions?.sorted().joined(separator: "\n\n") ?? ""
+							writes.append((
+								destination: URL(fileURLWithPath: entry.outputFilePath),
+								content: fileHeader + body,
+							))
 						}
-						let body = extensions?.sorted().joined(separator: "\n\n") ?? ""
-						if combinedOutput != nil {
-							if !body.isEmpty {
-								combinedOutputBodies.append(body)
-							}
-						} else {
-							let code = fileHeader + body
-							let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
-							if existingContent != code {
-								try code.write(toPath: entry.outputFilePath)
-							}
+						// Shared mock-configuration file. Declared even
+						// when empty — the build system expects the
+						// output to exist.
+						if let mockConfigurationOutputFilePath = manifest.mockConfigurationOutputFilePath {
+							writes.append((
+								destination: URL(fileURLWithPath: mockConfigurationOutputFilePath),
+								content: fileHeader + (mockResult.mockConfigurationCode ?? ""),
+							))
 						}
-					}
-
-					// Write shared mock configuration file.
-					// Always write the file when the path is set, even if empty,
-					// because the build system expects the declared output to exist.
-					if let mockConfigurationOutputFilePath = manifest.mockConfigurationOutputFilePath {
-						let mockConfigurationBody = mockResult.mockConfigurationCode ?? ""
-						if combinedOutput != nil {
-							if !mockConfigurationBody.isEmpty {
-								combinedOutputBodies.append(mockConfigurationBody)
-							}
-						} else {
-							let code = fileHeader + mockConfigurationBody
-							let existingContent = try? String(contentsOfFile: mockConfigurationOutputFilePath, encoding: .utf8)
-							if existingContent != code {
-								try code.write(toPath: mockConfigurationOutputFilePath)
-							}
+					} else {
+						// Combined mode: per-source mocks sorted, then
+						// per-type-name additional mocks sorted.
+						for sourceFile in currentModuleMockSourceFiles {
+							let body = sourceFileToMockExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? ""
+							writes.append((destination: nil, content: fileHeader + body))
+						}
+						for typeName in additionalMocksToGenerate.sorted() {
+							let body = typeNameToMockExtensions[typeName]?.sorted().joined(separator: "\n\n") ?? ""
+							writes.append((destination: nil, content: fileHeader + body))
+						}
+						if let mockConfigurationCode = mockResult.mockConfigurationCode,
+						   !mockConfigurationCode.isEmpty
+						{
+							writes.append((destination: nil, content: fileHeader + mockConfigurationCode))
 						}
 					}
 				}
 
+				// ---- Emission ----
 				if let combinedOutput {
-					// One fileHeader at the top, then each body. An
-					// empty module (no roots, no mocks) still writes
-					// the header-only file so build systems whose
-					// declared output is this path find it populated.
-					let code = combinedOutputBodies.isEmpty
+					// Strip the per-entry fileHeader and concat under a
+					// single header. An empty module (no roots, no
+					// mocks) still writes the header-only file so the
+					// build system's declared output is populated.
+					let bodies: [String] = writes.compactMap { write in
+						guard write.content.hasPrefix(fileHeader) else { return write.content }
+						let body = String(write.content.dropFirst(fileHeader.count))
+						return body.isEmpty ? nil : body
+					}
+					let code = bodies.isEmpty
 						? fileHeader
-						: fileHeader + combinedOutputBodies.joined(separator: "\n\n")
-					let existingContent = try? String(contentsOfFile: combinedOutput, encoding: .utf8)
-					if existingContent != code {
-						try code.write(toPath: combinedOutput)
+						: fileHeader + bodies.joined(separator: "\n\n")
+					// Always write — Bazel/Buck2 content-hash their
+					// inputs, so a stat-identical re-write costs them
+					// nothing, and we keep the action output stamp
+					// fresh for any stat-based staleness check.
+					try code.write(toPath: combinedOutput)
+				} else {
+					for write in writes {
+						guard let destination = write.destination else { continue }
+						let existingContent = try? String(contentsOf: destination, encoding: .utf8)
+						if existingContent != write.content {
+							try write.content.write(to: destination, atomically: true, encoding: .utf8)
+						}
 					}
 				}
 			}

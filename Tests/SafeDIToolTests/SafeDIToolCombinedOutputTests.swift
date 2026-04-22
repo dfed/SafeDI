@@ -60,7 +60,6 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 				}
 				""",
 			],
-			buildSwiftOutputDirectory: true,
 			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
 		)
@@ -90,9 +89,8 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_combinedOutput_includesSharedMockConfiguration_whenMocksShareConfigurationExtensions() async throws {
 		// Middle lacks `generateMock: true`; its `SafeDIMockConfiguration`
-		// extension therefore lives in the shared mock-configuration file
-		// rather than an individual mock file — and in combined mode gets
-		// appended onto the single combined output.
+		// extension therefore lives in the shared mock-configuration section
+		// and gets appended onto the combined output.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -120,48 +118,61 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 				}
 				""",
 			],
-			buildSwiftOutputDirectory: true,
 			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
 		)
 
 		let combined = try #require(output.combinedOutput)
-		// The shared mock-configuration extension lands in the combined file.
 		#expect(combined.contains("extension Middle {"))
 		#expect(combined.contains("struct SafeDIMockConfiguration"))
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_combinedOutput_worksWhenNeitherManifestNorOutputDirectoryIsProvided() async throws {
-		// When `--combined-output` is the only emission flag, the tool
-		// synthesizes a scratch directory for the inline scan so the
-		// downstream generate path still fires.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable(isRoot: true)
-				public struct Root: Instantiable {
-				    public init(dep: Dep) {
-				        self.dep = dep
-				    }
-				    @Instantiated let dep: Dep
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Dep: Instantiable {
-				    public init() {}
-				}
-				""",
-			],
-			buildCombinedOutputAlone: true,
+	mutating func run_combinedOutput_isStableForStableInputsRegardlessOfFixtureOrdering() async throws {
+		// Generating the same module twice — with the input files in different
+		// declaration orders — should produce byte-identical combined output.
+		// Guards against ordering non-determinism (dictionary iteration,
+		// unsorted collections) leaking into the concatenated result.
+		let fileAlpha = """
+		@Instantiable(isRoot: true)
+		public struct AlphaRoot: Instantiable {
+		    public init(a: Alpha) {
+		        self.a = a
+		    }
+		    @Instantiated let a: Alpha
+		}
+		"""
+		let fileBeta = """
+		@Instantiable(generateMock: true)
+		public struct Alpha: Instantiable {
+		    public init() {}
+		}
+		"""
+		let fileGamma = """
+		@Instantiable(isRoot: true)
+		public struct BetaRoot: Instantiable {
+		    public init(a: Alpha) {
+		        self.a = a
+		    }
+		    @Instantiated let a: Alpha
+		}
+		"""
+
+		let firstOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [fileAlpha, fileBeta, fileGamma],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+		)
+		let secondOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [fileGamma, fileBeta, fileAlpha],
+			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
 		)
 
-		let combined = try #require(output.combinedOutput)
-		#expect(combined.contains("extension Root {"))
-		#expect(combined.contains("public init() {"))
+		let first = try #require(firstOutput.combinedOutput)
+		let second = try #require(secondOutput.combinedOutput)
+		#expect(first == second, "Combined output drifted with input order:\n--- first ---\n\(first)\n--- second ---\n\(second)")
 	}
 
 	@Test
@@ -187,7 +198,6 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 				}
 				""",
 			],
-			buildSwiftOutputDirectory: true,
 			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
 			skipCompileVerification: true,
@@ -202,11 +212,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_combinedOutput_enumeratesIncludeDirectoriesWithoutRequiringSourcesCSV() async throws {
 		// Driving `generate` purely from `--include` (no positional CSV) is
-		// a supported workflow. Before this fix the combined-output
-		// synthetic-scratch path hard-failed with
-		// "--output-directory requires 'swift-sources-file-path'" because
-		// it didn't know how to build inputs from `--include`.
-
+		// a supported workflow; combined mode has to cope with it.
 		let tempDir = FileManager.default.temporaryDirectory
 			.appendingPathComponent("SafeDIToolIncludeTest-\(UUID().uuidString)", isDirectory: true)
 		try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -251,7 +257,22 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 			"--output-directory", "/tmp/out-dir",
 		])
 		await assertThrowsError(
-			containing: "--combined-output cannot be combined with --output-directory",
+			containing: "--combined-output is mutually exclusive with --output-directory and --swift-manifest",
+		) {
+			try await tool.run()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_combinedOutput_rejectsCombinationWithSwiftManifest() async throws {
+		let tool = try Generate.parse([
+			"/tmp/nonexistent-sources.csv",
+			"--combined-output", "/tmp/combined.swift",
+			"--swift-manifest", "/tmp/manifest.json",
+		])
+		await assertThrowsError(
+			containing: "--combined-output is mutually exclusive with --output-directory and --swift-manifest",
 		) {
 			try await tool.run()
 		}
@@ -269,7 +290,6 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 				}
 				""",
 			],
-			buildSwiftOutputDirectory: true,
 			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
 		)
