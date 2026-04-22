@@ -845,6 +845,20 @@ Both subcommands utilize Apple’s [SwiftSyntax](https://github.com/apple/swift-
 
 Run `swift run SafeDITool --help`, `swift run SafeDITool scan --help`, or `swift run SafeDITool generate --help` to see documentation of all supported arguments.
 
+#### `--combined-output` for single-output build systems
+
+`generate` accepts a `--combined-output <path>` option that concatenates every Swift file it would otherwise emit — the root dependency tree, each mock, and the shared mock-configuration extensions — into one file at the given path. Intended for build systems whose code-gen rules must declare every output statically at analysis time (Bazel, Buck2): one rule output means the caller doesn’t have to maintain a list of per-root / per-mock filenames that would change whenever a new `@Instantiable(isRoot: true)` or `generateMock: true` type is added.
+
+Example:
+
+```
+SafeDITool generate Module.csv \
+    --combined-output path/to/Module+SafeDI.swift \
+    --dependent-module-info-file-path DependentModuleInfo.csv
+```
+
+`--combined-output` may be combined with `--module-info-output` (for a module that publishes both a combined Swift file and a `.safedi` artifact). It ignores per-entry `outputFilePath` values in a `--swift-manifest` or inline-scan manifest — the manifest still drives discovery, just not placement.
+
 ## Introspecting a SafeDI tree
 
 You can create a [GraphViz DOT file](https://graphviz.org/doc/info/lang.html) to introspect a SafeDI dependency tree by running `swift run SafeDITool` and utilizing the `--dot-file-output` parameter. This command will create a `DOT` file that you can pipe into `GraphViz`’s `dot` command to create a pdf.

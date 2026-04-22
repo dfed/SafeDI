@@ -46,6 +46,8 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Swift file paths scoped to the current target for mock generation. Only used when --output-directory is provided without --swift-manifest.") var mockScopedFiles: [String] = []
 
+	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path instead of emitting the per-root / per-mock files the manifest describes. Useful for build systems that need rule outputs statically declared at analysis time (Bazel, Buck2). Requires 'swift-sources-file-path' or '--include'. May be combined with '--module-info-output'. Ignores per-entry 'outputFilePath' values in a '--swift-manifest' or inline-scan manifest — the manifest still drives discovery, just not placement.") var combinedOutput: String?
+
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
 
 	// MARK: Internal
@@ -55,22 +57,45 @@ struct Generate: AsyncParsableCommand {
 			throw ValidationError("Must provide 'swift-sources-file-path' or '--include'.")
 		}
 
+		// When --combined-output is the only emission flag, synthesize a
+		// scratch output directory so the inline-scan path below can
+		// fire. The manifest's per-entry outputFilePath values are
+		// discarded in favor of the combined file anyway, so the
+		// scratch location is ephemeral.
+		var syntheticOutputDirectory: String?
+		if combinedOutput != nil, outputDirectory == nil, swiftManifest == nil {
+			let scratch = FileManager.default.temporaryDirectory
+				.appendingPathComponent("SafeDITool-\(UUID().uuidString)")
+				.path
+			try FileManager.default.createDirectory(
+				atPath: scratch,
+				withIntermediateDirectories: true,
+			)
+			syntheticOutputDirectory = scratch
+		}
+
 		// When --output-directory is provided without --swift-manifest, run an
 		// inline scan to discover roots/mocks and build the manifest automatically.
 		var resolvedSwiftManifest = swiftManifest
-		if resolvedSwiftManifest == nil, let outputDirectory {
+		let resolvedOutputDirectory = outputDirectory ?? syntheticOutputDirectory
+		if resolvedSwiftManifest == nil, let resolvedOutputDirectory {
 			guard let swiftSourcesFilePath else {
 				throw ValidationError("--output-directory requires 'swift-sources-file-path'.")
 			}
-			let manifestPath = (outputDirectory as NSString).appendingPathComponent("SafeDIManifest.json")
+			let manifestPath = (resolvedOutputDirectory as NSString).appendingPathComponent("SafeDIManifest.json")
 			try await performScan(
 				inputSourcesFile: swiftSourcesFilePath,
 				projectRoot: FileManager.default.currentDirectoryPath,
-				outputDirectory: outputDirectory,
+				outputDirectory: resolvedOutputDirectory,
 				manifestFile: manifestPath,
 				mockScopedFiles: mockScopedFiles,
 			)
 			resolvedSwiftManifest = manifestPath
+		}
+		defer {
+			if let syntheticOutputDirectory {
+				try? FileManager.default.removeItem(atPath: syntheticOutputDirectory)
+			}
 		}
 
 		let (dependentModuleInfo, parsed) = try await (
@@ -218,11 +243,18 @@ struct Generate: AsyncParsableCommand {
 					\(filesWithUnexpectedNodes.joined(separator: "\n\t"))
 				\""")
 				"""
-				for entry in manifest.dependencyTreeGeneration {
-					try errorContent.write(toPath: entry.outputFilePath)
-				}
-				for entry in manifest.mockGeneration {
-					try errorContent.write(toPath: entry.outputFilePath)
+				if let combinedOutput {
+					// In combined-output mode the build system only
+					// declared this one path, so route the `#error(…)`
+					// here instead of the manifest's per-entry paths.
+					try errorContent.write(toPath: combinedOutput)
+				} else {
+					for entry in manifest.dependencyTreeGeneration {
+						try errorContent.write(toPath: entry.outputFilePath)
+					}
+					for entry in manifest.mockGeneration {
+						try errorContent.write(toPath: entry.outputFilePath)
+					}
 				}
 			} else {
 				let generatedRoots = try await generator.generatePerRootCodeTrees()
@@ -254,17 +286,29 @@ struct Generate: AsyncParsableCommand {
 					}
 				}
 
+				// Accumulates body blocks for `--combined-output`. One
+				// shared fileHeader is emitted at the top of the
+				// combined file; each entry's body (sans its own
+				// duplicate header) is appended in discovery order —
+				// roots first, then mocks, then mock configuration —
+				// so the output layout mirrors what a reader would see
+				// if they concatenated the per-file outputs by hand.
+				var combinedOutputBodies: [String] = []
+
 				// Write dependency tree output files.
 				for entry in manifest.dependencyTreeGeneration {
-					let code: String = if let extensions = sourceFileToExtensions[entry.inputFilePath] {
-						fileHeader + extensions.sorted().joined(separator: "\n\n")
+					let body = sourceFileToExtensions[entry.inputFilePath]?.sorted().joined(separator: "\n\n") ?? ""
+					if combinedOutput != nil {
+						if !body.isEmpty {
+							combinedOutputBodies.append(body)
+						}
 					} else {
-						fileHeader
-					}
-					// Only update the file if the content has changed.
-					let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
-					if existingContent != code {
-						try code.write(toPath: entry.outputFilePath)
+						let code = body.isEmpty ? fileHeader : fileHeader + body
+						// Only update the file if the content has changed.
+						let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
+						if existingContent != code {
+							try code.write(toPath: entry.outputFilePath)
+						}
 					}
 				}
 
@@ -301,10 +345,17 @@ struct Generate: AsyncParsableCommand {
 						} else {
 							sourceFileToMockExtensions[entry.inputFilePath]
 						}
-						let code = fileHeader + (extensions?.sorted().joined(separator: "\n\n") ?? "")
-						let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
-						if existingContent != code {
-							try code.write(toPath: entry.outputFilePath)
+						let body = extensions?.sorted().joined(separator: "\n\n") ?? ""
+						if combinedOutput != nil {
+							if !body.isEmpty {
+								combinedOutputBodies.append(body)
+							}
+						} else {
+							let code = fileHeader + body
+							let existingContent = try? String(contentsOfFile: entry.outputFilePath, encoding: .utf8)
+							if existingContent != code {
+								try code.write(toPath: entry.outputFilePath)
+							}
 						}
 					}
 
@@ -312,11 +363,32 @@ struct Generate: AsyncParsableCommand {
 					// Always write the file when the path is set, even if empty,
 					// because the build system expects the declared output to exist.
 					if let mockConfigurationOutputFilePath = manifest.mockConfigurationOutputFilePath {
-						let code = fileHeader + (mockResult.mockConfigurationCode ?? "")
-						let existingContent = try? String(contentsOfFile: mockConfigurationOutputFilePath, encoding: .utf8)
-						if existingContent != code {
-							try code.write(toPath: mockConfigurationOutputFilePath)
+						let mockConfigurationBody = mockResult.mockConfigurationCode ?? ""
+						if combinedOutput != nil {
+							if !mockConfigurationBody.isEmpty {
+								combinedOutputBodies.append(mockConfigurationBody)
+							}
+						} else {
+							let code = fileHeader + mockConfigurationBody
+							let existingContent = try? String(contentsOfFile: mockConfigurationOutputFilePath, encoding: .utf8)
+							if existingContent != code {
+								try code.write(toPath: mockConfigurationOutputFilePath)
+							}
 						}
+					}
+				}
+
+				if let combinedOutput {
+					// One fileHeader at the top, then each body. An
+					// empty module (no roots, no mocks) still writes
+					// the header-only file so build systems whose
+					// declared output is this path find it populated.
+					let code = combinedOutputBodies.isEmpty
+						? fileHeader
+						: fileHeader + combinedOutputBodies.joined(separator: "\n\n")
+					let existingContent = try? String(contentsOfFile: combinedOutput, encoding: .utf8)
+					if existingContent != code {
+						try code.write(toPath: combinedOutput)
 					}
 				}
 			}
