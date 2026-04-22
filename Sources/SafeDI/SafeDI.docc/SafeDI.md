@@ -52,7 +52,7 @@ public struct LoggedInView: View, Instantiable {
 
 @Instantiable
 public final class NoteStorage: Instantiable {
-    public init(user: User, stringStorage: StringStorage, defaultNote: String = "") { /* ... */ }
+    public init(user: User, stringStorage: StringStorage) { /* ... */ }
 
     // `user` and `stringStorage` are received from ancestors in the tree.
     @Received private let user: User
