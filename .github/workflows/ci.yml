@@ -163,7 +163,13 @@ jobs:
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Install Tuist
-        run: brew install --formula tuist
+        # Tuist no longer publishes a Homebrew formula; the official
+        # installer routes through mise, which places the `tuist` shim
+        # under ~/.local/share/mise/shims.
+        run: |
+          curl -Ls https://tuist.dev/install.sh | bash
+          echo "$HOME/.local/share/mise/shims" >> "$GITHUB_PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Build SafeDITool
         # Pre-build the tool so the first Xcode build doesn't pay the
         # compile cost inside its script phase — matches what a developer
