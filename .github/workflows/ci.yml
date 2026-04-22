@@ -157,38 +157,26 @@ jobs:
     runs-on: macos-26
     permissions:
       contents: read
+    # Required so mise / tuist install don't hit anonymous GitHub API
+    # rate limits when resolving release tags and artifact bundles.
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Install Tuist via mise
-        # Tuist no longer publishes a Homebrew formula and the
-        # tuist.dev/install.sh URL 404s as of 2026-04. Install mise
-        # (Tuist's recommended package manager) and use it to install a
-        # specific Tuist version for reproducibility. GITHUB_TOKEN is
-        # required so mise doesn't hit unauthenticated GitHub API rate
-        # limits when resolving the release tag.
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Keep the pinned Tuist version here in sync with the README.
         run: |
           curl -fsSL https://mise.run | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           echo "$HOME/.local/share/mise/shims" >> "$GITHUB_PATH"
           "$HOME/.local/bin/mise" install -y tuist@4.183.0
           "$HOME/.local/bin/mise" use -g tuist@4.183.0
-          "$HOME/.local/share/mise/shims/tuist" version
       - name: Tuist Install
-        # `tuist install` resolves Tuist/Package.swift, which uses
-        # `.binaryTarget(url:checksum:)` to download the published
-        # SafeDITool artifact bundle. The build-phase script reads
-        # the unpacked binary from Tuist/.build/artifacts/...
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pushd Examples/ExampleTuistIntegration && tuist install && popd
       - name: Tuist Generate
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pushd Examples/ExampleTuistIntegration && tuist generate --no-open && popd
       - name: Build Tuist Integration
         run: pushd Examples/ExampleTuistIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -workspace ExampleTuistIntegration.xcworkspace -scheme ExampleTuistIntegration; popd
