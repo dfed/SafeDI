@@ -1,11 +1,5 @@
 import ProjectDescription
 
-// Pin the SafeDI runtime library to the same release Tuist/Package.swift
-// pins the SafeDITool CLI binary to. When bumping SafeDI, update both:
-//   - safediVersion here
-//   - url + checksum in Tuist/Package.swift
-let safediVersion = "2.0.0-beta-5"
-
 // Tuist expands glob patterns in `sources` and script `inputPaths` at
 // `tuist generate` time, baking a literal file list into the .xcodeproj.
 // That means adding or removing a `.swift` source is a `tuist generate`
@@ -42,12 +36,6 @@ let hostGeneratedMarker: Path = "$(DERIVED_FILE_DIR)/safedi-generated.marker"
 
 let project = Project(
 	name: "ExampleTuistIntegration",
-	packages: [
-		.package(
-			url: "https://github.com/dfed/SafeDI.git",
-			.upToNextMajor(from: "\(safediVersion)"),
-		),
-	],
 	targets: [
 		.target(
 			name: "Subproject",
@@ -70,7 +58,7 @@ let project = Project(
 				),
 			],
 			dependencies: [
-				.package(product: "SafeDI"),
+				.external(name: "SafeDI"),
 			],
 		),
 		.target(
@@ -103,7 +91,7 @@ let project = Project(
 			],
 			dependencies: [
 				.target(name: "Subproject"),
-				.package(product: "SafeDI"),
+				.external(name: "SafeDI"),
 			],
 		),
 	],

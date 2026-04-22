@@ -36,7 +36,7 @@ When cloning into a new project the edits you're expected to make are:
 |---|---|
 | `Project.swift` | target names, bundle IDs, deployment targets, module directory names |
 | `Scripts/generate-safedi.sh` | the two `case` labels (`subproject` / `host`) if your module names differ, or add more branches for additional targets |
-| `Tuist/Package.swift` + `Project.swift` | bump SafeDI version together |
+| `Tuist/Package.swift` | bump SafeDI version (single source of truth — the artifact bundle follows automatically) |
 
 ## Why not use the `SafeDIGenerator` SPM plugin?
 
@@ -105,12 +105,12 @@ tuist generate
 To regenerate the project after editing `Project.swift`, re-run
 `tuist generate`. Re-run `tuist install` whenever you bump SafeDI.
 
-SafeDI's runtime library is consumed via `Project.packages` (Xcode's
-built-in SPM client), while the SafeDITool CLI is consumed via
-`Tuist/Package.swift` (Tuist's SPM integration). Both reference the
-same SafeDI release — split because Tuist's SPM integration can't
-currently resolve SafeDI's trait-gated internal targets through
-`.external(name:)`, so the runtime library has to go through Xcode.
+Both the SafeDI runtime library and the SafeDITool CLI are consumed
+through a single `.package(url:from:)` entry in `Tuist/Package.swift`.
+Targets in `Project.swift` depend on `.external(name: "SafeDI")`;
+`Scripts/generate-safedi.sh` reads the SafeDITool binary SPM pulled
+down as a side effect of SafeDI's `prebuilt` trait chain. One version
+pin, one dependency graph.
 
 ## How the build wiring works
 

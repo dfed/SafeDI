@@ -21,11 +21,13 @@
 #     filename rules.
 #
 # SafeDITool is resolved by `tuist install`, which invokes SPM on
-# Tuist/Package.swift — a minimal manifest whose only target is the
-# published `SafeDITool.artifactbundle.zip`. Bump SafeDI by editing the
-# URL + checksum in Tuist/Package.swift and Project.swift's
-# `.package(url:.upToNextMajor(from:))` requirement together; nothing
-# else needs to change.
+# Tuist/Package.swift. SafeDI's default trait chain pulls in its
+# `SafeDIToolBinary` binary target for the SafeDIGenerator plugin, so
+# the .artifactbundle.zip is downloaded + unpacked as a side effect of
+# resolving SafeDI itself — no separate binary-target declaration
+# needed here. Bump SafeDI by editing the `.package(url:from:)`
+# requirement in Tuist/Package.swift; this script picks up the
+# matching binary automatically.
 #
 # Neither the input source list nor the output file list is hardcoded:
 # `find` enumerates the target's Swift sources, `scan` discovers roots
@@ -66,13 +68,14 @@ Linux:x86_64 | Linux:amd64)   tool_variant="SafeDITool-linux-x86_64" ;;
 	;;
 esac
 
-artifact_bundle="$SRCROOT/Tuist/.build/artifacts/tuist/SafeDITool/SafeDITool.artifactbundle"
+artifact_bundle="$SRCROOT/Tuist/.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle"
 safedi_tool="$artifact_bundle/$tool_variant/bin/SafeDITool"
 
 if [[ ! -x "$safedi_tool" ]]; then
 	echo "error: SafeDITool not found at $safedi_tool" >&2
-	echo "       run \`tuist install\` to fetch it (this downloads" >&2
-	echo "       SafeDITool.artifactbundle via Tuist/Package.swift)." >&2
+	echo "       run \`tuist install\` to fetch it — that drives SPM" >&2
+	echo "       resolution on Tuist/Package.swift, which pulls SafeDI" >&2
+	echo "       and its SafeDIToolBinary.artifactbundle." >&2
 	exit 5
 fi
 
