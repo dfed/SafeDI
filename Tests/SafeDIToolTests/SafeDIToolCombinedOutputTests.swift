@@ -87,6 +87,118 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_combinedOutput_includesSharedMockConfiguration_whenMocksShareConfigurationExtensions() async throws {
+		// Middle lacks `generateMock: true`; its `SafeDIMockConfiguration`
+		// extension therefore lives in the shared mock-configuration file
+		// rather than an individual mock file — and in combined mode gets
+		// appended onto the single combined output.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(middle: Middle) {
+				        self.middle = middle
+				    }
+				    @Instantiated let middle: Middle
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Middle: Instantiable {
+				    public init(leaf: Leaf) {
+				        self.leaf = leaf
+				    }
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Leaf: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let combined = try #require(output.combinedOutput)
+		// The shared mock-configuration extension lands in the combined file.
+		#expect(combined.contains("extension Middle {"))
+		#expect(combined.contains("struct SafeDIMockConfiguration"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_combinedOutput_worksWhenNeitherManifestNorOutputDirectoryIsProvided() async throws {
+		// When `--combined-output` is the only emission flag, the tool
+		// synthesizes a scratch directory for the inline scan so the
+		// downstream generate path still fires.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Instantiated let dep: Dep
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Dep: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildCombinedOutputAlone: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let combined = try #require(output.combinedOutput)
+		#expect(combined.contains("extension Root {"))
+		#expect(combined.contains("public init() {"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_combinedOutput_writesParseErrorStub_whenSourcesContainUnexpectedSwiftNodes() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+
+				    :::brokenSyntax
+
+				    @Instantiated let dep: Dep
+				}
+
+				@Instantiable
+				public final class Dep: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
+		)
+
+		let combined = try #require(output.combinedOutput)
+		#expect(combined.contains("#error"), "Expected #error stub: \(combined)")
+		#expect(combined.contains("Compiler errors prevented the generation of the dependency tree"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_combinedOutput_writesOnlyHeader_whenModuleHasNothingToEmit() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [

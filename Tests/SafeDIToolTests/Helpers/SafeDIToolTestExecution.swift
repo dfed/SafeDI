@@ -39,6 +39,7 @@ func executeSafeDIToolTest(
 	buildSwiftOutputDirectory: Bool = false,
 	buildDOTFileOutput: Bool = false,
 	buildCombinedOutput: Bool = false,
+	buildCombinedOutputAlone: Bool = false,
 	filesToDelete: inout [URL],
 	includeFolders: [String] = [],
 	skipCompileVerification: Bool = false,
@@ -150,7 +151,7 @@ func executeSafeDIToolTest(
 		if buildDOTFileOutput {
 			generateArguments += ["--dot-file-output", dotTreeOutput.relativePath]
 		}
-		if buildCombinedOutput {
+		if buildCombinedOutput || buildCombinedOutputAlone {
 			generateArguments += ["--combined-output", combinedOutput.relativePath]
 		}
 		let tool = try Generate.parse(generateArguments)
@@ -169,7 +170,7 @@ func executeSafeDIToolTest(
 		if buildDOTFileOutput {
 			filesToDelete.append(dotTreeOutput)
 		}
-		if buildCombinedOutput {
+		if buildCombinedOutput || buildCombinedOutputAlone {
 			filesToDelete.append(combinedOutput)
 		}
 
@@ -202,7 +203,7 @@ func executeSafeDIToolTest(
 			moduleInfoOutputPath: moduleInfoOutput.relativePath,
 			generatedFiles: generatedFiles,
 			dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil,
-			combinedOutput: buildCombinedOutput
+			combinedOutput: buildCombinedOutput || buildCombinedOutputAlone
 				? String(data: Data(contentsOf: combinedOutput), encoding: .utf8)
 				: nil,
 		)
