@@ -280,6 +280,55 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_combinedOutput_emitsAdditionalMockFromConfiguration() async throws {
+		// `#SafeDIConfiguration(additionalMocksToGenerate:)` is how a
+		// module requests mocks for types defined in a dependent
+		// module. Combined mode should append those type-name-keyed
+		// mocks after the per-source ones.
+		let crossModuleOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct CrossModuleService: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				#SafeDIConfiguration(
+				    additionalMocksToGenerate: [
+				        "CrossModuleService",
+				    ]
+				)
+				""",
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(crossModuleService: CrossModuleService) {
+				        self.crossModuleService = crossModuleService
+				    }
+				    @Instantiated let crossModuleService: CrossModuleService
+				}
+				""",
+			],
+			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
+		)
+
+		let combined = try #require(output.combinedOutput)
+		#expect(combined.contains("extension CrossModuleService {"), "Expected additional-mock extension: \(combined)")
+		#expect(combined.contains("static func mock"), "Missing mock method: \(combined)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_combinedOutput_writesOnlyHeader_whenModuleHasNothingToEmit() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
