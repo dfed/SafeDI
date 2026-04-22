@@ -14,7 +14,6 @@ Opting a type into the SafeDI dependency tree is simple: add `@Instantiable` to 
 public struct NotesApp: App, Instantiable {
     public init(
         userService: UserService,
-        stringStorage: StringStorage,
         nameEntryViewBuilder: Instantiator<NameEntryView>,
         loggedInViewBuilder: Instantiator<LoggedInView>
     ) { /* ... */ }
@@ -31,7 +30,6 @@ public struct NotesApp: App, Instantiable {
     }
 
     @ObservedObject @Instantiated private var userService: UserService
-    @Instantiated private let stringStorage: StringStorage
     @Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
     @Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
 }
@@ -48,15 +46,6 @@ public struct LoggedInView: View, Instantiable {
     @Received private let userService: UserService
     // `noteStorage` is created by `LoggedInView` and lives for its lifetime.
     @Instantiated private let noteStorage: NoteStorage
-}
-
-@Instantiable
-public final class NoteStorage: Instantiable {
-    public init(user: User, stringStorage: StringStorage) { /* ... */ }
-
-    // `user` and `stringStorage` are received from ancestors in the tree.
-    @Received private let user: User
-    @Received private let stringStorage: StringStorage
 }
 ```
 
