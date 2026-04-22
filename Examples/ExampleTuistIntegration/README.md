@@ -38,24 +38,25 @@ input/output paths.
 
 ### Installing Tuist
 
-This example is pinned against Tuist 4.x. The reproducible install path
-(matching what CI runs) is via [mise](https://mise.jdx.dev):
+This example pins Tuist to the same concrete version CI installs
+(`4.183.0`). The reproducible install path is via
+[mise](https://mise.jdx.dev):
 
 ```bash
 # Install mise if you don't have it.
 curl -fsSL https://mise.run | sh
 
-# Install Tuist.
-mise install tuist@latest
-mise use -g tuist@latest
+# Install the pinned Tuist version.
+mise install tuist@4.183.0
+mise use -g tuist@4.183.0
 
 # Verify.
 tuist version
 ```
 
-Alternatively, if you already manage developer tooling with `asdf`,
-`mise` understands asdf plugin configs, so `tuist@latest` resolves the
-same.
+If you want to track a newer Tuist release locally, bump the pinned
+version in `.github/workflows/ci.yml` (`spm-tuist-integration` job) at
+the same time so CI and local setup stay aligned.
 
 ## First-time setup
 
@@ -129,5 +130,5 @@ under `Generated/`.
 
 A `spm-tuist-integration` job in `.github/workflows/ci.yml` performs the
 equivalent of the first-time setup steps above: it installs Tuist via
-Homebrew, builds `SafeDITool`, runs `tuist generate`, then builds the
-generated workspace with `xcodebuild`.
+`mise` (pinned to `4.183.0`), builds `SafeDITool`, runs `tuist generate`,
+then builds the generated workspace with `xcodebuild`.
