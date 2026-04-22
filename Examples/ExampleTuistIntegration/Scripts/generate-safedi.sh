@@ -39,9 +39,28 @@
 
 set -euo pipefail
 
-mode="${1:?expected 'subproject' or 'host'}"
+mode="${1:?expected 'subproject', 'host', or 'all'}"
 
-: "${SRCROOT:?SRCROOT must be set (this script runs as an Xcode build phase)}"
+# Convenience bootstrap so a fresh checkout can run one command before
+# `tuist generate`:
+#   ./Scripts/generate-safedi.sh all
+# Each Xcode build phase still calls a single mode.
+if [[ "$mode" == "all" ]]; then
+	"$0" subproject
+	"$0" host
+	exit 0
+fi
+
+# Works in two invocation modes:
+#   - From an Xcode build phase, where SRCROOT / DERIVED_FILE_DIR /
+#     BUILT_PRODUCTS_DIR are set by Xcode.
+#   - Standalone (before `tuist generate`, so Generated/ is populated
+#     and Tuist's source glob resolves), where we derive SRCROOT from
+#     the script's own path and fall back to scratch directories inside
+#     the example's .build/ tree.
+if [[ -z "${SRCROOT:-}" ]]; then
+	SRCROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fi
 
 scratch_dir="${DERIVED_FILE_DIR:-$SRCROOT/.build/tuist-safedi-$mode}"
 mkdir -p "$scratch_dir"
@@ -49,7 +68,9 @@ mkdir -p "$scratch_dir"
 manifest_file="$scratch_dir/SafeDIManifest.json"
 
 # Shared module-info location so the host target can pick it up
-# regardless of which target is doing the reading.
+# regardless of which target is doing the reading. Under Xcode this is
+# the configuration-scoped BUILT_PRODUCTS_DIR; standalone it lives in
+# .build/ inside the example.
 shared_safedi_dir="${BUILT_PRODUCTS_DIR:-$SRCROOT/.build/SharedProducts}/SafeDI"
 mkdir -p "$shared_safedi_dir"
 
@@ -175,7 +196,7 @@ host)
 	# Single-file dep-analysis marker — the generated `.swift` files
 	# are picked up by Tuist's source glob. `outputPaths` in
 	# Project.swift points at this one path.
-	marker="$DERIVED_FILE_DIR/safedi-generated.marker"
+	marker="$scratch_dir/safedi-generated.marker"
 	date +%s >"$marker"
 	echo "Wrote generated SafeDI code into $host_output_directory"
 	;;

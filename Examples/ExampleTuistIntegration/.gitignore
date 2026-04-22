@@ -8,6 +8,11 @@ Derived/
 # safety net for any local `swift build` invocation inside the example).
 .build/
 
+# SafeDI generated code — populated by Scripts/generate-safedi.sh before
+# `tuist generate` and regenerated in every Xcode build via the target's
+# pre-compile script phase.
+ExampleTuistIntegration/Generated/
+
 # Xcode user data and IDE noise
 .DS_Store
 xcuserdata/

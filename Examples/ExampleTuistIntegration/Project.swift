@@ -1,4 +1,30 @@
+import Foundation
 import ProjectDescription
+
+// Run SafeDI codegen during `tuist generate` so the host target's
+// `Generated/` directory is populated by the time Tuist evaluates the
+// source glob. Without this, a fresh checkout would generate a project
+// whose pbxproj contains zero references to the SafeDI-generated Swift
+// files — `Generated/` is `.gitignore`d, nothing's on disk, Tuist's
+// glob matches nothing, Xcode's compile phase doesn't know about the
+// generated files, and the app fails to link when it tries to reference
+// SafeDI-synthesized initializers.
+//
+// Running the script here mirrors what the per-target Xcode script
+// phases (declared below) do at build time; the two invocations are
+// idempotent with respect to each other. SafeDITool is already on
+// disk at this point because `tuist install` fetched it via SafeDI's
+// `prebuilt` trait chain.
+let manifestDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+let codegenScript = manifestDirectory.appendingPathComponent("Scripts/generate-safedi.sh")
+if FileManager.default.fileExists(atPath: codegenScript.path) {
+	let process = Process()
+	process.executableURL = URL(fileURLWithPath: "/bin/bash")
+	process.arguments = [codegenScript.path, "all"]
+	process.currentDirectoryURL = manifestDirectory
+	try? process.run()
+	process.waitUntilExit()
+}
 
 // Tuist expands glob patterns in `sources` and script `inputPaths` at
 // `tuist generate` time, baking a literal file list into the .xcodeproj.
@@ -71,6 +97,9 @@ let project = Project(
 				"CFBundleDisplayName": "Example Tuist Integration",
 				"LSApplicationCategoryType": "public.app-category.productivity",
 			]),
+			// Generated/ is populated by the `tuist generate`-time
+			// codegen at the top of this file; the regular glob picks
+			// it up on first and all subsequent generates.
 			sources: ["ExampleTuistIntegration/**/*.swift"],
 			resources: [
 				"ExampleTuistIntegration/Assets.xcassets",
