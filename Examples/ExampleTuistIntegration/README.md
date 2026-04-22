@@ -19,22 +19,20 @@ This example is designed to be lifted as a template:
   hardcoded Swift file lists** — `find` (in the script) and
   `FileListGlob` (in the manifest) enumerate sources automatically.
 - The set of generated output filenames is **not hardcoded either** —
-  `SafeDITool scan` decides them from the `@Instantiable` declarations
-  it finds. `Project.swift` enumerates the populated `Generated/`
-  directory at `tuist generate` time to compute the script phase's
-  `outputPaths`, so new `@Instantiable(isRoot:)` /
-  `@Instantiable(generateMock: true)` declarations produce new files
-  without any manifest edits.
-- **No generated files are committed.** `Project.swift` runs the
-  codegen script during `tuist generate`, which populates
-  `ExampleTuistIntegration/Generated/` before Tuist evaluates the
-  source glob. The same script re-runs as an Xcode build phase on
-  every build. `Generated/` is `.gitignore`d.
+  `Project.swift` runs `SafeDITool scan` at `tuist generate` time to
+  ask the tool which Swift files it would emit, and registers each one
+  via `.generated("$(DERIVED_FILE_DIR)/...")` so Xcode adds it to the
+  compile phase without expecting the file to exist yet.
+- **Generated code is a build artifact, never in the source tree.**
+  The pre-compile script phase writes to `$(DERIVED_FILE_DIR)` during
+  every `xcodebuild` run. Nothing is committed, nothing is
+  `.gitignore`d — there's just no `Generated/` in the source tree at
+  all.
 - SafeDITool is fetched as the published artifact bundle. SafeDI's
-  own Package.swift declares the `.binaryTarget(url:checksum:)` for
+  own `Package.swift` declares the `.binaryTarget(url:checksum:)` for
   its `prebuilt` trait, so `tuist install` pulls the bundle as a side
-  effect of resolving SafeDI — nothing extra is declared here, no
-  "build from source" step for consumers.
+  effect of resolving SafeDI — no "build from source" step for
+  consumers.
 
 When cloning into a new project the edits you're expected to make are:
 
@@ -100,16 +98,16 @@ From this directory (`Examples/ExampleTuistIntegration`):
 #    default `prebuilt` trait) the SafeDITool artifact bundle.
 tuist install
 
-# 2. Generate the Xcode project and workspace. This also runs the
-#    codegen script once to populate Generated/ before Tuist's source
-#    glob is evaluated. Re-run any time sources change.
+# 2. Generate the Xcode project and workspace.
 tuist generate
 ```
 
 `tuist generate` opens the generated workspace in Xcode. Build and run the
 `ExampleTuistIntegration` scheme.
 
-Re-run `tuist install` when bumping SafeDI; `tuist generate` otherwise.
+Re-run `tuist install` when bumping SafeDI; `tuist generate` after
+adding/removing Swift files or `@Instantiable` declarations so the
+source glob and `.generated(…)` output list refresh.
 
 Both the SafeDI runtime library and the SafeDITool CLI are consumed
 through a single `.package(url:from:)` entry in `Tuist/Package.swift`.
@@ -120,29 +118,23 @@ pin, one dependency graph.
 
 ## How the build wiring works
 
-`Scripts/generate-safedi.sh` is invoked in two places (both use the
-same code path — the script takes a `subproject` / `host` / `all`
-argument that decides which module(s) to generate for):
+Each target has a pre-compile Xcode script phase that invokes
+`Scripts/generate-safedi.sh <subproject|host>`. The script runs
+`SafeDITool scan` followed by `SafeDITool generate` — the same two-step
+flow the `SafeDIGenerator` SPM plugin uses. Manifest files land in
+`$(DERIVED_FILE_DIR)`, the generated `.swift` files land there too.
 
-- As two pre-compile Xcode script phases (one per target), set up by
-  Tuist, so edits during an iteration cycle are picked up on the next
-  `xcodebuild` without needing `tuist generate`.
-- During `tuist generate` itself — `Project.swift` shells out before
-  evaluating its source globs, so `Generated/` (which is `.gitignore`d)
-  exists on a fresh checkout by the time Tuist bakes a source list
-  into the pbxproj.
-
-Each script run invokes `SafeDITool scan` followed by `SafeDITool
-generate` — the same two-step flow the `SafeDIGenerator` SPM plugin
-uses — so manifest and cache files land in `$DERIVED_FILE_DIR` (or a
-`.build/` scratch dir when running standalone) rather than inside
-committed source directories.
+`Project.swift` also runs `SafeDITool scan` once at `tuist generate`
+time (for the host module only) so it can register each expected
+output via `.generated("$(DERIVED_FILE_DIR)/...")`. That call is a
+read-only query — it writes only to a scratch dir under `.build/`; the
+actual code generation happens at `xcodebuild` time.
 
 ### `Subproject` target
 
 1. Runs `SafeDITool generate` with `--module-info-output
-   $BUILT_PRODUCTS_DIR/SafeDI/Subproject.safedi`.
-2. Produces no Swift output — the subproject has no
+   $(BUILT_PRODUCTS_DIR)/SafeDI/Subproject.safedi`.
+2. Produces no Swift output today — the subproject has no
    `@Instantiable(isRoot: true)` and no `@Instantiable(generateMock: true)`
    types, so the dependency tree and mock manifests are empty.
 3. The `.safedi` artifact encodes the subproject's `@Instantiable` surface
@@ -157,23 +149,9 @@ committed source directories.
    at a CSV containing `Subproject.safedi`. The host never re-parses
    subproject sources.
 3. Emits the root's `+SafeDI.swift`, the mocks' `+SafeDIMock.swift`, and the
-   shared `SafeDIMockConfiguration.swift` into `ExampleTuistIntegration/Generated/`.
-   The specific filenames follow SafeDI's
-   [output-naming rules](../../Sources/SafeDICore/Utilities/OutputFileNaming.swift)
-   — no manifest edit required when adding new roots or mocks.
-
-### Script-phase incremental builds
-
-Script `inputPaths` are glob patterns that Tuist expands at
-`tuist generate` time into literal file lists. `outputPaths` for the
-host target enumerate the concrete generated `.swift` files — Project.swift
-reads them off disk after running the codegen, so Xcode's dep-analysis
-tracks each output individually. The generated files flow into the
-compile phase via the target's source glob.
-
-Adding or removing a Swift source file (whether a normal source or a
-new `@Instantiable` type that triggers new generated output) is a
-`tuist generate` away from being picked up by the manifest.
+   shared `SafeDIMockConfiguration.swift` into `$(DERIVED_FILE_DIR)`.
+   Specific filenames follow SafeDI's
+   [output-naming rules](../../Sources/SafeDICore/Utilities/OutputFileNaming.swift).
 
 ## CI
 
