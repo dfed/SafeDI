@@ -200,6 +200,50 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_combinedOutput_enumeratesIncludeDirectoriesWithoutRequiringSourcesCSV() async throws {
+		// Driving `generate` purely from `--include` (no positional CSV) is
+		// a supported workflow. Before this fix the combined-output
+		// synthetic-scratch path hard-failed with
+		// "--output-directory requires 'swift-sources-file-path'" because
+		// it didn't know how to build inputs from `--include`.
+
+		let tempDir = FileManager.default.temporaryDirectory
+			.appendingPathComponent("SafeDIToolIncludeTest-\(UUID().uuidString)", isDirectory: true)
+		try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+		filesToDelete.append(tempDir)
+
+		let sourceURL = tempDir.appendingPathComponent("Root.swift")
+		try """
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init(dep: Dep) {
+		        self.dep = dep
+		    }
+		    @Instantiated let dep: Dep
+		}
+
+		@Instantiable
+		public struct Dep: Instantiable {
+		    public init() {}
+		}
+		""".write(to: sourceURL, atomically: true, encoding: .utf8)
+
+		let combinedOutput = URL.temporaryFile.appendingPathExtension("swift")
+		filesToDelete.append(combinedOutput)
+
+		let tool = try Generate.parse([
+			"--include", tempDir.path,
+			"--combined-output", combinedOutput.path,
+		])
+		try await tool.run()
+
+		let combined = try String(contentsOf: combinedOutput, encoding: .utf8)
+		#expect(combined.contains("extension Root {"), "Missing Root extension: \(combined)")
+		#expect(combined.contains("public init() {"), "Missing synthesized init: \(combined)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_combinedOutput_rejectsCombinationWithOutputDirectory() async throws {
 		let tool = try Generate.parse([
 			"/tmp/nonexistent-sources.csv",
@@ -237,4 +281,15 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+}
+
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+extension URL {
+	fileprivate static var temporaryFile: URL {
+		#if os(Linux)
+			FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+		#else
+			URL.temporaryDirectory.appending(path: UUID().uuidString)
+		#endif
+	}
 }

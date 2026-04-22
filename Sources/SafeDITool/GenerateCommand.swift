@@ -81,29 +81,52 @@ struct Generate: AsyncParsableCommand {
 			)
 			syntheticOutputDirectory = scratch
 		}
+		// Register cleanup before any throwing work below so a
+		// failure in the inline scan doesn't leak the scratch dir.
+		defer {
+			if let syntheticOutputDirectory {
+				try? FileManager.default.removeItem(atPath: syntheticOutputDirectory)
+			}
+		}
 
 		// When --output-directory is provided without --swift-manifest, run an
 		// inline scan to discover roots/mocks and build the manifest automatically.
 		var resolvedSwiftManifest = swiftManifest
 		let resolvedOutputDirectory = outputDirectory ?? syntheticOutputDirectory
 		if resolvedSwiftManifest == nil, let resolvedOutputDirectory {
-			guard let swiftSourcesFilePath else {
+			// Inline scan needs a CSV. Prefer an explicit
+			// --swift-sources-file-path. When running on the
+			// synthetic scratch directory (i.e. `--combined-output`
+			// is driving the flow), also allow `--include` to seed
+			// the inputs — enumerate the included directories and
+			// write a scratch CSV so directory-driven workflows
+			// (`generate --include src/ --combined-output out.swift`)
+			// don't require the caller to pre-build a CSV. The
+			// explicit `--output-directory` path still requires a
+			// CSV so existing behavior is unchanged.
+			let inputSourcesFilePath: String
+			if let swiftSourcesFilePath {
+				inputSourcesFilePath = swiftSourcesFilePath
+			} else if syntheticOutputDirectory != nil, !include.isEmpty {
+				let includedFiles = try await findSwiftFiles(inDirectories: include)
+				let scratchCSV = (resolvedOutputDirectory as NSString).appendingPathComponent("SafeDIToolInputSources.csv")
+				try includedFiles
+					.sorted()
+					.joined(separator: ",")
+					.write(toPath: scratchCSV)
+				inputSourcesFilePath = scratchCSV
+			} else {
 				throw ValidationError("--output-directory requires 'swift-sources-file-path'.")
 			}
 			let manifestPath = (resolvedOutputDirectory as NSString).appendingPathComponent("SafeDIManifest.json")
 			try await performScan(
-				inputSourcesFile: swiftSourcesFilePath,
+				inputSourcesFile: inputSourcesFilePath,
 				projectRoot: FileManager.default.currentDirectoryPath,
 				outputDirectory: resolvedOutputDirectory,
 				manifestFile: manifestPath,
 				mockScopedFiles: mockScopedFiles,
 			)
 			resolvedSwiftManifest = manifestPath
-		}
-		defer {
-			if let syntheticOutputDirectory {
-				try? FileManager.default.removeItem(atPath: syntheticOutputDirectory)
-			}
 		}
 
 		let (dependentModuleInfo, parsed) = try await (
