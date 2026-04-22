@@ -36,19 +36,23 @@ let subprojectSafediArtifactAsOutput: Path = "$(BUILT_PRODUCTS_DIR)/SafeDI/Subpr
 // still knows to compile whatever files land there.
 let manifestDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
 
+// Manifest-time failures (missing binary, scan errors, unreadable
+// output) should stop `tuist generate` rather than silently produce a
+// pbxproj with no `.generated(…)` entries. An empty outputs list would
+// surface later as a hard-to-diagnose build failure ("cannot find
+// initializer…"), far from the root cause.
+func fatal(_ message: String) -> Never {
+	FileHandle.standardError.write(Data("error: \(message)\n".utf8))
+	exit(1)
+}
+
 enum SafeDIOutputDiscovery {
 	static func outputs(forModuleAt moduleDirectory: URL) -> [Path] {
 		guard let tool = resolvedSafeDIToolURL() else {
-			// `tuist install` hasn't run yet (or is mid-resolve).
-			// Surface it rather than silently returning an empty list
-			// that would cause a hard-to-diagnose build failure.
-			FileHandle.standardError.write(Data(#"""
-			warning: SafeDITool binary not found under Tuist/.build/artifacts/…
-			  Run `tuist install` before `tuist generate`. The generated
-			  SafeDI file list will be empty until then.
-
-			"""#.utf8))
-			return []
+			fatal("""
+			SafeDITool binary not found under Tuist/.build/artifacts/…
+			Run `tuist install` before `tuist generate`.
+			""")
 		}
 		let scratch = manifestDirectory.appendingPathComponent(".build/tuist-manifest-scan", isDirectory: true)
 		let moduleScratch = scratch.appendingPathComponent(moduleDirectory.lastPathComponent, isDirectory: true)
@@ -56,8 +60,14 @@ enum SafeDIOutputDiscovery {
 
 		let inputCSV = moduleScratch.appendingPathComponent("InputSwiftFiles.csv")
 		let sources = swiftSourcePaths(relativeTo: manifestDirectory, in: moduleDirectory)
-		guard !sources.isEmpty else { return [] }
-		try? sources.joined(separator: ",").write(to: inputCSV, atomically: true, encoding: .utf8)
+		guard !sources.isEmpty else {
+			fatal("No .swift sources found under \(moduleDirectory.path).")
+		}
+		do {
+			try sources.joined(separator: ",").write(to: inputCSV, atomically: true, encoding: .utf8)
+		} catch {
+			fatal("Failed to write SafeDI input CSV at \(inputCSV.path): \(error).")
+		}
 
 		let manifestFile = moduleScratch.appendingPathComponent("SafeDIManifest.json")
 
@@ -71,13 +81,30 @@ enum SafeDIOutputDiscovery {
 			"--output-directory", moduleScratch.path,
 			"--manifest-file", manifestFile.path,
 		]
-		try? process.run()
+		// Capture stderr so a scan failure surfaces in the `tuist generate`
+		// log rather than silently falling through to an empty output list.
+		let stderrPipe = Pipe()
+		process.standardError = stderrPipe
+		do {
+			try process.run()
+		} catch {
+			fatal("Failed to launch SafeDITool scan: \(error).")
+		}
 		process.waitUntilExit()
-		guard process.terminationStatus == 0,
-		      let data = try? Data(contentsOf: manifestFile),
+		guard process.terminationStatus == 0 else {
+			let stderr = String(
+				data: stderrPipe.fileHandleForReading.readDataToEndOfFile(),
+				encoding: .utf8,
+			) ?? "<unavailable>"
+			fatal("""
+			SafeDITool scan exited \(process.terminationStatus):
+			\(stderr)
+			""")
+		}
+		guard let data = try? Data(contentsOf: manifestFile),
 		      let manifest = try? JSONDecoder().decode(ScanManifest.self, from: data)
 		else {
-			return []
+			fatal("SafeDITool scan succeeded but its manifest at \(manifestFile.path) is unreadable.")
 		}
 
 		// The outputFilePaths in the manifest point into `moduleScratch`
