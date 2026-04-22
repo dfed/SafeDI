@@ -152,6 +152,30 @@ jobs:
       - name: Build Project Integration
         run: pushd Examples/ExampleMultiProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration; popd
 
+  spm-tuist-integration:
+    name: Build Tuist Integration on Xcode 26
+    runs-on: macos-26
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+      - name: Install Tuist
+        run: brew install --formula tuist
+      - name: Build SafeDITool
+        # Pre-build the tool so the first Xcode build doesn't pay the
+        # compile cost inside its script phase — matches what a developer
+        # is instructed to do in Examples/ExampleTuistIntegration/README.md.
+        run: xcrun swift build -c release --product SafeDITool
+      - name: Tuist Install
+        run: pushd Examples/ExampleTuistIntegration && tuist install && popd
+      - name: Tuist Generate
+        run: pushd Examples/ExampleTuistIntegration && tuist generate --no-open && popd
+      - name: Build Tuist Integration
+        run: pushd Examples/ExampleTuistIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -workspace ExampleTuistIntegration.xcworkspace -scheme ExampleTuistIntegration; popd
+
   spm:
     name: Build and Test on Xcode 26
     runs-on: macos-26

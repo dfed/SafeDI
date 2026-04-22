@@ -1,6 +1,7 @@
 # file options
 
 --exclude Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDI.swift
+--exclude Examples/ExampleTuistIntegration/ExampleTuistIntegration/Generated
 
 # format options
 --indent tab
