@@ -30,6 +30,12 @@ public struct NotesApp: App, Instantiable {
 
 @Instantiable
 public struct LoggedInView: View, Instantiable {
+    public init(user: User, userService: UserService, noteStorage: NoteStorage) {
+        self.user = user
+        self.userService = userService
+        self.noteStorage = noteStorage
+    }
+
     public var body: some View { /* ... */ }
 
     // `user` is a runtime value forwarded in at this boundary.
@@ -38,6 +44,21 @@ public struct LoggedInView: View, Instantiable {
     @Received private let userService: UserService
     // `noteStorage` is created by `LoggedInView` and lives for its lifetime.
     @Instantiated private let noteStorage: NoteStorage
+}
+
+@Instantiable
+public final class NoteStorage: Instantiable {
+    public init(user: User, stringStorage: StringStorage, defaultNote: String = "") {
+        self.user = user
+        self.stringStorage = stringStorage
+        self.defaultNote = defaultNote
+    }
+
+    // `user` and `stringStorage` are received from ancestors in the tree.
+    @Received private let user: User
+    @Received private let stringStorage: StringStorage
+
+    private let defaultNote: String
 }
 ```
 
