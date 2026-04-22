@@ -19,10 +19,12 @@ This example is designed to be lifted as a template:
   hardcoded Swift file lists** — `find` (in the script) and
   `FileListGlob` (in the manifest) enumerate sources automatically.
 - The set of generated output filenames is **not hardcoded either** —
-  the script delegates to `SafeDITool scan` and uses a single
-  timestamp marker as its declared build-phase output, so new
-  `@Instantiable(isRoot:)` / `@Instantiable(generateMock: true)`
-  declarations produce new files without any manifest edits.
+  `SafeDITool scan` decides them from the `@Instantiable` declarations
+  it finds. `Project.swift` enumerates the populated `Generated/`
+  directory at `tuist generate` time to compute the script phase's
+  `outputPaths`, so new `@Instantiable(isRoot:)` /
+  `@Instantiable(generateMock: true)` declarations produce new files
+  without any manifest edits.
 - **No generated files are committed.** `Project.swift` runs the
   codegen script during `tuist generate`, which populates
   `ExampleTuistIntegration/Generated/` before Tuist evaluates the
@@ -163,10 +165,11 @@ committed source directories.
 ### Script-phase incremental builds
 
 Script `inputPaths` are glob patterns that Tuist expands at
-`tuist generate` time into literal file lists; the script declares a
-single timestamp output file (`$(DERIVED_FILE_DIR)/safedi-generated.marker`)
-for Xcode's dep-analysis. The generated `.swift` files themselves flow
-into the compile phase via the target's source glob.
+`tuist generate` time into literal file lists. `outputPaths` for the
+host target enumerate the concrete generated `.swift` files — Project.swift
+reads them off disk after running the codegen, so Xcode's dep-analysis
+tracks each output individually. The generated files flow into the
+compile phase via the target's source glob.
 
 Adding or removing a Swift source file (whether a normal source or a
 new `@Instantiable` type that triggers new generated output) is a

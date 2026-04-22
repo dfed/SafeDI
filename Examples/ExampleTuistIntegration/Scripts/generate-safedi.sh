@@ -193,11 +193,6 @@ host)
 		--swift-manifest "$manifest_file" \
 		--dependent-module-info-file-path "$dependent_csv"
 
-	# Single-file dep-analysis marker — the generated `.swift` files
-	# are picked up by Tuist's source glob. `outputPaths` in
-	# Project.swift points at this one path.
-	marker="$scratch_dir/safedi-generated.marker"
-	date +%s >"$marker"
 	echo "Wrote generated SafeDI code into $host_output_directory"
 	;;
 esac

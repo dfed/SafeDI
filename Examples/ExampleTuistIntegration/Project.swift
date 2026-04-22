@@ -52,13 +52,20 @@ let hostSources: [FileListGlob] = [
 let subprojectSafediArtifactAsInput: FileListGlob = "$(BUILT_PRODUCTS_DIR)/SafeDI/Subproject.safedi"
 let subprojectSafediArtifactAsOutput: Path = "$(BUILT_PRODUCTS_DIR)/SafeDI/Subproject.safedi"
 
-// Single timestamp marker stands in for the generated-swift output set.
-// Xcode's dep-analysis only needs one output file to decide whether to
-// re-run the script; the actual .swift outputs are picked up by the
-// host target's source glob. This lets the manifest stay agnostic of
-// which concrete files SafeDITool will emit — the tool decides based on
-// what @Instantiable(isRoot:)/generateMock:true declarations it finds.
-let hostGeneratedMarker: Path = "$(DERIVED_FILE_DIR)/safedi-generated.marker"
+// Enumerate the host's generated output files on disk — the codegen above
+// populated `Generated/` so every file SafeDITool will emit exists now.
+// Feeding these as the host script phase's `outputPaths` gives Xcode
+// precise per-file dep-analysis without hardcoding filenames in the
+// manifest.
+let hostGeneratedDirectory = manifestDirectory
+	.appendingPathComponent("ExampleTuistIntegration/Generated")
+let hostGeneratedOutputs: [Path] = (try? FileManager.default
+	.contentsOfDirectory(at: hostGeneratedDirectory, includingPropertiesForKeys: nil))?
+	.filter { $0.pathExtension == "swift" }
+	.map(\.lastPathComponent)
+	.sorted()
+	.map { Path("$(SRCROOT)/ExampleTuistIntegration/Generated/\($0)") }
+	?? []
 
 let project = Project(
 	name: "ExampleTuistIntegration",
@@ -114,7 +121,7 @@ let project = Project(
 					"""#,
 					name: "Generate SafeDI",
 					inputPaths: hostSources + [subprojectSafediArtifactAsInput],
-					outputPaths: [hostGeneratedMarker],
+					outputPaths: hostGeneratedOutputs,
 					basedOnDependencyAnalysis: true,
 				),
 			],
