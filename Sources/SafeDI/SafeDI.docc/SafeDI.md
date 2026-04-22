@@ -9,7 +9,8 @@ SafeDI reads your code, validates your dependencies, and generates production an
 Opting a type into the SafeDI dependency tree is simple: add `@Instantiable` to your type declaration, and decorate each dependency with a macro that indicates its lifecycle. Here is what a notes app might look like in SafeDI:
 
 ```swift
-// `NotesApp` is the root of the dependency graph. SafeDI generates its public `init()`.
+// `NotesApp` is the root of the dependency graph.
+// SafeDI generates its public `init()`, so you do not write one yourself.
 @Instantiable(isRoot: true) @main
 public struct NotesApp: App, Instantiable {
     public var body: some Scene {
@@ -30,11 +31,7 @@ public struct NotesApp: App, Instantiable {
 
 @Instantiable
 public struct LoggedInView: View, Instantiable {
-    public init(user: User, userService: UserService, noteStorage: NoteStorage) {
-        self.user = user
-        self.userService = userService
-        self.noteStorage = noteStorage
-    }
+    public init(user: User, userService: UserService, noteStorage: NoteStorage) { /* ... */ }
 
     public var body: some View { /* ... */ }
 
@@ -48,17 +45,11 @@ public struct LoggedInView: View, Instantiable {
 
 @Instantiable
 public final class NoteStorage: Instantiable {
-    public init(user: User, stringStorage: StringStorage, defaultNote: String = "") {
-        self.user = user
-        self.stringStorage = stringStorage
-        self.defaultNote = defaultNote
-    }
+    public init(user: User, stringStorage: StringStorage, defaultNote: String = "") { /* ... */ }
 
     // `user` and `stringStorage` are received from ancestors in the tree.
     @Received private let user: User
     @Received private let stringStorage: StringStorage
-
-    private let defaultNote: String
 }
 ```
 
