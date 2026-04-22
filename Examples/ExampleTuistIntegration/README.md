@@ -33,26 +33,29 @@ input/output paths.
 | Tool | Notes |
 |------|-------|
 | macOS with Xcode 26 | Matches the rest of SafeDI's CI. |
-| [Tuist](https://tuist.dev) 4.x | Recommended install via [mise](https://mise.jdx.dev) (`mise install tuist@latest`) or Homebrew (`brew install --formula tuist`). |
+| [Tuist](https://tuist.dev) 4.x | Install via [mise](https://mise.jdx.dev). Tuist no longer publishes a Homebrew formula, and the old `tuist.dev/install.sh` shortcut now routes through mise. |
 | Swift 6.3 toolchain | Ships with Xcode 26; used to build `SafeDITool` from source. |
 
 ### Installing Tuist
 
-Pick one:
+This example is pinned against Tuist 4.x. The reproducible install path
+(matching what CI runs) is via [mise](https://mise.jdx.dev):
 
 ```bash
-# mise (recommended for project-pinned versions)
+# Install mise if you don't have it.
+curl -fsSL https://mise.run | sh
+
+# Install Tuist.
 mise install tuist@latest
-mise use tuist@latest
+mise use -g tuist@latest
 
-# Homebrew
-brew install --formula tuist
-
-# Curl installer
-curl -Ls https://tuist.dev/install.sh | bash
+# Verify.
+tuist version
 ```
 
-Verify with `tuist version`.
+Alternatively, if you already manage developer tooling with `asdf`,
+`mise` understands asdf plugin configs, so `tuist@latest` resolves the
+same.
 
 ## First-time setup
 
