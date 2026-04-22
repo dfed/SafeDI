@@ -46,7 +46,7 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Swift file paths scoped to the current target for mock generation. Only used when --output-directory is provided without --swift-manifest.") var mockScopedFiles: [String] = []
 
-	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path instead of emitting the per-root / per-mock files the manifest describes. Useful for build systems that need rule outputs statically declared at analysis time (Bazel, Buck2). Requires 'swift-sources-file-path' or '--include'. May be combined with '--module-info-output'. Ignores per-entry 'outputFilePath' values in a '--swift-manifest' or inline-scan manifest — the manifest still drives discovery, just not placement.") var combinedOutput: String?
+	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path instead of emitting the per-root / per-mock files a manifest describes. Useful for build systems that need rule outputs statically declared at analysis time (Bazel, Buck2). Requires 'swift-sources-file-path' or '--include'. May be combined with '--swift-manifest' (manifest drives discovery; combined file gets written) or '--module-info-output'. Cannot be combined with '--output-directory' — use one or the other.") var combinedOutput: String?
 
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
 
@@ -55,6 +55,14 @@ struct Generate: AsyncParsableCommand {
 	func run() async throws {
 		if swiftSourcesFilePath == nil, include.isEmpty {
 			throw ValidationError("Must provide 'swift-sources-file-path' or '--include'.")
+		}
+
+		// --combined-output is the "one emitted file" mode; --output-directory
+		// is the "one emitted file per root/mock" mode. Mixing them is
+		// ambiguous and would leave scan's scratch JSON in --output-directory
+		// without emitting any of the Swift files it listed there. Fail loud.
+		if combinedOutput != nil, outputDirectory != nil {
+			throw ValidationError("--combined-output cannot be combined with --output-directory. Use --combined-output alone (optionally with --swift-manifest) to emit a single file, or --output-directory to emit per-file outputs.")
 		}
 
 		// When --combined-output is the only emission flag, synthesize a

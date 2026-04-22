@@ -857,7 +857,7 @@ SafeDITool generate Module.csv \
     --dependent-module-info-file-path DependentModuleInfo.csv
 ```
 
-`--combined-output` may be combined with `--module-info-output` (for a module that publishes both a combined Swift file and a `.safedi` artifact). It ignores per-entry `outputFilePath` values in a `--swift-manifest` or inline-scan manifest — the manifest still drives discovery, just not placement.
+`--combined-output` may be combined with `--swift-manifest` (the manifest drives discovery; the combined file gets written) and with `--module-info-output` (for a module that publishes both a combined Swift file and a `.safedi` artifact). It cannot be combined with `--output-directory` — they're two different emission modes (one file vs. per-root/per-mock files); `SafeDITool` rejects the combination.
 
 ## Introspecting a SafeDI tree
 

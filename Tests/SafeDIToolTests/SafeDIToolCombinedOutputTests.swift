@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import ArgumentParser
 import Foundation
 import SafeDICore
 import Testing
@@ -195,6 +196,21 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		let combined = try #require(output.combinedOutput)
 		#expect(combined.contains("#error"), "Expected #error stub: \(combined)")
 		#expect(combined.contains("Compiler errors prevented the generation of the dependency tree"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_combinedOutput_rejectsCombinationWithOutputDirectory() async throws {
+		let tool = try Generate.parse([
+			"/tmp/nonexistent-sources.csv",
+			"--combined-output", "/tmp/combined.swift",
+			"--output-directory", "/tmp/out-dir",
+		])
+		await assertThrowsError(
+			containing: "--combined-output cannot be combined with --output-directory",
+		) {
+			try await tool.run()
+		}
 	}
 
 	@Test
