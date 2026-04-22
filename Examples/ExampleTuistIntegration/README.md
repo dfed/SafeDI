@@ -64,24 +64,28 @@ From this directory (`Examples/ExampleTuistIntegration`):
 #    first Xcode build log.
 (cd ../.. && swift build -c release --product SafeDITool)
 
-# 2. Resolve Tuist's SPM dependencies (pulls SafeDI from the local path).
-tuist install
-
-# 3. Generate the Xcode project and workspace.
+# 2. Generate the Xcode project and workspace.
 tuist generate
 ```
 
 `tuist generate` opens the generated workspace in Xcode. Build and run the
 `ExampleTuistIntegration` scheme.
 
-To regenerate the project after editing `Project.swift` or
-`Tuist/Package.swift`, re-run `tuist install` (only if dependencies changed)
-and `tuist generate`.
+To regenerate the project after editing `Project.swift`, re-run
+`tuist generate`.
+
+SafeDI is consumed as a local SPM package via `Project.packages` rather than
+through `Tuist/Package.swift`. Tuist's SPM integration hit wall with SafeDI's
+trait-gated internal targets (`SafeDICore`, `SafeDIMacros`, `SafeDITool`,
+`SafeDIToolBinary`); going through Xcode's native SPM client sidesteps that.
 
 ## How the build wiring works
 
 Two pre-compile script phases, one per target, both invoking
-`Scripts/generate-safedi.sh`:
+`Scripts/generate-safedi.sh`. The script invokes `SafeDITool scan` followed
+by `SafeDITool generate` — the same two-step flow the `SafeDIGenerator` SPM
+plugin uses — so manifest and cache files land in `$DERIVED_FILE_DIR` rather
+than inside committed source directories.
 
 ### `Subproject` target
 
@@ -99,7 +103,8 @@ Two pre-compile script phases, one per target, both invoking
 1. Xcode's target dependency graph guarantees `Subproject` builds first, so
    `Subproject.safedi` exists before this script runs.
 2. Runs `SafeDITool generate` with `--dependent-module-info-file-path` pointed
-   at a CSV containing `Subproject.safedi`.
+   at a CSV containing `Subproject.safedi`. The host never re-parses
+   subproject sources.
 3. Emits four Swift files into `ExampleTuistIntegration/Generated/`:
    - `NotesApp+SafeDI.swift` — dependency tree wiring for the root.
    - `LoggedInView+SafeDIMock.swift` — mock method for previews.
@@ -120,6 +125,6 @@ under `Generated/`.
 ## CI
 
 A `spm-tuist-integration` job in `.github/workflows/ci.yml` performs the
-equivalent of the first-time setup steps above: it installs Tuist, builds
-`SafeDITool`, runs `tuist install` and `tuist generate`, then builds the
+equivalent of the first-time setup steps above: it installs Tuist via
+Homebrew, builds `SafeDITool`, runs `tuist generate`, then builds the
 generated workspace with `xcodebuild`.

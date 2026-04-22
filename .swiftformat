@@ -2,6 +2,7 @@
 
 --exclude Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDI.swift
 --exclude Examples/ExampleTuistIntegration/ExampleTuistIntegration/Generated
+--exclude Examples/ExampleTuistIntegration/Derived
 
 # format options
 --indent tab

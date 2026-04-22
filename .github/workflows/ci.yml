@@ -169,8 +169,6 @@ jobs:
         # compile cost inside its script phase — matches what a developer
         # is instructed to do in Examples/ExampleTuistIntegration/README.md.
         run: xcrun swift build -c release --product SafeDITool
-      - name: Tuist Install
-        run: pushd Examples/ExampleTuistIntegration && tuist install && popd
       - name: Tuist Generate
         run: pushd Examples/ExampleTuistIntegration && tuist generate --no-open && popd
       - name: Build Tuist Integration
