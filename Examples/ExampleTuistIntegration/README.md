@@ -11,6 +11,33 @@ scanner at the subproject's sources.
 The source code of both targets (types, mocks, previews) is byte-for-byte the
 same as `ExampleMultiProjectIntegration`; only the project structure differs.
 
+## Copying this into your own project
+
+This example is designed to be lifted as a template:
+
+- `Project.swift` and `Scripts/generate-safedi.sh` contain **no
+  hardcoded Swift file lists** — `find` (in the script) and
+  `FileListGlob` (in the manifest) enumerate sources automatically.
+- The set of generated output filenames is **not hardcoded either** —
+  the script delegates to `SafeDITool scan` and uses a single
+  timestamp marker as its declared build-phase output, so new
+  `@Instantiable(isRoot:)` / `@Instantiable(generateMock: true)`
+  declarations produce new files without any manifest edits. (The
+  committed stubs under `Generated/` just exist so Tuist's source glob
+  resolves on a fresh checkout; the script overwrites them on every
+  build.)
+- SafeDITool is fetched as the published artifact bundle via SPM's
+  `.binaryTarget(url:checksum:)` — there's no "build from source" step
+  for consumers.
+
+When cloning into a new project the edits you're expected to make are:
+
+| Where | What |
+|---|---|
+| `Project.swift` | target names, bundle IDs, deployment targets, module directory names |
+| `Scripts/generate-safedi.sh` | the two `case` labels (`subproject` / `host`) if your module names differ, or add more branches for additional targets |
+| `Tuist/Package.swift` + `Project.swift` | bump SafeDI version together |
+
 ## Why not use the `SafeDIGenerator` SPM plugin?
 
 SafeDI's build-tool plugin collects every `.swift` file from the target plus
@@ -33,8 +60,8 @@ input/output paths.
 | Tool | Notes |
 |------|-------|
 | macOS with Xcode 26 | Matches the rest of SafeDI's CI. |
-| [Tuist](https://tuist.dev) 4.x | Install via [mise](https://mise.jdx.dev). Tuist no longer publishes a Homebrew formula, and the old `tuist.dev/install.sh` shortcut now routes through mise. |
-| Swift 6.3 toolchain | Ships with Xcode 26; used to build `SafeDITool` from source. |
+| [Tuist](https://tuist.dev) 4.x | Install via [mise](https://mise.jdx.dev). Tuist no longer publishes a Homebrew formula. |
+| Swift 6.3 toolchain | Ships with Xcode 26. |
 
 ### Installing Tuist
 
@@ -63,10 +90,10 @@ the same time so CI and local setup stay aligned.
 From this directory (`Examples/ExampleTuistIntegration`):
 
 ```bash
-# 1. Build SafeDITool from source. The build-phase script does this
-#    automatically on first build, but doing it up front gives a cleaner
-#    first Xcode build log.
-(cd ../.. && swift build -c release --product SafeDITool)
+# 1. Resolve SPM dependencies: SafeDI library (for @Instantiable et al.)
+#    and the SafeDITool binary (via Tuist/Package.swift's binary target).
+#    This downloads the published SafeDITool artifact bundle.
+tuist install
 
 # 2. Generate the Xcode project and workspace.
 tuist generate
@@ -76,20 +103,22 @@ tuist generate
 `ExampleTuistIntegration` scheme.
 
 To regenerate the project after editing `Project.swift`, re-run
-`tuist generate`.
+`tuist generate`. Re-run `tuist install` whenever you bump SafeDI.
 
-SafeDI is consumed as a local SPM package via `Project.packages` rather than
-through `Tuist/Package.swift`. Tuist's SPM integration hit wall with SafeDI's
-trait-gated internal targets (`SafeDICore`, `SafeDIMacros`, `SafeDITool`,
-`SafeDIToolBinary`); going through Xcode's native SPM client sidesteps that.
+SafeDI's runtime library is consumed via `Project.packages` (Xcode's
+built-in SPM client), while the SafeDITool CLI is consumed via
+`Tuist/Package.swift` (Tuist's SPM integration). Both reference the
+same SafeDI release — split because Tuist's SPM integration can't
+currently resolve SafeDI's trait-gated internal targets through
+`.external(name:)`, so the runtime library has to go through Xcode.
 
 ## How the build wiring works
 
 Two pre-compile script phases, one per target, both invoking
-`Scripts/generate-safedi.sh`. The script invokes `SafeDITool scan` followed
-by `SafeDITool generate` — the same two-step flow the `SafeDIGenerator` SPM
-plugin uses — so manifest and cache files land in `$DERIVED_FILE_DIR` rather
-than inside committed source directories.
+`Scripts/generate-safedi.sh`. The script invokes `SafeDITool scan`
+followed by `SafeDITool generate` — the same two-step flow the
+`SafeDIGenerator` SPM plugin uses — so manifest and cache files land
+in `$DERIVED_FILE_DIR` rather than inside committed source directories.
 
 ### `Subproject` target
 
@@ -109,26 +138,25 @@ than inside committed source directories.
 2. Runs `SafeDITool generate` with `--dependent-module-info-file-path` pointed
    at a CSV containing `Subproject.safedi`. The host never re-parses
    subproject sources.
-3. Emits four Swift files into `ExampleTuistIntegration/Generated/`:
-   - `NotesApp+SafeDI.swift` — dependency tree wiring for the root.
-   - `LoggedInView+SafeDIMock.swift` — mock method for previews.
-   - `NameEntryView+SafeDIMock.swift` — mock method for previews.
-   - `SafeDIMockConfiguration.swift` — shared `SafeDIOverrides` struct.
-
-The `Generated/*.swift` files are committed as empty stubs so Tuist's source
-glob resolves them at project-generation time. Each build overwrites them.
+3. Emits the root's `+SafeDI.swift`, the mocks' `+SafeDIMock.swift`, and the
+   shared `SafeDIMockConfiguration.swift` into `ExampleTuistIntegration/Generated/`.
+   The specific filenames follow SafeDI's
+   [output-naming rules](../../Sources/SafeDICore/Utilities/OutputFileNaming.swift)
+   — no manifest edit required when adding new roots or mocks.
 
 ### Script-phase incremental builds
 
-The two script phases declare their `inputPaths` and `outputPaths` in
-`Project.swift` explicitly (Xcode's script phases don't support globs here).
-Adding, removing, or renaming a type means updating those lists in
-`Project.swift` and — for a generated output file — committing a new stub
-under `Generated/`.
+Script `inputPaths` are glob patterns that Tuist expands at
+`tuist generate` time into literal file lists, and the script declares a
+single timestamp output file (`$(DERIVED_FILE_DIR)/safedi-generated.marker`)
+for Xcode's dep-analysis. Adding or removing a `.swift` source is a
+`tuist generate` away from being picked up by the manifest; adding a new
+`@Instantiable` type just requires committing a matching stub under
+`Generated/` alongside the new source file so Tuist's source glob resolves it.
 
 ## CI
 
 A `spm-tuist-integration` job in `.github/workflows/ci.yml` performs the
 equivalent of the first-time setup steps above: it installs Tuist via
-`mise` (pinned to `4.183.0`), builds `SafeDITool`, runs `tuist generate`,
+`mise` (pinned to `4.183.0`), runs `tuist install` and `tuist generate`,
 then builds the generated workspace with `xcodebuild`.

@@ -1,51 +1,52 @@
 import ProjectDescription
 
-// Absolute-ish input/output paths keep Xcode's incremental-build tracking
-// precise. Globs aren't supported in script input/output path lists.
+// Pin the SafeDI runtime library to the same release Tuist/Package.swift
+// pins the SafeDITool CLI binary to. When bumping SafeDI, update both:
+//   - safediVersion here
+//   - url + checksum in Tuist/Package.swift
+let safediVersion = "2.0.0-beta-5"
+
+// Tuist expands glob patterns in `sources` and script `inputPaths` at
+// `tuist generate` time, baking a literal file list into the .xcodeproj.
+// That means adding or removing a `.swift` source is a `tuist generate`
+// away; nothing in this manifest or in `Scripts/generate-safedi.sh`
+// needs a hand edit.
+//
+// The host-target glob excludes `Generated/**` because those files are
+// the script's outputs. Feeding outputs back as inputs would make Xcode
+// re-run the script on every build.
 let subprojectSources: [FileListGlob] = [
-	"$(SRCROOT)/Subproject/SafeDIConfiguration.swift",
-	"$(SRCROOT)/Subproject/User.swift",
-	"$(SRCROOT)/Subproject/InMemoryStorage.swift",
-	"$(SRCROOT)/Subproject/NoteStorage.swift",
-	"$(SRCROOT)/Subproject/StringStorage.swift",
-	"$(SRCROOT)/Subproject/UserService.swift",
+	"Subproject/**/*.swift",
 ]
 
 let hostSources: [FileListGlob] = [
-	"$(SRCROOT)/ExampleTuistIntegration/SafeDIConfiguration.swift",
-	"$(SRCROOT)/ExampleTuistIntegration/Views/LoggedInView.swift",
-	"$(SRCROOT)/ExampleTuistIntegration/Views/NameEntryView.swift",
-	"$(SRCROOT)/ExampleTuistIntegration/Views/NotesApp.swift",
+	.glob(
+		"ExampleTuistIntegration/**/*.swift",
+		excluding: ["ExampleTuistIntegration/Generated/**"],
+	),
 ]
 
 // The Subproject emits a `.safedi` artifact that the host module reads to
 // build its dependency tree. Written under BUILT_PRODUCTS_DIR so the path
-// is shared across targets of a given configuration. Same location used
-// as an output by the producer target and an input by the consumer.
+// is shared across targets of a given configuration.
 let subprojectSafediArtifactAsInput: FileListGlob = "$(BUILT_PRODUCTS_DIR)/SafeDI/Subproject.safedi"
 let subprojectSafediArtifactAsOutput: Path = "$(BUILT_PRODUCTS_DIR)/SafeDI/Subproject.safedi"
 
-// The host module's generated Swift is written under a `Generated/`
-// directory that Tuist's source glob picks up. Stub files are committed so
-// the glob resolves on a fresh `tuist generate`; the script overwrites them
-// on every build.
-let hostGeneratedFiles: [Path] = [
-	"$(SRCROOT)/ExampleTuistIntegration/Generated/NotesApp+SafeDI.swift",
-	"$(SRCROOT)/ExampleTuistIntegration/Generated/LoggedInView+SafeDIMock.swift",
-	"$(SRCROOT)/ExampleTuistIntegration/Generated/NameEntryView+SafeDIMock.swift",
-	"$(SRCROOT)/ExampleTuistIntegration/Generated/SafeDIMockConfiguration.swift",
-]
+// Single timestamp marker stands in for the generated-swift output set.
+// Xcode's dep-analysis only needs one output file to decide whether to
+// re-run the script; the actual .swift outputs are picked up by the
+// host target's source glob. This lets the manifest stay agnostic of
+// which concrete files SafeDITool will emit — the tool decides based on
+// what @Instantiable(isRoot:)/generateMock:true declarations it finds.
+let hostGeneratedMarker: Path = "$(DERIVED_FILE_DIR)/safedi-generated.marker"
 
 let project = Project(
 	name: "ExampleTuistIntegration",
-	// SafeDI is referenced as a raw local SPM package rather than via
-	// `Tuist/Package.swift` — Tuist's SPM integration couldn't resolve
-	// SafeDI's traits-gated internal targets (SafeDICore/SafeDIMacros/
-	// SafeDITool/SafeDIToolBinary). Using `Project.packages` hands the
-	// package directly to Xcode's built-in SPM client, which handles
-	// traits correctly.
 	packages: [
-		.package(path: "../.."),
+		.package(
+			url: "https://github.com/dfed/SafeDI.git",
+			.upToNextMajor(from: "\(safediVersion)"),
+		),
 	],
 	targets: [
 		.target(
@@ -96,7 +97,7 @@ let project = Project(
 					"""#,
 					name: "Generate SafeDI",
 					inputPaths: hostSources + [subprojectSafediArtifactAsInput],
-					outputPaths: hostGeneratedFiles,
+					outputPaths: [hostGeneratedMarker],
 					basedOnDependencyAnalysis: true,
 				),
 			],

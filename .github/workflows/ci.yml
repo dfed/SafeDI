@@ -178,12 +178,17 @@ jobs:
           "$HOME/.local/bin/mise" install -y tuist@4.183.0
           "$HOME/.local/bin/mise" use -g tuist@4.183.0
           "$HOME/.local/share/mise/shims/tuist" version
-      - name: Build SafeDITool
-        # Pre-build the tool so the first Xcode build doesn't pay the
-        # compile cost inside its script phase — matches what a developer
-        # is instructed to do in Examples/ExampleTuistIntegration/README.md.
-        run: xcrun swift build -c release --product SafeDITool
+      - name: Tuist Install
+        # `tuist install` resolves Tuist/Package.swift, which uses
+        # `.binaryTarget(url:checksum:)` to download the published
+        # SafeDITool artifact bundle. The build-phase script reads
+        # the unpacked binary from Tuist/.build/artifacts/...
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pushd Examples/ExampleTuistIntegration && tuist install && popd
       - name: Tuist Generate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pushd Examples/ExampleTuistIntegration && tuist generate --no-open && popd
       - name: Build Tuist Integration
         run: pushd Examples/ExampleTuistIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -workspace ExampleTuistIntegration.xcworkspace -scheme ExampleTuistIntegration; popd
