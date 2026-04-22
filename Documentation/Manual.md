@@ -623,6 +623,14 @@ Your user-defined `mock()` method must be `public` (or `open`) and must accept p
 
 ### Overriding dependencies
 
+It can be helpful to think of a generated `mock()` as having three buckets:
+
+1. Flat `mock()` parameters for values the caller owns directly at the root.
+2. The `safeDIOverrides` parameter, whose `SafeDIOverrides` value lets you customize values that SafeDI surfaces through the generated dependency tree.
+3. Nested `SafeDIMockConfiguration` values inside `SafeDIOverrides` when a child has its own subtree or default-valued construction inputs.
+
+In practice, that means values that belong directly to the mocked root stay as flat parameters, while values that customize the generated dependency tree flow through `safeDIOverrides`.
+
 When a type has `@Instantiated` dependencies, the generated `mock()` accepts a `safeDIOverrides` argument that lets you override any dependency in the tree. Each entry on `SafeDIOverrides` is either a closure whose parameters match the resolved values of that dependency’s own inputs, or a nested `SafeDIMockConfiguration` struct when the dependency has its own `@Instantiated` subtree or default-valued init parameters.
 
 Closure-shaped entries apply when the dependency has nothing further to configure. Pass any closure whose parameters match the dependency's resolved inputs — a literal, or an `init` reference when its signature already matches:
@@ -658,6 +666,20 @@ Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by defau
 
 A type generates its own `SafeDIOverrides` struct when it has `@Instantiated` dependencies or `@Received(onlyIfAvailable: true)` dependencies. A type whose only dependencies are required `@Received` or `@Forwarded` uses flat parameters on its `mock()` method.
 
+Here is all three buckets together in one call:
+
+```swift
+LoggedInView.mock(
+    user: User(name: "dfed"),
+    safeDIOverrides: .init(
+        userService: StubUserService.init,
+        noteStorage: .init(defaultNote: "dfed says hello")
+    )
+)
+```
+
+In that example, `user` is a flat `mock()` parameter, `userService` is overridden directly on `SafeDIOverrides`, and `noteStorage` uses a nested `SafeDIMockConfiguration` because it has its own configurable construction input.
+
 ### Mock visibility
 
 Generated mocks have `internal` visibility. They are accessible within the module where they are generated but not from other modules. This avoids cross-module extension conflicts when multiple modules generate mocks for the same types.
@@ -666,7 +688,13 @@ To use a mock from another module in your tests, see [Cross-module mock generati
 
 ### Dependency kinds in the generated mock
 
-Each dependency kind surfaces in a predictable place on `mock()` and `SafeDIOverrides`:
+The three buckets above map cleanly onto the generated API surface:
+
+- Flat `mock()` parameters: values the caller supplies directly to the root.
+- `SafeDIOverrides`: root-level access to the generated dependency subtree.
+- `SafeDIMockConfiguration`: per-child customization when a child has its own subtree or default-valued construction inputs.
+
+The table below shows where each dependency kind lands:
 
 | Dependency kind | Shape in the mock | Default |
 | --- | --- | --- |
