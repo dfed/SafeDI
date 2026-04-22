@@ -28,9 +28,11 @@ This example is designed to be lifted as a template:
   `ExampleTuistIntegration/Generated/` before Tuist evaluates the
   source glob. The same script re-runs as an Xcode build phase on
   every build. `Generated/` is `.gitignore`d.
-- SafeDITool is fetched as the published artifact bundle via SPM's
-  `.binaryTarget(url:checksum:)` — there's no "build from source" step
-  for consumers.
+- SafeDITool is fetched as the published artifact bundle. SafeDI's
+  own Package.swift declares the `.binaryTarget(url:checksum:)` for
+  its `prebuilt` trait, so `tuist install` pulls the bundle as a side
+  effect of resolving SafeDI — nothing extra is declared here, no
+  "build from source" step for consumers.
 
 When cloning into a new project the edits you're expected to make are:
 
@@ -116,11 +118,23 @@ pin, one dependency graph.
 
 ## How the build wiring works
 
-Two pre-compile script phases, one per target, both invoking
-`Scripts/generate-safedi.sh`. The script invokes `SafeDITool scan`
-followed by `SafeDITool generate` — the same two-step flow the
-`SafeDIGenerator` SPM plugin uses — so manifest and cache files land
-in `$DERIVED_FILE_DIR` rather than inside committed source directories.
+`Scripts/generate-safedi.sh` is invoked in two places (both use the
+same code path — the script takes a `subproject` / `host` / `all`
+argument that decides which module(s) to generate for):
+
+- As two pre-compile Xcode script phases (one per target), set up by
+  Tuist, so edits during an iteration cycle are picked up on the next
+  `xcodebuild` without needing `tuist generate`.
+- During `tuist generate` itself — `Project.swift` shells out before
+  evaluating its source globs, so `Generated/` (which is `.gitignore`d)
+  exists on a fresh checkout by the time Tuist bakes a source list
+  into the pbxproj.
+
+Each script run invokes `SafeDITool scan` followed by `SafeDITool
+generate` — the same two-step flow the `SafeDIGenerator` SPM plugin
+uses — so manifest and cache files land in `$DERIVED_FILE_DIR` (or a
+`.build/` scratch dir when running standalone) rather than inside
+committed source directories.
 
 ### `Subproject` target
 
@@ -146,19 +160,7 @@ in `$DERIVED_FILE_DIR` rather than inside committed source directories.
    [output-naming rules](../../Sources/SafeDICore/Utilities/OutputFileNaming.swift)
    — no manifest edit required when adding new roots or mocks.
 
-### When each invocation of the codegen runs
-
-`Scripts/generate-safedi.sh` runs in two places:
-
-1. **At `tuist generate` time** — `Project.swift` shells out to it so
-   `Generated/` is populated before Tuist evaluates the source glob
-   baked into the pbxproj. Without this step, a fresh checkout would
-   have an empty `Generated/`, the glob would match nothing, and the
-   app would fail to link when the build tried to reference generated
-   initializers.
-2. **As an Xcode pre-compile script phase** — so edits to `@Instantiable`
-   types during an iteration cycle get picked up without needing a
-   `tuist generate` rerun.
+### Script-phase incremental builds
 
 Script `inputPaths` are glob patterns that Tuist expands at
 `tuist generate` time into literal file lists; the script declares a
