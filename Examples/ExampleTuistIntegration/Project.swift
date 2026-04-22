@@ -56,7 +56,11 @@ enum SafeDIOutputDiscovery {
 		}
 		let scratch = manifestDirectory.appendingPathComponent(".build/tuist-manifest-scan", isDirectory: true)
 		let moduleScratch = scratch.appendingPathComponent(moduleDirectory.lastPathComponent, isDirectory: true)
-		try? FileManager.default.createDirectory(at: moduleScratch, withIntermediateDirectories: true)
+		do {
+			try FileManager.default.createDirectory(at: moduleScratch, withIntermediateDirectories: true)
+		} catch {
+			fatal("Failed to create SafeDI scan scratch dir at \(moduleScratch.path): \(error).")
+		}
 
 		let inputCSV = moduleScratch.appendingPathComponent("InputSwiftFiles.csv")
 		let sources = swiftSourcePaths(relativeTo: manifestDirectory, in: moduleDirectory)
