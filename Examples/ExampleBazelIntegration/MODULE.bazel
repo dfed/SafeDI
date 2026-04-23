@@ -1,4 +1,12 @@
-"""Bazel module for the SafeDI Tuist-parity example, ARM-mac-only."""
+"""Bazel module for the SafeDI Bazel integration example.
+
+Builds an ARM-mac iOS app demonstrating the same `.safedi` cross-
+module handoff as ExampleTuistIntegration / ExampleMultiProjectIntegration.
+Depends on SafeDI via `bazel_dep` — in our own repo the
+`local_path_override` below points at the workspace root so the
+example tracks the working copy; downstream consumers would get
+SafeDI from the Bazel Central Registry instead.
+"""
 
 module(
     name = "example_bazel_integration",
@@ -8,25 +16,13 @@ module(
 bazel_dep(name = "rules_swift", version = "3.6.0")
 bazel_dep(name = "rules_apple", version = "4.3.3")
 bazel_dep(name = "apple_support", version = "1.24.2")
-bazel_dep(name = "rules_swift_package_manager", version = "1.15.0")
+bazel_dep(name = "safedi", version = "2.0.0-beta-6")
 
-# Pull the SafeDI runtime library into Bazel via
-# rules_swift_package_manager. `@swiftpkg_safedi//:SafeDI` is the
-# library + macro entry point.
-swift_deps = use_extension(
-    "@rules_swift_package_manager//:extensions.bzl",
-    "swift_deps",
+# local_path_override applies only when this module is root
+# (i.e. when you run `bazel build` from this directory). BCR
+# presubmit consumes the published source archive and ignores this,
+# resolving `safedi` from the registry instead.
+local_path_override(
+    module_name = "safedi",
+    path = "../..",
 )
-swift_deps.from_package(
-    resolved = "//:Package.resolved",
-    swift = "//:Package.swift",
-)
-use_repo(
-    swift_deps,
-    "swift_package",
-    "swiftpkg_safedi",
-)
-
-# Download the prebuilt SafeDITool CLI.
-safeditool = use_extension("//bazel:safeditool_extension.bzl", "safeditool")
-use_repo(safeditool, "safeditool_bundle")

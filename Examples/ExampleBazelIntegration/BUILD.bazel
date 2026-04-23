@@ -1,6 +1,2 @@
-# Root BUILD file — no top-level targets; each module lives in its
+# Root BUILD file — no top-level targets. Each module lives in its
 # own package (Subproject/, ExampleBazelIntegration/).
-exports_files([
-    "Package.swift",
-    "Package.resolved",
-])

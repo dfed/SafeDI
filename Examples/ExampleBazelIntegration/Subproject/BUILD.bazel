@@ -1,5 +1,5 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
-load("//bazel:safedi.bzl", "safedi_module_info")
+load("@safedi//bazel:safedi.bzl", "safedi_module_info")
 
 # `.safedi` module-info artifact published for downstream consumers.
 # Contains the subproject's @Instantiable surface in JSON so the host
@@ -15,8 +15,8 @@ swift_library(
     name = "Subproject",
     srcs = glob(["*.swift"]),
     module_name = "Subproject",
-    deps = [
-        "@swiftpkg_safedi//:SafeDI",
-    ],
     visibility = ["//ExampleBazelIntegration:__pkg__"],
+    deps = [
+        "@safedi//Sources/SafeDI",
+    ],
 )
