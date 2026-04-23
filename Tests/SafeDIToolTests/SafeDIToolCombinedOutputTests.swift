@@ -375,6 +375,74 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_manifest_writesDeclaredMockConfigurationOutput_whenMockGenerationEmptyAndAdditionalMocksNonEmpty() async throws {
+		// When a manifest declares `mockConfigurationOutputFilePath`
+		// and `additionalMocksToGenerate`, but no `mockGeneration`
+		// entries, the shared mock-configuration file must still be
+		// written — Bazel/Buck2 style build systems expect every
+		// declared output to exist, and silently dropping the write
+		// previously caused "missing declared output" build failures.
+		let crossModuleOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct CrossModuleService: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		let tempDir = FileManager.default.temporaryDirectory
+			.appendingPathComponent("SafeDIToolMockConfigOnlyTest-\(UUID().uuidString)", isDirectory: true)
+		try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+		filesToDelete.append(tempDir)
+
+		let rootURL = tempDir.appendingPathComponent("Root.swift")
+		try """
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init() {}
+		}
+		""".write(to: rootURL, atomically: true, encoding: .utf8)
+
+		let csvURL = tempDir.appendingPathComponent("sources.csv")
+		try rootURL.path.write(to: csvURL, atomically: true, encoding: .utf8)
+
+		let dependentModuleCSV = tempDir.appendingPathComponent("dependent-modules.csv")
+		try crossModuleOutput.moduleInfoOutputPath.write(to: dependentModuleCSV, atomically: true, encoding: .utf8)
+
+		let rootOutputURL = tempDir.appendingPathComponent("Root+SafeDI.swift")
+		let mockConfigURL = tempDir.appendingPathComponent("SafeDIMockConfiguration.swift")
+		let manifest = SafeDIToolManifest(
+			dependencyTreeGeneration: [
+				.init(inputFilePath: rootURL.path, outputFilePath: rootOutputURL.path),
+			],
+			mockGeneration: [],
+			mockConfigurationOutputFilePath: mockConfigURL.path,
+			additionalMocksToGenerate: ["CrossModuleService"],
+		)
+		let manifestURL = tempDir.appendingPathComponent("manifest.json")
+		try JSONEncoder().encode(manifest).write(to: manifestURL)
+
+		let tool = try Generate.parse([
+			csvURL.path,
+			"--swift-manifest", manifestURL.path,
+			"--dependent-module-info-file-path", dependentModuleCSV.path,
+		])
+		try await tool.run()
+
+		#expect(
+			FileManager.default.fileExists(atPath: mockConfigURL.path),
+			"Declared mockConfigurationOutputFilePath was not written",
+		)
+		let mockConfig = try String(contentsOf: mockConfigURL, encoding: .utf8)
+		#expect(mockConfig == emptyMockConfigurationFileOutput, "Unexpected mock configuration output: \(mockConfig)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_combinedOutput_emitsAdditionalMockFromConfiguration() async throws {
 		// `#SafeDIConfiguration(additionalMocksToGenerate:)` is how a
 		// module requests mocks for types defined in a dependent

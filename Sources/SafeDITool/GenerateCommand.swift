@@ -299,9 +299,9 @@ struct Generate: AsyncParsableCommand {
 					// Sort by source file path so the concatenated
 					// output is stable for stable inputs.
 					dependencyTreeDestinationsBySource = [:]
-					dependencyTreeSourcesInOrder = Array(Set(
+					dependencyTreeSourcesInOrder = Set(
 						module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath),
-					)).sorted()
+					).sorted()
 				}
 				for sourceFile in dependencyTreeSourcesInOrder {
 					let body = sourceFileToExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? ""
@@ -326,9 +326,9 @@ struct Generate: AsyncParsableCommand {
 						.filter { !additionalMockTypeNames.contains($0) }
 				} else {
 					// Sorted for deterministic combined output.
-					currentModuleMockSourceFiles = Array(Set(
+					currentModuleMockSourceFiles = Set(
 						module.instantiables.filter(\.generateMock).compactMap(\.sourceFilePath),
-					)).sorted()
+					).sorted()
 				}
 				let hasAnyMockGeneration = !currentModuleMockSourceFiles.isEmpty
 					|| !additionalMocksToGenerate.isEmpty
@@ -389,7 +389,7 @@ struct Generate: AsyncParsableCommand {
 						// per-type-name additional mocks sorted.
 						let currentModuleMockSourceFileSet = Set(currentModuleMockSourceFiles)
 						let typeNamesEmittedBySource = Set(
-							mockResult.generatedRoots.lazy
+							mockResult.generatedRoots
 								.filter { $0.sourceFilePath.map(currentModuleMockSourceFileSet.contains) ?? false }
 								.map(\.typeDescription.asSource),
 						)
@@ -422,8 +422,10 @@ struct Generate: AsyncParsableCommand {
 					// single header. An empty module (no roots, no
 					// mocks) still writes the header-only file so the
 					// build system's declared output is populated.
+					// Every `writes` entry starts with `fileHeader` — strip
+					// it and drop empties so the concat has one header up
+					// top and one blank line between each body.
 					let bodies: [String] = writes.compactMap { write in
-						guard write.content.hasPrefix(fileHeader) else { return write.content }
 						let body = String(write.content.dropFirst(fileHeader.count))
 						return body.isEmpty ? nil : body
 					}
