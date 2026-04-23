@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Updates the artifact bundle URL and checksum in Package.swift, and
-# the InstallSafeDITool plugin's hardcoded SafeDI version in
-# Plugins/Shared.swift. Used by the publish workflow after building the
-# artifact bundle.
+# Updates the artifact bundle URL and checksum in Package.swift, the
+# InstallSafeDITool plugin's hardcoded SafeDI version in
+# Plugins/Shared.swift, and the Bazel module version in MODULE.bazel.
+# Used by the publish workflow after building the artifact bundle.
 #
 # Usage: ./Scripts/update-version.sh <version> <checksum>
 # Example: ./Scripts/update-version.sh 2.0.0 abc123def456
@@ -37,4 +37,11 @@ echo "  Package.swift: URL and checksum updated"
 sed -i '' -E "/var safeDIVersion: String \{/,/\}/ s|\"[^\"]+\"|\"${VERSION}\"|" Plugins/Shared.swift
 
 echo "  Plugins/Shared.swift: safeDIVersion updated"
+
+# Update the Bazel module version. Scope the replacement to the
+# `module(…)` block so the top-level version line is the only match
+# (bazel_dep's `version = "X"` lines elsewhere in the file stay put).
+sed -i '' -E "/^module\(/,/^\)/ s|version = \"[^\"]*\"|version = \"${VERSION}\"|" MODULE.bazel
+
+echo "  MODULE.bazel: module version updated"
 echo "Done."
