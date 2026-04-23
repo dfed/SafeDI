@@ -285,11 +285,14 @@ struct Generate: AsyncParsableCommand {
 				let dependencyTreeDestinationsBySource: [String: URL]
 				let dependencyTreeSourcesInOrder: [String]
 				if let manifest {
-					dependencyTreeDestinationsBySource = Dictionary(
-						uniqueKeysWithValues: manifest.dependencyTreeGeneration.map {
-							($0.inputFilePath, URL(fileURLWithPath: $0.outputFilePath))
-						},
-					)
+					var destinations = [String: URL]()
+					for entry in manifest.dependencyTreeGeneration {
+						guard destinations[entry.inputFilePath] == nil else {
+							throw ValidationError("Manifest contains duplicate dependencyTreeGeneration inputFilePath: \(entry.inputFilePath)")
+						}
+						destinations[entry.inputFilePath] = URL(fileURLWithPath: entry.outputFilePath)
+					}
+					dependencyTreeDestinationsBySource = destinations
 					dependencyTreeSourcesInOrder = manifest.dependencyTreeGeneration.map(\.inputFilePath)
 				} else {
 					// Combined mode: enumerate current-module roots.
@@ -388,7 +391,7 @@ struct Generate: AsyncParsableCommand {
 							let body = sourceFileToMockExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? ""
 							writes.append((destination: nil, content: fileHeader + body))
 						}
-						for typeName in additionalMocksToGenerate.sorted() {
+						for typeName in Set(additionalMocksToGenerate).sorted() {
 							let body = typeNameToMockExtensions[typeName]?.sorted().joined(separator: "\n\n") ?? ""
 							writes.append((destination: nil, content: fileHeader + body))
 						}
