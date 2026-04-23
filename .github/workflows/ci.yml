@@ -240,6 +240,19 @@ jobs:
           verbose: true
           os: linux
 
+  bazel:
+    name: Bazel Build on macOS
+    runs-on: macos-26
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+      - name: Build Sources
+        run: bazelisk build //Sources/...
+
   readme-validation:
     name: Check Markdown links
     runs-on: ubuntu-latest

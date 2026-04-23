@@ -5,3 +5,6 @@ checkout/
 .build/
 codesign/
 .claude/
+
+# Bazel
+bazel-*

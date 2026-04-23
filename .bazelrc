@@ -1,0 +1,7 @@
+# SafeDI Bazel configuration.
+
+# Use bzlmod for external dependency resolution.
+common --enable_bzlmod
+
+# Fail loudly on errors — makes CI logs readable.
+common --verbose_failures
