@@ -548,7 +548,7 @@ If you provide a mock method without `generateMock: true`, parent types that ins
 
 ### The `mockOnly` parameter
 
-The `mockOnly` parameter lets you provide a hand-written `mock()` method without providing a mechanism to instantiate the type in production. Here’s an example that provides a default mock for a protocol:
+The `mockOnly` parameter lets you create a declaration that participates only in mock generation. It provides a hand-written `mock()` method without contributing a production instantiation path. Here’s an example that provides a default mock for a protocol:
 
 ```swift
 @Instantiable(fulfillingAdditionalTypes: [UserManager.self], mockOnly: true)
@@ -578,9 +578,9 @@ public final class User {
 }
 ```
 
-When you provide a `mockOnly` declaration for a type, SafeDI’s mock generator will utilize that mock wherever the type appears in a mock dependency tree. This "auto-filling" behavior means you don’t have to manually provide a mock for common types (like `User` or `NetworkClient`) every time you call `mock()` on a parent type. For `@Forwarded` dependencies, the parameter gets a default value so callers don’t need to provide it. For `@Instantiated` dependencies, the type appears in `SafeDIOverrides` with `Type.mock()` as the default, allowing optional override.
+When you provide a `mockOnly` declaration, SafeDI’s mock generator will utilize that mock wherever the declaration’s concrete or fulfilled types appear in a mock dependency tree. This "auto-filling" behavior means you don’t have to manually provide a mock for common types (like `User` or `NetworkClient`) every time you call `mock()` on a parent type. For `@Forwarded` dependencies, the parameter gets a default value so callers don’t need to provide it. For `@Instantiated` dependencies, the type appears in `SafeDIOverrides` with `Type.mock()` as the default, allowing optional override.
 
-`mockOnly` is useful for:
+`mockOnly` declarations are useful for:
 
 - Protocols that need mocks in your tests and previews
 - Types used as `@Forwarded` dependencies (e.g., `String`, `Int`, `UUID`, `User`)
@@ -717,7 +717,12 @@ Each type that should have a mock must be decorated with `@Instantiable(generate
 
 ### Cross-module mock generation
 
-When a module needs to use the generated `mock()` method of a type defined in a dependent module, use the `additionalMocksToGenerate` parameter on [`#SafeDIConfiguration`](#safediconfiguration):
+Most projects use one of two cross-module mock setups:
+
+1. Add `SafeDIGenerator` to each first-party target that owns types with `@Instantiable(generateMock: true)`. Use this when the module’s own tests or previews need mocks for its own types.
+2. Add `additionalMocksToGenerate` in the consuming module. Use this when the current module needs a local generated `mock()` for a type defined in a dependency module.
+
+For the second case, use the `additionalMocksToGenerate` parameter on [`#SafeDIConfiguration`](#safediconfiguration):
 
 ```swift
 #SafeDIConfiguration(
@@ -728,9 +733,9 @@ When a module needs to use the generated `mock()` method of a type defined in a 
 )
 ```
 
-This generates a `mock()` method for each listed type in the current module, even though the type is defined elsewhere. The type must be `@Instantiable` in its home module (though `generateMock: true` is not required there).
+This generates a `mock()` method for each listed type in the current module, even though the type is defined elsewhere. The type must be `@Instantiable` in its home module, but `generateMock: true` is not required there unless that home module also wants to generate its own mock.
 
-**Note:** Mock generation only creates mocks for types defined in the current module. Types from dependent modules or `additionalDirectoriesToInclude` are not mocked — each module must have its own `SafeDIGenerator` plugin to generate mocks for its types.
+**Note:** `additionalDirectoriesToInclude` helps SafeDI scan source from Xcode project dependencies, but it does not generate mocks for those dependency modules. Use `additionalMocksToGenerate` when the current module needs a local mock for a dependency-module type.
 
 ## Comparing SafeDI and Manual Injection: Key Differences
 
@@ -797,7 +802,7 @@ This plugin will:
 1. Update your `swift-tools-version` to 6.3 or later
 2. Update your SafeDI dependency to `from: "2.0.0"`
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
-4. If you don’t have CSV configuration files, add a `#SafeDIConfiguration()` in your root module
+4. If you don’t have CSV configuration files and do not need other SafeDI configuration options, no `#SafeDIConfiguration()` declaration is required
 
 ### Plugin changes
 

@@ -20,7 +20,7 @@
 
 import SafeDI
 
-// `mockOnly` means `InMemoryStorage` only exists in mock mode (previews, tests).
+// `mockOnly` means this declaration participates only in mock generation.
 // `fulfillingAdditionalTypes: [StringStorage.self]` makes `InMemoryStorage` the
 // `StringStorage` every `mock()` in the graph receives by default —
 // `safeDIOverrides` is only needed to deviate from it.
