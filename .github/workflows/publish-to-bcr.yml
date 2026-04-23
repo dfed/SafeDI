@@ -25,10 +25,12 @@ jobs:
     with:
       tag_name: ${{ github.event.release.tag_name || inputs.tag_name }}
       registry_fork: dfed/bazel-central-registry
-      attest: true
+      # Our release is produced by .github/workflows/publish.yml, not
+      # bazel-contrib/.github's release_ruleset — so the attestations
+      # publish-to-bcr wants to verify don't exist. Leave off until a
+      # release-workflow migration makes them available.
+      attest: false
     permissions:
       contents: write
-      id-token: write
-      attestations: write
     secrets:
       publish_token: ${{ secrets.BCR_PUBLISH_PAT }}
