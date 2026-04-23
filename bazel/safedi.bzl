@@ -14,6 +14,14 @@ per-mock output into one file — Bazel requires rule outputs to be
 known at analysis time, and the combined mode lets SafeDITool's
 output set (which depends on source contents) resolve to a single
 statically-known file.
+
+## Unsupported SafeDI features
+
+- `#SafeDIConfiguration(additionalDirectoriesToInclude:)` is **not
+  supported** under these rules. SafeDITool reads those paths at
+  runtime to scan for additional source files, but Bazel's hermetic
+  sandbox only exposes files declared as action inputs. List every
+  Swift source you want SafeDITool to see directly in `srcs`.
 """
 
 def _write_csv(ctx, name, files):
