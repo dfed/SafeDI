@@ -387,11 +387,24 @@ struct Generate: AsyncParsableCommand {
 					} else {
 						// Combined mode: per-source mocks sorted, then
 						// per-type-name additional mocks sorted.
+						let currentModuleMockSourceFileSet = Set(currentModuleMockSourceFiles)
+						let typeNamesEmittedBySource = Set(
+							mockResult.generatedRoots.lazy
+								.filter { $0.sourceFilePath.map(currentModuleMockSourceFileSet.contains) ?? false }
+								.map(\.typeDescription.asSource),
+						)
 						for sourceFile in currentModuleMockSourceFiles {
 							let body = sourceFileToMockExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? ""
 							writes.append((destination: nil, content: fileHeader + body))
 						}
-						for typeName in Set(additionalMocksToGenerate).sorted() {
+						// Skip types already emitted via the per-source
+						// loop — a type declared locally with
+						// `generateMock: true` AND listed in
+						// `additionalMocksToGenerate` otherwise emits
+						// twice and fails to compile.
+						for typeName in Set(additionalMocksToGenerate).sorted()
+							where !typeNamesEmittedBySource.contains(typeName)
+						{
 							let body = typeNameToMockExtensions[typeName]?.sorted().joined(separator: "\n\n") ?? ""
 							writes.append((destination: nil, content: fileHeader + body))
 						}
