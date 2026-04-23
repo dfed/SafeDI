@@ -38,6 +38,7 @@ func executeSafeDIToolTest(
 	additionalImportedModules: [String] = [],
 	buildSwiftOutputDirectory: Bool = false,
 	buildDOTFileOutput: Bool = false,
+	buildCombinedOutput: Bool = false,
 	filesToDelete: inout [URL],
 	includeFolders: [String] = [],
 	skipCompileVerification: Bool = false,
@@ -92,6 +93,7 @@ func executeSafeDIToolTest(
 	let outputDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
 	let manifestFile = URL.temporaryFile.appendingPathExtension("json")
 	let dotTreeOutput = URL.temporaryFile.appendingPathExtension("dot")
+	let combinedOutput = URL.temporaryFile.appendingPathExtension("swift")
 
 	// Build the StubFileFinder. When additional directory files exist, make it
 	// directory-aware so it returns only files under the enumerated root.
@@ -148,6 +150,9 @@ func executeSafeDIToolTest(
 		if buildDOTFileOutput {
 			generateArguments += ["--dot-file-output", dotTreeOutput.relativePath]
 		}
+		if buildCombinedOutput {
+			generateArguments += ["--combined-output", combinedOutput.relativePath]
+		}
 		let tool = try Generate.parse(generateArguments)
 		try await tool.run()
 
@@ -163,6 +168,9 @@ func executeSafeDIToolTest(
 		}
 		if buildDOTFileOutput {
 			filesToDelete.append(dotTreeOutput)
+		}
+		if buildCombinedOutput {
+			filesToDelete.append(combinedOutput)
 		}
 
 		// Read generated files from the output directory.
@@ -194,6 +202,9 @@ func executeSafeDIToolTest(
 			moduleInfoOutputPath: moduleInfoOutput.relativePath,
 			generatedFiles: generatedFiles,
 			dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil,
+			combinedOutput: buildCombinedOutput
+				? String(data: Data(contentsOf: combinedOutput), encoding: .utf8)
+				: nil,
 		)
 	}
 }
@@ -204,6 +215,7 @@ struct TestOutput {
 	let moduleInfoOutputPath: String
 	let generatedFiles: [String: String]?
 	let dotTree: String?
+	let combinedOutput: String?
 
 	var dependencyTreeFiles: [String: String] {
 		generatedFiles?.filter { $0.key.hasSuffix("+SafeDI.swift") } ?? [:]
