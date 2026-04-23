@@ -1,0 +1,25 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//bazel:safedi.bzl", "safedi_generate")
+
+# `safedi_generate` emits a single `safedi_generated.swift` containing
+# the dependency tree + every mock the module needs. No hand-maintained
+# output list — the per-root / per-mock file split happens inside the
+# action's scratch directory and gets concatenated for us.
+safedi_generate(
+    name = "safedi_generated",
+    srcs = glob(["**/*.swift"]),
+    module_infos = [
+        "//Subproject:Subproject_safedi",
+    ],
+)
+
+swift_library(
+    name = "ExampleBazelIntegration",
+    srcs = glob(["**/*.swift"]) + [":safedi_generated"],
+    module_name = "ExampleBazelIntegration",
+    deps = [
+        "//Subproject:Subproject",
+        "@swiftpkg_safedi//:SafeDI",
+    ],
+    visibility = ["//visibility:public"],
+)

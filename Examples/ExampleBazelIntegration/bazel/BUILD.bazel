@@ -1,0 +1,5 @@
+# Helper files for SafeDI integration live here.
+exports_files([
+    "safedi.bzl",
+    "safeditool_extension.bzl",
+])

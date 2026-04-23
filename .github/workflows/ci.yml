@@ -252,6 +252,9 @@ jobs:
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Build Sources
         run: bazelisk build //Sources/...
+      - name: Build Example
+        working-directory: Examples/ExampleBazelIntegration
+        run: bazelisk build //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration
 
   readme-validation:
     name: Check Markdown links

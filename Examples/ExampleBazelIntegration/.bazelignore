@@ -1,0 +1,5 @@
+.build
+bazel-bin
+bazel-out
+bazel-testlogs
+bazel-example_bazel_integration

@@ -1,0 +1,3 @@
+"""Export safedi.bzl so downstream consumers can load `safedi_generate` and `safedi_module_info`."""
+
+exports_files(["safedi.bzl"])
