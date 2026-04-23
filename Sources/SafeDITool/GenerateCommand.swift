@@ -46,7 +46,7 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Swift file paths scoped to the current target for mock generation. Only used when --output-directory is provided without --swift-manifest.") var mockScopedFiles: [String] = []
 
-	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path — one header, bodies joined in source-file order, deterministic for stable inputs. Intended for build systems that need rule outputs statically declared at analysis time (Bazel, Buck2). Requires 'swift-sources-file-path' or '--include'. Cannot be combined with '--output-directory' or '--swift-manifest' — those are per-file emission modes. May be combined with '--module-info-output'. The combined file is always rewritten on every run, even when content would be unchanged — Bazel/Buck2 content-hash their inputs and a stat-identical re-write costs them nothing.") var combinedOutput: String?
+	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path — one header, bodies joined in source-file order, deterministic for stable inputs. Intended for build systems that need rule outputs statically declared at analysis time (Bazel, Buck2). Requires 'swift-sources-file-path' or '--include'. Cannot be combined with '--output-directory' or '--swift-manifest' — those are per-file emission modes. May be combined with '--module-info-output'. The combined file is always rewritten on every run, even when content would be unchanged.") var combinedOutput: String?
 
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
 
@@ -232,7 +232,6 @@ struct Generate: AsyncParsableCommand {
 				\""")
 				"""
 				if let combinedOutput {
-					// Combined mode: the build system only declared this one path.
 					try errorContent.write(toPath: combinedOutput)
 				} else if let manifest {
 					for entry in manifest.dependencyTreeGeneration {
@@ -415,10 +414,7 @@ struct Generate: AsyncParsableCommand {
 					let code = bodies.isEmpty
 						? fileHeader
 						: fileHeader + bodies.joined(separator: "\n\n")
-					// Always write — Bazel/Buck2 content-hash their
-					// inputs, so a stat-identical re-write costs them
-					// nothing, and we keep the action output stamp
-					// fresh for any stat-based staleness check.
+					// Always write — this flag is used to support Bazel and Buck2, which content-hash their inputs, so a stat-identical re-write costs them nothing. Moreover, these tools require that genrules write the outputs that are expected.
 					try code.write(toPath: combinedOutput)
 				} else {
 					for write in writes {
