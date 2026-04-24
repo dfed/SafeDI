@@ -251,6 +251,22 @@ jobs:
           git tag "${{ inputs.version }}"
           git push origin "${{ github.ref_name }}" --tags
 
+      # Produce a source tarball for the BCR entry. `git archive` from
+      # the just-created tag gives a reproducible archive whose contents
+      # are rooted at `SafeDI-<version>/` — matching `strip_prefix` in
+      # `.bcr/source.template.json`. We upload this as a release asset
+      # so BCR can reference a stable `releases/download/...` URL
+      # instead of GitHub's auto-generated `archive/...` URL (which
+      # BCR presubmit flags as unstable).
+      - name: Create source tarball
+        if: ${{ !inputs.dry-run }}
+        run: |
+          git archive \
+            --format=tar.gz \
+            --prefix="SafeDI-${{ inputs.version }}/" \
+            -o "SafeDI-${{ inputs.version }}.tar.gz" \
+            "${{ inputs.version }}"
+
       - name: Create GitHub Release
         if: ${{ !inputs.dry-run }}
         env:
@@ -264,4 +280,5 @@ jobs:
             SafeDITool-macos-arm64 \
             SafeDITool-macos-x86_64 \
             SafeDITool-linux-x86_64 \
-            SafeDITool-linux-arm64
+            SafeDITool-linux-arm64 \
+            "SafeDI-${{ inputs.version }}.tar.gz"
