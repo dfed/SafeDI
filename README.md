@@ -77,14 +77,14 @@ For a comprehensive explanation of SafeDI’s macros and their usage, please rea
 
 Decorate a type with `@Instantiable(generateMock: true)` and SafeDI generates a `static func mock(…) -> Type` method that builds the full dependency subtree for that type. The same declarations that define the production graph generate the test and preview graphs.
 
-If every dependency can be mocked, calling `mock()` with no arguments works:
+For a `LoggedInView` decorated with `@Instantiable(generateMock: true)`, if every dependency can be mocked, calling `mock()` with no arguments works. The `User` mock below demonstrates how `mockOnly` can supply a default for a forwarded runtime value:
 
 ```swift
 #Preview {
     LoggedInView.mock()
 }
 
-// Types can give SafeDI a mock without providing a production implementation via `mockOnly`.
+// Declarations can participate only in mock generation via `mockOnly`.
 @Instantiable(mockOnly: true)
 extension User {
     public static func mock() -> User {
