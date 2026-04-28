@@ -34,6 +34,15 @@ public enum SafeDI {
 	/// helper feeds the artifact through
 	/// `--dependent-module-info-file-path`.
 	///
+	/// The helper assumes the target's Swift sources live under
+	/// `$SRCROOT/<module>/**/*.swift`. That single glob feeds both the
+	/// script's `inputPaths` (so Xcode reruns the phase only when those
+	/// files change) and the script's own scan (so SafeDITool sees the
+	/// same set). If your module's sources don't fit that shape, build
+	/// the `TargetScript.pre` yourself rather than risk drift between
+	/// the two — Xcode would skip rebuilds when files outside
+	/// `inputPaths` changed but the script still scanned them.
+	///
 	/// - Parameters:
 	///   - module: Directory under `$SRCROOT` holding the target's
 	///     Swift sources. Also the basename of the module-info
@@ -42,8 +51,6 @@ public enum SafeDI {
 	///     consumes. Each resolves to
 	///     `$(BUILT_PRODUCTS_DIR)/SafeDI/<name>.safedi`. Tuist target
 	///     dependencies must guarantee build order.
-	///   - sources: Globs feeding the script's `inputPaths`. Defaults
-	///     to `<module>/**/*.swift`.
 	///   - generatedOutputs: `[Path]` of generated Swift files this
 	///     module produces, typically `generatedSources(for:)` mapped
 	///     to their `glob`. Empty for modules that publish a `.safedi`
@@ -52,10 +59,9 @@ public enum SafeDI {
 	public static func preCompileScript(
 		module: String,
 		dependents: [String] = [],
-		sources: [FileListGlob]? = nil,
 		generatedOutputs: [Path] = [],
 	) -> TargetScript {
-		let resolvedSources = sources ?? [FileListGlob.glob("\(module)/**/*.swift")]
+		let moduleSources: [FileListGlob] = [.glob("\(module)/**/*.swift")]
 		let dependentInputPaths: [FileListGlob] = dependents.map {
 			FileListGlob.glob("$(BUILT_PRODUCTS_DIR)/SafeDI/\($0).safedi")
 		}
@@ -66,7 +72,7 @@ public enum SafeDI {
 		return .pre(
 			script: scriptBody(module: module, dependents: dependents),
 			name: "Generate SafeDI",
-			inputPaths: resolvedSources + dependentInputPaths,
+			inputPaths: moduleSources + dependentInputPaths,
 			outputPaths: outputPaths,
 			basedOnDependencyAnalysis: true,
 		)
