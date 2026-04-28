@@ -143,12 +143,24 @@ private func scriptBody(module: String, dependents: [String]) -> String {
 	fi
 
 	# Build a CSV of paths relative to $SRCROOT for `scan` and `generate`.
+	# Run `find` standalone so `set -e` catches a non-zero exit (e.g.
+	# unreadable subdir or broken symlink) — a pipeline would mask it
+	# under POSIX sh, which has no pipefail.
+	sources_list="$scratch_dir/SourcesList.txt"
+	find -L "$module_dir" -type f -name '*.swift' >"$sources_list"
+
 	input_csv="$scratch_dir/InputSwiftFiles.csv"
-	find -L "$module_dir" -type f -name '*.swift' \\
-		| sed "s|^$SRCROOT/||" \\
-		| tr '\\n' ',' \\
-		| sed 's/,$//' \\
-		>"$input_csv"
+	: >"$input_csv"
+	first=1
+	while IFS= read -r abs; do
+		rel=${abs#"$SRCROOT/"}
+		if [ "$first" = 1 ]; then
+			printf '%s' "$rel" >>"$input_csv"
+			first=0
+		else
+			printf ',%s' "$rel" >>"$input_csv"
+		fi
+	done <"$sources_list"
 
 	if [ ! -s "$input_csv" ]; then
 		echo "error: SafeDI plugin: no .swift sources found under $module_dir" >&2
