@@ -3,18 +3,27 @@
 # Invoked as a pre-compile script phase from Tuist-generated targets.
 # Runs SafeDITool against one module of this example project.
 #
-# Usage: generate-safedi.sh <subproject|host>
+# Usage: generate-safedi.sh <module-name> [<dependent-module-name>...]
 #
-# Behavior:
-#   - `subproject`: emits a `.safedi` module-info artifact for the
-#     Subproject framework into $(BUILT_PRODUCTS_DIR)/SafeDI/Subproject.safedi.
-#     No Swift files are generated for this target unless it gains
-#     @Instantiable(isRoot: true) or @Instantiable(generateMock: true)
-#     declarations; if it does, those files land in $(DERIVED_FILE_DIR).
-#   - `host`: reads Subproject.safedi to resolve cross-module types and
-#     emits the dependency-tree + mock Swift files into
-#     $(DERIVED_FILE_DIR). Project.swift's `.generated(...)` entries
-#     register those paths with the host's compile phase.
+#   <module-name>            Directory under $SRCROOT holding this
+#                            module's .swift sources, and basename of
+#                            the emitted <module-name>.safedi artifact.
+#   <dependent-module-name>  Optional. Names of modules whose .safedi
+#                            artifacts this module consumes — fed to
+#                            `SafeDITool generate` as
+#                            --dependent-module-info-file-path. Each
+#                            resolves to
+#                            $BUILT_PRODUCTS_DIR/SafeDI/<name>.safedi;
+#                            missing files are an error (the Tuist
+#                            target dependency graph guarantees they
+#                            exist before this script runs).
+#
+# Every invocation writes $BUILT_PRODUCTS_DIR/SafeDI/<module-name>.safedi.
+# Modules without downstream consumers can ignore that artifact;
+# downstream modules pass the upstream's name on the command line.
+# Generated Swift code (dependency tree, mocks, mock configuration)
+# lands in $DERIVED_FILE_DIR; Project.swift's `.generated(...)` entries
+# register those paths with the consuming target's compile phase.
 #
 # SafeDITool is resolved by `tuist install` via SPM (SafeDI's default
 # `prebuilt` trait pulls in its `SafeDIToolBinary` artifact bundle as a
@@ -29,22 +38,26 @@
 
 set -euo pipefail
 
-mode="${1:?expected 'subproject' or 'host'}"
+module_name="${1:?expected <module-name> as first argument}"
+shift
+dependent_module_names=("$@")
 
 : "${SRCROOT:?SRCROOT must be set (this script runs as an Xcode build phase)}"
 : "${DERIVED_FILE_DIR:?DERIVED_FILE_DIR must be set (this script runs as an Xcode build phase)}"
+: "${BUILT_PRODUCTS_DIR:?BUILT_PRODUCTS_DIR must be set (this script runs as an Xcode build phase)}"
 
 scratch_dir="$DERIVED_FILE_DIR"
 mkdir -p "$scratch_dir"
 
 manifest_file="$scratch_dir/SafeDIManifest.json"
 
-# Shared module-info location so the host target can pick it up
-# regardless of which target is doing the reading. Uses the
-# configuration-scoped BUILT_PRODUCTS_DIR so both targets in a given
-# build resolve to the same path.
+# Shared module-info location so any consuming target picks the file
+# up from a configuration-scoped path that both producer and consumer
+# resolve to identically.
 shared_safedi_dir="$BUILT_PRODUCTS_DIR/SafeDI"
 mkdir -p "$shared_safedi_dir"
+
+module_info_output="$shared_safedi_dir/$module_name.safedi"
 
 # ---------- Locate the tuist-resolved SafeDITool binary ----------
 
@@ -74,18 +87,11 @@ fi
 
 # ---------- Collect this module's Swift sources ----------
 
-case "$mode" in
-subproject)
-	module_dir="Subproject"
-	;;
-host)
-	module_dir="ExampleTuistIntegration"
-	;;
-*)
-	echo "error: unknown mode '$mode' (expected 'subproject' or 'host')" >&2
-	exit 2
-	;;
-esac
+module_dir="$SRCROOT/$module_name"
+if [[ ! -d "$module_dir" ]]; then
+	echo "error: module directory not found at $module_dir" >&2
+	exit 4
+fi
 
 # Build a CSV of paths relative to $SRCROOT so `scan` and `generate`
 # agree on file identity (the manifest validator rejects absolute paths
@@ -101,54 +107,55 @@ while IFS= read -r abs; do
 	else
 		printf ',%s' "$rel" >>"$input_csv"
 	fi
-done < <(find -L "$SRCROOT/$module_dir" -type f -name '*.swift')
+done < <(find -L "$module_dir" -type f -name '*.swift')
 
 if ((first)); then
-	echo "error: no .swift sources found under $SRCROOT/$module_dir" >&2
+	echo "error: no .swift sources found under $module_dir" >&2
 	exit 4
+fi
+
+# ---------- Resolve dependent .safedi artifacts ----------
+
+dependent_csv=""
+if ((${#dependent_module_names[@]} > 0)); then
+	dependent_csv="$scratch_dir/DependentModuleInfo.csv"
+	: >"$dependent_csv"
+	first=1
+	for dependent_name in "${dependent_module_names[@]}"; do
+		dependent_path="$shared_safedi_dir/$dependent_name.safedi"
+		if [[ ! -f "$dependent_path" ]]; then
+			echo "error: $dependent_name.safedi not found at $dependent_path — the $dependent_name target must build first" >&2
+			exit 1
+		fi
+		if ((first)); then
+			printf '%s' "$dependent_path" >>"$dependent_csv"
+			first=0
+		else
+			printf ',%s' "$dependent_path" >>"$dependent_csv"
+		fi
+	done
 fi
 
 # ---------- Run SafeDITool ----------
 
 cd "$SRCROOT"
 
-case "$mode" in
-subproject)
-	module_info_output="$shared_safedi_dir/Subproject.safedi"
+"$safedi_tool" scan \
+	--input-sources-file "$input_csv" \
+	--project-root "$SRCROOT" \
+	--output-directory "$scratch_dir" \
+	--manifest-file "$manifest_file"
 
-	"$safedi_tool" scan \
-		--input-sources-file "$input_csv" \
-		--project-root "$SRCROOT" \
-		--output-directory "$scratch_dir" \
-		--manifest-file "$manifest_file"
+generate_args=(
+	"$input_csv"
+	--swift-manifest "$manifest_file"
+	--module-info-output "$module_info_output"
+)
+if [[ -n "$dependent_csv" ]]; then
+	generate_args+=(--dependent-module-info-file-path "$dependent_csv")
+fi
 
-	"$safedi_tool" generate \
-		"$input_csv" \
-		--swift-manifest "$manifest_file" \
-		--module-info-output "$module_info_output"
+"$safedi_tool" generate "${generate_args[@]}"
 
-	echo "Wrote $module_info_output"
-	;;
-host)
-	dependent_module_info="$shared_safedi_dir/Subproject.safedi"
-	if [[ ! -f "$dependent_module_info" ]]; then
-		echo "error: Subproject.safedi not found at $dependent_module_info — Subproject target must build first" >&2
-		exit 1
-	fi
-	dependent_csv="$scratch_dir/DependentModuleInfo.csv"
-	printf '%s' "$dependent_module_info" >"$dependent_csv"
-
-	"$safedi_tool" scan \
-		--input-sources-file "$input_csv" \
-		--project-root "$SRCROOT" \
-		--output-directory "$scratch_dir" \
-		--manifest-file "$manifest_file"
-
-	"$safedi_tool" generate \
-		"$input_csv" \
-		--swift-manifest "$manifest_file" \
-		--dependent-module-info-file-path "$dependent_csv"
-
-	echo "Wrote generated SafeDI code into $scratch_dir"
-	;;
-esac
+echo "Wrote $module_info_output"
+echo "Wrote generated SafeDI code into $scratch_dir"

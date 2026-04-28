@@ -15,11 +15,13 @@ let hostSources: [FileListGlob] = [
 	"ExampleTuistIntegration/**/*.swift",
 ]
 
-// The Subproject emits a `.safedi` artifact that the host module reads to
-// build its dependency tree. Written under BUILT_PRODUCTS_DIR so the path
-// is shared across targets of a given configuration.
+// Each target emits a `<TargetName>.safedi` module-info artifact that
+// downstream targets consume to build their dependency tree. Written
+// under BUILT_PRODUCTS_DIR so the path is shared across targets of a
+// given configuration.
 let subprojectSafediArtifactAsInput: FileListGlob = "$(BUILT_PRODUCTS_DIR)/SafeDI/Subproject.safedi"
 let subprojectSafediArtifactAsOutput: Path = "$(BUILT_PRODUCTS_DIR)/SafeDI/Subproject.safedi"
+let hostSafediArtifactAsOutput: Path = "$(BUILT_PRODUCTS_DIR)/SafeDI/ExampleTuistIntegration.safedi"
 
 // MARK: - Generated-output discovery
 
@@ -185,7 +187,7 @@ let project = Project(
 				.pre(
 					script: #"""
 					set -euo pipefail
-					"$SRCROOT/Scripts/generate-safedi.sh" subproject
+					"$SRCROOT/Scripts/generate-safedi.sh" Subproject
 					"""#,
 					name: "Generate SafeDI",
 					inputPaths: subprojectSources,
@@ -219,11 +221,11 @@ let project = Project(
 				.pre(
 					script: #"""
 					set -euo pipefail
-					"$SRCROOT/Scripts/generate-safedi.sh" host
+					"$SRCROOT/Scripts/generate-safedi.sh" ExampleTuistIntegration Subproject
 					"""#,
 					name: "Generate SafeDI",
 					inputPaths: hostSources + [subprojectSafediArtifactAsInput],
-					outputPaths: hostGeneratedSources.map(\.glob),
+					outputPaths: hostGeneratedSources.map(\.glob) + [hostSafediArtifactAsOutput],
 					basedOnDependencyAnalysis: true,
 				),
 			],

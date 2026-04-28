@@ -38,8 +38,8 @@ When cloning into a new project the edits you're expected to make are:
 
 | Where | What |
 |---|---|
-| `Project.swift` | target names, bundle IDs, deployment targets, module directory names |
-| `Scripts/generate-safedi.sh` | the two `case` labels (`subproject` / `host`) if your module names differ, or add more branches for additional targets |
+| `Project.swift` | target names, bundle IDs, deployment targets, module directory names, and the `<module-name> [<dependent-module-name>...]` arguments passed to `Scripts/generate-safedi.sh` from each target's pre-compile script |
+| `Scripts/generate-safedi.sh` | nothing — the script is module-generic; module name and dependents come in as positional arguments |
 | `Tuist/Package.swift` | bump SafeDI version (single source of truth — the artifact bundle follows automatically) |
 
 ## Why not use the `SafeDIGenerator` SPM plugin?
@@ -119,10 +119,15 @@ pin, one dependency graph.
 ## How the build wiring works
 
 Each target has a pre-compile Xcode script phase that invokes
-`Scripts/generate-safedi.sh <subproject|host>`. The script runs
-`SafeDITool scan` followed by `SafeDITool generate` — the same two-step
-flow the `SafeDIGenerator` SPM plugin uses. Manifest files land in
-`$(DERIVED_FILE_DIR)`, the generated `.swift` files land there too.
+`Scripts/generate-safedi.sh <module-name> [<dependent-module-name>...]`.
+The script runs `SafeDITool scan` followed by `SafeDITool generate` —
+the same two-step flow the `SafeDIGenerator` SPM plugin uses. Every
+invocation writes `$(BUILT_PRODUCTS_DIR)/SafeDI/<module-name>.safedi`
+(via `--module-info-output`) so any downstream module can consume it;
+modules with no consumers just ignore the artifact. Each
+`<dependent-module-name>` resolves to that same shared directory and
+is passed through to `--dependent-module-info-file-path`. Generated
+`.swift` files land in `$(DERIVED_FILE_DIR)`.
 
 `Project.swift` also runs `SafeDITool scan` once at `tuist generate`
 time (for the host module only) so it can register each expected
@@ -132,26 +137,31 @@ actual code generation happens at `xcodebuild` time.
 
 ### `Subproject` target
 
-1. Runs `SafeDITool generate` with `--module-info-output
-   $(BUILT_PRODUCTS_DIR)/SafeDI/Subproject.safedi`.
-2. Produces no Swift output today — the subproject has no
+Pre-compile phase runs `generate-safedi.sh Subproject`.
+
+1. Emits `$(BUILT_PRODUCTS_DIR)/SafeDI/Subproject.safedi` — the JSON
+   `@Instantiable` surface (`User`, `InMemoryStorage`, `NoteStorage`,
+   `StringStorage`, `DefaultUserService`) for the host to consume.
+2. Produces no generated Swift today — the subproject has no
    `@Instantiable(isRoot: true)` and no `@Instantiable(generateMock: true)`
    types, so the dependency tree and mock manifests are empty.
-3. The `.safedi` artifact encodes the subproject's `@Instantiable` surface
-   (including `User`, `InMemoryStorage`, `NoteStorage`, `StringStorage`,
-   `DefaultUserService`) as JSON for the host to consume.
 
 ### `ExampleTuistIntegration` (host app) target
 
+Pre-compile phase runs `generate-safedi.sh ExampleTuistIntegration Subproject`.
+
 1. Xcode's target dependency graph guarantees `Subproject` builds first, so
    `Subproject.safedi` exists before this script runs.
-2. Runs `SafeDITool generate` with `--dependent-module-info-file-path` pointed
-   at a CSV containing `Subproject.safedi`. The host never re-parses
-   subproject sources.
+2. Reads `Subproject.safedi` via `--dependent-module-info-file-path` so
+   `SafeDITool generate` can resolve cross-module types. The host never
+   re-parses subproject sources.
 3. Emits the root's `+SafeDI.swift`, the mocks' `+SafeDIMock.swift`, and the
    shared `SafeDIMockConfiguration.swift` into `$(DERIVED_FILE_DIR)`.
    Specific filenames follow SafeDI's
    [output-naming rules](../../Sources/SafeDICore/Utilities/OutputFileNaming.swift).
+4. Also emits its own `ExampleTuistIntegration.safedi` for any future
+   downstream consumer. With no current consumer the artifact is
+   tracked only so Xcode's incremental dependency analysis sees it.
 
 ## CI
 
