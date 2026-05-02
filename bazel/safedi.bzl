@@ -1,6 +1,6 @@
 """Custom Starlark rule for integrating SafeDI into a Bazel build.
 
-`safedi_compile(srcs, dependents)` runs `SafeDITool generate
+`safedi_compile(srcs, deps)` runs `SafeDITool generate
 --combined-output --module-info-output` once per module and produces
 two artifacts:
 
@@ -14,8 +14,8 @@ two artifacts:
 
   - `<rule>.safedi` — the module-info artifact. Cross-module
     consumers list this rule's label in their own `safedi_compile`'s
-    `dependents` to reach `@Instantiable` types declared in this
-    module without re-parsing the sources.
+    `deps` to reach `@Instantiable` types declared in this module
+    without re-parsing the sources.
 
 The rule shells out to `@safedi//Sources/SafeDITool:SafeDITool` (built
 from source by Bazel, cached across runs).
@@ -56,9 +56,9 @@ def _safedi_compile_impl(ctx):
     combined = ctx.actions.declare_file(ctx.label.name + ".swift")
     input_csv = _write_csv(ctx, ctx.label.name + "_sources.csv", ctx.files.srcs)
 
-    dependent_module_info_files = [
+    dep_module_info_files = [
         dep[SafeDIInfo].module_info
-        for dep in ctx.attr.dependents
+        for dep in ctx.attr.deps
     ]
 
     arguments = [
@@ -69,14 +69,14 @@ def _safedi_compile_impl(ctx):
         module_info.path,
     ]
     extra_inputs = []
-    if dependent_module_info_files:
+    if dep_module_info_files:
         dep_csv = _write_csv(
             ctx,
-            ctx.label.name + "_dependent_module_infos.csv",
-            dependent_module_info_files,
+            ctx.label.name + "_dep_module_infos.csv",
+            dep_module_info_files,
         )
         arguments += ["--dependent-module-info-file-path", dep_csv.path]
-        extra_inputs = [dep_csv] + dependent_module_info_files
+        extra_inputs = [dep_csv] + dep_module_info_files
 
     ctx.actions.run(
         executable = ctx.executable._safeditool,
@@ -91,7 +91,7 @@ def _safedi_compile_impl(ctx):
         # `.swift` is the rule's default output — `[":<rule>"]` in a
         # downstream `swift_library.srcs` resolves to the generated
         # source. The `.safedi` rides through `SafeDIInfo` so other
-        # `safedi_compile` rules can list this label in `dependents`.
+        # `safedi_compile` rules can list this label in `deps`.
         DefaultInfo(files = depset([combined])),
         SafeDIInfo(module_info = module_info),
     ]
@@ -107,12 +107,12 @@ module-info artifact in a single action.""",
             mandatory = True,
             doc = "Swift sources in this module.",
         ),
-        "dependents": attr.label_list(
+        "deps": attr.label_list(
             providers = [SafeDIInfo],
             default = [],
             doc = """Other `safedi_compile` labels whose `.safedi`
-artifacts this module's generation depends on. Use these to expose
-`@Instantiable` types from cross-module producers.""",
+module-info artifacts this rule consumes for cross-module
+`@Instantiable` type resolution.""",
         ),
         "_safeditool": attr.label(
             default = Label("//Sources/SafeDITool:SafeDITool"),

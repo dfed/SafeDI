@@ -19,7 +19,7 @@ toolchain). The SafeDI rules themselves are platform-agnostic.
   - `<rule>.safedi` — module-info artifact for cross-module consumers (carried via the rule's `SafeDIInfo` provider).
   - `<rule>.swift` — combined dependency-tree + mocks + mock configuration source (the rule's `DefaultInfo` files; just include the label in a `swift_library.srcs`).
   SafeDITool's per-root / per-mock file split is concatenated via `--combined-output` into one statically-declared output — `outs` doesn't need a hand-maintained list regardless of how many `@Instantiable(isRoot:)` / `generateMock: true` types the module declares.
-- **Cross-module type resolution via `.safedi`.** The host target reaches the subproject via `dependents = ["//Subproject:Subproject_safedi"]` and never re-parses its sources.
+- **Cross-module type resolution via `.safedi`.** The host target reaches the subproject via `deps = ["//Subproject:Subproject_safedi"]` and never re-parses its sources.
 - **SafeDI consumed via `bazel_dep`.** MODULE.bazel declares
   `bazel_dep(name = "safedi", ...)`. In this repo the dep is resolved
   via `local_path_override` to the workspace root so the example
@@ -50,8 +50,8 @@ no bump needed — just `git pull` the outer repo.
 
 | | Tuist | Bazel |
 |---|---|---|
-| Codegen entry point | `SafeDI.preCompileScript(module:dependents:)` Tuist plugin helper | `safedi_compile(srcs, dependents)` rule |
-| Cross-module handoff | `Subproject.safedi` in `$(BUILT_PRODUCTS_DIR)` consumed via script-phase input | `safedi_compile`'s `SafeDIInfo` provider; downstream rules list the producer label in `dependents` |
+| Codegen entry point | `SafeDI.preCompileScript(module:dependencies:)` Tuist plugin helper | `safedi_compile(srcs, deps)` rule |
+| Cross-module handoff | `Subproject.safedi` in `$(BUILT_PRODUCTS_DIR)` consumed via script-phase input | `safedi_compile`'s `SafeDIInfo` provider; downstream rules list the producer label in `deps` |
 | Input enumeration | `FileListGlob` in `Project.swift` | `glob()` in `BUILD.bazel` |
 | Output enumeration | `SafeDITool scan` at `tuist generate` time → `.generated(…)` per-file entries | Single concatenated output file per `safedi_compile` target — no per-file enumeration needed |
 | SafeDITool acquisition | `tuist install` pulls via SafeDI's `prebuilt` trait | Built from source by Bazel; cached across runs |

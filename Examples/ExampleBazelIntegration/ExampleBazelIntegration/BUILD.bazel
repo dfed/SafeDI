@@ -10,7 +10,7 @@ load("@safedi//bazel:safedi.bzl", "safedi_compile")
 safedi_compile(
     name = "ExampleBazelIntegration_safedi",
     srcs = glob(["**/*.swift"]),
-    dependents = [
+    deps = [
         "//Subproject:Subproject_safedi",
     ],
 )
