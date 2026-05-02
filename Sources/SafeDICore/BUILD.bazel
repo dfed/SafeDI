@@ -1,0 +1,23 @@
+load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
+
+# Source file group shared with SafeDIMacros (which inlines SafeDICore
+# via a Sources/SafeDIMacros/SafeDICore symlink in SPM). Bazel's glob
+# doesn't follow symlinked directories, so we expose the raw sources
+# here and let SafeDIMacros pull them into its own compile unit.
+filegroup(
+    name = "SafeDICoreSources",
+    srcs = glob(["**/*.swift"]),
+    visibility = ["//Sources/SafeDIMacros:__pkg__"],
+)
+
+swift_library(
+    name = "SafeDICore",
+    srcs = glob(["**/*.swift"]),
+    module_name = "SafeDICore",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@swiftpkg_swift_syntax//:SwiftDiagnostics",
+        "@swiftpkg_swift_syntax//:SwiftSyntax",
+        "@swiftpkg_swift_syntax//:SwiftSyntaxBuilder",
+    ],
+)

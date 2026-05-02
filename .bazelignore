@@ -1,0 +1,6 @@
+Examples
+
+# The Sources/SafeDIMacros/SafeDICore symlink points at Sources/SafeDICore's
+# BUILD.bazel, so Bazel would otherwise register a duplicate package. We
+# consume the files via the `SafeDICoreSources` filegroup instead.
+Sources/SafeDIMacros/SafeDICore

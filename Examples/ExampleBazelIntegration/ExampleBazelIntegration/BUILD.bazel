@@ -1,0 +1,27 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@safedi//bazel:safedi.bzl", "safedi_compile")
+
+# `safedi_compile` emits a single `<rule>.swift` (the dependency tree
+# + every mock the module needs) and a `<rule>.safedi` module-info
+# artifact in one SafeDITool invocation. SafeDITool's
+# `--combined-output` mode concatenates the per-root / per-mock file
+# split into one declared output, so `outs` doesn't need a hand-
+# maintained list regardless of source contents.
+safedi_compile(
+    name = "ExampleBazelIntegration_safedi",
+    srcs = glob(["**/*.swift"]),
+    deps = [
+        "//Subproject:Subproject_safedi",
+    ],
+)
+
+swift_library(
+    name = "ExampleBazelIntegration",
+    srcs = glob(["**/*.swift"]) + [":ExampleBazelIntegration_safedi"],
+    module_name = "ExampleBazelIntegration",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//Subproject:Subproject",
+        "@safedi//Sources/SafeDI",
+    ],
+)

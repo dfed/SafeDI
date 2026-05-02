@@ -1,0 +1,6 @@
+"""Root Bazel package — exports Package.swift/Package.resolved for rules_swift_package_manager."""
+
+exports_files([
+    "Package.swift",
+    "Package.resolved",
+])

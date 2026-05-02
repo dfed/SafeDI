@@ -1,0 +1,2 @@
+# Root BUILD file — no top-level targets. Each module lives in its
+# own package (Subproject/, ExampleBazelIntegration/).

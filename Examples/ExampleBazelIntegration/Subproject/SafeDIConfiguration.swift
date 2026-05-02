@@ -1,0 +1,3 @@
+import SafeDI
+
+#SafeDIConfiguration()

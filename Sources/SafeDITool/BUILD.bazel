@@ -1,0 +1,12 @@
+load("@build_bazel_rules_swift//swift:swift.bzl", "swift_binary")
+
+swift_binary(
+    name = "SafeDITool",
+    srcs = glob(["**/*.swift"]),
+    visibility = ["//visibility:public"],
+    deps = [
+        "//Sources/SafeDICore",
+        "@swiftpkg_swift_argument_parser//:ArgumentParser",
+        "@swiftpkg_swift_syntax//:SwiftParser",
+    ],
+)

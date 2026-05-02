@@ -1,0 +1,28 @@
+"""Bazel module for the SafeDI Bazel integration example.
+
+Builds an ARM-mac iOS app demonstrating the same `.safedi` cross-
+module handoff as ExampleTuistIntegration / ExampleMultiProjectIntegration.
+Depends on SafeDI via `bazel_dep` — in our own repo the
+`local_path_override` below points at the workspace root so the
+example tracks the working copy; downstream consumers would get
+SafeDI from the Bazel Central Registry instead.
+"""
+
+module(
+    name = "example_bazel_integration",
+    version = "0.1.0",
+)
+
+bazel_dep(name = "rules_swift", version = "3.6.0")
+bazel_dep(name = "rules_apple", version = "4.3.3")
+bazel_dep(name = "apple_support", version = "1.24.2")
+bazel_dep(name = "safedi", version = "2.0.0-beta-6")
+
+# local_path_override applies only when this module is root
+# (i.e. when you run `bazel build` from this directory). BCR
+# presubmit consumes the published source archive and ignores this,
+# resolving `safedi` from the registry instead.
+local_path_override(
+    module_name = "safedi",
+    path = "../..",
+)
