@@ -35,6 +35,11 @@ jobs:
         # an unquoted inline `{` trips the YAML parser.
         run: |
           grep -A 2 'var safeDIVersion: String {' Plugins/Shared.swift | grep -q '"99.99.99-test"'
+      - name: Verify MODULE.bazel version was updated
+        # Scope to the top-level module() block so bazel_dep lines that
+        # also carry `version = "X"` can't false-positive.
+        run: |
+          awk '/^module\(/,/^\)/' MODULE.bazel | grep -q 'version = "99.99.99-test"'
 
   xcodebuild:
     name: Build with xcodebuild on Xcode 26

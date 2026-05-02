@@ -1,0 +1,15 @@
+{
+  "homepage": "https://github.com/dfed/SafeDI",
+  "maintainers": [
+    {
+      "name": "Dan Federman",
+      "email": "dan@portola.ai",
+      "github": "dfed"
+    }
+  ],
+  "repository": [
+    "github:dfed/SafeDI"
+  ],
+  "versions": [],
+  "yanked_versions": {}
+}
