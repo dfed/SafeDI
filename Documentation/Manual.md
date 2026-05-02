@@ -42,7 +42,7 @@ import SafeDI
 
 The `additionalDirectoriesToInclude` parameter specifies folders outside of your module that SafeDI will scan for Swift source files. Paths must be relative to the executing directory (the directory containing the `.xcodeproj` for Xcode integrations). Use this parameter to specify the paths to dependent modules’ source directories, since Xcode project plugins cannot discover these automatically. You can see [an example of this configuration](../Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](../Examples/ExampleMultiProjectIntegration) project.
 
-> **Note:** `additionalDirectoriesToInclude` is only honored by the SPM build-tool plugin (i.e. `swift build` or Xcode building an SPM package). The Bazel and Tuist integrations enumerate every input up front (Bazel via declared rule inputs; Tuist via the build phase's `inputPaths`), so files reached only through `additionalDirectoriesToInclude` won't be visible to SafeDITool at build time and won't trigger incremental rebuilds. Under those integrations, list every Swift source you want SafeDI to see directly via the build target.
+> **Note:** `additionalDirectoriesToInclude` is only honored by the SPM build-tool plugin. The Bazel and Tuist integrations enumerate every input up front (Bazel via declared rule inputs; Tuist via the build phase's `inputPaths`), so files reached only through `additionalDirectoriesToInclude` won't be visible to SafeDITool at build time and won't trigger incremental rebuilds. Under those integrations, list every Swift source you want SafeDI to see directly via the build target.
 
 ##### Installing the prebuilt SafeDITool binary
 
@@ -441,7 +441,7 @@ public struct FeedView: Instantiable {
 **Parameters:**
 
 - `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types. Default: `[]`.
-- `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. Only honored by the SPM build-tool plugin (i.e. `swift build` or Xcode building an SPM package). The Bazel and Tuist integrations enumerate inputs up front and ignore this parameter — list every Swift source via the build target itself instead. Default: `[]`.
+- `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. Only honored by the SPM build-tool plugin. The Bazel and Tuist integrations enumerate inputs up front and ignore this parameter — list every Swift source via the build target itself instead. Default: `[]`.
 - `additionalMocksToGenerate`: Type names from dependent modules to generate `mock()` methods for in this module. The types must be `@Instantiable` in their home module. See [Cross-module mock generation](#cross-module-mock-generation). Default: `[]`.
 - `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Default: `"DEBUG"`.
 
