@@ -17,13 +17,13 @@ All SafeDI-specific scaffolding lives in the
 [`SafeDITuist` Tuist plugin](../../TuistPlugins/SafeDITuist) shipped from this
 repo. `Tuist.swift` declares the plugin; `Project.swift` calls two helpers:
 
-- `SafeDI.preCompileScript(module:dependents:)` — returns a `TargetScript.pre`
+- `SafeDI.preCompileScript(module:dependencies:)` — returns a `TargetScript.pre`
   that runs `SafeDITool generate --combined-output` against one module at
   build time. Every call writes
   `$(BUILT_PRODUCTS_DIR)/SafeDI/<module>.safedi` for downstream consumers and
   `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift` (every dependency-tree, mock,
-  and mock-configuration body concatenated into one file). `dependents:` lists
-  upstream modules whose `.safedi` to feed in via
+  and mock-configuration body concatenated into one file). `dependencies:`
+  lists upstream modules whose `.safedi` to feed in via
   `--dependent-module-info-file-path`.
 - `SafeDI.generatedSource` — the single `.generated(...)` source entry to add
   to a target's `sources`. Always at
@@ -151,7 +151,7 @@ inline shell:
    `$(SRCROOT)/Tuist/.build/artifacts/safedi/SafeDIToolBinary/...`
    (resolved by `tuist install`).
 2. Globs the module's `.swift` sources into a CSV.
-3. For each `dependents:` entry, builds a CSV of
+3. For each `dependencies:` entry, builds a CSV of
    `$(BUILT_PRODUCTS_DIR)/SafeDI/<name>.safedi` paths and feeds them to
    `--dependent-module-info-file-path`.
 4. Runs `SafeDITool generate` with `--combined-output
@@ -175,7 +175,7 @@ in this module today, that file is just a header.
 
 ### `ExampleTuistIntegration` (host app) target
 
-`SafeDI.preCompileScript(module: "ExampleTuistIntegration", dependents: ["Subproject"])` — Xcode's target dependency graph guarantees
+`SafeDI.preCompileScript(module: "ExampleTuistIntegration", dependencies: ["Subproject"])` — Xcode's target dependency graph guarantees
 `Subproject` builds first, so `Subproject.safedi` exists. The host reads
 it via `--dependent-module-info-file-path` (never re-parsing subproject
 sources) and emits its root's dependency tree, the host-target mocks, and

@@ -58,7 +58,7 @@ let project = Project(
 			scripts: [
 				SafeDI.preCompileScript(
 					module: "ExampleTuistIntegration",
-					dependents: ["Subproject"],
+					dependencies: ["Subproject"],
 				),
 			],
 			dependencies: [
