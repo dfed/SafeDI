@@ -29,7 +29,7 @@
 ///
 /// - Parameters:
 ///   - additionalImportedModules: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types.
-///   - additionalDirectoriesToInclude: Directories containing Swift files to include, relative to the executing directory. Only supported when SafeDI runs via the SPM build-tool plugin in an Xcode project. The Bazel and Tuist integrations enumerate inputs up front and therefore cannot honor this parameter — list every Swift source via the build target itself instead.
+///   - additionalDirectoriesToInclude: Directories containing Swift files to include, relative to the executing directory. Only honored by the SPM build-tool plugin (i.e. `swift build` or Xcode building an SPM package). The Bazel and Tuist integrations enumerate inputs up front and therefore ignore this parameter — list every Swift source via the build target itself instead.
 ///   - additionalMocksToGenerate: Type names from dependent modules to generate `mock()` methods for in this module. The types must be decorated with `@Instantiable` in their home module. See the "Cross-module mock generation" section of the manual.
 ///   - mockConditionalCompilation: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation.
 ///
