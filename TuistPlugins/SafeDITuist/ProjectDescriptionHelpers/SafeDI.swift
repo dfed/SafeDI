@@ -114,7 +114,12 @@ private func scriptBody(module: String, dependents: [String]) -> String {
 	shared_safedi_dir="$BUILT_PRODUCTS_DIR/SafeDI"
 	mkdir -p "$shared_safedi_dir"
 
+	# `$module` may contain slashes (e.g. `Sources/App`). Create the
+	# parent dir of the module-info output explicitly so the write
+	# doesn't fail on the intermediate directories.
 	module_info_output="$shared_safedi_dir/$module.safedi"
+	mkdir -p "$(dirname "$module_info_output")"
+
 	combined_output="$scratch_dir/SafeDIGenerated.swift"
 
 	host_os=$(uname -s)
