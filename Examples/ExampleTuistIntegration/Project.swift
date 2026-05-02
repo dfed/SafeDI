@@ -2,20 +2,18 @@ import ProjectDescription
 import SafeDITuist
 
 // SafeDI codegen is wired up via the SafeDITuist plugin (declared in
-// Tuist.swift). For each target the plugin returns a pre-compile
-// `TargetScript` that runs `SafeDITool scan` + `generate` at build
-// time, and a list of `.generated(...)` source entries that point
-// at the build-time outputs in `$(DERIVED_FILE_DIR)`.
+// Tuist.swift). Each target uses two helpers:
 //
-// Adding/removing a `.swift` file: just `tuist generate` — the plugin
-// runs `SafeDITool scan` to refresh the generated-output list. No
-// manifest edits.
+//   - `SafeDI.preCompileScript(...)` — pre-compile shell phase that
+//     runs `SafeDITool generate --combined-output` at build time.
+//   - `SafeDI.generatedSource` — the single `.generated(...)` source
+//     entry pointing at `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift`.
 //
-// Bumping SafeDI: edit `Tuist/Package.swift` only. Both the runtime
-// library (via `.external(name: "SafeDI")`) and the SafeDITool binary
-// the plugin invokes follow from that single version pin.
-
-let hostGeneratedSources = SafeDI.generatedSources(for: "ExampleTuistIntegration")
+// Adding/removing `@Instantiable` declarations changes the contents
+// of `SafeDIGenerated.swift` but not its path, so Xcode picks them
+// up on the next build. No `tuist generate` round-trip required.
+//
+// Bumping SafeDI: edit `Tuist/Package.swift` only.
 
 let project = Project(
 	name: "ExampleTuistIntegration",
@@ -27,7 +25,10 @@ let project = Project(
 			bundleId: "com.safedi.ExampleTuistIntegration.Subproject",
 			deploymentTargets: .macOS("14.0"),
 			infoPlist: .default,
-			sources: ["Subproject/**/*.swift"],
+			sources: SourceFilesList(globs: [
+				.glob("Subproject/**/*.swift"),
+				SafeDI.generatedSource,
+			]),
 			scripts: [
 				SafeDI.preCompileScript(module: "Subproject"),
 			],
@@ -47,7 +48,8 @@ let project = Project(
 			]),
 			sources: SourceFilesList(globs: [
 				.glob("ExampleTuistIntegration/**/*.swift"),
-			] + hostGeneratedSources),
+				SafeDI.generatedSource,
+			]),
 			resources: [
 				"ExampleTuistIntegration/Assets.xcassets",
 				"ExampleTuistIntegration/Preview Content/**",
@@ -57,7 +59,6 @@ let project = Project(
 				SafeDI.preCompileScript(
 					module: "ExampleTuistIntegration",
 					dependents: ["Subproject"],
-					generatedOutputs: hostGeneratedSources.map(\.glob),
 				),
 			],
 			dependencies: [
