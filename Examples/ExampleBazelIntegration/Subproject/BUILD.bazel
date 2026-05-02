@@ -1,11 +1,11 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
-load("@safedi//bazel:safedi.bzl", "safedi_module_info")
+load("@safedi//bazel:safedi.bzl", "safedi_compile")
 
-# `.safedi` module-info artifact published for downstream consumers.
-# Contains the subproject's @Instantiable surface in JSON so the host
-# target can resolve cross-module types without re-parsing these
-# sources.
-safedi_module_info(
+# `safedi_compile` emits both the `.safedi` module-info artifact for
+# cross-module consumers and the combined `.swift` source the
+# subproject compiles against. The host target reaches the
+# `.safedi` via `dependents = ["//Subproject:Subproject_safedi"]`.
+safedi_compile(
     name = "Subproject_safedi",
     srcs = glob(["*.swift"]),
     visibility = ["//ExampleBazelIntegration:__pkg__"],
@@ -13,7 +13,7 @@ safedi_module_info(
 
 swift_library(
     name = "Subproject",
-    srcs = glob(["*.swift"]),
+    srcs = glob(["*.swift"]) + [":Subproject_safedi"],
     module_name = "Subproject",
     visibility = ["//ExampleBazelIntegration:__pkg__"],
     deps = [

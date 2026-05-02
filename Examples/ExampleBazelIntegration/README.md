@@ -15,19 +15,11 @@ toolchain). The SafeDI rules themselves are platform-agnostic.
 - **Two `swift_library` targets** (`//Subproject:Subproject`,
   `//ExampleBazelIntegration:ExampleBazelIntegration`) that compile
   separately.
-- **SafeDI rules from the SafeDI repo** — `load("@safedi//bazel:safedi.bzl", ...)`:
-  - `safedi_module_info(srcs)` emits a module's `.safedi` artifact
-    for downstream consumers.
-  - `safedi_generate(srcs, module_infos)` reads upstream `.safedi`
-    files for cross-module types and emits **one** combined
-    `<rule_name>.swift`. SafeDITool's per-root / per-mock file splits
-    are concatenated via the tool's `--combined-output` mode into a
-    single declared output — `outs` doesn't need a hand-maintained
-    list regardless of how many `@Instantiable(isRoot:)` /
-    `generateMock: true` types the module declares.
-- **Cross-module type resolution via `.safedi`.** The host target
-  reads `//Subproject:Subproject_safedi`'s output as `module_infos`
-  and never re-parses the subproject's sources.
+- **`safedi_compile` rule** — `load("@safedi//bazel:safedi.bzl", "safedi_compile")`. One rule, one SafeDITool invocation per module, two outputs:
+  - `<rule>.safedi` — module-info artifact for cross-module consumers (carried via the rule's `SafeDIInfo` provider).
+  - `<rule>.swift` — combined dependency-tree + mocks + mock configuration source (the rule's `DefaultInfo` files; just include the label in a `swift_library.srcs`).
+  SafeDITool's per-root / per-mock file split is concatenated via `--combined-output` into one statically-declared output — `outs` doesn't need a hand-maintained list regardless of how many `@Instantiable(isRoot:)` / `generateMock: true` types the module declares.
+- **Cross-module type resolution via `.safedi`.** The host target reaches the subproject via `dependents = ["//Subproject:Subproject_safedi"]` and never re-parses its sources.
 - **SafeDI consumed via `bazel_dep`.** MODULE.bazel declares
   `bazel_dep(name = "safedi", ...)`. In this repo the dep is resolved
   via `local_path_override` to the workspace root so the example
@@ -58,9 +50,10 @@ no bump needed — just `git pull` the outer repo.
 
 | | Tuist | Bazel |
 |---|---|---|
-| Cross-module handoff | `Subproject.safedi` in `$(BUILT_PRODUCTS_DIR)` consumed via script-phase input | `safedi_module_info` output consumed via `safedi_generate.module_infos` |
+| Codegen entry point | `SafeDI.preCompileScript(module:dependents:)` Tuist plugin helper | `safedi_compile(srcs, dependents)` rule |
+| Cross-module handoff | `Subproject.safedi` in `$(BUILT_PRODUCTS_DIR)` consumed via script-phase input | `safedi_compile`'s `SafeDIInfo` provider; downstream rules list the producer label in `dependents` |
 | Input enumeration | `FileListGlob` in `Project.swift` | `glob()` in `BUILD.bazel` |
-| Output enumeration | `SafeDITool scan` at `tuist generate` time → `.generated(…)` per-file entries | Single concatenated output file per `safedi_generate` target — no per-file enumeration needed |
+| Output enumeration | `SafeDITool scan` at `tuist generate` time → `.generated(…)` per-file entries | Single concatenated output file per `safedi_compile` target — no per-file enumeration needed |
 | SafeDITool acquisition | `tuist install` pulls via SafeDI's `prebuilt` trait | Built from source by Bazel; cached across runs |
 | Generated code location | `$(DERIVED_FILE_DIR)` (Xcode build sandbox) | `bazel-bin/…` (Bazel action sandbox) |
 
@@ -76,7 +69,7 @@ depends on what's inside each Swift file — how many
 `@Instantiable(isRoot:)` / `generateMock: true` declarations it
 finds — which analysis can't see. Hand-maintaining the output list
 in `BUILD.bazel` would force every author to update their build file
-on every annotation change, so `safedi_generate` uses SafeDITool's
+on every annotation change, so `safedi_compile` uses SafeDITool's
 `--combined-output` mode to emit a single declared output regardless
 of source contents. The concatenated file is still valid Swift
 (SafeDI's generated files are all top-level declarations) and
