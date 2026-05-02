@@ -152,6 +152,35 @@ jobs:
       - name: Build Project Integration
         run: pushd Examples/ExampleMultiProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration; popd
 
+  spm-tuist-integration:
+    name: Build Tuist Integration on Xcode 26
+    runs-on: macos-26
+    permissions:
+      contents: read
+    # Required so mise / tuist install don't hit anonymous GitHub API
+    # rate limits when resolving release tags and artifact bundles.
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+      - name: Install Tuist via mise
+        # Keep the pinned Tuist version here in sync with the README.
+        run: |
+          curl -fsSL https://mise.run | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/share/mise/shims" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/mise" install -y tuist@4.183.0
+          "$HOME/.local/bin/mise" use -g tuist@4.183.0
+      - name: Tuist Install
+        run: pushd Examples/ExampleTuistIntegration && tuist install && popd
+      - name: Tuist Generate
+        run: pushd Examples/ExampleTuistIntegration && tuist generate --no-open && popd
+      - name: Build Tuist Integration
+        run: pushd Examples/ExampleTuistIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -workspace ExampleTuistIntegration.xcworkspace -scheme ExampleTuistIntegration; popd
+
   spm:
     name: Build and Test on Xcode 26
     runs-on: macos-26
