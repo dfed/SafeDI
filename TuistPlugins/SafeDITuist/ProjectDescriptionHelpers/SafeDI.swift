@@ -51,11 +51,11 @@ public enum SafeDI {
 	/// The helper assumes the target's Swift sources live under
 	/// `$SRCROOT/<module>/**/*.swift`. That single glob feeds both the
 	/// script's `inputPaths` (so Xcode reruns the phase only when those
-	/// files change) and the script's own scan (so SafeDITool sees the
-	/// same set). If your module's sources don't fit that shape, build
-	/// the `TargetScript.pre` yourself rather than risk drift between
-	/// the two — Xcode would skip rebuilds when files outside
-	/// `inputPaths` changed but the script still scanned them.
+	/// files change) and the script's own `find` of files to pass to
+	/// `SafeDITool generate`. If your module's sources don't fit that
+	/// shape, build the `TargetScript.pre` yourself rather than risk
+	/// drift between the two — Xcode would skip rebuilds when files
+	/// outside `inputPaths` changed but the script still read them.
 	///
 	/// - Parameters:
 	///   - module: Directory under `$SRCROOT` holding the target's
