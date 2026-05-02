@@ -74,9 +74,9 @@ Bazel rule outputs must be known at analysis time (Starlark can't run
 subprocesses or read file contents then). SafeDI's output *set*
 depends on what's inside each Swift file — how many
 `@Instantiable(isRoot:)` / `generateMock: true` declarations it
-finds — which analysis can't see. Listing outputs manually in
-`BUILD.bazel` would regress the "no hardcoded filenames" property we
-cared about for Tuist, so `safedi_generate` uses SafeDITool's
+finds — which analysis can't see. Hand-maintaining the output list
+in `BUILD.bazel` would force every author to update their build file
+on every annotation change, so `safedi_generate` uses SafeDITool's
 `--combined-output` mode to emit a single declared output regardless
 of source contents. The concatenated file is still valid Swift
 (SafeDI's generated files are all top-level declarations) and
