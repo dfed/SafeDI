@@ -5,11 +5,11 @@ import ProjectDescription
 //
 // Two entry points cover the typical wiring:
 //
-//   `SafeDI.preCompileScript(module:dependents:)` — pre-compile script
+//   `SafeDI.preCompileScript(module:dependencies:)` — pre-compile script
 //   phase that runs `SafeDITool generate --combined-output` against
 //   one module. The producing target writes
 //   `$(BUILT_PRODUCTS_DIR)/SafeDI/<module>.safedi`; downstream targets
-//   list the producer's name in `dependents:` and the helper passes
+//   list the producer's name in `dependencies:` and the helper passes
 //   that artifact through `--dependent-module-info-file-path`.
 //
 //   `SafeDI.generatedSource` — the single `.generated(...)` entry to
@@ -45,7 +45,7 @@ public enum SafeDI {
 	/// `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift` (every generated
 	/// dependency-tree, mock, and mock-configuration body
 	/// concatenated into one file). Downstream targets pass the
-	/// producer's name in `dependents:` so the helper feeds that
+	/// producer's name in `dependencies:` so the helper feeds that
 	/// `.safedi` artifact through `--dependent-module-info-file-path`.
 	///
 	/// The helper assumes the target's Swift sources live under
@@ -61,16 +61,16 @@ public enum SafeDI {
 	///   - module: Directory under `$SRCROOT` holding the target's
 	///     Swift sources. Also the basename of the module-info
 	///     artifact this target emits.
-	///   - dependents: Modules whose `.safedi` artifacts this target
+	///   - dependencies: Modules whose `.safedi` artifacts this target
 	///     consumes. Each resolves to
 	///     `$(BUILT_PRODUCTS_DIR)/SafeDI/<name>.safedi`. Tuist target
 	///     dependencies must guarantee build order.
 	public static func preCompileScript(
 		module: String,
-		dependents: [String] = [],
+		dependencies: [String] = [],
 	) -> TargetScript {
 		let moduleSources: [FileListGlob] = [.glob("\(module)/**/*.swift")]
-		let dependentInputPaths: [FileListGlob] = dependents.map {
+		let dependencyInputPaths: [FileListGlob] = dependencies.map {
 			FileListGlob.glob("$(BUILT_PRODUCTS_DIR)/SafeDI/\($0).safedi")
 		}
 		let outputPaths: [Path] = [
@@ -79,9 +79,9 @@ public enum SafeDI {
 		]
 
 		return .pre(
-			script: scriptBody(module: module, dependents: dependents),
+			script: scriptBody(module: module, dependencies: dependencies),
 			name: "Generate SafeDI",
-			inputPaths: moduleSources + dependentInputPaths,
+			inputPaths: moduleSources + dependencyInputPaths,
 			outputPaths: outputPaths,
 			basedOnDependencyAnalysis: true,
 		)
@@ -94,15 +94,15 @@ public enum SafeDI {
 // don't honor in-content shebangs. The body below sticks to POSIX
 // shell — no arrays, no process substitution — so behavior is
 // identical regardless of which sh-compatible shell Xcode picks.
-private func scriptBody(module: String, dependents: [String]) -> String {
+private func scriptBody(module: String, dependencies: [String]) -> String {
 	let escapedModule = shellEscape(module)
-	let escapedDependentNames = shellEscape(dependents.joined(separator: ","))
+	let escapedDependencyNames = shellEscape(dependencies.joined(separator: ","))
 
 	return """
 	set -eu
 
 	module=\(escapedModule)
-	dependent_names_csv=\(escapedDependentNames)
+	dependency_names_csv=\(escapedDependencyNames)
 
 	: "${SRCROOT:?SRCROOT must be set}"
 	: "${DERIVED_FILE_DIR:?DERIVED_FILE_DIR must be set}"
@@ -178,41 +178,41 @@ private func scriptBody(module: String, dependents: [String]) -> String {
 	# Resolve dependent .safedi artifacts. Caller passes the
 	# comma-separated list of module *names*; we construct paths
 	# inside the build env so $BUILT_PRODUCTS_DIR expands correctly.
-	dependent_csv=""
-	if [ -n "$dependent_names_csv" ]; then
-		dependent_csv="$scratch_dir/DependentModuleInfo.csv"
-		: >"$dependent_csv"
+	dependency_csv=""
+	if [ -n "$dependency_names_csv" ]; then
+		dependency_csv="$scratch_dir/DependencyModuleInfo.csv"
+		: >"$dependency_csv"
 
 		old_ifs="$IFS"
 		IFS=','
 		# shellcheck disable=SC2086
-		set -- $dependent_names_csv
+		set -- $dependency_names_csv
 		IFS="$old_ifs"
 
 		first=1
-		for dependent_name in "$@"; do
-			dependent_path="$shared_safedi_dir/$dependent_name.safedi"
-			if [ ! -f "$dependent_path" ]; then
-				echo "error: SafeDI plugin: $dependent_name.safedi not found at $dependent_path — the $dependent_name target must build first" >&2
+		for dependency_name in "$@"; do
+			dependency_path="$shared_safedi_dir/$dependency_name.safedi"
+			if [ ! -f "$dependency_path" ]; then
+				echo "error: SafeDI plugin: $dependency_name.safedi not found at $dependency_path — the $dependency_name target must build first" >&2
 				exit 1
 			fi
 			if [ "$first" = 1 ]; then
-				printf '%s' "$dependent_path" >>"$dependent_csv"
+				printf '%s' "$dependency_path" >>"$dependency_csv"
 				first=0
 			else
-				printf ',%s' "$dependent_path" >>"$dependent_csv"
+				printf ',%s' "$dependency_path" >>"$dependency_csv"
 			fi
 		done
 	fi
 
 	cd "$SRCROOT"
 
-	if [ -n "$dependent_csv" ]; then
+	if [ -n "$dependency_csv" ]; then
 		"$safedi_tool" generate \\
 			"$input_csv" \\
 			--combined-output "$combined_output" \\
 			--module-info-output "$module_info_output" \\
-			--dependent-module-info-file-path "$dependent_csv"
+			--dependent-module-info-file-path "$dependency_csv"
 	else
 		"$safedi_tool" generate \\
 			"$input_csv" \\
