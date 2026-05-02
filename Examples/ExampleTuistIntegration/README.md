@@ -65,9 +65,15 @@ appropriate inputs/outputs for Xcode's incremental dependency analysis.
 4. Each target depending on SafeDI's runtime library adds
    `.external(name: "SafeDI")` to its `dependencies`.
 
-Adding/removing `.swift` files: just `tuist generate`. Bumping SafeDI: edit
-the version in `Tuist/Package.swift`. Both the runtime library and the
-`SafeDITool` binary the plugin invokes follow from that single pin.
+Adding/removing an `@Instantiable(isRoot: true)` or
+`@Instantiable(generateMock: true)` type: re-run `tuist generate` so the
+plugin's manifest-time scan refreshes the `.generated(...)` source list
+that backs Xcode's compile phase. (Plain file additions/removals that
+don't change those annotations are just standard Tuist glob refresh.)
+
+Bumping SafeDI: edit the version in `Tuist/Package.swift`. Both the
+runtime library and the `SafeDITool` binary the plugin invokes follow
+from that single pin.
 
 ## Why not use the `SafeDIGenerator` SPM plugin?
 
@@ -135,9 +141,11 @@ tuist generate
 `tuist generate` opens the generated workspace in Xcode. Build and run the
 `ExampleTuistIntegration` scheme.
 
-Re-run `tuist install` when bumping SafeDI; `tuist generate` after
-adding/removing Swift files or `@Instantiable` declarations so the
-source glob and `.generated(…)` output list refresh.
+Re-run `tuist install` when bumping SafeDI. Re-run `tuist generate`
+after adding or removing an `@Instantiable(isRoot: true)` or
+`@Instantiable(generateMock: true)` type so the `.generated(…)` output
+list picks up the new file names (the source-glob refresh on plain
+file changes is just standard Tuist).
 
 ## How the build wiring works (under the hood)
 
