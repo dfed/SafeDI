@@ -4,9 +4,7 @@
 Derived/
 .tuist-bin/
 
-# SPM build products and the manifest-time scan scratch directory
-# (SafeDITool scan writes here during `tuist generate` — see
-# Project.swift).
+# SPM build products (tuist install populates Tuist/.build/...).
 .build/
 
 # Xcode user data and IDE noise

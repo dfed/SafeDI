@@ -11,36 +11,69 @@ scanner at the subproject's sources.
 The source code of both targets (types, mocks, previews) is byte-for-byte the
 same as `ExampleMultiProjectIntegration`; only the project structure differs.
 
+## How it's wired
+
+All SafeDI-specific scaffolding lives in the
+[`SafeDITuist` Tuist plugin](../../TuistPlugins/SafeDITuist) shipped from this
+repo. `Tuist.swift` declares the plugin; `Project.swift` calls two helpers:
+
+- `SafeDI.preCompileScript(module:dependents:)` — returns a `TargetScript.pre`
+  that runs `SafeDITool generate --combined-output` against one module at
+  build time. Every call writes
+  `$(BUILT_PRODUCTS_DIR)/SafeDI/<module>.safedi` for downstream consumers and
+  `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift` (every dependency-tree, mock,
+  and mock-configuration body concatenated into one file). `dependents:` lists
+  upstream modules whose `.safedi` to feed in via
+  `--dependent-module-info-file-path`.
+- `SafeDI.generatedSource` — the single `.generated(...)` source entry to add
+  to a target's `sources`. Always at
+  `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift`.
+
+That's the entire integration surface. Because the generated path is fixed,
+adding or removing `@Instantiable` declarations changes only the *contents*
+of `SafeDIGenerated.swift` — never its name. Xcode's incremental build
+recompiles it on the next `xcodebuild`, no `tuist generate` round-trip.
+
 ## Copying this into your own project
 
-This example is designed to be lifted as a template:
+1. Add the plugin to your `Tuist.swift`:
 
-- `Project.swift` and `Scripts/generate-safedi.sh` contain **no
-  hardcoded Swift file lists** — `find` (in the script) and
-  `FileListGlob` (in the manifest) enumerate sources automatically.
-- The set of generated output filenames is **not hardcoded either** —
-  `Project.swift` runs `SafeDITool scan` at `tuist generate` time to
-  ask the tool which Swift files it would emit, and registers each one
-  via `.generated("$(DERIVED_FILE_DIR)/...")` so Xcode adds it to the
-  compile phase without expecting the file to exist yet.
-- **Generated code is a build artifact, never in the source tree.**
-  The pre-compile script phase writes to `$(DERIVED_FILE_DIR)` during
-  every `xcodebuild` run. Nothing is committed, nothing is
-  `.gitignore`d — there's just no `Generated/` in the source tree at
-  all.
-- SafeDITool is fetched as the published artifact bundle. SafeDI's
-  own `Package.swift` declares the `.binaryTarget(url:checksum:)` for
-  its `prebuilt` trait, so `tuist install` pulls the bundle as a side
-  effect of resolving SafeDI — no "build from source" step for
-  consumers.
+   ```swift
+   let tuist = Tuist(
+       project: .tuist(
+           plugins: [
+               .git(
+                   url: "https://github.com/dfed/SafeDI",
+                   tag: "<version>",
+                   directory: "TuistPlugins/SafeDITuist",
+               ),
+           ],
+       ),
+   )
+   ```
 
-When cloning into a new project the edits you're expected to make are:
+2. In `Tuist/Package.swift`, depend on SafeDI so its runtime library and
+   `SafeDIToolBinary` artifact bundle are resolved (the plugin requires
+   `SafeDITool >= 2.0.0-beta-6` for the `--combined-output` flag):
 
-| Where | What |
-|---|---|
-| `Project.swift` | target names, bundle IDs, deployment targets, module directory names, and the `<module-name> [<dependent-module-name>...]` arguments passed to `Scripts/generate-safedi.sh` from each target's pre-compile script |
-| `Scripts/generate-safedi.sh` | nothing — the script is module-generic; module name and dependents come in as positional arguments |
-| `Tuist/Package.swift` | bump SafeDI version (single source of truth — the artifact bundle follows automatically) |
+   ```swift
+   .package(url: "https://github.com/dfed/SafeDI.git", from: "2.0.0-beta-6"),
+   ```
+
+3. In `Project.swift`, `import SafeDITuist` and call the helpers from each
+   target's `scripts:` and `sources:`. See this example's `Project.swift`
+   for the full shape.
+
+4. Each target depending on SafeDI's runtime library adds
+   `.external(name: "SafeDI")` to its `dependencies`.
+
+Adding/removing `@Instantiable` declarations of any kind: just rebuild — the
+plugin overwrites `SafeDIGenerated.swift` with the new contents, and Xcode
+picks it up incrementally. No `tuist generate` step required for SafeDI.
+
+Bumping SafeDI: edit the version in `Tuist/Package.swift`. Both the runtime
+library and the `SafeDITool` binary the plugin invokes follow from that
+single pin.
 
 ## Why not use the `SafeDIGenerator` SPM plugin?
 
@@ -53,11 +86,11 @@ target re-parses its dependencies' sources on every build and that no target
 `SafeDITool` already supports a different workflow: pass `--module-info-output
 Module.safedi` when you run `generate` against a leaf module, then pass
 `--dependent-module-info-file-path` (a CSV of those `.safedi` paths) when you
-run `generate` against a downstream module. This example wires the tool up
-that way directly from Xcode build-phase scripts — no SPM plugin involved —
-which is easier to do under Tuist than under plain SPM because Tuist emits
-real Xcode targets whose script phases can declare arbitrary
-input/output paths.
+run `generate` against a downstream module. The `SafeDITuist` plugin wires
+`SafeDITool` up that way directly from Xcode build-phase scripts — no SPM
+plugin involved — which is easier to do under Tuist than under plain SPM
+because Tuist emits real Xcode targets whose script phases can declare
+arbitrary input/output paths.
 
 ## Prerequisites
 
@@ -94,8 +127,9 @@ the same time so CI and local setup stay aligned.
 From this directory (`Examples/ExampleTuistIntegration`):
 
 ```bash
-# 1. Resolve SPM dependencies — pulls SafeDI and (via SafeDI's
-#    default `prebuilt` trait) the SafeDITool artifact bundle.
+# 1. Resolve SPM dependencies and Tuist plugins. SPM pulls SafeDI and
+#    (via its `prebuilt` trait) the SafeDITool artifact bundle. Tuist
+#    fetches the `SafeDITuist` plugin manifest.
 tuist install
 
 # 2. Generate the Xcode project and workspace.
@@ -105,63 +139,49 @@ tuist generate
 `tuist generate` opens the generated workspace in Xcode. Build and run the
 `ExampleTuistIntegration` scheme.
 
-Re-run `tuist install` when bumping SafeDI; `tuist generate` after
-adding/removing Swift files or `@Instantiable` declarations so the
-source glob and `.generated(…)` output list refresh.
+Re-run `tuist install` when bumping SafeDI. After that, SafeDI annotation
+changes don't require any `tuist generate` — just rebuild.
 
-Both the SafeDI runtime library and the SafeDITool CLI are consumed
-through a single `.package(url:from:)` entry in `Tuist/Package.swift`.
-Targets in `Project.swift` depend on `.external(name: "SafeDI")`;
-`Scripts/generate-safedi.sh` reads the SafeDITool binary SPM pulled
-down as a side effect of SafeDI's `prebuilt` trait chain. One version
-pin, one dependency graph.
+## How the build wiring works (under the hood)
 
-## How the build wiring works
+The plugin's `preCompileScript` helper emits a `TargetScript.pre` whose
+inline shell:
 
-Each target has a pre-compile Xcode script phase that invokes
-`Scripts/generate-safedi.sh <module-name> [<dependent-module-name>...]`.
-The script runs `SafeDITool scan` followed by `SafeDITool generate` —
-the same two-step flow the `SafeDIGenerator` SPM plugin uses. Every
-invocation writes `$(BUILT_PRODUCTS_DIR)/SafeDI/<module-name>.safedi`
-(via `--module-info-output`) so any downstream module can consume it;
-modules with no consumers just ignore the artifact. Each
-`<dependent-module-name>` resolves to that same shared directory and
-is passed through to `--dependent-module-info-file-path`. Generated
-`.swift` files land in `$(DERIVED_FILE_DIR)`.
+1. Locates `SafeDITool` under
+   `$(SRCROOT)/Tuist/.build/artifacts/safedi/SafeDIToolBinary/...`
+   (resolved by `tuist install`).
+2. Globs the module's `.swift` sources into a CSV.
+3. For each `dependents:` entry, builds a CSV of
+   `$(BUILT_PRODUCTS_DIR)/SafeDI/<name>.safedi` paths and feeds them to
+   `--dependent-module-info-file-path`.
+4. Runs `SafeDITool generate` with `--combined-output
+   $(DERIVED_FILE_DIR)/SafeDIGenerated.swift` (the single concatenated
+   Swift file Xcode compiles via `SafeDI.generatedSource`) and
+   `--module-info-output $(BUILT_PRODUCTS_DIR)/SafeDI/<module>.safedi`
+   (the artifact downstream targets consume).
 
-`Project.swift` also runs `SafeDITool scan` once at `tuist generate`
-time (for the host module only) so it can register each expected
-output via `.generated("$(DERIVED_FILE_DIR)/...")`. That call is a
-read-only query — it writes only to a scratch dir under `.build/`; the
-actual code generation happens at `xcodebuild` time.
+Because the combined-output path is fixed and registered statically as a
+`.generated(...)` source, no manifest-time `SafeDITool scan` is needed —
+the plugin doesn't run anything during `tuist generate`.
 
 ### `Subproject` target
 
-Pre-compile phase runs `generate-safedi.sh Subproject`.
-
-1. Emits `$(BUILT_PRODUCTS_DIR)/SafeDI/Subproject.safedi` — the JSON
-   `@Instantiable` surface (`User`, `InMemoryStorage`, `NoteStorage`,
-   `StringStorage`, `DefaultUserService`) for the host to consume.
-2. Produces no generated Swift today — the subproject has no
-   `@Instantiable(isRoot: true)` and no `@Instantiable(generateMock: true)`
-   types, so the dependency tree and mock manifests are empty.
+`SafeDI.preCompileScript(module: "Subproject")` — emits
+`$(BUILT_PRODUCTS_DIR)/SafeDI/Subproject.safedi` (the JSON `@Instantiable`
+surface for `User`, `InMemoryStorage`, `NoteStorage`, `StringStorage`,
+`DefaultUserService`). Also writes `SafeDIGenerated.swift`; with no
+`@Instantiable(isRoot: true)` or `@Instantiable(generateMock: true)` types
+in this module today, that file is just a header.
 
 ### `ExampleTuistIntegration` (host app) target
 
-Pre-compile phase runs `generate-safedi.sh ExampleTuistIntegration Subproject`.
-
-1. Xcode's target dependency graph guarantees `Subproject` builds first, so
-   `Subproject.safedi` exists before this script runs.
-2. Reads `Subproject.safedi` via `--dependent-module-info-file-path` so
-   `SafeDITool generate` can resolve cross-module types. The host never
-   re-parses subproject sources.
-3. Emits the root's `+SafeDI.swift`, the mocks' `+SafeDIMock.swift`, and the
-   shared `SafeDIMockConfiguration.swift` into `$(DERIVED_FILE_DIR)`.
-   Specific filenames follow SafeDI's
-   [output-naming rules](../../Sources/SafeDICore/Utilities/OutputFileNaming.swift).
-4. Also emits its own `ExampleTuistIntegration.safedi` for any future
-   downstream consumer. With no current consumer the artifact is
-   tracked only so Xcode's incremental dependency analysis sees it.
+`SafeDI.preCompileScript(module: "ExampleTuistIntegration", dependents: ["Subproject"])` — Xcode's target dependency graph guarantees
+`Subproject` builds first, so `Subproject.safedi` exists. The host reads
+it via `--dependent-module-info-file-path` (never re-parsing subproject
+sources) and emits its root's dependency tree, the host-target mocks, and
+the shared mock-configuration extensions — all concatenated into
+`SafeDIGenerated.swift`. The host also emits its own
+`ExampleTuistIntegration.safedi` for any future downstream consumer.
 
 ## CI
 
