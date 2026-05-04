@@ -60,7 +60,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
       - name: Download Platform
         if: matrix.platforms != 'platform=macOS'
         run: |
@@ -84,7 +84,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
       # `swift-docc-plugin`'s `--warnings-as-errors` scopes to a single
       # target, so swift-syntax's internal DocC noise stays out of our
       # strict build. That scoping isn't available via `xcodebuild
@@ -93,6 +93,11 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: swift package generate-documentation --target SafeDI --warnings-as-errors
+
+  # Example jobs that declare package traits in their .xcodeproj
+  # (`traits = (…)`) need Xcode 26.4 — the first Xcode that
+  # surfaces traits in the project file. Other examples run on the
+  # same baseline as the SafeDI-core jobs above.
 
   spm-package-integration:
     name: Build Package Integration on Xcode 26
@@ -103,7 +108,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -115,10 +120,11 @@ jobs:
       # path would make Xcode IDE builds fail while the swift build above
       # still passes.
       - name: Build Package Integration (xcodebuild)
-        run: pushd "Examples/Example Package Integration"; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -destination "generic/platform=iOS"; popd
+        run: pushd "Examples/Example Package Integration"; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -destination "platform=macOS"; popd
 
   spm-project-integration:
     name: Build Project Integration on Xcode 26
+    # Pinned to 26.4 — project file declares package traits.
     runs-on: macos-26
     permissions:
       contents: read
@@ -139,6 +145,7 @@ jobs:
 
   spm-multi-project-integration:
     name: Build Multi Project Integration on Xcode 26
+    # Pinned to 26.4 — project file declares package traits.
     runs-on: macos-26
     permissions:
       contents: read
@@ -159,6 +166,10 @@ jobs:
 
   spm-tuist-integration:
     name: Build Tuist Integration on Xcode 26
+    # Pinned to 26.4 (not 26.0) until the SafeDI dependency in
+    # `Tuist/Package.swift` bumps to a release that ships
+    # `swift-tools-version: 6.2`. The current pin still declares 6.3,
+    # which Swift 6.2 rejects when Tuist resolves the manifest.
     runs-on: macos-26
     permissions:
       contents: read
@@ -195,7 +206,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -218,7 +229,7 @@ jobs:
   linux:
     name: Build and Test on Linux
     runs-on: ubuntu-latest
-    container: swift:6.3
+    container: swift:6.2
     permissions:
       contents: read
     steps:
@@ -247,6 +258,8 @@ jobs:
 
   bazel:
     name: Bazel Build on macOS
+    # Pinned to Xcode 26.0 — matches BCR's `macos_arm64` runner
+    # platform defined at https://github.com/bazelbuild/continuous-integration/blob/master/buildkite/bazelci.py
     runs-on: macos-26
     permissions:
       contents: read
@@ -254,7 +267,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
       - name: Build Sources
         run: bazelisk build //Sources/...
       - name: Build Example

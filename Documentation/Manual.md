@@ -781,7 +781,7 @@ UIKit applications’ natural root is the `UIApplicationDelegate`-conforming app
 
 ## Migrating from SafeDI 1.x to 2.x
 
-SafeDI 2.x requires Swift 6.3 or later and does not support CocoaPods. Projects using an earlier Swift version or CocoaPods should use SafeDI 1.x.
+SafeDI 2.x requires Swift 6.2 or later and does not support CocoaPods. Projects using an earlier Swift version or CocoaPods should use SafeDI 1.x.
 
 SafeDI 2.x also removes support for CSV-based configuration files (`.safedi/configuration/include.csv` and `.safedi/configuration/additionalImportedModules.csv`). Configuration is now done via the `#SafeDIConfiguration` macro.
 
@@ -794,14 +794,14 @@ swift package plugin safedi-v1-to-v2 --target <YourRootTarget>
 ```
 
 This plugin will:
-1. Verify your `swift-tools-version` is 6.3 or later
+1. Verify your `swift-tools-version` is 6.2 or later
 2. Create a `SafeDIConfiguration.swift` file in your target’s source directory
 3. Migrate any existing CSV configuration values into the new `#SafeDIConfiguration` macro
 4. Delete the obsolete CSV files
 
 ### Manual migration
 
-1. Update your `swift-tools-version` to 6.3 or later
+1. Update your `swift-tools-version` to 6.2 or later
 2. Update your SafeDI dependency to `from: "2.0.0"`
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
 4. If you don’t have CSV configuration files and do not need other SafeDI configuration options, no `#SafeDIConfiguration()` declaration is required
