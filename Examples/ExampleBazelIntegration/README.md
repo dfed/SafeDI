@@ -10,12 +10,6 @@ system.
 [`rules_apple`](https://github.com/bazelbuild/rules_apple) macOS
 toolchain). The SafeDI rules themselves are platform-agnostic.
 
-**Toolchain:** Swift 6.2 or later (Xcode 26.0+). SafeDI's
-`Package.swift` declares `swift-tools-version: 6.2`, which is what
-the Bazel Central Registry's `macos_arm64` runners ship with;
-trying to consume SafeDI from a Bazel build that uses an older
-Swift toolchain will fail at the swift-syntax compile step.
-
 ## What it demonstrates
 
 - **Two `swift_library` targets** (`//Subproject:Subproject`,

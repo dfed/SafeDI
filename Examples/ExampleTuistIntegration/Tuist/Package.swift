@@ -28,6 +28,6 @@ import PackageDescription
 let package = Package(
 	name: "ExampleTuistIntegration",
 	dependencies: [
-		.package(url: "https://github.com/dfed/SafeDI.git", from: "2.0.0-beta-6"),
+		.package(url: "https://github.com/dfed/SafeDI.git", from: "2.0.0-rc-1"),
 	],
 )

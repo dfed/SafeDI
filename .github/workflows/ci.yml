@@ -42,8 +42,7 @@ jobs:
           awk '/^module\(/,/^\)/' MODULE.bazel | grep -q 'version = "99.99.99-test"'
 
   xcodebuild:
-    name: Build with xcodebuild on Xcode 26.0
-    # Pinned to Xcode 26.0 — matches BCR's macos_arm64 runners.
+    name: Build with xcodebuild on Xcode 26
     runs-on: macos-26
     strategy:
       matrix:
@@ -77,8 +76,7 @@ jobs:
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
 
   docc:
-    name: Build DocC on Xcode 26.0
-    # Pinned to Xcode 26.0 — matches BCR's macos_arm64 runners.
+    name: Build DocC on Xcode 26
     runs-on: macos-26
     permissions:
       contents: read
@@ -96,17 +94,13 @@ jobs:
         with:
           command: swift package generate-documentation --target SafeDI --warnings-as-errors
 
-  # Example CI jobs below pick their Xcode version based on where
-  # they declare package traits: Xcode 26.4 was the first Xcode to
-  # surface package traits in `.xcodeproj` (`traits = (…)` in the
-  # project file), so examples that declare traits there need 26.4.
-  # Examples that declare traits only in `Package.swift` via
-  # `.package(…, traits: …)` — or don't declare traits at all — run
-  # on Xcode 26.0 (same baseline as the SafeDI-core jobs above).
+  # Example jobs that declare package traits in their .xcodeproj
+  # (`traits = (…)`) need Xcode 26.4 — the first Xcode that
+  # surfaces traits in the project file. Other examples run on the
+  # same baseline as the SafeDI-core jobs above.
 
   spm-package-integration:
-    name: Build Package Integration on Xcode 26.0
-    # Declares traits in Package.swift (not the project file).
+    name: Build Package Integration on Xcode 26
     runs-on: macos-26
     permissions:
       contents: read
@@ -115,17 +109,6 @@ jobs:
         uses: actions/checkout@v6
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
-      - name: Download iOS Platform
-        # macos-26 runners only ship the iOS SDK pinned to the
-        # default Xcode (26.4); switching to 26.0 means we need to
-        # download iOS 26.0 explicitly before xcodebuild can target
-        # `generic/platform=iOS`. The `simctl list` warms up the
-        # simulator service — without it `-downloadPlatform` flakes
-        # with "Unable to connect to simulator".
-        run: |
-          sudo xcodebuild -runFirstLaunch
-          sudo xcrun simctl list
-          sudo xcodebuild -downloadPlatform iOS
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -137,11 +120,11 @@ jobs:
       # path would make Xcode IDE builds fail while the swift build above
       # still passes.
       - name: Build Package Integration (xcodebuild)
-        run: pushd "Examples/Example Package Integration"; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -destination "generic/platform=iOS"; popd
+        run: pushd "Examples/Example Package Integration"; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -destination "platform=macOS"; popd
 
   spm-project-integration:
-    name: Build Project Integration on Xcode 26.4
-    # Project file declares package traits.
+    name: Build Project Integration on Xcode 26
+    # Pinned to 26.4 — project file declares package traits.
     runs-on: macos-26
     permissions:
       contents: read
@@ -161,8 +144,8 @@ jobs:
         run: pushd Examples/ExampleProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration; popd
 
   spm-multi-project-integration:
-    name: Build Multi Project Integration on Xcode 26.4
-    # Project file declares package traits.
+    name: Build Multi Project Integration on Xcode 26
+    # Pinned to 26.4 — project file declares package traits.
     runs-on: macos-26
     permissions:
       contents: read
@@ -182,13 +165,11 @@ jobs:
         run: pushd Examples/ExampleMultiProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration; popd
 
   spm-tuist-integration:
-    name: Build Tuist Integration on Xcode 26.4
-    # Pinned to 26.4 (not 26.0) until the SafeDI dep in
+    name: Build Tuist Integration on Xcode 26
+    # Pinned to 26.4 (not 26.0) until the SafeDI dependency in
     # `Tuist/Package.swift` bumps to a release that ships
-    # `swift-tools-version: 6.2`. The current pin
-    # (`from: "2.0.0-beta-6"`) still declares 6.3, which Swift 6.2
-    # rejects when Tuist resolves the manifest. Move to 26.0 after
-    # the next SafeDI release.
+    # `swift-tools-version: 6.2`. The current pin still declares 6.3,
+    # which Swift 6.2 rejects when Tuist resolves the manifest.
     runs-on: macos-26
     permissions:
       contents: read
@@ -249,10 +230,7 @@ jobs:
   linux:
     name: Build and Test on Linux
     runs-on: ubuntu-latest
-    # `-jammy` (Ubuntu 22.04) is more stable than the default
-    # `noble` tag for apt — the curl install we need for the
-    # codecov uploader has hit transient noble-mirror timeouts.
-    container: swift:6.2-jammy
+    container: swift:6.2
     permissions:
       contents: read
     steps:
