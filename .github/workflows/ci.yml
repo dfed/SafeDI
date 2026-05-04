@@ -259,8 +259,7 @@ jobs:
   bazel:
     name: Bazel Build on macOS
     # Pinned to Xcode 26.0 — matches BCR's `macos_arm64` runner
-    # platform defined at
-    # https://github.com/bazelbuild/continuous-integration/blob/master/buildkite/bazelci.py
+    # platform defined at https://github.com/bazelbuild/continuous-integration/blob/master/buildkite/bazelci.py
     runs-on: macos-26
     permissions:
       contents: read
