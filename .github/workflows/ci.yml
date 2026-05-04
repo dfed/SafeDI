@@ -119,9 +119,12 @@ jobs:
         # macos-26 runners only ship the iOS SDK pinned to the
         # default Xcode (26.4); switching to 26.0 means we need to
         # download iOS 26.0 explicitly before xcodebuild can target
-        # `generic/platform=iOS`.
+        # `generic/platform=iOS`. The `simctl list` warms up the
+        # simulator service — without it `-downloadPlatform` flakes
+        # with "Unable to connect to simulator".
         run: |
           sudo xcodebuild -runFirstLaunch
+          sudo xcrun simctl list
           sudo xcodebuild -downloadPlatform iOS
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
