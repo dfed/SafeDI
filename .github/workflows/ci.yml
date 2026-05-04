@@ -254,7 +254,10 @@ jobs:
           os: linux
 
   bazel:
-    name: Bazel Build on macOS
+    name: Bazel Build on Xcode 26.0
+    # Pinned to Xcode 26.0 (Swift 6.2) to mirror BCR's macos_arm64
+    # runners — that's the toolchain SafeDI's BCR submission has to
+    # build under, so our local Bazel CI should match.
     runs-on: macos-26
     permissions:
       contents: read
@@ -262,7 +265,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
       - name: Build Sources
         run: bazelisk build //Sources/...
       - name: Build Example
