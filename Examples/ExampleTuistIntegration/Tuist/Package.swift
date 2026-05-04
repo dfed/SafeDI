@@ -1,4 +1,4 @@
-// swift-tools-version: 6.3
+// swift-tools-version: 6.2
 //
 // Consumed by `tuist install`, which invokes SPM to resolve this
 // manifest. Declaring SafeDI here gives Tuist's SPM integration a

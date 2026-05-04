@@ -43,11 +43,7 @@ jobs:
 
   xcodebuild:
     name: Build with xcodebuild on Xcode 26.0
-    # Pinned to Xcode 26.0 (Swift 6.2) — the lowest Swift toolchain
-    # we support, matching what BCR's macos_arm64 runners ship.
-    # Verifies SafeDI's Package.swift parses + compiles on the
-    # baseline Swift version. Examples + the publish workflow stay
-    # on the latest Xcode.
+    # Pinned to Xcode 26.0 — matches BCR's macos_arm64 runners.
     runs-on: macos-26
     strategy:
       matrix:
@@ -99,8 +95,16 @@ jobs:
         with:
           command: swift package generate-documentation --target SafeDI --warnings-as-errors
 
+  # Example CI jobs below pick their Xcode version based on whether
+  # the example uses package traits: Xcode 26.4 was the first Xcode
+  # to support package traits, so any example whose Package.swift /
+  # `.xcodeproj` declares them needs 26.4. Examples that only consume
+  # SafeDI via its default trait (no explicit `traits:` syntax) run
+  # on Xcode 26.0 — same baseline as the SafeDI-core jobs above.
+
   spm-package-integration:
-    name: Build Package Integration on Xcode 26
+    name: Build Package Integration on Xcode 26.4
+    # Uses `.package(traits: ["sourceBuild"])`.
     runs-on: macos-26
     permissions:
       contents: read
@@ -123,7 +127,8 @@ jobs:
         run: pushd "Examples/Example Package Integration"; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -destination "generic/platform=iOS"; popd
 
   spm-project-integration:
-    name: Build Project Integration on Xcode 26
+    name: Build Project Integration on Xcode 26.4
+    # Project file declares package traits.
     runs-on: macos-26
     permissions:
       contents: read
@@ -143,7 +148,8 @@ jobs:
         run: pushd Examples/ExampleProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration; popd
 
   spm-multi-project-integration:
-    name: Build Multi Project Integration on Xcode 26
+    name: Build Multi Project Integration on Xcode 26.4
+    # Project file declares package traits.
     runs-on: macos-26
     permissions:
       contents: read
@@ -163,7 +169,8 @@ jobs:
         run: pushd Examples/ExampleMultiProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration; popd
 
   spm-tuist-integration:
-    name: Build Tuist Integration on Xcode 26
+    name: Build Tuist Integration on Xcode 26.0
+    # Tuist example doesn't declare package traits.
     runs-on: macos-26
     permissions:
       contents: read
@@ -175,7 +182,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
       - name: Install Tuist via mise
         # Keep the pinned Tuist version here in sync with the README.
         run: |
@@ -193,9 +200,7 @@ jobs:
 
   spm:
     name: Build and Test on Xcode 26.0
-    # Pinned to Xcode 26.0 (Swift 6.2) — see the `xcodebuild` job
-    # comment above for rationale. Coverage on the latest toolchain
-    # is provided by the Linux job (Swift 6.3 docker).
+    # Pinned to Xcode 26.0 — matches BCR's macos_arm64 runners.
     runs-on: macos-26
     permissions:
       contents: read
@@ -226,7 +231,7 @@ jobs:
   linux:
     name: Build and Test on Linux
     runs-on: ubuntu-latest
-    container: swift:6.3
+    container: swift:6.2
     permissions:
       contents: read
     steps:
@@ -255,9 +260,7 @@ jobs:
 
   bazel:
     name: Bazel Build on Xcode 26.0
-    # Pinned to Xcode 26.0 (Swift 6.2) to mirror BCR's macos_arm64
-    # runners — that's the toolchain SafeDI's BCR submission has to
-    # build under, so our local Bazel CI should match.
+    # Pinned to Xcode 26.0 — matches BCR's macos_arm64 runners.
     runs-on: macos-26
     permissions:
       contents: read
