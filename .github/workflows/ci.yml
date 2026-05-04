@@ -115,6 +115,14 @@ jobs:
         uses: actions/checkout@v6
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      - name: Download iOS Platform
+        # macos-26 runners only ship the iOS SDK pinned to the
+        # default Xcode (26.4); switching to 26.0 means we need to
+        # download iOS 26.0 explicitly before xcodebuild can target
+        # `generic/platform=iOS`.
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          sudo xcodebuild -downloadPlatform iOS
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -233,7 +241,10 @@ jobs:
   linux:
     name: Build and Test on Linux
     runs-on: ubuntu-latest
-    container: swift:6.2
+    # `-jammy` (Ubuntu 22.04) is more stable than the default
+    # `noble` tag for apt — the curl install we need for the
+    # codecov uploader has hit transient noble-mirror timeouts.
+    container: swift:6.2-jammy
     permissions:
       contents: read
     steps:
