@@ -182,8 +182,13 @@ jobs:
         run: pushd Examples/ExampleMultiProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration; popd
 
   spm-tuist-integration:
-    name: Build Tuist Integration on Xcode 26.0
-    # Tuist example doesn't declare package traits.
+    name: Build Tuist Integration on Xcode 26.4
+    # Pinned to 26.4 (not 26.0) until the SafeDI dep in
+    # `Tuist/Package.swift` bumps to a release that ships
+    # `swift-tools-version: 6.2`. The current pin
+    # (`from: "2.0.0-beta-6"`) still declares 6.3, which Swift 6.2
+    # rejects when Tuist resolves the manifest. Move to 26.0 after
+    # the next SafeDI release.
     runs-on: macos-26
     permissions:
       contents: read
@@ -195,7 +200,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Install Tuist via mise
         # Keep the pinned Tuist version here in sync with the README.
         run: |

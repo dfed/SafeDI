@@ -96,9 +96,9 @@ arbitrary input/output paths.
 
 | Tool | Notes |
 |------|-------|
-| macOS with Xcode 26.0 | Matches the rest of SafeDI's CI. |
+| macOS with Xcode 26.4 | Matches the rest of SafeDI's CI. |
 | [Tuist](https://tuist.dev) 4.x | Install via [mise](https://mise.jdx.dev). Tuist no longer publishes a Homebrew formula. |
-| Swift 6.2 toolchain | Ships with Xcode 26.0 |
+| Swift 6.3 toolchain | Ships with Xcode 26.4 |
 
 ### Installing Tuist
 
