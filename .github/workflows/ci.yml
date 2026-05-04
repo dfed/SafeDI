@@ -198,7 +198,7 @@ jobs:
         run: pushd Examples/ExampleTuistIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -workspace ExampleTuistIntegration.xcworkspace -scheme ExampleTuistIntegration; popd
 
   spm:
-    name: Build and Test on Xcode 26.0
+    name: Build and Test on Xcode 26
     # Pinned to Xcode 26.0 — matches BCR's macos_arm64 runners.
     runs-on: macos-26
     permissions:
@@ -258,7 +258,7 @@ jobs:
           os: linux
 
   bazel:
-    name: Bazel Build on Xcode 26.0
+    name: Bazel Build on macOS
     # Pinned to Xcode 26.0 — matches BCR's macos_arm64 runners.
     runs-on: macos-26
     permissions:
