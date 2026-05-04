@@ -52,8 +52,8 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 			Diagnostics.error("Could not parse swift-tools-version from Package.swift")
 			return
 		}
-		guard major > 6 || (major == 6 && minor >= 3) else {
-			Diagnostics.error("SafeDI 2.x requires swift-tools-version 6.3 or later. Found \(major).\(minor). Update your Package.swift before migrating.")
+		guard major > 6 || (major == 6 && minor >= 2) else {
+			Diagnostics.error("SafeDI 2.x requires swift-tools-version 6.2 or later. Found \(major).\(minor). Update your Package.swift before migrating.")
 			return
 		}
 

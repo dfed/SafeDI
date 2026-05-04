@@ -96,9 +96,9 @@ arbitrary input/output paths.
 
 | Tool | Notes |
 |------|-------|
-| macOS with Xcode 26.4 | Matches the rest of SafeDI's CI. |
+| macOS with Xcode 26.0+ | This example pins Swift 6.3 / Xcode 26.4 (matches the rest of SafeDI's example CI), but SafeDI itself supports Swift 6.2 / Xcode 26.0 minimum — bump the example down if you need to test against the baseline. |
 | [Tuist](https://tuist.dev) 4.x | Install via [mise](https://mise.jdx.dev). Tuist no longer publishes a Homebrew formula. |
-| Swift 6.3 toolchain | Ships with Xcode 26.4 |
+| Swift 6.3 toolchain | Ships with Xcode 26.4. SafeDI itself supports Swift 6.2+; this example tracks the latest. |
 
 ### Installing Tuist
 

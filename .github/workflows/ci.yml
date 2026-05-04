@@ -42,7 +42,12 @@ jobs:
           awk '/^module\(/,/^\)/' MODULE.bazel | grep -q 'version = "99.99.99-test"'
 
   xcodebuild:
-    name: Build with xcodebuild on Xcode 26
+    name: Build with xcodebuild on Xcode 26.0
+    # Pinned to Xcode 26.0 (Swift 6.2) — the lowest Swift toolchain
+    # we support, matching what BCR's macos_arm64 runners ship.
+    # Verifies SafeDI's Package.swift parses + compiles on the
+    # baseline Swift version. Examples + the publish workflow stay
+    # on the latest Xcode.
     runs-on: macos-26
     strategy:
       matrix:
@@ -60,7 +65,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
       - name: Download Platform
         if: matrix.platforms != 'platform=macOS'
         run: |
@@ -187,7 +192,10 @@ jobs:
         run: pushd Examples/ExampleTuistIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -workspace ExampleTuistIntegration.xcworkspace -scheme ExampleTuistIntegration; popd
 
   spm:
-    name: Build and Test on Xcode 26
+    name: Build and Test on Xcode 26.0
+    # Pinned to Xcode 26.0 (Swift 6.2) — see the `xcodebuild` job
+    # comment above for rationale. Coverage on the latest toolchain
+    # is provided by the Linux job (Swift 6.3 docker).
     runs-on: macos-26
     permissions:
       contents: read
@@ -195,7 +203,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
