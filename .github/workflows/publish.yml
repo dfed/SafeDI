@@ -18,6 +18,13 @@ on:
         default: false
 
 jobs:
+  # Publish builds SafeDITool against the *latest* Swift toolchain,
+  # not the project's minimum. SafeDITool ships as a prebuilt that
+  # consumers run through the SafeDIGenerator plugin, so it has to
+  # handle source written for any Swift version downstream consumers
+  # are on. Building against the latest swift-syntax keeps the
+  # prebuilt tolerant of newer constructs; an older build would
+  # parse-fail on newer consumer code.
   build-macos:
     name: Build macOS
     runs-on: macos-26
