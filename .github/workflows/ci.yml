@@ -166,10 +166,6 @@ jobs:
 
   spm-tuist-integration:
     name: Build Tuist Integration on Xcode 26
-    # Pinned to 26.4 (not 26.0) until the SafeDI dependency in
-    # `Tuist/Package.swift` bumps to a release that ships
-    # `swift-tools-version: 6.2`. The current pin still declares 6.3,
-    # which Swift 6.2 rejects when Tuist resolves the manifest.
     runs-on: macos-26
     permissions:
       contents: read
@@ -181,7 +177,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v6
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
       - name: Install Tuist via mise
         # Keep the pinned Tuist version here in sync with the README.
         run: |
