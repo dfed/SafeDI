@@ -264,11 +264,25 @@ jobs:
         uses: actions/checkout@v6
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      # Wrapping `bazelisk build` in retry — not just dependency
+      # resolution, like the SPM jobs above — because Bazel resolves
+      # external repos lazily during the build itself. There's no
+      # equivalent to `swift package resolve` we could isolate; a
+      # transient HTTP failure (e.g. on a `rules_swift` transitive
+      # like `MobileNativeFoundation/index-import`) surfaces as a
+      # build failure. Bazel caches successful downloads, so a retry
+      # after a flake is cheap.
+      #
+      # Each command runs in a subshell so a `cd` for the example
+      # build doesn't leak its cwd change into subsequent retries.
       - name: Build Sources
-        run: bazelisk build //Sources/...
+        uses: ./.github/actions/retry
+        with:
+          command: bazelisk build //Sources/...
       - name: Build Example
-        working-directory: Examples/ExampleBazelIntegration
-        run: bazelisk build //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration
+        uses: ./.github/actions/retry
+        with:
+          command: (cd Examples/ExampleBazelIntegration && bazelisk build //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration)
 
   readme-validation:
     name: Check Markdown links
