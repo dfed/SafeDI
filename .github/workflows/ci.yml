@@ -258,13 +258,22 @@ jobs:
     # publish (https://registry.bazel.build/modules/safedi) surface
     # here first. Keep it in sync with `.bcr/presubmit.yml`:
     #   - Bazel version: matches `.bazelversion` (consumed by bazelisk)
-    #     and BCR's `bazel: ["9.x"]` matrix entry.
+    #     and BCR's `bazel: ["9.x"]` matrix entry. NOTE: `9.x` resolves
+    #     to whatever 9.x point release is current; we pin a specific
+    #     version. If BCR ships a newer 9.x before we bump, drift is
+    #     possible — bump `.bazelversion` when you notice the gap.
     #   - Xcode 26.0 — matches BCR's `macos_arm64` runner platform
     #     defined at https://github.com/bazelbuild/continuous-integration/blob/master/buildkite/bazelci.py
+    #   - Runner OS: `macos-15` (Sequoia), NOT `macos-26`. BCR's
+    #     `macos_arm64` runs an OS older than the Xcode 26 SDK it has
+    #     installed, so a binary built for macOS 26 deployment target
+    #     fails dyld at execution time. Running on `macos-26` masks
+    #     that failure (SDK == runner OS); `macos-15` reproduces the
+    #     SDK-vs-runner gap so we catch it locally.
     #   - `build_targets` here mirror the two BCR tasks
     #     (`verify_safedi_build` and `bcr_test_module.build_example`).
     # If you change BCR's matrix or task list, update this job too.
-    runs-on: macos-26
+    runs-on: macos-15
     permissions:
       contents: read
     steps:
