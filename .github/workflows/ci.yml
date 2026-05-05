@@ -254,26 +254,23 @@ jobs:
 
   bazel:
     name: Bazel Build on macOS
-    # This job mirrors BCR's presubmit so issues that block our BCR
-    # publish (https://registry.bazel.build/modules/safedi) surface
-    # here first. Keep it in sync with `.bcr/presubmit.yml`:
-    #   - Bazel version: matches `.bazelversion` (consumed by bazelisk)
-    #     and BCR's `bazel: ["9.x"]` matrix entry. NOTE: `9.x` resolves
-    #     to whatever 9.x point release is current; we pin a specific
-    #     version. If BCR ships a newer 9.x before we bump, drift is
-    #     possible — bump `.bazelversion` when you notice the gap.
-    #   - Xcode 26.0 — matches BCR's `macos_arm64` runner platform
-    #     defined at https://github.com/bazelbuild/continuous-integration/blob/master/buildkite/bazelci.py
-    #   - Runner OS: `macos-15` (Sequoia), NOT `macos-26`. BCR's
-    #     `macos_arm64` runs an OS older than the Xcode 26 SDK it has
-    #     installed, so a binary built for macOS 26 deployment target
-    #     fails dyld at execution time. Running on `macos-26` masks
-    #     that failure (SDK == runner OS); `macos-15` reproduces the
-    #     SDK-vs-runner gap so we catch it locally.
-    #   - `build_targets` here mirror the two BCR tasks
-    #     (`verify_safedi_build` and `bcr_test_module.build_example`).
-    # If you change BCR's matrix or task list, update this job too.
-    runs-on: macos-15
+    # General bazel sanity check on every PR. We can't perfectly
+    # mirror BCR's presubmit (https://registry.bazel.build/modules/safedi):
+    # BazelCI's BuildKite infrastructure is closed to non-`bazelbuild`
+    # projects (https://github.com/bazelbuild/continuous-integration/blob/main/.github/ISSUE_TEMPLATE/adding-your-project-to-bazel-ci.md),
+    # and any GH Actions runner we pick differs from BCR's image in
+    # ways we can't fully control (CC toolchain auto-detection,
+    # SDK-vs-runner-OS gap, exact Bazel point release). So treat BCR
+    # as the canonical macOS-on-older-OS check; this job catches
+    # general regressions before we publish.
+    #
+    # Keep `build_targets` aligned with `.bcr/presubmit.yml` so a
+    # divergence is visible in review. If you change BCR's task list,
+    # update this job too.
+    #
+    # Pinned to Xcode 26.0 — matches BCR's `macos_arm64` runner
+    # platform defined at https://github.com/bazelbuild/continuous-integration/blob/master/buildkite/bazelci.py
+    runs-on: macos-26
     permissions:
       contents: read
     steps:
