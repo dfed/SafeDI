@@ -286,12 +286,11 @@ jobs:
       - name: Build SafeDI targets (mirrors BCR `verify_safedi_build`)
         uses: ./.github/actions/retry
         with:
-          command: |
-            bazelisk build \
-              //Sources/SafeDI:SafeDI \
-              //Sources/SafeDICore:SafeDICore \
-              //Sources/SafeDIMacros:SafeDIMacros \
-              //Sources/SafeDITool:SafeDITool
+          # Kept on one line — the retry composite action splices
+          # `${{ inputs.command }}` directly into a bash `for` loop
+          # and tacks ` && break` onto the same source line, so a
+          # multi-line YAML command leaves `&& break` orphaned.
+          command: bazelisk build //Sources/SafeDI:SafeDI //Sources/SafeDICore:SafeDICore //Sources/SafeDIMacros:SafeDIMacros //Sources/SafeDITool:SafeDITool
       - name: Build downstream example (mirrors BCR `bcr_test_module.build_example`)
         uses: ./.github/actions/retry
         with:
