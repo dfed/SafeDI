@@ -254,8 +254,16 @@ jobs:
 
   bazel:
     name: Bazel Build on macOS
-    # Pinned to Xcode 26.0 — matches BCR's `macos_arm64` runner
-    # platform defined at https://github.com/bazelbuild/continuous-integration/blob/master/buildkite/bazelci.py
+    # This job mirrors BCR's presubmit so issues that block our BCR
+    # publish (https://registry.bazel.build/modules/safedi) surface
+    # here first. Keep it in sync with `.bcr/presubmit.yml`:
+    #   - Bazel version: matches `.bazelversion` (consumed by bazelisk)
+    #     and BCR's `bazel: ["9.x"]` matrix entry.
+    #   - Xcode 26.0 — matches BCR's `macos_arm64` runner platform
+    #     defined at https://github.com/bazelbuild/continuous-integration/blob/master/buildkite/bazelci.py
+    #   - `build_targets` here mirror the two BCR tasks
+    #     (`verify_safedi_build` and `bcr_test_module.build_example`).
+    # If you change BCR's matrix or task list, update this job too.
     runs-on: macos-26
     permissions:
       contents: read
@@ -275,11 +283,16 @@ jobs:
       #
       # Each command runs in a subshell so a `cd` for the example
       # build doesn't leak its cwd change into subsequent retries.
-      - name: Build Sources
+      - name: Build SafeDI targets (mirrors BCR `verify_safedi_build`)
         uses: ./.github/actions/retry
         with:
-          command: bazelisk build //Sources/...
-      - name: Build Example
+          command: |
+            bazelisk build \
+              //Sources/SafeDI:SafeDI \
+              //Sources/SafeDICore:SafeDICore \
+              //Sources/SafeDIMacros:SafeDIMacros \
+              //Sources/SafeDITool:SafeDITool
+      - name: Build downstream example (mirrors BCR `bcr_test_module.build_example`)
         uses: ./.github/actions/retry
         with:
           command: (cd Examples/ExampleBazelIntegration && bazelisk build //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration)

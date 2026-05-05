@@ -15,6 +15,7 @@ module(
 
 bazel_dep(name = "rules_swift", version = "3.6.0", repo_name = "build_bazel_rules_swift")
 bazel_dep(name = "rules_swift_package_manager", version = "1.15.0")
+bazel_dep(name = "apple_support", version = "1.24.2", repo_name = "build_bazel_apple_support")
 
 # Translate SPM dependencies into Bazel targets. The resulting
 # @swiftpkg_* repos are referenced from per-module BUILD.bazel files.

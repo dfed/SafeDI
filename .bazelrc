@@ -5,3 +5,9 @@ common --enable_bzlmod
 
 # Fail loudly on errors — makes CI logs readable.
 common --verbose_failures
+
+# Pin host (exec-config) deployment target so tools like SafeDITool stay
+# runnable on macOS hosts older than the SDK used to build them. Without
+# this, a build on a machine with Xcode 26 produces a SafeDITool binary
+# that dyld refuses to load on a runner with an older macOS.
+common --host_macos_minimum_os=14.0
