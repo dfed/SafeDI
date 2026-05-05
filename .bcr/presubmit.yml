@@ -11,13 +11,13 @@
 #       `cc_toolchain.target_gnu_system_name` returning "local" on
 #       BCR's runner and analysis fails. (Belt-and-suspenders with the
 #       `apple_support` bazel_dep we register in MODULE.bazel.)
-#   - --host_macos_minimum_os=14.0
+#   - --host_macos_minimum_os=12.0
 #       Pins the deployment target for tools built under exec config
 #       (e.g. SafeDITool itself), so a binary built with the macOS 26
 #       SDK still runs on BCR's older runner OS. Without this, dyld
 #       refuses to load SafeDITool when the example task tries to
 #       execute it during code generation.
-#   - --macos_minimum_os=14.0
+#   - --macos_minimum_os=12.0
 #       Same idea for target-config builds. Matches swift-syntax's
 #       configuration for consistency.
 matrix:
@@ -31,8 +31,8 @@ tasks:
     bazel: ${{ bazel }}
     build_flags:
       - "--repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1"
-      - "--host_macos_minimum_os=14.0"
-      - "--macos_minimum_os=14.0"
+      - "--host_macos_minimum_os=12.0"
+      - "--macos_minimum_os=12.0"
     build_targets:
       - "@safedi//Sources/SafeDI:SafeDI"
       - "@safedi//Sources/SafeDICore:SafeDICore"
@@ -51,8 +51,8 @@ bcr_test_module:
       bazel: ${{ bazel }}
       build_flags:
         - "--repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1"
-        - "--host_macos_minimum_os=14.0"
-        - "--macos_minimum_os=14.0"
+        - "--host_macos_minimum_os=12.0"
+        - "--macos_minimum_os=12.0"
       build_targets:
         - "//Subproject:Subproject"
         - "//ExampleBazelIntegration:ExampleBazelIntegration"

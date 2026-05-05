@@ -12,5 +12,5 @@ common --verbose_failures
 # machine with Xcode 26 produces a SafeDITool binary that dyld
 # refuses to load on a runner with an older macOS. Pattern matches
 # swift-syntax's .bazelrc.
-common --host_macos_minimum_os=14.0
-common --macos_minimum_os=14.0
+common --host_macos_minimum_os=12.0
+common --macos_minimum_os=12.0
