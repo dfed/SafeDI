@@ -1,3 +1,25 @@
+# BCR presubmit configuration. Mirrors the pattern used by
+# swift-syntax (modules/swift-syntax/603.0.1/presubmit.yml in the
+# bazel-central-registry repo) — same dep shape (swift-syntax +
+# rules_swift on Bazel 9.x with Xcode 26 SDK on an older runner OS),
+# same set of `build_flags` needed.
+#
+# The `build_flags` block is the substantive part:
+#   - --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+#       Stops Bazel from auto-detecting the host CC toolchain; without
+#       this, rules_swift's xcode_swift_toolchain falls through to
+#       `cc_toolchain.target_gnu_system_name` returning "local" on
+#       BCR's runner and analysis fails. (Belt-and-suspenders with the
+#       `apple_support` bazel_dep we register in MODULE.bazel.)
+#   - --host_macos_minimum_os=14.0
+#       Pins the deployment target for tools built under exec config
+#       (e.g. SafeDITool itself), so a binary built with the macOS 26
+#       SDK still runs on BCR's older runner OS. Without this, dyld
+#       refuses to load SafeDITool when the example task tries to
+#       execute it during code generation.
+#   - --macos_minimum_os=14.0
+#       Same idea for target-config builds. Matches swift-syntax's
+#       configuration for consistency.
 matrix:
   platform: ["macos_arm64"]
   bazel: ["9.x"]
@@ -7,6 +29,10 @@ tasks:
     name: "Build SafeDI targets (${{ platform }}, Bazel ${{ bazel }})"
     platform: ${{ platform }}
     bazel: ${{ bazel }}
+    build_flags:
+      - "--repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1"
+      - "--host_macos_minimum_os=14.0"
+      - "--macos_minimum_os=14.0"
     build_targets:
       - "@safedi//Sources/SafeDI:SafeDI"
       - "@safedi//Sources/SafeDICore:SafeDICore"
@@ -23,6 +49,10 @@ bcr_test_module:
       name: "Build downstream example (${{ platform }}, Bazel ${{ bazel }})"
       platform: ${{ platform }}
       bazel: ${{ bazel }}
+      build_flags:
+        - "--repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1"
+        - "--host_macos_minimum_os=14.0"
+        - "--macos_minimum_os=14.0"
       build_targets:
         - "//Subproject:Subproject"
         - "//ExampleBazelIntegration:ExampleBazelIntegration"
