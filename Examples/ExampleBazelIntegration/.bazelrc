@@ -1,1 +1,12 @@
 common --enable_bzlmod
+
+# Pin host (exec-config) deployment target low (11.0, matching
+# SafeDI's Package.swift) so SafeDITool — built fresh under this
+# module's exec config — stays runnable on hosts older than the
+# SDK. The BCR macOS runner builds with Xcode 26 but executes on
+# an older macOS; an unpinned default makes dyld refuse the binary.
+common --host_macos_minimum_os=11.0
+# Target deployment target (14.0) is driven by the example app's
+# own source: LoggedInView and NameEntryView use macOS 14+ APIs.
+# This is the example app's requirement, not SafeDI's.
+common --macos_minimum_os=14.0

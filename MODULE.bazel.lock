@@ -530,7 +530,7 @@
     "@@rules_swift_package_manager+//:extensions.bzl%swift_deps": {
       "general": {
         "bzlTransitiveDigest": "QPzonOjYtXIWyUjGi44AUsRd7aYzf/8r9Sn0ghJjwRk=",
-        "usagesDigest": "Inz16quqqq9sQ7gZ28Q7sfWU1B/K9/hDAtYlxQOcJnA=",
+        "usagesDigest": "Cqv8otPjpwbQp42uEGj5z8Zkn1QTMFEkit5F8KDG2Ok=",
         "recordedInputs": [
           "REPO_MAPPING:rules_swift_package_manager+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_swift_package_manager+,bazel_tools bazel_tools",
