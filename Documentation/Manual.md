@@ -812,28 +812,37 @@ The `SafeDIPrebuiltGenerator` plugin has been removed in SafeDI 2.x. `SafeDIGene
 
 ### Migrating prebuild scripts or custom build system integrations
 
-If you invoke `SafeDITool` directly (not via the provided SPM plugin), the `--dependency-tree-output` flag has been replaced with `generate --swift-manifest`. The tool now takes a JSON manifest file that maps input Swift files to output files. See [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) for the expected format.
+If you invoke `SafeDITool` directly (not via the provided SPM plugin), the 1.x `--dependency-tree-output` flag has been replaced. The simplest migration is `generate --combined-output`, which concatenates every dependency-tree, mock, and mock-configuration body SafeDITool would emit into one statically-known output file — a good fit for any build system that needs rule outputs declared up front.
 
 Before (1.x):
 ```bash
 safeditool input.csv --dependency-tree-output ./generated/SafeDI.swift
 ```
 
-After (2.x):
+After (2.x), single module:
 ```bash
-# Create a manifest mapping root files to outputs
-cat > manifest.json << 'EOF'
-{
-  "dependencyTreeGeneration": [
-    {
-      "inputFilePath": "Sources/App/Root.swift",
-      "outputFilePath": "generated/Root+SafeDI.swift"
-    }
-  ]
-}
-EOF
-safeditool generate input.csv --swift-manifest manifest.json
+safeditool generate input.csv --combined-output ./generated/SafeDI.swift
 ```
+
+For multi-module projects, add `--module-info-output` so downstream modules can resolve `@Instantiable` types declared upstream without re-parsing the producer's sources. Each producer emits a `.safedi` sidecar; each consumer feeds the producer's `.safedi` back in through `--dependent-module-info-file-path`:
+
+```bash
+# Producing module (Subproject):
+safeditool generate Subproject.csv \
+  --combined-output Subproject/SafeDIGenerated.swift \
+  --module-info-output Subproject.safedi
+
+# Consuming module (App), with Subproject already built:
+echo "Subproject.safedi" > deps.csv
+safeditool generate App.csv \
+  --combined-output App/SafeDIGenerated.swift \
+  --module-info-output App.safedi \
+  --dependent-module-info-file-path deps.csv
+```
+
+For working reference implementations, see the Bazel rule at [`bazel/safedi.bzl`](../bazel/safedi.bzl) and the Tuist plugin at [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift). Both invoke `generate --combined-output --module-info-output` per module and pass dependent modules' `.safedi` artifacts via `--dependent-module-info-file-path`.
+
+If you need per-root output files (one generated `.swift` per `@Instantiable(isRoot: true)` type) instead of a single combined file, use `generate --swift-manifest` with a JSON manifest in the [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) format. `--swift-manifest` and `--combined-output` are mutually exclusive — pick whichever maps better onto your build system's output model.
 
 ## Example applications
 
