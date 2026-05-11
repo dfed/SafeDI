@@ -9,7 +9,7 @@ two build systems stay in sync.
 
 module(
     name = "safedi",
-    version = "2.0.0-rc-3",
+    version = "2.0.0",
     compatibility_level = 1,
 )
 
