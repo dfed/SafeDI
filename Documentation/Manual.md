@@ -824,7 +824,7 @@ After (2.x), single module:
 safeditool generate input.csv --combined-output ./generated/SafeDI.swift
 ```
 
-For multi-module projects, add `--module-info-output` so downstream modules can resolve `@Instantiable` types declared upstream without re-parsing the producer's sources. Each producer emits a `.safedi` sidecar; each consumer feeds the producer's `.safedi` back in through `--dependent-module-info-file-path`:
+For multi-module projects, you can add the `--module-info-output` flag so downstream modules can resolve `@Instantiable` types declared upstream without re-parsing the producer's sources. Each producer emits a `.safedi` sidecar; each consumer feeds the producer's `.safedi` back in through `--dependent-module-info-file-path`:
 
 ```bash
 # Producing module (Subproject):
@@ -842,7 +842,7 @@ safeditool generate App.csv \
 
 For working reference implementations, see the Bazel rule at [`bazel/safedi.bzl`](../bazel/safedi.bzl) and the Tuist plugin at [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift). Both invoke `generate --combined-output --module-info-output` per module and pass dependent modules' `.safedi` artifacts via `--dependent-module-info-file-path`.
 
-If you need per-root output files (one generated `.swift` per `@Instantiable(isRoot: true)` type) instead of a single combined file, use `generate --swift-manifest` with a JSON manifest in the [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) format. `--swift-manifest` and `--combined-output` are mutually exclusive — pick whichever maps better onto your build system's output model.
+If you need per-root output files (one generated `.swift` per `@Instantiable(isRoot: true)` type) instead of a single combined file, use `generate --swift-manifest` with a JSON manifest in the [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) format. `--swift-manifest` and `--combined-output` are mutually exclusive — pick whichever maps better onto your build system’s output model.
 
 ## Example applications
 
