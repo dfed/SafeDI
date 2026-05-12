@@ -59,6 +59,17 @@ extension String {
 			URL(filePath: self)
 		#endif
 	}
+
+	/// Parses a path-list CSV emitted by a build system, shell script, or
+	/// `echo`/`printf`. Splits on commas and newlines, trims surrounding
+	/// whitespace from each entry, and drops empty entries — so a trailing
+	/// `\n` (as `echo "x" > deps.csv` writes) or CRLF line endings don't
+	/// produce a path that includes whitespace.
+	func parsedPathListCSV() -> [String] {
+		components(separatedBy: CharacterSet(charactersIn: ",\n\r"))
+			.map { $0.trimmingCharacters(in: .whitespaces) }
+			.filter { !$0.isEmpty }
+	}
 }
 
 protocol FileFinder: Sendable {

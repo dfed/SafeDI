@@ -481,8 +481,7 @@ struct Generate: AsyncParsableCommand {
 		var swiftFiles = try await findSwiftFiles(inDirectories: additionalDirectories)
 		if let swiftSourcesFilePath {
 			let sourcesFromFile = try String(contentsOfFile: swiftSourcesFilePath, encoding: .utf8)
-				.components(separatedBy: CharacterSet(arrayLiteral: ","))
-				.removingEmpty()
+				.parsedPathListCSV()
 			swiftFiles.formUnion(sourcesFromFile)
 		}
 		return swiftFiles
@@ -551,11 +550,7 @@ struct Generate: AsyncParsableCommand {
 			guard let currentCSVContent = try? String(contentsOfFile: swiftSourcesFilePath, encoding: .utf8) else {
 				return nil
 			}
-			let currentCSVPaths = Set(
-				currentCSVContent
-					.components(separatedBy: CharacterSet(arrayLiteral: ","))
-					.removingEmpty(),
-			)
+			let currentCSVPaths = Set(currentCSVContent.parsedPathListCSV())
 			guard currentCSVPaths == Set(cached.csvInputPaths) else {
 				return nil
 			}
@@ -602,8 +597,7 @@ struct Generate: AsyncParsableCommand {
 			if let dependentModuleInfoFilePath {
 				try .init(
 					String(contentsOfFile: dependentModuleInfoFilePath, encoding: .utf8)
-						.components(separatedBy: CharacterSet(arrayLiteral: ","))
-						.removingEmpty()
+						.parsedPathListCSV()
 						.map(\.asFileURL),
 				)
 			} else {
