@@ -65,8 +65,7 @@ func performScan(
 
 	// Read CSV and resolve file paths relative to project root.
 	let inputFilePaths = try String(contentsOfFile: inputSourcesFile, encoding: .utf8)
-		.components(separatedBy: CharacterSet(arrayLiteral: ","))
-		.removingEmpty()
+		.parsedPathListCSV()
 
 	let directoryBaseURL = projectRootURL.appendingPathComponent("", isDirectory: true)
 
