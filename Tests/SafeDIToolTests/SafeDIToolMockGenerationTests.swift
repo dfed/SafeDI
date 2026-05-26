@@ -11821,6 +11821,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			activeCompilationConditions: ["DEBUG"],
 		)
 
 		#expect(output.mockFiles.count == 3)

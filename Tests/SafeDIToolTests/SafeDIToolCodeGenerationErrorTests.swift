@@ -40,6 +40,31 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithUnknownConditionalCompilationAroundInstantiable_throwsError() async {
+		await assertThrowsError(
+			"""
+			Unable to evaluate conditional compilation condition `DEBUG` while scanning SafeDI declarations. Pass the active condition to SafeDITool with `--active-compilation-conditions DEBUG`, or remove the SafeDI declaration from the conditional branch.
+			""",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#if DEBUG
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init() {}
+					}
+					#endif
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithPropertyWithUnknownFulfilledType_throwsError() async {
 		await assertThrowsError(
 			"""

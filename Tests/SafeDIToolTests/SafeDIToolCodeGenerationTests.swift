@@ -52,6 +52,29 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_usesActiveCompilationConditionToScanGuardedRoot() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				#if DEBUG
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init() {}
+				}
+				#endif
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			activeCompilationConditions: ["DEBUG"],
+		)
+
+		#expect(output.moduleInfo.instantiables.map(\.concreteInstantiable) == [.simple(name: "Root")])
+		#expect(output.generatedFiles?["Root+SafeDI.swift"] != nil)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_doesNotWriteExtensionIfRootAlreadyHasEmptyInitializer() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [

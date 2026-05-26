@@ -38,6 +38,8 @@ struct Scan: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Swift file paths scoped to the current target for mock generation. When provided, only these files are scanned for generateMock and #SafeDIConfiguration.") var mockScopedFiles: [String] = []
 
+	@Option(parsing: .upToNextOption, help: "Active Swift conditional compilation flags to use while scanning SafeDI declarations, matching Swift's -D flags.") var activeCompilationConditions: [String] = []
+
 	func run() async throws {
 		try await performScan(
 			inputSourcesFile: inputSourcesFile,
@@ -45,6 +47,7 @@ struct Scan: AsyncParsableCommand {
 			outputDirectory: outputDirectory,
 			manifestFile: manifestFile,
 			mockScopedFiles: mockScopedFiles,
+			activeCompilationConditions: Set(activeCompilationConditions),
 		)
 	}
 }
@@ -59,6 +62,7 @@ func performScan(
 	outputDirectory: String,
 	manifestFile: String,
 	mockScopedFiles: [String] = [],
+	activeCompilationConditions: Set<String> = [],
 ) async throws {
 	let projectRootURL = projectRoot.asFileURL
 	let outputDirectoryURL = outputDirectory.asFileURL
@@ -75,7 +79,10 @@ func performScan(
 
 	// Parse all files once to find roots, mocks, and configurations.
 	let allFilePaths = Set(allSwiftFiles.map(\.relativePath))
-	let allModuleInfo = try await parseSwiftFiles(allFilePaths)
+	let allModuleInfo = try await parseSwiftFiles(
+		allFilePaths,
+		activeCompilationConditions: activeCompilationConditions,
+	)
 
 	// Determine which files are scoped for mock scanning.
 	let mockScopedFilePaths: Set<String> = if mockScopedFiles.isEmpty {
@@ -116,7 +123,10 @@ func performScan(
 		// and trip "multiple types fulfilling" validation downstream.
 		let unparsedAdditionalFiles = additionalFiles.subtracting(allFilePaths)
 		if !unparsedAdditionalFiles.isEmpty {
-			let additionalModuleInfo = try await parseSwiftFiles(unparsedAdditionalFiles)
+			let additionalModuleInfo = try await parseSwiftFiles(
+				unparsedAdditionalFiles,
+				activeCompilationConditions: activeCompilationConditions,
+			)
 			// Merge additional roots/mocks into the combined results.
 			combinedModuleInfo = ModuleInfo(
 				imports: allModuleInfo.imports + additionalModuleInfo.imports,
@@ -210,6 +220,7 @@ func performScan(
 		mockConfigurationOutputFilePath: mockConfigurationOutputFilePath,
 		additionalMocksToGenerate: additionalMocksToGenerate,
 		additionalInputFiles: additionalInputFiles,
+		activeCompilationConditions: activeCompilationConditions.sorted(),
 	)
 
 	let encoder = JSONEncoder()
@@ -269,6 +280,7 @@ func performScan(
 		csvInputPaths: inputFilePaths.sorted(),
 		additionalInputAbsolutePaths: additionalInputFiles.sorted(),
 		additionalDirectories: additionalDirectories,
+		activeCompilationConditions: activeCompilationConditions.sorted(),
 	)
 	let scannedModuleInfoURL = scannedModuleInfoURL(forManifestPath: manifestFile)
 	// Cache write is best-effort. A full disk or other transient FS
@@ -302,6 +314,8 @@ struct CachedScannedModuleInfo: Codable {
 	/// during freshness checks so files added to those directories
 	/// between scan and generate correctly invalidate the cache.
 	let additionalDirectories: [String]
+	/// Active conditional compilation flags used when this cache was created.
+	let activeCompilationConditions: [String]
 }
 
 /// Path alongside the manifest where `scan` persists the parsed

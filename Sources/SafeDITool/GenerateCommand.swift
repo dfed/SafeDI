@@ -46,6 +46,8 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Swift file paths scoped to the current target for mock generation. Only used when --output-directory is provided without --swift-manifest.") var mockScopedFiles: [String] = []
 
+	@Option(parsing: .upToNextOption, help: "Active Swift conditional compilation flags to use while scanning SafeDI declarations, matching Swift's -D flags.") var activeCompilationConditions: [String] = []
+
 	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path — one header, bodies joined in source-file order, deterministic for stable inputs. Intended for build systems that need rule outputs statically declared at analysis time (Bazel, Buck2). Requires 'swift-sources-file-path' or '--include'. Cannot be combined with '--output-directory' or '--swift-manifest' — those are per-file emission modes. May be combined with '--module-info-output'. The combined file is always rewritten on every run, even when content would be unchanged.") var combinedOutput: String?
 
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
@@ -65,6 +67,8 @@ struct Generate: AsyncParsableCommand {
 			throw ValidationError("--combined-output is mutually exclusive with --output-directory and --swift-manifest. Use --combined-output alone for a single output file, or one of the others for per-file outputs.")
 		}
 
+		let resolvedActiveCompilationConditions = try resolvedActiveCompilationConditions()
+
 		// When --output-directory is provided without --swift-manifest, run an
 		// inline scan to discover roots/mocks and build the manifest automatically.
 		var resolvedSwiftManifest = swiftManifest
@@ -79,13 +83,14 @@ struct Generate: AsyncParsableCommand {
 				outputDirectory: outputDirectory,
 				manifestFile: manifestPath,
 				mockScopedFiles: mockScopedFiles,
+				activeCompilationConditions: resolvedActiveCompilationConditions,
 			)
 			resolvedSwiftManifest = manifestPath
 		}
 
 		let (dependentModuleInfo, parsed) = try await (
 			loadSafeDIModuleInfo(),
-			parsedModule(),
+			parsedModule(activeCompilationConditions: resolvedActiveCompilationConditions),
 		)
 		let initialModule = parsed.module
 		let initialModuleIsFromCache = parsed.isFromCache
@@ -130,7 +135,10 @@ struct Generate: AsyncParsableCommand {
 		   !sourceConfiguration.additionalDirectoriesToInclude.isEmpty
 		{
 			let additionalFiles = try await findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude)
-			let additionalModule = try await parseSwiftFiles(additionalFiles)
+			let additionalModule = try await parseSwiftFiles(
+				additionalFiles,
+				activeCompilationConditions: resolvedActiveCompilationConditions,
+			)
 			module = ModuleInfo(
 				imports: initialModule.imports + additionalModule.imports,
 				instantiables: initialModule.instantiables + additionalModule.instantiables,
@@ -512,18 +520,42 @@ struct Generate: AsyncParsableCommand {
 	/// cross-version schema drift, etc.) fall through to a fresh parse
 	/// rather than aborting the build — the cache is an optimization
 	/// sidecar, not a correctness requirement.
-	private func parsedModule() async throws -> (module: ModuleInfo, isFromCache: Bool) {
-		if include.isEmpty,
-		   let swiftManifest,
-		   let cached = try await loadCachedModuleInfo(manifestPath: swiftManifest)
-		{
-			(cached, true)
-		} else {
-			try await (parseSwiftFiles(findGenerateSwiftFiles()), false)
+	private func resolvedActiveCompilationConditions() throws -> Set<String> {
+		var conditions = Set(activeCompilationConditions)
+		if let swiftManifest {
+			let manifest = try JSONDecoder().decode(
+				SafeDIToolManifest.self,
+				from: Data(contentsOf: swiftManifest.asFileURL),
+			)
+			conditions.formUnion(manifest.activeCompilationConditions)
 		}
+		return conditions
 	}
 
-	private func loadCachedModuleInfo(manifestPath: String) async throws -> ModuleInfo? {
+	private func parsedModule(activeCompilationConditions: Set<String>) async throws -> (module: ModuleInfo, isFromCache: Bool) {
+		if include.isEmpty, let swiftManifest {
+			let cached = try await loadCachedModuleInfo(
+				manifestPath: swiftManifest,
+				activeCompilationConditions: activeCompilationConditions,
+			)
+			if let cached {
+				return (cached, true)
+			}
+		}
+
+		return try await (
+			parseSwiftFiles(
+				findGenerateSwiftFiles(),
+				activeCompilationConditions: activeCompilationConditions,
+			),
+			false,
+		)
+	}
+
+	private func loadCachedModuleInfo(
+		manifestPath: String,
+		activeCompilationConditions: Set<String>,
+	) async throws -> ModuleInfo? {
 		let cacheURL = scannedModuleInfoURL(forManifestPath: manifestPath)
 		let fileManager = FileManager.default
 		guard let cacheAttributes = try? fileManager.attributesOfItem(atPath: cacheURL.path),
@@ -536,6 +568,10 @@ struct Generate: AsyncParsableCommand {
 		guard let data = try? Data(contentsOf: cacheURL),
 		      let cached = try? JSONDecoder().decode(CachedScannedModuleInfo.self, from: data)
 		else { return nil }
+
+		guard Set(cached.activeCompilationConditions) == activeCompilationConditions else {
+			return nil
+		}
 
 		// Bypass the cache if the current CSV's file set differs from what
 		// scan observed — a custom script could reuse a manifest path with a
