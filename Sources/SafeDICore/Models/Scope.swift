@@ -169,7 +169,7 @@ final class Scope: Hashable {
 			isPropertyCycle: isPropertyCycle,
 		)
 		if !forMockGeneration {
-			Task.detached {
+			_ = Task.detached {
 				// Kick off code generation.
 				try await scopeGenerator.generateCode()
 			}
