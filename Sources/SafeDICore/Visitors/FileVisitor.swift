@@ -24,7 +24,10 @@ import SwiftSyntax
 public final class FileVisitor: SyntaxVisitor {
 	// MARK: Initialization
 
-	public init() {
+	public init(activeCompilationConditions: Set<String> = []) {
+		conditionalCompilationEvaluator = ConditionalCompilationEvaluator(
+			activeCompilationConditions: activeCompilationConditions,
+		)
 		super.init(viewMode: .sourceAccurate)
 	}
 
@@ -53,6 +56,20 @@ public final class FileVisitor: SyntaxVisitor {
 
 	public override func visit(_: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
 		.skipChildren
+	}
+
+	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
+		switch conditionalCompilationEvaluator.activeClause(in: node) {
+		case let .active(activeClause):
+			if let elements = activeClause?.elements {
+				walkIfConfigElements(elements)
+			}
+		case let .unevaluable(error):
+			if node.containsSafeDIDeclaration {
+				appendUnevaluableConditionalCompilationCondition(error)
+			}
+		}
+		return .skipChildren
 	}
 
 	public override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -101,8 +118,13 @@ public final class FileVisitor: SyntaxVisitor {
 		let instantiableVisitor = InstantiableVisitor(
 			declarationType: .extensionDecl,
 			parentType: nil,
+			activeCompilationConditions: conditionalCompilationEvaluator.activeCompilationConditions,
+			failClosedOnUnevaluableConditionalCompilation: true,
 		)
 		instantiableVisitor.walk(node)
+		for error in instantiableVisitor.unevaluableConditionalCompilationConditions {
+			appendUnevaluableConditionalCompilationCondition(error)
+		}
 		for instantiable in instantiableVisitor.instantiables {
 			instantiables.append(instantiable)
 		}
@@ -134,17 +156,31 @@ public final class FileVisitor: SyntaxVisitor {
 	public private(set) var instantiables = [Instantiable]()
 	public private(set) var configurations = [SafeDIConfiguration]()
 	public private(set) var encounteredUnexpectedNodesSyntax = false
+	public private(set) var unevaluableConditionalCompilationConditions = [UnevaluableConditionalCompilationConditionError]()
 
 	// MARK: Private
 
+	private let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
 	private var parentType: TypeDescription?
+
+	private func appendUnevaluableConditionalCompilationCondition(_ error: UnevaluableConditionalCompilationConditionError) {
+		guard !unevaluableConditionalCompilationConditions.contains(error) else {
+			return
+		}
+		unevaluableConditionalCompilationConditions.append(error)
+	}
 
 	private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
 		let instantiableVisitor = InstantiableVisitor(
 			declarationType: .concreteDecl,
 			parentType: parentType,
+			activeCompilationConditions: conditionalCompilationEvaluator.activeCompilationConditions,
+			failClosedOnUnevaluableConditionalCompilation: true,
 		)
 		instantiableVisitor.walk(node)
+		for error in instantiableVisitor.unevaluableConditionalCompilationConditions {
+			appendUnevaluableConditionalCompilationCondition(error)
+		}
 		for instantiable in instantiableVisitor.instantiables {
 			instantiables.append(instantiable)
 		}

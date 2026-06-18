@@ -495,6 +495,182 @@ struct FileVisitorTests {
 	}
 
 	@Test
+	func walk_ignoresInactiveIfConfigBranch_whenConditionIsFalse() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		#if false
+		@Instantiable
+		public struct InactiveService {
+		    public init() {}
+		}
+		#else
+		@Instantiable
+		public struct ActiveService {
+		    public init() {}
+		}
+		#endif
+		"""))
+		#expect(fileVisitor.instantiables == [
+			Instantiable(
+				instantiableType: .simple(name: "ActiveService"),
+				isRoot: false,
+				initializer: Initializer(arguments: []),
+				additionalInstantiables: nil,
+				dependencies: [],
+				declarationType: .structType,
+			),
+		])
+	}
+
+	@Test
+	func walk_visitsActiveIfConfigBranch_whenConditionIsSupplied() {
+		let fileVisitor = FileVisitor(activeCompilationConditions: ["DEBUG"])
+		fileVisitor.walk(Parser.parse(source: """
+		#if DEBUG
+		@Instantiable
+		public struct DebugService {
+		    public init() {}
+		}
+		#else
+		@Instantiable
+		public struct ReleaseService {
+		    public init() {}
+		}
+		#endif
+		"""))
+		#expect(fileVisitor.unevaluableConditionalCompilationConditions.isEmpty)
+		#expect(fileVisitor.instantiables == [
+			Instantiable(
+				instantiableType: .simple(name: "DebugService"),
+				isRoot: false,
+				initializer: Initializer(arguments: []),
+				additionalInstantiables: nil,
+				dependencies: [],
+				declarationType: .structType,
+			),
+		])
+	}
+
+	@Test
+	func walk_visitsElseifBranch_whenEarlierConditionIsFalse() {
+		let fileVisitor = FileVisitor(activeCompilationConditions: ["STAGING"])
+		fileVisitor.walk(Parser.parse(source: """
+		#if false
+		@Instantiable
+		public struct InactiveService {
+		    public init() {}
+		}
+		#elseif STAGING && !false
+		@Instantiable
+		public struct StagingService {
+		    public init() {}
+		}
+		#else
+		@Instantiable
+		public struct FallbackService {
+		    public init() {}
+		}
+		#endif
+		"""))
+		#expect(fileVisitor.unevaluableConditionalCompilationConditions.isEmpty)
+		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [
+			.simple(name: "StagingService"),
+		])
+	}
+
+	@Test
+	func walk_evaluatesKnownBooleanOperators_beforeFailingClosed() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		#if DEBUG && false
+		@Instantiable
+		public struct InactiveService {
+		    public init() {}
+		}
+		#else
+		@Instantiable
+		public struct ActiveService {
+		    public init() {}
+		}
+		#endif
+		"""))
+		#expect(fileVisitor.unevaluableConditionalCompilationConditions.isEmpty)
+		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [
+			.simple(name: "ActiveService"),
+		])
+	}
+
+	@Test
+	func walk_ignoresInactiveIfConfigMember_whenConditionIsFalse() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		@Instantiable
+		public struct SomeService {
+		    public init() {}
+
+		    #if false
+		    @Received let inactiveDependency: InactiveDependency
+		    #endif
+		}
+		"""))
+		#expect(fileVisitor.instantiables == [
+			Instantiable(
+				instantiableType: .simple(name: "SomeService"),
+				isRoot: false,
+				initializer: Initializer(arguments: []),
+				additionalInstantiables: nil,
+				dependencies: [],
+				declarationType: .structType,
+			),
+		])
+	}
+
+	@Test
+	func walk_recordsUnevaluableIfConfigCondition_whenSafeDIDeclarationIsGuardedByUnknownCondition() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		#if DEBUG
+		@Instantiable
+		public struct DebugService {
+		    public init() {}
+		}
+		#endif
+		"""))
+		#expect(fileVisitor.instantiables.isEmpty)
+		#expect(fileVisitor.unevaluableConditionalCompilationConditions == [
+			UnevaluableConditionalCompilationConditionError(
+				condition: "DEBUG",
+				suggestedActiveCondition: "DEBUG",
+			),
+		])
+	}
+
+	@Test
+	func walk_recordsUnevaluableIfConfigCondition_whenCustomMockIsGuardedByUnknownCondition() {
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(Parser.parse(source: """
+		@Instantiable(generateMock: true, customMockName: "customMock")
+		public struct SomeService {
+		    public init() {}
+
+		    #if DEBUG
+		    public static func customMock() -> SomeService {
+		        SomeService()
+		    }
+		    #endif
+		}
+		"""))
+		#expect(fileVisitor.instantiables.count == 1)
+		#expect(fileVisitor.instantiables.first?.mockInitializer == nil)
+		#expect(fileVisitor.unevaluableConditionalCompilationConditions == [
+			UnevaluableConditionalCompilationConditionError(
+				condition: "DEBUG",
+				suggestedActiveCondition: "DEBUG",
+			),
+		])
+	}
+
+	@Test
 	func walk_ignoresSafeDIConfigurationInsideType() {
 		let fileVisitor = FileVisitor()
 		fileVisitor.walk(Parser.parse(source: """

@@ -41,6 +41,7 @@ func executeSafeDIToolTest(
 	buildCombinedOutput: Bool = false,
 	filesToDelete: inout [URL],
 	includeFolders: [String] = [],
+	activeCompilationConditions: [String] = [],
 	skipCompileVerification: Bool = false,
 ) async throws -> TestOutput {
 	// Create additional directory first so its path can be substituted into target file content.
@@ -127,6 +128,7 @@ func executeSafeDIToolTest(
 				outputDirectory: outputDirectory.path,
 				manifestFile: manifestFile.relativePath,
 				mockScopedFiles: swiftFiles.map(\.relativePath),
+				activeCompilationConditions: Set(activeCompilationConditions),
 			)
 			manifestPath = manifestFile.relativePath
 
@@ -139,6 +141,9 @@ func executeSafeDIToolTest(
 		}
 		for module in additionalImportedModules {
 			generateArguments += ["--additional-imported-modules", module]
+		}
+		for condition in activeCompilationConditions {
+			generateArguments += ["--active-compilation-conditions", condition]
 		}
 		generateArguments += ["--module-info-output", moduleInfoOutput.relativePath]
 		if !dependentModuleInfoPaths.isEmpty {

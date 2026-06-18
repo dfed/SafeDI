@@ -27,9 +27,15 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public init(
 		declarationType: DeclarationType,
 		parentType: TypeDescription? = nil,
+		activeCompilationConditions: Set<String> = [],
+		failClosedOnUnevaluableConditionalCompilation: Bool = false,
 	) {
 		self.declarationType = declarationType
 		self.parentType = parentType
+		self.failClosedOnUnevaluableConditionalCompilation = failClosedOnUnevaluableConditionalCompilation
+		conditionalCompilationEvaluator = ConditionalCompilationEvaluator(
+			activeCompilationConditions: activeCompilationConditions,
+		)
 		super.init(viewMode: .sourceAccurate)
 	}
 
@@ -134,6 +140,23 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	public override func visit(_: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
 		.skipChildren
+	}
+
+	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
+		guard failClosedOnUnevaluableConditionalCompilation else {
+			return .visitChildren
+		}
+		switch conditionalCompilationEvaluator.activeClause(in: node) {
+		case let .active(activeClause):
+			if let elements = activeClause?.elements {
+				walkIfConfigElements(elements)
+			}
+		case let .unevaluable(error):
+			if shouldFailClosed(on: node) {
+				appendUnevaluableConditionalCompilationCondition(error)
+			}
+		}
+		return .skipChildren
 	}
 
 	public override func visit(_: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -447,6 +470,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	private let declarationType: DeclarationType
 	private let parentType: TypeDescription?
+	private let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
+	private let failClosedOnUnevaluableConditionalCompilation: Bool
+
+	public private(set) var unevaluableConditionalCompilationConditions = [UnevaluableConditionalCompilationConditionError]()
 
 	private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
 		let nodeDeclarationType: TypeDescription = if let parentType {
@@ -475,6 +502,18 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		processModifiers(node.modifiers, on: node)
 
 		return .visitChildren
+	}
+
+	private func shouldFailClosed(on node: IfConfigDeclSyntax) -> Bool {
+		node.containsSafeDIDeclaration
+			|| node.containsInstantiableBodySyntax(customMockName: customMockName)
+	}
+
+	private func appendUnevaluableConditionalCompilationCondition(_ error: UnevaluableConditionalCompilationConditionError) {
+		guard !unevaluableConditionalCompilationConditions.contains(error) else {
+			return
+		}
+		unevaluableConditionalCompilationConditions.append(error)
 	}
 
 	private func processAttributes(_: AttributeListSyntax, on macro: AttributeSyntax) {

@@ -75,7 +75,10 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Str
 }
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-func parseSwiftFiles(_ filePaths: Set<String>) async throws -> ModuleInfo {
+func parseSwiftFiles(
+	_ filePaths: Set<String>,
+	activeCompilationConditions: Set<String> = [],
+) async throws -> ModuleInfo {
 	try await withThrowingTaskGroup(
 		of: (
 			imports: [ImportStatement],
@@ -95,8 +98,11 @@ func parseSwiftFiles(_ filePaths: Set<String>) async throws -> ModuleInfo {
 				let containsInstantiable = content.contains("@\(InstantiableVisitor.macroName)")
 				let containsConfiguration = content.contains("#\(SafeDIConfigurationVisitor.macroName)")
 				guard containsInstantiable || containsConfiguration else { return nil }
-				let fileVisitor = FileVisitor()
+				let fileVisitor = FileVisitor(activeCompilationConditions: activeCompilationConditions)
 				fileVisitor.walk(Parser.parse(source: content))
+				if let error = fileVisitor.unevaluableConditionalCompilationConditions.first {
+					throw error
+				}
 				guard !fileVisitor.instantiables.isEmpty
 					|| !fileVisitor.configurations.isEmpty
 					|| fileVisitor.encounteredUnexpectedNodesSyntax

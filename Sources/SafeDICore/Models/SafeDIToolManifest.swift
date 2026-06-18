@@ -22,6 +22,16 @@
 /// All input file paths are relative to the working directory where the tool is invoked.
 /// Output file paths may be absolute or relative to the working directory.
 public struct SafeDIToolManifest: Codable, Sendable {
+	private enum CodingKeys: String, CodingKey {
+		case dependencyTreeGeneration
+		case mockGeneration
+		case configurationFilePaths
+		case mockConfigurationOutputFilePath
+		case additionalMocksToGenerate
+		case additionalInputFiles
+		case activeCompilationConditions
+	}
+
 	/// A mapping from an input Swift file to an output file.
 	public struct InputOutputMap: Codable, Sendable {
 		/// The path to the input Swift file containing one or more root `@Instantiable` declarations.
@@ -65,6 +75,9 @@ public struct SafeDIToolManifest: Codable, Sendable {
 	/// Only populated by the `scan` subcommand; ignored by `generate`.
 	public var additionalInputFiles: [String]
 
+	/// Active conditional compilation flags used while scanning SafeDI declarations.
+	public var activeCompilationConditions: [String]
+
 	public init(
 		dependencyTreeGeneration: [InputOutputMap],
 		mockGeneration: [InputOutputMap] = [],
@@ -72,6 +85,7 @@ public struct SafeDIToolManifest: Codable, Sendable {
 		mockConfigurationOutputFilePath: String? = nil,
 		additionalMocksToGenerate: [String] = [],
 		additionalInputFiles: [String] = [],
+		activeCompilationConditions: [String] = [],
 	) {
 		self.dependencyTreeGeneration = dependencyTreeGeneration
 		self.mockGeneration = mockGeneration
@@ -79,5 +93,19 @@ public struct SafeDIToolManifest: Codable, Sendable {
 		self.mockConfigurationOutputFilePath = mockConfigurationOutputFilePath
 		self.additionalMocksToGenerate = additionalMocksToGenerate
 		self.additionalInputFiles = additionalInputFiles
+		self.activeCompilationConditions = activeCompilationConditions
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: CodingKeys.self)
+		self.init(
+			dependencyTreeGeneration: try container.decode([InputOutputMap].self, forKey: .dependencyTreeGeneration),
+			mockGeneration: try container.decodeIfPresent([InputOutputMap].self, forKey: .mockGeneration) ?? [],
+			configurationFilePaths: try container.decodeIfPresent([String].self, forKey: .configurationFilePaths) ?? [],
+			mockConfigurationOutputFilePath: try container.decodeIfPresent(String.self, forKey: .mockConfigurationOutputFilePath),
+			additionalMocksToGenerate: try container.decodeIfPresent([String].self, forKey: .additionalMocksToGenerate) ?? [],
+			additionalInputFiles: try container.decodeIfPresent([String].self, forKey: .additionalInputFiles) ?? [],
+			activeCompilationConditions: try container.decodeIfPresent([String].self, forKey: .activeCompilationConditions) ?? [],
+		)
 	}
 }
