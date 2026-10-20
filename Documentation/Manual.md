@@ -330,7 +330,7 @@ extension Container {
 
 Property declarations within `@Instantiable` types decorated with [`@Instantiated`](../Sources/SafeDI/Decorators/Instantiated.swift) are instantiated when its enclosing type is instantiated. `@Instantiated`-decorated properties are available to be `@Received` by objects instantiated further down the dependency tree.
 
-Each `@Instantiated` property creates its own instance. Two `@Instantiated` properties of the same type are two instances, whether they live in the same type or in different types. To share one instance, declare it `@Instantiated` once and have types further down the tree declare it `@Received`.
+Each `@Instantiated` property creates its own instance. To share an instance, instantiate it once and receive it everywhere else.
 
 `@Instantiated`-decorated properties must be an `@Instantiable` type, or a type listed in an `@Instantiable(fulfillingAdditionalTypes:)` declaration.
 
@@ -444,7 +444,7 @@ public struct ProfileView: Instantiable {
 
 A protocol composition works as the instantiated type as well, with no typealias required: `@Instantiated private let telemetry: EventTracker & CrashReporter` is fulfilled by a type that lists `(EventTracker & CrashReporter).self` in `fulfillingAdditionalTypes`, and the renames then use `ofType: (EventTracker & CrashReporter).self`.
 
-Generated mocks resolve each `@Received` dependency from its declared type, not from the renames in any particular parent. If `ProfileView` has `generateMock: true`, `ProfileView.mock()` can build `crashReporter` itself only when `Telemetry` lists the protocol in `fulfillingAdditionalTypes` (`[EventTracker.self, CrashReporter.self]`); a composition entry alone does not cover its members. Otherwise `crashReporter` is a required parameter of `ProfileView.mock()`. Because each received dependency is resolved on its own, a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each. Pass one instance through `safeDIOverrides` if a test needs them to coincide.
+Generated mocks resolve `@Received` dependencies from their declared types rather than from these renames. See [Dependency kinds in the generated mock](#dependency-kinds-in-the-generated-mock) for what that means for `ProfileView.mock()`.
 
 #### Conditionally receiving dependencies
 
@@ -727,6 +727,8 @@ The table below shows where each dependency kind lands in the three buckets abov
 | `@Instantiated` | Entry on `SafeDIOverrides` | Built from the real subtree — see [Overriding dependencies](#overriding-dependencies) |
 | `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
 | Default-valued non-DI init parameter | Flat `mock()` parameter on a direct mock, or a nested `SafeDIMockConfiguration` field when reached through a parent | The parameter’s original default expression |
+
+A `@Received` dependency is resolved from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` can build `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`. A composition entry such as `(EventTracker & CrashReporter).self` alone does not cover its members. Otherwise `crashReporter` is a required parameter of `ProfileView.mock()`. Because each received dependency is resolved on its own, a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each. Pass one instance through `safeDIOverrides` if a test needs them to coincide.
 
 ### Mock visibility
 
