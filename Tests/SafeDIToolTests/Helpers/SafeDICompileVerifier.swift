@@ -224,8 +224,14 @@ enum SafeDIBuildArtifactLocator {
 
 		// Also probe the standard `.build` locations relative to the cwd
 		// (helps when tests are driven from `swift test` at the project root).
+		// The native build system lays products out as `.build/<platform>/<config>/`.
+		// The `swiftbuild` build system (the default starting with Swift 6.4) lays
+		// them out as `.build/out/Products/<Config>/` and symlinks
+		// `.build/<config>` to that directory, so probe the symlinks directly too.
 		let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 		let buildRoot = cwd.appendingPathComponent(".build")
+		append(buildRoot.appendingPathComponent("debug"))
+		append(buildRoot.appendingPathComponent("release"))
 		if let platformDirectories = try? FileManager.default.contentsOfDirectory(
 			at: buildRoot,
 			includingPropertiesForKeys: nil,
