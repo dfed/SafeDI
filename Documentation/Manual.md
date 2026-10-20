@@ -413,6 +413,41 @@ public struct ProfileView: Instantiable {
 }
 ```
 
+#### Sharing one instance across unrelated protocols
+
+`@Received(fulfilledByDependencyNamed:ofType:)` also lets a single instance serve several protocols that do not inherit from one another. Instantiate the concrete type once, then rename it once per protocol. Children receive whichever protocol they need, and every one of them gets the same instance:
+
+```swift
+public protocol AnalyticsSink { func track(_ event: String) }
+public protocol CrashReporter { func report(_ error: Error) }
+
+/// One implementation serves both roles. Listing both protocols lets
+/// `AnalyticsSink` and `CrashReporter` properties anywhere in the tree –
+/// including generated mocks – be fulfilled by `Telemetry`.
+@Instantiable(fulfillingAdditionalTypes: [AnalyticsSink.self, CrashReporter.self])
+public final class Telemetry: AnalyticsSink, CrashReporter, Instantiable { /* … */ }
+
+@Instantiable(isRoot: true)
+public struct App: Instantiable {
+    // Instantiated once. Exists only to be renamed below.
+    @Instantiated private let telemetryImplementation: Telemetry
+    @Received(fulfilledByDependencyNamed: "telemetryImplementation", ofType: Telemetry.self) private let analyticsSink: AnalyticsSink
+    @Received(fulfilledByDependencyNamed: "telemetryImplementation", ofType: Telemetry.self) private let crashReporter: CrashReporter
+}
+
+@Instantiable(generateMock: true)
+public struct Screen: Instantiable {
+    // The same `Telemetry` instance that `App` created.
+    @Received private let crashReporter: CrashReporter
+}
+```
+
+Declaring `@Instantiated private let analyticsSink: AnalyticsSink` and `@Instantiated private let crashReporter: CrashReporter` instead would create two `Telemetry` instances. SafeDI does not infer that a type fulfilling one protocol also fulfills another, so the parent states the relationship once by instantiating the concrete type and renaming it.
+
+A protocol composition works as the instantiated type as well, with no typealias required. `@Instantiated private let telemetry: AnalyticsSink & CrashReporter` is fulfilled by a type that lists `(AnalyticsSink & CrashReporter).self` in `fulfillingAdditionalTypes`, and the renames then use `ofType: (AnalyticsSink & CrashReporter).self`. Children that receive `AnalyticsSink` or `CrashReporter` on their own still need those protocols listed individually, because SafeDI does not split a composition into its members.
+
+Generated mocks resolve each `@Received` dependency from its declared type, not from the renames in any particular parent. `Screen.mock()` builds `crashReporter` from `Telemetry` because `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`. If it did not, `crashReporter` would be a required parameter of `Screen.mock()` instead. Because each received dependency is resolved on its own, a mock that receives both `AnalyticsSink` and `CrashReporter` builds a separate `Telemetry` for each. Pass one instance through `safeDIOverrides` if a test needs them to coincide.
+
 #### Conditionally receiving dependencies
 
 Use `@Received(onlyIfAvailable: true)` to receive an optional dependency only when a parent has `@Instantiated` or `@Forwarded` it. This is useful when a type is instantiated by multiple parents with different available dependencies — for example, a `FeedView` used by both a logged-in and logged-out parent:
@@ -680,7 +715,7 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator` (or `SendableErasedInstantiator`) anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
 
-A type generates its own `SafeDIOverrides` struct when it has `@Instantiated` dependencies or `@Received(onlyIfAvailable: true)` dependencies. A type whose only dependencies are required `@Received` or `@Forwarded` uses flat parameters on its `mock()` method.
+A type generates its own `SafeDIOverrides` struct when it has `@Instantiated` dependencies, `@Received` dependencies whose type some `@Instantiable` declaration fulfills, or `@Received(onlyIfAvailable: true)` dependencies. A type whose only dependencies are `@Forwarded`, or `@Received` of types no `@Instantiable` declaration fulfills, uses flat parameters on its `mock()` method.
 
 #### Dependency kinds in the generated mock
 
@@ -688,7 +723,8 @@ The table below shows where each dependency kind lands in the three buckets abov
 
 | Dependency kind | Shape in the mock | Default |
 | --- | --- | --- |
-| Required `@Received` | Flat `mock()` parameter | Required |
+| Required `@Received` of a type some `@Instantiable` declaration fulfills (directly or via `fulfillingAdditionalTypes`) | Entry on `SafeDIOverrides` | Built from the real subtree, exactly like `@Instantiated` |
+| Required `@Received` of a type no `@Instantiable` declaration fulfills | Flat `mock()` parameter | Required |
 | `@Forwarded` | Flat `mock()` parameter | Required, unless the root provides a default or the forwarded type has a [`mockOnly`](#the-mockonly-parameter) provider (which defaults the parameter to `Type.mock()`) |
 | `@Instantiated` | Entry on `SafeDIOverrides` | Built from the real subtree — see [Overriding dependencies](#overriding-dependencies) |
 | `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
