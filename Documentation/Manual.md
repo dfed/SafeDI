@@ -330,7 +330,7 @@ extension Container {
 
 Property declarations within `@Instantiable` types decorated with [`@Instantiated`](../Sources/SafeDI/Decorators/Instantiated.swift) are instantiated when its enclosing type is instantiated. `@Instantiated`-decorated properties are available to be `@Received` by objects instantiated further down the dependency tree.
 
-Each `@Instantiated` property creates its own instance. To share an instance, instantiate it once and receive it everywhere else.
+Each `@Instantiated` property is a distinct instance.
 
 `@Instantiated`-decorated properties must be an `@Instantiable` type, or a type listed in an `@Instantiable(fulfillingAdditionalTypes:)` declaration.
 
@@ -368,7 +368,7 @@ public struct NotesApp: App, Instantiable {
 
 ### @Received
 
-Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. Received properties must be `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree.
+Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. Received properties must be `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree. A `@Received` property matches the `@Instantiated` or `@Forwarded` property further up the tree that has the same name and type.
 
 Continuing the [Macros intro](#macros) example: `LoggedInView` has a `@Forwarded user: User` and an `@Instantiated noteStorage: NoteStorage`. `NoteStorage` can `@Received` the same `user` instance from anywhere in the subtree below `LoggedInView`:
 
@@ -394,7 +394,7 @@ public class NoteStorage: Instantiable {
 
 #### Renaming and retyping dependencies
 
-Use `@Received(fulfilledByDependencyNamed:ofType:)` to rename or retype a dependency that was `@Instantiated` or `@Forwarded` higher up the tree. Types further down the tree can then `@Received` the dependency under its new name and type.
+Use `@Received(fulfilledByDependencyNamed:ofType:)` to give a dependency that was `@Instantiated` or `@Forwarded` higher up the tree an additional name and type. Types further down the tree can then `@Received` the same instance under either name and type.
 
 Here, a parent instantiates a read-write `UserManager` and also renames the object to make it available a `UserVendor`. A child receives the same instance as the read-only `UserVendor`:
 
@@ -417,7 +417,7 @@ public struct ProfileView: Instantiable {
 
 #### Sharing one instance across properties of disparate types
 
-`@Received(fulfilledByDependencyNamed:ofType:)` also lets a single instance serve several protocols that do not inherit from one another. Instantiate the concrete type once, then rename it once per protocol. Types further down the tree receive whichever protocol they need, and every one of them gets the same instance:
+Renaming can be applied more than once to the same `@Instantiated` or `@Forwarded` property, so a single instance can serve several protocols that do not inherit from one another. Instantiate the concrete type once, then rename it once per protocol. Types further down the tree receive whichever protocol they need, and every one of them gets the same instance:
 
 ```swift
 public protocol EventTracker { func track(_ event: String) }
