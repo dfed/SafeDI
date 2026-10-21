@@ -50,43 +50,34 @@ public struct InstantiableMacro: MemberMacro {
 		if let mockAttributesArgument = declaration
 			.attributes
 			.instantiableMacro?
-			.mockAttributes
+			.mockAttributes, StringLiteralExprSyntax(mockAttributesArgument) == nil
 		{
-			if StringLiteralExprSyntax(mockAttributesArgument) == nil {
-				throw InstantiableError.mockAttributesArgumentInvalid
-			}
+			throw InstantiableError.mockAttributesArgumentInvalid
 		}
 
 		if let generateMockArgument = declaration
 			.attributes
 			.instantiableMacro?
-			.generateMock
+			.generateMock, BooleanLiteralExprSyntax(generateMockArgument) == nil
 		{
-			if BooleanLiteralExprSyntax(generateMockArgument) == nil {
-				throw InstantiableError.generateMockArgumentInvalid
-			}
+			throw InstantiableError.generateMockArgumentInvalid
 		}
 
 		if let mockOnlyArgument = declaration
 			.attributes
 			.instantiableMacro?
-			.mockOnly
+			.mockOnly, BooleanLiteralExprSyntax(mockOnlyArgument) == nil
 		{
-			if BooleanLiteralExprSyntax(mockOnlyArgument) == nil {
-				throw InstantiableError.mockOnlyArgumentInvalid
-			}
+			throw InstantiableError.mockOnlyArgumentInvalid
 		}
 
 		if let customMockNameArgument = declaration
 			.attributes
 			.instantiableMacro?
-			.customMockName
+			.customMockName, NilLiteralExprSyntax(customMockNameArgument) == nil,
+			StringLiteralExprSyntax(customMockNameArgument) == nil
 		{
-			if NilLiteralExprSyntax(customMockNameArgument) == nil,
-			   StringLiteralExprSyntax(customMockNameArgument) == nil
-			{
-				throw InstantiableError.customMockNameArgumentInvalid
-			}
+			throw InstantiableError.customMockNameArgumentInvalid
 		}
 
 		if let concreteDeclaration: ConcreteDeclSyntaxProtocol
@@ -1224,11 +1215,9 @@ public struct InstantiableMacro: MemberMacro {
 		for (index, argument) in arguments.enumerated() {
 			guard argument.label == "_",
 			      argument.hasDefaultValue,
-			      !dependencyLabels.contains(argument.innerLabel)
-			else { continue }
-			guard let following = arguments[(index + 1)...].first(where: {
-				$0.label == "_" && !$0.hasDefaultValue
-			}) else { continue }
+			      !dependencyLabels.contains(argument.innerLabel), let following = arguments[(index + 1)...].first(where: {
+			      	$0.label == "_" && !$0.hasDefaultValue
+			      }) else { continue }
 
 			// Fix-it: promote the inner label to the external label by
 			// rewriting `_ x: T = …` to `x: T = …`. That makes the parameter
