@@ -123,3 +123,18 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		}
 	}
 }
+
+extension [Instantiable] {
+	/// Orders instantiables by source file path while keeping each file's declarations in
+	/// the order they appear in that file. Parsing runs in parallel, so without this the
+	/// order in which instantiables reach `resolveSafeDIFulfilledTypes` would depend on
+	/// which file finished parsing first. Sorted once per parsed module; serialized
+	/// module info keeps the order, so consumers never need to sort again.
+	public func sortedByDeclaration() -> [Instantiable] {
+		enumerated()
+			.sorted { lhs, rhs in
+				(lhs.element.sourceFilePath ?? "", lhs.offset) < (rhs.element.sourceFilePath ?? "", rhs.offset)
+			}
+			.map(\.element)
+	}
+}
