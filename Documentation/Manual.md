@@ -368,7 +368,7 @@ public struct NotesApp: App, Instantiable {
 
 ### @Received
 
-Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. Received properties must be `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree. A `@Received` property matches the `@Instantiated` or `@Forwarded` property further up the tree that has the same name and type.
+Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. Received properties must be `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree. A `@Received` property is fulfilled by the `@Instantiated` or `@Forwarded` property further up the tree that shares its name and type. If no such property exists, the build fails.
 
 Continuing the [Macros intro](#macros) example: `LoggedInView` has a `@Forwarded user: User` and an `@Instantiated noteStorage: NoteStorage`. `NoteStorage` can `@Received` the same `user` instance from anywhere in the subtree below `LoggedInView`:
 
@@ -417,7 +417,7 @@ public struct ProfileView: Instantiable {
 
 #### Sharing one instance across properties of disparate types
 
-Renaming can be applied more than once to the same `@Instantiated` or `@Forwarded` property, so a single instance can serve several protocols that do not inherit from one another. Instantiate the concrete type once, then rename it once per protocol. Types further down the tree receive whichever protocol they need, and every one of them gets the same instance:
+Renaming can be applied more than once to the same `@Instantiated` or `@Forwarded` property, so a single instance can be received as several different types: any type the instance can be assigned to, such as unrelated protocols it conforms to or a superclass. Instantiate it once, then rename it once per type. Types further down the tree receive whichever type they need, and every one of them gets the same instance:
 
 ```swift
 public protocol EventTracker { func track(_ event: String) }
@@ -713,7 +713,7 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator` (or `SendableErasedInstantiator`) anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
 
-A type gets its own `SafeDIOverrides` struct when it has at least one dependency that belongs there: an `@Instantiated` dependency or a `@Received` dependency whose type an `@Instantiable` declaration fulfills (SafeDI builds both from the real subtree), or a `@Received(onlyIfAvailable: true)` dependency (an optional entry that defaults to `nil`). A type with none of those, because it only has `@Forwarded` dependencies or `@Received` dependencies of types no `@Instantiable` declaration fulfills, takes them as flat `mock()` parameters instead.
+A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency of a type an `@Instantiable` declaration fulfills, or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
 
 #### Dependency kinds in the generated mock
 
