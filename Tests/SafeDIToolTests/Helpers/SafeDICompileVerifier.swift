@@ -255,9 +255,9 @@ struct SwiftTypecheckResult {
 	let stderr: String
 }
 
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 /// - Parameter activeCompilationConditions: Conditions defined for the compile, mirroring what the
 ///   test supplied to SafeDITool. `DEBUG` is always defined, as it is in a debug build.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func runSwiftTypecheck(
 	sources: [URL],
 	artifacts: SafeDIBuildArtifacts,

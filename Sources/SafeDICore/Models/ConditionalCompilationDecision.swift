@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 /// How SafeDITool evaluated one `#if` condition that guards SafeDI declarations.
 ///
 /// SafeDITool scans sources before the compiler runs and takes the compilation conditions it was

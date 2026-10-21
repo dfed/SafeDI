@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 import SwiftSyntax
 
 /// What SafeDI would learn from the declarations inside an `#if` block.
@@ -121,7 +120,7 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
 		if case let .members(members) = context {
 			let isStaticOrClass = node.modifiers.contains { $0.name.tokenKind == .keyword(.static) || $0.name.tokenKind == .keyword(.class) }
-			let mockMethodNames = [InstantiableVisitor.mockMethodName, members.customMockName].compactMap { $0 }
+			let mockMethodNames = [InstantiableVisitor.mockMethodName, members.customMockName].compactMap(\.self)
 			if isStaticOrClass, mockMethodNames.contains(node.name.text) {
 				record(.mockOnly)
 			} else if members.isExtension, node.name.text == InstantiableVisitor.instantiateMethodName {
