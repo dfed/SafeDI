@@ -330,6 +330,8 @@ extension Container {
 
 Property declarations within `@Instantiable` types decorated with [`@Instantiated`](../Sources/SafeDI/Decorators/Instantiated.swift) are instantiated when its enclosing type is instantiated. `@Instantiated`-decorated properties are available to be `@Received` by objects instantiated further down the dependency tree.
 
+Each `@Instantiated` property is a distinct instance.
+
 `@Instantiated`-decorated properties must be an `@Instantiable` type, or a type listed in an `@Instantiable(fulfillingAdditionalTypes:)` declaration.
 
 If the enclosing type is a SwiftUI `View`, keep in mind that `@Instantiated` objects are re-initialized each time the view is recreated by SwiftUI. You can find a deep dive on SwiftUI view lifecycles [here](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
@@ -366,7 +368,7 @@ public struct NotesApp: App, Instantiable {
 
 ### @Received
 
-Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. Received properties must be `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree.
+Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. Received properties must be `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree. A `@Received` property is fulfilled by the `@Instantiated` or `@Forwarded` property further up the tree that shares its name and type. If no such property exists, the build fails.
 
 Continuing the [Macros intro](#macros) example: `LoggedInView` has a `@Forwarded user: User` and an `@Instantiated noteStorage: NoteStorage`. `NoteStorage` can `@Received` the same `user` instance from anywhere in the subtree below `LoggedInView`:
 
@@ -392,7 +394,7 @@ public class NoteStorage: Instantiable {
 
 #### Renaming and retyping dependencies
 
-Use `@Received(fulfilledByDependencyNamed:ofType:)` to rename or retype a dependency that was `@Instantiated` or `@Forwarded` higher up the tree. Types further down the tree can then `@Received` the dependency under its new name and type.
+Use `@Received(fulfilledByDependencyNamed:ofType:)` to give a dependency that was `@Instantiated` or `@Forwarded` higher up the tree an additional name and type. Types further down the tree can then `@Received` the same instance under either name and type.
 
 Here, a parent instantiates a read-write `UserManager` and also renames the object to make it available a `UserVendor`. A child receives the same instance as the read-only `UserVendor`:
 
@@ -412,6 +414,37 @@ public struct ProfileView: Instantiable {
     @Received private let userVendor: UserVendor
 }
 ```
+
+#### Sharing one instance across properties of disparate types
+
+Renaming can be applied more than once to the same `@Instantiated` or `@Forwarded` property, so a single instance can be received as several different types: any type the instance can be assigned to, such as unrelated protocols it conforms to or a superclass. Instantiate it once, then rename it once per type. Types further down the tree receive whichever type they need, and every one of them gets the same instance:
+
+```swift
+public protocol EventTracker { func track(_ event: String) }
+public protocol CrashReporter { func report(_ error: Error) }
+
+@Instantiable
+public final class Telemetry: EventTracker, CrashReporter, Instantiable { /* … */ }
+
+@Instantiable
+public struct LoggedInView: Instantiable {
+    // Instantiated once. Exists only to be renamed below.
+    @Instantiated private let telemetryImplementation: Telemetry
+    @Received(fulfilledByDependencyNamed: "telemetryImplementation", ofType: Telemetry.self) private let eventTracker: EventTracker
+    @Received(fulfilledByDependencyNamed: "telemetryImplementation", ofType: Telemetry.self) private let crashReporter: CrashReporter
+    @Instantiated private let profileViewBuilder: Instantiator<ProfileView>
+}
+
+@Instantiable
+public struct ProfileView: Instantiable {
+    // The same `Telemetry` instance that `LoggedInView` created.
+    @Received private let crashReporter: CrashReporter
+}
+```
+
+A protocol composition works as the instantiated type as well, with no typealias required: `@Instantiated private let telemetry: EventTracker & CrashReporter` is fulfilled by a type that lists `(EventTracker & CrashReporter).self` in `fulfillingAdditionalTypes`, and the renames then use `ofType: (EventTracker & CrashReporter).self`.
+
+Generated mocks resolve `@Received` dependencies from their declared types rather than from these renames. See [Dependency kinds in the generated mock](#dependency-kinds-in-the-generated-mock) for what that means for `ProfileView.mock()`.
 
 #### Conditionally receiving dependencies
 
@@ -680,7 +713,7 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator` (or `SendableErasedInstantiator`) anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
 
-A type generates its own `SafeDIOverrides` struct when it has `@Instantiated` dependencies or `@Received(onlyIfAvailable: true)` dependencies. A type whose only dependencies are required `@Received` or `@Forwarded` uses flat parameters on its `mock()` method.
+A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency of a type an `@Instantiable` declaration fulfills, or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
 
 #### Dependency kinds in the generated mock
 
@@ -688,11 +721,14 @@ The table below shows where each dependency kind lands in the three buckets abov
 
 | Dependency kind | Shape in the mock | Default |
 | --- | --- | --- |
-| Required `@Received` | Flat `mock()` parameter | Required |
+| Required `@Received` of a type some `@Instantiable` declaration fulfills (directly or via `fulfillingAdditionalTypes`) | Entry on `SafeDIOverrides` | Built from the real subtree, exactly like `@Instantiated` |
+| Required `@Received` of a type no `@Instantiable` declaration fulfills | Flat `mock()` parameter | Required |
 | `@Forwarded` | Flat `mock()` parameter | Required, unless the root provides a default or the forwarded type has a [`mockOnly`](#the-mockonly-parameter) provider (which defaults the parameter to `Type.mock()`) |
 | `@Instantiated` | Entry on `SafeDIOverrides` | Built from the real subtree — see [Overriding dependencies](#overriding-dependencies) |
 | `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
 | Default-valued non-DI init parameter | Flat `mock()` parameter on a direct mock, or a nested `SafeDIMockConfiguration` field when reached through a parent | The parameter’s original default expression |
+
+A `@Received` dependency is resolved from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` can build `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`. A composition entry such as `(EventTracker & CrashReporter).self` alone does not cover its members. Otherwise `crashReporter` is a required parameter of `ProfileView.mock()`. Because each received dependency is resolved on its own, a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each. Pass one instance through `safeDIOverrides` if a test needs them to coincide.
 
 ### Mock visibility
 
