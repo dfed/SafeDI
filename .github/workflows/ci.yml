@@ -252,6 +252,31 @@ jobs:
           verbose: true
           os: linux
 
+  linux-latest-swift:
+    name: Build and Test on Latest Swift
+    runs-on: ubuntu-latest
+    # `swift:latest` floats to the newest Swift release so this job
+    # catches toolchain changes (e.g. SwiftPM's `swiftbuild` build
+    # system and its new `.build` layout) before anyone pins to them.
+    # Runs on Linux rather than macOS to save runner minutes. Coverage
+    # is deliberately not collected or uploaded here: the pinned `spm`
+    # and `linux` jobs own the Codecov report, and a second upload
+    # from a different toolchain would skew it.
+    container: swift:latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+      - name: Print Swift Version
+        run: swift --version
+      - name: Resolve Package Dependencies
+        uses: ./.github/actions/retry
+        with:
+          command: swift package resolve
+      - name: Build and Test Framework
+        run: swift test --traits sourceBuild
+
   bazel:
     name: Bazel Build on macOS
     # General bazel sanity check on every PR. We can't perfectly
