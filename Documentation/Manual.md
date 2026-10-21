@@ -84,6 +84,24 @@ import SafeDI
 
 `SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run `swift run SafeDITool --help` to see documentation of the tool’s supported arguments.
 
+### Finding the generated code
+
+SafeDI writes its output into the build directory rather than your source tree. When you want to read what it generated for a root or a mock, look here:
+
+| Integration | Generated files |
+| --- | --- |
+| Xcode project with the `SafeDIGenerator` plugin | `<DerivedData>/Build/Intermediates.noindex/BuildToolPluginIntermediates/<Project>.output/<Target>/SafeDIGenerator/SafeDIOutput/` |
+| Swift package built with `swift build` | `.build/plugins/outputs/<package>/<target>/destination/SafeDIGenerator/SafeDIOutput/` |
+| Bazel (`safedi_compile`) | `bazel-bin/<package>/<rule name>.swift`, one combined file per rule |
+| Tuist (`SafeDITuist` plugin) | `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift` for each target, under the target’s intermediates in DerivedData |
+| Custom build system | Wherever your `generate` invocation points `--combined-output` or the manifest’s output paths |
+
+The plugin-based integrations name files `<Root>+SafeDI.swift` for each root’s dependency tree, `<Type>+SafeDIMock.swift` for each generated mock, and `SafeDIMockConfiguration.swift` for the shared mock configuration. The quickest way to locate them in any layout is:
+
+```bash
+find . -name '*+SafeDI*.swift' -not -path '*/checkouts/*'
+```
+
 ## Macros
 
 There are a total of five macros in the SafeDI library:
