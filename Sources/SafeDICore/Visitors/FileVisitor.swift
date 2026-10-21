@@ -24,8 +24,14 @@ import SwiftSyntax
 public final class FileVisitor: SyntaxVisitor {
 	// MARK: Initialization
 
-	/// - Parameter sourceLocationConverter: A converter for the tree being walked. When provided, each dependency records where its property is declared.
-	public init(sourceLocationConverter: SourceLocationConverter? = nil) {
+	/// - Parameters:
+	///   - conditionalCompilation: How `#if` blocks are scanned. Defaults to evaluating conditions with none active, which scans platform-conditioned blocks and skips blocks guarded by bare conditions.
+	///   - sourceLocationConverter: A converter for the tree being walked. When provided, each dependency records where its property is declared.
+	public init(
+		conditionalCompilation: ConditionalCompilationHandling = .evaluate(ConditionalCompilationEvaluator(activeCompilationConditions: [])),
+		sourceLocationConverter: SourceLocationConverter? = nil,
+	) {
+		self.conditionalCompilation = conditionalCompilation
 		self.sourceLocationConverter = sourceLocationConverter
 		super.init(viewMode: .sourceAccurate)
 	}
@@ -55,6 +61,24 @@ public final class FileVisitor: SyntaxVisitor {
 
 	public override func visit(_: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
 		.skipChildren
+	}
+
+	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
+		if case let .evaluate(evaluator) = conditionalCompilation {
+			let scannable = evaluator.scannableClauses(in: node, guarding: node.safeDIContent(in: .declarations))
+			activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
+			record(scannable.decisions)
+		}
+		return .visitChildren
+	}
+
+	public override func visit(_ node: IfConfigClauseSyntax) -> SyntaxVisitorContinueKind {
+		switch conditionalCompilation {
+		case .scanAllClauses:
+			.visitChildren
+		case .evaluate:
+			activeIfConfigClauses.contains(node.id) ? .visitChildren : .skipChildren
+		}
 	}
 
 	public override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -103,12 +127,14 @@ public final class FileVisitor: SyntaxVisitor {
 		let instantiableVisitor = InstantiableVisitor(
 			declarationType: .extensionDecl,
 			parentType: nil,
+			conditionalCompilation: conditionalCompilation,
 			sourceLocationConverter: sourceLocationConverter,
 		)
 		instantiableVisitor.walk(node)
 		for instantiable in instantiableVisitor.instantiables {
 			instantiables.append(instantiable)
 		}
+		record(instantiableVisitor.conditionalCompilationDecisions)
 
 		// Extensions are always top-level.
 		parentType = node.extendedType.typeDescription
@@ -137,22 +163,29 @@ public final class FileVisitor: SyntaxVisitor {
 	public private(set) var instantiables = [Instantiable]()
 	public private(set) var configurations = [SafeDIConfiguration]()
 	public private(set) var encounteredUnexpectedNodesSyntax = false
+	/// How each `#if` condition that guards SafeDI declarations was evaluated, in source order.
+	public private(set) var conditionalCompilationDecisions = [ConditionalCompilationDecision]()
 
 	// MARK: Private
 
 	private var parentType: TypeDescription?
+	private let conditionalCompilation: ConditionalCompilationHandling
 	private let sourceLocationConverter: SourceLocationConverter?
+	/// The `#if` clauses the evaluator selected for scanning.
+	private var activeIfConfigClauses = Set<SyntaxIdentifier>()
 
 	private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
 		let instantiableVisitor = InstantiableVisitor(
 			declarationType: .concreteDecl,
 			parentType: parentType,
+			conditionalCompilation: conditionalCompilation,
 			sourceLocationConverter: sourceLocationConverter,
 		)
 		instantiableVisitor.walk(node)
 		for instantiable in instantiableVisitor.instantiables {
 			instantiables.append(instantiable)
 		}
+		record(instantiableVisitor.conditionalCompilationDecisions)
 
 		// Keep track of how nested we are.
 		enterTypeNamed(node.name.text)
@@ -171,5 +204,12 @@ public final class FileVisitor: SyntaxVisitor {
 
 	private func exitType() {
 		parentType = parentType?.popNested
+	}
+
+	/// Records each decision once, even when both this visitor and an `InstantiableVisitor` walk the block.
+	private func record(_ decisions: [ConditionalCompilationDecision]) {
+		for decision in decisions where !conditionalCompilationDecisions.contains(decision) {
+			conditionalCompilationDecisions.append(decision)
+		}
 	}
 }

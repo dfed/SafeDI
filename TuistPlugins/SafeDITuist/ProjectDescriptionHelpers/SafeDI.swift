@@ -207,18 +207,26 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 
 	cd "$SRCROOT"
 
+	set -- "$input_csv" \\
+		--combined-output "$combined_output" \\
+		--module-info-output "$module_info_output"
 	if [ -n "$dependency_csv" ]; then
-		"$safedi_tool" generate \\
-			"$input_csv" \\
-			--combined-output "$combined_output" \\
-			--module-info-output "$module_info_output" \\
-			--dependent-module-info-file-path "$dependency_csv"
-	else
-		"$safedi_tool" generate \\
-			"$input_csv" \\
-			--combined-output "$combined_output" \\
-			--module-info-output "$module_info_output"
+		set -- "$@" --dependent-module-info-file-path "$dependency_csv"
 	fi
+
+	# Forward the target's active compilation conditions so SafeDITool
+	# scans the same `#if` clauses swiftc compiles. Xcode exports the
+	# build setting space-separated, so it is left unquoted to word-split.
+	# SafeDITool releases before the option existed reject it, so a
+	# plugin newer than the pinned binary only forwards when the binary
+	# advertises the option.
+	if [ -n "${SWIFT_ACTIVE_COMPILATION_CONDITIONS:-}" ] \\
+		&& "$safedi_tool" generate --help | grep -q -- '--active-compilation-conditions'; then
+		# shellcheck disable=SC2086
+		set -- "$@" --active-compilation-conditions $SWIFT_ACTIVE_COMPILATION_CONDITIONS
+	fi
+
+	"$safedi_tool" generate "$@"
 
 	echo "SafeDI: wrote $module_info_output"
 	echo "SafeDI: wrote $combined_output"

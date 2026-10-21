@@ -75,6 +75,13 @@ Bumping SafeDI: edit the version in `Tuist/Package.swift`. Both the runtime
 library and the `SafeDITool` binary the plugin invokes follow from that
 single pin.
 
+Conditional compilation: the script forwards the target's
+`SWIFT_ACTIVE_COMPILATION_CONDITIONS` build setting to
+`SafeDITool generate --active-compilation-conditions`, so `#if` blocks
+are scanned the way swiftc compiles them (see the manual's "Conditional
+compilation" section). A pinned `SafeDITool` release that predates the
+option is detected and left alone, so the plugin may be newer than the pin.
+
 ## Why not use the `SafeDIGenerator` SPM plugin?
 
 SafeDI's build-tool plugin collects every `.swift` file from the target plus

@@ -44,6 +44,7 @@ func verifyGeneratedCodeCompiles(
 	inputSwiftFiles: [URL],
 	additionalDirectorySwiftFiles: [URL],
 	generatedFiles: [String: String],
+	activeCompilationConditions: [String] = [],
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) throws {
@@ -99,6 +100,7 @@ func verifyGeneratedCodeCompiles(
 	let combinedResult = try runSwiftTypecheck(
 		sources: combinedCompileFiles,
 		artifacts: artifacts,
+		activeCompilationConditions: activeCompilationConditions,
 	)
 	guard combinedResult.exitCode != 0 else { return }
 
@@ -107,6 +109,7 @@ func verifyGeneratedCodeCompiles(
 	let inputsOnlyResult = try runSwiftTypecheck(
 		sources: inputCompileFiles,
 		artifacts: artifacts,
+		activeCompilationConditions: activeCompilationConditions,
 	)
 	if inputsOnlyResult.exitCode != 0 {
 		Issue.record(
@@ -253,9 +256,12 @@ struct SwiftTypecheckResult {
 }
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+/// - Parameter activeCompilationConditions: Conditions defined for the compile, mirroring what the
+///   test supplied to SafeDITool. `DEBUG` is always defined, as it is in a debug build.
 func runSwiftTypecheck(
 	sources: [URL],
 	artifacts: SafeDIBuildArtifacts,
+	activeCompilationConditions: [String] = [],
 ) throws -> SwiftTypecheckResult {
 	let process = Process()
 	#if os(Linux)
@@ -273,6 +279,7 @@ func runSwiftTypecheck(
 		"-DDEBUG",
 		"-swift-version", "6",
 	])
+	arguments.append(contentsOf: Set(activeCompilationConditions).subtracting(["DEBUG"]).sorted().map { "-D\($0)" })
 	arguments.append(contentsOf: sources.map(\.path))
 	process.arguments = arguments
 

@@ -48,6 +48,10 @@ public struct SafeDIConfigurationMacro: DeclarationMacro {
 				guard isStringLiteralOrNil(argument.expression) else {
 					throw SafeDIConfigurationError.mockConditionalCompilationNotStringLiteralOrNil
 				}
+			case SafeDIConfigurationVisitor.activeCompilationConditionsArgumentLabel:
+				guard isArrayOfStringLiterals(argument.expression) else {
+					throw SafeDIConfigurationError.activeCompilationConditionsNotStringLiteralArray
+				}
 			case let unknownLabel:
 				throw SafeDIConfigurationError.unexpectedArgument(unknownLabel)
 			}
@@ -95,6 +99,7 @@ public struct SafeDIConfigurationMacro: DeclarationMacro {
 		case additionalDirectoriesToIncludeNotStringLiteralArray
 		case additionalMocksToGenerateNotStringLiteralArray
 		case mockConditionalCompilationNotStringLiteralOrNil
+		case activeCompilationConditionsNotStringLiteralArray
 		case unexpectedUnlabeledArgument
 		case unexpectedArgument(String)
 
@@ -108,6 +113,8 @@ public struct SafeDIConfigurationMacro: DeclarationMacro {
 				"The `\(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel)` argument must be an array of string literals"
 			case .mockConditionalCompilationNotStringLiteralOrNil:
 				"The `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)` argument must be a string literal or `nil`"
+			case .activeCompilationConditionsNotStringLiteralArray:
+				"The `\(SafeDIConfigurationVisitor.activeCompilationConditionsArgumentLabel)` argument must be an array of string literals"
 			case .unexpectedUnlabeledArgument:
 				"#\(SafeDIConfigurationVisitor.macroName) does not accept unlabeled arguments"
 			case let .unexpectedArgument(label):

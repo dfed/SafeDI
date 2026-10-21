@@ -42,6 +42,8 @@ import SafeDI
 
 The `additionalDirectoriesToInclude` parameter specifies folders outside of your module that SafeDI will scan for Swift source files. Paths must be relative to the executing directory (the directory containing the `.xcodeproj` for Xcode integrations). Use this parameter to specify the paths to dependent modules’ source directories, since Xcode project plugins cannot discover these automatically. You can see [an example of this configuration](../Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](../Examples/ExampleMultiProjectIntegration) project.
 
+> **Note:** Xcode does not expose build settings to build tool plugins, so the `SafeDIGenerator` plugin cannot tell which compilation conditions are active in an Xcode project. See [Conditional compilation](#conditional-compilation) before guarding SafeDI declarations with `#if`.
+
 > **Note:** `additionalDirectoriesToInclude` is only honored by the SPM build-tool plugin. The Bazel and Tuist integrations enumerate every input up front (Bazel via declared rule inputs; Tuist via the build phase's `inputPaths`), so files reached only through `additionalDirectoriesToInclude` won't be visible to SafeDITool at build time and won't trigger incremental rebuilds. Under those integrations, list every Swift source you want SafeDI to see directly via the build target.
 
 ##### Installing the prebuilt SafeDITool binary
@@ -80,7 +82,7 @@ import SafeDI
 
 ### Additional configurations
 
-`SafeDITool` is designed to integrate into projects of any size or shape. Our [Releases](https://github.com/dfed/SafeDI/releases) page ships a prebuilt, codesigned `SafeDITool.artifactbundle.zip` that can be downloaded and driven directly from a pre-build script — see the embedded shell in [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift) for a working reference (it locates the binary via SPM, runs `generate --combined-output` for fixed-path Swift output, and supports the cross-module `.safedi` module-info handoff). For a non-SPM build system, swap the binary-location lookup for a `curl` of the artifact bundle. Set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
+`SafeDITool` is designed to integrate into projects of any size or shape. Our [Releases](https://github.com/dfed/SafeDI/releases) page ships a prebuilt, codesigned `SafeDITool.artifactbundle.zip` that can be downloaded and driven directly from a pre-build script — see the embedded shell in [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift) for a working reference (it locates the binary via SPM, runs `generate --combined-output` for fixed-path Swift output, and supports the cross-module `.safedi` module-info handoff). For a non-SPM build system, swap the binary-location lookup for a `curl` of the artifact bundle. Set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script. Pass the target's active compilation conditions to `generate --active-compilation-conditions` so SafeDITool scans the same `#if` clauses the compiler compiles; see [Conditional compilation](#conditional-compilation).
 
 `SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run `swift run SafeDITool --help` to see documentation of the tool’s supported arguments.
 
@@ -497,6 +499,7 @@ public struct FeedView: Instantiable {
 - `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. Only honored by the SPM build-tool plugin. The Bazel and Tuist integrations enumerate inputs up front and ignore this parameter — list every Swift source via the build target itself instead. Default: `[]`.
 - `additionalMocksToGenerate`: Type names from dependent modules to generate `mock()` methods for in this module. The types must be `@Instantiable` in their home module. See [Cross-module mock generation](#cross-module-mock-generation). Default: `[]`.
 - `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Default: `"DEBUG"`.
+- `activeCompilationConditions`: Compilation conditions to treat as active while SafeDITool scans this module's `#if` blocks, for conditions your build integration cannot report. The list is static and applies in every build configuration. See [Conditional compilation](#conditional-compilation). Default: `[]`.
 
 ## Delayed instantiation
 
@@ -794,6 +797,60 @@ For the second case, use the `additionalMocksToGenerate` parameter on [`#SafeDIC
 This generates a `mock()` method for each listed type in the current module, even though the type is defined elsewhere. The type must be `@Instantiable` in its home module, but `generateMock: true` is not required there unless that home module also wants to generate its own mock.
 
 **Note:** `additionalDirectoriesToInclude` helps SafeDI scan source from Xcode project dependencies, but it does not generate mocks for those dependency modules. Use `additionalMocksToGenerate` when the current module needs a local mock for a dependency-module type.
+
+## Conditional compilation
+
+SafeDITool scans your source before the compiler runs, so it decides for itself which clauses of an `#if` block are active, using the compilation conditions your build integration reports:
+
+- `true`, `false`, `!`, `&&`, `||`, and parentheses are evaluated.
+- A bare condition such as `DEBUG` or `STAGING` is active when the reported conditions include it and inactive otherwise. SafeDITool scans the clause the conditions select and ignores the others, so a type declared under `#if DEBUG` and a different type declared under `#else` can both fulfill the same protocol:
+
+```swift
+#if DEBUG
+@Instantiable(fulfillingAdditionalTypes: [EventLogger.self])
+public final class ConsoleEventLogger: EventLogger, Instantiable { … }
+#else
+@Instantiable(fulfillingAdditionalTypes: [EventLogger.self])
+public final class DisabledEventLogger: EventLogger, Instantiable { … }
+#endif
+```
+
+- Platform conditions such as `os(iOS)`, `arch(arm64)`, `canImport(UIKit)`, `targetEnvironment(simulator)`, `swift(>=6.0)`, and `compiler(>=6.0)` are left to the compiler. SafeDITool scans every clause one of them could select, so declarations under `#if os(iOS)` and under its `#else` are both visible to code generation.
+
+The reported conditions are taken as complete, so a condition your build defines but your integration does not report would make SafeDITool scan the wrong clause. To keep that from going unnoticed, every generated file begins by asserting each decision SafeDITool made about a block that declares something SafeDI scans for—an `@Instantiable` type, a dependency property, an initializer or `instantiate()` method, or a `#SafeDIConfiguration`:
+
+```swift
+#if !(DEBUG)
+#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \"Conditional compilation\" section of the SafeDI manual.")
+#endif
+```
+
+The compiler evaluates the same condition with the real build settings, so a mismatch fails the build at the generated file with a message naming the condition instead of producing code for the wrong configuration. Blocks that guard nothing SafeDI reads are not asserted.
+
+### Declarations that only feed mock generation
+
+A declaration that participates only in mock generation—an `@Instantiable(mockOnly: true)` type or extension, or a hand-written `mock()` or `customMockName` method—may be guarded by the module’s `mockConditionalCompilation` condition (`DEBUG` by default) without the build reporting it. SafeDITool evaluates such a block as if that condition were active, because the generated mock code that references the declaration is wrapped in the same `#if`, and emits no assertion for it. This keeps `#if DEBUG` around a `mockOnly` declaration working under every integration, including the Xcode project plugin. Setting `mockConditionalCompilation: nil` disables this exemption, since the generated mocks are then unconditional. The exemption never applies to production declarations, nor to other conditions guarding mock-only declarations.
+
+### Reporting active conditions
+
+Each integration reports the conditions it can see:
+
+| Integration | Reported conditions |
+|-------------|---------------------|
+| Swift package plugin | The target’s `swiftSettings` defines, including those with `.when(configuration:)` conditions, and trait defines. SwiftPM’s implicit `DEBUG` is **not** reported: to guard a production declaration with `DEBUG`, add `.define("DEBUG", .when(configuration: .debug))` to the target’s `swiftSettings`, as the [Example Package Integration](../Examples/Example%20Package%20Integration/Package.swift) does. |
+| Xcode project plugin | None. Xcode does not expose build settings to build tool plugins, so every bare condition is inactive: a production declaration under `#if DEBUG` is never scanned, and a debug build then fails at the assertion. Declare conditions that are always on with `#SafeDIConfiguration(activeCompilationConditions:)`. |
+| Bazel `safedi_compile` | `DEBUG` in the `dbg` and `fastbuild` compilation modes, plus the rule’s `defines` attribute, which must mirror the wrapped `swift_library.defines`. |
+| Tuist plugin and other prebuild scripts | The target’s `SWIFT_ACTIVE_COMPILATION_CONDITIONS` build setting, passed as `generate --active-compilation-conditions`. |
+
+The Swift package plugin scans the sources of a target’s dependencies with the target’s own conditions, so a condition that guards a production declaration in a dependency must be defined on every target whose dependency tree reaches it.
+
+### Conditions your build cannot report
+
+`#SafeDIConfiguration(activeCompilationConditions: ["STAGING"])` treats the listed conditions as active whenever SafeDITool scans the module. The list is static—it applies in every build configuration—so it suits conditions your build defines unconditionally, such as an entry in an Xcode project’s `SWIFT_ACTIVE_COMPILATION_CONDITIONS`, rather than ones that vary per configuration like `DEBUG`.
+
+### Upgrading
+
+Earlier releases scanned every clause of every `#if` block. Existing projects keep building unless a production declaration sits behind a bare condition. SafeDITool now scans such a block according to the conditions your integration reports, and the generated code asserts that choice, so a build whose compiler disagrees fails with a message naming the condition. Fix it by reporting the condition as described above, declaring it in `#SafeDIConfiguration(activeCompilationConditions:)`, or moving the declaration out of the block.
 
 ## Comparing SafeDI and Manual Injection: Key Differences
 

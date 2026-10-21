@@ -37,6 +37,10 @@ SafeDI is a compile-time dependency injection framework for Swift. It uses Swift
 3. **DependencyTreeGenerator** creates `ScopeGenerator` trees → each generates its code via `generatePropertyCode`
 4. **Mock generation** (`generateMockCode`) creates `mock()` static methods with `@autoclosure @escaping` parameters, `T? = nil` subtree parameters, and `MockContext` for disambiguation
 
+### Conditional compilation
+
+`FileVisitor` and `InstantiableVisitor` take a `ConditionalCompilationHandling`: the macro passes `.scanAllClauses` (the compiler already picked the active clause), the tool passes `.evaluate(ConditionalCompilationEvaluator)`. The evaluator treats the supplied `activeCompilationConditions` as complete (a bare condition not in the set is inactive), scans every clause of platform-conditioned blocks (`os()`, `canImport()`, …), and evaluates mock-only content (`SafeDIContentDetector`) as if `mockConditionalCompilation` were active. Each evaluation that decides a block guarding SafeDI content is a `ConditionalCompilationDecision`; `generate` prepends `ConditionalCompilationDecision.compileTimeAssertions` (`#if …` / `#error`) to every generated file so the compiler rejects code generated under a condition it evaluates differently. There is no "unknown condition" state and no error at generate time: the compile-time assertion is the fail-closed mechanism. `#SafeDIConfiguration(activeCompilationConditions:)` is discovered before the main parse (`discoverConfigurations`) because it feeds the evaluator.
+
 ### Mock generation flow
 
 Mock generation follows this pipeline:

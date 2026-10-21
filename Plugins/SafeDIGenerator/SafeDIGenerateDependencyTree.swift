@@ -27,9 +27,15 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		context: PluginContext,
 		target: Target,
 	) async throws -> [Command] {
-		guard let sourceTarget = target as? SourceModuleTarget else {
+		guard let sourceTarget = target as? SwiftSourceModuleTarget else {
 			return []
 		}
+		// The target's active compilation conditions (`-D` flags from `swiftSettings`
+		// and traits, resolved for the current configuration) let SafeDITool scan the
+		// same `#if` clauses the compiler compiles. SwiftPM's implicit `DEBUG` is not
+		// among them; a target that guards SafeDI declarations with `DEBUG` declares
+		// `.define("DEBUG", .when(configuration: .debug))` in its `swiftSettings`.
+		let activeCompilationConditionArguments = activeCompilationConditionArguments(sourceTarget.compilationConditions)
 
 		let tool = try context.tool(named: "SafeDITool").url
 		let outputDirectory = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutput")
@@ -68,7 +74,8 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					"--output-directory", outputDirectory.path(percentEncoded: false),
 					"--manifest-file", manifestFile.path(percentEncoded: false),
 					"--mock-scoped-files",
-				] + targetSwiftFiles.map { $0.path(percentEncoded: false) },
+				] + targetSwiftFiles.map { $0.path(percentEncoded: false) }
+					+ activeCompilationConditionArguments,
 			)
 		} catch let error as SafeDIToolLaunchError {
 			Diagnostics.warning(
@@ -82,6 +89,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 				packageRoot: packageRoot,
 				inputSourcesFile: inputSourcesFile,
 				outputDirectory: outputDirectory,
+				activeCompilationConditionArguments: activeCompilationConditionArguments,
 			)
 		}
 
@@ -107,7 +115,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					inputSourcesFile.path(percentEncoded: false),
 					"--swift-manifest",
 					manifestFile.path(percentEncoded: false),
-				],
+				] + activeCompilationConditionArguments,
 				environment: [:],
 				inputFiles: allSwiftFiles + additionalInputFiles,
 				outputFiles: outputFiles,
@@ -126,6 +134,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		packageRoot: URL,
 		inputSourcesFile: URL,
 		outputDirectory: URL,
+		activeCompilationConditionArguments: [String],
 	) throws -> [Command] {
 		let scanResult = PluginScanner.scan(
 			swiftFiles: allSwiftFiles,
@@ -146,12 +155,23 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					inputSourcesFile.path(percentEncoded: false),
 					"--output-directory", outputDirectory.path(percentEncoded: false),
 					"--mock-scoped-files",
-				] + targetSwiftFiles.map { $0.path(percentEncoded: false) },
+				] + targetSwiftFiles.map { $0.path(percentEncoded: false) }
+					+ activeCompilationConditionArguments,
 				environment: [:],
 				inputFiles: allSwiftFiles + scanResult.additionalInputFiles,
 				outputFiles: scanResult.outputFiles,
 			),
 		]
+	}
+
+	/// The `--active-compilation-conditions` arguments for `conditions`, or none when there
+	/// are no conditions: the option requires at least one value.
+	private func activeCompilationConditionArguments(_ conditions: [String]) -> [String] {
+		if conditions.isEmpty {
+			[]
+		} else {
+			["--active-compilation-conditions"] + conditions
+		}
 	}
 }
 
