@@ -115,8 +115,7 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 			return nil
 		}
 		for case let fileURL as URL in enumerator {
-			guard fileURL.pathExtension == "swift" else { continue }
-			guard let contents = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
+			guard fileURL.pathExtension == "swift", let contents = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
 			if contents.contains("#SafeDIConfiguration") || contents.contains("@SafeDIConfiguration") {
 				return fileURL
 			}

@@ -650,10 +650,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var onlyIfAvailableSafeDIParameterEntries = [(label: String, typeSource: String)]()
 		for receivedProperty in receivedProperties.sorted() {
 			guard !treePropertyLabels.contains(receivedProperty.label),
-			      !forwardedPropertySet.contains(receivedProperty)
-			else { continue }
-			guard !receivedProperty.typeDescription.isOptional
-				|| !receivedNonOptionalProperties.contains(receivedProperty.asUnwrappedProperty)
+			      !forwardedPropertySet.contains(receivedProperty), !receivedProperty.typeDescription.isOptional
+			      || !receivedNonOptionalProperties.contains(receivedProperty.asUnwrappedProperty)
 			else { continue }
 			let isOnlyIfAvailable = (receivedProperty.typeDescription.isOptional
 				&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty))
@@ -1043,7 +1041,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// concern properties — aliases are plain `let` bindings emitted inline.
 		var propertyChildren: [MockParameterNode] {
 			children.compactMap {
-				if case let .property(property) = $0 { property } else { nil }
+				if case let .property(property) = $0 {
+					property
+				} else {
+					nil
+				}
 			}
 		}
 
@@ -2483,7 +2485,11 @@ extension [ScopeGenerator.MockTreeItem] {
 	/// sibling disambiguation.
 	fileprivate var propertyNodes: [ScopeGenerator.MockParameterNode] {
 		compactMap {
-			if case let .property(node) = $0 { node } else { nil }
+			if case let .property(node) = $0 {
+				node
+			} else {
+				nil
+			}
 		}
 	}
 }

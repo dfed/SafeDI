@@ -756,15 +756,17 @@ public actor DependencyTreeGenerator {
 		cache: inout [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
 	) -> (received: Set<Property>, onlyIfAvailable: Set<Property>) {
 		let id = ObjectIdentifier(scope)
-		if let cached = cache[id] { return cached }
+		if let cached = cache[id] {
+			return cached
+		}
 		// Cycle sentinel — re-entrant calls return empty (cycles contribute no new received).
 		cache[id] = ([], [])
 
 		// Properties declared at this scope (instantiated/aliased children).
 		let propertiesToDeclare = Set(scope.propertiesToGenerate.compactMap { propertyToGenerate -> Property? in
 			switch propertyToGenerate {
-			case let .instantiated(property, _, _): return property
-			case let .aliased(property, _, _, _): return property
+			case let .instantiated(property, _, _): property
+			case let .aliased(property, _, _, _): property
 			}
 		})
 
@@ -1133,19 +1135,17 @@ public actor DependencyTreeGenerator {
 				for receivedProperty in scope.requiredReceivedProperties {
 					let parentContainsProperty = receivableProperties.contains(receivedProperty)
 					let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
-					if !parentContainsProperty, !propertyIsCreatedAtThisScope {
-						if property != nil {
-							// This property is in a dependency tree and is unfulfillable. Record the problem.
-							unfulfillableProperties.insert(.init(
-								property: receivedProperty,
-								instantiable: scope.instantiable,
-								parentStack: propertyStack.map(\.typeDescription) + [root],
-								suggestedAlternatives: receivableProperties.filter {
-									receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
-										|| receivedProperty.label == $0.label
-								}.sorted(),
-							))
-						}
+					if !parentContainsProperty, !propertyIsCreatedAtThisScope, property != nil {
+						// This property is in a dependency tree and is unfulfillable. Record the problem.
+						unfulfillableProperties.insert(.init(
+							property: receivedProperty,
+							instantiable: scope.instantiable,
+							parentStack: propertyStack.map(\.typeDescription) + [root],
+							suggestedAlternatives: receivableProperties.filter {
+								receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
+									|| receivedProperty.label == $0.label
+							}.sorted(),
+						))
 					}
 				}
 			}
