@@ -154,3 +154,4 @@ Dan has a proven track record of maintaining open-source libraries: he co-create
 ## Acknowledgements
 
 Special thanks to [@kierajmumick](http://github.com/kierajmumick) for helping shape the early design of SafeDI.
+
