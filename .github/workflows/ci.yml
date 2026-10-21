@@ -43,17 +43,14 @@ jobs:
 
   xcodebuild:
     name: Build with xcodebuild on Xcode 26
+    # One job builds every Apple platform rather than a five-entry
+    # matrix. Each matrix entry resolved the package graph, downloaded
+    # its platform, and compiled swift-syntax for the macro plugin host
+    # from scratch. With one DerivedData the host-side macro plugin (and
+    # the swift-syntax it links) compiles once and every later destination
+    # reuses it; only the per-platform compile of the package's own
+    # modules repeats. The five xcodebuild invocations are unchanged.
     runs-on: macos-26
-    strategy:
-      matrix:
-        platforms: [
-          'generic/platform=ios',
-          'platform=macOS',
-          'generic/platform=tvos',
-          'generic/platform=watchos',
-          'generic/platform=visionos'
-        ]
-      fail-fast: false
     permissions:
       contents: read
     steps:
@@ -61,19 +58,40 @@ jobs:
         uses: actions/checkout@v6
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
-      - name: Download Platform
-        if: matrix.platforms != 'platform=macOS'
+      # GitHub's macOS images no longer bundle the non-macOS platforms,
+      # so each has to be downloaded. Once per job, not once per platform
+      # job.
+      - name: Download Platforms
         run: |
           sudo xcodebuild -runFirstLaunch
           sudo xcrun simctl list
-          PLATFORM=$(echo "${{ matrix.platforms }}" | sed 's|generic/platform=||')
-          sudo xcodebuild -downloadPlatform "$PLATFORM"
+          for platform in iOS tvOS watchOS visionOS; do
+            sudo xcodebuild -downloadPlatform "$platform"
+          done
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
           command: xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme SafeDI-Package
-      - name: Build Framework
-        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
+      # macOS goes first so its build populates DerivedData with the
+      # host-side macro plugin the other destinations reuse. Every build
+      # step runs even when an earlier destination failed
+      # (`!cancelled()`), preserving the old matrix's `fail-fast: false`
+      # so one broken platform doesn't hide the status of the others.
+      - name: Build Framework (macOS)
+        if: ${{ !cancelled() }}
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination platform=macOS
+      - name: Build Framework (iOS)
+        if: ${{ !cancelled() }}
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=ios
+      - name: Build Framework (tvOS)
+        if: ${{ !cancelled() }}
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=tvos
+      - name: Build Framework (watchOS)
+        if: ${{ !cancelled() }}
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=watchos
+      - name: Build Framework (visionOS)
+        if: ${{ !cancelled() }}
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=visionos
 
   docc:
     name: Build DocC on Xcode 26
@@ -203,14 +221,36 @@ jobs:
         uses: actions/checkout@v6
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      # Restoring `.build` carries swift-syntax's release-mode objects
+      # over between runs; SafeDI's own targets and tests still rebuild
+      # from the current sources. The key pins the Xcode version because
+      # build products aren't portable across toolchains. The
+      # restore-keys prefix reuses the most recent cache when
+      # Package.resolved changes, and the incremental build takes it
+      # from there.
+      - name: Cache Build Directory
+        uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-release-${{ runner.os }}-xcode-26.0-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            spm-release-${{ runner.os }}-xcode-26.0-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
           command: xcrun swift package resolve
+      # Run tests a few times to ensure code-gen is stable. The repeat
+      # passes exist to catch output that differs between processes
+      # (per-process hash seeds), and every pass still compares generated
+      # output against the expected strings. Compile verification runs
+      # only on the first pass: it typechecks each generated output with
+      # swiftc, and re-typechecking a string the later passes have already
+      # proven identical adds nothing except ~90% of the pass's runtime.
       - name: Build and Test Framework
         run: |
-          for i in {1..5}; do # Run tests a few times to ensure code-gen is stable.
-            xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild
+          xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild
+          for _ in {1..4}; do
+            SAFEDI_SKIP_COMPILE_CHECK=1 xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild
           done
       - name: Prepare Coverage Reports
         run: ./Scripts/prepare-coverage-reports.sh
@@ -231,6 +271,15 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
+      # Same idea as the macOS test job: reuse dependency build products
+      # between runs. Keyed on the container's Swift version.
+      - name: Cache Build Directory
+        uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            spm-release-${{ runner.os }}-swift-6.2-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -303,6 +352,23 @@ jobs:
         uses: actions/checkout@v6
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      # Bazel's disk and repository caches are content-addressed, so
+      # restoring them reuses the outputs of identical actions (above
+      # all the swift-syntax compiles) without changing what gets built.
+      # Both builds below point at the same caches, so the downstream
+      # example's exec-config swift-syntax is a hit even on a run where
+      # nothing was restored. The flags live on the command lines rather
+      # than in `.bazelrc` so BCR's presubmit keeps building with
+      # SafeDI's committed defaults.
+      - name: Cache Bazel
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/bazel-disk
+            ~/.cache/bazel-repository
+          key: bazel-${{ runner.os }}-xcode-26.0-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'Package.resolved', 'Examples/ExampleBazelIntegration/MODULE.bazel', 'Examples/ExampleBazelIntegration/MODULE.bazel.lock') }}
+          restore-keys: |
+            bazel-${{ runner.os }}-xcode-26.0-
       # Wrapping `bazelisk build` in retry — not just dependency
       # resolution, like the SPM jobs above — because Bazel resolves
       # external repos lazily during the build itself. There's no
@@ -321,11 +387,11 @@ jobs:
           # `${{ inputs.command }}` directly into a bash `for` loop
           # and tacks ` && break` onto the same source line, so a
           # multi-line YAML command leaves `&& break` orphaned.
-          command: bazelisk build //Sources/SafeDI:SafeDI //Sources/SafeDICore:SafeDICore //Sources/SafeDIMacros:SafeDIMacros //Sources/SafeDITool:SafeDITool
+          command: bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Sources/SafeDI:SafeDI //Sources/SafeDICore:SafeDICore //Sources/SafeDIMacros:SafeDIMacros //Sources/SafeDITool:SafeDITool
       - name: Build downstream example (mirrors BCR `bcr_test_module.build_example`)
         uses: ./.github/actions/retry
         with:
-          command: (cd Examples/ExampleBazelIntegration && bazelisk build //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration)
+          command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration)
 
   readme-validation:
     name: Check Markdown links
@@ -347,6 +413,13 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
+      # `swift run` otherwise compiles SwiftFormat from source on every
+      # run. Keyed on the container's Swift version.
+      - name: Cache SwiftFormat Build
+        uses: actions/cache@v6
+        with:
+          path: CLI/.build
+          key: swiftformat-${{ runner.os }}-swift-6.3-${{ hashFiles('CLI/Package.resolved') }}
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
