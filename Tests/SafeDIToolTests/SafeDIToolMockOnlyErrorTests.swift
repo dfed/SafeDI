@@ -80,6 +80,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 			diagnostics: { inputSwiftFilePaths in
 				"""
 				\(inputSwiftFilePaths[0]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(inputSwiftFilePaths[0]):6:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
 				"""
 			},
 		) {
@@ -114,6 +115,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 			diagnostics: { inputSwiftFilePaths in
 				"""
 				\(inputSwiftFilePaths[0]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(inputSwiftFilePaths[0]):7:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
 				"""
 			},
 		) {
@@ -376,6 +378,42 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					public struct FakeService: Instantiable {
 					    public init() {}
 					    public static func mock() -> FakeService { FakeService() }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_reportsDuplicateProviderAtInstantiableDeclaration_whenDeclarationIsNotAtTopOfFile() async {
+		await assertThrowsError(
+			diagnostics: { inputSwiftFilePaths in
+				"""
+				\(inputSwiftFilePaths[1]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(inputSwiftFilePaths[0]):5:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol ServiceProtocol {
+					    func perform()
+					}
+
+					@Instantiable(mockOnly: true)
+					extension MyService {
+					    public static func mock() -> MyService { fatalError() }
+					}
+					""",
+					"""
+					@Instantiable(mockOnly: true)
+					extension MyService {
+					    public static func mock() -> MyService { fatalError() }
 					}
 					""",
 				],

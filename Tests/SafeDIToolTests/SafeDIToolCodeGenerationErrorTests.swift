@@ -818,7 +818,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			diagnostics: { inputSwiftFilePaths in
 				"""
 				\(inputSwiftFilePaths[2]):13:5: error: Dependency cycle detected: AuthService -> AuthService
-				\(inputSwiftFilePaths[2]):1:1: note: `AuthService` is part of the cycle
+				\(inputSwiftFilePaths[2]):5:1: note: `AuthService` is part of the cycle
 				"""
 			},
 		) {
@@ -1150,8 +1150,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { inputSwiftFilePaths in
 				"""
-				\(inputSwiftFilePaths[0]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(inputSwiftFilePaths[1]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(inputSwiftFilePaths[0]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(inputSwiftFilePaths[1]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 				"""
 			},
 		) {
@@ -1182,8 +1182,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { inputSwiftFilePaths in
 				"""
-				\(inputSwiftFilePaths[0]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(inputSwiftFilePaths[1]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(inputSwiftFilePaths[0]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(inputSwiftFilePaths[1]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 				"""
 			},
 		) {
@@ -1214,8 +1214,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { inputSwiftFilePaths in
 				"""
-				\(inputSwiftFilePaths[1]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(inputSwiftFilePaths[0]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(inputSwiftFilePaths[1]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(inputSwiftFilePaths[0]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 				"""
 			},
 		) {
@@ -1250,8 +1250,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { inputSwiftFilePaths in
 				"""
-				\(inputSwiftFilePaths[1]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(inputSwiftFilePaths[0]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(inputSwiftFilePaths[1]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(inputSwiftFilePaths[0]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 				"""
 			},
 		) {
@@ -1286,8 +1286,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { inputSwiftFilePaths in
 				"""
-				\(inputSwiftFilePaths[1]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(inputSwiftFilePaths[0]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(inputSwiftFilePaths[1]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(inputSwiftFilePaths[0]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 				"""
 			},
 		) {
@@ -1322,8 +1322,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { inputSwiftFilePaths in
 				"""
-				\(inputSwiftFilePaths[0]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UserDefaults`
-				\(inputSwiftFilePaths[1]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UserDefaults`
+				\(inputSwiftFilePaths[0]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UserDefaults`
+				\(inputSwiftFilePaths[1]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UserDefaults`
 				"""
 			},
 		) {
@@ -1362,8 +1362,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { inputSwiftFilePaths in
 				"""
-				\(inputSwiftFilePaths[0]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UIViewController`
-				\(inputSwiftFilePaths[1]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UIViewController`
+				\(inputSwiftFilePaths[0]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UIViewController`
+				\(inputSwiftFilePaths[1]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UIViewController`
 				"""
 			},
 		) {
@@ -1441,7 +1441,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			diagnostics: { inputSwiftFilePaths in
 				"""
 				\(inputSwiftFilePaths[0]):14:2: error: Dependency cycle detected: A -> C -> B -> A
-				\(inputSwiftFilePaths[0]):1:1: note: `A` is part of the cycle
+				\(inputSwiftFilePaths[0]):7:1: note: `A` is part of the cycle
+				\(inputSwiftFilePaths[0]):17:1: note: `C` is part of the cycle
+				\(inputSwiftFilePaths[0]):12:1: note: `B` is part of the cycle
 				"""
 			},
 		) {
@@ -2414,7 +2416,143 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsMissingSourceLocationError_whenDependentModuleInfoOmitsDependencyDeclarationLocation() async throws {
+		let childModuleOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(missing: Missing) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let missing: Missing
+				}
+
+				public struct Missing {}
+				""",
+			],
+			buildSwiftOutputDirectory: false,
+			filesToDelete: &filesToDelete,
+		)
+		let moduleInfoPath = try writeModuleInfo(
+			childModuleOutput.moduleInfo,
+			strippingDependencyDeclarationLocations: true,
+			strippingInstantiableDeclarationLocations: false,
+		)
+
+		await assertThrowsError(
+			"SafeDI has no source location for property `missing: Missing` on `Child`. Every `.safedi` module info file must be regenerated by this version of SafeDITool.",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let child: Child
+					}
+					""",
+				],
+				dependentModuleInfoPaths: [moduleInfoPath],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsMissingSourceLocationError_whenDependentModuleInfoOmitsInstantiableDeclarationLocation() async throws {
+		let childModuleOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Service: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: false,
+			filesToDelete: &filesToDelete,
+		)
+		let moduleInfoPath = try writeModuleInfo(
+			childModuleOutput.moduleInfo,
+			strippingDependencyDeclarationLocations: false,
+			strippingInstantiableDeclarationLocations: true,
+		)
+
+		await assertThrowsError(
+			"SafeDI has no source location for `@Instantiable` type `Service`. Every `.safedi` module info file must be regenerated by this version of SafeDITool.",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable
+					public final class Service: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				dependentModuleInfoPaths: [moduleInfoPath],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()
+
+	/// Writes a `.safedi` file like one produced by a SafeDITool that did not record source locations.
+	/// Locations are optional on the models, so a file without them decodes with `nil` locations.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func writeModuleInfo(
+		_ moduleInfo: ModuleInfo,
+		strippingDependencyDeclarationLocations: Bool,
+		strippingInstantiableDeclarationLocations: Bool,
+	) throws -> String {
+		let strippedModuleInfo = ModuleInfo(
+			imports: moduleInfo.imports,
+			instantiables: moduleInfo.instantiables.map { instantiable in
+				var stripped = Instantiable(
+					instantiableType: instantiable.concreteInstantiable,
+					isRoot: instantiable.isRoot,
+					initializer: instantiable.initializer,
+					additionalInstantiables: Array(instantiable.instantiableTypes.dropFirst()),
+					dependencies: instantiable.dependencies.map { dependency in
+						Dependency(
+							property: dependency.property,
+							source: dependency.source,
+							declarationLocation: strippingDependencyDeclarationLocations ? nil : dependency.declarationLocation,
+						)
+					},
+					declarationType: instantiable.declarationType,
+					mockAttributes: instantiable.mockAttributes,
+					generateMock: instantiable.generateMock,
+					mockOnly: instantiable.mockOnly,
+					mockInitializer: instantiable.mockInitializer,
+					mockReturnType: instantiable.mockReturnType,
+					customMockName: instantiable.customMockName,
+					declarationLocation: strippingInstantiableDeclarationLocations ? nil : instantiable.declarationLocation,
+				)
+				stripped.sourceFilePath = instantiable.sourceFilePath
+				return stripped
+			},
+			configurations: moduleInfo.configurations,
+			filesWithUnexpectedNodes: moduleInfo.filesWithUnexpectedNodes,
+		)
+		let moduleInfoURL = URL(fileURLWithPath: NSTemporaryDirectory())
+			.appendingPathComponent(UUID().uuidString)
+			.appendingPathExtension("safedi")
+		try JSONEncoder().encode(strippedModuleInfo).write(to: moduleInfoURL)
+		filesToDelete.append(moduleInfoURL)
+		return moduleInfoURL.path
+	}
 }

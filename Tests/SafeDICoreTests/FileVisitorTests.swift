@@ -247,6 +247,11 @@ struct FileVisitorTests {
 					),
 				],
 				declarationType: .classType,
+				declarationLocation: Dependency.DeclarationLocation(
+					filePath: "Sources/App/LoggedInViewController.swift",
+					line: 3,
+					column: 1,
+				),
 			),
 		])
 	}

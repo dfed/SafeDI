@@ -34,8 +34,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		mockInitializer: Initializer? = nil,
 		mockReturnType: TypeDescription? = nil,
 		customMockName: String? = nil,
+		declarationLocation: Dependency.DeclarationLocation? = nil,
 	) {
 		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
+		self.declarationLocation = declarationLocation
 		self.isRoot = isRoot
 		self.initializer = initializer
 		self.dependencies = dependencies
@@ -103,8 +105,13 @@ public struct Instantiable: Codable, Hashable, Sendable {
 			|| mockReturnType == .simple(name: "Self", generics: [])
 	}
 
-	/// The path to the source file that declared this Instantiable.
+	/// The path to the source file that declared this Instantiable, as the build system supplied it.
+	/// `scan` rewrites it to a project-relative form so cached module info matches manifest entries;
+	/// `declarationLocation.filePath` keeps the path exactly as parsed for diagnostics.
 	public var sourceFilePath: String?
+	/// Where the decorated declaration begins in source: its first attribute, as for `Dependency.declarationLocation`.
+	/// `nil` when the declaration was parsed without a file context (e.g. during macro expansion).
+	public let declarationLocation: Dependency.DeclarationLocation?
 
 	/// The type of declaration where this Instantiable was defined.
 	public enum DeclarationType: Codable, Hashable, Sendable {

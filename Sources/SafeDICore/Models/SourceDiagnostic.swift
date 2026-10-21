@@ -27,7 +27,7 @@ public struct SourceDiagnostic: Hashable, Sendable {
 
 	public init(
 		severity: Severity,
-		location: Dependency.DeclarationLocation?,
+		location: Dependency.DeclarationLocation,
 		message: String,
 	) {
 		self.severity = severity
@@ -44,15 +44,14 @@ public struct SourceDiagnostic: Hashable, Sendable {
 
 	/// Whether the diagnostic is the error itself or a note that adds detail, possibly at another location.
 	public let severity: Severity
-	/// Where the diagnostic points. `nil` when the declaration was parsed without a file context.
-	public let location: Dependency.DeclarationLocation?
+	/// Where the diagnostic points.
+	public let location: Dependency.DeclarationLocation
 	/// A single line of text. A newline would break the compiler format, so messages must not contain one.
 	public let message: String
 
 	/// The diagnostic formatted as the Swift compiler would print it.
 	public var formatted: String {
-		let locationPrefix = location.map { "\($0.filePath):\($0.line):\($0.column)" } ?? "<unknown>:0"
-		return "\(locationPrefix): \(severity.rawValue): \(message)"
+		"\(location.filePath):\(location.line):\(location.column): \(severity.rawValue): \(message)"
 	}
 
 	/// Returns a copy whose file path is absolute, resolving a relative path against the directory at `directoryPath`.
@@ -62,13 +61,11 @@ public struct SourceDiagnostic: Hashable, Sendable {
 		let directory = URL(fileURLWithPath: directoryPath, isDirectory: true)
 		return SourceDiagnostic(
 			severity: severity,
-			location: location.map { location in
-				Dependency.DeclarationLocation(
-					filePath: URL(fileURLWithPath: location.filePath, relativeTo: directory).standardizedFileURL.path,
-					line: location.line,
-					column: location.column,
-				)
-			},
+			location: Dependency.DeclarationLocation(
+				filePath: URL(fileURLWithPath: location.filePath, relativeTo: directory).standardizedFileURL.path,
+				line: location.line,
+				column: location.column,
+			),
 			message: message,
 		)
 	}

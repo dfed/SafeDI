@@ -24,16 +24,6 @@ import Testing
 
 struct SourceDiagnosticTests {
 	@Test
-	func formatted_usesUnknownLocation_whenLocationIsNil() {
-		let diagnostic = SourceDiagnostic(
-			severity: .error,
-			location: nil,
-			message: "Dependency cycle detected: A -> B -> A",
-		)
-		#expect(diagnostic.formatted == "<unknown>:0: error: Dependency cycle detected: A -> B -> A")
-	}
-
-	@Test
 	func resolvingFilePath_makesPathAbsolute_whenFilePathIsRelative() {
 		let diagnostic = SourceDiagnostic(
 			severity: .note,

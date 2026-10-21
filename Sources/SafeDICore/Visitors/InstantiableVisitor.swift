@@ -108,10 +108,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 							typeDescription: typeDescription,
 						),
 						source: dependencySource,
-						declarationLocation: sourceLocationConverter.map { sourceLocationConverter in
-							let location = sourceLocationConverter.location(for: node.positionAfterSkippingLeadingTrivia)
-							return Dependency.DeclarationLocation(filePath: location.file, line: location.line, column: location.column)
-						},
+						declarationLocation: declarationLocation(of: node),
 					),
 				)
 			}
@@ -153,6 +150,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
 		instantiableType = node.extendedType.typeDescription
 		if let instantiableMacro = node.attributes.instantiableMacro {
+			instantiableDeclarationLocation = declarationLocation(of: node)
 			processAttributes(node.attributes, on: instantiableMacro)
 		}
 
@@ -227,10 +225,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					Dependency(
 						property: argument.asProperty,
 						source: .received(onlyIfAvailable: false),
-						declarationLocation: sourceLocationConverter.map { sourceLocationConverter in
-							let location = sourceLocationConverter.location(for: parameter.positionAfterSkippingLeadingTrivia)
-							return Dependency.DeclarationLocation(filePath: location.file, line: location.line, column: location.column)
-						},
+						declarationLocation: declarationLocation(of: parameter),
 					)
 				},
 				declarationType: .extensionType,
@@ -240,6 +235,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				mockInitializer: mockInitializer,
 				mockReturnType: mockReturnType,
 				customMockName: customMockName,
+				declarationLocation: instantiableDeclarationLocation,
 			))
 		}
 
@@ -409,6 +405,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						mockInitializer: mockInitializer,
 						mockReturnType: mockReturnType,
 						customMockName: customMockName,
+						declarationLocation: instantiableDeclarationLocation,
 					),
 				]
 			} else {
@@ -434,6 +431,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						mockInitializer: mockInitializer,
 						mockReturnType: mockReturnType,
 						customMockName: customMockName,
+						declarationLocation: instantiableDeclarationLocation,
 					),
 				]
 			} else {
@@ -462,6 +460,15 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	private let declarationType: DeclarationType
 	private let parentType: TypeDescription?
 	private let sourceLocationConverter: SourceLocationConverter?
+	private var instantiableDeclarationLocation: Dependency.DeclarationLocation?
+
+	/// Where `node` begins after its leading trivia – its first attribute for a decorated declaration – or `nil` without a converter.
+	private func declarationLocation(of node: some SyntaxProtocol) -> Dependency.DeclarationLocation? {
+		sourceLocationConverter.map { sourceLocationConverter in
+			let location = sourceLocationConverter.location(for: node.positionAfterSkippingLeadingTrivia)
+			return Dependency.DeclarationLocation(filePath: location.file, line: location.line, column: location.column)
+		}
+	}
 
 	private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
 		let nodeDeclarationType: TypeDescription = if let parentType {
@@ -484,6 +491,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		}
 		hasFoundDeclaration = true
 		instantiableDeclarationType = node.declType
+		instantiableDeclarationLocation = declarationLocation(of: node)
 
 		instantiableType = nodeDeclarationType
 		processAttributes(node.attributes, on: macro)
