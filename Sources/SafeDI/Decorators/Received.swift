@@ -43,6 +43,8 @@ public macro Received(onlyIfAvailable: Bool = false) = #externalMacro(module: "S
 ///
 /// Renamed and retyped dependencies can be `@Received` by their new name and type by `@Instantiable` types further down the dependency tree.
 ///
+/// SafeDI does not check that the property’s type can be fulfilled by `concreteType`. The Swift compiler checks the generated assignment, and a failure is reported at this declaration.
+///
 /// - Parameters:
 ///   - fulfilledByDependencyNamed: The name of the property belonging to an `@Instantiable` instance higher up in the dependency tree whose name and/or type is being changed from the dependency‘s initial declaration.
 ///   - concreteType: The type of the property belonging to an `@Instantiable` instance higher up in the dependency tree whose name and/or type is being changed from the dependency‘s initial declaration.

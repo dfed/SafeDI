@@ -1799,7 +1799,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
 		            let service = (safeDIOverrides.child.service ?? TypeB.init)()
+		            #sourceLocation(file: "\(output.inputSwiftFiles[1].relativePath)", line: 8)
 		            let serviceAlias: TypeB = service
+		            #sourceLocation()
 		            return (safeDIOverrides.child.safeDIBuilder ?? Child.init(service:serviceAlias:))(service, serviceAlias)
 		        }
 		        let child: Child = __safeDI_child()
@@ -1905,7 +1907,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        func __safeDI_childA() -> ChildA {
 		            let service = (safeDIOverrides.childA.service ?? SharedService.init)()
 		            func __safeDI_consumer() -> Consumer {
+		                #sourceLocation(file: "\(output.inputSwiftFiles[2].relativePath)", line: 6)
 		                let serviceAlias: SharedService = service
+		                #sourceLocation()
 		                return (safeDIOverrides.childA.consumer ?? Consumer.init(serviceAlias:))(serviceAlias)
 		            }
 		            let consumer: Consumer = __safeDI_consumer()
@@ -2126,7 +2130,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service_UserService = (safeDIOverrides.service_UserService ?? UserService.init)()
+		        #sourceLocation(file: "\(output.inputSwiftFiles[0].relativePath)", line: 8)
 		        let serviceAlias: UserService = service_UserService
+		        #sourceLocation()
 		        func __safeDI_childA() -> ChildA {
 		            let service: UserService = service_UserService
 		            return (safeDIOverrides.childA ?? ChildA.init(service:))(service)
@@ -2203,7 +2209,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            (safeDIOverrides.childBuilder ?? Child.init)()
 		        }
 		        let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
+		        #sourceLocation(file: "\(output.inputSwiftFiles[0].relativePath)", line: 8)
 		        let aliasBuilder: Instantiator<Child> = childBuilder
+		        #sourceLocation()
 		        return Root(childBuilder: childBuilder, aliasBuilder: aliasBuilder)
 		    }
 		}

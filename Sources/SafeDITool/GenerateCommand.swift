@@ -160,6 +160,7 @@ struct Generate: AsyncParsableCommand {
 					Dependency(
 						property: $0.property.withUpdatedTypeDescription(bestTypeDescription),
 						source: $0.source,
+						declarationLocation: $0.declarationLocation,
 					)
 				} else {
 					// Default to what was in the code – we'll probably error later

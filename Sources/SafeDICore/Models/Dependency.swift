@@ -28,9 +28,11 @@ public struct Dependency: Codable, Hashable, Sendable {
 	public init(
 		property: Property,
 		source: Dependency.Source,
+		declarationLocation: DeclarationLocation? = nil,
 	) {
 		self.property = property
 		self.source = source
+		self.declarationLocation = declarationLocation
 		switch source {
 		case .received, .forwarded:
 			asInstantiatedType = property.typeDescription.asInstantiatedType
@@ -49,6 +51,22 @@ public struct Dependency: Codable, Hashable, Sendable {
 	public let source: Source
 	/// The receiver’s type description as an `@Instantiable`-decorated type.
 	public let asInstantiatedType: TypeDescription
+	/// Where the dependency’s property is declared in source.
+	/// `nil` when the dependency was parsed without a file context (e.g. during macro expansion).
+	public let declarationLocation: DeclarationLocation?
+
+	/// The file and line at which a dependency’s property declaration begins.
+	public struct DeclarationLocation: Codable, Hashable, Sendable {
+		public init(filePath: String, line: Int) {
+			self.filePath = filePath
+			self.line = line
+		}
+
+		/// The path to the file containing the declaration, exactly as it was provided to the parser.
+		public let filePath: String
+		/// The one-based line on which the declaration begins (its first attribute).
+		public let line: Int
+	}
 
 	public enum Source: Codable, Hashable, Sendable {
 		case instantiated(fulfillingTypeDescription: TypeDescription?, erasedToConcreteExistential: Bool)

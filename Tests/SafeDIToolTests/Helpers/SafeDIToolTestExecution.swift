@@ -200,6 +200,7 @@ func executeSafeDIToolTest(
 		return try TestOutput(
 			moduleInfo: JSONDecoder().decode(ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
 			moduleInfoOutputPath: moduleInfoOutput.relativePath,
+			inputSwiftFiles: swiftFiles,
 			generatedFiles: generatedFiles,
 			dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil,
 			combinedOutput: buildCombinedOutput
@@ -213,6 +214,10 @@ func executeSafeDIToolTest(
 struct TestOutput {
 	let moduleInfo: ModuleInfo
 	let moduleInfoOutputPath: String
+	/// The fixture files written for `swiftFileContent`, in the same order as the content was provided.
+	/// Each file is named after the `@Instantiable` type it declares, so generated `#sourceLocation`
+	/// directives can be asserted against `inputSwiftFiles[index].relativePath`.
+	let inputSwiftFiles: [URL]
 	let generatedFiles: [String: String]?
 	let dotTree: String?
 	let combinedOutput: String?

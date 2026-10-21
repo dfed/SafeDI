@@ -24,12 +24,18 @@ import SwiftSyntax
 public final class InstantiableVisitor: SyntaxVisitor {
 	// MARK: Initialization
 
+	/// - Parameters:
+	///   - declarationType: The kind of declaration this visitor walks.
+	///   - parentType: The type enclosing the walked declaration, if any.
+	///   - sourceLocationConverter: A converter for the tree being walked. When provided, each dependency records where its property is declared.
 	public init(
 		declarationType: DeclarationType,
 		parentType: TypeDescription? = nil,
+		sourceLocationConverter: SourceLocationConverter? = nil,
 	) {
 		self.declarationType = declarationType
 		self.parentType = parentType
+		self.sourceLocationConverter = sourceLocationConverter
 		super.init(viewMode: .sourceAccurate)
 	}
 
@@ -102,6 +108,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 							typeDescription: typeDescription,
 						),
 						source: dependencySource,
+						declarationLocation: sourceLocationConverter.map { sourceLocationConverter in
+							let location = sourceLocationConverter.location(for: node.positionAfterSkippingLeadingTrivia)
+							return Dependency.DeclarationLocation(filePath: location.file, line: location.line)
+						},
 					),
 				)
 			}
@@ -447,6 +457,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	private let declarationType: DeclarationType
 	private let parentType: TypeDescription?
+	private let sourceLocationConverter: SourceLocationConverter?
 
 	private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
 		let nodeDeclarationType: TypeDescription = if let parentType {

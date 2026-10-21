@@ -48,7 +48,13 @@ final class Scope: Hashable {
 
 	enum PropertyToGenerate {
 		case instantiated(Property, Scope, erasedToConcreteExistential: Bool)
-		case aliased(Property, fulfilledBy: Property, erasedToConcreteExistential: Bool, onlyIfAvailable: Bool)
+		case aliased(
+			Property,
+			fulfilledBy: Property,
+			erasedToConcreteExistential: Bool,
+			onlyIfAvailable: Bool,
+			declarationLocation: Dependency.DeclarationLocation?,
+		)
 	}
 
 	private(set) lazy var properties: [Property] = instantiable
@@ -154,13 +160,14 @@ final class Scope: Hashable {
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						forMockGeneration: forMockGeneration,
 					)
-				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
+				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationLocation):
 					ScopeGenerator(
 						property: property,
 						fulfillingProperty: fulfillingProperty,
 						unavailableOptionalProperties: unavailableOptionalProperties,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
+						declarationLocation: declarationLocation,
 					)
 				}
 			},

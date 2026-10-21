@@ -21,6 +21,7 @@
 import Foundation
 import SafeDICore
 import SwiftParser
+import SwiftSyntax
 
 struct ModuleInfo: Codable {
 	let imports: [ImportStatement]
@@ -95,8 +96,11 @@ func parseSwiftFiles(_ filePaths: Set<String>) async throws -> ModuleInfo {
 				let containsInstantiable = content.contains("@\(InstantiableVisitor.macroName)")
 				let containsConfiguration = content.contains("#\(SafeDIConfigurationVisitor.macroName)")
 				guard containsInstantiable || containsConfiguration else { return nil }
-				let fileVisitor = FileVisitor()
-				fileVisitor.walk(Parser.parse(source: content))
+				let syntaxTree = Parser.parse(source: content)
+				let fileVisitor = FileVisitor(
+					sourceLocationConverter: SourceLocationConverter(fileName: filePath, tree: syntaxTree),
+				)
+				fileVisitor.walk(syntaxTree)
 				guard !fileVisitor.instantiables.isEmpty
 					|| !fileVisitor.configurations.isEmpty
 					|| fileVisitor.encounteredUnexpectedNodesSyntax

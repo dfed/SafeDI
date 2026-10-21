@@ -414,6 +414,8 @@ public class NoteStorage: Instantiable {
 
 Use `@Received(fulfilledByDependencyNamed:ofType:)` to give a dependency that was `@Instantiated` or `@Forwarded` higher up the tree an additional name and type. Types further down the tree can then `@Received` the same instance under either name and type.
 
+SafeDI does not check that the retyped property can be fulfilled by the original type. The Swift compiler checks the generated assignment, and a failure is reported at the `@Received` declaration rather than in the generated file.
+
 Here, a parent instantiates a read-write `UserManager` and also renames the object to make it available a `UserVendor`. A child receives the same instance as the read-only `UserVendor`:
 
 ```swift
