@@ -414,6 +414,8 @@ public class NoteStorage: Instantiable {
 
 Use `@Received(fulfilledByDependencyNamed:ofType:)` to give a dependency that was `@Instantiated` or `@Forwarded` higher up the tree an additional name and type. Types further down the tree can then `@Received` the same instance under either name and type.
 
+SafeDI does not check that the retyped property can be fulfilled by the original type. The Swift compiler checks the generated assignment, and a failure is reported at the `@Received` declaration rather than in the generated file.
+
 Here, a parent instantiates a read-write `UserManager` and also renames the object to make it available a `UserVendor`. A child receives the same instance as the read-only `UserVendor`:
 
 ```swift
@@ -916,6 +918,8 @@ If you are integrating SafeDI with a build system other than SPM (e.g. Bazel, Bu
 - **`scan`**: Scans Swift source files and produces a manifest JSON describing the `@Instantiable` types found. This is used by the `SafeDIGenerator` plugin to coordinate builds across modules, and is also useful for per-module scanning in custom build systems.
 
 Both subcommands utilize Apple’s [SwiftSyntax](https://github.com/apple/swift-syntax) library to parse your code and find your `@Instantiable` types’ initializers and dependencies. With this information, SafeDI generates a graph of your project’s dependencies, validates it during `SafeDITool` execution, and provides clear, human-readable error messages if the graph is invalid. Source code is only generated if the dependency graph is valid.
+
+Generated `#sourceLocation` directives use each source path exactly as it was supplied to the tool, so a build system that needs reproducible output must supply relative paths. The vended Bazel rule already does this by passing execution-root-relative paths.
 
 Run `swift run SafeDITool --help`, `swift run SafeDITool scan --help`, or `swift run SafeDITool generate --help` to see documentation of all supported arguments.
 

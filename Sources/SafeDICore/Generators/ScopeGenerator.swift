@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 import Foundation
+import SwiftSyntax
 
 /// A model capable of generating code for a scope’s dependency tree.
 actor ScopeGenerator: CustomStringConvertible, Sendable {
@@ -128,12 +129,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		unavailableOptionalProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
+		declarationLocation: Dependency.DeclarationLocation?,
 	) {
 		scopeData = .alias(
 			property: property,
 			fulfillingProperty: fulfillingProperty,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			onlyIfAvailable: onlyIfAvailable,
+			declarationLocation: declarationLocation,
 		)
 		receivedProperties = [fulfillingProperty]
 		onlyIfAvailableUnwrappedReceivedProperties = if onlyIfAvailable {
@@ -235,6 +238,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			fulfillingProperty: Property,
 			erasedToConcreteExistential: Bool,
 			onlyIfAvailable: Bool,
+			declarationLocation: Dependency.DeclarationLocation?,
 		)
 
 		var forwardedProperties: Set<Property> {
@@ -252,7 +256,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				instantiable.concreteInstantiable.asSource
 			case let .property(_, property, _, _, _):
 				"\"\(property.asSource)\""
-			case let .alias(property, fulfillingProperty, _, _):
+			case let .alias(property, fulfillingProperty, _, _, _):
 				"\"\(property.asSource) <- \(fulfillingProperty.asSource)\""
 			}
 		}
@@ -561,15 +565,38 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 				return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 			}
-		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
-			return if onlyIfAvailable, unavailableProperties.contains(fulfillingProperty) {
-				"// Did not create `\(property.asSource)` because `\(fulfillingProperty.asSource)` is unavailable."
-			} else if erasedToConcreteExistential {
-				"let \(property.label): \(property.typeDescription.asSource) = \(fulfillingProperty.label)"
+		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationLocation):
+			if onlyIfAvailable, unavailableProperties.contains(fulfillingProperty) {
+				return "// Did not create `\(property.asSource)` because `\(fulfillingProperty.asSource)` is unavailable."
 			} else {
-				"let \(property.asSource) = \(fulfillingProperty.label)"
+				let aliasDeclaration = if erasedToConcreteExistential {
+					"let \(property.label): \(property.typeDescription.asSource) = \(fulfillingProperty.label)"
+				} else {
+					"let \(property.asSource) = \(fulfillingProperty.label)"
+				}
+				return Self.remappingSourceLocation(of: aliasDeclaration, to: declarationLocation)
 			}
 		}
+	}
+
+	/// Wraps `code` in `#sourceLocation` directives so that compiler diagnostics for it are
+	/// reported at `declarationLocation` – the user’s own declaration – rather than in the
+	/// generated file. The trailing bare `#sourceLocation()` restores reporting against the
+	/// generated file for the lines that follow.
+	///
+	/// SafeDI does not validate that an aliased dependency’s declared type can be fulfilled by
+	/// the fulfilling dependency’s type; the Swift compiler checks the generated assignment.
+	private static func remappingSourceLocation(
+		of code: String,
+		to declarationLocation: Dependency.DeclarationLocation?,
+	) -> String {
+		guard let declarationLocation else { return code }
+		let filePathLiteral = StringLiteralExprSyntax(content: declarationLocation.filePath).description
+		return """
+		#sourceLocation(file: \(filePathLiteral), line: \(declarationLocation.line))
+		\(code)
+		#sourceLocation()
+		"""
 	}
 
 	// MARK: Mock Root Code Generation
@@ -1287,6 +1314,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The fulfilling dependency's type — used to look up flat-parameter
 		/// disambiguations when the fulfiller is a renamed mock parameter.
 		let fulfillingTypeDescription: TypeDescription
+		/// Where the alias property is declared, so compiler diagnostics for the
+		/// emitted binding can be reported at the user's declaration.
+		let declarationLocation: Dependency.DeclarationLocation?
 	}
 
 	// MARK: MockTreeItem
@@ -1374,12 +1404,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Roots only appear at the top level, never as children here — so the
 		// `.root` case is not part of the reachable pattern space and is omitted.
 		for childGenerator in orderedPropertiesToGenerate {
-			if case let .alias(property, fulfillingProperty, _, _) = childGenerator.scopeData {
+			if case let .alias(property, fulfillingProperty, _, _, declarationLocation) = childGenerator.scopeData {
 				items.append(.alias(MockAliasNode(
 					propertyLabel: property.label,
 					typeDescription: property.typeDescription,
 					fulfillingLabel: fulfillingProperty.label,
 					fulfillingTypeDescription: fulfillingProperty.typeDescription,
+					declarationLocation: declarationLocation,
 				)))
 			} else if case let .property(childInstantiable, childProperty, _, erasedToConcreteExistential, isPropertyCycle) = childGenerator.scopeData {
 				let isInstantiator = !childProperty.propertyType.isConstant
@@ -2139,6 +2170,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Emits a single `let <alias>: <Type> = <fulfillingLabel>` line, resolving
 	/// the fulfilling label through `flatParameterDisambiguationMap` when the
 	/// fulfiller is a renamed flat mock parameter or a disambiguated sibling.
+	/// The line is wrapped in `#sourceLocation` directives pointing at the
+	/// alias's declaration, matching the production dependency-tree output.
 	private static func emitAliasBinding(
 		_ alias: MockAliasNode,
 		flatParameterDisambiguationMap: [String: [String: String]],
@@ -2147,7 +2180,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let fulfillingLabel = alias.fulfillingLabel
 		let fulfillingTypeSource = alias.fulfillingTypeDescription.asSource
 		let resolvedFulfilling = flatParameterDisambiguationMap[fulfillingLabel]?[fulfillingTypeSource] ?? fulfillingLabel
-		return "\(indent)let \(alias.propertyLabel): \(alias.typeDescription.asSource) = \(resolvedFulfilling)"
+		return remappingSourceLocation(
+			of: "let \(alias.propertyLabel): \(alias.typeDescription.asSource) = \(resolvedFulfilling)",
+			to: alias.declarationLocation,
+		)
+		.split(separator: "\n")
+		.map { "\(indent)\($0)" }
+		.joined(separator: "\n")
 	}
 
 	/// Resolves the positional arguments for a builder call.

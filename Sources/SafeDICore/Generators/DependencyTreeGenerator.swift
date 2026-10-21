@@ -766,7 +766,7 @@ public actor DependencyTreeGenerator {
 		let propertiesToDeclare = Set(scope.propertiesToGenerate.compactMap { propertyToGenerate -> Property? in
 			switch propertyToGenerate {
 			case let .instantiated(property, _, _): property
-			case let .aliased(property, _, _, _): property
+			case let .aliased(property, _, _, _, _): property
 			}
 		})
 
@@ -950,6 +950,7 @@ public actor DependencyTreeGenerator {
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
+						declarationLocation: dependency.declarationLocation,
 					))
 				case .forwarded:
 					continue
@@ -1039,6 +1040,7 @@ public actor DependencyTreeGenerator {
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
+						declarationLocation: dependency.declarationLocation,
 					))
 				case .forwarded, .received:
 					continue

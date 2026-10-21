@@ -178,6 +178,78 @@ struct FileVisitorTests {
 	}
 
 	@Test
+	func walk_recordsDependencyDeclarationLocations_whenSourceLocationConverterIsProvided() {
+		let syntaxTree = Parser.parse(source: """
+		import UIKit
+
+		@Instantiable
+		public final class LoggedInViewController: UIViewController {
+		    public init(user: User, networkService: NetworkService) {
+		        fatalError("SafeDI doesn't inspect the initializer body")
+		    }
+
+		    @Forwarded private let user: User
+
+		    @Received
+		    let networkService: NetworkService
+		}
+		""")
+		let fileVisitor = FileVisitor(
+			sourceLocationConverter: SourceLocationConverter(
+				fileName: "Sources/App/LoggedInViewController.swift",
+				tree: syntaxTree,
+			),
+		)
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables == [
+			Instantiable(
+				instantiableType: .simple(name: "LoggedInViewController"),
+				isRoot: false,
+				initializer: Initializer(
+					arguments: [
+						.init(
+							innerLabel: "user",
+							typeDescription: .simple(name: "User"),
+							defaultValueExpression: nil,
+						),
+						.init(
+							innerLabel: "networkService",
+							typeDescription: .simple(name: "NetworkService"),
+							defaultValueExpression: nil,
+						),
+					],
+				),
+				additionalInstantiables: nil,
+				dependencies: [
+					Dependency(
+						property: Property(
+							label: "user",
+							typeDescription: .simple(name: "User"),
+						),
+						source: .forwarded,
+						declarationLocation: Dependency.DeclarationLocation(
+							filePath: "Sources/App/LoggedInViewController.swift",
+							line: 9,
+						),
+					),
+					Dependency(
+						property: Property(
+							label: "networkService",
+							typeDescription: .simple(name: "NetworkService"),
+						),
+						source: .received(onlyIfAvailable: false),
+						declarationLocation: Dependency.DeclarationLocation(
+							filePath: "Sources/App/LoggedInViewController.swift",
+							line: 11,
+						),
+					),
+				],
+				declarationType: .classType,
+			),
+		])
+	}
+
+	@Test
 	func walk_findsMultipleInstantiables() {
 		let fileVisitor = FileVisitor()
 		fileVisitor.walk(Parser.parse(source: """
