@@ -38,8 +38,8 @@ struct SafeDITool: AsyncParsableCommand {
 	@TaskLocal static var fileFinder: FileFinder = FileManager.default
 }
 
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension Data {
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func write(toPath filePath: String) throws {
 		try write(to: filePath.asFileURL)
 	}

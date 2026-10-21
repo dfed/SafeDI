@@ -79,16 +79,12 @@ public struct InjectableMacro: PeerMacro {
 			}
 		}
 
-		if let fulfilledByType = macroWithParameters?.ofType {
-			if case .unknown = fulfilledByType.typeDescription {
-				throw InjectableError.ofTypeArgumentInvalidType
-			}
+		if let fulfilledByType = macroWithParameters?.ofType, case .unknown = fulfilledByType.typeDescription {
+			throw InjectableError.ofTypeArgumentInvalidType
 		}
 
-		if let erasedToConcreteExistential = macroWithParameters?.erasedToConcreteExistential {
-			if BooleanLiteralExprSyntax(erasedToConcreteExistential) == nil {
-				throw InjectableError.erasedToConcreteExistentialInvalidType
-			}
+		if let erasedToConcreteExistential = macroWithParameters?.erasedToConcreteExistential, BooleanLiteralExprSyntax(erasedToConcreteExistential) == nil {
+			throw InjectableError.erasedToConcreteExistentialInvalidType
 		}
 
 		if let onlyIfAvailable = macroWithParameters?.onlyIfAvailable {
