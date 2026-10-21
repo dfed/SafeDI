@@ -85,7 +85,7 @@ jobs:
   update-version-check:
     name: Update Version Script Check
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && github.event_name != 'push' }}
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     # The script uses portable `sed -i.bak`, so this needn't take one of
     # the five concurrent macOS slots. The publish workflow still runs
     # it on macOS.
@@ -132,7 +132,7 @@ jobs:
     # DerivedData, so the downloads cost no wall clock unless they
     # outlast it.
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && github.event_name != 'push' }}
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: macos-26
     strategy:
       fail-fast: false
@@ -216,7 +216,7 @@ jobs:
     needs: changes
     # DocC articles under `*.docc/` are Markdown, so this job also runs
     # when only those changed.
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || needs.changes.outputs.docc == 'true') && github.event_name != 'push' }}
+    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || needs.changes.outputs.docc == 'true') && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -251,7 +251,7 @@ jobs:
   spm-package-integration:
     name: Build Package Integration on Xcode 26
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && github.event_name != 'push' }}
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -276,7 +276,7 @@ jobs:
   spm-project-integration:
     name: Build Project Integration on Xcode 26
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && github.event_name != 'push' }}
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     # Pinned to 26.4 — project file declares package traits.
     runs-on: macos-26
     permissions:
@@ -299,7 +299,7 @@ jobs:
   spm-multi-project-integration:
     name: Build Multi Project Integration on Xcode 26
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && github.event_name != 'push' }}
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     # Pinned to 26.4 — project file declares package traits.
     runs-on: macos-26
     permissions:
@@ -322,7 +322,7 @@ jobs:
   spm-tuist-integration:
     name: Build Tuist Integration on Xcode 26
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && github.event_name != 'push' }}
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -447,7 +447,7 @@ jobs:
   linux-latest-swift:
     name: Build and Test on Latest Swift
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && github.event_name != 'push' }}
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     # `swift:latest` floats to the newest Swift release so this job
     # catches toolchain changes (e.g. SwiftPM's `swiftbuild` build
@@ -486,7 +486,7 @@ jobs:
   bazel:
     name: Bazel Build on macOS
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && github.event_name != 'push' }}
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     # General bazel sanity check on every PR. We can't perfectly
     # mirror BCR's presubmit (https://registry.bazel.build/modules/safedi):
     # BazelCI's BuildKite infrastructure is closed to non-`bazelbuild`
@@ -576,7 +576,7 @@ jobs:
 
   readme-validation:
     name: Check Markdown links
-    if: ${{ github.event_name != 'push' }}
+    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -589,7 +589,7 @@ jobs:
   lint-swift:
     name: Lint Swift
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && github.event_name != 'push' }}
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     container: swift:6.3
     permissions:
