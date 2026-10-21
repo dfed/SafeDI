@@ -34,7 +34,7 @@ jobs:
       docc: ${{ steps.classify.outputs.docc }}
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Full history so both ends of the diff are present.
           fetch-depth: 0
@@ -489,9 +489,9 @@ jobs:
       contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Send Empty Upload
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           run_command: empty-upload
           token: ${{ secrets.CODECOV_TOKEN }}
