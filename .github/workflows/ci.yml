@@ -77,7 +77,10 @@ jobs:
     name: Update Version Script Check
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
-    runs-on: macos-26
+    # The script uses portable `sed -i.bak`, so this needn't take one of
+    # the five concurrent macOS slots. The publish workflow still runs
+    # it on macOS.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -103,17 +106,38 @@ jobs:
           awk '/^module\(/,/^\)/' MODULE.bazel | grep -q 'version = "99.99.99-test"'
 
   xcodebuild:
-    name: Build with xcodebuild on Xcode 26
+    name: Build with xcodebuild on Xcode 26 (${{ matrix.name }})
+    # The five Apple destinations are split into three groups. One job
+    # per destination repeated the package resolution and the compile
+    # of the macro plugin host five times over; one job for all five
+    # ran about as long as an entire uncontended CI run, because the
+    # four platform downloads alone take ~10 minutes in sequence. Three
+    # groups keep each job short while still resolving and compiling
+    # the host-side macro plugin once per group. The five xcodebuild
+    # invocations are unchanged.
+    #
+    # Each group starts its platform downloads in the background, then
+    # resolves and builds the macOS destination while they run. The
+    # macOS build compiles the host-side macro plugin (and the
+    # swift-syntax it links) that every later destination reuses from
+    # DerivedData, so the downloads cost no wall clock unless they
+    # outlast it.
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
-    # One job builds every Apple platform rather than a five-entry
-    # matrix. Each matrix entry resolved the package graph, downloaded
-    # its platform, and compiled swift-syntax for the macro plugin host
-    # from scratch. With one DerivedData the host-side macro plugin (and
-    # the swift-syntax it links) compiles once and every later destination
-    # reuses it; only the per-platform compile of the package's own
-    # modules repeats. The five xcodebuild invocations are unchanged.
     runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS and iOS
+            downloads: iOS
+            destinations: generic/platform=ios
+          - name: tvOS and watchOS
+            downloads: tvOS watchOS
+            destinations: generic/platform=tvos generic/platform=watchos
+          - name: visionOS
+            downloads: visionOS
+            destinations: generic/platform=visionos
     permissions:
       contents: read
     steps:
@@ -121,40 +145,62 @@ jobs:
         uses: actions/checkout@v7
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
-      # GitHub's macOS images no longer bundle the non-macOS platforms,
-      # so each has to be downloaded. Once per job, not once per platform
-      # job.
-      - name: Download Platforms
+      # GitHub's macOS images no longer bundle the non-macOS platforms.
+      # The downloads run in the background; "Wait for Platform
+      # Downloads" below joins them before the first non-macOS build.
+      - name: Start Platform Downloads
+        env:
+          DOWNLOADS: ${{ matrix.downloads }}
         run: |
           sudo xcodebuild -runFirstLaunch
           sudo xcrun simctl list
-          for platform in iOS tvOS watchOS visionOS; do
-            sudo xcodebuild -downloadPlatform "$platform"
-          done
+          (
+            for platform in $DOWNLOADS; do
+              sudo xcodebuild -downloadPlatform "$platform"
+            done
+            echo ok > "$RUNNER_TEMP/platform-downloads.status"
+          ) > "$RUNNER_TEMP/platform-downloads.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/platform-downloads.pid"
+      # xcodebuild otherwise clones every package dependency from
+      # scratch on each run (swift-syntax is the large one). Keeping the
+      # clones in a fixed directory lets actions/cache restore them.
+      - name: Cache Cloned Source Packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/xcode-packages
+          key: xcode-packages-${{ runner.os }}-xcode-26.0-${{ hashFiles('Package.resolved') }}
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
-          command: xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme SafeDI-Package
-      # macOS goes first so its build populates DerivedData with the
-      # host-side macro plugin the other destinations reuse. Every build
-      # step runs even when an earlier destination failed
-      # (`!cancelled()`), preserving the old matrix's `fail-fast: false`
-      # so one broken platform doesn't hide the status of the others.
+          command: xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme SafeDI-Package -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages"
       - name: Build Framework (macOS)
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination platform=macOS -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages"
+      - name: Wait for Platform Downloads
         if: ${{ !cancelled() }}
-        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination platform=macOS
-      - name: Build Framework (iOS)
+        run: |
+          pid=$(cat "$RUNNER_TEMP/platform-downloads.pid")
+          while kill -0 "$pid" 2>/dev/null; do
+            sleep 10
+          done
+          tail -n 20 "$RUNNER_TEMP/platform-downloads.log"
+          [ "$(cat "$RUNNER_TEMP/platform-downloads.status" 2>/dev/null)" = ok ]
+      # Every destination in the group builds even if an earlier one
+      # failed, matching `fail-fast: false` between groups.
+      - name: Build Framework (remaining destinations)
         if: ${{ !cancelled() }}
-        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=ios
-      - name: Build Framework (tvOS)
-        if: ${{ !cancelled() }}
-        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=tvos
-      - name: Build Framework (watchOS)
-        if: ${{ !cancelled() }}
-        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=watchos
-      - name: Build Framework (visionOS)
-        if: ${{ !cancelled() }}
-        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=visionos
+        env:
+          DESTINATIONS: ${{ matrix.destinations }}
+        run: |
+          failed=""
+          for destination in $DESTINATIONS; do
+            echo "::group::$destination"
+            xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination "$destination" -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages" || failed="$failed $destination"
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::Build failed for:$failed"
+            exit 1
+          fi
 
   docc:
     name: Build DocC on Xcode 26
@@ -174,6 +220,15 @@ jobs:
       # target, so swift-syntax's internal DocC noise stays out of our
       # strict build. That scoping isn't available via `xcodebuild
       # docbuild`, which analyzes the whole target graph.
+      # `generate-documentation` builds the target in debug; reuse the
+      # dependency build products between runs.
+      - name: Cache Build Directory
+        uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-debug-${{ runner.os }}-xcode-26.0-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            spm-debug-${{ runner.os }}-xcode-26.0-
       - name: Build DocC
         uses: ./.github/actions/retry
         with:
@@ -399,7 +454,19 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Print Swift Version
-        run: swift --version
+        id: swift
+        run: |
+          swift --version
+          echo "version=$(swift --version 2>&1 | grep -m1 -oE 'Swift version [0-9.]+' | awk '{print $3}')" >> "$GITHUB_OUTPUT"
+      # The toolchain floats, so the key carries the version printed
+      # above: a new release starts from an empty cache.
+      - name: Cache Build Directory
+        uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-debug-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            spm-debug-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:

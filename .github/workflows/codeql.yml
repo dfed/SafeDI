@@ -3,8 +3,13 @@ name: "CodeQL Advanced"
 on:
   push:
     branches: [ "main" ]
+    # Markdown can't change the analysis. This isn't a required status
+    # check, so skipping the whole workflow is safe here (unlike ci.yml,
+    # whose jobs skip themselves so their checks still report).
+    paths-ignore: [ "**.md" ]
   pull_request:
     branches: [ "main" ]
+    paths-ignore: [ "**.md" ]
   schedule:
     - cron: '35 2 * * 0'
 
@@ -15,7 +20,9 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    runs-on: macos-26
+    # Swift analysis requires macOS; the Actions-workflow analysis
+    # doesn't, and macOS runners are capped at five concurrent jobs.
+    runs-on: ${{ matrix.runs-on }}
     permissions:
       security-events: write
       packages: read
@@ -28,8 +35,10 @@ jobs:
         include:
         - language: actions
           build-mode: none
+          runs-on: ubuntu-latest
         - language: swift
           build-mode: manual
+          runs-on: macos-26
         # CodeQL supports the following values keywords for 'language': 'actions', 'c-cpp', 'csharp', 'go', 'java-kotlin', 'javascript-typescript', 'python', 'ruby', 'rust', 'swift'
         # Use `c-cpp` to analyze code written in C, C++ or both
         # Use 'java-kotlin' to analyze code written in Java, Kotlin or both
@@ -41,8 +50,24 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v7
-    - name: Select Xcode Version
+    - if: matrix.language == 'swift'
+      name: Select Xcode Version
       run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+    # CodeQL analyzes whatever the compiler is invoked on during the
+    # traced build. Restoring `.build` keeps the dependency build
+    # products (swift-syntax was ~90% of the build) so they aren't
+    # recompiled, and the Build step touches SafeDI's own sources so
+    # every target in this package is recompiled under the tracer.
+    # GitHub's guidance for Swift is to build only the code you want
+    # analyzed.
+    - if: matrix.language == 'swift'
+      name: Cache Build Directory
+      uses: actions/cache@v6
+      with:
+        path: .build
+        key: codeql-swift-${{ runner.os }}-xcode-26.4-${{ hashFiles('Package.resolved') }}
+        restore-keys: |
+          codeql-swift-${{ runner.os }}-xcode-26.4-
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
@@ -53,7 +78,9 @@ jobs:
 
     - if: matrix.language == 'swift'
       name: Build
-      run: xcrun swift build --target SafeDI --target SafeDITool
+      run: |
+        find Sources -name '*.swift' -exec touch {} +
+        xcrun swift build --target SafeDI --target SafeDITool
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
