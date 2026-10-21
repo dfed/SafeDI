@@ -162,7 +162,13 @@ func executeSafeDIToolTest(
 			generateArguments += ["--combined-output", combinedOutput.relativePath]
 		}
 		let tool = try Generate.parse(generateArguments)
-		try await tool.run()
+		// Call `generate()` rather than `run()`: `run()` prints located errors in compiler format and
+		// rethrows them as an `ExitCode`, which would hide the error from the assertion helpers.
+		do {
+			try await tool.generate()
+		} catch {
+			throw SafeDIToolTestError(underlyingError: error, inputSwiftFilePaths: inputSwiftFilePaths)
+		}
 
 		filesToDelete.append(swiftFileCSV)
 		filesToDelete.append(swiftFixtureDirectory)
@@ -314,6 +320,18 @@ struct StubFileFinder: FileFinder {
 	private let fallbackFiles: [URL]
 }
 
+/// An error thrown by `executeSafeDIToolTest` when `generate` fails. Carries the fixture file paths exactly as
+/// the tool read them so diagnostics that cite those paths can be asserted in full.
+struct SafeDIToolTestError: Error, CustomStringConvertible {
+	let underlyingError: any Error
+	/// The paths of the fixture files written for `swiftFileContent`, in the same order as the content was provided.
+	let inputSwiftFilePaths: [String]
+
+	var description: String {
+		"\(underlyingError)"
+	}
+}
+
 func assertThrowsError(
 	_ errorDescription: String,
 	sourceLocation: SourceLocation = #_sourceLocation,
@@ -324,6 +342,24 @@ func assertThrowsError(
 		Issue.record("Did not throw error!", sourceLocation: sourceLocation)
 	} catch {
 		#expect(errorDescription == "\(error)", sourceLocation: sourceLocation)
+	}
+}
+
+/// Asserts that `block` throws an error whose description – the compiler-formatted diagnostics for a
+/// `SourceLocatedError` – exactly matches `expectedDiagnostics`, which is given the fixture file paths the
+/// tool read so it can cite them in `<path>:<line>:<column>` locations.
+func assertThrowsError(
+	diagnostics expectedDiagnostics: (_ inputSwiftFilePaths: [String]) -> String,
+	sourceLocation: SourceLocation = #_sourceLocation,
+	block: () async throws -> some Sendable,
+) async {
+	do {
+		_ = try await block()
+		Issue.record("Did not throw error!", sourceLocation: sourceLocation)
+	} catch let error as SafeDIToolTestError {
+		#expect(expectedDiagnostics(error.inputSwiftFilePaths) == "\(error.underlyingError)", sourceLocation: sourceLocation)
+	} catch {
+		Issue.record("Threw an error that does not carry fixture paths: \(error)", sourceLocation: sourceLocation)
 	}
 }
 

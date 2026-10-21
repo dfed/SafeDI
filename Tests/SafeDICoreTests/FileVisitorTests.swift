@@ -230,6 +230,7 @@ struct FileVisitorTests {
 						declarationLocation: Dependency.DeclarationLocation(
 							filePath: "Sources/App/LoggedInViewController.swift",
 							line: 9,
+							column: 5,
 						),
 					),
 					Dependency(
@@ -241,6 +242,7 @@ struct FileVisitorTests {
 						declarationLocation: Dependency.DeclarationLocation(
 							filePath: "Sources/App/LoggedInViewController.swift",
 							line: 11,
+							column: 5,
 						),
 					),
 				],

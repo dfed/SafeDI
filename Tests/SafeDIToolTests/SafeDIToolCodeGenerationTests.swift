@@ -6296,9 +6296,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		let child = try #require(output.moduleInfo.instantiables.first { $0.concreteInstantiable == .simple(name: "Child") })
 		#expect(child.dependencies.map(\.declarationLocation) == [
-			Dependency.DeclarationLocation(filePath: output.inputSwiftFiles[1].relativePath, line: 9),
-			Dependency.DeclarationLocation(filePath: output.inputSwiftFiles[1].relativePath, line: 11),
-			Dependency.DeclarationLocation(filePath: output.inputSwiftFiles[1].relativePath, line: 12),
+			Dependency.DeclarationLocation(filePath: output.inputSwiftFiles[1].relativePath, line: 9, column: 5),
+			Dependency.DeclarationLocation(filePath: output.inputSwiftFiles[1].relativePath, line: 11, column: 5),
+			Dependency.DeclarationLocation(filePath: output.inputSwiftFiles[1].relativePath, line: 12, column: 5),
 		])
 	}
 
@@ -7667,12 +7667,12 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		try FileManager.default.removeItem(at: extraHelperFile)
 
 		await assertThrowsError(
-			"No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `ExtraHelper`",
+			"\(rootFile.path):8:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `ExtraHelper`",
 		) {
 			try await (Generate.parse([
 				swiftFileCSV.path,
 				"--swift-manifest", manifestFile.path,
-			])).run()
+			])).generate()
 		}
 	}
 

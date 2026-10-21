@@ -110,7 +110,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						source: dependencySource,
 						declarationLocation: sourceLocationConverter.map { sourceLocationConverter in
 							let location = sourceLocationConverter.location(for: node.positionAfterSkippingLeadingTrivia)
-							return Dependency.DeclarationLocation(filePath: location.file, line: location.line)
+							return Dependency.DeclarationLocation(filePath: location.file, line: location.line, column: location.column)
 						},
 					),
 				)
@@ -223,10 +223,14 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				isRoot: false,
 				initializer: initializer,
 				additionalInstantiables: additionalInstantiables,
-				dependencies: initializer.arguments.map {
+				dependencies: zip(initializer.arguments, node.signature.parameterClause.parameters).map { argument, parameter in
 					Dependency(
-						property: $0.asProperty,
+						property: argument.asProperty,
 						source: .received(onlyIfAvailable: false),
+						declarationLocation: sourceLocationConverter.map { sourceLocationConverter in
+							let location = sourceLocationConverter.location(for: parameter.positionAfterSkippingLeadingTrivia)
+							return Dependency.DeclarationLocation(filePath: location.file, line: location.line, column: location.column)
+						},
 					)
 				},
 				declarationType: .extensionType,

@@ -42,7 +42,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTwoMockOnlyExistForSameType() async {
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			diagnostics: { inputSwiftFilePaths in
+				"""
+				\(inputSwiftFilePaths[0]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(inputSwiftFilePaths[1]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -72,7 +77,11 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		// parsed first (FileVisitor processes top-to-bottom), hitting the
 		// (true, false) branch regardless of TaskGroup ordering.
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			diagnostics: { inputSwiftFilePaths in
+				"""
+				\(inputSwiftFilePaths[0]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -102,7 +111,11 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		// first (FileVisitor processes top-to-bottom), hitting the (false, true)
 		// branch regardless of TaskGroup ordering.
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			diagnostics: { inputSwiftFilePaths in
+				"""
+				\(inputSwiftFilePaths[0]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -129,7 +142,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTwoDifferentMockOnlyConcreteTypesFulfillSameAdditionalType() async {
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `ServiceProtocol`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			diagnostics: { inputSwiftFilePaths in
+				"""
+				\(inputSwiftFilePaths[1]):1:1: error: Found multiple hand-written mock providers for `ServiceProtocol`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(inputSwiftFilePaths[2]):1:1: error: Found multiple hand-written mock providers for `ServiceProtocol`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -164,9 +182,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		// the declared type (via mockOnly), the forwarded-property validation
 		// must still fire for constant @Instantiated dependencies.
 		await assertThrowsError(
-			"""
-			Property `service: AnyService` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
-			""",
+			diagnostics: { inputSwiftFilePaths in
+				"""
+				\(inputSwiftFilePaths[1]):6:5: error: Property `service: AnyService` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
+				\(inputSwiftFilePaths[2]):6:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -242,7 +263,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTwoMockOnlyTypesAndProductionAllClaimSameType() async {
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			diagnostics: { inputSwiftFilePaths in
+				"""
+				\(inputSwiftFilePaths[2]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(inputSwiftFilePaths[1]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -276,9 +302,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenMockOnlyWinsAdditionalTypeSlotAndChildHasForwardedProperty() async {
 		await assertThrowsError(
-			"""
-			Property `service: ServiceProtocol` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
-			""",
+			diagnostics: { inputSwiftFilePaths in
+				"""
+				\(inputSwiftFilePaths[1]):6:5: error: Property `service: ServiceProtocol` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
+				\(inputSwiftFilePaths[3]):6:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -321,7 +350,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTwoMockOnlyTypesClaimSameTypeAsProductionWithGenerateMock() async {
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			diagnostics: { inputSwiftFilePaths in
+				"""
+				\(inputSwiftFilePaths[2]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(inputSwiftFilePaths[1]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [

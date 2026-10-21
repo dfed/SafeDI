@@ -55,17 +55,20 @@ public struct Dependency: Codable, Hashable, Sendable {
 	/// `nil` when the dependency was parsed without a file context (e.g. during macro expansion).
 	public let declarationLocation: DeclarationLocation?
 
-	/// The file and line at which a dependency’s property declaration begins.
+	/// The file, line, and column at which a declaration begins.
 	public struct DeclarationLocation: Codable, Hashable, Sendable {
-		public init(filePath: String, line: Int) {
+		public init(filePath: String, line: Int, column: Int) {
 			self.filePath = filePath
 			self.line = line
+			self.column = column
 		}
 
 		/// The path to the file containing the declaration, exactly as it was provided to the parser.
 		public let filePath: String
 		/// The one-based line on which the declaration begins (its first attribute).
 		public let line: Int
+		/// The one-based column at which the declaration begins (its first attribute).
+		public let column: Int
 	}
 
 	public enum Source: Codable, Hashable, Sendable {
@@ -122,4 +125,12 @@ public struct Dependency: Codable, Hashable, Sendable {
 	static let erasedInstantiatorType = "ErasedInstantiator"
 	static let sendableInstantiatorType = "SendableInstantiator"
 	static let sendableErasedInstantiatorType = "SendableErasedInstantiator"
+}
+
+// MARK: - Dependency.DeclarationLocation + Comparable
+
+extension Dependency.DeclarationLocation: Comparable {
+	public static func < (lhs: Dependency.DeclarationLocation, rhs: Dependency.DeclarationLocation) -> Bool {
+		(lhs.filePath, lhs.line, lhs.column) < (rhs.filePath, rhs.line, rhs.column)
+	}
 }
