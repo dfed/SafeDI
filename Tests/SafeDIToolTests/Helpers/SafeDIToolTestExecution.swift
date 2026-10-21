@@ -42,6 +42,7 @@ func executeSafeDIToolTest(
 	filesToDelete: inout [URL],
 	includeFolders: [String] = [],
 	skipCompileVerification: Bool = false,
+	inputPathsRelativeToCurrentDirectory: Bool = false,
 ) async throws -> TestOutput {
 	// Create additional directory first so its path can be substituted into target file content.
 	var additionalDirectoryFiles = [URL]()
@@ -79,8 +80,15 @@ func executeSafeDIToolTest(
 		from: resolvedSwiftFileContent,
 		in: swiftFixtureDirectory,
 	)
-	try swiftFiles
-		.map(\.relativePath)
+	// Build systems like Bazel hand the tool paths relative to its working
+	// directory; mirror that by computing paths relative to the test process's
+	// current directory, which leaves the process-global directory untouched.
+	let inputSwiftFilePaths = if inputPathsRelativeToCurrentDirectory {
+		swiftFiles.map(currentDirectoryRelativePath(to:))
+	} else {
+		swiftFiles.map(\.relativePath)
+	}
+	try inputSwiftFilePaths
 		.joined(separator: ",")
 		.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
@@ -201,6 +209,7 @@ func executeSafeDIToolTest(
 			moduleInfo: JSONDecoder().decode(ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
 			moduleInfoOutputPath: moduleInfoOutput.relativePath,
 			inputSwiftFiles: swiftFiles,
+			inputSwiftFilePaths: inputSwiftFilePaths,
 			generatedFiles: generatedFiles,
 			dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil,
 			combinedOutput: buildCombinedOutput
@@ -218,6 +227,10 @@ struct TestOutput {
 	/// Each file is named after the `@Instantiable` type it declares, so generated `#sourceLocation`
 	/// directives can be asserted against `inputSwiftFiles[index].relativePath`.
 	let inputSwiftFiles: [URL]
+	/// The paths of `inputSwiftFiles` exactly as they were written to the CSV the tool read:
+	/// absolute by default, or relative to the current directory when the test passed
+	/// `inputPathsRelativeToCurrentDirectory: true`.
+	let inputSwiftFilePaths: [String]
 	let generatedFiles: [String: String]?
 	let dotTree: String?
 	let combinedOutput: String?
@@ -335,6 +348,16 @@ func assertThrowsError(
 			sourceLocation: sourceLocation,
 		)
 	}
+}
+
+/// Expresses `target` relative to the current directory using `..` components,
+/// e.g. `../../tmp/Fixtures/Root.swift`, the way a build system would.
+private func currentDirectoryRelativePath(to target: URL) -> String {
+	let currentDirectoryComponents = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).standardizedFileURL.pathComponents
+	let targetComponents = target.standardizedFileURL.pathComponents
+	let sharedComponentCount = zip(currentDirectoryComponents, targetComponents).prefix { $0 == $1 }.count
+	let ascents = Array(repeating: "..", count: currentDirectoryComponents.count - sharedComponentCount)
+	return (ascents + targetComponents[sharedComponentCount...]).joined(separator: "/")
 }
 
 private func createSwiftFixtureFiles(

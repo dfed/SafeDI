@@ -919,6 +919,8 @@ If you are integrating SafeDI with a build system other than SPM (e.g. Bazel, Bu
 
 Both subcommands utilize Apple’s [SwiftSyntax](https://github.com/apple/swift-syntax) library to parse your code and find your `@Instantiable` types’ initializers and dependencies. With this information, SafeDI generates a graph of your project’s dependencies, validates it during `SafeDITool` execution, and provides clear, human-readable error messages if the graph is invalid. Source code is only generated if the dependency graph is valid.
 
+Generated `#sourceLocation` directives use each source path exactly as it was supplied to the tool, so a build system that needs reproducible output must supply relative paths. The vended Bazel rule already does this by passing execution-root-relative paths.
+
 Run `swift run SafeDITool --help`, `swift run SafeDITool scan --help`, or `swift run SafeDITool generate --help` to see documentation of all supported arguments.
 
 ## Introspecting a SafeDI tree
