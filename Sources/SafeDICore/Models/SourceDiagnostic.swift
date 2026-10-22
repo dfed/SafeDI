@@ -93,3 +93,30 @@ extension SourceLocatedError {
 		sourceDiagnostics.map(\.formatted).joined(separator: "\n")
 	}
 }
+
+extension Dependency.DeclarationLocation: Comparable {
+	public static func < (lhs: Dependency.DeclarationLocation, rhs: Dependency.DeclarationLocation) -> Bool {
+		(lhs.filePath, lhs.line, lhs.column) < (rhs.filePath, rhs.line, rhs.column)
+	}
+}
+
+extension SourceDiagnostic {
+	/// Orders diagnostics by file, line, and column, with location-less diagnostics last and the message as the
+	/// tiebreak, so a group of diagnostics prints in source order and never depends on collection order.
+	public static func precedesInSourceOrder(_ lhs: SourceDiagnostic, _ rhs: SourceDiagnostic) -> Bool {
+		switch (lhs.location, rhs.location) {
+		case let (lhsLocation?, rhsLocation?):
+			if lhsLocation == rhsLocation {
+				lhs.message < rhs.message
+			} else {
+				lhsLocation < rhsLocation
+			}
+		case (.some, .none):
+			true
+		case (.none, .some):
+			false
+		case (.none, .none):
+			lhs.message < rhs.message
+		}
+	}
+}

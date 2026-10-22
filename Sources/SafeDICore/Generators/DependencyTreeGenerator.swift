@@ -398,7 +398,7 @@ public actor DependencyTreeGenerator {
 	private enum DependencyTreeGeneratorError: SourceLocatedError {
 		case noInstantiableFound(TypeDescription, referencedAt: [Dependency.DeclarationLocation?])
 		case unfulfillableProperties([UnfulfillableProperty])
-		case instantiableHasForwardedProperty(property: Property, declarationLocation: Dependency.DeclarationLocation?, instantiableWithForwardedProperty: Instantiable, forwardedDeclarations: [(property: Property, declarationLocation: Dependency.DeclarationLocation?)], parent: Instantiable)
+		case instantiableHasForwardedProperty(property: Property, declarationLocation: Dependency.DeclarationLocation?, instantiableWithForwardedProperty: Instantiable, forwardedDeclarations: [LocatedProperty], parent: Instantiable)
 		/// Reported at the dependency declaration that closes the cycle – the `@Instantiated` or `@Received`
 		/// property whose type is already on the instantiation stack – with a note at each member type’s
 		/// `@Instantiable` declaration. See `DependencyCycle`.
@@ -416,7 +416,7 @@ public actor DependencyTreeGenerator {
 		var sourceDiagnostics: [SourceDiagnostic] {
 			switch self {
 			case let .noInstantiableFound(typeDescription, referencedAt):
-				// Sorted on the formatted line, a non-optional key, so the order never depends on map iteration.
+				// Sorted by location so the order never depends on map iteration.
 				referencedAt.map {
 					SourceDiagnostic(
 						severity: .error,
@@ -424,11 +424,11 @@ public actor DependencyTreeGenerator {
 						message: "No `@\(InstantiableVisitor.macroName)`-decorated type or extension found to fulfill `@\(Dependency.Source.instantiatedRawValue)`-decorated property with type `\(typeDescription.asSource)`",
 					)
 				}
-				.sorted { $0.formatted < $1.formatted }
+				.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 			case let .unfulfillableProperties(unfulfillableProperties):
 				unfulfillableProperties
 					.map(\.sourceDiagnostics)
-					.sorted { $0.map(\.formatted).joined(separator: "\n") < $1.map(\.formatted).joined(separator: "\n") }
+					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
 					.flatMap(\.self)
 			case let .instantiableHasForwardedProperty(property, declarationLocation, instantiable, forwardedDeclarations, parent):
 				[
@@ -465,11 +465,17 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
+		/// A property together with where it is declared.
+		struct LocatedProperty: Hashable {
+			let property: Property
+			let declarationLocation: Dependency.DeclarationLocation?
+		}
+
 		struct UnfulfillableProperty: Hashable {
 			let property: Property
 			let declarationLocation: Dependency.DeclarationLocation?
 			let instantiable: Instantiable
-			/// The types that instantiate `instantiable`, innermost first, ending with `root`.
+			/// The types that instantiate `instantiable`, innermost first, excluding `root`.
 			let parentStack: [TypeDescription]
 			let root: TypeDescription
 			let suggestedAlternatives: [Property]
@@ -477,7 +483,7 @@ public actor DependencyTreeGenerator {
 			/// A single `error:` line. The suggestion or fix hint is folded into it rather than emitted as a
 			/// `note:` because it belongs at the same location, and Xcode drops notes from build-tool output.
 			var sourceDiagnostics: [SourceDiagnostic] {
-				let chain = ([instantiable.concreteInstantiable] + parentStack).reversed()
+				let chain = ([instantiable.concreteInstantiable] + parentStack + [root]).reversed()
 				let summary = "@\(Dependency.Source.receivedRawValue) property `\(property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(chain.map(\.asSource).joined(separator: " -> "))"
 				let hint = if property.typeDescription.isOptional,
 				              let nonOptionalAlternative = suggestedAlternatives.first(where: { alternative in
@@ -510,9 +516,15 @@ public actor DependencyTreeGenerator {
 		struct DependencyCycle {
 			/// The location of the dependency declaration whose target type is already on the instantiation stack.
 			let declarationLocation: Dependency.DeclarationLocation?
-			/// The property types in the cycle, innermost first, each paired with the location of the `@Instantiable`
-			/// declaration fulfilling it. `nil` when no `@Instantiable` is registered for the property’s type.
-			let members: [(typeDescription: TypeDescription, declarationLocation: Dependency.DeclarationLocation?)]
+			/// A type in the cycle together with the location of the `@Instantiable` declaration fulfilling it.
+			struct Member: Hashable {
+				let typeDescription: TypeDescription
+				/// `nil` when no `@Instantiable` is registered for the type.
+				let declarationLocation: Dependency.DeclarationLocation?
+			}
+
+			/// The property types in the cycle, innermost first.
+			let members: [Member]
 
 			var asSource: String {
 				members
@@ -795,7 +807,7 @@ public actor DependencyTreeGenerator {
 		let cycle = DependencyTreeGeneratorError.DependencyCycle(
 			declarationLocation: declarationLocation,
 			members: typesInCycle.map { typeDescription in
-				(
+				DependencyTreeGeneratorError.DependencyCycle.Member(
 					typeDescription: typeDescription,
 					declarationLocation: typeDescriptionToFulfillingInstantiableMap[typeDescription.asInstantiatedType]?.declarationLocation,
 				)
@@ -1134,7 +1146,7 @@ public actor DependencyTreeGenerator {
 						declarationLocation: dependency.declarationLocation,
 						instantiableWithForwardedProperty: instantiable,
 						forwardedDeclarations: forwardedDependencies.map {
-							(property: $0.property, declarationLocation: $0.declarationLocation)
+							DependencyTreeGeneratorError.LocatedProperty(property: $0.property, declarationLocation: $0.declarationLocation)
 						},
 						parent: parent,
 					)
@@ -1221,7 +1233,7 @@ public actor DependencyTreeGenerator {
 							property: receivedProperty,
 							declarationLocation: requiredReceivedProperty.declarationLocation,
 							instantiable: scope.instantiable,
-							parentStack: propertyStack.map(\.typeDescription) + [root],
+							parentStack: propertyStack.map(\.typeDescription),
 							root: root,
 							suggestedAlternatives: receivableProperties.filter {
 								receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription

@@ -768,7 +768,7 @@ struct Generate: AsyncParsableCommand {
 				message = "Found multiple hand-written mock providers for `\(duplicateInstantiable.asSource)`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both."
 				declarationLocations = declaredAt
 			}
-			// Sorted on the formatted line, a non-optional key, so the output does not depend on collection order.
+			// Sorted by location so the output does not depend on collection order.
 			return declarationLocations
 				.map { declarationLocation in
 					SourceDiagnostic(
@@ -777,7 +777,7 @@ struct Generate: AsyncParsableCommand {
 						message: message,
 					)
 				}
-				.sorted { $0.formatted < $1.formatted }
+				.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 		}
 	}
 }

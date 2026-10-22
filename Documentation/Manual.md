@@ -921,6 +921,8 @@ Both subcommands utilize Apple’s [SwiftSyntax](https://github.com/apple/swift-
 
 Generated `#sourceLocation` directives use each source path exactly as it was supplied to the tool, so a build system that needs reproducible output must supply relative paths. The vended Bazel rule already does this by passing execution-root-relative paths.
 
+Diagnostics are the exception: `SafeDITool` resolves a relative input path against its working directory before printing an error, so the location in the build log is one an editor can open. Under Bazel that working directory is the action’s sandbox, so a diagnostic there names the sandbox copy of the source file.
+
 Run `swift run SafeDITool --help`, `swift run SafeDITool scan --help`, or `swift run SafeDITool generate --help` to see documentation of all supported arguments.
 
 ## Introspecting a SafeDI tree

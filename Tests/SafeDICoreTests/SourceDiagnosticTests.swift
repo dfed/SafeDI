@@ -57,4 +57,35 @@ struct SourceDiagnosticTests {
 		let resolved = diagnostic.resolvingFilePath(relativeToDirectory: "/Users/developer/Project")
 		#expect(resolved.formatted == "/Users/developer/Other/Root.swift:3:1: error: Dependency cycle detected: Root -> Root")
 	}
+
+	@Test
+	func precedesInSourceOrder_ordersByFileLineAndColumnWithLocationlessLast() {
+		// Line and column compare numerically, so line 10 follows line 9; a location-less diagnostic sorts last;
+		// equal locations fall back to the message. The nil arms are reachable only for values built without a
+		// file context, which the generator never sees, so they are covered here rather than through the tool.
+		func diagnostic(_ location: Dependency.DeclarationLocation?, _ message: String = "message") -> SourceDiagnostic {
+			SourceDiagnostic(severity: .error, location: location, message: message)
+		}
+		let lineNine = Dependency.DeclarationLocation(filePath: "/Project/File.swift", line: 9, column: 5)
+		let lineTen = Dependency.DeclarationLocation(filePath: "/Project/File.swift", line: 10, column: 5)
+		let otherFile = Dependency.DeclarationLocation(filePath: "/Project/Other.swift", line: 1, column: 1)
+
+		let sorted = [
+			diagnostic(nil, "b"),
+			diagnostic(otherFile),
+			diagnostic(lineTen, "b"),
+			diagnostic(lineTen, "a"),
+			diagnostic(nil, "a"),
+			diagnostic(lineNine),
+		].sorted(by: SourceDiagnostic.precedesInSourceOrder)
+
+		#expect(sorted.map(\.formatted) == [
+			"/Project/File.swift:9:5: error: message",
+			"/Project/File.swift:10:5: error: a",
+			"/Project/File.swift:10:5: error: b",
+			"/Project/Other.swift:1:1: error: message",
+			"error: a",
+			"error: b",
+		])
+	}
 }
