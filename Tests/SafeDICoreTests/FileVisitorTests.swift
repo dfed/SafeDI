@@ -181,6 +181,14 @@ struct FileVisitorTests {
 							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 28),
 							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 32),
 						),
+						typeAnnotationRange: Dependency.SourceRange(
+							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 34),
+							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 38),
+						),
+						bareAttributeRange: Dependency.SourceRange(
+							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5),
+							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 15),
+						),
 					),
 					Dependency(
 						property: Property(
@@ -192,6 +200,14 @@ struct FileVisitorTests {
 						identifierRange: Dependency.SourceRange(
 							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 19),
 							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 33),
+						),
+						typeAnnotationRange: Dependency.SourceRange(
+							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 35),
+							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 49),
+						),
+						bareAttributeRange: Dependency.SourceRange(
+							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 5),
+							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 14),
 						),
 					),
 				],
@@ -253,6 +269,14 @@ struct FileVisitorTests {
 							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 28),
 							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 32),
 						),
+						typeAnnotationRange: Dependency.SourceRange(
+							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 34),
+							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 38),
+						),
+						bareAttributeRange: Dependency.SourceRange(
+							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 5),
+							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 15),
+						),
 					),
 					Dependency(
 						property: Property(
@@ -264,6 +288,14 @@ struct FileVisitorTests {
 						identifierRange: Dependency.SourceRange(
 							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 19),
 							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 33),
+						),
+						typeAnnotationRange: Dependency.SourceRange(
+							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 35),
+							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 49),
+						),
+						bareAttributeRange: Dependency.SourceRange(
+							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5),
+							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 14),
 						),
 					),
 				],
