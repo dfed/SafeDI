@@ -221,6 +221,7 @@ jobs:
           fail_ci_if_error: true
           verbose: true
           os: macos
+          flags: macos
 
   linux:
     name: Build and Test on Linux
@@ -251,6 +252,7 @@ jobs:
           fail_ci_if_error: true
           verbose: true
           os: linux
+          flags: linux
 
   linux-latest-swift:
     name: Build and Test on Latest Swift
