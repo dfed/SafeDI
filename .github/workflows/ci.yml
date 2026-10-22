@@ -16,7 +16,10 @@ concurrency:
 jobs:
   update-version-check:
     name: Update Version Script Check
-    runs-on: macos-26
+    # The script uses portable `sed -i.bak`, so this needn't take one of
+    # the five concurrent macOS slots. The publish workflow still runs
+    # it on macOS.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -89,6 +92,15 @@ jobs:
       # target, so swift-syntax's internal DocC noise stays out of our
       # strict build. That scoping isn't available via `xcodebuild
       # docbuild`, which analyzes the whole target graph.
+      # `generate-documentation` builds the target in debug; reuse the
+      # dependency build products between runs.
+      - name: Cache Build Directory
+        uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-debug-${{ runner.os }}-xcode-26.0-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            spm-debug-${{ runner.os }}-xcode-26.0-
       - name: Build DocC
         uses: ./.github/actions/retry
         with:
@@ -203,14 +215,36 @@ jobs:
         uses: actions/checkout@v7
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      # Restoring `.build` carries swift-syntax's release-mode objects
+      # over between runs; SafeDI's own targets and tests still rebuild
+      # from the current sources. The key pins the Xcode version because
+      # build products aren't portable across toolchains. The
+      # restore-keys prefix reuses the most recent cache when
+      # Package.resolved changes, and the incremental build takes it
+      # from there.
+      - name: Cache Build Directory
+        uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-release-${{ runner.os }}-xcode-26.0-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            spm-release-${{ runner.os }}-xcode-26.0-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
           command: xcrun swift package resolve
+      # Run tests a few times to ensure code-gen is stable. The repeat
+      # passes exist to catch output that differs between processes
+      # (per-process hash seeds), and every pass still compares generated
+      # output against the expected strings. Compile verification runs
+      # only on the first pass: it typechecks each generated output with
+      # swiftc, and re-typechecking a string the later passes have already
+      # proven identical adds nothing except ~90% of the pass's runtime.
       - name: Build and Test Framework
         run: |
-          for i in {1..5}; do # Run tests a few times to ensure code-gen is stable.
-            xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild
+          xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild
+          for _ in {1..4}; do
+            SAFEDI_SKIP_COMPILE_CHECK=1 xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild
           done
       - name: Prepare Coverage Reports
         run: ./Scripts/prepare-coverage-reports.sh
@@ -231,6 +265,15 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+      # Same idea as the macOS test job: reuse dependency build products
+      # between runs. Keyed on the container's Swift version.
+      - name: Cache Build Directory
+        uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            spm-release-${{ runner.os }}-swift-6.2-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -269,7 +312,19 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Print Swift Version
-        run: swift --version
+        id: swift
+        run: |
+          swift --version
+          echo "version=$(swift --version 2>&1 | grep -m1 -oE 'Swift version [0-9.]+' | awk '{print $3}')" >> "$GITHUB_OUTPUT"
+      # The toolchain floats, so the key carries the version printed
+      # above: a new release starts from an empty cache.
+      - name: Cache Build Directory
+        uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-debug-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            spm-debug-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -303,6 +358,23 @@ jobs:
         uses: actions/checkout@v7
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      # Bazel's disk and repository caches are content-addressed, so
+      # restoring them reuses the outputs of identical actions (above
+      # all the swift-syntax compiles) without changing what gets built.
+      # Both builds below point at the same caches, so the downstream
+      # example's exec-config swift-syntax is a hit even on a run where
+      # nothing was restored. The flags live on the command lines rather
+      # than in `.bazelrc` so BCR's presubmit keeps building with
+      # SafeDI's committed defaults.
+      - name: Cache Bazel
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/bazel-disk
+            ~/.cache/bazel-repository
+          key: bazel-${{ runner.os }}-xcode-26.0-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'Package.resolved', 'Examples/ExampleBazelIntegration/MODULE.bazel', 'Examples/ExampleBazelIntegration/MODULE.bazel.lock') }}
+          restore-keys: |
+            bazel-${{ runner.os }}-xcode-26.0-
       # Wrapping `bazelisk build` in retry — not just dependency
       # resolution, like the SPM jobs above — because Bazel resolves
       # external repos lazily during the build itself. There's no
@@ -321,11 +393,11 @@ jobs:
           # `${{ inputs.command }}` directly into a bash `for` loop
           # and tacks ` && break` onto the same source line, so a
           # multi-line YAML command leaves `&& break` orphaned.
-          command: bazelisk build //Sources/SafeDI:SafeDI //Sources/SafeDICore:SafeDICore //Sources/SafeDIMacros:SafeDIMacros //Sources/SafeDITool:SafeDITool
+          command: bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Sources/SafeDI:SafeDI //Sources/SafeDICore:SafeDICore //Sources/SafeDIMacros:SafeDIMacros //Sources/SafeDITool:SafeDITool
       - name: Build downstream example (mirrors BCR `bcr_test_module.build_example`)
         uses: ./.github/actions/retry
         with:
-          command: (cd Examples/ExampleBazelIntegration && bazelisk build //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration)
+          command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration)
 
   readme-validation:
     name: Check Markdown links
@@ -347,6 +419,13 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+      # `swift run` otherwise compiles SwiftFormat from source on every
+      # run. Keyed on the container's Swift version.
+      - name: Cache SwiftFormat Build
+        uses: actions/cache@v6
+        with:
+          path: CLI/.build
+          key: swiftformat-${{ runner.os }}-swift-6.3-${{ hashFiles('CLI/Package.resolved') }}
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
