@@ -2546,7 +2546,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_offersNoFixIt_whenUnfulfillableReceivedPropertySuggestionMatchesLabelOnly() async {
 		// The suggestion shares the property's label, so renaming the identifier to it would change nothing;
-		// the fix-it gate rejects it on the label, before the type comparison is reached.
+		// the fix-it gate rejects it on the label.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
@@ -2594,14 +2594,14 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_offersFixItRenamingProperty_whenUnfulfillableReceivedPropertyTypeIsModuleQualified() async {
-		// The suggester matches on the least-qualified type, so `SharedModule.SharedThing` is suggested
-		// `shared: SharedThing`; the fix-it gate compares types the same way and still offers the rename.
+	mutating func run_offersNoFixIt_whenUnfulfillableReceivedPropertyTypeIsModuleQualified() async {
+		// The suggester matches on the least-qualified type, so `shared: SharedThing` is suggested, but
+		// normalization does not unify `SharedModule.SharedThing` with `SharedThing`: the rename alone would
+		// leave the property unfulfilled, so the gate offers no fix-it.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
 				\(fixtures["Child.swift"]):7:5: error: @Received property `shared2: SharedModule.SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: SharedThing`?
-				\(fixtures["Child.swift"]):7:19-7:26: fixit: shared
 				"""
 			},
 		) {

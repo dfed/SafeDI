@@ -502,13 +502,13 @@ public actor DependencyTreeGenerator {
 					"Did you mean one of \(suggestedAlternatives.map { "`\($0.asSource)`" }.joined(separator: ", "))?"
 				}
 				// Offer the rename as a fix-it only when renaming is the actual repair. The suggestion list mixes
-				// same-type and same-label near-matches: the label check keeps the fix-it off the no-op case where
-				// only the type differs, and the least-qualified comparison is the one the suggester passed, so a
-				// qualified spelling such as `SharedModule.SharedThing` still gets the button. Several candidates
-				// leave the choice to the user.
+				// same-type and same-label near-matches, and a rename repairs only the first kind: the label must
+				// differ (otherwise the edit is a no-op) and the type must be exactly what fulfillment compares after
+				// normalization – a module-qualified spelling is not unified by normalization, so a rename there
+				// would leave the property unfulfilled and gets no fix-it. Several candidates leave the choice to the user.
 				let fixIts: [SourceDiagnostic.FixIt] = if suggestedAlternatives.count == 1,
 				                                          suggestedAlternatives[0].label != property.label,
-				                                          suggestedAlternatives[0].typeDescription.leastQualifiedTypeDescription == property.typeDescription.leastQualifiedTypeDescription,
+				                                          suggestedAlternatives[0].typeDescription == property.typeDescription,
 				                                          let identifierRange
 				{
 					[SourceDiagnostic.FixIt(range: identifierRange, replacement: suggestedAlternatives[0].label)]
