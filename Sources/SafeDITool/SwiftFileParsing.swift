@@ -141,7 +141,7 @@ func parseModule(
 		let syntaxTree = Parser.parse(source: file.content)
 		parsedConfigurationFiles[file.path] = syntaxTree
 		let fileVisitor = FileVisitor(
-			conditionalCompilation: .evaluate(ConditionalCompilationEvaluator(activeCompilationConditions: activeCompilationConditions)),
+			conditionalCompilationEvaluator: ConditionalCompilationEvaluator(activeCompilationConditions: activeCompilationConditions),
 		)
 		fileVisitor.walk(syntaxTree)
 		configurations.append(contentsOf: fileVisitor.configurations.map {
@@ -248,7 +248,7 @@ private func scan(
 			taskGroup.addTask {
 				let syntaxTree = file.syntaxTree ?? Parser.parse(source: file.content)
 				let fileVisitor = FileVisitor(
-					conditionalCompilation: .evaluate(evaluator),
+					conditionalCompilationEvaluator: evaluator,
 					sourceLocationConverter: SourceLocationConverter(fileName: file.path, tree: syntaxTree),
 				)
 				fileVisitor.walk(syntaxTree)

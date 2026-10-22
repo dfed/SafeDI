@@ -25,13 +25,13 @@ public final class FileVisitor: SyntaxVisitor {
 	// MARK: Initialization
 
 	/// - Parameters:
-	///   - conditionalCompilation: How `#if` blocks are scanned. Defaults to evaluating conditions with none active, which scans platform-conditioned blocks and skips blocks guarded by bare conditions.
+	///   - conditionalCompilationEvaluator: Decides which clauses of each `#if` block are scanned. Defaults to no active conditions, which scans platform-conditioned blocks and skips blocks guarded by bare conditions.
 	///   - sourceLocationConverter: A converter for the tree being walked. When provided, each dependency records where its property is declared.
 	public init(
-		conditionalCompilation: ConditionalCompilationHandling = .evaluate(ConditionalCompilationEvaluator(activeCompilationConditions: [])),
+		conditionalCompilationEvaluator: ConditionalCompilationEvaluator = ConditionalCompilationEvaluator(activeCompilationConditions: []),
 		sourceLocationConverter: SourceLocationConverter? = nil,
 	) {
-		self.conditionalCompilation = conditionalCompilation
+		self.conditionalCompilationEvaluator = conditionalCompilationEvaluator
 		self.sourceLocationConverter = sourceLocationConverter
 		super.init(viewMode: .sourceAccurate)
 	}
@@ -64,21 +64,14 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
-		if case let .evaluate(evaluator) = conditionalCompilation {
-			let scannable = evaluator.scannableClauses(in: node, guarding: node.safeDIContent(in: .declarations))
-			activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
-			record(scannable.decisions)
-		}
+		let scannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: node.safeDIContent(in: .declarations))
+		activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
+		record(scannable.decisions)
 		return .visitChildren
 	}
 
 	public override func visit(_ node: IfConfigClauseSyntax) -> SyntaxVisitorContinueKind {
-		switch conditionalCompilation {
-		case .scanAllClauses:
-			.visitChildren
-		case .evaluate:
-			activeIfConfigClauses.contains(node.id) ? .visitChildren : .skipChildren
-		}
+		activeIfConfigClauses.contains(node.id) ? .visitChildren : .skipChildren
 	}
 
 	public override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -127,7 +120,7 @@ public final class FileVisitor: SyntaxVisitor {
 		let instantiableVisitor = InstantiableVisitor(
 			declarationType: .extensionDecl,
 			parentType: nil,
-			conditionalCompilation: conditionalCompilation,
+			conditionalCompilation: .evaluate(conditionalCompilationEvaluator),
 			sourceLocationConverter: sourceLocationConverter,
 		)
 		instantiableVisitor.walk(node)
@@ -169,7 +162,7 @@ public final class FileVisitor: SyntaxVisitor {
 	// MARK: Private
 
 	private var parentType: TypeDescription?
-	private let conditionalCompilation: ConditionalCompilationHandling
+	private let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
 	private let sourceLocationConverter: SourceLocationConverter?
 	/// The `#if` clauses the evaluator selected for scanning.
 	private var activeIfConfigClauses = Set<SyntaxIdentifier>()
@@ -178,7 +171,7 @@ public final class FileVisitor: SyntaxVisitor {
 		let instantiableVisitor = InstantiableVisitor(
 			declarationType: .concreteDecl,
 			parentType: parentType,
-			conditionalCompilation: conditionalCompilation,
+			conditionalCompilation: .evaluate(conditionalCompilationEvaluator),
 			sourceLocationConverter: sourceLocationConverter,
 		)
 		instantiableVisitor.walk(node)
