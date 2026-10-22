@@ -1966,6 +1966,7 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 				    let value = 1
 
 				    struct Nested {}
+				    enum Inner {}
 				    #endif
 				}
 				""",
