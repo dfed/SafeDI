@@ -65,9 +65,12 @@ jobs:
       uses: actions/cache@v6
       with:
         path: .build
-        key: codeql-swift-${{ runner.os }}-xcode-26.4-${{ hashFiles('Package.resolved') }}
+        # "native" distinguishes this cache from the one the emulated
+        # build wrote: an exact key hit is never re-saved, so reusing the
+        # old key would leave the arm64 build products uncached forever.
+        key: codeql-swift-native-${{ runner.os }}-xcode-26.4-${{ hashFiles('Package.resolved') }}
         restore-keys: |
-          codeql-swift-${{ runner.os }}-xcode-26.4-
+          codeql-swift-native-${{ runner.os }}-xcode-26.4-
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
@@ -76,11 +79,29 @@ jobs:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
 
+    # CodeQL's Swift extractor ships x86_64 only, so on Apple Silicon the
+    # tracer relocates the arm64e system binaries it needs to inject into
+    # (/bin/bash, /usr/bin/xcrun) and falls back to their x86_64 slices.
+    # Everything they spawn inherits that, so `xcrun swift build` ran
+    # SwiftPM itself under Rosetta: every toolchain binary paid a
+    # first-launch translation (swift --version alone took 2-4 minutes),
+    # the manifests compiled for x86_64, and the build went to
+    # .build/x86_64-apple-macosx, a directory no cache of ours warms.
+    #
+    # Launching the toolchain's own swift with `arch -arm64`, with Xcode's
+    # toolchain first on PATH so swiftc and git resolve to Xcode's arm64
+    # binaries, keeps SwiftPM and the compiler native; only the extractor
+    # runs under Rosetta. Measured on a warm cache: 797 s -> 446 s.
     - if: matrix.language == 'swift'
       name: Build
       run: |
         find Sources -name '*.swift' -exec touch {} +
-        xcrun swift build --target SafeDI --target SafeDITool
+        DEVELOPER_DIR=$(xcode-select -p)
+        TOOLCHAIN="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin"
+        export PATH="$TOOLCHAIN:$DEVELOPER_DIR/usr/bin:$PATH"
+        SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
+        export SDKROOT
+        arch -arm64 "$TOOLCHAIN/swift" build --target SafeDI --target SafeDITool
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
