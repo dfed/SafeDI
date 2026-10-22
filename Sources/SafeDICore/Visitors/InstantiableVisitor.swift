@@ -156,7 +156,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
 		if case let .evaluate(evaluator) = conditionalCompilation {
 			// Members of a declaration without `@Instantiable` are never scanned, so nothing inside matters.
-			let content: SafeDIContent = if hasInstantiableMacro {
+			let content: SafeDIContent = if hasFoundDeclaration {
 				node.safeDIContent(in: .members(.init(
 					isExtension: declarationType.isExtension,
 					isMockOnly: mockOnly,
@@ -184,7 +184,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
 		instantiableType = node.extendedType.typeDescription
 		if let instantiableMacro = node.attributes.instantiableMacro {
-			hasInstantiableMacro = true
+			hasFoundDeclaration = true
 			processAttributes(node.attributes, on: instantiableMacro)
 		}
 
@@ -484,9 +484,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	// MARK: Private
 
-	private var hasFoundDeclaration = false
 	/// Whether the walked declaration carries `@Instantiable`, which is when its members matter.
-	private var hasInstantiableMacro = false
+	private var hasFoundDeclaration = false
 	private var instantiableDeclarationType: ConcreteDeclType?
 
 	private var extensionInstantiables = [Instantiable]()
@@ -518,7 +517,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			return .skipChildren
 		}
 		hasFoundDeclaration = true
-		hasInstantiableMacro = true
 		instantiableDeclarationType = node.declType
 
 		instantiableType = nodeDeclarationType

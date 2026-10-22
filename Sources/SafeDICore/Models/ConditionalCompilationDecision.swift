@@ -31,18 +31,15 @@ public struct ConditionalCompilationDecision: Codable, Hashable, Comparable, Sen
 	/// - Parameters:
 	///   - condition: The source of the `#if` or `#elseif` condition, e.g. `DEBUG && !STAGING`.
 	///   - isActive: Whether SafeDITool evaluated the condition as true.
-	///   - mentionedConditions: The bare compilation conditions `condition` refers to.
-	public init(condition: String, isActive: Bool, mentionedConditions: Set<String>) {
+	public init(condition: String, isActive: Bool) {
 		self.condition = condition
 		self.isActive = isActive
-		self.mentionedConditions = mentionedConditions
 	}
 
 	// MARK: Public
 
 	public let condition: String
 	public let isActive: Bool
-	public let mentionedConditions: Set<String>
 
 	/// Swift source that fails to compile wherever the compiler disagrees with any of `decisions`,
 	/// or an empty string when there are none. Emitted after the header of each generated file.

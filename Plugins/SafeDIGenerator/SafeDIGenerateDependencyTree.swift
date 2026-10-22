@@ -115,7 +115,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					inputSourcesFile.path(percentEncoded: false),
 					"--swift-manifest",
 					manifestFile.path(percentEncoded: false),
-				] + activeCompilationConditionArguments,
+				],
 				environment: [:],
 				inputFiles: allSwiftFiles + additionalInputFiles,
 				outputFiles: outputFiles,

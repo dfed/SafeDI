@@ -62,7 +62,7 @@ struct FileVisitorConditionalCompilationTests {
 		""", activeCompilationConditions: ["DEBUG"])
 		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [.simple(name: "DebugService")])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "DEBUG", isActive: true, mentionedConditions: ["DEBUG"]),
+			ConditionalCompilationDecision(condition: "DEBUG", isActive: true),
 		])
 	}
 
@@ -83,7 +83,7 @@ struct FileVisitorConditionalCompilationTests {
 		""", activeCompilationConditions: ["DEBUG"])
 		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [.simple(name: "DebugService")])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "!DEBUG", isActive: false, mentionedConditions: ["DEBUG"]),
+			ConditionalCompilationDecision(condition: "!DEBUG", isActive: false),
 		])
 	}
 
@@ -109,7 +109,7 @@ struct FileVisitorConditionalCompilationTests {
 		""", activeCompilationConditions: ["STAGING"])
 		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [.simple(name: "StagingService")])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "STAGING && !false", isActive: true, mentionedConditions: ["STAGING"]),
+			ConditionalCompilationDecision(condition: "STAGING && !false", isActive: true),
 		])
 	}
 
@@ -130,7 +130,7 @@ struct FileVisitorConditionalCompilationTests {
 		""", activeCompilationConditions: ["DEBUG"])
 		#expect(fileVisitor.instantiables == [])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "!DEBUG", isActive: false, mentionedConditions: ["DEBUG"]),
+			ConditionalCompilationDecision(condition: "!DEBUG", isActive: false),
 		])
 	}
 
@@ -151,7 +151,7 @@ struct FileVisitorConditionalCompilationTests {
 		""", activeCompilationConditions: ["DEBUG"])
 		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [.simple(name: "ActiveService")])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "DEBUG && false", isActive: false, mentionedConditions: ["DEBUG"]),
+			ConditionalCompilationDecision(condition: "DEBUG && false", isActive: false),
 		])
 	}
 
@@ -172,7 +172,7 @@ struct FileVisitorConditionalCompilationTests {
 		""")
 		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [.simple(name: "ActiveService")])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "DEBUG || true", isActive: true, mentionedConditions: ["DEBUG"]),
+			ConditionalCompilationDecision(condition: "DEBUG || true", isActive: true),
 		])
 	}
 
@@ -189,7 +189,7 @@ struct FileVisitorConditionalCompilationTests {
 		""", activeCompilationConditions: ["STAGING"])
 		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [.simple(name: "StagingService")])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "false && DEBUG || STAGING", isActive: true, mentionedConditions: ["DEBUG", "STAGING"]),
+			ConditionalCompilationDecision(condition: "false && DEBUG || STAGING", isActive: true),
 		])
 	}
 
@@ -205,7 +205,7 @@ struct FileVisitorConditionalCompilationTests {
 		""", activeCompilationConditions: ["DEBUG"])
 		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [.simple(name: "DebugService")])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "(DEBUG || STAGING) && !false", isActive: true, mentionedConditions: ["DEBUG", "STAGING"]),
+			ConditionalCompilationDecision(condition: "(DEBUG || STAGING) && !false", isActive: true),
 		])
 	}
 
@@ -362,10 +362,49 @@ struct FileVisitorConditionalCompilationTests {
 			.simple(name: "TouchOrReleaseService"),
 		])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "DEBUG && os(iOS)", isActive: false, mentionedConditions: ["DEBUG"]),
-			ConditionalCompilationDecision(condition: "os(iOS) && DEBUG", isActive: false, mentionedConditions: ["DEBUG"]),
-			ConditionalCompilationDecision(condition: "!DEBUG || os(iOS)", isActive: true, mentionedConditions: ["DEBUG"]),
-			ConditionalCompilationDecision(condition: "os(iOS) || !DEBUG", isActive: true, mentionedConditions: ["DEBUG"]),
+			ConditionalCompilationDecision(condition: "DEBUG && os(iOS)", isActive: false),
+			ConditionalCompilationDecision(condition: "os(iOS) && DEBUG", isActive: false),
+			ConditionalCompilationDecision(condition: "!DEBUG || os(iOS)", isActive: true),
+			ConditionalCompilationDecision(condition: "os(iOS) || !DEBUG", isActive: true),
+		])
+	}
+
+	@Test
+	func walk_scansFeatureFlagClause_andRecordsNoDecision() {
+		let fileVisitor = walk("""
+		#if $Macros
+		@Instantiable
+		public struct MacroService {
+		    public init() {}
+		}
+		#endif
+		#if !$Macros
+		@Instantiable
+		public struct LegacyService {
+		    public init() {}
+		}
+		#endif
+		""")
+		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [
+			.simple(name: "MacroService"),
+			.simple(name: "LegacyService"),
+		])
+		#expect(fileVisitor.conditionalCompilationDecisions == [])
+	}
+
+	@Test
+	func walk_decidesFeatureFlagClause_whenCompilationConditionSettlesIt() {
+		let fileVisitor = walk("""
+		#if $Macros && DEBUG
+		@Instantiable
+		public struct DebugMacroService {
+		    public init() {}
+		}
+		#endif
+		""")
+		#expect(fileVisitor.instantiables == [])
+		#expect(fileVisitor.conditionalCompilationDecisions == [
+			ConditionalCompilationDecision(condition: "$Macros && DEBUG", isActive: false),
 		])
 	}
 
@@ -383,7 +422,7 @@ struct FileVisitorConditionalCompilationTests {
 		""")
 		#expect(fileVisitor.instantiables == [])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "DEBUG", isActive: false, mentionedConditions: ["DEBUG"]),
+			ConditionalCompilationDecision(condition: "DEBUG", isActive: false),
 		])
 	}
 
@@ -399,7 +438,7 @@ struct FileVisitorConditionalCompilationTests {
 		""", activeCompilationConditions: ["DEBUG"])
 		#expect(fileVisitor.instantiables == [])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "STAGING && DEBUG", isActive: false, mentionedConditions: ["DEBUG", "STAGING"]),
+			ConditionalCompilationDecision(condition: "STAGING && DEBUG", isActive: false),
 		])
 	}
 
@@ -415,7 +454,7 @@ struct FileVisitorConditionalCompilationTests {
 		""", activeCompilationConditions: ["DEBUG"])
 		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [.simple(name: "DebugService")])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "STAGING || DEBUG", isActive: true, mentionedConditions: ["DEBUG", "STAGING"]),
+			ConditionalCompilationDecision(condition: "STAGING || DEBUG", isActive: true),
 		])
 	}
 
@@ -431,7 +470,7 @@ struct FileVisitorConditionalCompilationTests {
 		""")
 		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [.simple(name: "ReleaseService")])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "!DEBUG", isActive: true, mentionedConditions: ["DEBUG"]),
+			ConditionalCompilationDecision(condition: "!DEBUG", isActive: true),
 		])
 	}
 
@@ -452,7 +491,7 @@ struct FileVisitorConditionalCompilationTests {
 		""")
 		#expect(fileVisitor.instantiables == [])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "STAGING", isActive: false, mentionedConditions: ["STAGING"]),
+			ConditionalCompilationDecision(condition: "STAGING", isActive: false),
 		])
 	}
 
@@ -470,7 +509,7 @@ struct FileVisitorConditionalCompilationTests {
 		""")
 		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [.simple(name: "ProductionService")])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "STAGING", isActive: false, mentionedConditions: ["STAGING"]),
+			ConditionalCompilationDecision(condition: "STAGING", isActive: false),
 		])
 	}
 
@@ -488,7 +527,7 @@ struct FileVisitorConditionalCompilationTests {
 		""")
 		#expect(fileVisitor.instantiables == [])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "STAGING", isActive: false, mentionedConditions: ["STAGING"]),
+			ConditionalCompilationDecision(condition: "STAGING", isActive: false),
 		])
 	}
 
@@ -501,7 +540,7 @@ struct FileVisitorConditionalCompilationTests {
 		""")
 		#expect(fileVisitor.configurations == [])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "STAGING", isActive: false, mentionedConditions: ["STAGING"]),
+			ConditionalCompilationDecision(condition: "STAGING", isActive: false),
 		])
 	}
 
@@ -521,7 +560,7 @@ struct FileVisitorConditionalCompilationTests {
 		""")
 		#expect(fileVisitor.instantiables.map(\.dependencies) == [[]])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "DEBUG", isActive: false, mentionedConditions: ["DEBUG"]),
+			ConditionalCompilationDecision(condition: "DEBUG", isActive: false),
 		])
 	}
 
@@ -546,7 +585,7 @@ struct FileVisitorConditionalCompilationTests {
 		""")
 		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [.simple(name: "SomeService")])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "DEBUG", isActive: false, mentionedConditions: ["DEBUG"]),
+			ConditionalCompilationDecision(condition: "DEBUG", isActive: false),
 		])
 	}
 
@@ -562,7 +601,7 @@ struct FileVisitorConditionalCompilationTests {
 		""")
 		#expect(fileVisitor.instantiables.map(\.initializer) == [nil])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "STAGING", isActive: false, mentionedConditions: ["STAGING"]),
+			ConditionalCompilationDecision(condition: "STAGING", isActive: false),
 		])
 	}
 
@@ -580,7 +619,7 @@ struct FileVisitorConditionalCompilationTests {
 		""")
 		#expect(fileVisitor.instantiables == [])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "STAGING", isActive: false, mentionedConditions: ["STAGING"]),
+			ConditionalCompilationDecision(condition: "STAGING", isActive: false),
 		])
 	}
 
@@ -687,7 +726,7 @@ struct FileVisitorConditionalCompilationTests {
 		""")
 		#expect(fileVisitor.instantiables == [])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "TESTING", isActive: false, mentionedConditions: ["TESTING"]),
+			ConditionalCompilationDecision(condition: "TESTING", isActive: false),
 		])
 	}
 
@@ -705,7 +744,7 @@ struct FileVisitorConditionalCompilationTests {
 		""", mockConditionalCompilation: nil)
 		#expect(fileVisitor.instantiables == [])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "DEBUG", isActive: false, mentionedConditions: ["DEBUG"]),
+			ConditionalCompilationDecision(condition: "DEBUG", isActive: false),
 		])
 	}
 
@@ -728,7 +767,7 @@ struct FileVisitorConditionalCompilationTests {
 		""")
 		#expect(fileVisitor.instantiables == [])
 		#expect(fileVisitor.conditionalCompilationDecisions == [
-			ConditionalCompilationDecision(condition: "DEBUG", isActive: false, mentionedConditions: ["DEBUG"]),
+			ConditionalCompilationDecision(condition: "DEBUG", isActive: false),
 		])
 	}
 
@@ -816,9 +855,9 @@ struct FileVisitorConditionalCompilationTests {
 	@Test
 	func compileTimeAssertions_assertEachDecisionOnce_sortedByCondition() {
 		let assertions = ConditionalCompilationDecision.compileTimeAssertions(for: [
-			ConditionalCompilationDecision(condition: "STAGING && DEBUG", isActive: false, mentionedConditions: ["DEBUG", "STAGING"]),
-			ConditionalCompilationDecision(condition: "DEBUG", isActive: true, mentionedConditions: ["DEBUG"]),
-			ConditionalCompilationDecision(condition: "DEBUG", isActive: true, mentionedConditions: ["DEBUG"]),
+			ConditionalCompilationDecision(condition: "STAGING && DEBUG", isActive: false),
+			ConditionalCompilationDecision(condition: "DEBUG", isActive: true),
+			ConditionalCompilationDecision(condition: "DEBUG", isActive: true),
 		])
 		#expect(assertions == """
 		#if !(DEBUG)

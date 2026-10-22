@@ -87,14 +87,16 @@ func performScan(
 		})
 	}
 
-	// The module's configuration decides how `#if` blocks are evaluated, so find it first.
-	let evaluator = try await conditionalCompilationEvaluator(
+	// Parse all files once to find roots, mocks, and configurations. Only the
+	// mock-scoped files can declare this module's configuration, which decides
+	// how every file's `#if` blocks are evaluated.
+	let parsedModule = try await parseModule(
+		filePaths: allFilePaths,
+		configurationFilePaths: mockScopedFilePaths,
 		activeCompilationConditions: activeCompilationConditions,
-		configuration: discoverConfigurations(in: mockScopedFilePaths).first,
 	)
-
-	// Parse all files once to find roots, mocks, and configurations.
-	let allModuleInfo = try await parseSwiftFiles(allFilePaths, conditionalCompilation: evaluator)
+	let allModuleInfo = parsedModule.moduleInfo
+	let evaluator = parsedModule.conditionalCompilationEvaluator
 
 	// Filter the already-parsed results to the mock-scoped subset.
 	let mockScopedInstantiables = allModuleInfo.instantiables.filter { instantiable in
@@ -106,9 +108,8 @@ func performScan(
 		return mockScopedFilePaths.contains(sourceFilePath)
 	}
 
-	// Find configuration from the scoped files. Generate validates at most one exists;
-	// here we take the first to drive directory/mocks expansion for the manifest.
-	let configuration = mockScopedConfigurations.first
+	// The parse rejected more than one configuration among the scoped files.
+	let configuration = parsedModule.configuration
 
 	// Discover additional directories from configuration.
 	var additionalInputFiles = [String]()

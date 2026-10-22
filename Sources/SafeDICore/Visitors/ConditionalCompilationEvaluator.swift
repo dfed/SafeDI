@@ -82,7 +82,7 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 	func evaluate(_ condition: ExprSyntax) -> Evaluation {
 		if let booleanLiteral = BooleanLiteralExprSyntax(condition) {
 			.known(booleanLiteral.literal.tokenKind == .keyword(.true))
-		} else if let identifier = DeclReferenceExprSyntax(condition) {
+		} else if let identifier = DeclReferenceExprSyntax(condition), !identifier.baseName.text.hasPrefix("$") {
 			.known(activeCompilationConditions.contains(identifier.baseName.text))
 		} else if let prefixOperator = PrefixOperatorExprSyntax(condition) {
 			// `!` is the only prefix operator the compiler accepts in a build configuration.
@@ -92,8 +92,9 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 		} else if let tuple = TupleExprSyntax(condition), tuple.elements.count == 1, let element = tuple.elements.first {
 			evaluate(element.expression)
 		} else {
-			// `os(…)`, `arch(…)`, `canImport(…)`, `targetEnvironment(…)`, `swift(…)`, `compiler(…)`
-			// and the like depend on the compiler and destination, which no build integration reports.
+			// `os(…)`, `arch(…)`, `canImport(…)`, `targetEnvironment(…)`, `swift(…)`, `compiler(…)`,
+			// feature flags such as `$Macros`, and the like depend on the compiler and destination,
+			// which no build integration reports.
 			.compilerDetermined
 		}
 	}
@@ -104,14 +105,20 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 	/// condition, so the condition is active wherever that code compiles. A decision that rests on
 	/// it cannot be asserted outside that code, so only decisions about other conditions are reported.
 	private func mockOnlyScannableClauses(in node: IfConfigDeclSyntax, mockConditionalCompilation: String) -> ScannableClauses {
-		let scannable = activeClauses(in: node, activeCompilationConditions: activeCompilationConditions.union([mockConditionalCompilation]))
-		return ScannableClauses(
-			clauses: scannable.clauses,
-			decisions: scannable.decisions.filter { !$0.mentionedConditions.contains(mockConditionalCompilation) },
+		activeClauses(
+			in: node,
+			activeCompilationConditions: activeCompilationConditions.union([mockConditionalCompilation]),
+			ignoringDecisionsMentioning: mockConditionalCompilation,
 		)
 	}
 
-	private func activeClauses(in node: IfConfigDeclSyntax, activeCompilationConditions: Set<String>) -> ScannableClauses {
+	/// - Parameter ignoredCondition: A condition whose evaluation is settled by where the generated
+	///   code is compiled, so decisions that mention it are not reported.
+	private func activeClauses(
+		in node: IfConfigDeclSyntax,
+		activeCompilationConditions: Set<String>,
+		ignoringDecisionsMentioning ignoredCondition: String? = nil,
+	) -> ScannableClauses {
 		let evaluator = ConditionalCompilationEvaluator(
 			activeCompilationConditions: activeCompilationConditions,
 			mockConditionalCompilation: mockConditionalCompilation,
@@ -125,11 +132,10 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 				case let .known(isActive):
 					let mentionedConditions = mentionedCompilationConditions(in: condition)
 					// A condition without compilation conditions, such as `#if false`, cannot be decided wrongly.
-					if !mentionedConditions.isEmpty {
+					if !mentionedConditions.isEmpty, !mentionedConditions.contains(ignoredCondition ?? "") {
 						decisions.append(ConditionalCompilationDecision(
 							condition: condition.trimmedDescription,
 							isActive: isActive,
-							mentionedConditions: mentionedConditions,
 						))
 					}
 					if isActive {
@@ -150,7 +156,7 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 
 	/// The bare compilation conditions `condition` refers to, which are the inputs its evaluation rests on.
 	private func mentionedCompilationConditions(in condition: ExprSyntax) -> Set<String> {
-		if let identifier = DeclReferenceExprSyntax(condition) {
+		if let identifier = DeclReferenceExprSyntax(condition), !identifier.baseName.text.hasPrefix("$") {
 			[identifier.baseName.text]
 		} else if let prefixOperator = PrefixOperatorExprSyntax(condition) {
 			mentionedCompilationConditions(in: prefixOperator.expression)
@@ -161,7 +167,7 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 		} else if let tuple = TupleExprSyntax(condition), tuple.elements.count == 1, let element = tuple.elements.first {
 			mentionedCompilationConditions(in: element.expression)
 		} else {
-			// Literals and platform conditions.
+			// Literals, platform conditions, and feature flags.
 			[]
 		}
 	}

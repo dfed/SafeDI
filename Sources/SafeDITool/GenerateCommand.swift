@@ -92,45 +92,31 @@ struct Generate: AsyncParsableCommand {
 			)
 		}
 
-		// The module's configuration decides how `#if` blocks are evaluated, so find it before
-		// parsing. The manifest names this module's configuration files by the same paths the
-		// CSV uses; without a manifest every input file belongs to this module.
+		// In multi-module builds, the CSV includes all modules' files, so multiple
+		// configs may be present. The manifest's configurationFilePaths lists only
+		// this target's own config files, by the same paths the CSV uses; without
+		// a manifest every input file belongs to this module.
 		let inputFilePaths = try await findGenerateSwiftFiles()
 		let configurationFilePaths: Set<String> = if let manifest {
 			inputFilePaths.intersection(manifest.configurationFilePaths)
 		} else {
 			inputFilePaths
 		}
-		let evaluator = try await conditionalCompilationEvaluator(
-			activeCompilationConditions: Set(activeCompilationConditions).union(manifest?.activeCompilationConditions ?? []),
-			configuration: discoverConfigurations(in: configurationFilePaths).first,
-		)
+		let suppliedCompilationConditions = Set(activeCompilationConditions).union(manifest?.activeCompilationConditions ?? [])
 
 		let (dependentModuleInfo, parsed) = try await (
 			loadSafeDIModuleInfo(),
-			parsedModule(inputFilePaths: inputFilePaths, conditionalCompilation: evaluator),
+			parsedModule(
+				inputFilePaths: inputFilePaths,
+				configurationFilePaths: configurationFilePaths,
+				manifestConfigurationFilePaths: Set(manifest?.configurationFilePaths ?? []),
+				activeCompilationConditions: suppliedCompilationConditions,
+			),
 		)
-		let initialModule = parsed.module
+		let initialModule = parsed.module.moduleInfo
 		let initialModuleIsFromCache = parsed.isFromCache
-
-		// In multi-module builds, the CSV includes all modules' files, so multiple
-		// configs may be present. Scope to the current module using the manifest's
-		// configurationFilePaths (which lists only this target's own config files).
-		let currentModuleConfigurations: [SafeDIConfiguration]
-		if let manifest {
-			let configurationFilePaths = Set(manifest.configurationFilePaths)
-			currentModuleConfigurations = initialModule.configurations.filter { configuration in
-				guard let configPath = configuration.sourceFilePath else { return false }
-				return configurationFilePaths.contains(configPath)
-			}
-		} else {
-			currentModuleConfigurations = initialModule.configurations
-		}
-		guard currentModuleConfigurations.count <= 1 else {
-			let configPaths = currentModuleConfigurations.compactMap(\.sourceFilePath).joined(separator: "\n\t")
-			throw ValidationError("Found \(currentModuleConfigurations.count) #\(SafeDIConfigurationVisitor.macroName) declarations in this module. Each module must have at most one #\(SafeDIConfigurationVisitor.macroName). Found in:\n\t\(configPaths)")
-		}
-		let sourceConfiguration: SafeDIConfiguration? = currentModuleConfigurations.first
+		let sourceConfiguration = parsed.module.configuration
+		let evaluator = parsed.module.conditionalCompilationEvaluator
 
 		let resolvedAdditionalImportedModules: [String] = if let sourceConfiguration {
 			additionalImportedModules + sourceConfiguration.additionalImportedModules
@@ -232,13 +218,7 @@ struct Generate: AsyncParsableCommand {
 			try JSONEncoder().encode(module).write(toPath: moduleInfoOutput)
 		}
 
-		if resolvedSwiftManifest != nil || combinedOutput != nil {
-			let manifest: SafeDIToolManifest? = try resolvedSwiftManifest.map { manifestPath in
-				try JSONDecoder().decode(
-					SafeDIToolManifest.self,
-					from: Data(contentsOf: manifestPath.asFileURL),
-				)
-			}
+		if manifest != nil || combinedOutput != nil {
 
 			let filesWithUnexpectedNodes = dependentModuleInfo.compactMap(\.filesWithUnexpectedNodes).flatMap(\.self) + (module.filesWithUnexpectedNodes ?? [])
 			if !filesWithUnexpectedNodes.isEmpty {
@@ -538,26 +518,47 @@ struct Generate: AsyncParsableCommand {
 	/// cross-version schema drift, etc.) fall through to a fresh parse
 	/// rather than aborting the build — the cache is an optimization
 	/// sidecar, not a correctness requirement.
+	///
+	/// - Parameters:
+	///   - inputFilePaths: The files `generate` was given, which with `include` empty are exactly the CSV's paths.
+	///   - configurationFilePaths: The input files that can declare this module's configuration.
+	///   - manifestConfigurationFilePaths: The same files as scan recorded them, which is how the
+	///     cached `ModuleInfo` names them.
+	///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
 	private func parsedModule(
 		inputFilePaths: Set<String>,
-		conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-	) async throws -> (module: ModuleInfo, isFromCache: Bool) {
+		configurationFilePaths: Set<String>,
+		manifestConfigurationFilePaths: Set<String>,
+		activeCompilationConditions: Set<String>,
+	) async throws -> (module: ParsedModule, isFromCache: Bool) {
 		if include.isEmpty,
 		   let swiftManifest,
-		   let cached = try await loadCachedModuleInfo(manifestPath: swiftManifest, inputFilePaths: inputFilePaths, conditionalCompilation: evaluator)
+		   let cached = try await loadCachedModule(
+		   	manifestPath: swiftManifest,
+		   	inputFilePaths: inputFilePaths,
+		   	configurationFilePaths: manifestConfigurationFilePaths,
+		   	activeCompilationConditions: activeCompilationConditions,
+		   )
 		{
 			(cached, true)
 		} else {
-			try await (parseSwiftFiles(inputFilePaths, conditionalCompilation: evaluator), false)
+			try await (
+				parseModule(
+					filePaths: inputFilePaths,
+					configurationFilePaths: configurationFilePaths,
+					activeCompilationConditions: activeCompilationConditions,
+				),
+				false,
+			)
 		}
 	}
 
-	/// - Parameter inputFilePaths: The files `generate` was given, which with `include` empty are exactly the CSV's paths.
-	private func loadCachedModuleInfo(
+	private func loadCachedModule(
 		manifestPath: String,
 		inputFilePaths: Set<String>,
-		conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-	) async throws -> ModuleInfo? {
+		configurationFilePaths: Set<String>,
+		activeCompilationConditions: Set<String>,
+	) async throws -> ParsedModule? {
 		let cacheURL = scannedModuleInfoURL(forManifestPath: manifestPath)
 		let fileManager = FileManager.default
 		guard let cacheAttributes = try? fileManager.attributesOfItem(atPath: cacheURL.path),
@@ -573,7 +574,19 @@ struct Generate: AsyncParsableCommand {
 
 		// Bypass the cache if scan treated a different set of compilation
 		// conditions as active — the set decides which `#if` clauses were
-		// parsed.
+		// parsed. Scan rejected more than one configuration in scope, so the
+		// first by path is the module's.
+		let configuration = cached.moduleInfo.configurations
+			.filter { configuration in
+				guard let sourceFilePath = configuration.sourceFilePath else { return false }
+				return configurationFilePaths.contains(sourceFilePath)
+			}
+			.sorted { ($0.sourceFilePath ?? "") < ($1.sourceFilePath ?? "") }
+			.first
+		let evaluator = conditionalCompilationEvaluator(
+			activeCompilationConditions: activeCompilationConditions,
+			configuration: configuration,
+		)
 		guard Set(cached.activeCompilationConditions) == evaluator.activeCompilationConditions else {
 			return nil
 		}
@@ -622,7 +635,11 @@ struct Generate: AsyncParsableCommand {
 		}) else {
 			return nil
 		}
-		return cached.moduleInfo
+		return ParsedModule(
+			moduleInfo: cached.moduleInfo,
+			configuration: configuration,
+			conditionalCompilationEvaluator: evaluator,
+		)
 	}
 
 	private var moduleInfoURLs: Set<URL> {

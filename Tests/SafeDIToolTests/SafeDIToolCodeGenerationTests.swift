@@ -423,6 +423,56 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_generatedAssertionFailsCompilation_whenCompilerActivatesSkippedCondition() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init() {}
+				}
+
+				#if STAGING
+				@Instantiable(isRoot: true)
+				public struct StagingRoot: Instantiable {
+				    public init() {}
+				}
+				#endif
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			// Verified by hand below, with and without `STAGING`.
+			skipCompileVerification: true,
+		)
+		let generatedCode = try #require(output.generatedFiles?["Root+SafeDI.swift"])
+		#expect(generatedCode.contains("#if STAGING\n#error("))
+
+		let artifacts = try #require(SafeDIBuildArtifactLocator.locate())
+		let scratchDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: scratchDirectory, withIntermediateDirectories: true)
+		filesToDelete.append(scratchDirectory)
+		let sources = try [
+			("Root.swift", String(contentsOf: output.inputSwiftFiles[0], encoding: .utf8)),
+			("Root+SafeDI.swift", generatedCode),
+		].map { fileName, content in
+			let destination = scratchDirectory.appendingPathComponent(fileName)
+			try ("import SafeDI\n" + content).write(to: destination, atomically: true, encoding: .utf8)
+			return destination
+		}
+
+		// The compiler agrees with SafeDI's assumption: the assertion is inert.
+		let agreeing = try runSwiftTypecheck(sources: sources, artifacts: artifacts)
+		#expect(agreeing.exitCode == 0, Comment(rawValue: agreeing.stderr))
+
+		// The compiler activates the condition SafeDI assumed inactive: the assertion fails the build.
+		let disagreeing = try runSwiftTypecheck(sources: sources, artifacts: artifacts, activeCompilationConditions: ["STAGING"])
+		#expect(disagreeing.exitCode != 0)
+		#expect(disagreeing.stderr.contains("error: SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation."))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_skipsGuardedRoot_whenConditionIsFalse() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
