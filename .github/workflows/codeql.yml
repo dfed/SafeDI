@@ -1,7 +1,7 @@
 name: "CodeQL Advanced"
 
 # Throwaway experiment: why does CodeQL's Swift analysis spend 8-9 minutes
-# in SwiftPM before compiling anything? Three variants of the Swift job,
+# in SwiftPM before compiling anything? Two variants of the Swift job,
 # run cold then warm. Results are never uploaded.
 
 on:
@@ -20,29 +20,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # As on main: arm64 runner, `.build` cached, build under the
-          # tracer (which runs x86_64 under Rosetta on Apple Silicon).
+          # As on main: `xcrun swift build` under the tracer. The tracer
+          # relocates /usr/bin/xcrun and falls back to its x86_64 slice,
+          # so SwiftPM itself runs under Rosetta and builds for
+          # x86_64-apple-macosx.
           - name: control
             runs-on: macos-26
-            swiftpm-cache: false
-            prebuild: none
-            extra-flags: ""
-          # Also cache SwiftPM's user-level caches: compiled manifests and
-          # repository mirrors, which otherwise are rebuilt and re-fetched
-          # under the tracer on every run.
-          - name: swiftpm-cache
+            native: false
+          # Launch the toolchain's own `swift` with Xcode's toolchain first
+          # on PATH, so SwiftPM, swift-frontend, and git are Xcode's
+          # arm64 binaries (no relocation needed) and only the extractor
+          # runs under Rosetta.
+          - name: native-toolchain
             runs-on: macos-26
-            swiftpm-cache: true
-            prebuild: resolve
-            extra-flags: ""
-          # Resolve and fully build before CodeQL starts tracing, then
-          # rebuild only SafeDI's targets under the tracer with
-          # --skip-update so SwiftPM does no network or git work there.
-          - name: pre-resolve
-            runs-on: macos-26
-            swiftpm-cache: true
-            prebuild: full
-            extra-flags: "--skip-update"
+            native: true
     steps:
     - name: Checkout repository
       uses: actions/checkout@v7
@@ -57,20 +48,6 @@ jobs:
       with:
         path: .build
         key: codeql-exp-build-${{ matrix.name }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}
-    - if: matrix.swiftpm-cache
-      name: Cache SwiftPM Caches
-      uses: actions/cache@v6
-      with:
-        path: ~/Library/Caches/org.swift.swiftpm
-        key: codeql-exp-swiftpm-${{ matrix.name }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}
-    - if: matrix.prebuild == 'resolve'
-      name: Resolve Before Tracing
-      run: xcrun swift package resolve
-    - if: matrix.prebuild == 'full'
-      name: Resolve and Build Before Tracing
-      run: |
-        xcrun swift package resolve
-        xcrun swift build --target SafeDI --target SafeDITool
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
       with:
@@ -78,10 +55,28 @@ jobs:
         build-mode: manual
     - name: Build
       env:
-        EXTRA_FLAGS: ${{ matrix.extra-flags }}
+        NATIVE: ${{ matrix.native }}
       run: |
         find Sources -name '*.swift' -exec touch {} +
-        xcrun swift build -v $EXTRA_FLAGS --target SafeDI --target SafeDITool
+        DEVELOPER_DIR=$(xcode-select -p)
+        TOOLCHAIN="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin"
+        echo "::group::probes under the tracer"
+        printf 'hello\n' > /tmp/probe.swift
+        if [ "$NATIVE" = true ]; then
+          export PATH="$TOOLCHAIN:$DEVELOPER_DIR/usr/bin:$PATH"
+          export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+          SWIFT="$TOOLCHAIN/swift"
+        else
+          SWIFT="xcrun swift"
+        fi
+        echo "shell arch: $(uname -m)"
+        time $SWIFT --version
+        time git -C .build/checkouts/swift-syntax rev-parse HEAD
+        time $SWIFT package dump-package > /dev/null
+        time $SWIFT package dump-package > /dev/null
+        echo "::endgroup::"
+        time $SWIFT build -v --target SafeDI --target SafeDITool
+        echo "build directories:"; ls .build | grep -E 'apple-macosx'
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
       with:
