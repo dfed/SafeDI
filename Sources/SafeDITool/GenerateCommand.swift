@@ -219,7 +219,6 @@ struct Generate: AsyncParsableCommand {
 		}
 
 		if manifest != nil || combinedOutput != nil {
-
 			let filesWithUnexpectedNodes = dependentModuleInfo.compactMap(\.filesWithUnexpectedNodes).flatMap(\.self) + (module.filesWithUnexpectedNodes ?? [])
 			if !filesWithUnexpectedNodes.isEmpty {
 				// Write `#error(…)` instead of generated Swift so the
