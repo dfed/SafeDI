@@ -501,10 +501,14 @@ public actor DependencyTreeGenerator {
 				} else {
 					"Did you mean one of \(suggestedAlternatives.map { "`\($0.asSource)`" }.joined(separator: ", "))?"
 				}
-				// Exactly one near-match of the same type is an unambiguous repair: rename the identifier to it.
-				// A label-only match (different type) or several candidates leave the choice to the user.
+				// Offer the rename as a fix-it only when renaming is the actual repair. The suggestion list mixes
+				// same-type and same-label near-matches: the label check keeps the fix-it off the no-op case where
+				// only the type differs, and the least-qualified comparison is the one the suggester passed, so a
+				// qualified spelling such as `SharedModule.SharedThing` still gets the button. Several candidates
+				// leave the choice to the user.
 				let fixIts: [SourceDiagnostic.FixIt] = if suggestedAlternatives.count == 1,
-				                                          suggestedAlternatives[0].typeDescription == property.typeDescription,
+				                                          suggestedAlternatives[0].label != property.label,
+				                                          suggestedAlternatives[0].typeDescription.leastQualifiedTypeDescription == property.typeDescription.leastQualifiedTypeDescription,
 				                                          let identifierRange
 				{
 					[SourceDiagnostic.FixIt(range: identifierRange, replacement: suggestedAlternatives[0].label)]

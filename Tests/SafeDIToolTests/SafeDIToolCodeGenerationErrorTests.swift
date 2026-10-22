@@ -2545,6 +2545,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_offersNoFixIt_whenUnfulfillableReceivedPropertySuggestionMatchesLabelOnly() async {
+		// The suggestion shares the property's label, so renaming the identifier to it would change nothing;
+		// the fix-it gate rejects it on the label, before the type comparison is reached.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
@@ -2580,6 +2582,55 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					"""
 					@Instantiable
 					public struct OtherThing: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_offersFixItRenamingProperty_whenUnfulfillableReceivedPropertyTypeIsModuleQualified() async {
+		// The suggester matches on the least-qualified type, so `SharedModule.SharedThing` is suggested
+		// `shared: SharedThing`; the fix-it gate compares types the same way and still offers the rename.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):7:5: error: @Received property `shared2: SharedModule.SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: SharedThing`?
+				\(fixtures["Child.swift"]):7:19-7:26: fixit: shared
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(shared: SharedThing, child: Child) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let shared: SharedThing
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Child: Instantiable {
+					    public init(shared2: SharedModule.SharedThing) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let shared2: SharedModule.SharedThing
+					}
+					""",
+					"""
+					@Instantiable
+					public struct SharedThing: Instantiable {
 					    public init() {}
 					}
 					""",
