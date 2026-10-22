@@ -287,11 +287,21 @@ jobs:
         run: |
           xcrun swift build -c release --package-path "Examples/Example Package Integration"
           grep -q "DisabledEventLogger()" "$(find "Examples/Example Package Integration/.build/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
-      - name: Build Package Integration in release (xcodebuild)
+      # Xcode evaluates a package's `.when(configuration:)` defines as for a
+      # debug build whatever configuration it compiles, so it hands the plugin
+      # `DEBUG` in Release too and SafeDI scans the debug clause. The generated
+      # assertion must then stop the Release build. This step fails if the
+      # build succeeds (Xcode started reporting configuration-specific
+      # defines: update the Manual's Swift package plugin row) or if it fails
+      # for any other reason.
+      - name: Build Package Integration in release (xcodebuild, expects the assertion)
         run: |
           pushd "Examples/Example Package Integration"
-          xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -configuration Release -destination "platform=macOS" -derivedDataPath DerivedData
-          grep -q "DisabledEventLogger()" "$(find DerivedData/Build/Intermediates.noindex/BuildToolPluginIntermediates -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
+          if xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -configuration Release -destination "platform=macOS" -derivedDataPath DerivedData > xcodebuild-release.log 2>&1; then
+            echo "Expected the Release build to stop at SafeDI's compile-time assertion, but it succeeded." >&2
+            exit 1
+          fi
+          grep -q 'SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation' xcodebuild-release.log || { cat xcodebuild-release.log; exit 1; }
           popd
 
   spm-project-integration:
