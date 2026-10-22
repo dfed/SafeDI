@@ -195,8 +195,8 @@ private struct FileScan: Sendable {
 	}
 }
 
-private extension ModuleInfo {
-	init(_ fileScans: [FileScan]) {
+extension ModuleInfo {
+	fileprivate init(_ fileScans: [FileScan]) {
 		var conditionalCompilationDecisions = Set<ConditionalCompilationDecision>()
 		for fileScan in fileScans {
 			conditionalCompilationDecisions.formUnion(fileScan.conditionalCompilationDecisions)
