@@ -474,44 +474,32 @@ public actor DependencyTreeGenerator {
 			let root: TypeDescription
 			let suggestedAlternatives: [Property]
 
+			/// A single `error:` line. The suggestion or fix hint is folded into it rather than emitted as a
+			/// `note:` because it belongs at the same location, and Xcode drops notes from build-tool output.
 			var sourceDiagnostics: [SourceDiagnostic] {
 				let chain = ([instantiable.concreteInstantiable] + parentStack).reversed()
-				let error = SourceDiagnostic(
-					severity: .error,
-					location: declarationLocation,
-					message: "@\(Dependency.Source.receivedRawValue) property `\(property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(chain.map(\.asSource).joined(separator: " -> "))",
-				)
-				let notes: [SourceDiagnostic] = if property.typeDescription.isOptional,
-				                                   let nonOptionalAlternative = suggestedAlternatives.first(where: { alternative in
-				                                   	alternative.label == property.label
-				                                   		&& alternative.typeDescription == property.typeDescription.unwrapped
-				                                   })
+				let summary = "@\(Dependency.Source.receivedRawValue) property `\(property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(chain.map(\.asSource).joined(separator: " -> "))"
+				let hint = if property.typeDescription.isOptional,
+				              let nonOptionalAlternative = suggestedAlternatives.first(where: { alternative in
+				              	alternative.label == property.label
+				              		&& alternative.typeDescription == property.typeDescription.unwrapped
+				              })
 				{
-					[
-						SourceDiagnostic(
-							severity: .note,
-							location: declarationLocation,
-							message: "The non-optional `\(nonOptionalAlternative.asSource)` is available in chain. Did you mean to decorate this property with `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)`?",
-						),
-					]
+					"The non-optional `\(nonOptionalAlternative.asSource)` is available in chain. Did you mean to decorate this property with `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)`?"
 				} else if suggestedAlternatives.isEmpty {
-					[
-						SourceDiagnostic(
-							severity: .note,
-							location: declarationLocation,
-							message: "Declare `@\(Dependency.Source.instantiatedRawValue) let \(property.asSource)` on `\(root.asSource)` or on another type in the chain to fix.",
-						),
-					]
+					"Declare `@\(Dependency.Source.instantiatedRawValue) let \(property.asSource)` on `\(root.asSource)` or on another type in the chain to fix."
+				} else if suggestedAlternatives.count == 1 {
+					"Did you mean `\(suggestedAlternatives[0].asSource)`?"
 				} else {
-					suggestedAlternatives.map {
-						SourceDiagnostic(
-							severity: .note,
-							location: declarationLocation,
-							message: "Did you mean `\($0.asSource)`?",
-						)
-					}
+					"Did you mean one of \(suggestedAlternatives.map { "`\($0.asSource)`" }.joined(separator: ", "))?"
 				}
-				return [error] + notes
+				return [
+					SourceDiagnostic(
+						severity: .error,
+						location: declarationLocation,
+						message: "\(summary). \(hint)",
+					),
+				]
 			}
 		}
 

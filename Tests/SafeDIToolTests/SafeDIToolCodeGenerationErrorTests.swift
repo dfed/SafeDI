@@ -73,8 +73,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Grandchild.swift"]):6:5: error: @Received property `value: NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild
-				\(fixtures["Grandchild.swift"]):6:5: note: Did you mean `value: Grandchild.NestedType`?
+				\(fixtures["Grandchild.swift"]):6:5: error: @Received property `value: NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild. Did you mean `value: Grandchild.NestedType`?
 				"""
 			},
 		) {
@@ -119,8 +118,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Grandchild.swift"]):5:5: error: @Received property `value: Root.NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild
-				\(fixtures["Grandchild.swift"]):5:5: note: Did you mean `value: NestedType`?
+				\(fixtures["Grandchild.swift"]):5:5: error: @Received property `value: Root.NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild. Did you mean `value: NestedType`?
 				"""
 			},
 		) {
@@ -280,8 +278,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultNetworkService.swift"]):7:5: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService
-				\(fixtures["DefaultNetworkService.swift"]):7:5: note: Declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain to fix.
+				\(fixtures["DefaultNetworkService.swift"]):7:5: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService. Declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain to fix.
 				"""
 			},
 		) {
@@ -318,8 +315,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):5:5: error: @Received property `erasedType: any ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(fixtures["Child.swift"]):5:5: note: Did you mean `erasedType: ErasedType`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `erasedType: any ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `erasedType: ErasedType`?
 				"""
 			},
 		) {
@@ -363,8 +359,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):5:5: error: @Received property `erasedType: ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(fixtures["Child.swift"]):5:5: note: Did you mean `erasedType: any ErasedType`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `erasedType: ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `erasedType: any ErasedType`?
 				"""
 			},
 		) {
@@ -408,8 +403,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing!` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(fixtures["Child.swift"]):5:5: note: Did you mean `thing: Thing`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing!` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `thing: Thing`?
 				"""
 			},
 		) {
@@ -451,8 +445,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(fixtures["Child.swift"]):5:5: note: Did you mean `thing: Thing!`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `thing: Thing!`?
 				"""
 			},
 		) {
@@ -494,8 +487,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(fixtures["Child.swift"]):5:5: note: The non-optional `thing: Thing` is available in chain. Did you mean to decorate this property with `@Received(onlyIfAvailable: true)`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain: Root -> Child. The non-optional `thing: Thing` is available in chain. Did you mean to decorate this property with `@Received(onlyIfAvailable: true)`?
 				"""
 			},
 		) {
@@ -537,8 +529,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(fixtures["Child.swift"]):5:5: note: Did you mean `thing: Thing?`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `thing: Thing?`?
 				"""
 			},
 		) {
@@ -580,8 +571,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(fixtures["Child.swift"]):5:5: note: Did you mean `thing: Thing`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `thing: Thing`?
 				"""
 			},
 		) {
@@ -626,9 +616,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(fixtures["Child.swift"]):5:5: note: Did you mean `otherThing: OtherThing`?
-				\(fixtures["Child.swift"]):5:5: note: Did you mean `thing: Thing`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean one of `otherThing: OtherThing`, `thing: Thing`?
 				"""
 			},
 		) {
@@ -712,8 +700,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Grandchild.swift"]):3:5: error: @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
-				\(fixtures["Grandchild.swift"]):3:5: note: Declare `@Instantiated let blankie: Blankie` on `Root` or on another type in the chain to fix.
+				\(fixtures["Grandchild.swift"]):3:5: error: @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild. Declare `@Instantiated let blankie: Blankie` on `Root` or on another type in the chain to fix.
 				"""
 			},
 		) {
@@ -762,12 +749,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Grandchild.swift"]):3:5: error: @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
-				\(fixtures["Grandchild.swift"]):3:5: note: Declare `@Instantiated let blankie: Blankie` on `Root` or on another type in the chain to fix.
-				\(fixtures["Grandchild.swift"]):4:5: error: @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildA -> Grandchild
-				\(fixtures["Grandchild.swift"]):4:5: note: Did you mean `blankie: Blankie`?
-				\(fixtures["Grandchild.swift"]):4:5: error: @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
-				\(fixtures["Grandchild.swift"]):4:5: note: Declare `@Instantiated let blankie2: Blankie` on `Root` or on another type in the chain to fix.
+				\(fixtures["Grandchild.swift"]):3:5: error: @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild. Declare `@Instantiated let blankie: Blankie` on `Root` or on another type in the chain to fix.
+				\(fixtures["Grandchild.swift"]):4:5: error: @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildA -> Grandchild. Did you mean `blankie: Blankie`?
+				\(fixtures["Grandchild.swift"]):4:5: error: @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild. Declare `@Instantiated let blankie2: Blankie` on `Root` or on another type in the chain to fix.
 				"""
 			},
 		) {
@@ -942,8 +926,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultAuthService.swift"]):11:5: error: @Received property `networkService2: NetworkService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
-				\(fixtures["DefaultAuthService.swift"]):11:5: note: Did you mean `networkService: NetworkService`?
+				\(fixtures["DefaultAuthService.swift"]):11:5: error: @Received property `networkService2: NetworkService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService. Did you mean `networkService: NetworkService`?
 				"""
 			},
 		) {
@@ -996,8 +979,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultAuthService.swift"]):11:5: error: @Received property `networkService: NetworkService2` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
-				\(fixtures["DefaultAuthService.swift"]):11:5: note: Did you mean `networkService: NetworkService`?
+				\(fixtures["DefaultAuthService.swift"]):11:5: error: @Received property `networkService: NetworkService2` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService. Did you mean `networkService: NetworkService`?
 				"""
 			},
 		) {
@@ -1112,8 +1094,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):5:29: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> URLSessionWrapper
-				\(fixtures["File.swift"]):5:29: note: Declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain to fix.
+				\(fixtures["File.swift"]):5:29: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> URLSessionWrapper. Declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain to fix.
 				"""
 			},
 		) {
@@ -2271,8 +2252,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Grandchild.swift"]):7:5: error: @Received property `missing: Missing` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grandchild
-				\(fixtures["Grandchild.swift"]):7:5: note: Declare `@Instantiated let missing: Missing` on `Root` or on another type in the chain to fix.
+				\(fixtures["Grandchild.swift"]):7:5: error: @Received property `missing: Missing` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grandchild. Declare `@Instantiated let missing: Missing` on `Root` or on another type in the chain to fix.
 				"""
 			},
 		) {
