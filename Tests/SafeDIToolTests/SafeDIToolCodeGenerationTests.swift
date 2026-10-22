@@ -6953,6 +6953,50 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		#expect(configuration.sourceFilePath != nil)
 	}
 
+	// MARK: Instantiable ordering
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_ordersModuleInfoInstantiablesBySourceFilePath_whenFilesFinishParsingOutOfOrder() async throws {
+		// `AaaSlowRoot` is large enough that its parse task finishes after the
+		// tiny files that sort behind it, so completion order and path order differ.
+		let slowRootProperties = (0..<400).map { index in
+			"    @Instantiated let dependency\(index): Leaf\(index)"
+		}.joined(separator: "\n")
+		let slowRootInitializerParameters = (0..<400).map { index in
+			"dependency\(index): Leaf\(index)"
+		}.joined(separator: ", ")
+		let leafFiles = (0..<400).map { index in
+			"""
+			@Instantiable
+			public struct Leaf\(index): Instantiable {
+			    public init() {}
+			}
+			"""
+		}
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct AaaSlowRoot: Instantiable {
+				    public init(\(slowRootInitializerParameters)) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				\(slowRootProperties)
+				}
+				""",
+			] + leafFiles,
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
+		)
+
+		let sourceFilePaths = output.moduleInfo.instantiables.compactMap(\.sourceFilePath)
+		#expect(sourceFilePaths.count == 401)
+		#expect(sourceFilePaths == sourceFilePaths.sorted(), "Instantiables were not ordered by source file path: \(sourceFilePaths.prefix(5))")
+	}
+
 	// MARK: Additional Directories + Manifest Tests
 
 	@Test

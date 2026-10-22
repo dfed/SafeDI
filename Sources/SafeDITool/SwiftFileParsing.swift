@@ -137,7 +137,7 @@ func parseSwiftFiles(_ filePaths: Set<String>) async throws -> ModuleInfo {
 
 		return ModuleInfo(
 			imports: imports,
-			instantiables: instantiables,
+			instantiables: instantiables.sortedByDeclaration(),
 			configurations: configurations,
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.isEmpty ? nil : filesWithUnexpectedNodes,
 		)
