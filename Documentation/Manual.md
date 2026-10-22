@@ -837,7 +837,7 @@ Each integration reports the conditions it can see:
 
 | Integration | Reported conditions |
 |-------------|---------------------|
-| Swift package plugin | The target’s `swiftSettings` defines, including those with `.when(configuration:)` conditions, and trait defines. SwiftPM’s implicit `DEBUG` is **not** reported: to guard a production declaration with `DEBUG`, add `.define("DEBUG", .when(configuration: .debug))` to the target’s `swiftSettings`. |
+| Swift package plugin | The target’s `swiftSettings` defines, including those with `.when(configuration:)` conditions, and trait defines. SwiftPM’s implicit `DEBUG` is **not** reported: to guard a production declaration with `DEBUG`, add `.define("DEBUG", .when(configuration: .debug))` to the target’s `swiftSettings`, as the [Example Package Integration](../Examples/Example Package Integration/Package.swift) does. |
 | Xcode project plugin | None. Xcode does not expose build settings to build tool plugins, so every bare condition is inactive: a production declaration under `#if DEBUG` is never scanned, and a debug build then fails at the assertion (a root under such a block fails earlier, because the plugin's regex-based output discovery still declares its output file). Declare conditions that are always on with `#SafeDIConfiguration(activeCompilationConditions:)`. |
 | Bazel `safedi_compile` | `DEBUG` in the `dbg` and `fastbuild` compilation modes, plus the rule’s `defines` attribute, which must mirror the wrapped `swift_library.defines`. |
 | Tuist plugin and other prebuild scripts | The target’s `SWIFT_ACTIVE_COMPILATION_CONDITIONS` build setting, passed as `generate --active-compilation-conditions`. |
