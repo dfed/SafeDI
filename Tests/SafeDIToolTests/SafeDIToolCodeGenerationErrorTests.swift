@@ -2506,6 +2506,56 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_offersFixItRenamingParameterInnerName_whenUnfulfillableInstantiateParameterHasAnOuterLabel() async {
+		// The dependency's label is the parameter's inner name, so that is what the fix-it renames.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):3:36: error: @Received property `shared3: SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: SharedThing`?
+				\(fixtures["Child.swift"]):3:44-3:51: fixit: shared
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(shared: SharedThing, child: Child) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let shared: SharedThing
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					extension Child: Instantiable {
+					    public static func instantiate(shared2 shared3: SharedThing) -> Child {
+					        Child(shared: shared3)
+					    }
+					}
+
+					public struct Child {
+					    public init(shared: SharedThing) {}
+					}
+					""",
+					"""
+					@Instantiable
+					public struct SharedThing: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_offersNoFixIt_whenUnfulfillableReceivedPropertyHasSeveralSuggestionsOfSameType() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in

@@ -236,7 +236,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						property: argument.asProperty,
 						source: .received(onlyIfAvailable: false),
 						declarationLocation: declarationLocation(of: parameter),
-						identifierRange: sourceRange(of: parameter.firstName),
+						// The dependency's label is the inner name, so that is the token a rename fix-it replaces.
+						identifierRange: sourceRange(of: parameter.secondName ?? parameter.firstName),
 						typeAnnotationRange: sourceRange(of: parameter.type),
 					)
 				},
