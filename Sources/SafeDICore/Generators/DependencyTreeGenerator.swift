@@ -399,9 +399,18 @@ public actor DependencyTreeGenerator {
 		case noInstantiableFound(TypeDescription, referencedAt: [Dependency.DeclarationLocation])
 		case unfulfillableProperties([UnfulfillableProperty])
 		case instantiableHasForwardedProperty(property: Property, declarationLocation: Dependency.DeclarationLocation, instantiableWithForwardedProperty: Instantiable, forwardedDeclarations: [(property: Property, declarationLocation: Dependency.DeclarationLocation)], parent: Instantiable)
+		/// Reported at the dependency declaration that closes the cycle – the `@Instantiated` or `@Received`
+		/// property whose type is already on the instantiation stack – with a note at each member type’s
+		/// `@Instantiable` declaration. See `DependencyCycle`.
 		case constantDependencyCycleDetected(DependencyCycle)
+		/// Reported at the dependency declaration that closes the cycle, with a note at each member type’s
+		/// `@Instantiable` declaration. See `DependencyCycle`.
 		case partiallyLazyDependencyCycleDetected(DependencyCycle)
+		/// Reported at the `@Received` declaration on `directParent` that closes the cycle, with a note at each
+		/// member type’s `@Instantiable` declaration. See `DependencyCycle`.
 		case receivedInstantiatorDependencyCycleDetected(property: Property, directParent: TypeDescription, cycle: DependencyCycle)
+		/// Reported at the `@Received` declaration that closes the chain: the one that receives `instantiated` back
+		/// inside the tree `instantiated` creates. No notes; the chain is spelled out in the message.
 		case receivedConstantCycleDetected(instantiated: Property, receivedPropertyChain: [Property], declarationLocation: Dependency.DeclarationLocation)
 
 		var sourceDiagnostics: [SourceDiagnostic] {
@@ -504,9 +513,12 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		/// A dependency cycle, located at the dependency declaration that closes it.
+		/// A dependency cycle. The error is reported at the dependency declaration that closes the cycle – the edge
+		/// whose target type is already on the instantiation stack when validation reaches it – because that is the
+		/// property the user changes (to an `Instantiator`, or from `@Received` to `@Instantiated`) to break the cycle.
+		/// Each member type gets a note at its `@Instantiable` declaration so every file involved is navigable.
 		struct DependencyCycle {
-			/// The location of the dependency declaration whose target is already in the instantiation stack.
+			/// The location of the dependency declaration whose target type is already on the instantiation stack.
 			let declarationLocation: Dependency.DeclarationLocation
 			/// The property types in the cycle, innermost first, each paired with the location of the `@Instantiable`
 			/// declaration fulfilling it. `nil` when no `@Instantiable` is registered for the property’s type.
@@ -738,7 +750,7 @@ public actor DependencyTreeGenerator {
 			try throwIfInvalidCycle(
 				typesInCycle: typesInCycle,
 				property: propertyForDependency,
-				declarationLocation: dependency.requireDeclarationLocation(on: scope.instantiable),
+				declarationLocation: dependency.declarationLocation,
 				directParent: scope.instantiable.concreteInstantiable,
 				isReceived: dependency.source.isReceived,
 			)
@@ -790,12 +802,12 @@ public actor DependencyTreeGenerator {
 		directParent: TypeDescription,
 		isReceived: Bool,
 	) throws {
-		let cycle = try DependencyTreeGeneratorError.DependencyCycle(
+		let cycle = DependencyTreeGeneratorError.DependencyCycle(
 			declarationLocation: declarationLocation,
 			members: typesInCycle.map { typeDescription in
-				try (
+				(
 					typeDescription: typeDescription,
-					declarationLocation: typeDescriptionToFulfillingInstantiableMap[typeDescription.asInstantiatedType].map { try $0.requireDeclarationLocation() },
+					declarationLocation: typeDescriptionToFulfillingInstantiableMap[typeDescription.asInstantiatedType]?.declarationLocation,
 				)
 			},
 		)
@@ -1126,13 +1138,13 @@ public actor DependencyTreeGenerator {
 		if dependency.property.propertyType.isConstant {
 			let forwardedDependencies = instantiable.dependencies.filter(\.isForwarded)
 			guard forwardedDependencies.isEmpty else {
-				throw try DependencyTreeGeneratorError
+				throw DependencyTreeGeneratorError
 					.instantiableHasForwardedProperty(
 						property: dependency.property,
-						declarationLocation: dependency.requireDeclarationLocation(on: parent),
+						declarationLocation: dependency.declarationLocation,
 						instantiableWithForwardedProperty: instantiable,
 						forwardedDeclarations: forwardedDependencies.map {
-							try (property: $0.property, declarationLocation: $0.requireDeclarationLocation(on: instantiable))
+							(property: $0.property, declarationLocation: $0.declarationLocation)
 						},
 						parent: parent,
 					)
@@ -1165,10 +1177,10 @@ public actor DependencyTreeGenerator {
 					for requiredReceivedProperty in scope.requiredReceivedProperties {
 						let childProperty = requiredReceivedProperty.property
 						guard childProperty != property else {
-							throw try DependencyTreeGeneratorError.receivedConstantCycleDetected(
+							throw DependencyTreeGeneratorError.receivedConstantCycleDetected(
 								instantiated: property,
 								receivedPropertyChain: receivedPropertyStack + [childProperty],
-								declarationLocation: requiredReceivedProperty.dependency.requireDeclarationLocation(on: scope.instantiable),
+								declarationLocation: requiredReceivedProperty.declarationLocation,
 							)
 						}
 						guard !receivedPropertyStack.contains(childProperty) else {
@@ -1185,7 +1197,7 @@ public actor DependencyTreeGenerator {
 							try throwIfInvalidCycle(
 								typesInCycle: typesInCycle,
 								property: childProperty,
-								declarationLocation: requiredReceivedProperty.dependency.requireDeclarationLocation(on: scope.instantiable),
+								declarationLocation: requiredReceivedProperty.declarationLocation,
 								directParent: scope.instantiable.concreteInstantiable,
 								isReceived: !childProperty.propertyType.isConstant,
 							)
@@ -1215,9 +1227,9 @@ public actor DependencyTreeGenerator {
 					let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
 					if !parentContainsProperty, !propertyIsCreatedAtThisScope, property != nil {
 						// This property is in a dependency tree and is unfulfillable. Record the problem.
-						try unfulfillableProperties.insert(.init(
+						unfulfillableProperties.insert(.init(
 							property: receivedProperty,
-							declarationLocation: requiredReceivedProperty.dependency.requireDeclarationLocation(on: scope.instantiable),
+							declarationLocation: requiredReceivedProperty.declarationLocation,
 							instantiable: scope.instantiable,
 							parentStack: propertyStack.map(\.typeDescription) + [root],
 							root: root,
@@ -1249,7 +1261,7 @@ public actor DependencyTreeGenerator {
 				try throwIfInvalidCycle(
 					typesInCycle: typesInCycle,
 					property: propertyForDependency,
-					declarationLocation: dependency.requireDeclarationLocation(on: scope.instantiable),
+					declarationLocation: dependency.declarationLocation,
 					directParent: scope.instantiable.concreteInstantiable,
 					isReceived: dependency.source.isReceived,
 				)
@@ -1314,11 +1326,11 @@ public actor DependencyTreeGenerator {
 		for reachableTypeDescription in reachableTypeDescriptions.sorted() {
 			if typeDescriptionToFulfillingInstantiableMap[reachableTypeDescription] == nil {
 				// The map's values can hold the same instantiable under several keys, so collect into a set.
-				let referencingDeclarationLocations = try Set(
+				let referencingDeclarationLocations = Set(
 					typeDescriptionToFulfillingInstantiableMap.values.flatMap { instantiable in
-						try instantiable.dependencies
+						instantiable.dependencies
 							.filter { $0.isInstantiated && $0.asInstantiatedType == reachableTypeDescription }
-							.map { try $0.requireDeclarationLocation(on: instantiable) }
+							.map(\.declarationLocation)
 					},
 				)
 				throw DependencyTreeGeneratorError.noInstantiableFound(

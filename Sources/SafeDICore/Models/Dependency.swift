@@ -28,7 +28,7 @@ public struct Dependency: Codable, Hashable, Sendable {
 	public init(
 		property: Property,
 		source: Dependency.Source,
-		declarationLocation: DeclarationLocation? = nil,
+		declarationLocation: DeclarationLocation,
 	) {
 		self.property = property
 		self.source = source
@@ -51,9 +51,9 @@ public struct Dependency: Codable, Hashable, Sendable {
 	public let source: Source
 	/// The receiver’s type description as an `@Instantiable`-decorated type.
 	public let asInstantiatedType: TypeDescription
-	/// Where the dependency’s property is declared in source.
-	/// `nil` when the dependency was parsed without a file context (e.g. during macro expansion).
-	public let declarationLocation: DeclarationLocation?
+	/// Where the dependency’s property is declared in source. The macro expansion path records it against an
+	/// unnamed file; `SafeDITool` records it against the path it was given, which diagnostics print.
+	public let declarationLocation: DeclarationLocation
 
 	/// The file, line, and column at which a declaration begins.
 	public struct DeclarationLocation: Codable, Hashable, Sendable {

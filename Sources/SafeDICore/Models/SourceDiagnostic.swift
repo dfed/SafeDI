@@ -38,7 +38,9 @@ public struct SourceDiagnostic: Hashable, Sendable {
 	// MARK: Public
 
 	public enum Severity: String, Hashable, Sendable {
+		/// The problem itself. An error fails generation and is the first line printed for it.
 		case error
+		/// Detail that accompanies an error – a related location or a suggested fix. A note never stands alone.
 		case note
 	}
 

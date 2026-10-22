@@ -164,10 +164,14 @@ func executeSafeDIToolTest(
 		let tool = try Generate.parse(generateArguments)
 		// Call `generate()` rather than `run()`: `run()` prints located errors in compiler format and
 		// rethrows them as an `ExitCode`, which would hide the error from the assertion helpers.
+		let fixtures = FixturePaths(
+			fileNames: swiftFiles.map(\.lastPathComponent),
+			paths: inputSwiftFilePaths,
+		)
 		do {
 			try await tool.generate()
 		} catch {
-			throw SafeDIToolTestError(underlyingError: error, inputSwiftFilePaths: inputSwiftFilePaths)
+			throw SafeDIToolTestError(underlyingError: error, fixtures: fixtures)
 		}
 
 		filesToDelete.append(swiftFileCSV)
@@ -214,8 +218,7 @@ func executeSafeDIToolTest(
 		return try TestOutput(
 			moduleInfo: JSONDecoder().decode(ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
 			moduleInfoOutputPath: moduleInfoOutput.relativePath,
-			inputSwiftFiles: swiftFiles,
-			inputSwiftFilePaths: inputSwiftFilePaths,
+			fixtures: fixtures,
 			generatedFiles: generatedFiles,
 			dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil,
 			combinedOutput: buildCombinedOutput
@@ -229,14 +232,8 @@ func executeSafeDIToolTest(
 struct TestOutput {
 	let moduleInfo: ModuleInfo
 	let moduleInfoOutputPath: String
-	/// The fixture files written for `swiftFileContent`, in the same order as the content was provided.
-	/// Each file is named after the `@Instantiable` type it declares, so generated `#sourceLocation`
-	/// directives can be asserted against `inputSwiftFiles[index].relativePath`.
-	let inputSwiftFiles: [URL]
-	/// The paths of `inputSwiftFiles` exactly as they were written to the CSV the tool read:
-	/// absolute by default, or relative to the current directory when the test passed
-	/// `inputPathsRelativeToCurrentDirectory: true`.
-	let inputSwiftFilePaths: [String]
+	/// The fixture files written for `swiftFileContent`, looked up by file name.
+	let fixtures: FixturePaths
 	let generatedFiles: [String: String]?
 	let dotTree: String?
 	let combinedOutput: String?
@@ -320,12 +317,40 @@ struct StubFileFinder: FileFinder {
 	private let fallbackFiles: [URL]
 }
 
+/// The fixture files `executeSafeDIToolTest` wrote for `swiftFileContent`, looked up by file name.
+///
+/// Each file is named after the `@Instantiable` type its snippet declares (falling back to the first
+/// declared type, then to `File`, with `_2`, `_3`… suffixes for repeats), so a test names the file it means
+/// rather than relying on the order of its snippets. Paths are exactly as they were written to the CSV
+/// the tool read: absolute by default, or relative to the current directory when the test passed
+/// `inputPathsRelativeToCurrentDirectory: true`.
+struct FixturePaths {
+	init(fileNames: [String], paths: [String]) {
+		pathsByFileName = Dictionary(uniqueKeysWithValues: zip(fileNames, paths))
+	}
+
+	/// The path of the named fixture. A name the harness did not write records an issue listing the
+	/// files it did write and returns a sentinel, so the assertion fails readably instead of crashing.
+	subscript(fileName: String, sourceLocation sourceLocation: SourceLocation = #_sourceLocation) -> String {
+		if let path = pathsByFileName[fileName] {
+			return path
+		} else {
+			Issue.record(
+				"No fixture named \(fileName). The harness wrote: \(pathsByFileName.keys.sorted().joined(separator: ", "))",
+				sourceLocation: sourceLocation,
+			)
+			return "<missing fixture \(fileName)>"
+		}
+	}
+
+	private let pathsByFileName: [String: String]
+}
+
 /// An error thrown by `executeSafeDIToolTest` when `generate` fails. Carries the fixture file paths exactly as
 /// the tool read them so diagnostics that cite those paths can be asserted in full.
 struct SafeDIToolTestError: Error, CustomStringConvertible {
 	let underlyingError: any Error
-	/// The paths of the fixture files written for `swiftFileContent`, in the same order as the content was provided.
-	let inputSwiftFilePaths: [String]
+	let fixtures: FixturePaths
 
 	var description: String {
 		"\(underlyingError)"
@@ -346,10 +371,10 @@ func assertThrowsError(
 }
 
 /// Asserts that `block` throws an error whose description – the compiler-formatted diagnostics for a
-/// `SourceLocatedError` – exactly matches `expectedDiagnostics`, which is given the fixture file paths the
-/// tool read so it can cite them in `<path>:<line>:<column>` locations.
+/// `SourceLocatedError` – exactly matches `expectedDiagnostics`, which is given the fixture files the
+/// tool read so it can cite their paths in `<path>:<line>:<column>` locations.
 func assertThrowsError(
-	diagnostics expectedDiagnostics: (_ inputSwiftFilePaths: [String]) -> String,
+	diagnostics expectedDiagnostics: (_ fixtures: FixturePaths) -> String,
 	sourceLocation: SourceLocation = #_sourceLocation,
 	block: () async throws -> some Sendable,
 ) async {
@@ -357,7 +382,7 @@ func assertThrowsError(
 		_ = try await block()
 		Issue.record("Did not throw error!", sourceLocation: sourceLocation)
 	} catch let error as SafeDIToolTestError {
-		#expect(expectedDiagnostics(error.inputSwiftFilePaths) == "\(error.underlyingError)", sourceLocation: sourceLocation)
+		#expect(expectedDiagnostics(error.fixtures) == "\(error.underlyingError)", sourceLocation: sourceLocation)
 	} catch {
 		Issue.record("Threw an error that does not carry fixture paths: \(error)", sourceLocation: sourceLocation)
 	}

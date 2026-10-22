@@ -110,8 +110,9 @@ struct SafeDIConfigurationVisitorTests {
 	// MARK: Private
 
 	private func extractConfiguration(from source: String) -> SafeDIConfiguration {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: source))
+		let syntaxTree = Parser.parse(source: source)
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		return fileVisitor.configurations.first ?? SafeDIConfiguration(
 			additionalImportedModules: [],
 			additionalDirectoriesToInclude: [],
@@ -122,8 +123,7 @@ struct SafeDIConfigurationVisitorTests {
 struct FileVisitorTests {
 	@Test
 	func walk_findsInstantiable() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		import UIKit
 
 		@Instantiable
@@ -136,70 +136,8 @@ struct FileVisitorTests {
 
 		    @Received let networkService: NetworkService
 		}
-		"""))
-		#expect(fileVisitor.instantiables == [
-			Instantiable(
-				instantiableType: .simple(name: "LoggedInViewController"),
-				isRoot: false,
-				initializer: Initializer(
-					arguments: [
-						.init(
-							innerLabel: "user",
-							typeDescription: .simple(name: "User"),
-							defaultValueExpression: nil,
-						),
-						.init(
-							innerLabel: "networkService",
-							typeDescription: .simple(name: "NetworkService"),
-							defaultValueExpression: nil,
-						),
-					],
-				),
-				additionalInstantiables: nil,
-				dependencies: [
-					Dependency(
-						property: Property(
-							label: "user",
-							typeDescription: .simple(name: "User"),
-						),
-						source: .forwarded,
-					),
-					Dependency(
-						property: Property(
-							label: "networkService",
-							typeDescription: .simple(name: "NetworkService"),
-						),
-						source: .received(onlyIfAvailable: false),
-					),
-				],
-				declarationType: .classType,
-			),
-		])
-	}
-
-	@Test
-	func walk_recordsDependencyDeclarationLocations_whenSourceLocationConverterIsProvided() {
-		let syntaxTree = Parser.parse(source: """
-		import UIKit
-
-		@Instantiable
-		public final class LoggedInViewController: UIViewController {
-		    public init(user: User, networkService: NetworkService) {
-		        fatalError("SafeDI doesn't inspect the initializer body")
-		    }
-
-		    @Forwarded private let user: User
-
-		    @Received
-		    let networkService: NetworkService
-		}
 		""")
-		let fileVisitor = FileVisitor(
-			sourceLocationConverter: SourceLocationConverter(
-				fileName: "Sources/App/LoggedInViewController.swift",
-				tree: syntaxTree,
-			),
-		)
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.instantiables == [
 			Instantiable(
@@ -227,11 +165,7 @@ struct FileVisitorTests {
 							typeDescription: .simple(name: "User"),
 						),
 						source: .forwarded,
-						declarationLocation: Dependency.DeclarationLocation(
-							filePath: "Sources/App/LoggedInViewController.swift",
-							line: 9,
-							column: 5,
-						),
+						declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5),
 					),
 					Dependency(
 						property: Property(
@@ -239,27 +173,18 @@ struct FileVisitorTests {
 							typeDescription: .simple(name: "NetworkService"),
 						),
 						source: .received(onlyIfAvailable: false),
-						declarationLocation: Dependency.DeclarationLocation(
-							filePath: "Sources/App/LoggedInViewController.swift",
-							line: 11,
-							column: 5,
-						),
+						declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 5),
 					),
 				],
 				declarationType: .classType,
-				declarationLocation: Dependency.DeclarationLocation(
-					filePath: "Sources/App/LoggedInViewController.swift",
-					line: 3,
-					column: 1,
-				),
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 1),
 			),
 		])
 	}
 
 	@Test
 	func walk_findsMultipleInstantiables() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		@Instantiable
 		public final class LoggedInViewController: UIViewController {
 		    public init(user: User, networkService: NetworkService) {
@@ -275,7 +200,9 @@ struct FileVisitorTests {
 		public struct SomeOtherInstantiable {
 		    public init() {}
 		}
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.instantiables == [
 			Instantiable(
 				instantiableType: .simple(name: "LoggedInViewController"),
@@ -302,6 +229,7 @@ struct FileVisitorTests {
 							typeDescription: .simple(name: "User"),
 						),
 						source: .forwarded,
+						declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 5),
 					),
 					Dependency(
 						property: Property(
@@ -309,9 +237,11 @@ struct FileVisitorTests {
 							typeDescription: .simple(name: "NetworkService"),
 						),
 						source: .received(onlyIfAvailable: false),
+						declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5),
 					),
 				],
 				declarationType: .classType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 			Instantiable(
 				instantiableType: .simple(name: "SomeOtherInstantiable"),
@@ -320,14 +250,14 @@ struct FileVisitorTests {
 				additionalInstantiables: nil,
 				dependencies: [],
 				declarationType: .structType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 12, column: 1),
 			),
 		])
 	}
 
 	@Test
 	func walk_findsInstantiableNestedInOuterInstantiableConcreteDeclaration() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		@Instantiable(fulfillingAdditionalTypes: [SomeProtocol.self])
 		public struct OuterLevel: SomeProtocol {
 		    public init() {}
@@ -337,7 +267,9 @@ struct FileVisitorTests {
 		        public init() {}
 		    }
 		}
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.instantiables == [
 			Instantiable(
 				instantiableType: .simple(name: "OuterLevel"),
@@ -348,6 +280,7 @@ struct FileVisitorTests {
 				],
 				dependencies: [],
 				declarationType: .structType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
@@ -356,14 +289,14 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
 			),
 		])
 	}
 
 	@Test
 	func walk_findsInstantiableNestedInOuterExtendedInstantiable() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		extension OuterLevel {
 		    public static func instantiate() -> OuterLevel { fatalError() }
 
@@ -372,7 +305,9 @@ struct FileVisitorTests {
 		        public init() {}
 		    }
 		}
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.instantiables == [
 			Instantiable(
 				instantiableType: .simple(name: "OuterLevel"),
@@ -381,6 +316,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .extensionType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
@@ -389,14 +325,14 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 5),
 			),
 		])
 	}
 
 	@Test
 	func walk_findsInstantiablesNestedInOuterExtendedInstantiable() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		extension OuterLevel {
 		    public static func instantiate() -> OuterLevel { fatalError() }
 
@@ -416,7 +352,9 @@ struct FileVisitorTests {
 		        public init() {}
 		    }
 		}
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.instantiables == [
 			Instantiable(
 				instantiableType: .simple(name: "OuterLevel"),
@@ -425,6 +363,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .extensionType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel1", parentType: .simple(name: "OuterLevel")),
@@ -433,6 +372,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .actorType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 5),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel2", parentType: .simple(name: "OuterLevel")),
@@ -441,6 +381,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 8, column: 5),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel3", parentType: .simple(name: "OuterLevel")),
@@ -449,21 +390,23 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 12, column: 5),
 			),
 		])
 	}
 
 	@Test
 	func walk_findsInstantiableNestedWithinEnum() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		public enum OuterLevel {
 		    @Instantiable
 		    public struct InnerLevel {
 		        public init() {}
 		    }
 		}
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.instantiables == [
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
@@ -472,19 +415,21 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 5),
 			),
 		])
 	}
 
 	@Test
 	func walk_findsSafeDIConfiguration() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		#SafeDIConfiguration(
 		    additionalImportedModules: ["ModuleA", "ModuleB"],
 		    additionalDirectoriesToInclude: ["DirA"]
 		)
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.configurations == [
 			SafeDIConfiguration(
 				additionalImportedModules: ["ModuleA", "ModuleB"],
@@ -496,10 +441,11 @@ struct FileVisitorTests {
 
 	@Test
 	func walk_findsSafeDIConfigurationWithNoArguments() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		#SafeDIConfiguration()
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.configurations == [
 			SafeDIConfiguration(
 				additionalImportedModules: [],
@@ -510,13 +456,14 @@ struct FileVisitorTests {
 
 	@Test
 	func walk_findsSafeDIConfigurationWithEmptyArrays() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		#SafeDIConfiguration(
 		    additionalImportedModules: [],
 		    additionalDirectoriesToInclude: []
 		)
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.configurations == [
 			SafeDIConfiguration(
 				additionalImportedModules: [],
@@ -527,13 +474,14 @@ struct FileVisitorTests {
 
 	@Test
 	func walk_findsSafeDIConfigurationWithNonLiteralValues() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		#SafeDIConfiguration(
 		    additionalImportedModules: someVariable,
 		    additionalDirectoriesToInclude: anotherVariable
 		)
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.configurations == [
 			SafeDIConfiguration(
 				additionalImportedModules: [],
@@ -544,8 +492,7 @@ struct FileVisitorTests {
 
 	@Test
 	func walk_findsSafeDIConfigurationAlongsideInstantiable() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		#SafeDIConfiguration(
 		    additionalImportedModules: ["ModuleA"]
 		)
@@ -554,7 +501,9 @@ struct FileVisitorTests {
 		public struct SomeService {
 		    public init() {}
 		}
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.configurations == [
 			SafeDIConfiguration(
 				additionalImportedModules: ["ModuleA"],
@@ -569,27 +518,28 @@ struct FileVisitorTests {
 				additionalInstantiables: nil,
 				dependencies: [],
 				declarationType: .structType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 1),
 			),
 		])
 	}
 
 	@Test
 	func walk_ignoresSafeDIConfigurationInsideType() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		struct Outer {
 		    #SafeDIConfiguration(
 		        additionalImportedModules: ["ModuleA"]
 		    )
 		}
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.configurations.isEmpty)
 	}
 
 	@Test
 	func walk_findsDeeplyNestedInstantiables() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		public enum Nested {
 		    @Instantiable
 		    public struct Nested {
@@ -686,7 +636,9 @@ struct FileVisitorTests {
 		        }
 		    }
 		}
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.instantiables == [
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .simple(name: "Nested")),
@@ -703,6 +655,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 5),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))),
@@ -719,6 +672,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .actorType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 9),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))),
@@ -735,6 +689,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 10, column: 13),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))),
@@ -751,6 +706,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .actorType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 14, column: 17),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))),
@@ -767,6 +723,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 18, column: 21),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))),
@@ -783,6 +740,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 22, column: 25),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))),
@@ -799,6 +757,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 26, column: 29),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))),
@@ -815,6 +774,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .actorType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 30, column: 33),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))),
@@ -831,6 +791,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .actorType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 34, column: 37),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))),
@@ -847,6 +808,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 38, column: 41),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))),
@@ -863,6 +825,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 42, column: 45),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))),
@@ -879,6 +842,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 46, column: 49),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))),
@@ -895,6 +859,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 50, column: 53),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))),
@@ -911,6 +876,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 54, column: 57),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))),
@@ -927,6 +893,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 58, column: 61),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))))),
@@ -943,6 +910,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 62, column: 65),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))))),
@@ -959,6 +927,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 66, column: 69),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))))))),
@@ -975,6 +944,7 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 70, column: 73),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))))))),
@@ -991,19 +961,21 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 74, column: 77),
 			),
 		])
 	}
 
 	@Test
 	func walk_parsesGenerateMockTrue() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		@Instantiable(generateMock: true)
 		public struct OptedIn {
 		    public init() {}
 		}
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.instantiables == [
 			Instantiable(
 				instantiableType: .simple(name: "OptedIn"),
@@ -1013,19 +985,21 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .structType,
 				generateMock: true,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 		])
 	}
 
 	@Test
 	func walk_parsesGenerateMockFalse() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		@Instantiable(generateMock: false)
 		public struct OptedOut {
 		    public init() {}
 		}
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.instantiables == [
 			Instantiable(
 				instantiableType: .simple(name: "OptedOut"),
@@ -1035,19 +1009,21 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .structType,
 				generateMock: false,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 		])
 	}
 
 	@Test
 	func walk_parsesGenerateMockDefault() {
-		let fileVisitor = FileVisitor()
-		fileVisitor.walk(Parser.parse(source: """
+		let syntaxTree = Parser.parse(source: """
 		@Instantiable
 		public struct DefaultType {
 		    public init() {}
 		}
-		"""))
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
 		#expect(fileVisitor.instantiables == [
 			Instantiable(
 				instantiableType: .simple(name: "DefaultType"),
@@ -1056,6 +1032,7 @@ struct FileVisitorTests {
 				additionalInstantiables: nil,
 				dependencies: [],
 				declarationType: .structType,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 		])
 	}

@@ -135,7 +135,12 @@ public struct InstantiableMacro: MemberMacro {
 				))
 			}
 
-			let visitor = InstantiableVisitor(declarationType: .concreteDecl)
+			// The macro never reads the recorded locations, but the visitor always records them,
+			// so give it a converter over the detached declaration it is about to walk.
+			let visitor = InstantiableVisitor(
+				declarationType: .concreteDecl,
+				sourceLocationConverter: SourceLocationConverter(fileName: "", tree: Syntax(concreteDeclaration).root),
+			)
 			visitor.walk(concreteDeclaration)
 			for diagnostic in visitor.diagnostics {
 				context.diagnose(diagnostic)
@@ -782,7 +787,12 @@ public struct InstantiableMacro: MemberMacro {
 				))
 			}
 
-			let visitor = InstantiableVisitor(declarationType: .extensionDecl)
+			// The macro never reads the recorded locations, but the visitor always records them,
+			// so give it a converter over the detached declaration it is about to walk.
+			let visitor = InstantiableVisitor(
+				declarationType: .extensionDecl,
+				sourceLocationConverter: SourceLocationConverter(fileName: "", tree: Syntax(extensionDeclaration).root),
+			)
 			visitor.walk(extensionDeclaration)
 			for diagnostic in visitor.diagnostics {
 				context.diagnose(diagnostic)

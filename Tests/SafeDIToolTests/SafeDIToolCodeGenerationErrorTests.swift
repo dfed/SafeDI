@@ -43,9 +43,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithPropertyWithUnknownFulfilledType_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[0]):5:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `DoesNotExist`
+				\(fixtures["RootViewController.swift"]):5:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `DoesNotExist`
 				"""
 			},
 		) {
@@ -71,10 +71,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithPropertyWithUnknownTypeWithDotSuffixOfFulfillableType_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):6:5: error: @Received property `value: NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild
-				\(inputSwiftFilePaths[2]):6:5: note: Did you mean `value: Grandchild.NestedType`?
+				\(fixtures["Grandchild.swift"]):6:5: error: @Received property `value: NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild
+				\(fixtures["Grandchild.swift"]):6:5: note: Did you mean `value: Grandchild.NestedType`?
 				"""
 			},
 		) {
@@ -117,10 +117,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithPropertyWithUnknownTypeWithDotPrefixOfFulfillableType_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):5:5: error: @Received property `value: Root.NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild
-				\(inputSwiftFilePaths[2]):5:5: note: Did you mean `value: NestedType`?
+				\(fixtures["Grandchild.swift"]):5:5: error: @Received property `value: Root.NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild
+				\(fixtures["Grandchild.swift"]):5:5: note: Did you mean `value: NestedType`?
 				"""
 			},
 		) {
@@ -163,10 +163,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithMultipleInstantiateMethodsForTheSameTypeWithSameParameters_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[1]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `Container<Int>`
-				\(inputSwiftFilePaths[2]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `Container<Int>`
+				\(fixtures["File_2.swift"]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `Container<Int>`
+				\(fixtures["File_3.swift"]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `Container<Int>`
 				"""
 			},
 		) {
@@ -202,10 +202,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithMultipleInstantiateMethodsForTheSameTypeWithDifferentParameters_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[1]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `Container<Int>`
-				\(inputSwiftFilePaths[2]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `Container<Int>`
+				\(fixtures["File_2.swift"]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `Container<Int>`
+				\(fixtures["File_3.swift"]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `Container<Int>`
 				"""
 			},
 		) {
@@ -241,9 +241,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableInstantiatedProperty_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[0]):7:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `URLSession`
+				\(fixtures["DefaultNetworkService.swift"]):7:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `URLSession`
 				"""
 			},
 		) {
@@ -278,10 +278,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableReceivedProperty_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[0]):7:5: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService
-				\(inputSwiftFilePaths[0]):7:5: note: Declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain to fix.
+				\(fixtures["DefaultNetworkService.swift"]):7:5: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService
+				\(fixtures["DefaultNetworkService.swift"]):7:5: note: Declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain to fix.
 				"""
 			},
 		) {
@@ -316,10 +316,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToUnexpectedAny_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):5:5: error: @Received property `erasedType: any ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(inputSwiftFilePaths[2]):5:5: note: Did you mean `erasedType: ErasedType`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `erasedType: any ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child
+				\(fixtures["Child.swift"]):5:5: note: Did you mean `erasedType: ErasedType`?
 				"""
 			},
 		) {
@@ -361,10 +361,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToDroppedAny_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):5:5: error: @Received property `erasedType: ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(inputSwiftFilePaths[2]):5:5: note: Did you mean `erasedType: any ErasedType`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `erasedType: ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child
+				\(fixtures["Child.swift"]):5:5: note: Did you mean `erasedType: any ErasedType`?
 				"""
 			},
 		) {
@@ -406,10 +406,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToUnexpectedForceUnwrap_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):5:5: error: @Received property `thing: Thing!` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(inputSwiftFilePaths[2]):5:5: note: Did you mean `thing: Thing`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing!` is not @Instantiated or @Forwarded in chain: Root -> Child
+				\(fixtures["Child.swift"]):5:5: note: Did you mean `thing: Thing`?
 				"""
 			},
 		) {
@@ -449,10 +449,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToDroppedForceUnwrap_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):5:5: error: @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(inputSwiftFilePaths[2]):5:5: note: Did you mean `thing: Thing!`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain: Root -> Child
+				\(fixtures["Child.swift"]):5:5: note: Did you mean `thing: Thing!`?
 				"""
 			},
 		) {
@@ -492,10 +492,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToUnexpectedOptional_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):5:5: error: @Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(inputSwiftFilePaths[2]):5:5: note: The non-optional `thing: Thing` is available in chain. Did you mean to decorate this property with `@Received(onlyIfAvailable: true)`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain: Root -> Child
+				\(fixtures["Child.swift"]):5:5: note: The non-optional `thing: Thing` is available in chain. Did you mean to decorate this property with `@Received(onlyIfAvailable: true)`?
 				"""
 			},
 		) {
@@ -535,10 +535,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToDroppedOptional_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):5:5: error: @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(inputSwiftFilePaths[2]):5:5: note: Did you mean `thing: Thing?`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain: Root -> Child
+				\(fixtures["Child.swift"]):5:5: note: Did you mean `thing: Thing?`?
 				"""
 			},
 		) {
@@ -578,10 +578,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToIncorrectType_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):5:5: error: @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(inputSwiftFilePaths[2]):5:5: note: Did you mean `thing: Thing`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain: Root -> Child
+				\(fixtures["Child.swift"]):5:5: note: Did you mean `thing: Thing`?
 				"""
 			},
 		) {
@@ -624,11 +624,11 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToIncorrectTypeOrLabel_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):5:5: error: @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain: Root -> Child
-				\(inputSwiftFilePaths[2]):5:5: note: Did you mean `otherThing: OtherThing`?
-				\(inputSwiftFilePaths[2]):5:5: note: Did you mean `thing: Thing`?
+				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain: Root -> Child
+				\(fixtures["Child.swift"]):5:5: note: Did you mean `otherThing: OtherThing`?
+				\(fixtures["Child.swift"]):5:5: note: Did you mean `thing: Thing`?
 				"""
 			},
 		) {
@@ -672,10 +672,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithInstantiatedPropertyWithForwardedArgument_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[1]):5:5: error: Property `networkService: NetworkService` on RootViewController has at least one @Forwarded property. Property should instead be of type `Instantiator<DefaultNetworkService>`.
-				\(inputSwiftFilePaths[0]):7:5: note: @Forwarded property `urlSession: URLSession` is declared here
+				\(fixtures["RootViewController.swift"]):5:5: error: Property `networkService: NetworkService` on RootViewController has at least one @Forwarded property. Property should instead be of type `Instantiator<DefaultNetworkService>`.
+				\(fixtures["DefaultNetworkService.swift"]):7:5: note: @Forwarded property `urlSession: URLSession` is declared here
 				"""
 			},
 		) {
@@ -710,10 +710,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDiamondDependencyWhereAReceivedPropertyIsUnfulfillableOnOneBranch_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[3]):3:5: error: @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
-				\(inputSwiftFilePaths[3]):3:5: note: Declare `@Instantiated let blankie: Blankie` on `Root` or on another type in the chain to fix.
+				\(fixtures["Grandchild.swift"]):3:5: error: @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
+				\(fixtures["Grandchild.swift"]):3:5: note: Declare `@Instantiated let blankie: Blankie` on `Root` or on another type in the chain to fix.
 				"""
 			},
 		) {
@@ -760,14 +760,14 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDiamondDependencyWhereMultipleReceivedPropertiesAreUnfulfillableOnOneBranch_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[3]):3:5: error: @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
-				\(inputSwiftFilePaths[3]):3:5: note: Declare `@Instantiated let blankie: Blankie` on `Root` or on another type in the chain to fix.
-				\(inputSwiftFilePaths[3]):4:5: error: @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildA -> Grandchild
-				\(inputSwiftFilePaths[3]):4:5: note: Did you mean `blankie: Blankie`?
-				\(inputSwiftFilePaths[3]):4:5: error: @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
-				\(inputSwiftFilePaths[3]):4:5: note: Declare `@Instantiated let blankie2: Blankie` on `Root` or on another type in the chain to fix.
+				\(fixtures["Grandchild.swift"]):3:5: error: @Received property `blankie: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
+				\(fixtures["Grandchild.swift"]):3:5: note: Declare `@Instantiated let blankie: Blankie` on `Root` or on another type in the chain to fix.
+				\(fixtures["Grandchild.swift"]):4:5: error: @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildA -> Grandchild
+				\(fixtures["Grandchild.swift"]):4:5: note: Did you mean `blankie: Blankie`?
+				\(fixtures["Grandchild.swift"]):4:5: error: @Received property `blankie2: Blankie` is not @Instantiated or @Forwarded in chain: Root -> ChildB -> Grandchild
+				\(fixtures["Grandchild.swift"]):4:5: note: Declare `@Instantiated let blankie2: Blankie` on `Root` or on another type in the chain to fix.
 				"""
 			},
 		) {
@@ -815,10 +815,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithInstantiatedPropertyThatRefersToCurrentInstantiable_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):13:5: error: Dependency cycle detected: AuthService -> AuthService
-				\(inputSwiftFilePaths[2]):5:1: note: `AuthService` is part of the cycle
+				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency cycle detected: AuthService -> AuthService
+				\(fixtures["DefaultAuthService.swift"]):5:1: note: `AuthService` is part of the cycle
 				"""
 			},
 		) {
@@ -878,9 +878,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithReceivedPropertyThatRefersToCurrentInstantiable_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):13:5: error: Dependency received in same chain it is instantiated: @Instantiated authService: AuthService -> @Received authService: AuthService
+				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency received in same chain it is instantiated: @Instantiated authService: AuthService -> @Received authService: AuthService
 				"""
 			},
 		) {
@@ -940,10 +940,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableAliasedReceivedPropertyName_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):11:5: error: @Received property `networkService2: NetworkService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
-				\(inputSwiftFilePaths[2]):11:5: note: Did you mean `networkService: NetworkService`?
+				\(fixtures["DefaultAuthService.swift"]):11:5: error: @Received property `networkService2: NetworkService` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
+				\(fixtures["DefaultAuthService.swift"]):11:5: note: Did you mean `networkService: NetworkService`?
 				"""
 			},
 		) {
@@ -994,10 +994,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableAliasedReceivedPropertyType_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):11:5: error: @Received property `networkService: NetworkService2` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
-				\(inputSwiftFilePaths[2]):11:5: note: Did you mean `networkService: NetworkService`?
+				\(fixtures["DefaultAuthService.swift"]):11:5: error: @Received property `networkService: NetworkService2` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultAuthService
+				\(fixtures["DefaultAuthService.swift"]):11:5: note: Did you mean `networkService: NetworkService`?
 				"""
 			},
 		) {
@@ -1048,9 +1048,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWhereAliasedReceivedPropertyRefersToCurrentInstantiable_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):13:5: error: Dependency received in same chain it is instantiated: @Instantiated authService: AuthService -> @Received authService: AuthService
+				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency received in same chain it is instantiated: @Instantiated authService: AuthService -> @Received authService: AuthService
 				"""
 			},
 		) {
@@ -1110,10 +1110,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableReceivedPropertyOnExtendedInstantiatedType_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[0]):5:29: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> URLSessionWrapper
-				\(inputSwiftFilePaths[0]):5:29: note: Declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain to fix.
+				\(fixtures["File.swift"]):5:29: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> URLSessionWrapper
+				\(fixtures["File.swift"]):5:29: note: Declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain to fix.
 				"""
 			},
 		) {
@@ -1148,10 +1148,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDuplicateInstantiableNames_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[0]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(inputSwiftFilePaths[1]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["RootViewController.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["RootViewController_2.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 				"""
 			},
 		) {
@@ -1180,10 +1180,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDuplicateInstantiableNamesWhereOneIsRoot_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[0]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(inputSwiftFilePaths[1]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["RootViewController.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["RootViewController_2.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 				"""
 			},
 		) {
@@ -1212,10 +1212,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtension_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[1]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(inputSwiftFilePaths[0]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["File.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["RootViewController.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 				"""
 			},
 		) {
@@ -1248,10 +1248,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtensionWhereDeclarationIsRoot_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[1]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(inputSwiftFilePaths[0]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["File.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["RootViewController.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 				"""
 			},
 		) {
@@ -1284,10 +1284,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDuplicateInstantiableNamesViaDeclarationAndExtensionWhereExtensionIsRoot_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[1]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(inputSwiftFilePaths[0]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["File.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["RootViewController.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
 				"""
 			},
 		) {
@@ -1320,10 +1320,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDuplicateInstantiableNamesViaExtension_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[0]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UserDefaults`
-				\(inputSwiftFilePaths[1]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UserDefaults`
+				\(fixtures["File.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UserDefaults`
+				\(fixtures["File_2.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UserDefaults`
 				"""
 			},
 		) {
@@ -1360,10 +1360,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDuplicateInstantiableFulfillment_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[0]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UIViewController`
-				\(inputSwiftFilePaths[1]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UIViewController`
+				\(fixtures["RootViewController.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UIViewController`
+				\(fixtures["SplashViewController.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UIViewController`
 				"""
 			},
 		) {
@@ -1392,12 +1392,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitialized_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[3]):3:5: error: Dependency cycle detected: A -> B -> C -> A
-				\(inputSwiftFilePaths[1]):1:1: note: `A` is part of the cycle
-				\(inputSwiftFilePaths[2]):1:1: note: `B` is part of the cycle
-				\(inputSwiftFilePaths[3]):1:1: note: `C` is part of the cycle
+				\(fixtures["C.swift"]):3:5: error: Dependency cycle detected: A -> B -> C -> A
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
 				"""
 			},
 		) {
@@ -1438,12 +1438,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithMixOfReceivedAndInstantiated_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[0]):14:2: error: Dependency cycle detected: A -> C -> B -> A
-				\(inputSwiftFilePaths[0]):7:1: note: `A` is part of the cycle
-				\(inputSwiftFilePaths[0]):17:1: note: `C` is part of the cycle
-				\(inputSwiftFilePaths[0]):12:1: note: `B` is part of the cycle
+				\(fixtures["Root.swift"]):14:2: error: Dependency cycle detected: A -> C -> B -> A
+				\(fixtures["Root.swift"]):7:1: note: `A` is part of the cycle
+				\(fixtures["Root.swift"]):17:1: note: `C` is part of the cycle
+				\(fixtures["Root.swift"]):12:1: note: `B` is part of the cycle
 				"""
 			},
 		) {
@@ -1482,12 +1482,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedAndReceived_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[3]):3:5: error: Dependency cycle detected: A -> B -> C -> A
-				\(inputSwiftFilePaths[1]):1:1: note: `A` is part of the cycle
-				\(inputSwiftFilePaths[2]):1:1: note: `B` is part of the cycle
-				\(inputSwiftFilePaths[3]):1:1: note: `C` is part of the cycle
+				\(fixtures["C.swift"]):3:5: error: Dependency cycle detected: A -> B -> C -> A
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
 				"""
 			},
 		) {
@@ -1528,12 +1528,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndReceived_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[3]):3:5: error: Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `C` as @Instantiated to fix. Full cycle: Instantiator<A> -> Instantiator<B> -> Instantiator<C> -> Instantiator<A>
-				\(inputSwiftFilePaths[1]):1:1: note: `A` is part of the cycle
-				\(inputSwiftFilePaths[2]):1:1: note: `B` is part of the cycle
-				\(inputSwiftFilePaths[3]):1:1: note: `C` is part of the cycle
+				\(fixtures["C.swift"]):3:5: error: Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `C` as @Instantiated to fix. Full cycle: Instantiator<A> -> Instantiator<B> -> Instantiator<C> -> Instantiator<A>
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
 				"""
 			},
 		) {
@@ -1574,12 +1574,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndOnlyIfAvailableReceived_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[3]):3:5: error: Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>?` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>?`. Declare @Received `aBuilder: Instantiator<A>?` on `C` as @Instantiated to fix. Full cycle: Instantiator<A>? -> Instantiator<B> -> Instantiator<C> -> Instantiator<A>?
-				\(inputSwiftFilePaths[1]):1:1: note: `A` is part of the cycle
-				\(inputSwiftFilePaths[2]):1:1: note: `B` is part of the cycle
-				\(inputSwiftFilePaths[3]):1:1: note: `C` is part of the cycle
+				\(fixtures["C.swift"]):3:5: error: Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>?` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>?`. Declare @Received `aBuilder: Instantiator<A>?` on `C` as @Instantiated to fix. Full cycle: Instantiator<A>? -> Instantiator<B> -> Instantiator<C> -> Instantiator<A>?
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
 				"""
 			},
 		) {
@@ -1620,12 +1620,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithVaryingNames_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[1]):3:5: error: Dependency cycle detected: B -> C -> A -> B
-				\(inputSwiftFilePaths[2]):1:1: note: `B` is part of the cycle
-				\(inputSwiftFilePaths[3]):1:1: note: `C` is part of the cycle
-				\(inputSwiftFilePaths[1]):1:1: note: `A` is part of the cycle
+				\(fixtures["A.swift"]):3:5: error: Dependency cycle detected: B -> C -> A -> B
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				"""
 			},
 		) {
@@ -1666,9 +1666,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularReceivedDependencies_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[3]):3:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received b: B -> @Received c: C -> @Received a: A
+				\(fixtures["C.swift"]):3:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received b: B -> @Received c: C -> @Received a: A
 				"""
 			},
 		) {
@@ -1711,9 +1711,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularReceivedRenamedDependencies_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[3]):3:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received renamedB: B -> @Received c: C -> @Received a: A
+				\(fixtures["C.swift"]):3:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received renamedB: B -> @Received c: C -> @Received a: A
 				"""
 			},
 		) {
@@ -1757,9 +1757,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithMultipleCircularReceivedRenamedDependencies_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):3:5: error: Dependency received in same chain it is instantiated: @Instantiated c: C -> @Received renamedB: B -> @Received c: C
+				\(fixtures["B.swift"]):3:5: error: Dependency received in same chain it is instantiated: @Instantiated c: C -> @Received renamedB: B -> @Received c: C
 				"""
 			},
 		) {
@@ -1802,11 +1802,11 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithOptionalPropertyAliasAndMarkedOnlyIfAvailableAndItIsOnlyAvailableViaCircularDependency_throwsError() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):7:2: error: Dependency cycle detected: C -> B -> C
-				\(inputSwiftFilePaths[3]):1:1: note: `C` is part of the cycle
-				\(inputSwiftFilePaths[2]):1:1: note: `B` is part of the cycle
+				\(fixtures["B.swift"]):7:2: error: Dependency cycle detected: C -> B -> C
+				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				"""
 			},
 		) {
@@ -2178,12 +2178,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsError_whenPartiallyLazyInstantiationCycleExists() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[3]):7:5: error: Dependency cycle detected. Cycles with a mix of constant and lazy (Instantiator) dependencies cannot be resolved. Make all dependencies in the cycle lazy by using Instantiator: A -> B -> Instantiator<C> -> A
-				\(inputSwiftFilePaths[1]):1:1: note: `A` is part of the cycle
-				\(inputSwiftFilePaths[2]):1:1: note: `B` is part of the cycle
-				\(inputSwiftFilePaths[3]):1:1: note: `C` is part of the cycle
+				\(fixtures["C.swift"]):7:5: error: Dependency cycle detected. Cycles with a mix of constant and lazy (Instantiator) dependencies cannot be resolved. Make all dependencies in the cycle lazy by using Instantiator: A -> B -> Instantiator<C> -> A
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
 				"""
 			},
 		) {
@@ -2269,10 +2269,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_namesRootOfChainInFixHint_whenUnfulfillableReceivedPropertyHasNoSuggestedAlternatives() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):7:5: error: @Received property `missing: Missing` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grandchild
-				\(inputSwiftFilePaths[2]):7:5: note: Declare `@Instantiated let missing: Missing` on `Root` or on another type in the chain to fix.
+				\(fixtures["Grandchild.swift"]):7:5: error: @Received property `missing: Missing` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grandchild
+				\(fixtures["Grandchild.swift"]):7:5: note: Declare `@Instantiated let missing: Missing` on `Root` or on another type in the chain to fix.
 				"""
 			},
 		) {
@@ -2321,11 +2321,11 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_reportsErrorAtEveryReferencingDeclaration_whenNoInstantiableFound() async {
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[1]):7:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `Missing`
-				\(inputSwiftFilePaths[0]):7:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `Missing`
-				\(inputSwiftFilePaths[0]):9:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `Missing`
+				\(fixtures["Child.swift"]):7:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `Missing`
+				\(fixtures["Root.swift"]):7:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `Missing`
+				\(fixtures["Root.swift"]):9:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `Missing`
 				"""
 			},
 		) {
@@ -2368,10 +2368,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		// `b: BProtocol` is fulfilled by `B` via `fulfilledByType`, but `B` does not declare that it fulfills
 		// `BProtocol`, so no `@Instantiable` is registered for the property's type and no note can point at it.
 		await assertThrowsError(
-			diagnostics: { inputSwiftFilePaths in
+			diagnostics: { fixtures in
 				"""
-				\(inputSwiftFilePaths[2]):7:5: error: Dependency cycle detected: A -> BProtocol -> A
-				\(inputSwiftFilePaths[1]):1:1: note: `A` is part of the cycle
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle detected: A -> BProtocol -> A
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				"""
 			},
 		) {
@@ -2416,143 +2416,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 	}
 
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsMissingSourceLocationError_whenDependentModuleInfoOmitsDependencyDeclarationLocation() async throws {
-		let childModuleOutput = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable
-				public final class Child: Instantiable {
-				    public init(missing: Missing) {
-				        fatalError("SafeDI doesn't inspect the initializer body")
-				    }
-
-				    @Received let missing: Missing
-				}
-
-				public struct Missing {}
-				""",
-			],
-			buildSwiftOutputDirectory: false,
-			filesToDelete: &filesToDelete,
-		)
-		let moduleInfoPath = try writeModuleInfo(
-			childModuleOutput.moduleInfo,
-			strippingDependencyDeclarationLocations: true,
-			strippingInstantiableDeclarationLocations: false,
-		)
-
-		await assertThrowsError(
-			"SafeDI has no source location for property `missing: Missing` on `Child`. Every `.safedi` module info file must be regenerated by this version of SafeDITool.",
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public final class Root: Instantiable {
-					    public init(child: Child) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
-
-					    @Instantiated let child: Child
-					}
-					""",
-				],
-				dependentModuleInfoPaths: [moduleInfoPath],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsMissingSourceLocationError_whenDependentModuleInfoOmitsInstantiableDeclarationLocation() async throws {
-		let childModuleOutput = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable
-				public final class Service: Instantiable {
-				    public init() {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: false,
-			filesToDelete: &filesToDelete,
-		)
-		let moduleInfoPath = try writeModuleInfo(
-			childModuleOutput.moduleInfo,
-			strippingDependencyDeclarationLocations: false,
-			strippingInstantiableDeclarationLocations: true,
-		)
-
-		await assertThrowsError(
-			"SafeDI has no source location for `@Instantiable` type `Service`. Every `.safedi` module info file must be regenerated by this version of SafeDITool.",
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable
-					public final class Service: Instantiable {
-					    public init() {}
-					}
-					""",
-				],
-				dependentModuleInfoPaths: [moduleInfoPath],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
 	// MARK: Private
 
 	private var filesToDelete = [URL]()
-
-	/// Writes a `.safedi` file like one produced by a SafeDITool that did not record source locations.
-	/// Locations are optional on the models, so a file without them decodes with `nil` locations.
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func writeModuleInfo(
-		_ moduleInfo: ModuleInfo,
-		strippingDependencyDeclarationLocations: Bool,
-		strippingInstantiableDeclarationLocations: Bool,
-	) throws -> String {
-		let strippedModuleInfo = ModuleInfo(
-			imports: moduleInfo.imports,
-			instantiables: moduleInfo.instantiables.map { instantiable in
-				var stripped = Instantiable(
-					instantiableType: instantiable.concreteInstantiable,
-					isRoot: instantiable.isRoot,
-					initializer: instantiable.initializer,
-					additionalInstantiables: Array(instantiable.instantiableTypes.dropFirst()),
-					dependencies: instantiable.dependencies.map { dependency in
-						Dependency(
-							property: dependency.property,
-							source: dependency.source,
-							declarationLocation: strippingDependencyDeclarationLocations ? nil : dependency.declarationLocation,
-						)
-					},
-					declarationType: instantiable.declarationType,
-					mockAttributes: instantiable.mockAttributes,
-					generateMock: instantiable.generateMock,
-					mockOnly: instantiable.mockOnly,
-					mockInitializer: instantiable.mockInitializer,
-					mockReturnType: instantiable.mockReturnType,
-					customMockName: instantiable.customMockName,
-					declarationLocation: strippingInstantiableDeclarationLocations ? nil : instantiable.declarationLocation,
-				)
-				stripped.sourceFilePath = instantiable.sourceFilePath
-				return stripped
-			},
-			configurations: moduleInfo.configurations,
-			filesWithUnexpectedNodes: moduleInfo.filesWithUnexpectedNodes,
-		)
-		let moduleInfoURL = URL(fileURLWithPath: NSTemporaryDirectory())
-			.appendingPathComponent(UUID().uuidString)
-			.appendingPathExtension("safedi")
-		try JSONEncoder().encode(strippedModuleInfo).write(to: moduleInfoURL)
-		filesToDelete.append(moduleInfoURL)
-		return moduleInfoURL.path
-	}
 }
