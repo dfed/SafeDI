@@ -60,23 +60,26 @@ jobs:
         find Sources -name '*.swift' -exec touch {} +
         DEVELOPER_DIR=$(xcode-select -p)
         TOOLCHAIN="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin"
-        echo "::group::probes under the tracer"
-        printf 'hello\n' > /tmp/probe.swift
         if [ "$NATIVE" = true ]; then
+          # The step shell itself runs x86_64 under the tracer (relocated
+          # /bin/bash falls back to its x86_64 slice), and children inherit
+          # that preference. `arch -arm64` resets it for the build.
           export PATH="$TOOLCHAIN:$DEVELOPER_DIR/usr/bin:$PATH"
           export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
-          SWIFT="$TOOLCHAIN/swift"
+          RUN="arch -arm64 $TOOLCHAIN/swift"
         else
-          SWIFT="xcrun swift"
+          RUN="xcrun swift"
         fi
-        echo "shell arch: $(uname -m)"
-        time $SWIFT --version
-        time git -C .build/checkouts/swift-syntax rev-parse HEAD
-        time $SWIFT package dump-package > /dev/null
-        time $SWIFT package dump-package > /dev/null
+        echo "::group::probes under the tracer"
+        echo "step shell arch: $(uname -m)"
+        if [ "$NATIVE" = true ]; then echo "arch -arm64 child: $(arch -arm64 uname -m || echo 'arch failed')"; fi
+        time $RUN --version
+        if [ -d .build/checkouts/swift-syntax ]; then time git -C .build/checkouts/swift-syntax rev-parse HEAD; fi
+        time $RUN package dump-package > /dev/null
+        time $RUN package dump-package > /dev/null
         echo "::endgroup::"
-        time $SWIFT build -v --target SafeDI --target SafeDITool
-        echo "build directories:"; ls .build | grep -E 'apple-macosx'
+        time $RUN build -v --target SafeDI --target SafeDITool
+        echo "build directories:"; ls -d .build/*-apple-macosx
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
       with:
