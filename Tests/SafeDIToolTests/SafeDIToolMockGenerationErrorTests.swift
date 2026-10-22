@@ -42,10 +42,13 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenPartiallyLazyCycleThroughInstantiatorBoundary() async {
 		await assertThrowsError(
-			"""
-			Dependency cycle detected. Cycles with a mix of constant and lazy (Instantiator) dependencies cannot be resolved. Make all dependencies in the cycle lazy by using Instantiator:
-			\tPlayer -> Instantiator<CachedItem> -> Player
-			""",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["CachedItem.swift"]):7:5: error: Dependency cycle detected. Cycles with a mix of constant and lazy (Instantiator) dependencies cannot be resolved. Make all dependencies in the cycle lazy by using Instantiator: Player -> Instantiator<CachedItem> -> Player
+				\(fixtures["Player.swift"]):1:1: note: `Player` is part of the cycle
+				\(fixtures["CachedItem.swift"]):1:1: note: `CachedItem` is part of the cycle
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -80,10 +83,14 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenConstantDependencyCycleExists() async {
 		await assertThrowsError(
-			"""
-			Dependency cycle detected:
-			\tA -> B -> C -> A
-			""",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):4:5: error: Dependency cycle detected: A -> B -> C -> A
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -126,9 +133,11 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenUnfulfillableInstantiatedPropertyExists() async {
 		await assertThrowsError(
-			"""
-			No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `Unknown`
-			""",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):4:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `Unknown`
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -157,10 +166,11 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenReceivedPropertyIsUnfulfillable() async {
 		await assertThrowsError(
-			"""
-			@Received property `service: Service` is not @Instantiated or @Forwarded in chain:
-			\tRoot -> Child
-			""",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):4:5: error: @Received property `service: Service` is not @Instantiated or @Forwarded in chain: Root -> Child. Declare `@Instantiated let service: Service` on `Root` or on another type in the chain to fix.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -199,10 +209,12 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenInstantiatedPropertyRefersToSelf() async {
 		await assertThrowsError(
-			"""
-			Dependency cycle detected:
-			\tSelfReferencing -> SelfReferencing
-			""",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["SelfReferencing.swift"]):4:5: error: Dependency cycle detected: SelfReferencing -> SelfReferencing
+				\(fixtures["SelfReferencing.swift"]):1:1: note: `SelfReferencing` is part of the cycle
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -231,9 +243,12 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenInstantiatedPropertyHasForwardedArgument() async {
 		await assertThrowsError(
-			"""
-			Property `child: Child` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<Child>`.
-			""",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):4:5: error: Property `child: Child` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<Child>`.
+				\(fixtures["Child.swift"]):4:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -262,10 +277,13 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenReceivedInstantiatorDependencyCycleExists_withRoot() async {
 		await assertThrowsError(
-			"""
-			Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `B` as @Instantiated to fix. Full cycle:
-			\tInstantiator<A> -> B -> Instantiator<A>
-			""",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `B` as @Instantiated to fix. Full cycle: Instantiator<A> -> B -> Instantiator<A>
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -303,10 +321,13 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		// Same cycle as the _withRoot test but no root — the cycle is only visible
 		// after mock generation promotes @Received dependencies.
 		await assertThrowsError(
-			"""
-			Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `B` as @Instantiated to fix. Full cycle:
-			\tInstantiator<A> -> B -> Instantiator<A>
-			""",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `B` as @Instantiated to fix. Full cycle: Instantiator<A> -> B -> Instantiator<A>
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -368,9 +389,12 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		// Production validation never sees this graph (no root entry point),
 		// but mock generation must still catch the forwarded-property error.
 		await assertThrowsError(
-			"""
-			Property `child: Child` on Parent has at least one @Forwarded property. Property should instead be of type `Instantiator<Child>`.
-			""",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Parent.swift"]):4:5: error: Property `child: Child` on Parent has at least one @Forwarded property. Property should instead be of type `Instantiator<Child>`.
+				\(fixtures["Child.swift"]):4:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [

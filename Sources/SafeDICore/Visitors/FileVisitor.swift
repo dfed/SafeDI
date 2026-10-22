@@ -26,7 +26,7 @@ public final class FileVisitor: SyntaxVisitor {
 
 	/// - Parameters:
 	///   - conditionalCompilationEvaluator: Decides which clauses of each `#if` block are scanned. Defaults to no active conditions, which scans platform-conditioned blocks and skips blocks guarded by bare conditions.
-	///   - sourceLocationConverter: A converter for the tree being walked. When provided, each dependency records where its property is declared.
+	///   - sourceLocationConverter: A converter for the tree being walked. When provided, each declaration records where it begins.
 	public init(
 		conditionalCompilationEvaluator: ConditionalCompilationEvaluator = ConditionalCompilationEvaluator(activeCompilationConditions: []),
 		sourceLocationConverter: SourceLocationConverter? = nil,

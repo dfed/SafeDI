@@ -453,7 +453,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		try FileManager.default.createDirectory(at: scratchDirectory, withIntermediateDirectories: true)
 		filesToDelete.append(scratchDirectory)
 		let sources = try [
-			("Root.swift", String(contentsOf: output.inputSwiftFiles[0], encoding: .utf8)),
+			("Root.swift", String(contentsOfFile: output.fixtures["Root.swift"], encoding: .utf8)),
 			("Root+SafeDI.swift", generatedCode),
 		].map { fileName, content in
 			let destination = scratchDirectory.appendingPathComponent(fileName)
@@ -972,10 +972,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension LoggedInView {
 		    public init() {
 		        let telemetry: EventTracker & CrashReporter = Telemetry()
-		        #sourceLocation(file: "\(output.inputSwiftFiles[2].relativePath)", line: 8)
+		        #sourceLocation(file: "\(output.fixtures["LoggedInView.swift"])", line: 8)
 		        let eventTracker: EventTracker = telemetry
 		        #sourceLocation()
-		        #sourceLocation(file: "\(output.inputSwiftFiles[2].relativePath)", line: 9)
+		        #sourceLocation(file: "\(output.fixtures["LoggedInView.swift"])", line: 9)
 		        let crashReporter: CrashReporter = telemetry
 		        #sourceLocation()
 		        func __safeDI_profileViewBuilder() -> ProfileView {
@@ -3537,7 +3537,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        let defaultUserService = DefaultUserService()
-		        #sourceLocation(file: "\(output.inputSwiftFiles[0].relativePath)", line: 9)
+		        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 9)
 		        let userService: any UserService = defaultUserService
 		        #sourceLocation()
 		        self.init(defaultUserService: defaultUserService, userService: userService)
@@ -3745,7 +3745,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		        let authService: AuthService = DefaultAuthService(networkService: networkService)
 		        func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
 		            func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
-		                #sourceLocation(file: "\(output.inputSwiftFiles[7].relativePath)", line: 7)
+		                #sourceLocation(file: "\(output.fixtures["ProfileViewController.swift"])", line: 7)
 		                let userVendor: UserVendor = userManager
 		                #sourceLocation()
 		                func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
@@ -3820,7 +3820,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_childBuilder(iterator: IndexingIterator<Array<Element>>) -> Child {
 		            func __safeDI_grandchildBuilder() -> Grandchild {
-		                #sourceLocation(file: "\(output.inputSwiftFiles[3].relativePath)", line: 7)
+		                #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
 		                let anyIterator: AnyIterator = iterator
 		                #sourceLocation()
 		                return Grandchild(anyIterator: anyIterator)
@@ -3973,11 +3973,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		        let networkService: NetworkService = DefaultNetworkService()
 		        let authService: AuthService = DefaultAuthService(networkService: networkService)
 		        func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
-		            #sourceLocation(file: "\(output.inputSwiftFiles[6].relativePath)", line: 9)
+		            #sourceLocation(file: "\(output.fixtures["LoggedInViewController.swift"])", line: 9)
 		            let userNetworkService: NetworkService = networkService
 		            #sourceLocation()
 		            func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
-		                #sourceLocation(file: "\(output.inputSwiftFiles[7].relativePath)", line: 7)
+		                #sourceLocation(file: "\(output.fixtures["ProfileViewController.swift"])", line: 7)
 		                let userVendor: UserVendor = userManager
 		                #sourceLocation()
 		                func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
@@ -4067,7 +4067,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_authService() -> DefaultAuthService {
 		            let networkService: NetworkService = DefaultNetworkService()
-		            #sourceLocation(file: "\(output.inputSwiftFiles[3].relativePath)", line: 17)
+		            #sourceLocation(file: "\(output.fixtures["DefaultAuthService.swift"])", line: 17)
 		            let renamedNetworkService: NetworkService = networkService
 		            #sourceLocation()
 		            return DefaultAuthService(networkService: networkService, renamedNetworkService: renamedNetworkService)
@@ -4152,10 +4152,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        let networkService: NetworkService = DefaultNetworkService()
 		        func __safeDI_authService() -> DefaultAuthService {
-		            #sourceLocation(file: "\(output.inputSwiftFiles[3].relativePath)", line: 16)
+		            #sourceLocation(file: "\(output.fixtures["DefaultAuthService.swift"])", line: 16)
 		            let renamedNetworkService: NetworkService = networkService
 		            #sourceLocation()
-		            #sourceLocation(file: "\(output.inputSwiftFiles[3].relativePath)", line: 18)
+		            #sourceLocation(file: "\(output.fixtures["DefaultAuthService.swift"])", line: 18)
 		            let renamedAgainNetworkService: NetworkService = renamedNetworkService
 		            #sourceLocation()
 		            return DefaultAuthService(networkService: networkService, renamedNetworkService: renamedNetworkService, renamedAgainNetworkService: renamedAgainNetworkService)
@@ -4300,7 +4300,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		        let networkService: NetworkService = DefaultNetworkService()
 		        let authService: AuthService = DefaultAuthService(networkService: networkService)
 		        func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
-		            #sourceLocation(file: "\(output.inputSwiftFiles[6].relativePath)", line: 9)
+		            #sourceLocation(file: "\(output.fixtures["LoggedInViewController.swift"])", line: 9)
 		            let userVendor: UserVendor = userManager
 		            #sourceLocation()
 		            func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
@@ -4455,7 +4455,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		        func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
 		            func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
 		                func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
-		                    #sourceLocation(file: "\(output.inputSwiftFiles[8].relativePath)", line: 7)
+		                    #sourceLocation(file: "\(output.fixtures["EditProfileViewController.swift"])", line: 7)
 		                    let userVendor: UserVendor = userManager
 		                    #sourceLocation()
 		                    return EditProfileViewController(userVendor: userVendor, userManager: userManager)
@@ -6386,7 +6386,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		        func __safeDI_aBuilder() -> A {
 		            let c = C()
 		            func __safeDI_b() -> B {
-		                #sourceLocation(file: "\(output.inputSwiftFiles[3].relativePath)", line: 7)
+		                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
 		                let cRenamed: CRenamed? = c
 		                #sourceLocation()
 		                return B(cRenamed: cRenamed)
@@ -6475,7 +6475,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		            let c = C()
 		            func __safeDI_d() -> D {
 		                func __safeDI_b() -> B {
-		                    #sourceLocation(file: "\(output.inputSwiftFiles[3].relativePath)", line: 7)
+		                    #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
 		                    let cRenamed: CRenamed? = c
 		                    #sourceLocation()
 		                    return B(cRenamed: cRenamed)
@@ -6559,7 +6559,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public init() {
 		        func __safeDI_consumer() -> Consumer {
 		            let service = Service()
-		            #sourceLocation(file: "\(output.inputSwiftFiles[1].relativePath)", line: 9)
+		            #sourceLocation(file: "\(output.fixtures["Consumer.swift"])", line: 9)
 		            let alias: Service = service
 		            #sourceLocation()
 		            return Consumer(service: service, alias: alias)
@@ -6632,7 +6632,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public init() {
 		        func __safeDI_consumer() -> Consumer {
 		            let service = Service()
-		            #sourceLocation(file: "\(output.inputSwiftFiles[1].relativePath)", line: 9)
+		            #sourceLocation(file: "\(output.fixtures["Consumer.swift"])", line: 9)
 		            let alias: Service? = service
 		            #sourceLocation()
 		            return Consumer(service: service, alias: alias)
@@ -6696,7 +6696,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public init() {
 		        let service = Service()
 		        func __safeDI_consumer() -> Consumer {
-		            #sourceLocation(file: "\(output.inputSwiftFiles[1].relativePath)", line: 7)
+		            #sourceLocation(file: "\(output.fixtures["Consumer.swift"])", line: 7)
 		            let renamedService: Service = service
 		            #sourceLocation()
 		            return Consumer(renamedService: renamedService)
@@ -6805,9 +6805,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		let child = try #require(output.moduleInfo.instantiables.first { $0.concreteInstantiable == .simple(name: "Child") })
 		#expect(child.dependencies.map(\.declarationLocation) == [
-			Dependency.DeclarationLocation(filePath: output.inputSwiftFiles[1].relativePath, line: 9),
-			Dependency.DeclarationLocation(filePath: output.inputSwiftFiles[1].relativePath, line: 11),
-			Dependency.DeclarationLocation(filePath: output.inputSwiftFiles[1].relativePath, line: 12),
+			Dependency.DeclarationLocation(filePath: output.fixtures["Child.swift"], line: 9, column: 5),
+			Dependency.DeclarationLocation(filePath: output.fixtures["Child.swift"], line: 11, column: 5),
+			Dependency.DeclarationLocation(filePath: output.fixtures["Child.swift"], line: 12, column: 5),
 		])
 	}
 
@@ -8223,12 +8223,12 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		try FileManager.default.removeItem(at: extraHelperFile)
 
 		await assertThrowsError(
-			"No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `ExtraHelper`",
+			"\(rootFile.path):8:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `ExtraHelper`",
 		) {
 			try await (Generate.parse([
 				swiftFileCSV.path,
 				"--swift-manifest", manifestFile.path,
-			])).run()
+			])).generate()
 		}
 	}
 

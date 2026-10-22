@@ -42,7 +42,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTwoMockOnlyExistForSameType() async {
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["File.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["File_2.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -72,7 +77,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		// parsed first (FileVisitor processes top-to-bottom), hitting the
 		// (true, false) branch regardless of TaskGroup ordering.
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["MyService.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["MyService.swift"]):6:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -102,7 +112,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		// first (FileVisitor processes top-to-bottom), hitting the (false, true)
 		// branch regardless of TaskGroup ordering.
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["MyService.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["MyService.swift"]):7:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -129,7 +144,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTwoDifferentMockOnlyConcreteTypesFulfillSameAdditionalType() async {
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `ServiceProtocol`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["MockServiceA.swift"]):1:1: error: Found multiple hand-written mock providers for `ServiceProtocol`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["MockServiceB.swift"]):1:1: error: Found multiple hand-written mock providers for `ServiceProtocol`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -164,9 +184,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		// the declared type (via mockOnly), the forwarded-property validation
 		// must still fire for constant @Instantiated dependencies.
 		await assertThrowsError(
-			"""
-			Property `service: AnyService` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
-			""",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):6:5: error: Property `service: AnyService` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
+				\(fixtures["MockService.swift"]):6:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -209,7 +232,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		// production declaration is seen first, its same-file mockOnly extension merges
 		// into it, and the second mockOnly then hits the already-merged guard.
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["MyService.swift"]):6:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["ZzzFakeService.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -242,7 +270,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTwoMockOnlyTypesAndProductionAllClaimSameType() async {
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["FakeService.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["File.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -276,9 +309,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenMockOnlyWinsAdditionalTypeSlotAndChildHasForwardedProperty() async {
 		await assertThrowsError(
-			"""
-			Property `service: ServiceProtocol` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
-			""",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):6:5: error: Property `service: ServiceProtocol` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
+				\(fixtures["MockService.swift"]):6:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -321,7 +357,12 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTwoMockOnlyTypesClaimSameTypeAsProductionWithGenerateMock() async {
 		await assertThrowsError(
-			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["FakeService.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["File.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -342,6 +383,42 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					public struct FakeService: Instantiable {
 					    public init() {}
 					    public static func mock() -> FakeService { FakeService() }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_reportsDuplicateProviderAtInstantiableDeclaration_whenDeclarationIsNotAtTopOfFile() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["File.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["ServiceProtocol.swift"]):5:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol ServiceProtocol {
+					    func perform()
+					}
+
+					@Instantiable(mockOnly: true)
+					extension MyService {
+					    public static func mock() -> MyService { fatalError() }
+					}
+					""",
+					"""
+					@Instantiable(mockOnly: true)
+					extension MyService {
+					    public static func mock() -> MyService { fatalError() }
 					}
 					""",
 				],

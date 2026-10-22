@@ -28,7 +28,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	///   - declarationType: The kind of declaration this visitor walks.
 	///   - parentType: The type enclosing the walked declaration, if any.
 	///   - conditionalCompilation: How `#if` blocks among the declaration's members are scanned. The macro scans every clause because the compiler has already selected the active one; SafeDITool evaluates them.
-	///   - sourceLocationConverter: A converter for the tree being walked. When provided, each dependency records where its property is declared.
+	///   - sourceLocationConverter: A converter for the tree being walked. When provided, the declaration and each dependency record where they begin.
 	public init(
 		declarationType: DeclarationType,
 		parentType: TypeDescription? = nil,
@@ -101,20 +101,18 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				))
 			}
 
-			if let label = IdentifierPatternSyntax(binding.pattern)?.identifier.text,
+			if let identifier = IdentifierPatternSyntax(binding.pattern)?.identifier,
 			   let typeDescription = binding.typeAnnotation?.type.typeDescription
 			{
 				dependencies.append(
 					Dependency(
 						property: Property(
-							label: label,
+							label: identifier.text,
 							typeDescription: typeDescription,
 						),
 						source: dependencySource,
-						declarationLocation: sourceLocationConverter.map { sourceLocationConverter in
-							let location = sourceLocationConverter.location(for: node.positionAfterSkippingLeadingTrivia)
-							return Dependency.DeclarationLocation(filePath: location.file, line: location.line)
-						},
+						declarationLocation: declarationLocation(of: node),
+						identifierRange: sourceRange(of: identifier),
 					),
 				)
 			}
@@ -183,6 +181,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
 		instantiableType = node.extendedType.typeDescription
+		instantiableDeclarationLocation = declarationLocation(of: node)
 		if let instantiableMacro = node.attributes.instantiableMacro {
 			hasFoundDeclaration = true
 			processAttributes(node.attributes, on: instantiableMacro)
@@ -255,10 +254,12 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				isRoot: false,
 				initializer: initializer,
 				additionalInstantiables: additionalInstantiables,
-				dependencies: initializer.arguments.map {
+				dependencies: zip(initializer.arguments, node.signature.parameterClause.parameters).map { argument, parameter in
 					Dependency(
-						property: $0.asProperty,
+						property: argument.asProperty,
 						source: .received(onlyIfAvailable: false),
+						declarationLocation: declarationLocation(of: parameter),
+						identifierRange: sourceRange(of: parameter.firstName),
 					)
 				},
 				declarationType: .extensionType,
@@ -268,6 +269,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				mockInitializer: mockInitializer,
 				mockReturnType: mockReturnType,
 				customMockName: customMockName,
+				declarationLocation: instantiableDeclarationLocation,
 			))
 		}
 
@@ -439,6 +441,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						mockInitializer: mockInitializer,
 						mockReturnType: mockReturnType,
 						customMockName: customMockName,
+						declarationLocation: instantiableDeclarationLocation,
 					),
 				]
 			} else {
@@ -464,6 +467,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						mockInitializer: mockInitializer,
 						mockReturnType: mockReturnType,
 						customMockName: customMockName,
+						declarationLocation: instantiableDeclarationLocation,
 					),
 				]
 			} else {
@@ -497,6 +501,26 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// The `#if` clauses the evaluator selected for scanning.
 	private var activeIfConfigClauses = Set<SyntaxIdentifier>()
 
+	/// The location of the decorated declaration, recorded when the declaration is visited with a converter.
+	private var instantiableDeclarationLocation: Dependency.DeclarationLocation?
+
+	/// Where `node` begins after its leading trivia – its first attribute for a decorated declaration – or `nil` without a converter.
+	private func declarationLocation(of node: some SyntaxProtocol) -> Dependency.DeclarationLocation? {
+		sourceLocationConverter.map { sourceLocationConverter in
+			sourceLocationConverter.declarationLocation(for: node.positionAfterSkippingLeadingTrivia)
+		}
+	}
+
+	/// The range of `token`’s text, excluding its trivia, or `nil` without a converter.
+	private func sourceRange(of token: TokenSyntax) -> Dependency.SourceRange? {
+		sourceLocationConverter.map { sourceLocationConverter in
+			Dependency.SourceRange(
+				start: sourceLocationConverter.declarationLocation(for: token.positionAfterSkippingLeadingTrivia),
+				end: sourceLocationConverter.declarationLocation(for: token.endPositionBeforeTrailingTrivia),
+			)
+		}
+	}
+
 	private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
 		let nodeDeclarationType: TypeDescription = if let parentType {
 			.nested(
@@ -518,6 +542,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		}
 		hasFoundDeclaration = true
 		instantiableDeclarationType = node.declType
+		instantiableDeclarationLocation = declarationLocation(of: node)
 
 		instantiableType = nodeDeclarationType
 		processAttributes(node.attributes, on: macro)
@@ -605,5 +630,14 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				],
 			))
 		}
+	}
+}
+
+// MARK: - SourceLocationConverter
+
+extension SourceLocationConverter {
+	fileprivate func declarationLocation(for position: AbsolutePosition) -> Dependency.DeclarationLocation {
+		let location = location(for: position)
+		return Dependency.DeclarationLocation(filePath: location.file, line: location.line, column: location.column)
 	}
 }

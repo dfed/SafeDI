@@ -915,7 +915,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let providerService = (safeDIOverrides.providerService ?? Provider.init)()
 		        func __safeDI_myService() -> AnyMyService {
-		            #sourceLocation(file: "\(output.inputSwiftFiles[2].relativePath)", line: 6)
+		            #sourceLocation(file: "\(output.fixtures["DefaultMyService.swift"])", line: 6)
 		            let provider: Provider = providerService
 		            #sourceLocation()
 		            if let safeDIBuilder = safeDIOverrides.myService {
@@ -3029,7 +3029,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        let user = (safeDIOverrides.user ?? User.init)()
-		        #sourceLocation(file: "\(output.inputSwiftFiles[2].relativePath)", line: 6)
+		        #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 6)
 		        let userType: UserType = user
 		        #sourceLocation()
 		        return Child(userType: userType)
@@ -3064,7 +3064,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let user = (safeDIOverrides.user ?? User.init)()
 		        func __safeDI_child() -> Child {
-		            #sourceLocation(file: "\(output.inputSwiftFiles[2].relativePath)", line: 6)
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 6)
 		            let userType: UserType = user
 		            #sourceLocation()
 		            return (safeDIOverrides.child ?? Child.init(userType:))(userType)
@@ -3279,7 +3279,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let defaultUserService = (safeDIOverrides.defaultUserService ?? DefaultUserService.init)()
-		        #sourceLocation(file: "\(output.inputSwiftFiles[0].relativePath)", line: 10)
+		        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 10)
 		        let userService: any UserService = defaultUserService
 		        #sourceLocation()
 		        return Root(defaultUserService: defaultUserService, userService: userService)
@@ -3908,11 +3908,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> LoggedInViewController {
 		        let networkService = (safeDIOverrides.networkService ?? DefaultNetworkService.init)()
-		        #sourceLocation(file: "\(output.inputSwiftFiles[5].relativePath)", line: 9)
+		        #sourceLocation(file: "\(output.fixtures["LoggedInViewController.swift"])", line: 9)
 		        let userNetworkService: NetworkService = networkService
 		        #sourceLocation()
 		        func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
-		            #sourceLocation(file: "\(output.inputSwiftFiles[6].relativePath)", line: 7)
+		            #sourceLocation(file: "\(output.fixtures["ProfileViewController.swift"])", line: 7)
 		            let userVendor: UserVendor = userManager
 		            #sourceLocation()
 		            func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
@@ -3975,7 +3975,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> ProfileViewController {
 		        let userManager = (safeDIOverrides.userManager ?? UserManager.init)()
-		        #sourceLocation(file: "\(output.inputSwiftFiles[6].relativePath)", line: 7)
+		        #sourceLocation(file: "\(output.fixtures["ProfileViewController.swift"])", line: 7)
 		        let userVendor: UserVendor = userManager
 		        #sourceLocation()
 		        let userNetworkService = (safeDIOverrides.userNetworkService ?? DefaultNetworkService.init)()
@@ -4038,11 +4038,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let networkService = (safeDIOverrides.networkService ?? DefaultNetworkService.init)()
 		        let authService = (safeDIOverrides.authService ?? DefaultAuthService.init(networkService:))(networkService)
 		        func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
-		            #sourceLocation(file: "\(output.inputSwiftFiles[5].relativePath)", line: 9)
+		            #sourceLocation(file: "\(output.fixtures["LoggedInViewController.swift"])", line: 9)
 		            let userNetworkService: NetworkService = networkService
 		            #sourceLocation()
 		            func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
-		                #sourceLocation(file: "\(output.inputSwiftFiles[6].relativePath)", line: 7)
+		                #sourceLocation(file: "\(output.fixtures["ProfileViewController.swift"])", line: 7)
 		                let userVendor: UserVendor = userManager
 		                #sourceLocation()
 		                func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
@@ -4149,7 +4149,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
 		        func __safeDI_grandchildBuilder() -> Grandchild {
-		            #sourceLocation(file: "\(output.inputSwiftFiles[3].relativePath)", line: 7)
+		            #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
 		            let anyIterator: AnyIterator = iterator
 		            #sourceLocation()
 		            return (safeDIOverrides.grandchildBuilder ?? Grandchild.init(anyIterator:))(anyIterator)
@@ -4190,7 +4190,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    static func mock(
 		        iterator: IndexingIterator<Array<Element>>
 		    ) -> Grandchild {
-		        #sourceLocation(file: "\(output.inputSwiftFiles[3].relativePath)", line: 7)
+		        #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
 		        let anyIterator: AnyIterator = iterator
 		        #sourceLocation()
 		        return Grandchild(anyIterator: anyIterator)
@@ -4222,7 +4222,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        func __safeDI_childBuilder(iterator: IndexingIterator<Array<Element>>) -> Child {
 		            func __safeDI_grandchildBuilder() -> Grandchild {
-		                #sourceLocation(file: "\(output.inputSwiftFiles[3].relativePath)", line: 7)
+		                #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
 		                let anyIterator: AnyIterator = iterator
 		                #sourceLocation()
 		                return (safeDIOverrides.childBuilder.grandchildBuilder ?? Grandchild.init(anyIterator:))(anyIterator)
@@ -4846,7 +4846,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> DefaultAuthService {
 		        let networkService = (safeDIOverrides.networkService ?? DefaultNetworkService.init)()
-		        #sourceLocation(file: "\(output.inputSwiftFiles[2].relativePath)", line: 11)
+		        #sourceLocation(file: "\(output.fixtures["DefaultAuthService.swift"])", line: 11)
 		        let renamedNetworkService: NetworkService = networkService
 		        #sourceLocation()
 		        return DefaultAuthService(networkService: networkService, renamedNetworkService: renamedNetworkService)
@@ -4911,7 +4911,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> RootViewController {
 		        func __safeDI_authService() -> AuthService {
 		            let networkService = (safeDIOverrides.authService.networkService ?? DefaultNetworkService.init)()
-		            #sourceLocation(file: "\(output.inputSwiftFiles[2].relativePath)", line: 11)
+		            #sourceLocation(file: "\(output.fixtures["DefaultAuthService.swift"])", line: 11)
 		            let renamedNetworkService: NetworkService = networkService
 		            #sourceLocation()
 		            return (safeDIOverrides.authService.safeDIBuilder ?? DefaultAuthService.init(networkService:renamedNetworkService:))(networkService, renamedNetworkService)
@@ -5001,7 +5001,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        func __safeDI_consumer() -> Consumer {
 		            let service = (safeDIOverrides.consumer.service ?? Service.init)()
-		            #sourceLocation(file: "\(output.inputSwiftFiles[1].relativePath)", line: 8)
+		            #sourceLocation(file: "\(output.fixtures["Consumer.swift"])", line: 8)
 		            let alias: Service = service
 		            #sourceLocation()
 		            return (safeDIOverrides.consumer.safeDIBuilder ?? Consumer.init(service:alias:))(service, alias)
@@ -5036,7 +5036,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Consumer {
 		        let service = (safeDIOverrides.service ?? Service.init)()
-		        #sourceLocation(file: "\(output.inputSwiftFiles[1].relativePath)", line: 8)
+		        #sourceLocation(file: "\(output.fixtures["Consumer.swift"])", line: 8)
 		        let alias: Service = service
 		        #sourceLocation()
 		        return Consumer(service: service, alias: alias)
@@ -5792,7 +5792,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let concreteService = (safeDIOverrides.concreteService ?? ConcreteService.init)()
 		        func __safeDI_consumerBuilder() -> Consumer {
-		            #sourceLocation(file: "\(output.inputSwiftFiles[2].relativePath)", line: 6)
+		            #sourceLocation(file: "\(output.fixtures["Consumer.swift"])", line: 6)
 		            let service: ServiceProtocol = concreteService
 		            #sourceLocation()
 		            return (safeDIOverrides.consumerBuilder ?? Consumer.init(service:))(service)
@@ -8072,7 +8072,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Parent {
 		        let concreteService: ConcreteService? = safeDIOverrides.concreteService
 		        func __safeDI_consumer() -> Consumer {
-		            #sourceLocation(file: "\(output.inputSwiftFiles[1].relativePath)", line: 6)
+		            #sourceLocation(file: "\(output.fixtures["Consumer.swift"])", line: 6)
 		            let service: ServiceProtocol? = concreteService
 		            #sourceLocation()
 		            return (safeDIOverrides.consumer ?? Consumer.init(service:))(service)
