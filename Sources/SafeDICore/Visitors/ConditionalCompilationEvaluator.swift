@@ -66,8 +66,12 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 	func scannableClauses(in node: IfConfigDeclSyntax, guarding content: SafeDIContent) -> ScannableClauses {
 		switch content {
 		case .none:
-			// Nothing SafeDI scans for is inside, so the decisions do not affect generated code.
-			ScannableClauses(clauses: activeClauses(in: node, activeCompilationConditions: activeCompilationConditions).clauses, decisions: [])
+			// Nothing SafeDI scans for is inside, so the selection affects nothing SafeDI generates.
+			ScannableClauses(
+				clauses: activeClauses(in: node, activeCompilationConditions: activeCompilationConditions).clauses,
+				decisions: [],
+				restsOnCompilationConditions: false,
+			)
 		case .mockOnly:
 			if let mockConditionalCompilation {
 				mockOnlyScannableClauses(in: node, mockConditionalCompilation: mockConditionalCompilation)
@@ -125,12 +129,14 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 		)
 		var selectedClauses = [IfConfigClauseSyntax]()
 		var decisions = [ConditionalCompilationDecision]()
+		var restsOnCompilationConditions = false
 		var isSettled = false
 		for clause in node.clauses where !isSettled {
 			if let condition = clause.condition {
 				switch evaluator.evaluate(condition) {
 				case let .known(isActive):
 					let mentionedConditions = mentionedCompilationConditions(in: condition)
+					restsOnCompilationConditions = restsOnCompilationConditions || !mentionedConditions.isEmpty
 					// A condition without compilation conditions, such as `#if false`, cannot be decided wrongly.
 					if !mentionedConditions.isEmpty, !mentionedConditions.contains(ignoredCondition ?? "") {
 						decisions.append(ConditionalCompilationDecision(
@@ -151,7 +157,11 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 				selectedClauses.append(clause)
 			}
 		}
-		return ScannableClauses(clauses: selectedClauses, decisions: decisions)
+		return ScannableClauses(
+			clauses: selectedClauses,
+			decisions: decisions,
+			restsOnCompilationConditions: restsOnCompilationConditions,
+		)
 	}
 
 	/// The bare compilation conditions `condition` refers to, which are the inputs its evaluation rests on.
@@ -239,4 +249,7 @@ struct ScannableClauses {
 	let clauses: [IfConfigClauseSyntax]
 	/// The evaluations of bare conditions that the selection rests on, in source order.
 	let decisions: [ConditionalCompilationDecision]
+	/// Whether a different set of active conditions or mock condition could select different clauses
+	/// of a block that SafeDI scans, as opposed to a block decided by literals or platform conditions.
+	let restsOnCompilationConditions: Bool
 }

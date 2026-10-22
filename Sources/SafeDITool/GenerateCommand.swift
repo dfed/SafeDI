@@ -114,11 +114,14 @@ struct Generate: AsyncParsableCommand {
 
 		// In multi-module builds, the CSV includes all modules' files, so multiple
 		// configs may be present. The manifest's configurationFilePaths lists only
-		// this target's own config files, by the same paths the CSV uses; without
-		// a manifest every input file belongs to this module.
+		// this target's own config files, relative to scan's project root, so the
+		// CSV's paths are resolved the same way before matching; without a
+		// manifest every input file belongs to this module.
 		let inputFilePaths = try await findGenerateSwiftFiles()
 		let configurationFilePaths: Set<String> = if let manifest {
-			inputFilePaths.intersection(manifest.configurationFilePaths)
+			inputFilePaths.filter { inputFilePath in
+				manifest.configurationFilePaths.contains(manifest.resolvedPath(for: inputFilePath))
+			}
 		} else {
 			inputFilePaths
 		}

@@ -64,38 +64,13 @@ func verifyGeneratedCodeCompiles(
 		return
 	}
 
-	let scratchDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-verify-\(UUID().uuidString)")
-	try FileManager.default.createDirectory(at: scratchDirectory, withIntermediateDirectories: true)
-	filesToDelete.append(scratchDirectory)
-
-	// Prepend `import SafeDI` to each fixture file so test sources — which are
-	// authored without imports to keep them compact — can resolve the
-	// @Instantiable / @Received / @Forwarded / @Instantiated macros and the
-	// Instantiable protocol. The import is added at the wrapper layer (rather
-	// than inside the fixture string itself) because SafeDITool propagates
-	// user imports into generated output, and adding `import SafeDI` to the
-	// fixture string would rewrite every test's expected output to include a
-	// `#if canImport(SafeDI)` block.
-	var inputCompileFiles = [URL]()
-	for (index, sourceFile) in inputURLs.enumerated() {
-		let contents = try String(contentsOf: sourceFile, encoding: .utf8)
-		let wrapped = "import SafeDI\n" + contents
-		let destination = scratchDirectory.appendingPathComponent("input_\(index)_\(sourceFile.lastPathComponent)")
-		try wrapped.write(to: destination, atomically: true, encoding: .utf8)
-		inputCompileFiles.append(destination)
-	}
-
-	var combinedCompileFiles = inputCompileFiles
-	for (fileName, contents) in generatedFiles {
-		let destination = scratchDirectory.appendingPathComponent(fileName)
-		// Generated files reference SafeDI types (Instantiator, SendableInstantiator,
-		// etc.) but do not carry their own imports in production — they sit in the
-		// same target as the user's code, which imports SafeDI once. Inject the
-		// import here so each file typechecks in isolation.
-		let wrapped = "import SafeDI\n" + contents
-		try wrapped.write(to: destination, atomically: true, encoding: .utf8)
-		combinedCompileFiles.append(destination)
-	}
+	let staged = try stageCompileSources(
+		inputSwiftFiles: inputURLs,
+		generatedFiles: generatedFiles,
+		filesToDelete: &filesToDelete,
+	)
+	let inputCompileFiles = staged.inputFiles
+	let combinedCompileFiles = staged.inputFiles + staged.generatedFiles
 
 	let combinedResult = try runSwiftTypecheck(
 		sources: combinedCompileFiles,
@@ -257,6 +232,36 @@ struct SwiftTypecheckResult {
 
 /// - Parameter activeCompilationConditions: Conditions defined for the compile, mirroring what the
 ///   test supplied to SafeDITool. `DEBUG` is always defined, as it is in a debug build.
+/// Writes the fixture and generated files into a scratch directory the way the compiler will see them.
+///
+/// `import SafeDI` is prepended to each file. Fixture files are authored without imports to keep
+/// them compact, and the import is added at this layer rather than inside the fixture string
+/// because SafeDITool propagates user imports into generated output, so adding it to the fixture
+/// would rewrite every test's expected output to include a `#if canImport(SafeDI)` block. Generated
+/// files reference SafeDI types but carry no imports in production, where they sit in the same
+/// target as the user's code, which imports SafeDI once.
+func stageCompileSources(
+	inputSwiftFiles: [URL],
+	generatedFiles: [String: String],
+	filesToDelete: inout [URL],
+) throws -> (inputFiles: [URL], generatedFiles: [URL]) {
+	let scratchDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-verify-\(UUID().uuidString)")
+	try FileManager.default.createDirectory(at: scratchDirectory, withIntermediateDirectories: true)
+	filesToDelete.append(scratchDirectory)
+
+	let inputCompileFiles = try inputSwiftFiles.enumerated().map { index, sourceFile in
+		let destination = scratchDirectory.appendingPathComponent("input_\(index)_\(sourceFile.lastPathComponent)")
+		try ("import SafeDI\n" + String(contentsOf: sourceFile, encoding: .utf8)).write(to: destination, atomically: true, encoding: .utf8)
+		return destination
+	}
+	let generatedCompileFiles = try generatedFiles.map { fileName, contents in
+		let destination = scratchDirectory.appendingPathComponent(fileName)
+		try ("import SafeDI\n" + contents).write(to: destination, atomically: true, encoding: .utf8)
+		return destination
+	}
+	return (inputFiles: inputCompileFiles, generatedFiles: generatedCompileFiles)
+}
+
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func runSwiftTypecheck(
 	sources: [URL],

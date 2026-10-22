@@ -223,6 +223,7 @@ func performScan(
 		additionalMocksToGenerate: additionalMocksToGenerate,
 		additionalInputFiles: additionalInputFiles,
 		activeCompilationConditions: activeCompilationConditions.sorted(),
+		projectRoot: projectRootURL.path,
 	)
 
 	let encoder = JSONEncoder()
@@ -293,6 +294,21 @@ func performScan(
 	// machine-read only, so the `.sortedKeys` formatting the manifest
 	// needs for determinism isn't load-bearing here.
 	try? JSONEncoder().encode(cached).write(to: scannedModuleInfoURL)
+}
+
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+extension SafeDIToolManifest {
+	/// `path` as scan would have recorded it: relative to the manifest's project root when the
+	/// path lies under it, otherwise absolute. A manifest without a project root takes paths as written.
+	func resolvedPath(for path: String) -> String {
+		guard let projectRoot else { return path }
+		let projectRootURL = projectRoot.asFileURL
+		let directoryBaseURL = projectRootURL.appendingPathComponent("", isDirectory: true)
+		return relativePath(
+			for: URL(fileURLWithPath: path, relativeTo: directoryBaseURL).standardizedFileURL,
+			relativeTo: projectRootURL,
+		)
+	}
 }
 
 /// Wrapper persisted alongside the manifest so `generate` can both

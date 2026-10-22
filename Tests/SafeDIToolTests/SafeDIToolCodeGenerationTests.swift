@@ -449,17 +449,12 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		#expect(generatedCode.contains("#if STAGING\n#error("))
 
 		let artifacts = try #require(SafeDIBuildArtifactLocator.locate())
-		let scratchDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-		try FileManager.default.createDirectory(at: scratchDirectory, withIntermediateDirectories: true)
-		filesToDelete.append(scratchDirectory)
-		let sources = try [
-			("Root.swift", String(contentsOfFile: output.fixtures["Root.swift"], encoding: .utf8)),
-			("Root+SafeDI.swift", generatedCode),
-		].map { fileName, content in
-			let destination = scratchDirectory.appendingPathComponent(fileName)
-			try ("import SafeDI\n" + content).write(to: destination, atomically: true, encoding: .utf8)
-			return destination
-		}
+		let staged = try stageCompileSources(
+			inputSwiftFiles: [URL(fileURLWithPath: output.fixtures["Root.swift"])],
+			generatedFiles: ["Root+SafeDI.swift": generatedCode],
+			filesToDelete: &filesToDelete,
+		)
+		let sources = staged.inputFiles + staged.generatedFiles
 
 		// The compiler agrees with SafeDI's assumption: the assertion is inert.
 		let agreeing = try runSwiftTypecheck(sources: sources, artifacts: artifacts)

@@ -116,9 +116,12 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Str
 
 /// Parses a module's input files, reading and parsing each file once.
 ///
-/// The module's `#SafeDIConfiguration` decides how `#if` blocks are evaluated, so the files named
-/// by `configurationFilePaths` are parsed first to find it, and every file is then scanned with the
-/// resulting evaluator. A configuration file's syntax tree is kept for that scan rather than parsed again.
+/// The module's `#SafeDIConfiguration` decides how `#if` blocks are evaluated, but it can sit in
+/// any of the module's files, so every file is first walked with a provisional evaluator built from
+/// the supplied conditions. Only files in which an `#if` block guarding SafeDI declarations rested
+/// on a bare condition can extract something different under another evaluator; those keep their
+/// syntax trees and are walked again if the configuration changes the evaluator. Every other file
+/// is released as soon as it is walked, so memory scales with concurrency rather than module size.
 ///
 /// - Parameters:
 ///   - filePaths: Every file to parse.
@@ -131,25 +134,15 @@ func parseModule(
 	configurationFilePaths: Set<String>,
 	activeCompilationConditions: Set<String>,
 ) async throws -> ParsedModule {
-	let relevantFiles = try await readRelevantFiles(filePaths)
+	let provisionalEvaluator = ConditionalCompilationEvaluator(activeCompilationConditions: activeCompilationConditions)
+	var fileScans = try await walkFiles(filePaths, conditionalCompilation: provisionalEvaluator, retainingTreesThatDependOnEvaluator: true)
 
-	// Only the module's own files can declare its configuration, and the string check that gates
-	// parsing already ran, so this parses at most the handful of files that mention the macro.
-	var configurations = [SafeDIConfiguration]()
-	var parsedConfigurationFiles = [String: SourceFileSyntax]()
-	for file in relevantFiles where configurationFilePaths.contains(file.path) && file.containsConfiguration {
-		let syntaxTree = Parser.parse(source: file.content)
-		parsedConfigurationFiles[file.path] = syntaxTree
-		let fileVisitor = FileVisitor(
-			conditionalCompilationEvaluator: ConditionalCompilationEvaluator(activeCompilationConditions: activeCompilationConditions),
-		)
-		fileVisitor.walk(syntaxTree)
-		configurations.append(contentsOf: fileVisitor.configurations.map {
-			var configuration = $0
-			configuration.sourceFilePath = file.path
-			return configuration
-		})
-	}
+	let configurations = fileScans
+		.flatMap(\.configurations)
+		.filter { configuration in
+			guard let sourceFilePath = configuration.sourceFilePath else { return false }
+			return configurationFilePaths.contains(sourceFilePath)
+		}
 	guard configurations.count <= 1 else {
 		throw MultipleConfigurationsError(sourceFilePaths: configurations.compactMap(\.sourceFilePath).sorted())
 	}
@@ -158,15 +151,12 @@ func parseModule(
 		activeCompilationConditions: activeCompilationConditions,
 		configuration: configuration,
 	)
+	if evaluator != provisionalEvaluator {
+		fileScans = try await walkRetainedTrees(of: fileScans, conditionalCompilation: evaluator)
+	}
 
-	let moduleInfo = try await scan(
-		relevantFiles.map { file in
-			(path: file.path, content: file.content, syntaxTree: parsedConfigurationFiles[file.path])
-		},
-		conditionalCompilation: evaluator,
-	)
 	return ParsedModule(
-		moduleInfo: moduleInfo,
+		moduleInfo: ModuleInfo(fileScans),
 		configuration: configuration,
 		conditionalCompilationEvaluator: evaluator,
 	)
@@ -179,29 +169,59 @@ func parseSwiftFiles(
 	_ filePaths: Set<String>,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 ) async throws -> ModuleInfo {
-	try await scan(
-		readRelevantFiles(filePaths).map { file in
-			(path: file.path, content: file.content, syntaxTree: nil)
-		},
-		conditionalCompilation: evaluator,
-	)
+	try await ModuleInfo(walkFiles(filePaths, conditionalCompilation: evaluator, retainingTreesThatDependOnEvaluator: false))
 }
 
 // MARK: - Private
 
-private struct RelevantFile {
+/// What one file contributed to the module.
+private struct FileScan: Sendable {
 	let path: String
-	let content: String
-	/// Whether the content mentions `#SafeDIConfiguration`.
-	let containsConfiguration: Bool
+	let imports: [ImportStatement]
+	let instantiables: [Instantiable]
+	let configurations: [SafeDIConfiguration]
+	let encounteredUnexpectedNodes: Bool
+	let conditionalCompilationDecisions: [ConditionalCompilationDecision]
+	/// The file's syntax tree, kept only when the walk rested on a bare compilation condition and
+	/// the caller may need to walk it again with another evaluator.
+	let retainedSyntaxTree: SourceFileSyntax?
+
+	/// Whether the file declares nothing SafeDI scans for and no `#if` block was decided for it.
+	var contributesNothing: Bool {
+		instantiables.isEmpty
+			&& configurations.isEmpty
+			&& !encounteredUnexpectedNodes
+			&& conditionalCompilationDecisions.isEmpty
+	}
 }
 
-/// Reads every file and keeps the content of those that can contain SafeDI declarations.
+private extension ModuleInfo {
+	init(_ fileScans: [FileScan]) {
+		var conditionalCompilationDecisions = Set<ConditionalCompilationDecision>()
+		for fileScan in fileScans {
+			conditionalCompilationDecisions.formUnion(fileScan.conditionalCompilationDecisions)
+		}
+		let filesWithUnexpectedNodes = fileScans.filter(\.encounteredUnexpectedNodes).map(\.path)
+		self.init(
+			imports: fileScans.flatMap(\.imports),
+			instantiables: fileScans.flatMap(\.instantiables).sortedByDeclaration(),
+			configurations: fileScans.flatMap(\.configurations),
+			filesWithUnexpectedNodes: filesWithUnexpectedNodes.isEmpty ? nil : filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: conditionalCompilationDecisions.sorted(),
+		)
+	}
+}
+
+/// Reads, parses, and walks every file in parallel, keeping what each contributes.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-private func readRelevantFiles(_ filePaths: Set<String>) async throws -> [RelevantFile] {
+private func walkFiles(
+	_ filePaths: Set<String>,
+	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+	retainingTreesThatDependOnEvaluator retainsTrees: Bool,
+) async throws -> [FileScan] {
 	try await withThrowingTaskGroup(
-		of: RelevantFile?.self,
-		returning: [RelevantFile].self,
+		of: FileScan?.self,
+		returning: [FileScan].self,
 	) { taskGroup in
 		for filePath in filePaths where !filePath.isEmpty {
 			taskGroup.addTask {
@@ -209,93 +229,93 @@ private func readRelevantFiles(_ filePaths: Set<String>) async throws -> [Releva
 				let containsInstantiable = content.contains("@\(InstantiableVisitor.macroName)")
 				let containsConfiguration = content.contains("#\(SafeDIConfigurationVisitor.macroName)")
 				guard containsInstantiable || containsConfiguration else { return nil }
-				return RelevantFile(path: filePath, content: content, containsConfiguration: containsConfiguration)
+				let fileScan = walk(
+					Parser.parse(source: content),
+					at: filePath,
+					conditionalCompilation: evaluator,
+					retainingTreeIfDependentOnEvaluator: retainsTrees,
+				)
+				return fileScan.contributesNothing ? nil : fileScan
 			}
 		}
 
-		var relevantFiles = [RelevantFile]()
-		for try await relevantFile in taskGroup {
-			if let relevantFile {
-				relevantFiles.append(relevantFile)
+		var fileScans = [FileScan]()
+		for try await fileScan in taskGroup {
+			if let fileScan {
+				fileScans.append(fileScan)
 			}
 		}
-		return relevantFiles
+		return fileScans
 	}
 }
 
-/// Scans already-read files in parallel, parsing each unless its syntax tree is supplied.
+/// Walks again, with `evaluator`, every file that kept its syntax tree, and releases the trees.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-private func scan(
-	_ files: [(path: String, content: String, syntaxTree: SourceFileSyntax?)],
+private func walkRetainedTrees(
+	of fileScans: [FileScan],
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-) async throws -> ModuleInfo {
+) async throws -> [FileScan] {
 	try await withThrowingTaskGroup(
-		of: (
-			imports: [ImportStatement],
-			instantiables: [Instantiable],
-			configurations: [SafeDIConfiguration],
-			encounteredUnexpectedNodeInFile: String?,
-			conditionalCompilationDecisions: [ConditionalCompilationDecision],
-		)?.self,
-		returning: ModuleInfo.self,
+		of: (index: Int, fileScan: FileScan).self,
+		returning: [FileScan].self,
 	) { taskGroup in
-		var imports = [ImportStatement]()
-		var instantiables = [Instantiable]()
-		var configurations = [SafeDIConfiguration]()
-		var filesWithUnexpectedNodes = [String]()
-		var conditionalCompilationDecisions = Set<ConditionalCompilationDecision>()
-		for file in files {
-			taskGroup.addTask {
-				let syntaxTree = file.syntaxTree ?? Parser.parse(source: file.content)
-				let fileVisitor = FileVisitor(
-					conditionalCompilationEvaluator: evaluator,
-					sourceLocationConverter: SourceLocationConverter(fileName: file.path, tree: syntaxTree),
-				)
-				fileVisitor.walk(syntaxTree)
-				let declaresSafeDIContent = !fileVisitor.instantiables.isEmpty
-					|| !fileVisitor.configurations.isEmpty
-					|| fileVisitor.encounteredUnexpectedNodesSyntax
-				guard declaresSafeDIContent || !fileVisitor.conditionalCompilationDecisions.isEmpty else { return nil }
-				let instantiables = fileVisitor.instantiables.map {
-					var instantiable = $0
-					instantiable.sourceFilePath = file.path
-					return instantiable
+		for (index, fileScan) in fileScans.enumerated() {
+			if let retainedSyntaxTree = fileScan.retainedSyntaxTree {
+				taskGroup.addTask {
+					(
+						index: index,
+						fileScan: walk(
+							retainedSyntaxTree,
+							at: fileScan.path,
+							conditionalCompilation: evaluator,
+							retainingTreeIfDependentOnEvaluator: false,
+						),
+					)
 				}
-				let configurations = fileVisitor.configurations.map {
-					var configuration = $0
-					configuration.sourceFilePath = file.path
-					return configuration
-				}
-				return (
-					// A file whose only SafeDI content was skipped contributes nothing to generated
-					// code, so its imports stay out of the generated dependency tree.
-					imports: declaresSafeDIContent ? fileVisitor.imports : [],
-					instantiables: instantiables,
-					configurations: configurations,
-					encounteredUnexpectedNodeInFile: fileVisitor.encounteredUnexpectedNodesSyntax ? file.path : nil,
-					conditionalCompilationDecisions: fileVisitor.conditionalCompilationDecisions,
-				)
 			}
 		}
 
-		for try await fileInfo in taskGroup {
-			if let fileInfo {
-				imports.append(contentsOf: fileInfo.imports)
-				instantiables.append(contentsOf: fileInfo.instantiables)
-				configurations.append(contentsOf: fileInfo.configurations)
-				if let filePath = fileInfo.encounteredUnexpectedNodeInFile {
-					filesWithUnexpectedNodes.append(filePath)
-				}
-				conditionalCompilationDecisions.formUnion(fileInfo.conditionalCompilationDecisions)
-			}
+		// A file whose walk rested on a bare condition always yields a decision, so it still contributes.
+		var walkedFileScans = fileScans
+		for try await (index, fileScan) in taskGroup {
+			walkedFileScans[index] = fileScan
 		}
-
-		return ModuleInfo(
-			imports: imports,
-			instantiables: instantiables.sortedByDeclaration(),
-			configurations: configurations,
-			filesWithUnexpectedNodes: filesWithUnexpectedNodes.isEmpty ? nil : filesWithUnexpectedNodes,
-			conditionalCompilationDecisions: conditionalCompilationDecisions.sorted(),
-		)
+		return walkedFileScans
 	}
+}
+
+/// Walks one parsed file.
+private func walk(
+	_ syntaxTree: SourceFileSyntax,
+	at filePath: String,
+	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+	retainingTreeIfDependentOnEvaluator retainsTree: Bool,
+) -> FileScan {
+	let fileVisitor = FileVisitor(
+		conditionalCompilationEvaluator: evaluator,
+		sourceLocationConverter: SourceLocationConverter(fileName: filePath, tree: syntaxTree),
+	)
+	fileVisitor.walk(syntaxTree)
+	let declaresSafeDIContent = !fileVisitor.instantiables.isEmpty
+		|| !fileVisitor.configurations.isEmpty
+		|| fileVisitor.encounteredUnexpectedNodesSyntax
+	return FileScan(
+		path: filePath,
+		// A file whose only SafeDI content was skipped contributes nothing to generated
+		// code, so its imports stay out of the generated dependency tree.
+		imports: declaresSafeDIContent ? fileVisitor.imports : [],
+		instantiables: fileVisitor.instantiables.map {
+			var instantiable = $0
+			instantiable.sourceFilePath = filePath
+			return instantiable
+		},
+		configurations: fileVisitor.configurations.map {
+			var configuration = $0
+			configuration.sourceFilePath = filePath
+			return configuration
+		},
+		encounteredUnexpectedNodes: fileVisitor.encounteredUnexpectedNodesSyntax,
+		conditionalCompilationDecisions: fileVisitor.conditionalCompilationDecisions,
+		retainedSyntaxTree: retainsTree && fileVisitor.dependsOnConditionalCompilationEvaluator ? syntaxTree : nil,
+	)
 }

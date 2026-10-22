@@ -566,6 +566,12 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration)
+      # Optimized builds define no `DEBUG`, so the rule must withhold it and SafeDI
+      # must wire the example's `#else` logger.
+      - name: Build downstream example in opt mode
+        uses: ./.github/actions/retry
+        with:
+          command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" -c opt //ExampleBazelIntegration:ExampleBazelIntegration && grep -q "DisabledEventLogger()" bazel-bin/ExampleBazelIntegration/ExampleBazelIntegration_safedi.swift)
 
   codecov-empty-upload:
     name: Codecov Status for Markdown-only Changes
