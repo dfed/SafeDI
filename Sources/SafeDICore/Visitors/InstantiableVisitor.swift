@@ -56,12 +56,12 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				changes: [
 					.replace(
 						oldNode: Syntax(node.attributes),
-						newNode: Syntax(dependencySources[0].node),
+						newNode: Syntax(dependencySources[0].attribute),
 					),
 				],
 			))
 		}
-		guard let dependencySource = dependencySources.first?.source else {
+		guard case let (dependencySource, dependencyAttribute)? = dependencySources.first else {
 			// This dependency is not part of the DI system.
 			// If this variable declaration is missing a binding and is non-optional, we need a custom initializer.
 			let patterns = node
@@ -78,6 +78,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				.compactMap(TuplePatternSyntax.init)
 				.map(\.trimmedDescription)
 			return .skipChildren
+		}
+
+		// A fix-it rewrites the whole attribute, so its range is recorded only when there are no arguments to discard.
+		let bareAttributeRange: Dependency.SourceRange? = if dependencyAttribute.arguments == nil {
+			sourceRange(of: dependencyAttribute)
+		} else {
+			nil
 		}
 
 		// Check the bindings.
@@ -99,17 +106,19 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			}
 
 			if let identifier = IdentifierPatternSyntax(binding.pattern)?.identifier,
-			   let typeDescription = binding.typeAnnotation?.type.typeDescription
+			   let type = binding.typeAnnotation?.type
 			{
 				dependencies.append(
 					Dependency(
 						property: Property(
 							label: identifier.text,
-							typeDescription: typeDescription,
+							typeDescription: type.typeDescription,
 						),
 						source: dependencySource,
 						declarationLocation: declarationLocation(of: node),
 						identifierRange: sourceRange(of: identifier),
+						typeAnnotationRange: sourceRange(of: type),
+						bareAttributeRange: bareAttributeRange,
 					),
 				)
 			}
@@ -227,7 +236,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						property: argument.asProperty,
 						source: .received(onlyIfAvailable: false),
 						declarationLocation: declarationLocation(of: parameter),
-						identifierRange: sourceRange(of: parameter.firstName),
+						// The dependency's label is the inner name, so that is the token a rename fix-it replaces.
+						identifierRange: sourceRange(of: parameter.secondName ?? parameter.firstName),
+						typeAnnotationRange: sourceRange(of: parameter.type),
 					)
 				},
 				declarationType: .extensionType,
@@ -472,12 +483,12 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		}
 	}
 
-	/// The range of `token`’s text, excluding its trivia, or `nil` without a converter.
-	private func sourceRange(of token: TokenSyntax) -> Dependency.SourceRange? {
+	/// The range of `node`’s text, excluding its leading and trailing trivia, or `nil` without a converter.
+	private func sourceRange(of node: some SyntaxProtocol) -> Dependency.SourceRange? {
 		sourceLocationConverter.map { sourceLocationConverter in
 			Dependency.SourceRange(
-				start: sourceLocationConverter.declarationLocation(for: token.positionAfterSkippingLeadingTrivia),
-				end: sourceLocationConverter.declarationLocation(for: token.endPositionBeforeTrailingTrivia),
+				start: sourceLocationConverter.declarationLocation(for: node.positionAfterSkippingLeadingTrivia),
+				end: sourceLocationConverter.declarationLocation(for: node.endPositionBeforeTrailingTrivia),
 			)
 		}
 	}

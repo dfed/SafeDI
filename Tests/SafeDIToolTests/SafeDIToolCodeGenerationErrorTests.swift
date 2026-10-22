@@ -74,6 +74,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			diagnostics: { fixtures in
 				"""
 				\(fixtures["Grandchild.swift"]):6:5: error: @Received property `value: NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild. Did you mean `value: Grandchild.NestedType`?
+				\(fixtures["Grandchild.swift"]):6:26-6:36: fixit: Grandchild.NestedType
 				"""
 			},
 		) {
@@ -119,6 +120,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			diagnostics: { fixtures in
 				"""
 				\(fixtures["Grandchild.swift"]):5:5: error: @Received property `value: Root.NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild. Did you mean `value: NestedType`?
+				\(fixtures["Grandchild.swift"]):5:26-5:41: fixit: NestedType
 				"""
 			},
 		) {
@@ -316,6 +318,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			diagnostics: { fixtures in
 				"""
 				\(fixtures["Child.swift"]):5:5: error: @Received property `erasedType: any ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `erasedType: ErasedType`?
+				\(fixtures["Child.swift"]):5:31-5:45: fixit: ErasedType
 				"""
 			},
 		) {
@@ -360,6 +363,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			diagnostics: { fixtures in
 				"""
 				\(fixtures["Child.swift"]):5:5: error: @Received property `erasedType: ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `erasedType: any ErasedType`?
+				\(fixtures["Child.swift"]):5:31-5:41: fixit: any ErasedType
 				"""
 			},
 		) {
@@ -404,6 +408,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			diagnostics: { fixtures in
 				"""
 				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing!` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `thing: Thing`?
+				\(fixtures["Child.swift"]):5:26-5:32: fixit: Thing
 				"""
 			},
 		) {
@@ -446,6 +451,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			diagnostics: { fixtures in
 				"""
 				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `thing: Thing!`?
+				\(fixtures["Child.swift"]):5:26-5:31: fixit: Thing!
 				"""
 			},
 		) {
@@ -488,6 +494,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			diagnostics: { fixtures in
 				"""
 				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain: Root -> Child. The non-optional `thing: Thing` is available in chain. Did you mean to decorate this property with `@Received(onlyIfAvailable: true)`?
+				\(fixtures["Child.swift"]):5:5-5:14: fixit: @Received(onlyIfAvailable: true)
 				"""
 			},
 		) {
@@ -530,6 +537,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			diagnostics: { fixtures in
 				"""
 				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: Thing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `thing: Thing?`?
+				\(fixtures["Child.swift"]):5:26-5:31: fixit: Thing?
 				"""
 			},
 		) {
@@ -572,6 +580,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			diagnostics: { fixtures in
 				"""
 				\(fixtures["Child.swift"]):5:5: error: @Received property `thing: OtherThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `thing: Thing`?
+				\(fixtures["Child.swift"]):5:26-5:36: fixit: Thing
 				"""
 			},
 		) {
@@ -2497,6 +2506,56 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_offersFixItRenamingParameterInnerName_whenUnfulfillableInstantiateParameterHasAnOuterLabel() async {
+		// The dependency's label is the parameter's inner name, so that is what the fix-it renames.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):3:36: error: @Received property `shared3: SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: SharedThing`?
+				\(fixtures["Child.swift"]):3:44-3:51: fixit: shared
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(shared: SharedThing, child: Child) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let shared: SharedThing
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					extension Child: Instantiable {
+					    public static func instantiate(shared2 shared3: SharedThing) -> Child {
+					        Child(shared: shared3)
+					    }
+					}
+
+					public struct Child {
+					    public init(shared: SharedThing) {}
+					}
+					""",
+					"""
+					@Instantiable
+					public struct SharedThing: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_offersNoFixIt_whenUnfulfillableReceivedPropertyHasSeveralSuggestionsOfSameType() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
@@ -2544,13 +2603,14 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_offersNoFixIt_whenUnfulfillableReceivedPropertySuggestionMatchesLabelOnly() async {
-		// The suggestion shares the property's label, so renaming the identifier to it would change nothing;
-		// the fix-it gate rejects it on the label.
+	mutating func run_offersFixItRetypingProperty_whenUnfulfillableReceivedPropertyHasOneSuggestionOfSameLabel() async {
+		// The suggestion shares the property's label, so renaming the identifier would change nothing; the
+		// fix-it rewrites the type annotation instead.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
 				\(fixtures["Child.swift"]):7:5: error: @Received property `shared: SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: OtherThing`?
+				\(fixtures["Child.swift"]):7:27-7:38: fixit: OtherThing
 				"""
 			},
 		) {
@@ -2596,8 +2656,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_offersNoFixIt_whenUnfulfillableReceivedPropertyTypeIsModuleQualified() async {
 		// The suggester matches on the least-qualified type, so `shared: SharedThing` is suggested, but
-		// normalization does not unify `SharedModule.SharedThing` with `SharedThing`: the rename alone would
-		// leave the property unfulfilled, so the gate offers no fix-it.
+		// normalization does not unify `SharedModule.SharedThing` with `SharedThing`: label and type both
+		// differ, so neither the rename nor the retype alone would fulfill the property, and no fix-it is offered.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
@@ -2631,6 +2691,209 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					"""
 					@Instantiable
 					public struct SharedThing: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_offersFixItRetypingParameter_whenUnfulfillableInstantiateParameterHasOneSuggestionOfSameLabel() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):3:36: error: @Received property `shared: SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: OtherThing`?
+				\(fixtures["Child.swift"]):3:44-3:55: fixit: OtherThing
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(shared: OtherThing, child: Child) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let shared: OtherThing
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					extension Child: Instantiable {
+					    public static func instantiate(shared: SharedThing) -> Child {
+					        Child(shared: shared)
+					    }
+					}
+
+					public struct Child {
+					    public init(shared: SharedThing) {}
+					}
+
+					public struct SharedThing {}
+					""",
+					"""
+					@Instantiable
+					public struct OtherThing: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_offersNoFixIt_whenUnfulfillableReceivedPropertyHasSuggestionsOfSameLabelAndOfSameType() async {
+		// Renaming to `sharedThing` and retyping to `OtherThing` would each fulfill the property, so the choice is
+		// left to the user.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):7:5: error: @Received property `shared: SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean one of `shared: OtherThing`, `sharedThing: SharedThing`?
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(shared: OtherThing, sharedThing: SharedThing, child: Child) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let shared: OtherThing
+					    @Instantiated let sharedThing: SharedThing
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Child: Instantiable {
+					    public init(shared: SharedThing) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let shared: SharedThing
+					}
+					""",
+					"""
+					@Instantiable
+					public struct SharedThing: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public struct OtherThing: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_offersFixItAddingOnlyIfAvailable_whenUnfulfillableOptionalReceivedPropertyHasNonOptionalSuggestionAmongSeveral() async {
+		// The `onlyIfAvailable` hint names a single repair however many near-matches exist, so its fix-it is
+		// offered even though several suggestions are found.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):7:5: error: @Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain: Root -> Child. The non-optional `thing: Thing` is available in chain. Did you mean to decorate this property with `@Received(onlyIfAvailable: true)`?
+				\(fixtures["Child.swift"]):7:5-7:14: fixit: @Received(onlyIfAvailable: true)
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(thing: Thing, otherThing: Thing, child: Child) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let thing: Thing
+					    @Instantiated let otherThing: Thing
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Child: Instantiable {
+					    public init(thing: Thing?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let thing: Thing?
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Thing: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_offersNoFixIt_whenOnlyIfAvailableSuggestionArisesOnReceivedAttributeWithArguments() async {
+		// Only a bare `@Received` is rewritten, so the fix-it never discards arguments the user wrote.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):7:5: error: @Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain: Root -> Child. The non-optional `thing: Thing` is available in chain. Did you mean to decorate this property with `@Received(onlyIfAvailable: true)`?
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(thing: Thing, child: Child) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let thing: Thing
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Child: Instantiable {
+					    public init(thing: Thing?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(onlyIfAvailable: false) let thing: Thing?
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Thing: Instantiable {
 					    public init() {}
 					}
 					""",

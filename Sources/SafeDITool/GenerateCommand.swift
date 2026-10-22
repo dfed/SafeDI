@@ -184,6 +184,8 @@ struct Generate: AsyncParsableCommand {
 						source: $0.source,
 						declarationLocation: $0.declarationLocation,
 						identifierRange: $0.identifierRange,
+						typeAnnotationRange: $0.typeAnnotationRange,
+						bareAttributeRange: $0.bareAttributeRange,
 					)
 				} else {
 					// Default to what was in the code – we'll probably error later

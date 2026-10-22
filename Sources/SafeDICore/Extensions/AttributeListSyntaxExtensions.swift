@@ -48,14 +48,14 @@ extension AttributeListSyntax {
 		return AttributeSyntax(attribute)
 	}
 
-	public var dependencySources: [(source: Dependency.Source, node: AttributeListSyntax.Element)] {
+	public var dependencySources: [(source: Dependency.Source, attribute: AttributeSyntax)] {
 		compactMap {
 			switch $0 {
-			case .attribute:
+			case let .attribute(attribute):
 				guard let source = Dependency.Source(node: $0) else {
 					return nil
 				}
-				return (source: source, node: $0)
+				return (source: source, attribute: attribute)
 			case .ifConfigDecl:
 				return nil
 			}
