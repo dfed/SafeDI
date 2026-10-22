@@ -656,12 +656,12 @@ struct Generate: AsyncParsableCommand {
 	private func resolveSafeDIFulfilledTypes(instantiables: [Instantiable]) throws -> [TypeDescription: Instantiable] {
 		// Errors cite every declaration claiming the type rather than the pair that collided: a merged entry
 		// no longer knows which declaration it came from, and the pair would depend on collection order.
-		func productionDeclarationLocations(fulfilling instantiableType: TypeDescription) -> [Dependency.DeclarationLocation] {
+		func productionDeclarationLocations(fulfilling instantiableType: TypeDescription) -> [Dependency.DeclarationLocation?] {
 			instantiables
 				.filter { !$0.mockOnly && $0.instantiableTypes.contains(instantiableType) }
 				.map(\.declarationLocation)
 		}
-		func mockProviderDeclarationLocations(fulfilling instantiableType: TypeDescription) -> [Dependency.DeclarationLocation] {
+		func mockProviderDeclarationLocations(fulfilling instantiableType: TypeDescription) -> [Dependency.DeclarationLocation?] {
 			instantiables
 				.filter { ($0.mockOnly || $0.mockInitializer != nil) && $0.instantiableTypes.contains(instantiableType) }
 				.map(\.declarationLocation)
@@ -754,12 +754,12 @@ struct Generate: AsyncParsableCommand {
 	}
 
 	private enum CollectInstantiablesError: SourceLocatedError {
-		case foundDuplicateInstantiable(TypeDescription, declaredAt: [Dependency.DeclarationLocation])
-		case duplicateMockProvider(TypeDescription, declaredAt: [Dependency.DeclarationLocation])
+		case foundDuplicateInstantiable(TypeDescription, declaredAt: [Dependency.DeclarationLocation?])
+		case duplicateMockProvider(TypeDescription, declaredAt: [Dependency.DeclarationLocation?])
 
 		var sourceDiagnostics: [SourceDiagnostic] {
 			let message: String
-			let declarationLocations: [Dependency.DeclarationLocation]
+			let declarationLocations: [Dependency.DeclarationLocation?]
 			switch self {
 			case let .foundDuplicateInstantiable(duplicateInstantiable, declaredAt):
 				message = "@\(InstantiableVisitor.macroName)-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `\(duplicateInstantiable.asSource)`"
@@ -768,9 +768,8 @@ struct Generate: AsyncParsableCommand {
 				message = "Found multiple hand-written mock providers for `\(duplicateInstantiable.asSource)`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both."
 				declarationLocations = declaredAt
 			}
-			// Report each declaration in location order so the output does not depend on collection order.
+			// Sorted on the formatted line, a non-optional key, so the output does not depend on collection order.
 			return declarationLocations
-				.sorted()
 				.map { declarationLocation in
 					SourceDiagnostic(
 						severity: .error,
@@ -778,6 +777,7 @@ struct Generate: AsyncParsableCommand {
 						message: message,
 					)
 				}
+				.sorted { $0.formatted < $1.formatted }
 		}
 	}
 }

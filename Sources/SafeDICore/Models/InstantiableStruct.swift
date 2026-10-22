@@ -34,7 +34,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		mockInitializer: Initializer? = nil,
 		mockReturnType: TypeDescription? = nil,
 		customMockName: String? = nil,
-		declarationLocation: Dependency.DeclarationLocation,
+		declarationLocation: Dependency.DeclarationLocation? = nil,
 	) {
 		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
 		self.declarationLocation = declarationLocation
@@ -110,8 +110,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// `declarationLocation.filePath` keeps the path exactly as parsed for diagnostics.
 	public var sourceFilePath: String?
 	/// Where the decorated declaration begins in source: its first attribute, as for `Dependency.declarationLocation`.
-	/// The macro expansion path records it against an unnamed file; `SafeDITool` records the path it was given.
-	public let declarationLocation: Dependency.DeclarationLocation
+	/// `nil` only when the declaration was parsed without a file context – macro expansion walks a detached
+	/// declaration – and such values never reach the dependency tree generator, which only consumes
+	/// instantiables that `SafeDITool` parsed from files.
+	public let declarationLocation: Dependency.DeclarationLocation?
 
 	/// The type of declaration where this Instantiable was defined.
 	public enum DeclarationType: Codable, Hashable, Sendable {

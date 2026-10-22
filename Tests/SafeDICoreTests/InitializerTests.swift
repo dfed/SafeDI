@@ -22,9 +22,6 @@ import Testing
 @testable import SafeDICore
 
 struct InitializerTests {
-	/// Initializer validation does not read dependency locations; every hand-built dependency shares this one.
-	private static let declarationLocation = Dependency.DeclarationLocation(filePath: "Initializer.swift", line: 1, column: 1)
-
 	@Test
 	func generateSafeDIInitializer_throwsWhenInitializerIsNotPublicOrOpen() {
 		let initializer = Initializer(
@@ -95,7 +92,6 @@ struct InitializerTests {
 							typeDescription: .simple(name: "Variant"),
 						),
 						source: .forwarded,
-						declarationLocation: Self.declarationLocation,
 					),
 				],
 			)
@@ -124,7 +120,6 @@ struct InitializerTests {
 							typeDescription: .simple(name: "Variant"),
 						),
 						source: .forwarded,
-						declarationLocation: Self.declarationLocation,
 					),
 				],
 			)
@@ -161,7 +156,6 @@ struct InitializerTests {
 							typeDescription: .simple(name: "Variant"),
 						),
 						source: .forwarded,
-						declarationLocation: Self.declarationLocation,
 					),
 				],
 			)
@@ -189,7 +183,6 @@ struct InitializerTests {
 							typeDescription: .simple(name: "Variant"),
 						),
 						source: .forwarded,
-						declarationLocation: Self.declarationLocation,
 					),
 				],
 			)
@@ -217,7 +210,6 @@ struct InitializerTests {
 							typeDescription: .simple(name: "Variant"),
 						),
 						source: .forwarded,
-						declarationLocation: Self.declarationLocation,
 					),
 				],
 			)
@@ -246,12 +238,10 @@ struct InitializerTests {
 			.init(
 				property: .init(label: "service", typeDescription: .simple(name: "Service")),
 				source: .received(onlyIfAvailable: false),
-				declarationLocation: Self.declarationLocation,
 			),
 			.init(
 				property: .init(label: "optionalDep", typeDescription: .optional(.simple(name: "OptionalDep"))),
 				source: .received(onlyIfAvailable: true),
-				declarationLocation: Self.declarationLocation,
 			),
 		]
 		let unavailable: Set<Property> = [
@@ -286,7 +276,6 @@ struct InitializerTests {
 			.init(
 				property: .init(label: "service", typeDescription: .simple(name: "Service")),
 				source: .received(onlyIfAvailable: false),
-				declarationLocation: Self.declarationLocation,
 			),
 		]
 
@@ -320,12 +309,10 @@ struct InitializerTests {
 			.init(
 				property: .init(label: "service", typeDescription: .simple(name: "Service")),
 				source: .received(onlyIfAvailable: false),
-				declarationLocation: Self.declarationLocation,
 			),
 			.init(
 				property: .init(label: "crossModuleDependency", typeDescription: .simple(name: "CrossModuleType")),
 				source: .instantiated(fulfillingTypeDescription: nil, erasedToConcreteExistential: false),
-				declarationLocation: Self.declarationLocation,
 			),
 		]
 

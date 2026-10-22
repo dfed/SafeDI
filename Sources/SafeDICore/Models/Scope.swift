@@ -83,7 +83,7 @@ final class Scope: Hashable {
 	struct RequiredReceivedProperty {
 		/// The property an ancestor must provide: the fulfilling property for an aliased dependency, the declared property otherwise.
 		let property: Property
-		let declarationLocation: Dependency.DeclarationLocation
+		let declarationLocation: Dependency.DeclarationLocation?
 	}
 
 	private(set) lazy var requiredReceivedProperties: [RequiredReceivedProperty] = instantiable

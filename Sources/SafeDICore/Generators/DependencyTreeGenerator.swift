@@ -396,9 +396,9 @@ public actor DependencyTreeGenerator {
 	// MARK: - DependencyTreeGeneratorError
 
 	private enum DependencyTreeGeneratorError: SourceLocatedError {
-		case noInstantiableFound(TypeDescription, referencedAt: [Dependency.DeclarationLocation])
+		case noInstantiableFound(TypeDescription, referencedAt: [Dependency.DeclarationLocation?])
 		case unfulfillableProperties([UnfulfillableProperty])
-		case instantiableHasForwardedProperty(property: Property, declarationLocation: Dependency.DeclarationLocation, instantiableWithForwardedProperty: Instantiable, forwardedDeclarations: [(property: Property, declarationLocation: Dependency.DeclarationLocation)], parent: Instantiable)
+		case instantiableHasForwardedProperty(property: Property, declarationLocation: Dependency.DeclarationLocation?, instantiableWithForwardedProperty: Instantiable, forwardedDeclarations: [(property: Property, declarationLocation: Dependency.DeclarationLocation?)], parent: Instantiable)
 		/// Reported at the dependency declaration that closes the cycle – the `@Instantiated` or `@Received`
 		/// property whose type is already on the instantiation stack – with a note at each member type’s
 		/// `@Instantiable` declaration. See `DependencyCycle`.
@@ -411,11 +411,12 @@ public actor DependencyTreeGenerator {
 		case receivedInstantiatorDependencyCycleDetected(property: Property, directParent: TypeDescription, cycle: DependencyCycle)
 		/// Reported at the `@Received` declaration that closes the chain: the one that receives `instantiated` back
 		/// inside the tree `instantiated` creates. No notes; the chain is spelled out in the message.
-		case receivedConstantCycleDetected(instantiated: Property, receivedPropertyChain: [Property], declarationLocation: Dependency.DeclarationLocation)
+		case receivedConstantCycleDetected(instantiated: Property, receivedPropertyChain: [Property], declarationLocation: Dependency.DeclarationLocation?)
 
 		var sourceDiagnostics: [SourceDiagnostic] {
 			switch self {
 			case let .noInstantiableFound(typeDescription, referencedAt):
+				// Sorted on the formatted line, a non-optional key, so the order never depends on map iteration.
 				referencedAt.map {
 					SourceDiagnostic(
 						severity: .error,
@@ -423,6 +424,7 @@ public actor DependencyTreeGenerator {
 						message: "No `@\(InstantiableVisitor.macroName)`-decorated type or extension found to fulfill `@\(Dependency.Source.instantiatedRawValue)`-decorated property with type `\(typeDescription.asSource)`",
 					)
 				}
+				.sorted { $0.formatted < $1.formatted }
 			case let .unfulfillableProperties(unfulfillableProperties):
 				unfulfillableProperties
 					.map(\.sourceDiagnostics)
@@ -465,7 +467,7 @@ public actor DependencyTreeGenerator {
 
 		struct UnfulfillableProperty: Hashable {
 			let property: Property
-			let declarationLocation: Dependency.DeclarationLocation
+			let declarationLocation: Dependency.DeclarationLocation?
 			let instantiable: Instantiable
 			/// The types that instantiate `instantiable`, innermost first, ending with `root`.
 			let parentStack: [TypeDescription]
@@ -519,7 +521,7 @@ public actor DependencyTreeGenerator {
 		/// Each member type gets a note at its `@Instantiable` declaration so every file involved is navigable.
 		struct DependencyCycle {
 			/// The location of the dependency declaration whose target type is already on the instantiation stack.
-			let declarationLocation: Dependency.DeclarationLocation
+			let declarationLocation: Dependency.DeclarationLocation?
 			/// The property types in the cycle, innermost first, each paired with the location of the `@Instantiable`
 			/// declaration fulfilling it. `nil` when no `@Instantiable` is registered for the property’s type.
 			let members: [(typeDescription: TypeDescription, declarationLocation: Dependency.DeclarationLocation?)]
@@ -798,7 +800,7 @@ public actor DependencyTreeGenerator {
 	private func throwIfInvalidCycle(
 		typesInCycle: [TypeDescription],
 		property: Property,
-		declarationLocation: Dependency.DeclarationLocation,
+		declarationLocation: Dependency.DeclarationLocation?,
 		directParent: TypeDescription,
 		isReceived: Bool,
 	) throws {
@@ -1335,7 +1337,7 @@ public actor DependencyTreeGenerator {
 				)
 				throw DependencyTreeGeneratorError.noInstantiableFound(
 					reachableTypeDescription,
-					referencedAt: referencingDeclarationLocations.sorted(),
+					referencedAt: Array(referencingDeclarationLocations),
 				)
 			}
 		}

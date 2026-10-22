@@ -24,6 +24,19 @@ import Testing
 
 struct SourceDiagnosticTests {
 	@Test
+	func formatted_omitsLocationPrefix_whenLocationIsNil() {
+		// Model values built during macro expansion carry no location. The dependency tree generator never
+		// sees them, but the formatter does not have to prove that: a location-less diagnostic is rendered
+		// the way the compiler renders its own, as `<severity>: <message>`.
+		let diagnostic = SourceDiagnostic(
+			severity: .error,
+			location: nil,
+			message: "Dependency cycle detected: A -> B -> A",
+		)
+		#expect(diagnostic.formatted == "error: Dependency cycle detected: A -> B -> A")
+	}
+
+	@Test
 	func resolvingFilePath_makesPathAbsolute_whenFilePathIsRelative() {
 		let diagnostic = SourceDiagnostic(
 			severity: .note,

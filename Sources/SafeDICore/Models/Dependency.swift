@@ -28,7 +28,7 @@ public struct Dependency: Codable, Hashable, Sendable {
 	public init(
 		property: Property,
 		source: Dependency.Source,
-		declarationLocation: DeclarationLocation,
+		declarationLocation: DeclarationLocation? = nil,
 	) {
 		self.property = property
 		self.source = source
@@ -51,9 +51,11 @@ public struct Dependency: Codable, Hashable, Sendable {
 	public let source: Source
 	/// The receiver’s type description as an `@Instantiable`-decorated type.
 	public let asInstantiatedType: TypeDescription
-	/// Where the dependency’s property is declared in source. The macro expansion path records it against an
-	/// unnamed file; `SafeDITool` records it against the path it was given, which diagnostics print.
-	public let declarationLocation: DeclarationLocation
+	/// Where the dependency’s property is declared in source.
+	/// `nil` only when the dependency was parsed without a file context – macro expansion walks a detached
+	/// declaration – and such values never reach the dependency tree generator, which only consumes
+	/// dependencies that `SafeDITool` parsed from files.
+	public let declarationLocation: DeclarationLocation?
 
 	/// The file, line, and column at which a declaration begins.
 	public struct DeclarationLocation: Codable, Hashable, Sendable {
@@ -125,12 +127,4 @@ public struct Dependency: Codable, Hashable, Sendable {
 	static let erasedInstantiatorType = "ErasedInstantiator"
 	static let sendableInstantiatorType = "SendableInstantiator"
 	static let sendableErasedInstantiatorType = "SendableErasedInstantiator"
-}
-
-// MARK: - Dependency.DeclarationLocation + Comparable
-
-extension Dependency.DeclarationLocation: Comparable {
-	public static func < (lhs: Dependency.DeclarationLocation, rhs: Dependency.DeclarationLocation) -> Bool {
-		(lhs.filePath, lhs.line, lhs.column) < (rhs.filePath, rhs.line, rhs.column)
-	}
 }
