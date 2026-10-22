@@ -108,19 +108,47 @@ jobs:
           awk '/^module\(/,/^\)/' MODULE.bazel | grep -q 'version = "99.99.99-test"'
 
   xcodebuild:
-    name: Build with xcodebuild on Xcode 26
+    # The job name spells out the matrix value so the check names stay
+    # exactly as branch protection lists them.
+    name: Build with xcodebuild on Xcode 26 (${{ matrix.platforms }})
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     runs-on: macos-26
     strategy:
       matrix:
-        platforms: [
-          'generic/platform=ios',
-          'platform=macOS',
-          'generic/platform=tvos',
-          'generic/platform=watchos',
-          'generic/platform=visionos'
-        ]
+        # Why the non-macOS destinations build with Xcode 26.2 while
+        # everything else in this workflow stays on the 26.0 floor:
+        # GitHub's macos-26 image ships the simulator runtimes for
+        # Xcode 26.2 and newer, dyld caches prebuilt, but not 26.0's.
+        # With 26.0 each of these jobs had to download an 8 GB runtime
+        # and then build its dyld shared cache in the background, which
+        # slowed every xcodebuild action on the runner 2-5x for several
+        # minutes (resolve took ~175 s against ~10 s on the macOS job).
+        # The 26.0 floor is still exercised by the macOS destination
+        # here, by the test job, and by the example jobs; what moves
+        # to 26.2 is compiling SafeDI's library sources against the
+        # iOS, tvOS, watchOS, and visionOS SDKs. If the image stops
+        # shipping a runtime, "Ensure Platform Is Installed" downloads
+        # it: slower, not broken.
+        include:
+          - platforms: platform=macOS
+            xcode: /Applications/Xcode_26.0.app
+          - platforms: generic/platform=ios
+            xcode: /Applications/Xcode_26.2.app
+            runtime: iOS
+            sdk: iphonesimulator
+          - platforms: generic/platform=tvos
+            xcode: /Applications/Xcode_26.2.app
+            runtime: tvOS
+            sdk: appletvsimulator
+          - platforms: generic/platform=watchos
+            xcode: /Applications/Xcode_26.2.app
+            runtime: watchOS
+            sdk: watchsimulator
+          - platforms: generic/platform=visionos
+            xcode: /Applications/Xcode_26.2.app
+            runtime: visionOS
+            sdk: xrsimulator
       fail-fast: false
     permissions:
       contents: read
@@ -128,20 +156,67 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
-      - name: Download Platform
-        if: matrix.platforms != 'platform=macOS'
-        run: |
-          sudo xcodebuild -runFirstLaunch
-          sudo xcrun simctl list
-          PLATFORM=$(echo "${{ matrix.platforms }}" | sed 's|generic/platform=||')
-          sudo xcodebuild -downloadPlatform "$PLATFORM"
+        run: sudo xcode-select --switch ${{ matrix.xcode }}/Contents/Developer
+      # xcodebuild otherwise clones every package dependency from
+      # scratch on each run (swift-syntax is the large one). Keeping the
+      # clones in a fixed directory lets actions/cache restore them. The
+      # clones are plain git checkouts, so the key needn't name the
+      # Xcode version.
+      - name: Cache Cloned Source Packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/xcode-packages
+          key: xcode-packages-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+      # Resolving needs no platform, so it comes before any download
+      # the next step might have to do, while the runner is quiet.
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
-          command: xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme SafeDI-Package
+          command: xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme SafeDI-Package -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages"
+      # Normally a no-op: the selected Xcode's SDK version has a matching
+      # runtime on the image. The download is the fallback, with a
+      # deadline and one retry because a download that sits in
+      # "Preparing to download" has held a runner for an hour. The
+      # image has already run `-runFirstLaunch` for every Xcode, so it
+      # is only repeated when Xcode reports work pending. `ps` rather
+      # than `kill -0` for liveness: the child runs as root under sudo,
+      # so `kill -0` from the runner user would report EPERM instead of
+      # "alive".
+      - name: Ensure Platform Is Installed
+        if: ${{ matrix.runtime }}
+        env:
+          RUNTIME: ${{ matrix.runtime }}
+          SDK: ${{ matrix.sdk }}
+          DEADLINE_SECONDS: '900'
+        run: |
+          version=$(xcrun --sdk "$SDK" --show-sdk-version)
+          if xcrun simctl list runtimes | grep -q "^$RUNTIME $version "; then
+            echo "$RUNTIME $version runtime is installed on this image."
+            exit 0
+          fi
+          echo "::warning::$RUNTIME $version runtime is not on this image; downloading it. The job still passes, just more slowly."
+          if ! xcrun xcodebuild -checkFirstLaunchStatus > /dev/null 2>&1; then
+            sudo xcodebuild -runFirstLaunch
+          fi
+          download() {
+            sudo xcodebuild -downloadPlatform "$RUNTIME" &
+            local pid=$!
+            local waited=0
+            while ps -p "$pid" > /dev/null 2>&1; do
+              if [ "$waited" -ge "$DEADLINE_SECONDS" ]; then
+                echo "::warning::$RUNTIME download exceeded ${DEADLINE_SECONDS}s; stopping it"
+                sudo kill "$pid" 2> /dev/null || true
+                wait "$pid" 2> /dev/null || true
+                return 1
+              fi
+              sleep 15
+              waited=$((waited + 15))
+            done
+            wait "$pid"
+          }
+          download || download
       - name: Build Framework
-        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }}
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }} -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages"
 
   docc:
     name: Build DocC on Xcode 26
@@ -337,6 +412,7 @@ jobs:
           fail_ci_if_error: true
           verbose: true
           os: macos
+          flags: macos
 
   linux:
     name: Build and Test on Linux
@@ -381,6 +457,7 @@ jobs:
           fail_ci_if_error: true
           verbose: true
           os: linux
+          flags: linux
 
   linux-latest-swift:
     name: Build and Test on Latest Swift
