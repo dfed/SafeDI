@@ -14,8 +14,71 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect Changed Files
+    # Every build and test job below depends on this one and skips
+    # itself when the push or pull request touched only Markdown. A
+    # job skipped by its `if:` reports "Success", so required status
+    # checks are satisfied without allocating a runner. Anything that
+    # isn't Markdown (sources, workflows, lockfiles, project files)
+    # counts as a source change. DocC articles are Markdown but feed
+    # the DocC build, so they're tracked separately. The link checker
+    # always runs: Markdown is its input, and the two coverage jobs run
+    # on every push to main so the README badge's report is never an
+    # empty one. When in doubt (a scheduled run, or a diff that can't
+    # be computed) the answer is "everything changed", and the gates
+    # below treat a missing answer the same way.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      source: ${{ steps.classify.outputs.source }}
+      docc: ${{ steps.classify.outputs.docc }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          # Full history so both ends of the diff are present.
+          fetch-depth: 0
+      - name: Classify Changed Files
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          source=false
+          docc=false
+          if [ "$EVENT_NAME" != "pull_request" ] && [ "$EVENT_NAME" != "push" ]; then
+            echo "Event '$EVENT_NAME' has no diff to classify; treating everything as changed."
+            source=true
+            docc=true
+          elif ! changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA"); then
+            echo "Could not diff $BASE_SHA...$HEAD_SHA; treating everything as changed."
+            source=true
+            docc=true
+          else
+            echo "Changed files:"
+            echo "$changed"
+            while IFS= read -r file; do
+              [ -n "$file" ] || continue
+              case "$file" in
+                *.docc/*) docc=true ;;
+              esac
+              case "$file" in
+                *.md) ;;
+                *) source=true ;;
+              esac
+            done <<< "$changed"
+          fi
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+          echo "docc=$docc" >> "$GITHUB_OUTPUT"
+          echo "source=$source docc=$docc"
+
   update-version-check:
     name: Update Version Script Check
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     # The script uses portable `sed -i.bak`, so this needn't take one of
     # the five concurrent macOS slots. The publish workflow still runs
     # it on macOS.
@@ -46,6 +109,8 @@ jobs:
 
   xcodebuild:
     name: Build with xcodebuild on Xcode 26
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     runs-on: macos-26
     strategy:
       matrix:
@@ -80,6 +145,10 @@ jobs:
 
   docc:
     name: Build DocC on Xcode 26
+    needs: changes
+    # DocC articles under `*.docc/` are Markdown, so this job also runs
+    # when only those changed.
+    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || needs.changes.outputs.docc == 'true') }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -113,6 +182,8 @@ jobs:
 
   spm-package-integration:
     name: Build Package Integration on Xcode 26
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -136,6 +207,8 @@ jobs:
 
   spm-project-integration:
     name: Build Project Integration on Xcode 26
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     # Pinned to 26.4 — project file declares package traits.
     runs-on: macos-26
     permissions:
@@ -157,6 +230,8 @@ jobs:
 
   spm-multi-project-integration:
     name: Build Multi Project Integration on Xcode 26
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     # Pinned to 26.4 — project file declares package traits.
     runs-on: macos-26
     permissions:
@@ -178,6 +253,8 @@ jobs:
 
   spm-tuist-integration:
     name: Build Tuist Integration on Xcode 26
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -207,6 +284,11 @@ jobs:
 
   spm:
     name: Build and Test on Xcode 26
+    needs: changes
+    # Also runs on every push to main, Markdown-only or not, so the
+    # Codecov report behind the README badge always comes from a real
+    # test run.
+    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -258,6 +340,11 @@ jobs:
 
   linux:
     name: Build and Test on Linux
+    needs: changes
+    # Also runs on every push to main, Markdown-only or not, so the
+    # Codecov report behind the README badge always comes from a real
+    # test run.
+    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -297,6 +384,8 @@ jobs:
 
   linux-latest-swift:
     name: Build and Test on Latest Swift
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     # `swift:latest` floats to the newest Swift release so this job
     # catches toolchain changes (e.g. SwiftPM's `swiftbuild` build
@@ -334,6 +423,8 @@ jobs:
 
   bazel:
     name: Bazel Build on macOS
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     # General bazel sanity check on every PR. We can't perfectly
     # mirror BCR's presubmit (https://registry.bazel.build/modules/safedi):
     # BazelCI's BuildKite infrastructure is closed to non-`bazelbuild`
@@ -399,6 +490,29 @@ jobs:
         with:
           command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration)
 
+  codecov-empty-upload:
+    name: Codecov Status for Markdown-only Changes
+    needs: changes
+    # With the test jobs skipped, no coverage report reaches Codecov and
+    # its required `codecov/project` status would never be posted.
+    # `empty-upload` tells Codecov the commit changed nothing it
+    # measures, and Codecov posts passing statuses instead. Pull
+    # requests only: on main the coverage jobs run regardless.
+    if: ${{ needs.changes.outputs.source == 'false' && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Send Empty Upload
+        uses: codecov/codecov-action@v7
+        with:
+          run_command: empty-upload
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+          verbose: true
+
   readme-validation:
     name: Check Markdown links
     runs-on: ubuntu-latest
@@ -412,6 +526,8 @@ jobs:
 
   lint-swift:
     name: Lint Swift
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     container: swift:6.3
     permissions:
