@@ -208,7 +208,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 				"""
-				#if os(macOS) || os(iOS)
+				#if swift(>=5.0) || os(iOS)
 				@Instantiable(isRoot: true)
 				public struct Root: Instantiable {
 				    public init(networkService: NetworkService) {
