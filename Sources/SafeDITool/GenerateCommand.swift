@@ -161,6 +161,8 @@ struct Generate: AsyncParsableCommand {
 			module = initialModule
 		}
 
+		// Each module's instantiables are already ordered by `parseSwiftFiles`, so the
+		// combined order depends only on the caller's dependent-module list.
 		let unnormalizedInstantiables = dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
 		let instantiableTypes = Set(unnormalizedInstantiables.flatMap(\.instantiableTypes))
 		let normalizedInstantiables = unnormalizedInstantiables.map { unnormalizedInstantiable in

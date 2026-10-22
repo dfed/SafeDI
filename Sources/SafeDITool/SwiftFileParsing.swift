@@ -197,7 +197,7 @@ func parseSwiftFiles(
 
 		return ModuleInfo(
 			imports: imports,
-			instantiables: instantiables,
+			instantiables: instantiables.sortedByDeclaration(),
 			configurations: configurations,
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.isEmpty ? nil : filesWithUnexpectedNodes,
 			conditionalCompilationDecisions: conditionalCompilationDecisions.sorted(),
