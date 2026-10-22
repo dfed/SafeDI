@@ -741,7 +741,7 @@ import Testing
 				    }
 
 				    #if DEBUG
-				    @Received let dependency: Dependency
+				    let dependency: Dependency
 				    #endif
 				}
 				""",
