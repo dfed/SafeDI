@@ -29,10 +29,12 @@ public struct Dependency: Codable, Hashable, Sendable {
 		property: Property,
 		source: Dependency.Source,
 		declarationLocation: DeclarationLocation? = nil,
+		identifierRange: SourceRange? = nil,
 	) {
 		self.property = property
 		self.source = source
 		self.declarationLocation = declarationLocation
+		self.identifierRange = identifierRange
 		switch source {
 		case .received, .forwarded:
 			asInstantiatedType = property.typeDescription.asInstantiatedType
@@ -56,6 +58,26 @@ public struct Dependency: Codable, Hashable, Sendable {
 	/// declaration – and such values never reach the dependency tree generator, which only consumes
 	/// dependencies that `SafeDITool` parsed from files.
 	public let declarationLocation: DeclarationLocation?
+
+	/// The source range of the dependency’s identifier token – the property name, or the parameter name of an
+	/// extension’s `instantiate` – which a fix-it can replace.
+	/// `nil` only when the dependency was parsed without a file context – macro expansion walks a detached
+	/// declaration – and such values never reach the dependency tree generator, which only consumes
+	/// dependencies that `SafeDITool` parsed from files.
+	public let identifierRange: SourceRange?
+
+	/// A range of source text from `start` up to, but not including, `end`.
+	public struct SourceRange: Codable, Hashable, Sendable {
+		public init(start: DeclarationLocation, end: DeclarationLocation) {
+			self.start = start
+			self.end = end
+		}
+
+		/// The first character of the range.
+		public let start: DeclarationLocation
+		/// The character after the last one in the range, so a range’s end column is exclusive.
+		public let end: DeclarationLocation
+	}
 
 	/// The file, line, and column at which a declaration begins.
 	public struct DeclarationLocation: Codable, Hashable, Sendable {

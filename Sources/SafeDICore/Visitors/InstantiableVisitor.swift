@@ -98,17 +98,18 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				))
 			}
 
-			if let label = IdentifierPatternSyntax(binding.pattern)?.identifier.text,
+			if let identifier = IdentifierPatternSyntax(binding.pattern)?.identifier,
 			   let typeDescription = binding.typeAnnotation?.type.typeDescription
 			{
 				dependencies.append(
 					Dependency(
 						property: Property(
-							label: label,
+							label: identifier.text,
 							typeDescription: typeDescription,
 						),
 						source: dependencySource,
 						declarationLocation: declarationLocation(of: node),
+						identifierRange: sourceRange(of: identifier),
 					),
 				)
 			}
@@ -226,6 +227,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						property: argument.asProperty,
 						source: .received(onlyIfAvailable: false),
 						declarationLocation: declarationLocation(of: parameter),
+						identifierRange: sourceRange(of: parameter.firstName),
 					)
 				},
 				declarationType: .extensionType,
@@ -466,8 +468,17 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// Where `node` begins after its leading trivia – its first attribute for a decorated declaration – or `nil` without a converter.
 	private func declarationLocation(of node: some SyntaxProtocol) -> Dependency.DeclarationLocation? {
 		sourceLocationConverter.map { sourceLocationConverter in
-			let location = sourceLocationConverter.location(for: node.positionAfterSkippingLeadingTrivia)
-			return Dependency.DeclarationLocation(filePath: location.file, line: location.line, column: location.column)
+			sourceLocationConverter.declarationLocation(for: node.positionAfterSkippingLeadingTrivia)
+		}
+	}
+
+	/// The range of `token`’s text, excluding its trivia, or `nil` without a converter.
+	private func sourceRange(of token: TokenSyntax) -> Dependency.SourceRange? {
+		sourceLocationConverter.map { sourceLocationConverter in
+			Dependency.SourceRange(
+				start: sourceLocationConverter.declarationLocation(for: token.positionAfterSkippingLeadingTrivia),
+				end: sourceLocationConverter.declarationLocation(for: token.endPositionBeforeTrailingTrivia),
+			)
 		}
 	}
 
@@ -580,5 +591,14 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				],
 			))
 		}
+	}
+}
+
+// MARK: - SourceLocationConverter
+
+extension SourceLocationConverter {
+	fileprivate func declarationLocation(for position: AbsolutePosition) -> Dependency.DeclarationLocation {
+		let location = location(for: position)
+		return Dependency.DeclarationLocation(filePath: location.file, line: location.line, column: location.column)
 	}
 }
