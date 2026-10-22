@@ -25,7 +25,7 @@ jobs:
           - name: control
             runs-on: macos-26
             swiftpm-cache: false
-            prebuild: false
+            prebuild: none
             extra-flags: ""
           # Also cache SwiftPM's user-level caches: compiled manifests and
           # repository mirrors, which otherwise are rebuilt and re-fetched
@@ -33,7 +33,7 @@ jobs:
           - name: swiftpm-cache
             runs-on: macos-26
             swiftpm-cache: true
-            prebuild: true-resolve-only
+            prebuild: resolve
             extra-flags: ""
           # Resolve and fully build before CodeQL starts tracing, then
           # rebuild only SafeDI's targets under the tracer with
@@ -41,7 +41,7 @@ jobs:
           - name: pre-resolve
             runs-on: macos-26
             swiftpm-cache: true
-            prebuild: true
+            prebuild: full
             extra-flags: "--skip-update"
     steps:
     - name: Checkout repository
@@ -63,10 +63,10 @@ jobs:
       with:
         path: ~/Library/Caches/org.swift.swiftpm
         key: codeql-exp-swiftpm-${{ matrix.name }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}
-    - if: matrix.prebuild == 'true-resolve-only'
+    - if: matrix.prebuild == 'resolve'
       name: Resolve Before Tracing
       run: xcrun swift package resolve
-    - if: matrix.prebuild == 'true'
+    - if: matrix.prebuild == 'full'
       name: Resolve and Build Before Tracing
       run: |
         xcrun swift package resolve
