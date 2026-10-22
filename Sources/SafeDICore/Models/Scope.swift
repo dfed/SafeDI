@@ -87,6 +87,12 @@ final class Scope: Hashable {
 		/// The range of the identifier a fix-it can rename to a near-match. `nil` for an aliased dependency, whose
 		/// unfulfilled name lives in the `@Received(fulfilledByDependencyNamed:)` attribute, not in an identifier token.
 		let identifierRange: Dependency.SourceRange?
+		/// The range of the type annotation a fix-it can rewrite to a near-match’s type. `nil` for an aliased dependency,
+		/// whose unfulfilled type lives in the `@Received(ofType:)` argument, not in the type annotation.
+		let typeAnnotationRange: Dependency.SourceRange?
+		/// The range of the `@Received` attribute when it has no arguments, which a fix-it can rewrite to
+		/// `@Received(onlyIfAvailable: true)`. `nil` for an aliased dependency, whose attribute always has arguments.
+		let bareAttributeRange: Dependency.SourceRange?
 	}
 
 	private(set) lazy var requiredReceivedProperties: [RequiredReceivedProperty] = instantiable
@@ -101,6 +107,8 @@ final class Scope: Hashable {
 						property: $0.property,
 						declarationLocation: $0.declarationLocation,
 						identifierRange: $0.identifierRange,
+						typeAnnotationRange: $0.typeAnnotationRange,
+						bareAttributeRange: $0.bareAttributeRange,
 					)
 				}
 			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
@@ -111,6 +119,8 @@ final class Scope: Hashable {
 						property: fulfillingProperty,
 						declarationLocation: $0.declarationLocation,
 						identifierRange: nil,
+						typeAnnotationRange: nil,
+						bareAttributeRange: nil,
 					)
 				}
 			case .forwarded,

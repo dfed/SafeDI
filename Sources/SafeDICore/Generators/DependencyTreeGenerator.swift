@@ -476,6 +476,10 @@ public actor DependencyTreeGenerator {
 			let declarationLocation: Dependency.DeclarationLocation?
 			/// The range of the declared identifier, which a fix-it renames when exactly one near-match has the same type.
 			let identifierRange: Dependency.SourceRange?
+			/// The range of the declared type, which a fix-it rewrites when exactly one near-match has the same label.
+			let typeAnnotationRange: Dependency.SourceRange?
+			/// The range of a bare `@Received` attribute, which a fix-it rewrites to `@Received(onlyIfAvailable: true)`.
+			let bareAttributeRange: Dependency.SourceRange?
 			let instantiable: Instantiable
 			/// The types that instantiate `instantiable`, innermost first, excluding `root`.
 			let parentStack: [TypeDescription]
@@ -487,33 +491,52 @@ public actor DependencyTreeGenerator {
 			var sourceDiagnostics: [SourceDiagnostic] {
 				let chain = ([instantiable.concreteInstantiable] + parentStack + [root]).reversed()
 				let summary = "@\(Dependency.Source.receivedRawValue) property `\(property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(chain.map(\.asSource).joined(separator: " -> "))"
-				let hint = if property.typeDescription.isOptional,
-				              let nonOptionalAlternative = suggestedAlternatives.first(where: { alternative in
-				              	alternative.label == property.label
-				              		&& alternative.typeDescription == property.typeDescription.unwrapped
-				              })
+				// A diagnostic carries at most one fix-it – Xcode offers no Apply at all for a diagnostic with several –
+				// and a fix-it is offered only when it is exactly the repair the hint names.
+				let hint: String
+				let fixIts: [SourceDiagnostic.FixIt]
+				if property.typeDescription.isOptional,
+				   let nonOptionalAlternative = suggestedAlternatives.first(where: { alternative in
+				   	alternative.label == property.label
+				   		&& alternative.typeDescription == property.typeDescription.unwrapped
+				   })
 				{
-					"The non-optional `\(nonOptionalAlternative.asSource)` is available in chain. Did you mean to decorate this property with `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)`?"
+					let onlyIfAvailableAttribute = "@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)"
+					hint = "The non-optional `\(nonOptionalAlternative.asSource)` is available in chain. Did you mean to decorate this property with `\(onlyIfAvailableAttribute)`?"
+					// The range is recorded only for a bare attribute, so rewriting it never discards arguments the user wrote.
+					fixIts = if let bareAttributeRange {
+						[SourceDiagnostic.FixIt(range: bareAttributeRange, replacement: onlyIfAvailableAttribute)]
+					} else {
+						[]
+					}
 				} else if suggestedAlternatives.isEmpty {
-					"Declare `@\(Dependency.Source.instantiatedRawValue) let \(property.asSource)` on `\(root.asSource)` or on another type in the chain to fix."
+					hint = "Declare `@\(Dependency.Source.instantiatedRawValue) let \(property.asSource)` on `\(root.asSource)` or on another type in the chain to fix."
+					fixIts = []
 				} else if suggestedAlternatives.count == 1 {
-					"Did you mean `\(suggestedAlternatives[0].asSource)`?"
+					let suggestedAlternative = suggestedAlternatives[0]
+					hint = "Did you mean `\(suggestedAlternative.asSource)`?"
+					// The suggestion list mixes same-type and same-label near-matches, and a single-token edit repairs the
+					// property only when exactly one of label and type differs: a differing label is renamed and a differing
+					// type is rewritten. Both differing gets no fix-it, and neither differing cannot happen, since the property
+					// would then be fulfilled. A rename is offered only when the type is exactly what fulfillment compares
+					// after normalization – a module-qualified spelling is not unified by normalization, so a rename there
+					// would leave the property unfulfilled.
+					fixIts = if suggestedAlternative.label != property.label,
+					            suggestedAlternative.typeDescription == property.typeDescription,
+					            let identifierRange
+					{
+						[SourceDiagnostic.FixIt(range: identifierRange, replacement: suggestedAlternative.label)]
+					} else if suggestedAlternative.label == property.label,
+					          let typeAnnotationRange
+					{
+						[SourceDiagnostic.FixIt(range: typeAnnotationRange, replacement: suggestedAlternative.typeDescription.asSource)]
+					} else {
+						[]
+					}
 				} else {
-					"Did you mean one of \(suggestedAlternatives.map { "`\($0.asSource)`" }.joined(separator: ", "))?"
-				}
-				// Offer the rename as a fix-it only when renaming is the actual repair. The suggestion list mixes
-				// same-type and same-label near-matches, and a rename repairs only the first kind: the label must
-				// differ (otherwise the edit is a no-op) and the type must be exactly what fulfillment compares after
-				// normalization – a module-qualified spelling is not unified by normalization, so a rename there
-				// would leave the property unfulfilled and gets no fix-it. Several candidates leave the choice to the user.
-				let fixIts: [SourceDiagnostic.FixIt] = if suggestedAlternatives.count == 1,
-				                                          suggestedAlternatives[0].label != property.label,
-				                                          suggestedAlternatives[0].typeDescription == property.typeDescription,
-				                                          let identifierRange
-				{
-					[SourceDiagnostic.FixIt(range: identifierRange, replacement: suggestedAlternatives[0].label)]
-				} else {
-					[]
+					hint = "Did you mean one of \(suggestedAlternatives.map { "`\($0.asSource)`" }.joined(separator: ", "))?"
+					// Several candidates leave the choice to the user.
+					fixIts = []
 				}
 				return [
 					SourceDiagnostic(
@@ -1250,6 +1273,8 @@ public actor DependencyTreeGenerator {
 							property: receivedProperty,
 							declarationLocation: requiredReceivedProperty.declarationLocation,
 							identifierRange: requiredReceivedProperty.identifierRange,
+							typeAnnotationRange: requiredReceivedProperty.typeAnnotationRange,
+							bareAttributeRange: requiredReceivedProperty.bareAttributeRange,
 							instantiable: scope.instantiable,
 							parentStack: propertyStack.map(\.typeDescription),
 							root: root,

@@ -30,11 +30,15 @@ public struct Dependency: Codable, Hashable, Sendable {
 		source: Dependency.Source,
 		declarationLocation: DeclarationLocation? = nil,
 		identifierRange: SourceRange? = nil,
+		typeAnnotationRange: SourceRange? = nil,
+		bareAttributeRange: SourceRange? = nil,
 	) {
 		self.property = property
 		self.source = source
 		self.declarationLocation = declarationLocation
 		self.identifierRange = identifierRange
+		self.typeAnnotationRange = typeAnnotationRange
+		self.bareAttributeRange = bareAttributeRange
 		switch source {
 		case .received, .forwarded:
 			asInstantiatedType = property.typeDescription.asInstantiatedType
@@ -65,6 +69,21 @@ public struct Dependency: Codable, Hashable, Sendable {
 	/// declaration – and such values never reach the dependency tree generator, which only consumes
 	/// dependencies that `SafeDITool` parsed from files.
 	public let identifierRange: SourceRange?
+
+	/// The source range of the dependency’s type annotation – the property’s type, or the parameter type of an
+	/// extension’s `instantiate` – which a fix-it can replace.
+	/// `nil` only when the dependency was parsed without a file context – macro expansion walks a detached
+	/// declaration – and such values never reach the dependency tree generator, which only consumes
+	/// dependencies that `SafeDITool` parsed from files.
+	public let typeAnnotationRange: SourceRange?
+
+	/// The source range of the attribute that decorates the dependency’s property – `@Instantiated`, `@Received`,
+	/// or `@Forwarded` – recorded only when that attribute is written without arguments, so a fix-it that rewrites
+	/// the whole attribute never discards arguments the user wrote.
+	/// `nil` when the attribute has arguments, for an extension’s `instantiate` parameter (which has no attribute),
+	/// and when the dependency was parsed without a file context – macro expansion walks a detached declaration –
+	/// and such values never reach the dependency tree generator.
+	public let bareAttributeRange: SourceRange?
 
 	/// A range of source text from `start` up to, but not including, `end`.
 	public struct SourceRange: Codable, Hashable, Sendable {
