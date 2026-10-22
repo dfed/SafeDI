@@ -24,7 +24,7 @@ import SwiftSyntax
 public final class FileVisitor: SyntaxVisitor {
 	// MARK: Initialization
 
-	/// - Parameter sourceLocationConverter: A converter for the tree being walked. When provided, each dependency records where its property is declared.
+	/// - Parameter sourceLocationConverter: A converter for the tree being walked. When provided, each declaration records where it begins.
 	public init(sourceLocationConverter: SourceLocationConverter? = nil) {
 		self.sourceLocationConverter = sourceLocationConverter
 		super.init(viewMode: .sourceAccurate)

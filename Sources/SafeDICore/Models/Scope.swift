@@ -79,7 +79,14 @@ final class Scope: Hashable {
 			.map(\.property),
 	)
 
-	private(set) lazy var requiredReceivedProperties: [Property] = instantiable
+	/// A received property this scope requires an ancestor to provide, with the location of the declaration that requires it.
+	struct RequiredReceivedProperty {
+		/// The property an ancestor must provide: the fulfilling property for an aliased dependency, the declared property otherwise.
+		let property: Property
+		let declarationLocation: Dependency.DeclarationLocation?
+	}
+
+	private(set) lazy var requiredReceivedProperties: [RequiredReceivedProperty] = instantiable
 		.dependencies
 		.compactMap {
 			switch $0.source {
@@ -87,13 +94,13 @@ final class Scope: Hashable {
 				if onlyIfAvailable {
 					nil
 				} else {
-					$0.property
+					RequiredReceivedProperty(property: $0.property, declarationLocation: $0.declarationLocation)
 				}
 			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 				if onlyIfAvailable {
 					nil
 				} else {
-					fulfillingProperty
+					RequiredReceivedProperty(property: fulfillingProperty, declarationLocation: $0.declarationLocation)
 				}
 			case .forwarded,
 			     .instantiated:

@@ -53,6 +53,26 @@ struct Generate: AsyncParsableCommand {
 	// MARK: Internal
 
 	func run() async throws {
+		do {
+			try await generate()
+		} catch let error as any SourceLocatedError {
+			// Print located errors ourselves. ArgumentParser would print `Error: ` ahead of the first line,
+			// which stops Xcode and SwiftPM from recognizing the `<path>:<line>:<column>: error:` format.
+			// Throwing an `ExitCode` makes ArgumentParser exit non-zero without printing anything further.
+			// Build systems hand the tool paths relative to its working directory; resolve them so the
+			// printed location identifies the file wherever the build log is read.
+			let currentDirectoryPath = FileManager.default.currentDirectoryPath
+			let diagnostics = error.sourceDiagnostics
+				.map { $0.resolvingFilePath(relativeToDirectory: currentDirectoryPath).formatted }
+				.joined(separator: "\n")
+			FileHandle.standardError.write(Data("\(diagnostics)\n".utf8))
+			throw ExitCode.failure
+		}
+	}
+
+	/// Parses, validates, and writes the configured outputs.
+	/// Throws `SourceLocatedError`s as-is so tests can inspect their diagnostics; `run()` formats them for the build log.
+	func generate() async throws {
 		if swiftSourcesFilePath == nil, include.isEmpty {
 			throw ValidationError("Must provide 'swift-sources-file-path' or '--include'.")
 		}
@@ -198,6 +218,7 @@ struct Generate: AsyncParsableCommand {
 				mockInitializer: unnormalizedInstantiable.mockInitializer,
 				mockReturnType: unnormalizedInstantiable.mockReturnType,
 				customMockName: unnormalizedInstantiable.customMockName,
+				declarationLocation: unnormalizedInstantiable.declarationLocation,
 			)
 			normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath
 			return normalized
@@ -633,6 +654,18 @@ struct Generate: AsyncParsableCommand {
 	}
 
 	private func resolveSafeDIFulfilledTypes(instantiables: [Instantiable]) throws -> [TypeDescription: Instantiable] {
+		// Errors cite every declaration claiming the type rather than the pair that collided: a merged entry
+		// no longer knows which declaration it came from, and the pair would depend on collection order.
+		func productionDeclarationLocations(fulfilling instantiableType: TypeDescription) -> [Dependency.DeclarationLocation?] {
+			instantiables
+				.filter { !$0.mockOnly && $0.instantiableTypes.contains(instantiableType) }
+				.map(\.declarationLocation)
+		}
+		func mockProviderDeclarationLocations(fulfilling instantiableType: TypeDescription) -> [Dependency.DeclarationLocation?] {
+			instantiables
+				.filter { ($0.mockOnly || $0.mockInitializer != nil) && $0.instantiableTypes.contains(instantiableType) }
+				.map(\.declarationLocation)
+		}
 		var typeDescriptionToFulfillingInstantiableMap = [TypeDescription: Instantiable]()
 		// Track types that have already had a mockOnly merged in, so a second
 		// mockOnly is rejected even after the merged entry appears non-mockOnly.
@@ -643,16 +676,16 @@ struct Generate: AsyncParsableCommand {
 					// Allow one mockOnly and one non-mockOnly for the same type.
 					switch (existing.mockOnly, instantiable.mockOnly) {
 					case (true, true):
-						throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+						throw CollectInstantiablesError.duplicateMockProvider(instantiableType, declaredAt: mockProviderDeclarationLocations(fulfilling: instantiableType))
 					case (false, true):
 						guard !typesWithMockOnlyMerge.contains(instantiableType) else {
-							throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+							throw CollectInstantiablesError.duplicateMockProvider(instantiableType, declaredAt: mockProviderDeclarationLocations(fulfilling: instantiableType))
 						}
 						typesWithMockOnlyMerge.insert(instantiableType)
 						if existing.concreteInstantiable == instantiable.concreteInstantiable {
 							// Same concrete type: two hand-written mocks is ambiguous.
 							guard existing.mockInitializer == nil else {
-								throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+								throw CollectInstantiablesError.duplicateMockProvider(instantiableType, declaredAt: mockProviderDeclarationLocations(fulfilling: instantiableType))
 							}
 							// Only merge if the mockOnly's return type is compatible
 							// with this slot. Check against instantiableType (the key)
@@ -670,7 +703,7 @@ struct Generate: AsyncParsableCommand {
 						if existing.concreteInstantiable == instantiable.concreteInstantiable {
 							// Same concrete type: two hand-written mocks is ambiguous.
 							guard instantiable.mockInitializer == nil else {
-								throw CollectInstantiablesError.duplicateMockProvider(instantiableType.asSource)
+								throw CollectInstantiablesError.duplicateMockProvider(instantiableType, declaredAt: mockProviderDeclarationLocations(fulfilling: instantiableType))
 							}
 							// Only merge if the mockOnly's return type is compatible
 							// with this slot.
@@ -686,7 +719,7 @@ struct Generate: AsyncParsableCommand {
 							typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
 						}
 					case (false, false):
-						throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType.asSource)
+						throw CollectInstantiablesError.foundDuplicateInstantiable(instantiableType, declaredAt: productionDeclarationLocations(fulfilling: instantiableType))
 					}
 				} else {
 					typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
@@ -720,17 +753,31 @@ struct Generate: AsyncParsableCommand {
 		return typeDescriptionToFulfillingInstantiableMap
 	}
 
-	private enum CollectInstantiablesError: Error, CustomStringConvertible {
-		case foundDuplicateInstantiable(String)
-		case duplicateMockProvider(String)
+	private enum CollectInstantiablesError: SourceLocatedError {
+		case foundDuplicateInstantiable(TypeDescription, declaredAt: [Dependency.DeclarationLocation?])
+		case duplicateMockProvider(TypeDescription, declaredAt: [Dependency.DeclarationLocation?])
 
-		var description: String {
+		var sourceDiagnostics: [SourceDiagnostic] {
+			let message: String
+			let declarationLocations: [Dependency.DeclarationLocation?]
 			switch self {
-			case let .foundDuplicateInstantiable(duplicateInstantiable):
-				"@\(InstantiableVisitor.macroName)-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `\(duplicateInstantiable)`"
-			case let .duplicateMockProvider(duplicateInstantiable):
-				"Found multiple hand-written mock providers for `\(duplicateInstantiable)`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both."
+			case let .foundDuplicateInstantiable(duplicateInstantiable, declaredAt):
+				message = "@\(InstantiableVisitor.macroName)-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `\(duplicateInstantiable.asSource)`"
+				declarationLocations = declaredAt
+			case let .duplicateMockProvider(duplicateInstantiable, declaredAt):
+				message = "Found multiple hand-written mock providers for `\(duplicateInstantiable.asSource)`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both."
+				declarationLocations = declaredAt
 			}
+			// Sorted by location so the output does not depend on collection order.
+			return declarationLocations
+				.map { declarationLocation in
+					SourceDiagnostic(
+						severity: .error,
+						location: declarationLocation,
+						message: message,
+					)
+				}
+				.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 		}
 	}
 }

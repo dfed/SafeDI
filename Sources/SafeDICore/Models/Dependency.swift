@@ -52,20 +52,25 @@ public struct Dependency: Codable, Hashable, Sendable {
 	/// The receiver’s type description as an `@Instantiable`-decorated type.
 	public let asInstantiatedType: TypeDescription
 	/// Where the dependency’s property is declared in source.
-	/// `nil` when the dependency was parsed without a file context (e.g. during macro expansion).
+	/// `nil` only when the dependency was parsed without a file context – macro expansion walks a detached
+	/// declaration – and such values never reach the dependency tree generator, which only consumes
+	/// dependencies that `SafeDITool` parsed from files.
 	public let declarationLocation: DeclarationLocation?
 
-	/// The file and line at which a dependency’s property declaration begins.
+	/// The file, line, and column at which a declaration begins.
 	public struct DeclarationLocation: Codable, Hashable, Sendable {
-		public init(filePath: String, line: Int) {
+		public init(filePath: String, line: Int, column: Int) {
 			self.filePath = filePath
 			self.line = line
+			self.column = column
 		}
 
 		/// The path to the file containing the declaration, exactly as it was provided to the parser.
 		public let filePath: String
 		/// The one-based line on which the declaration begins (its first attribute).
 		public let line: Int
+		/// The one-based column at which the declaration begins (its first attribute).
+		public let column: Int
 	}
 
 	public enum Source: Codable, Hashable, Sendable {
