@@ -37,6 +37,29 @@ struct SourceDiagnosticTests {
 	}
 
 	@Test
+	func formatted_escapesReplacementAsJSONString_whenFixItReplacementContainsQuotesBackslashesAndNewlines() {
+		// swift-build reads the replacement as a JSON string literal, so the characters it would unescape must be escaped.
+		let diagnostic = SourceDiagnostic(
+			severity: .error,
+			location: Dependency.DeclarationLocation(filePath: "Sources/App/Child.swift", line: 7, column: 5),
+			message: "@Received property `shared2: SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: SharedThing`?",
+			fixIts: [
+				SourceDiagnostic.FixIt(
+					range: Dependency.SourceRange(
+						start: Dependency.DeclarationLocation(filePath: "Sources/App/Child.swift", line: 7, column: 19),
+						end: Dependency.DeclarationLocation(filePath: "Sources/App/Child.swift", line: 7, column: 26),
+					),
+					replacement: "quote\" backslash\\ newline\n return\r tab\t",
+				),
+			],
+		)
+		#expect(diagnostic.formatted == """
+		Sources/App/Child.swift:7:5: error: @Received property `shared2: SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: SharedThing`?
+		Sources/App/Child.swift:7:19-7:26: fixit: quote\\" backslash\\\\ newline\\n return\\r tab\\t
+		""")
+	}
+
+	@Test
 	func resolvingFilePath_makesPathAbsolute_whenFilePathIsRelative() {
 		let diagnostic = SourceDiagnostic(
 			severity: .note,
@@ -45,6 +68,29 @@ struct SourceDiagnosticTests {
 		)
 		let resolved = diagnostic.resolvingFilePath(relativeToDirectory: "/Users/developer/Project")
 		#expect(resolved.formatted == "/Users/developer/Project/Sources/App/Child.swift:12:5: note: `Child` is part of the cycle")
+	}
+
+	@Test
+	func resolvingFilePath_makesFixItPathsAbsolute_whenFilePathIsRelative() {
+		let diagnostic = SourceDiagnostic(
+			severity: .error,
+			location: Dependency.DeclarationLocation(filePath: "Sources/App/Child.swift", line: 7, column: 5),
+			message: "@Received property `shared2: SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: SharedThing`?",
+			fixIts: [
+				SourceDiagnostic.FixIt(
+					range: Dependency.SourceRange(
+						start: Dependency.DeclarationLocation(filePath: "Sources/App/Child.swift", line: 7, column: 19),
+						end: Dependency.DeclarationLocation(filePath: "Sources/App/Child.swift", line: 7, column: 26),
+					),
+					replacement: "shared",
+				),
+			],
+		)
+		let resolved = diagnostic.resolvingFilePath(relativeToDirectory: "/Users/developer/Project")
+		#expect(resolved.formatted == """
+		/Users/developer/Project/Sources/App/Child.swift:7:5: error: @Received property `shared2: SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: SharedThing`?
+		/Users/developer/Project/Sources/App/Child.swift:7:19-7:26: fixit: shared
+		""")
 	}
 
 	@Test

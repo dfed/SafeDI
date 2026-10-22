@@ -84,6 +84,9 @@ final class Scope: Hashable {
 		/// The property an ancestor must provide: the fulfilling property for an aliased dependency, the declared property otherwise.
 		let property: Property
 		let declarationLocation: Dependency.DeclarationLocation?
+		/// The range of the identifier a fix-it can rename to a near-match. `nil` for an aliased dependency, whose
+		/// unfulfilled name lives in the `@Received(fulfilledByDependencyNamed:)` attribute, not in an identifier token.
+		let identifierRange: Dependency.SourceRange?
 	}
 
 	private(set) lazy var requiredReceivedProperties: [RequiredReceivedProperty] = instantiable
@@ -94,13 +97,21 @@ final class Scope: Hashable {
 				if onlyIfAvailable {
 					nil
 				} else {
-					RequiredReceivedProperty(property: $0.property, declarationLocation: $0.declarationLocation)
+					RequiredReceivedProperty(
+						property: $0.property,
+						declarationLocation: $0.declarationLocation,
+						identifierRange: $0.identifierRange,
+					)
 				}
 			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 				if onlyIfAvailable {
 					nil
 				} else {
-					RequiredReceivedProperty(property: fulfillingProperty, declarationLocation: $0.declarationLocation)
+					RequiredReceivedProperty(
+						property: fulfillingProperty,
+						declarationLocation: $0.declarationLocation,
+						identifierRange: nil,
+					)
 				}
 			case .forwarded,
 			     .instantiated:

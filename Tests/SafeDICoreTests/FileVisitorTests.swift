@@ -166,6 +166,10 @@ struct FileVisitorTests {
 						),
 						source: .forwarded,
 						declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5),
+						identifierRange: Dependency.SourceRange(
+							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 28),
+							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 32),
+						),
 					),
 					Dependency(
 						property: Property(
@@ -174,6 +178,10 @@ struct FileVisitorTests {
 						),
 						source: .received(onlyIfAvailable: false),
 						declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 5),
+						identifierRange: Dependency.SourceRange(
+							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 19),
+							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 33),
+						),
 					),
 				],
 				declarationType: .classType,
@@ -230,6 +238,10 @@ struct FileVisitorTests {
 						),
 						source: .forwarded,
 						declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 5),
+						identifierRange: Dependency.SourceRange(
+							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 28),
+							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 32),
+						),
 					),
 					Dependency(
 						property: Property(
@@ -238,6 +250,10 @@ struct FileVisitorTests {
 						),
 						source: .received(onlyIfAvailable: false),
 						declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5),
+						identifierRange: Dependency.SourceRange(
+							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 19),
+							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 33),
+						),
 					),
 				],
 				declarationType: .classType,

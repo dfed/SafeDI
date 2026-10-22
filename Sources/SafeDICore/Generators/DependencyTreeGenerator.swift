@@ -474,6 +474,8 @@ public actor DependencyTreeGenerator {
 		struct UnfulfillableProperty: Hashable {
 			let property: Property
 			let declarationLocation: Dependency.DeclarationLocation?
+			/// The range of the declared identifier, which a fix-it renames when exactly one near-match has the same type.
+			let identifierRange: Dependency.SourceRange?
 			let instantiable: Instantiable
 			/// The types that instantiate `instantiable`, innermost first, excluding `root`.
 			let parentStack: [TypeDescription]
@@ -499,11 +501,26 @@ public actor DependencyTreeGenerator {
 				} else {
 					"Did you mean one of \(suggestedAlternatives.map { "`\($0.asSource)`" }.joined(separator: ", "))?"
 				}
+				// Offer the rename as a fix-it only when renaming is the actual repair. The suggestion list mixes
+				// same-type and same-label near-matches, and a rename repairs only the first kind: the label must
+				// differ (otherwise the edit is a no-op) and the type must be exactly what fulfillment compares after
+				// normalization – a module-qualified spelling is not unified by normalization, so a rename there
+				// would leave the property unfulfilled and gets no fix-it. Several candidates leave the choice to the user.
+				let fixIts: [SourceDiagnostic.FixIt] = if suggestedAlternatives.count == 1,
+				                                          suggestedAlternatives[0].label != property.label,
+				                                          suggestedAlternatives[0].typeDescription == property.typeDescription,
+				                                          let identifierRange
+				{
+					[SourceDiagnostic.FixIt(range: identifierRange, replacement: suggestedAlternatives[0].label)]
+				} else {
+					[]
+				}
 				return [
 					SourceDiagnostic(
 						severity: .error,
 						location: declarationLocation,
 						message: "\(summary). \(hint)",
+						fixIts: fixIts,
 					),
 				]
 			}
@@ -1232,6 +1249,7 @@ public actor DependencyTreeGenerator {
 						unfulfillableProperties.insert(.init(
 							property: receivedProperty,
 							declarationLocation: requiredReceivedProperty.declarationLocation,
+							identifierRange: requiredReceivedProperty.identifierRange,
 							instantiable: scope.instantiable,
 							parentStack: propertyStack.map(\.typeDescription),
 							root: root,
