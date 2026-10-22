@@ -1,7 +1,7 @@
 name: "CodeQL Advanced"
 
 # Throwaway experiment: why does CodeQL's Swift analysis spend 8-9 minutes
-# in SwiftPM before compiling anything? Four variants of the Swift job,
+# in SwiftPM before compiling anything? Three variants of the Swift job,
 # run cold then warm. Results are never uploaded.
 
 on:
@@ -43,12 +43,6 @@ jobs:
             swiftpm-cache: true
             prebuild: true
             extra-flags: "--skip-update"
-          # Native x86_64: no Rosetta, no relocation fallback.
-          - name: intel
-            runs-on: macos-26-intel
-            swiftpm-cache: false
-            prebuild: false
-            extra-flags: ""
     steps:
     - name: Checkout repository
       uses: actions/checkout@v7
