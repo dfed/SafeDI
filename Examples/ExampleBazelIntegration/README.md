@@ -74,3 +74,5 @@ on every annotation change, so `safedi_compile` uses SafeDITool's
 of source contents. The concatenated file is still valid Swift
 (SafeDI's generated files are all top-level declarations) and
 downstream `swift_library.srcs` treats it like any other source.
+
+<!-- Scratch control: Markdown-only change under the current Codecov config. -->
