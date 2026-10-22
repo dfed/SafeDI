@@ -27,14 +27,17 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// - Parameters:
 	///   - declarationType: The kind of declaration this visitor walks.
 	///   - parentType: The type enclosing the walked declaration, if any.
+	///   - conditionalCompilation: How `#if` blocks among the declaration's members are scanned. The macro scans every clause because the compiler has already selected the active one; SafeDITool evaluates them.
 	///   - sourceLocationConverter: A converter for the tree being walked. When provided, the declaration and each dependency record where they begin.
 	public init(
 		declarationType: DeclarationType,
 		parentType: TypeDescription? = nil,
+		conditionalCompilation: ConditionalCompilationHandling = .scanAllClauses,
 		sourceLocationConverter: SourceLocationConverter? = nil,
 	) {
 		self.declarationType = declarationType
 		self.parentType = parentType
+		self.conditionalCompilation = conditionalCompilation
 		self.sourceLocationConverter = sourceLocationConverter
 		super.init(viewMode: .sourceAccurate)
 	}
@@ -157,10 +160,40 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		.skipChildren
 	}
 
+	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
+		if case let .evaluate(evaluator) = conditionalCompilation {
+			// Members of a declaration without `@Instantiable` are never scanned, so nothing inside matters.
+			let content: SafeDIContent = if hasFoundDeclaration {
+				node.safeDIContent(in: .members(.init(
+					isExtension: declarationType.isExtension,
+					isMockOnly: mockOnly,
+					customMockName: customMockName,
+				)))
+			} else {
+				.none
+			}
+			let scannable = evaluator.scannableClauses(in: node, guarding: content)
+			activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
+			conditionalCompilationDecisions.append(contentsOf: scannable.decisions)
+			dependsOnConditionalCompilationEvaluator = dependsOnConditionalCompilationEvaluator || scannable.restsOnCompilationConditions
+		}
+		return .visitChildren
+	}
+
+	public override func visit(_ node: IfConfigClauseSyntax) -> SyntaxVisitorContinueKind {
+		switch conditionalCompilation {
+		case .scanAllClauses:
+			.visitChildren
+		case .evaluate:
+			activeIfConfigClauses.contains(node.id) ? .visitChildren : .skipChildren
+		}
+	}
+
 	public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
 		instantiableType = node.extendedType.typeDescription
 		instantiableDeclarationLocation = declarationLocation(of: node)
 		if let instantiableMacro = node.attributes.instantiableMacro {
+			hasFoundDeclaration = true
 			processAttributes(node.attributes, on: instantiableMacro)
 		}
 
@@ -349,6 +382,11 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var conflictingMockFunctionSyntax: FunctionDeclSyntax?
 	public private(set) var diagnostics = [Diagnostic]()
 	public private(set) var uninitializedNonOptionalPropertyNames = [String]()
+	/// How each `#if` condition that guards members SafeDI scans was evaluated, in source order.
+	public private(set) var conditionalCompilationDecisions = [ConditionalCompilationDecision]()
+	/// Whether walking with a different evaluator could extract different members: true once an
+	/// `#if` block guarding members SafeDI scans rested on a bare compilation condition.
+	public private(set) var dependsOnConditionalCompilationEvaluator = false
 
 	/// The initializer SafeDI selects for construction — the first in source
 	/// order that fulfills this type's dependencies. `Instantiable.initializer`
@@ -465,6 +503,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	// MARK: Private
 
+	/// Whether the walked declaration carries `@Instantiable`, which is when its members matter.
 	private var hasFoundDeclaration = false
 	private var instantiableDeclarationType: ConcreteDeclType?
 
@@ -472,7 +511,11 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	private let declarationType: DeclarationType
 	private let parentType: TypeDescription?
+	private let conditionalCompilation: ConditionalCompilationHandling
 	private let sourceLocationConverter: SourceLocationConverter?
+	/// The `#if` clauses the evaluator selected for scanning.
+	private var activeIfConfigClauses = Set<SyntaxIdentifier>()
+
 	/// The location of the decorated declaration, recorded when the declaration is visited with a converter.
 	private var instantiableDeclarationLocation: Dependency.DeclarationLocation?
 

@@ -719,6 +719,37 @@ import Testing
 		}
 
 		@Test
+		func declaration_expandsWithoutIssue_whenDependencyIsDeclaredInIfConfig() {
+			// The compiler has already chosen the active clause, so the macro reads every clause as written.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+
+				    #if DEBUG
+				    @Received let dependency: Dependency
+				    #endif
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+
+				    #if DEBUG
+				    let dependency: Dependency
+				    #endif
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func declaration_fixit_generatesRequiredInitializerEvenWhenPropertyDecoratedWithUnknownMacroInIfConfig() {
 			assertMacroExpansion(
 				"""

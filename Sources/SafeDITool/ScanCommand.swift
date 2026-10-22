@@ -38,6 +38,8 @@ struct Scan: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Swift file paths scoped to the current target for mock generation. When provided, only these files are scanned for generateMock and #SafeDIConfiguration.") var mockScopedFiles: [String] = []
 
+	@Option(parsing: .upToNextOption, help: "The compilation conditions that are active for this build, matching the compiler's -D flags. SafeDI declarations in `#if` blocks are scanned only when the block's condition evaluates to true. Conditions are recorded in the manifest so `generate` applies them too.") var activeCompilationConditions: [String] = []
+
 	func run() async throws {
 		try await performScan(
 			inputSourcesFile: inputSourcesFile,
@@ -45,6 +47,7 @@ struct Scan: AsyncParsableCommand {
 			outputDirectory: outputDirectory,
 			manifestFile: manifestFile,
 			mockScopedFiles: mockScopedFiles,
+			activeCompilationConditions: Set(activeCompilationConditions),
 		)
 	}
 }
@@ -59,6 +62,7 @@ func performScan(
 	outputDirectory: String,
 	manifestFile: String,
 	mockScopedFiles: [String] = [],
+	activeCompilationConditions: Set<String> = [],
 ) async throws {
 	let projectRootURL = projectRoot.asFileURL
 	let outputDirectoryURL = outputDirectory.asFileURL
@@ -72,10 +76,7 @@ func performScan(
 	let allSwiftFiles = inputFilePaths.map {
 		URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL
 	}
-
-	// Parse all files once to find roots, mocks, and configurations.
 	let allFilePaths = Set(allSwiftFiles.map(\.relativePath))
-	let allModuleInfo = try await parseSwiftFiles(allFilePaths)
 
 	// Determine which files are scoped for mock scanning.
 	let mockScopedFilePaths: Set<String> = if mockScopedFiles.isEmpty {
@@ -85,6 +86,17 @@ func performScan(
 			URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL.relativePath
 		})
 	}
+
+	// Parse all files once to find roots, mocks, and configurations. Only the
+	// mock-scoped files can declare this module's configuration, which decides
+	// how every file's `#if` blocks are evaluated.
+	let parsedModule = try await parseModule(
+		filePaths: allFilePaths,
+		configurationFilePaths: mockScopedFilePaths,
+		activeCompilationConditions: activeCompilationConditions,
+	)
+	let allModuleInfo = parsedModule.moduleInfo
+	let evaluator = parsedModule.conditionalCompilationEvaluator
 
 	// Filter the already-parsed results to the mock-scoped subset.
 	let mockScopedInstantiables = allModuleInfo.instantiables.filter { instantiable in
@@ -96,9 +108,8 @@ func performScan(
 		return mockScopedFilePaths.contains(sourceFilePath)
 	}
 
-	// Find configuration from the scoped files. Generate validates at most one exists;
-	// here we take the first to drive directory/mocks expansion for the manifest.
-	let configuration = mockScopedConfigurations.first
+	// The parse rejected more than one configuration among the scoped files.
+	let configuration = parsedModule.configuration
 
 	// Discover additional directories from configuration.
 	var additionalInputFiles = [String]()
@@ -116,13 +127,14 @@ func performScan(
 		// and trip "multiple types fulfilling" validation downstream.
 		let unparsedAdditionalFiles = additionalFiles.subtracting(allFilePaths)
 		if !unparsedAdditionalFiles.isEmpty {
-			let additionalModuleInfo = try await parseSwiftFiles(unparsedAdditionalFiles)
+			let additionalModuleInfo = try await parseSwiftFiles(unparsedAdditionalFiles, conditionalCompilation: evaluator)
 			// Merge additional roots/mocks into the combined results.
 			combinedModuleInfo = ModuleInfo(
 				imports: allModuleInfo.imports + additionalModuleInfo.imports,
 				instantiables: allModuleInfo.instantiables + additionalModuleInfo.instantiables,
 				configurations: allModuleInfo.configurations,
 				filesWithUnexpectedNodes: allModuleInfo.filesWithUnexpectedNodes.map { $0 + (additionalModuleInfo.filesWithUnexpectedNodes ?? []) } ?? additionalModuleInfo.filesWithUnexpectedNodes,
+				conditionalCompilationDecisions: Set(allModuleInfo.conditionalCompilationDecisions + additionalModuleInfo.conditionalCompilationDecisions).sorted(),
 			)
 		}
 	}
@@ -210,6 +222,8 @@ func performScan(
 		mockConfigurationOutputFilePath: mockConfigurationOutputFilePath,
 		additionalMocksToGenerate: additionalMocksToGenerate,
 		additionalInputFiles: additionalInputFiles,
+		activeCompilationConditions: activeCompilationConditions.sorted(),
+		projectRoot: projectRootURL.path,
 	)
 
 	let encoder = JSONEncoder()
@@ -241,6 +255,7 @@ func performScan(
 			return updated
 		},
 		filesWithUnexpectedNodes: combinedModuleInfo.filesWithUnexpectedNodes?.compactMap(normalize),
+		conditionalCompilationDecisions: combinedModuleInfo.conditionalCompilationDecisions,
 	)
 	// Every path scan parsed for this module — CSV inputs plus any files
 	// reached through `#SafeDIConfiguration.additionalDirectoriesToInclude`.
@@ -269,6 +284,7 @@ func performScan(
 		csvInputPaths: inputFilePaths.sorted(),
 		additionalInputAbsolutePaths: additionalInputFiles.sorted(),
 		additionalDirectories: additionalDirectories,
+		activeCompilationConditions: evaluator.activeCompilationConditions.sorted(),
 	)
 	let scannedModuleInfoURL = scannedModuleInfoURL(forManifestPath: manifestFile)
 	// Cache write is best-effort. A full disk or other transient FS
@@ -278,6 +294,21 @@ func performScan(
 	// machine-read only, so the `.sortedKeys` formatting the manifest
 	// needs for determinism isn't load-bearing here.
 	try? JSONEncoder().encode(cached).write(to: scannedModuleInfoURL)
+}
+
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+extension SafeDIToolManifest {
+	/// `path` as scan would have recorded it: relative to the manifest's project root when the
+	/// path lies under it, otherwise absolute. A manifest without a project root takes paths as written.
+	func resolvedPath(for path: String) -> String {
+		guard let projectRoot else { return path }
+		let projectRootURL = projectRoot.asFileURL
+		let directoryBaseURL = projectRootURL.appendingPathComponent("", isDirectory: true)
+		return relativePath(
+			for: URL(fileURLWithPath: path, relativeTo: directoryBaseURL).standardizedFileURL,
+			relativeTo: projectRootURL,
+		)
+	}
 }
 
 /// Wrapper persisted alongside the manifest so `generate` can both
@@ -302,6 +333,10 @@ struct CachedScannedModuleInfo: Codable {
 	/// during freshness checks so files added to those directories
 	/// between scan and generate correctly invalidate the cache.
 	let additionalDirectories: [String]
+	/// Every compilation condition the scan treated as active: those supplied to `scan` plus the
+	/// module's `#SafeDIConfiguration(activeCompilationConditions:)`. `generate` bypasses the cache
+	/// when its own set differs, since the set decides which `#if` clauses were parsed.
+	let activeCompilationConditions: [String]
 }
 
 /// Path alongside the manifest where `scan` persists the parsed

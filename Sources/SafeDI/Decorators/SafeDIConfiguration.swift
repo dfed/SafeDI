@@ -32,6 +32,7 @@
 ///   - additionalDirectoriesToInclude: Directories containing Swift files to include, relative to the executing directory. Only honored by the SPM build-tool plugin. The Bazel and Tuist integrations enumerate inputs up front and therefore ignore this parameter — list every Swift source via the build target itself instead.
 ///   - additionalMocksToGenerate: Type names from dependent modules to generate `mock()` methods for in this module. The types must be decorated with `@Instantiable` in their home module. See the "Cross-module mock generation" section of the manual.
 ///   - mockConditionalCompilation: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation.
+///   - activeCompilationConditions: Compilation conditions to treat as active while SafeDITool scans this module's `#if` blocks, for conditions your build integration cannot report (for example a flag set only in an Xcode project's build settings). Conditions are static: a condition listed here is active in every build configuration. See the "Conditional compilation" section of the manual.
 ///
 /// Example:
 ///
@@ -45,4 +46,5 @@ public macro SafeDIConfiguration(
 	additionalDirectoriesToInclude: [StaticString] = [],
 	additionalMocksToGenerate: [StaticString] = [],
 	mockConditionalCompilation: StaticString? = "DEBUG",
+	activeCompilationConditions: [StaticString] = [],
 ) = #externalMacro(module: "SafeDIMacros", type: "SafeDIConfigurationMacro")

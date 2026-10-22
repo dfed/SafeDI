@@ -28,6 +28,45 @@ struct ModuleInfo: Codable {
 	let instantiables: [Instantiable]
 	let configurations: [SafeDIConfiguration]
 	let filesWithUnexpectedNodes: [String]?
+	/// How each `#if` condition guarding SafeDI declarations was evaluated, sorted and without duplicates.
+	/// Generated code asserts these at compile time.
+	let conditionalCompilationDecisions: [ConditionalCompilationDecision]
+}
+
+/// A module's parsed input files together with the configuration that governed the parse.
+struct ParsedModule {
+	let moduleInfo: ModuleInfo
+	/// The module's `#SafeDIConfiguration`, found among the configuration file paths it was parsed with.
+	let configuration: SafeDIConfiguration?
+	/// The evaluator the files were scanned with. Files parsed later for the same module, such as
+	/// those in `configuration.additionalDirectoriesToInclude`, must be scanned with it too.
+	let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
+}
+
+/// More than one `#SafeDIConfiguration` was declared among a module's own files.
+struct MultipleConfigurationsError: Error, CustomStringConvertible {
+	let sourceFilePaths: [String]
+
+	var description: String {
+		"Found \(sourceFilePaths.count) #\(SafeDIConfigurationVisitor.macroName) declarations in this module. Each module must have at most one #\(SafeDIConfigurationVisitor.macroName). Found in:\n\t\(sourceFilePaths.joined(separator: "\n\t"))"
+	}
+}
+
+/// The evaluator for a module's `#if` blocks.
+///
+/// - Parameters:
+///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
+///   - configuration: The module's `#SafeDIConfiguration`, whose `activeCompilationConditions` are also active
+///     and whose `mockConditionalCompilation` guards the generated mock code. A module without a configuration
+///     wraps its mocks in `DEBUG`.
+func conditionalCompilationEvaluator(
+	activeCompilationConditions: Set<String>,
+	configuration: SafeDIConfiguration?,
+) -> ConditionalCompilationEvaluator {
+	ConditionalCompilationEvaluator(
+		activeCompilationConditions: activeCompilationConditions.union(configuration?.activeCompilationConditions ?? []),
+		mockConditionalCompilation: configuration.map(\.mockConditionalCompilation) ?? "DEBUG",
+	)
 }
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -75,71 +114,208 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Str
 	}
 }
 
+/// Parses a module's input files, reading and parsing each file once.
+///
+/// The module's `#SafeDIConfiguration` decides how `#if` blocks are evaluated, but it can sit in
+/// any of the module's files, so every file is first walked with a provisional evaluator built from
+/// the supplied conditions. Only files in which an `#if` block guarding SafeDI declarations rested
+/// on a bare condition can extract something different under another evaluator; those keep their
+/// syntax trees and are walked again if the configuration changes the evaluator. Every other file
+/// is released as soon as it is walked, so memory scales with concurrency rather than module size.
+///
+/// - Parameters:
+///   - filePaths: Every file to parse.
+///   - configurationFilePaths: The files that belong to the module itself, which are the only ones whose
+///     `#SafeDIConfiguration` applies. In a multi-module input set these are the current target's files.
+///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-func parseSwiftFiles(_ filePaths: Set<String>) async throws -> ModuleInfo {
+func parseModule(
+	filePaths: Set<String>,
+	configurationFilePaths: Set<String>,
+	activeCompilationConditions: Set<String>,
+) async throws -> ParsedModule {
+	let provisionalEvaluator = ConditionalCompilationEvaluator(activeCompilationConditions: activeCompilationConditions)
+	var fileScans = try await walkFiles(filePaths, conditionalCompilation: provisionalEvaluator, retainingTreesThatDependOnEvaluator: true)
+
+	let configurations = fileScans
+		.flatMap(\.configurations)
+		.filter { configuration in
+			guard let sourceFilePath = configuration.sourceFilePath else { return false }
+			return configurationFilePaths.contains(sourceFilePath)
+		}
+	guard configurations.count <= 1 else {
+		throw MultipleConfigurationsError(sourceFilePaths: configurations.compactMap(\.sourceFilePath).sorted())
+	}
+	let configuration = configurations.first
+	let evaluator = conditionalCompilationEvaluator(
+		activeCompilationConditions: activeCompilationConditions,
+		configuration: configuration,
+	)
+	if evaluator != provisionalEvaluator {
+		fileScans = try await walkRetainedTrees(of: fileScans, conditionalCompilation: evaluator)
+	}
+
+	return ParsedModule(
+		moduleInfo: ModuleInfo(fileScans),
+		configuration: configuration,
+		conditionalCompilationEvaluator: evaluator,
+	)
+}
+
+/// Parses files that belong to an already-configured module, such as those reached through
+/// `#SafeDIConfiguration(additionalDirectoriesToInclude:)`, with the module's evaluator.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+func parseSwiftFiles(
+	_ filePaths: Set<String>,
+	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+) async throws -> ModuleInfo {
+	try await ModuleInfo(walkFiles(filePaths, conditionalCompilation: evaluator, retainingTreesThatDependOnEvaluator: false))
+}
+
+// MARK: - Private
+
+/// What one file contributed to the module.
+private struct FileScan: Sendable {
+	let path: String
+	let imports: [ImportStatement]
+	let instantiables: [Instantiable]
+	let configurations: [SafeDIConfiguration]
+	let encounteredUnexpectedNodes: Bool
+	let conditionalCompilationDecisions: [ConditionalCompilationDecision]
+	/// The file's syntax tree, kept only when the walk rested on a bare compilation condition and
+	/// the caller may need to walk it again with another evaluator.
+	let retainedSyntaxTree: SourceFileSyntax?
+
+	/// Whether the file declares nothing SafeDI scans for and no `#if` block was decided for it.
+	var contributesNothing: Bool {
+		instantiables.isEmpty
+			&& configurations.isEmpty
+			&& !encounteredUnexpectedNodes
+			&& conditionalCompilationDecisions.isEmpty
+	}
+}
+
+extension ModuleInfo {
+	fileprivate init(_ fileScans: [FileScan]) {
+		var conditionalCompilationDecisions = Set<ConditionalCompilationDecision>()
+		for fileScan in fileScans {
+			conditionalCompilationDecisions.formUnion(fileScan.conditionalCompilationDecisions)
+		}
+		let filesWithUnexpectedNodes = fileScans.filter(\.encounteredUnexpectedNodes).map(\.path)
+		self.init(
+			imports: fileScans.flatMap(\.imports),
+			instantiables: fileScans.flatMap(\.instantiables).sortedByDeclaration(),
+			configurations: fileScans.flatMap(\.configurations),
+			filesWithUnexpectedNodes: filesWithUnexpectedNodes.isEmpty ? nil : filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: conditionalCompilationDecisions.sorted(),
+		)
+	}
+}
+
+/// Reads, parses, and walks every file in parallel, keeping what each contributes.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+private func walkFiles(
+	_ filePaths: Set<String>,
+	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+	retainingTreesThatDependOnEvaluator retainsTrees: Bool,
+) async throws -> [FileScan] {
 	try await withThrowingTaskGroup(
-		of: (
-			imports: [ImportStatement],
-			instantiables: [Instantiable],
-			configurations: [SafeDIConfiguration],
-			encounteredUnexpectedNodeInFile: String?,
-		)?.self,
-		returning: ModuleInfo.self,
+		of: FileScan?.self,
+		returning: [FileScan].self,
 	) { taskGroup in
-		var imports = [ImportStatement]()
-		var instantiables = [Instantiable]()
-		var configurations = [SafeDIConfiguration]()
-		var filesWithUnexpectedNodes = [String]()
 		for filePath in filePaths where !filePath.isEmpty {
 			taskGroup.addTask {
 				let content = try String(contentsOfFile: filePath, encoding: .utf8)
 				let containsInstantiable = content.contains("@\(InstantiableVisitor.macroName)")
 				let containsConfiguration = content.contains("#\(SafeDIConfigurationVisitor.macroName)")
 				guard containsInstantiable || containsConfiguration else { return nil }
-				let syntaxTree = Parser.parse(source: content)
-				let fileVisitor = FileVisitor(
-					sourceLocationConverter: SourceLocationConverter(fileName: filePath, tree: syntaxTree),
+				let fileScan = walk(
+					Parser.parse(source: content),
+					at: filePath,
+					conditionalCompilation: evaluator,
+					retainingTreeIfDependentOnEvaluator: retainsTrees,
 				)
-				fileVisitor.walk(syntaxTree)
-				guard !fileVisitor.instantiables.isEmpty
-					|| !fileVisitor.configurations.isEmpty
-					|| fileVisitor.encounteredUnexpectedNodesSyntax
-				else { return nil }
-				let instantiables = fileVisitor.instantiables.map {
-					var instantiable = $0
-					instantiable.sourceFilePath = filePath
-					return instantiable
-				}
-				let configurations = fileVisitor.configurations.map {
-					var configuration = $0
-					configuration.sourceFilePath = filePath
-					return configuration
-				}
-				return (
-					imports: fileVisitor.imports,
-					instantiables: instantiables,
-					configurations: configurations,
-					encounteredUnexpectedNodeInFile: fileVisitor.encounteredUnexpectedNodesSyntax ? filePath : nil,
-				)
+				return fileScan.contributesNothing ? nil : fileScan
 			}
 		}
 
-		for try await fileInfo in taskGroup {
-			if let fileInfo {
-				imports.append(contentsOf: fileInfo.imports)
-				instantiables.append(contentsOf: fileInfo.instantiables)
-				configurations.append(contentsOf: fileInfo.configurations)
-				if let filePath = fileInfo.encounteredUnexpectedNodeInFile {
-					filesWithUnexpectedNodes.append(filePath)
-				}
+		var fileScans = [FileScan]()
+		for try await fileScan in taskGroup {
+			if let fileScan {
+				fileScans.append(fileScan)
 			}
 		}
-
-		return ModuleInfo(
-			imports: imports,
-			instantiables: instantiables.sortedByDeclaration(),
-			configurations: configurations,
-			filesWithUnexpectedNodes: filesWithUnexpectedNodes.isEmpty ? nil : filesWithUnexpectedNodes,
-		)
+		return fileScans
 	}
+}
+
+/// Walks again, with `evaluator`, every file that kept its syntax tree, and releases the trees.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+private func walkRetainedTrees(
+	of fileScans: [FileScan],
+	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+) async throws -> [FileScan] {
+	try await withThrowingTaskGroup(
+		of: (index: Int, fileScan: FileScan).self,
+		returning: [FileScan].self,
+	) { taskGroup in
+		for (index, fileScan) in fileScans.enumerated() {
+			if let retainedSyntaxTree = fileScan.retainedSyntaxTree {
+				taskGroup.addTask {
+					(
+						index: index,
+						fileScan: walk(
+							retainedSyntaxTree,
+							at: fileScan.path,
+							conditionalCompilation: evaluator,
+							retainingTreeIfDependentOnEvaluator: false,
+						),
+					)
+				}
+			}
+		}
+
+		// A file whose walk rested on a bare condition always yields a decision, so it still contributes.
+		var walkedFileScans = fileScans
+		for try await (index, fileScan) in taskGroup {
+			walkedFileScans[index] = fileScan
+		}
+		return walkedFileScans
+	}
+}
+
+/// Walks one parsed file.
+private func walk(
+	_ syntaxTree: SourceFileSyntax,
+	at filePath: String,
+	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+	retainingTreeIfDependentOnEvaluator retainsTree: Bool,
+) -> FileScan {
+	let fileVisitor = FileVisitor(
+		conditionalCompilationEvaluator: evaluator,
+		sourceLocationConverter: SourceLocationConverter(fileName: filePath, tree: syntaxTree),
+	)
+	fileVisitor.walk(syntaxTree)
+	let declaresSafeDIContent = !fileVisitor.instantiables.isEmpty
+		|| !fileVisitor.configurations.isEmpty
+		|| fileVisitor.encounteredUnexpectedNodesSyntax
+	return FileScan(
+		path: filePath,
+		// A file whose only SafeDI content was skipped contributes nothing to generated
+		// code, so its imports stay out of the generated dependency tree.
+		imports: declaresSafeDIContent ? fileVisitor.imports : [],
+		instantiables: fileVisitor.instantiables.map {
+			var instantiable = $0
+			instantiable.sourceFilePath = filePath
+			return instantiable
+		},
+		configurations: fileVisitor.configurations.map {
+			var configuration = $0
+			configuration.sourceFilePath = filePath
+			return configuration
+		},
+		encounteredUnexpectedNodes: fileVisitor.encounteredUnexpectedNodesSyntax,
+		conditionalCompilationDecisions: fileVisitor.conditionalCompilationDecisions,
+		retainedSyntaxTree: retainsTree && fileVisitor.dependsOnConditionalCompilationEvaluator ? syntaxTree : nil,
+	)
 }

@@ -43,6 +43,7 @@ func executeSafeDIToolTest(
 	includeFolders: [String] = [],
 	skipCompileVerification: Bool = false,
 	inputPathsRelativeToCurrentDirectory: Bool = false,
+	activeCompilationConditions: [String] = [],
 ) async throws -> TestOutput {
 	// Create additional directory first so its path can be substituted into target file content.
 	var additionalDirectoryFiles = [URL]()
@@ -135,6 +136,7 @@ func executeSafeDIToolTest(
 				outputDirectory: outputDirectory.path,
 				manifestFile: manifestFile.relativePath,
 				mockScopedFiles: swiftFiles.map(\.relativePath),
+				activeCompilationConditions: Set(activeCompilationConditions),
 			)
 			manifestPath = manifestFile.relativePath
 
@@ -153,7 +155,13 @@ func executeSafeDIToolTest(
 			generateArguments += ["--dependent-module-info-file-path", dependentModuleInfoFileCSV.relativePath]
 		}
 		if let manifestPath {
+			// The manifest carries the conditions scan was given, which is how the
+			// SPM plugin's generate invocation receives them.
 			generateArguments += ["--swift-manifest", manifestPath]
+		} else {
+			for condition in activeCompilationConditions {
+				generateArguments += ["--active-compilation-conditions", condition]
+			}
 		}
 		if buildDOTFileOutput {
 			generateArguments += ["--dot-file-output", dotTreeOutput.relativePath]
@@ -211,6 +219,7 @@ func executeSafeDIToolTest(
 				inputSwiftFiles: swiftFiles,
 				additionalDirectorySwiftFiles: additionalDirectoryFiles,
 				generatedFiles: generatedFiles,
+				activeCompilationConditions: activeCompilationConditions,
 				filesToDelete: &filesToDelete,
 			)
 		}

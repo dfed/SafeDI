@@ -20,27 +20,33 @@
 
 import SafeDI
 
-// `mockOnly` means this declaration participates only in mock generation.
-// `fulfillingAdditionalTypes: [StringStorage.self]` makes `InMemoryStorage` the
-// `StringStorage` every `mock()` in the graph receives by default —
-// `safeDIOverrides` is only needed to deviate from it.
-@Instantiable(fulfillingAdditionalTypes: [StringStorage.self], mockOnly: true)
-public final class InMemoryStorage: StringStorage {
-	public init(storage: [String: String] = [:]) {
-		self.storage = storage
-	}
+// A declaration that only feeds mock generation may sit behind the module's
+// `mockConditionalCompilation` condition (`DEBUG` by default) without the build telling
+// SafeDITool whether that condition is active: the generated mock code that references
+// the declaration is wrapped in the same `#if`.
+#if DEBUG
+	// `mockOnly` means this declaration participates only in mock generation.
+	// `fulfillingAdditionalTypes: [StringStorage.self]` makes `InMemoryStorage` the
+	// `StringStorage` every `mock()` in the graph receives by default —
+	// `safeDIOverrides` is only needed to deviate from it.
+	@Instantiable(fulfillingAdditionalTypes: [StringStorage.self], mockOnly: true)
+	public final class InMemoryStorage: StringStorage {
+		public init(storage: [String: String] = [:]) {
+			self.storage = storage
+		}
 
-	public static func mock(storage: [String: String] = [:]) -> InMemoryStorage {
-		InMemoryStorage(storage: storage)
-	}
+		public static func mock(storage: [String: String] = [:]) -> InMemoryStorage {
+			InMemoryStorage(storage: storage)
+		}
 
-	public func string(forKey key: String) -> String? {
-		storage[key]
-	}
+		public func string(forKey key: String) -> String? {
+			storage[key]
+		}
 
-	public func setString(_ string: String?, forKey key: String) {
-		storage[key] = string
-	}
+		public func setString(_ string: String?, forKey key: String) {
+			storage[key] = string
+		}
 
-	private var storage: [String: String]
-}
+		private var storage: [String: String]
+	}
+#endif
