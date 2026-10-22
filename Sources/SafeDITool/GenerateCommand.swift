@@ -108,7 +108,7 @@ struct Generate: AsyncParsableCommand {
 
 		let (dependentModuleInfo, parsed) = try await (
 			loadSafeDIModuleInfo(),
-			parsedModule(conditionalCompilation: evaluator),
+			parsedModule(inputFilePaths: inputFilePaths, conditionalCompilation: evaluator),
 		)
 		let initialModule = parsed.module
 		let initialModuleIsFromCache = parsed.isFromCache
@@ -538,19 +538,24 @@ struct Generate: AsyncParsableCommand {
 	/// cross-version schema drift, etc.) fall through to a fresh parse
 	/// rather than aborting the build — the cache is an optimization
 	/// sidecar, not a correctness requirement.
-	private func parsedModule(conditionalCompilation evaluator: ConditionalCompilationEvaluator) async throws -> (module: ModuleInfo, isFromCache: Bool) {
+	private func parsedModule(
+		inputFilePaths: Set<String>,
+		conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+	) async throws -> (module: ModuleInfo, isFromCache: Bool) {
 		if include.isEmpty,
 		   let swiftManifest,
-		   let cached = try await loadCachedModuleInfo(manifestPath: swiftManifest, conditionalCompilation: evaluator)
+		   let cached = try await loadCachedModuleInfo(manifestPath: swiftManifest, inputFilePaths: inputFilePaths, conditionalCompilation: evaluator)
 		{
 			(cached, true)
 		} else {
-			try await (parseSwiftFiles(findGenerateSwiftFiles(), conditionalCompilation: evaluator), false)
+			try await (parseSwiftFiles(inputFilePaths, conditionalCompilation: evaluator), false)
 		}
 	}
 
+	/// - Parameter inputFilePaths: The files `generate` was given, which with `include` empty are exactly the CSV's paths.
 	private func loadCachedModuleInfo(
 		manifestPath: String,
+		inputFilePaths: Set<String>,
 		conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 	) async throws -> ModuleInfo? {
 		let cacheURL = scannedModuleInfoURL(forManifestPath: manifestPath)
@@ -578,18 +583,10 @@ struct Generate: AsyncParsableCommand {
 		// changed CSV, in which case the cached ModuleInfo is for the wrong
 		// input set. Plugin-driven builds always pair scan+generate with the
 		// same CSV, so this check is effectively free on the fast path.
-		//
-		// Failure to read the CSV also invalidates: we can't prove the
-		// inputs match, and the fresh-parse fallback will surface a clearer
-		// error (missing file) than silently reusing stale parse results.
-		if let swiftSourcesFilePath {
-			guard let currentCSVContent = try? String(contentsOfFile: swiftSourcesFilePath, encoding: .utf8) else {
-				return nil
-			}
-			let currentCSVPaths = Set(currentCSVContent.parsedPathListCSV())
-			guard currentCSVPaths == Set(cached.csvInputPaths) else {
-				return nil
-			}
+		// (An unreadable CSV never reaches here: `run` reads it first and
+		// surfaces the missing-file error.)
+		guard inputFilePaths == Set(cached.csvInputPaths) else {
+			return nil
 		}
 
 		// Bypass the cache if new Swift files have been added to any of the

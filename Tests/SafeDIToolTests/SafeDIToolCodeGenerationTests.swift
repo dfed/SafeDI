@@ -7866,12 +7866,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_bypassesCachedModuleInfo_whenCSVIsUnreadable() async throws {
-		// `loadCachedModuleInfo` can't verify the current input set when
-		// the CSV file can't be read, so it must invalidate rather than
-		// silently reuse cached data. Delete the CSV after scan and
-		// confirm the fresh-parse fallback surfaces the missing-CSV
-		// NSError (rather than a successful cache hit).
+	mutating func run_throwsMissingCSVError_whenCSVIsDeletedAfterScan() async throws {
+		// Generate reads the CSV before it consults scan's cache, so a cache
+		// hit can never mask an unreadable input set. Delete the CSV after
+		// scan and confirm the missing-CSV NSError surfaces (rather than a
+		// successful cache hit).
 		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
 		let rootFile = projectRoot.appendingPathComponent("Root.swift")
@@ -7899,8 +7898,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			"--manifest-file", manifestFile.path,
 		])).run()
 
-		// Delete the CSV so `String(contentsOfFile:)` fails in the cache
-		// freshness check — exercises the unreadable-CSV bypass branch.
 		try FileManager.default.removeItem(at: swiftFileCSV)
 
 		await assertThrowsError(containing: "NSCocoaErrorDomain Code=260") {
