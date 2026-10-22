@@ -1,13 +1,9 @@
 name: CI
 
+# Throwaway experiment branch: CI is dispatch-only here so the branch
+# adds no macOS load beyond the CodeQL matrix.
 on:
-  push:
-    branches:
-    - main
-  schedule:
-    # Runs at 00:00 UTC every Monday to ensure that CI does not bitrot.
-    - cron: '0 0 * * 1'
-  pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
