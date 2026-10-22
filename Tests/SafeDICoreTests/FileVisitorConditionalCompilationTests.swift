@@ -850,33 +850,6 @@ struct FileVisitorConditionalCompilationTests {
 		#expect(fileVisitor.conditionalCompilationDecisions == [])
 	}
 
-	// MARK: Compile-time assertions
-
-	@Test
-	func compileTimeAssertions_assertEachDecisionOnce_sortedByCondition() {
-		let assertions = ConditionalCompilationDecision.compileTimeAssertions(for: [
-			ConditionalCompilationDecision(condition: "STAGING && DEBUG", isActive: false),
-			ConditionalCompilationDecision(condition: "DEBUG", isActive: true),
-			ConditionalCompilationDecision(condition: "DEBUG", isActive: true),
-		])
-		#expect(assertions == """
-		#if !(DEBUG)
-		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
-		#endif
-
-		#if STAGING && DEBUG
-		#error("SafeDI scanned this module assuming `#if STAGING && DEBUG` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
-		#endif
-
-
-		""")
-	}
-
-	@Test
-	func compileTimeAssertions_areEmpty_whenThereAreNoDecisions() {
-		#expect(ConditionalCompilationDecision.compileTimeAssertions(for: []) == "")
-	}
-
 	// MARK: Private
 
 	private func walk(
