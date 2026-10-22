@@ -203,6 +203,43 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenSecondMockOnlyArrivesAfterFirstMockOnlyMergedIntoProduction() async {
+		// Instantiables are processed in source file path order, keeping each file's
+		// declaration order. `MyService.swift` sorts before `ZzzFakeService.swift`, so the
+		// production declaration is seen first, its same-file mockOnly extension merges
+		// into it, and the second mockOnly then hits the already-merged guard.
+		await assertThrowsError(
+			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable
+					public struct MyService: Instantiable {
+					    public init() {}
+					}
+
+					@Instantiable(mockOnly: true)
+					extension MyService {
+					    public static func mock() -> MyService { MyService() }
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [MyService.self], mockOnly: true)
+					public struct ZzzFakeService: Instantiable {
+					    public init() {}
+					    public static func mock() -> ZzzFakeService { ZzzFakeService() }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTwoMockOnlyTypesAndProductionAllClaimSameType() async {
 		await assertThrowsError(
 			"Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.",
