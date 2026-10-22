@@ -18,13 +18,21 @@ fi
 VERSION="$1"
 CHECKSUM="$2"
 
+# In-place sed that works with both BSD sed (macOS) and GNU sed (Linux):
+# BSD requires an argument to -i and GNU treats a separate argument as
+# the script, but both accept an attached suffix. The last argument is
+# the file being edited.
+sed_in_place() {
+    sed -i.bak "$@" && rm -f "${@: -1}.bak"
+}
+
 echo "Updating Package.swift for version $VERSION with checksum $CHECKSUM..."
 
 # Update the binary target URL.
-sed -i '' "s|https://github.com/dfed/SafeDI/releases/download/[^\"]*|https://github.com/dfed/SafeDI/releases/download/${VERSION}/SafeDITool.artifactbundle.zip|" Package.swift
+sed_in_place "s|https://github.com/dfed/SafeDI/releases/download/[^\"]*|https://github.com/dfed/SafeDI/releases/download/${VERSION}/SafeDITool.artifactbundle.zip|" Package.swift
 
 # Update the checksum.
-sed -i '' "s|checksum: \"[^\"]*\"|checksum: \"${CHECKSUM}\"|" Package.swift
+sed_in_place "s|checksum: \"[^\"]*\"|checksum: \"${CHECKSUM}\"|" Package.swift
 
 echo "  Package.swift: URL and checksum updated"
 
@@ -34,14 +42,14 @@ echo "  Package.swift: URL and checksum updated"
 # lines, so scope the replacement to the `safeDIVersion` getter body
 # via an address range — the only quoted string inside that range is
 # the version literal.
-sed -i '' -E "/var safeDIVersion: String \{/,/\}/ s|\"[^\"]+\"|\"${VERSION}\"|" Plugins/Shared.swift
+sed_in_place -E "/var safeDIVersion: String \{/,/\}/ s|\"[^\"]+\"|\"${VERSION}\"|" Plugins/Shared.swift
 
 echo "  Plugins/Shared.swift: safeDIVersion updated"
 
 # Update the Bazel module version. Scope the replacement to the
 # `module(…)` block so the top-level version line is the only match
 # (bazel_dep's `version = "X"` lines elsewhere in the file stay put).
-sed -i '' -E "/^module\(/,/^\)/ s|version = \"[^\"]*\"|version = \"${VERSION}\"|" MODULE.bazel
+sed_in_place -E "/^module\(/,/^\)/ s|version = \"[^\"]*\"|version = \"${VERSION}\"|" MODULE.bazel
 
 echo "  MODULE.bazel: module version updated"
 echo "Done."
