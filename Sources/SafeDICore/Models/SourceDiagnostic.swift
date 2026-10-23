@@ -50,14 +50,14 @@ public struct SourceDiagnostic: Hashable, Sendable {
 			self.replacement = replacement
 		}
 
-		/// The source text to replace.
+		/// The source text to replace, in the file the diagnostic points at.
 		public let range: Dependency.SourceRange
 		/// The text to put in its place.
 		public let replacement: String
 
-		/// The fix-it formatted as swift-build reads it.
-		public var formatted: String {
-			"\(range.start.filePath):\(range.start.line):\(range.start.column)-\(range.end.line):\(range.end.column): fixit: \(escapedReplacement)"
+		/// The fix-it formatted as swift-build reads it, for a range in the file at `filePath`.
+		func formatted(inFileAt filePath: String) -> String {
+			"\(filePath):\(range.startLine):\(range.startColumn)-\(range.endLine):\(range.endColumn): fixit: \(escapedReplacement)"
 		}
 
 		/// `replacement` escaped as the contents of a JSON string literal, which is how swift-build unescapes it.
@@ -89,16 +89,22 @@ public struct SourceDiagnostic: Hashable, Sendable {
 	public let location: Dependency.DeclarationLocation?
 	/// A single line of text. A newline would break the compiler format, so messages must not contain one.
 	public let message: String
-	/// Replacements the IDE can offer for this diagnostic. Printed on the lines directly after it.
+	/// Replacements the IDE can offer for this diagnostic, each within the file `location` names.
+	/// Printed on the lines directly after it.
 	public let fixIts: [FixIt]
 
-	/// The diagnostic formatted as the Swift compiler would print it: `<path>:<line>:<column>: <severity>: <message>`,
-	/// or `<severity>: <message>` without a location, which is the shape the compiler itself uses for location-less
-	/// diagnostics, followed by one `fixit:` line per fix-it.
+	/// The diagnostic formatted as the Swift compiler would print it: `<path>:<line>:<column>: <severity>: <message>`
+	/// followed by one `fixit:` line per fix-it, or `<severity>: <message>` without a location, which is the shape
+	/// the compiler itself uses for location-less diagnostics. A fix-it edits the file its diagnostic points at,
+	/// so a location-less diagnostic prints none.
 	public var formatted: String {
-		let locationPrefix = location.map { "\($0.filePath):\($0.line):\($0.column): " } ?? ""
-		return (["\(locationPrefix)\(severity.rawValue): \(message)"] + fixIts.map(\.formatted))
-			.joined(separator: "\n")
+		if let location {
+			(["\(location.filePath):\(location.line):\(location.column): \(severity.rawValue): \(message)"]
+				+ fixIts.map { $0.formatted(inFileAt: location.filePath) })
+				.joined(separator: "\n")
+		} else {
+			"\(severity.rawValue): \(message)"
+		}
 	}
 
 	/// Returns a copy whose file paths are absolute, resolving relative paths against the directory at `directoryPath`.
@@ -106,23 +112,17 @@ public struct SourceDiagnostic: Hashable, Sendable {
 	/// directory other than the one the user is looking at, so printed paths must not stay relative.
 	public func resolvingFilePath(relativeToDirectory directoryPath: String) -> SourceDiagnostic {
 		let directory = URL(fileURLWithPath: directoryPath, isDirectory: true)
-		func resolved(_ location: Dependency.DeclarationLocation) -> Dependency.DeclarationLocation {
-			Dependency.DeclarationLocation(
-				filePath: URL(fileURLWithPath: location.filePath, relativeTo: directory).standardizedFileURL.path,
-				line: location.line,
-				column: location.column,
-			)
-		}
 		return SourceDiagnostic(
 			severity: severity,
-			location: location.map(resolved),
-			message: message,
-			fixIts: fixIts.map { fixIt in
-				FixIt(
-					range: Dependency.SourceRange(start: resolved(fixIt.range.start), end: resolved(fixIt.range.end)),
-					replacement: fixIt.replacement,
+			location: location.map { location in
+				Dependency.DeclarationLocation(
+					filePath: URL(fileURLWithPath: location.filePath, relativeTo: directory).standardizedFileURL.path,
+					line: location.line,
+					column: location.column,
 				)
 			},
+			message: message,
+			fixIts: fixIts,
 		)
 	}
 }

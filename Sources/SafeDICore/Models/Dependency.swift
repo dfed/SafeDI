@@ -85,17 +85,25 @@ public struct Dependency: Codable, Hashable, Sendable {
 	/// and such values never reach the dependency tree generator.
 	public let bareAttributeRange: SourceRange?
 
-	/// A range of source text from `start` up to, but not including, `end`.
+	/// A range of source text in the file that declares the dependency, which is the file of its `declarationLocation`.
+	/// The range carries no file path of its own: every dependency records three ranges, and module info is
+	/// serialized and read back on every build, so repeating the path in each one is measurable.
 	public struct SourceRange: Codable, Hashable, Sendable {
-		public init(start: DeclarationLocation, end: DeclarationLocation) {
-			self.start = start
-			self.end = end
+		public init(startLine: Int, startColumn: Int, endLine: Int, endColumn: Int) {
+			self.startLine = startLine
+			self.startColumn = startColumn
+			self.endLine = endLine
+			self.endColumn = endColumn
 		}
 
-		/// The first character of the range.
-		public let start: DeclarationLocation
-		/// The character after the last one in the range, so a range’s end column is exclusive.
-		public let end: DeclarationLocation
+		/// The one-based line of the first character of the range.
+		public let startLine: Int
+		/// The one-based column of the first character of the range.
+		public let startColumn: Int
+		/// The one-based line of the character after the last one in the range.
+		public let endLine: Int
+		/// The one-based column of the character after the last one in the range, so the end column is exclusive.
+		public let endColumn: Int
 	}
 
 	/// The file, line, and column at which a declaration begins.
