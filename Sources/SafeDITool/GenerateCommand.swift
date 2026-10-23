@@ -112,32 +112,14 @@ struct Generate: AsyncParsableCommand {
 			)
 		}
 
-		// In multi-module builds, the CSV includes all modules' files, so multiple
-		// configs may be present. The manifest's configurationFilePaths lists only
-		// this target's own config files, relative to scan's project root, so the
-		// CSV's paths are resolved the same way before matching; without a
-		// manifest every input file belongs to this module.
 		let inputFilePaths = try await findGenerateSwiftFiles()
-		// Resolving a path is far costlier than comparing its suffix, and the CSV lists every
-		// file of every module this target depends on, so only an input that ends in a
-		// configuration file's name is resolved.
-		let configurationFileNames = (manifest?.configurationFilePaths ?? []).map { ($0 as NSString).lastPathComponent }
-		let configurationFilePaths: Set<String> = if let manifest {
-			inputFilePaths.filter { inputFilePath in
-				configurationFileNames.contains(where: inputFilePath.hasSuffix)
-					&& manifest.configurationFilePaths.contains(manifest.resolvedPath(for: inputFilePath))
-			}
-		} else {
-			inputFilePaths
-		}
 		let suppliedCompilationConditions = Set(activeCompilationConditions).union(manifest?.activeCompilationConditions ?? [])
 
 		let (dependentModuleInfo, parsed) = try await (
 			loadSafeDIModuleInfo(),
 			parsedModule(
 				inputFilePaths: inputFilePaths,
-				configurationFilePaths: configurationFilePaths,
-				manifestConfigurationFilePaths: Set(manifest?.configurationFilePaths ?? []),
+				manifest: manifest,
 				activeCompilationConditions: suppliedCompilationConditions,
 			),
 		)
@@ -552,14 +534,13 @@ struct Generate: AsyncParsableCommand {
 	///
 	/// - Parameters:
 	///   - inputFilePaths: The files `generate` was given, which with `include` empty are exactly the CSV's paths.
-	///   - configurationFilePaths: The input files that can declare this module's configuration.
-	///   - manifestConfigurationFilePaths: The same files as scan recorded them, which is how the
-	///     cached `ModuleInfo` names them.
+	///   - manifest: The manifest `generate` runs with, whose `configurationFilePaths` name the files that can
+	///     declare this module's configuration. In multi-module builds the CSV includes every module's files, so
+	///     several configurations may be present; without a manifest every input file belongs to this module.
 	///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
 	private func parsedModule(
 		inputFilePaths: Set<String>,
-		configurationFilePaths: Set<String>,
-		manifestConfigurationFilePaths: Set<String>,
+		manifest: SafeDIToolManifest?,
 		activeCompilationConditions: Set<String>,
 	) async throws -> (module: ParsedModule, isFromCache: Bool) {
 		if include.isEmpty,
@@ -567,7 +548,8 @@ struct Generate: AsyncParsableCommand {
 		   let cached = try await loadCachedModule(
 		   	manifestPath: swiftManifest,
 		   	inputFilePaths: inputFilePaths,
-		   	configurationFilePaths: manifestConfigurationFilePaths,
+		   	// The cached `ModuleInfo` names files as scan recorded them in the manifest.
+		   	configurationFilePaths: Set(manifest?.configurationFilePaths ?? []),
 		   	activeCompilationConditions: activeCompilationConditions,
 		   )
 		{
@@ -576,7 +558,9 @@ struct Generate: AsyncParsableCommand {
 			try await (
 				parseModule(
 					filePaths: inputFilePaths,
-					configurationFilePaths: configurationFilePaths,
+					// A fresh parse names files as the CSV does, so the manifest's configuration
+					// files are matched among the CSV's paths.
+					configurationFilePaths: manifest.map { $0.configurationFilePaths(among: inputFilePaths) } ?? inputFilePaths,
 					activeCompilationConditions: activeCompilationConditions,
 				),
 				false,
@@ -591,10 +575,7 @@ struct Generate: AsyncParsableCommand {
 		activeCompilationConditions: Set<String>,
 	) async throws -> ParsedModule? {
 		let cacheURL = scannedModuleInfoURL(forManifestPath: manifestPath)
-		let fileManager = FileManager.default
-		guard let cacheAttributes = try? fileManager.attributesOfItem(atPath: cacheURL.path),
-		      let cacheModifiedAt = cacheAttributes[.modificationDate] as? Date
-		else { return nil }
+		guard let cacheModifiedAt = contentModificationDate(ofFileAtPath: cacheURL.path) else { return nil }
 
 		// Treat decode failures as cache misses, not hard errors — the
 		// cache may have been truncated by an interrupted write or carry
@@ -654,10 +635,7 @@ struct Generate: AsyncParsableCommand {
 		// files reached through `#SafeDIConfiguration.additionalDirectoriesToInclude`,
 		// which don't appear in `findGenerateSwiftFiles()`'s output).
 		guard !cached.scannedInputPaths.contains(where: { filePath in
-			guard let modifiedAt = try? URL(fileURLWithPath: filePath)
-				.resourceValues(forKeys: [.contentModificationDateKey])
-				.contentModificationDate
-			else {
+			guard let modifiedAt = contentModificationDate(ofFileAtPath: filePath) else {
 				// File missing or unreadable — the scan-observed input set
 				// doesn't match disk, so a fresh parse is safer than
 				// trusting stale parse results.
@@ -672,6 +650,16 @@ struct Generate: AsyncParsableCommand {
 			configuration: configuration,
 			conditionalCompilationEvaluator: evaluator,
 		)
+	}
+
+	/// When the file at `path` was last modified, or `nil` when it is missing or unreadable.
+	/// Asks for the one value rather than `FileManager.attributesOfItem`'s whole dictionary:
+	/// this runs for every input file on every build. `isDirectory` is stated so that building
+	/// the URL does not consult the file system.
+	private func contentModificationDate(ofFileAtPath path: String) -> Date? {
+		try? URL(fileURLWithPath: path, isDirectory: false)
+			.resourceValues(forKeys: [.contentModificationDateKey])
+			.contentModificationDate
 	}
 
 	private var moduleInfoURLs: Set<URL> {

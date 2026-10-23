@@ -37,6 +37,24 @@ struct SourceDiagnosticTests {
 	}
 
 	@Test
+	func formatted_omitsFixIts_whenLocationIsNil() {
+		// A fix-it edits the file its diagnostic points at, and swift-build attaches a `fixit:` line only to a
+		// located diagnostic on the line before it, so without a location there is nothing to print.
+		let diagnostic = SourceDiagnostic(
+			severity: .error,
+			location: nil,
+			message: "Dependency cycle detected: A -> B -> A",
+			fixIts: [
+				SourceDiagnostic.FixIt(
+					range: Dependency.SourceRange(startLine: 7, startColumn: 19, endLine: 7, endColumn: 26),
+					replacement: "shared",
+				),
+			],
+		)
+		#expect(diagnostic.formatted == "error: Dependency cycle detected: A -> B -> A")
+	}
+
+	@Test
 	func formatted_escapesReplacementAsJSONString_whenFixItReplacementContainsQuotesBackslashesAndNewlines() {
 		// swift-build reads the replacement as a JSON string literal, so the characters it would unescape must be escaped.
 		let diagnostic = SourceDiagnostic(

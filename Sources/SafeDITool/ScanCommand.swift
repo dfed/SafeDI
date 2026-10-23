@@ -298,6 +298,19 @@ func performScan(
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension SafeDIToolManifest {
+	/// The members of `inputFilePaths` that are this module's configuration files.
+	/// Input paths are resolved the way scan resolved them before matching. Resolving a path is
+	/// far costlier than comparing its suffix, and the inputs are every file of every module the
+	/// target depends on, so only an input that ends in a configuration file's name is resolved;
+	/// resolving a path never changes its file name.
+	func configurationFilePaths(among inputFilePaths: Set<String>) -> Set<String> {
+		let configurationFileNames = configurationFilePaths.map { ($0 as NSString).lastPathComponent }
+		return inputFilePaths.filter { inputFilePath in
+			configurationFileNames.contains(where: inputFilePath.hasSuffix)
+				&& configurationFilePaths.contains(resolvedPath(for: inputFilePath))
+		}
+	}
+
 	/// `path` as scan would have recorded it: relative to the manifest's project root when the
 	/// path lies under it, otherwise absolute. A manifest without a project root takes paths as written.
 	func resolvedPath(for path: String) -> String {
