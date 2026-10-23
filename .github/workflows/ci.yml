@@ -567,12 +567,13 @@ jobs:
         with:
           command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration)
       # Optimized builds define no `DEBUG`, so the rule must withhold it and SafeDI
-      # must wire the example's `#else` logger. The `_safedi` target is listed so
-      # Bazel writes its output to bazel-bin even when every action is a cache hit.
+      # must wire the example's `#else` logger. The build itself is the check: had
+      # SafeDITool been told `DEBUG` was active, the generated code would reference
+      # `ConsoleEventLogger` and trip SafeDI's compile-time `#if DEBUG` assertion.
       - name: Build downstream example in opt mode
         uses: ./.github/actions/retry
         with:
-          command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" -c opt //ExampleBazelIntegration:ExampleBazelIntegration //ExampleBazelIntegration:ExampleBazelIntegration_safedi && grep -q "DisabledEventLogger()" bazel-bin/ExampleBazelIntegration/ExampleBazelIntegration_safedi.swift)
+          command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" -c opt //ExampleBazelIntegration:ExampleBazelIntegration)
 
   codecov-empty-upload:
     name: Codecov Status for Markdown-only Changes
