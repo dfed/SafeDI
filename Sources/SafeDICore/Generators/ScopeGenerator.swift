@@ -1185,11 +1185,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The type an `erasedToConcreteExistential` node wraps its concrete
 		/// value in (e.g., `AnyService`). Instantiator-family properties wrap in
 		/// the type they build, constant properties in the property type itself.
-		var erasedWrapperType: String {
+		var erasedWrapperType: TypeDescription {
 			if isInstantiator {
-				typeDescription.unwrapped.asInstantiatedType.asSource
+				typeDescription.unwrapped.asInstantiatedType
 			} else {
-				typeDescription.asSource
+				typeDescription
 			}
 		}
 
@@ -1205,14 +1205,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// destination, matching the type the binding had when the two were
 		/// unified through `??`. Erased nodes wrap both branches in the same
 		/// eraser, so they only need the annotation when that eraser is not
-		/// spelled like the property type.
+		/// the property type.
 		var overriddenBindingTypeAnnotation: String {
 			let defaultBranchType = if erasedToConcreteExistential {
 				erasedWrapperType
 			} else {
-				concreteType.asSource
+				concreteType
 			}
-			if defaultBranchType == instantiatedTypeDescription.asSource {
+			if defaultBranchType == instantiatedTypeDescription {
 				return ""
 			} else {
 				return ": \(instantiatedTypeDescription.asSource)"
@@ -1242,7 +1242,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		) -> String {
 			let defaultCall = defaultBuilderCall(arguments: arguments, overrideReachable: overrideReachable)
 			let defaultConstruction = if erasedToConcreteExistential {
-				"\(erasedWrapperType)(\(defaultCall))"
+				"\(erasedWrapperType.asSource)(\(defaultCall))"
 			} else {
 				defaultCall
 			}
@@ -1255,7 +1255,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			let overrideCall = "\(overrideName)(\(arguments.joined(separator: ", ")))"
 			let overrideConstruction = if erasedToConcreteExistential, needsConfigurationStruct {
-				"\(erasedWrapperType)(\(overrideCall))"
+				"\(erasedWrapperType.asSource)(\(overrideCall))"
 			} else {
 				overrideCall
 			}
@@ -1475,8 +1475,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				                                                    childInstantiable.generateMock,
 				                                                    (childInstantiable.customMockName ?? InstantiableVisitor.mockMethodName) == InstantiableVisitor.mockMethodName,
 				                                                    let mockReturnType = childInstantiable.mockReturnType,
-				                                                    mockReturnType != childInstantiable.concreteInstantiable,
-				                                                    mockReturnType != .simple(name: "Self", generics: [])
+				                                                    !childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childInstantiable.concreteInstantiable)
 				{
 					mockReturnType
 				} else {
