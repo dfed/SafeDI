@@ -118,9 +118,14 @@ struct Generate: AsyncParsableCommand {
 		// CSV's paths are resolved the same way before matching; without a
 		// manifest every input file belongs to this module.
 		let inputFilePaths = try await findGenerateSwiftFiles()
+		// Resolving a path is far costlier than comparing its suffix, and the CSV lists every
+		// file of every module this target depends on, so only an input that ends in a
+		// configuration file's name is resolved.
+		let configurationFileNames = (manifest?.configurationFilePaths ?? []).map { ($0 as NSString).lastPathComponent }
 		let configurationFilePaths: Set<String> = if let manifest {
 			inputFilePaths.filter { inputFilePath in
-				manifest.configurationFilePaths.contains(manifest.resolvedPath(for: inputFilePath))
+				configurationFileNames.contains(where: inputFilePath.hasSuffix)
+					&& manifest.configurationFilePaths.contains(manifest.resolvedPath(for: inputFilePath))
 			}
 		} else {
 			inputFilePaths
@@ -649,8 +654,9 @@ struct Generate: AsyncParsableCommand {
 		// files reached through `#SafeDIConfiguration.additionalDirectoriesToInclude`,
 		// which don't appear in `findGenerateSwiftFiles()`'s output).
 		guard !cached.scannedInputPaths.contains(where: { filePath in
-			guard let attributes = try? fileManager.attributesOfItem(atPath: filePath),
-			      let modifiedAt = attributes[.modificationDate] as? Date
+			guard let modifiedAt = try? URL(fileURLWithPath: filePath)
+				.resourceValues(forKeys: [.contentModificationDateKey])
+				.contentModificationDate
 			else {
 				// File missing or unreadable — the scan-observed input set
 				// doesn't match disk, so a fresh parse is safer than

@@ -45,10 +45,7 @@ struct SourceDiagnosticTests {
 			message: "@Received property `shared2: SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: SharedThing`?",
 			fixIts: [
 				SourceDiagnostic.FixIt(
-					range: Dependency.SourceRange(
-						start: Dependency.DeclarationLocation(filePath: "Sources/App/Child.swift", line: 7, column: 19),
-						end: Dependency.DeclarationLocation(filePath: "Sources/App/Child.swift", line: 7, column: 26),
-					),
+					range: Dependency.SourceRange(startLine: 7, startColumn: 19, endLine: 7, endColumn: 26),
 					replacement: "quote\" backslash\\ newline\n return\r tab\t",
 				),
 			],
@@ -78,10 +75,7 @@ struct SourceDiagnosticTests {
 			message: "@Received property `shared2: SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: SharedThing`?",
 			fixIts: [
 				SourceDiagnostic.FixIt(
-					range: Dependency.SourceRange(
-						start: Dependency.DeclarationLocation(filePath: "Sources/App/Child.swift", line: 7, column: 19),
-						end: Dependency.DeclarationLocation(filePath: "Sources/App/Child.swift", line: 7, column: 26),
-					),
+					range: Dependency.SourceRange(startLine: 7, startColumn: 19, endLine: 7, endColumn: 26),
 					replacement: "shared",
 				),
 			],
