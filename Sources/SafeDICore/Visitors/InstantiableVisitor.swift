@@ -529,9 +529,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// The range of `node`’s text, excluding its leading and trailing trivia, or `nil` without a converter.
 	private func sourceRange(of node: some SyntaxProtocol) -> Dependency.SourceRange? {
 		sourceLocationConverter.map { sourceLocationConverter in
-			Dependency.SourceRange(
-				start: sourceLocationConverter.declarationLocation(for: node.positionAfterSkippingLeadingTrivia),
-				end: sourceLocationConverter.declarationLocation(for: node.endPositionBeforeTrailingTrivia),
+			let start = sourceLocationConverter.location(for: node.positionAfterSkippingLeadingTrivia)
+			let end = sourceLocationConverter.location(for: node.endPositionBeforeTrailingTrivia)
+			return Dependency.SourceRange(
+				startLine: start.line,
+				startColumn: start.column,
+				endLine: end.line,
+				endColumn: end.column,
 			)
 		}
 	}
