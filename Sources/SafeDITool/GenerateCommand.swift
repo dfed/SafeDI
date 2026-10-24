@@ -217,6 +217,7 @@ struct Generate: AsyncParsableCommand {
 				mockInitializer: unnormalizedInstantiable.mockInitializer,
 				mockReturnType: unnormalizedInstantiable.mockReturnType,
 				customMockName: unnormalizedInstantiable.customMockName,
+				mockDeclarationLocation: unnormalizedInstantiable.mockDeclarationLocation,
 				declarationLocation: unnormalizedInstantiable.declarationLocation,
 			)
 			normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath

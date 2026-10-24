@@ -126,6 +126,23 @@ public actor DependencyTreeGenerator {
 				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 			}
 
+		// Collect the hand-written methods named `mock` for each concrete type.
+		// When the type also gets a generated `mock()`, each must be
+		// distinguishable from it. Entries under different keys for the same
+		// concrete type can carry the same method with different dependencies
+		// (merged vs. unmerged), which changes the calls generated code makes.
+		let handWrittenMocksByConcreteType: [TypeDescription: Set<ScopeGenerator.HandWrittenMock>] = typeDescriptionToFulfillingInstantiableMap.values
+			.reduce(into: [TypeDescription: Set<ScopeGenerator.HandWrittenMock>]()) { result, instantiable in
+				guard let mockInitializer = instantiable.mockInitializer,
+				      instantiable.customMockName == nil
+				else { return }
+				result[instantiable.concreteInstantiable, default: []].insert(ScopeGenerator.HandWrittenMock(
+					mockInitializer: mockInitializer,
+					dependencies: instantiable.dependencies,
+					declarationLocation: instantiable.mockDeclarationLocation,
+				))
+			}
+
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
@@ -137,8 +154,10 @@ public actor DependencyTreeGenerator {
 			// in additionalMocksToGenerate), duplicates, and types not in the scope map.
 			// Types from dependent modules are skipped unless they appear in
 			// additionalMocksToGenerate. When generateMock is true and a hand-written
-			// mock exists, the generated mock calls through to the hand-written one
-			// (which has a different name specified by customMockName).
+			// mock exists, the generated mock calls through to the hand-written one,
+			// which has a different name specified by customMockName or a call
+			// shape the generated mock does not share (see
+			// `ScopeGenerator.validateHandWrittenMocksAreDistinguishable`).
 			guard instantiable.generateMock || isAdditionalMock,
 			      seen.insert(instantiable.concreteInstantiable).inserted,
 			      let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable]
@@ -215,10 +234,14 @@ public actor DependencyTreeGenerator {
 			return union
 		}
 
-		// Generate mock code and collect configuration types in parallel.
-		let generatedRoots = try await withThrowingTaskGroup(
-			of: (root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)]).self,
-			returning: [(root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)])].self,
+		// Generate mock code and collect configuration types in parallel. Every
+		// root's outcome is collected before an error is thrown, so a failure
+		// reports the first failing root in type order rather than whichever
+		// task failed first.
+		typealias MockRootOutput = (root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)])
+		let mockRootOutcomes = await withTaskGroup(
+			of: (typeDescription: TypeDescription, output: Result<MockRootOutput, any Error>).self,
+			returning: [(typeDescription: TypeDescription, output: Result<MockRootOutput, any Error>)].self,
 		) { taskGroup in
 			for (instantiable, mockRoot) in mockRoots {
 				taskGroup.addTask {
@@ -227,28 +250,40 @@ public actor DependencyTreeGenerator {
 							mockConditionalCompilation: mockConditionalCompilation,
 							forwardedParameterMockDefaults: forwardedParameterMockDefaults,
 							cycleEdges: cycleEdges,
+							handWrittenMocks: Array(handWrittenMocksByConcreteType[instantiable.concreteInstantiable] ?? []),
+							isGeneratedForAdditionalMocksToGenerate: !instantiable.generateMock,
 						)),
 					)
 					async let configurationTypes = mockRoot.collectConfigurationTypes(
 						cycleEdges: cycleEdges,
 						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 					)
-					return try await (
-						root: GeneratedRoot(
+					do {
+						return try await (
 							typeDescription: instantiable.concreteInstantiable,
-							sourceFilePath: instantiable.sourceFilePath,
-							code: code,
-						),
-						configurationTypes: configurationTypes,
-					)
+							output: .success((
+								root: GeneratedRoot(
+									typeDescription: instantiable.concreteInstantiable,
+									sourceFilePath: instantiable.sourceFilePath,
+									code: code,
+								),
+								configurationTypes: configurationTypes,
+							)),
+						)
+					} catch {
+						return (typeDescription: instantiable.concreteInstantiable, output: .failure(error))
+					}
 				}
 			}
-			var results = [(root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)])]()
-			for try await result in taskGroup {
-				results.append(result)
+			var outcomes = [(typeDescription: TypeDescription, output: Result<MockRootOutput, any Error>)]()
+			for await outcome in taskGroup {
+				outcomes.append(outcome)
 			}
-			return results
+			return outcomes
 		}
+		let generatedRoots = try mockRootOutcomes
+			.sorted { $0.typeDescription < $1.typeDescription }
+			.map { try $0.output.get() }
 
 		let rootedTypeNames = Set(generatedRoots.map(\.root.typeDescription.asSource))
 		// Deduplicate configuration types by type name across all roots.
