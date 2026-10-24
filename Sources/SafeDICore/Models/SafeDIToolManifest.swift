@@ -66,7 +66,8 @@ public struct SafeDIToolManifest: Codable, Sendable {
 	public var additionalInputFiles: [String]
 
 	/// Compilation conditions supplied to `scan`, which `generate` treats as active too.
-	public var activeCompilationConditions: [String]
+	/// `nil` in a hand-written manifest that omits them, where no conditions are recorded.
+	public var activeCompilationConditions: [String]?
 
 	/// The directory `scan` resolved input paths against when writing `configurationFilePaths`
 	/// and `inputFilePath`s, so `generate` can resolve its own input paths the same way.
@@ -80,7 +81,7 @@ public struct SafeDIToolManifest: Codable, Sendable {
 		mockConfigurationOutputFilePath: String? = nil,
 		additionalMocksToGenerate: [String] = [],
 		additionalInputFiles: [String] = [],
-		activeCompilationConditions: [String] = [],
+		activeCompilationConditions: [String]? = nil,
 		projectRoot: String? = nil,
 	) {
 		self.dependencyTreeGeneration = dependencyTreeGeneration
