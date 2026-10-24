@@ -89,7 +89,7 @@ func performScan(
 
 	// Parse all files once to find roots, mocks, and configurations. Only the
 	// mock-scoped files can declare this module's configuration, which decides
-	// how every file's `#if` blocks are evaluated.
+	// how every file's `#if` blocks are evaluated, so they are searched for it first.
 	let parsedModule = try await parseModule(
 		filePaths: allFilePaths,
 		configurationFilePaths: mockScopedFilePaths,
