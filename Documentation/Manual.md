@@ -955,7 +955,7 @@ This plugin will:
 ### Manual migration
 
 1. Update your `swift-tools-version` to 6.2 or later
-2. Update your SafeDI dependency to `from: "2.0.0"`
+2. Update your SafeDI dependency to `from: "2.1.0"`
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
 4. If you don’t have CSV configuration files and do not need other SafeDI configuration options, no `#SafeDIConfiguration()` declaration is required
 
