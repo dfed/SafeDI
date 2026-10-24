@@ -1211,11 +1211,25 @@ public actor DependencyTreeGenerator {
 			root: TypeDescription,
 		) throws {
 			if let property {
+				// Scopes whose received properties have all been walked, transitively, without throwing
+				// and without bailing out on a cycle that isn't ours. Nothing reachable from such a scope
+				// can complete a cycle back to the scopes on the current walk, so walking it again —
+				// whatever received-property stack leads there — would also return without throwing.
+				// Skipping those walks keeps this linear in the received-dependency graph rather than
+				// exponential in the number of paths through it.
+				var fullyWalkedScopes = Set<ObjectIdentifier>()
+				/// - Returns: `true` when every received property reachable from `scope` was walked, or
+				///   `false` when the walk bailed out on a cycle that isn't ours and so may be incomplete.
 				func validateNoCycleInReceivedProperties(
 					scope: Scope,
 					receivedPropertyStack: [Property],
 					instantiationStack: [Property],
-				) throws {
+				) throws -> Bool {
+					let scopeIdentifier = ObjectIdentifier(scope)
+					guard !fullyWalkedScopes.contains(scopeIdentifier) else {
+						return true
+					}
+					var walkedEveryReceivedProperty = true
 					for requiredReceivedProperty in scope.requiredReceivedProperties {
 						let childProperty = requiredReceivedProperty.property
 						guard childProperty != property else {
@@ -1227,7 +1241,9 @@ public actor DependencyTreeGenerator {
 						}
 						guard !receivedPropertyStack.contains(childProperty) else {
 							// We've found a cycle, but it's not our cycle. Bail and let a future loop find this.
-							return
+							// The remaining received properties on this scope go unwalked, so a later visit
+							// through a different received-property stack must walk this scope again.
+							return false
 						}
 						if let cycleIndex = instantiationStack.firstIndex(of: childProperty) {
 							let instantiationProperties = Array(instantiationStack[0...cycleIndex])
@@ -1246,16 +1262,22 @@ public actor DependencyTreeGenerator {
 						} else if let receivedPropertyScope = typeDescriptionToScopeMap[childProperty.typeDescription] {
 							var childPropertyStack = receivedPropertyStack
 							childPropertyStack.append(childProperty)
-							try validateNoCycleInReceivedProperties(
+							let walkedEveryChildReceivedProperty = try validateNoCycleInReceivedProperties(
 								scope: receivedPropertyScope,
 								receivedPropertyStack: childPropertyStack,
 								instantiationStack: instantiationStack,
 							)
+							walkedEveryReceivedProperty = walkedEveryReceivedProperty && walkedEveryChildReceivedProperty
 						}
 					}
+					guard walkedEveryReceivedProperty else {
+						return false
+					}
+					fullyWalkedScopes.insert(scopeIdentifier)
+					return true
 				}
 				let instantiationStack: [Property] = [property] + propertyStack
-				try validateNoCycleInReceivedProperties(
+				_ = try validateNoCycleInReceivedProperties(
 					scope: scope,
 					receivedPropertyStack: [],
 					instantiationStack: instantiationStack,

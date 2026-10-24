@@ -7501,6 +7501,56 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		#expect(sourceFilePaths == sourceFilePaths.sorted(), "Instantiables were not ordered by source file path: \(sourceFilePaths.prefix(5))")
 	}
 
+	// MARK: Received dependency validation
+
+	@Test(.timeLimit(.minutes(1)))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds() async throws {
+		// Each service receives the two services before it and the service at half its index.
+		// The number of distinct received-dependency paths from the last service grows
+		// exponentially with the service count, while the number of services does not.
+		let serviceCount = 40
+		let serviceFiles = (0..<serviceCount).map { index in
+			let receivedIndices = Set([index - 1, index - 2, index / 2])
+				.filter { $0 >= 0 && $0 < index }
+				.sorted()
+			let initializerParameters = receivedIndices.map { "service\($0): Service\($0)" }.joined(separator: ", ")
+			let receivedProperties = receivedIndices.map { "    @Received let service\($0): Service\($0)" }.joined(separator: "\n")
+			return """
+			@Instantiable
+			public struct Service\(index): Instantiable {
+			    public init(\(initializerParameters)) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			\(receivedProperties)
+			}
+			"""
+		}
+		let rootInitializerParameters = (0..<serviceCount).map { "service\($0): Service\($0)" }.joined(separator: ", ")
+		let rootProperties = (0..<serviceCount).map { "    @Instantiated let service\($0): Service\($0)" }.joined(separator: "\n")
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(\(rootInitializerParameters)) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				\(rootProperties)
+				}
+				""",
+			] + serviceFiles,
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
+		)
+
+		#expect(output.dependencyTreeFiles.keys.sorted() == ["Root+SafeDI.swift"])
+		#expect(output.mockFiles.isEmpty)
+	}
+
 	// MARK: Additional Directories + Manifest Tests
 
 	@Test
@@ -7789,6 +7839,96 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let manifestData = try Data(contentsOf: manifestFile)
 		let manifest = try JSONDecoder().decode(SafeDIToolManifest.self, from: manifestData)
 		#expect(manifest.dependencyTreeGeneration.count == 1)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_appliesOnlyManifestConfiguration_whenDependencyModuleConfigurationSharesFileName() async throws {
+		// A multi-module CSV carries every module's files. Both modules name their configuration
+		// file `Configuration.swift`, so the file name alone cannot tell them apart: only the one
+		// the manifest lists configures this module. No scan ran, so there is no cached module
+		// info and `generate` matches the manifest's configuration file among the CSV's paths.
+		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let targetDirectory = projectRoot.appendingPathComponent("Target")
+		let dependencyDirectory = projectRoot.appendingPathComponent("Dependency")
+		try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
+		try FileManager.default.createDirectory(at: dependencyDirectory, withIntermediateDirectories: true)
+		let targetConfigurationFile = targetDirectory.appendingPathComponent("Configuration.swift")
+		try """
+		import SafeDI
+
+		#SafeDIConfiguration(
+		    additionalImportedModules: ["TargetOnlyModule"]
+		)
+		""".write(to: targetConfigurationFile, atomically: true, encoding: .utf8)
+		let dependencyConfigurationFile = dependencyDirectory.appendingPathComponent("Configuration.swift")
+		try """
+		import SafeDI
+
+		#SafeDIConfiguration(
+		    additionalImportedModules: ["DependencyOnlyModule"]
+		)
+		""".write(to: dependencyConfigurationFile, atomically: true, encoding: .utf8)
+		let rootFile = targetDirectory.appendingPathComponent("Root.swift")
+		try """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init(dep: Dep) {
+		        self.dep = dep
+		    }
+
+		    @Instantiated let dep: Dep
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+		let depFile = dependencyDirectory.appendingPathComponent("Dep.swift")
+		try """
+		import SafeDI
+
+		@Instantiable
+		public struct Dep: Instantiable {
+		    public init() {}
+		}
+		""".write(to: depFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try [targetConfigurationFile, dependencyConfigurationFile, rootFile, depFile]
+			.map(\.path)
+			.joined(separator: ",")
+			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		let outputFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".swift")
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		try JSONEncoder().encode(SafeDIToolManifest(
+			dependencyTreeGeneration: [.init(inputFilePath: rootFile.path, outputFilePath: outputFile.path)],
+			configurationFilePaths: [targetConfigurationFile.path],
+		)).write(to: manifestFile)
+		filesToDelete += [projectRoot, swiftFileCSV, outputFile, manifestFile]
+
+		try await (Generate.parse([
+			swiftFileCSV.path,
+			"--swift-manifest", manifestFile.path,
+		])).run()
+
+		#expect(try String(contentsOf: outputFile, encoding: .utf8) == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(TargetOnlyModule)
+		import TargetOnlyModule
+		#endif
+
+		extension Root {
+		    public init() {
+		        let dep = Dep()
+		        self.init(dep: dep)
+		    }
+		}
+		""")
 	}
 
 	@Test

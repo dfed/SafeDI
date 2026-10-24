@@ -177,18 +177,9 @@ struct FileVisitorTests {
 						),
 						source: .forwarded,
 						declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5),
-						identifierRange: Dependency.SourceRange(
-							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 28),
-							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 32),
-						),
-						typeAnnotationRange: Dependency.SourceRange(
-							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 34),
-							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 38),
-						),
-						bareAttributeRange: Dependency.SourceRange(
-							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5),
-							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 15),
-						),
+						identifierRange: Dependency.SourceRange(startLine: 9, startColumn: 28, endLine: 9, endColumn: 32),
+						typeAnnotationRange: Dependency.SourceRange(startLine: 9, startColumn: 34, endLine: 9, endColumn: 38),
+						bareAttributeRange: Dependency.SourceRange(startLine: 9, startColumn: 5, endLine: 9, endColumn: 15),
 					),
 					Dependency(
 						property: Property(
@@ -197,18 +188,9 @@ struct FileVisitorTests {
 						),
 						source: .received(onlyIfAvailable: false),
 						declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 5),
-						identifierRange: Dependency.SourceRange(
-							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 19),
-							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 33),
-						),
-						typeAnnotationRange: Dependency.SourceRange(
-							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 35),
-							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 49),
-						),
-						bareAttributeRange: Dependency.SourceRange(
-							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 5),
-							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 14),
-						),
+						identifierRange: Dependency.SourceRange(startLine: 11, startColumn: 19, endLine: 11, endColumn: 33),
+						typeAnnotationRange: Dependency.SourceRange(startLine: 11, startColumn: 35, endLine: 11, endColumn: 49),
+						bareAttributeRange: Dependency.SourceRange(startLine: 11, startColumn: 5, endLine: 11, endColumn: 14),
 					),
 				],
 				declarationType: .classType,
@@ -265,18 +247,9 @@ struct FileVisitorTests {
 						),
 						source: .forwarded,
 						declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 5),
-						identifierRange: Dependency.SourceRange(
-							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 28),
-							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 32),
-						),
-						typeAnnotationRange: Dependency.SourceRange(
-							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 34),
-							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 38),
-						),
-						bareAttributeRange: Dependency.SourceRange(
-							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 5),
-							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 15),
-						),
+						identifierRange: Dependency.SourceRange(startLine: 7, startColumn: 28, endLine: 7, endColumn: 32),
+						typeAnnotationRange: Dependency.SourceRange(startLine: 7, startColumn: 34, endLine: 7, endColumn: 38),
+						bareAttributeRange: Dependency.SourceRange(startLine: 7, startColumn: 5, endLine: 7, endColumn: 15),
 					),
 					Dependency(
 						property: Property(
@@ -285,18 +258,9 @@ struct FileVisitorTests {
 						),
 						source: .received(onlyIfAvailable: false),
 						declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5),
-						identifierRange: Dependency.SourceRange(
-							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 19),
-							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 33),
-						),
-						typeAnnotationRange: Dependency.SourceRange(
-							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 35),
-							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 49),
-						),
-						bareAttributeRange: Dependency.SourceRange(
-							start: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5),
-							end: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 14),
-						),
+						identifierRange: Dependency.SourceRange(startLine: 9, startColumn: 19, endLine: 9, endColumn: 33),
+						typeAnnotationRange: Dependency.SourceRange(startLine: 9, startColumn: 35, endLine: 9, endColumn: 49),
+						bareAttributeRange: Dependency.SourceRange(startLine: 9, startColumn: 5, endLine: 9, endColumn: 14),
 					),
 				],
 				declarationType: .classType,

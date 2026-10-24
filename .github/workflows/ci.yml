@@ -317,9 +317,6 @@ jobs:
         uses: actions/checkout@v7
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
-      - name: Replace 'main' branch with the current branch
-        if: github.event.pull_request.head.repo.full_name == github.repository # Only do this if the branch is from our repo.
-        run: sed -i '' "s#branch = main;#branch = ${{ github.head_ref || github.ref_name }};#" "Examples/ExampleProjectIntegration/ExampleProjectIntegration.xcodeproj/project.pbxproj"
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -340,9 +337,6 @@ jobs:
         uses: actions/checkout@v7
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
-      - name: Replace 'main' branch with the current branch
-        if: github.event.pull_request.head.repo.full_name == github.repository # Only do this if the branch is from our repo.
-        run: sed -i '' "s#branch = main;#branch = ${{ github.head_ref || github.ref_name }};#" "Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration.xcodeproj/project.pbxproj"
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -602,11 +596,15 @@ jobs:
         with:
           command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration)
       # Optimized builds define no `DEBUG`, so the rule must withhold it and SafeDI
-      # must wire the example's `#else` logger.
+      # must wire the example's `#else` logger. The `_safedi` target is listed so
+      # Bazel writes its output to bazel-bin even when every action is a cache hit.
       - name: Build downstream example in opt mode
         uses: ./.github/actions/retry
         with:
-          command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" -c opt //ExampleBazelIntegration:ExampleBazelIntegration && grep -q "DisabledEventLogger()" bazel-bin/ExampleBazelIntegration/ExampleBazelIntegration_safedi.swift)
+          command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" -c opt //ExampleBazelIntegration:ExampleBazelIntegration //ExampleBazelIntegration:ExampleBazelIntegration_safedi)
+      # Kept out of the retry wrapper: a missing logger is deterministic, not a flake.
+      - name: Verify opt mode wired the `#else` logger
+        run: grep -q "DisabledEventLogger()" Examples/ExampleBazelIntegration/bazel-bin/ExampleBazelIntegration/ExampleBazelIntegration_safedi.swift
 
   codecov-empty-upload:
     name: Codecov Status for Markdown-only Changes
