@@ -115,7 +115,11 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					inputSourcesFile.path(percentEncoded: false),
 					"--swift-manifest",
 					manifestFile.path(percentEncoded: false),
-				],
+				]
+					// The manifest already records these conditions, but it is neither an argument nor an
+					// input of this command. Repeating them here changes the command when they change, so a
+					// build in another configuration regenerates instead of reusing the previous output.
+					+ activeCompilationConditionArguments,
 				environment: [:],
 				inputFiles: allSwiftFiles + additionalInputFiles,
 				outputFiles: outputFiles,
