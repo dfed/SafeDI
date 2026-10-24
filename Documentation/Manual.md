@@ -602,6 +602,33 @@ The `customMockName` parameter requires `generateMock: true` or `mockOnly: true`
 
 When the hand-written method returns an additional type the `@Instantiable` declaration fulfills (for example, a protocol declared in `fulfillingAdditionalTypes`), the generated `mock()` method also returns that type. This keeps the signatures type-compatible on extension-based declarations where a concrete `Self` return wouldn’t line up with a protocol-returning `customMock`. Concrete-type declarations are required to return `Self` or the concrete type from their `customMock`.
 
+#### When a hand-written `mock` collides with the generated `mock()`
+
+The `@Instantiable` macro can only see the declaration it decorates, so it cannot require `customMockName` when the hand-written method lives in a separate [`mockOnly` declaration](#splitting-production-and-mock-declarations) — possibly in another module. SafeDI instead checks the pair when it generates code. Whenever a module generates a `mock()` for a type (because of `generateMock: true` or [`additionalMocksToGenerate`](#cross-module-mock-generation)) and the type also has a hand-written method named `mock`, the two collide when both of these hold:
+
+1. The generated `mock()` can be called with the argument labels SafeDI uses to call the hand-written method: every dependency argument plus every labeled defaulted argument, or the dependency arguments alone. The labels must appear in the generated method’s parameter order, and every generated parameter the call leaves out must have a default (such as the trailing `safeDIOverrides:` parameter).
+2. The hand-written method declares at least as many parameters as the generated `mock()`.
+
+When two methods named `mock` accept the same call, Swift prefers the one that leaves fewer parameters to their defaults. A collision therefore means the two methods are an invalid redeclaration (identical signatures), an ambiguous call (same number of parameters, including when only the return type differs), or a call that silently resolves to the generated `mock()` and skips your mock (the hand-written method has more parameters, for example a trailing `_ verbose: Bool = false`). SafeDI reports any of these as an error at the hand-written method:
+
+```swift
+@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], generateMock: true)
+public struct MyService: Instantiable, ServiceProtocol {
+    public init(engine: Engine) { self.engine = engine }
+    @Received let engine: Engine // Engine is not @Instantiable, so the generated mock is `mock(engine:)`.
+}
+
+@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+extension MyService {
+    // Error: `MyService.mock(engine: engine)` is ambiguous with the generated `mock(engine:) -> MyService`.
+    public static func mock(engine: Engine = Engine()) -> ServiceProtocol { MyService(engine: engine) }
+}
+```
+
+To fix it, give the hand-written method a different name and pass that name as `customMockName` on its `@Instantiable` — here, `@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true, customMockName: "preview")` with `public static func preview(engine: Engine = Engine()) -> ServiceProtocol`. When the generated `mock()` exists only because the type is listed in `additionalMocksToGenerate`, removing it from that list also resolves the collision.
+
+A hand-written `mock` that the generated `mock()` cannot be confused with keeps its name, and the generated `mock()` calls through to it. For example, when every dependency of the type is built from the mock tree, the generated method is `mock(safeDIOverrides:)`, which does not accept the hand-written `mock(engine:)` call. SafeDI does not compare parameter types: a generated parameter of a different type still accepts arguments that convert to it.
+
 If you provide a mock method without `generateMock: true`, parent types that instantiate the child will call `ChildType.mock(…)` (or `ChildType.customMock(…)`) instead of `ChildType(…)` when constructing it, threading mock parameters through your custom method.
 
 ### The `mockOnly` parameter
@@ -667,7 +694,7 @@ extension MyService {
 }
 ```
 
-When both declarations exist, SafeDI uses the production `@Instantiable` for the dependency tree and the `mockOnly` declaration’s hand-written mock for mock generation. If the production type also has a hand-written `mock()` method, SafeDI emits an error — a type can have at most one hand-written mock. A `generateMock: true` production type that lacks a hand-written mock will use the `mockOnly` declaration’s mock, since hand-written mocks take priority over generated ones.
+When both declarations exist, SafeDI uses the production `@Instantiable` for the dependency tree and the `mockOnly` declaration’s hand-written mock for mock generation. If the production type also has a hand-written `mock()` method, SafeDI emits an error — a type can have at most one hand-written mock. A `generateMock: true` production type that lacks a hand-written mock will use the `mockOnly` declaration’s mock, since hand-written mocks take priority over generated ones: the generated `mock()` calls through to it, and parents construct the type with it. Because the macro on the `mockOnly` declaration cannot see the generated `mock()`, SafeDI rejects a hand-written method named `mock` that the generated one could be confused with; see [When a hand-written `mock` collides with the generated `mock()`](#when-a-hand-written-mock-collides-with-the-generated-mock). The same check applies when the production type is listed in another module’s `additionalMocksToGenerate`.
 
 Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type’s `@Instantiated`, `@Received`, and `@Forwarded` dependencies. Non-dependency parameters must have default values. On concrete type declarations the return type must be `Self` or the type name; on extension-based `@Instantiable` types the return type must match the extended type (e.g. `-> Container<Bool>`) or a `fulfillingAdditionalTypes` entry, mirroring the corresponding `instantiate()` method. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
 

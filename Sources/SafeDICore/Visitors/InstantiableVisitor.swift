@@ -212,6 +212,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			} else {
 				mockInitializer = Initializer(node)
 				mockReturnType = node.signature.returnClause?.type.typeDescription
+				mockDeclarationLocation = declarationLocation(of: node)
 				mockFunctionSyntax = node
 			}
 		}
@@ -281,6 +282,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				mockInitializer: mockInitializer,
 				mockReturnType: mockReturnType,
 				customMockName: customMockName,
+				mockDeclarationLocation: mockDeclarationLocation,
 				declarationLocation: instantiableDeclarationLocation,
 			))
 		}
@@ -378,6 +380,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var mockInitializer: Initializer?
 	public private(set) var mockReturnType: TypeDescription?
 	public private(set) var mockFunctionSyntax: FunctionDeclSyntax?
+	/// Where `mockFunctionSyntax` begins, recorded when the declaration is visited with a converter.
+	public private(set) var mockDeclarationLocation: Dependency.DeclarationLocation?
 	public private(set) var duplicateMockFunctionSyntaxes = [FunctionDeclSyntax]()
 	public private(set) var conflictingMockFunctionSyntax: FunctionDeclSyntax?
 	public private(set) var diagnostics = [Diagnostic]()
@@ -456,6 +460,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						mockInitializer: mockInitializer,
 						mockReturnType: mockReturnType,
 						customMockName: customMockName,
+						mockDeclarationLocation: mockDeclarationLocation,
 						declarationLocation: instantiableDeclarationLocation,
 					),
 				]
@@ -482,6 +487,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						mockInitializer: mockInitializer,
 						mockReturnType: mockReturnType,
 						customMockName: customMockName,
+						mockDeclarationLocation: mockDeclarationLocation,
 						declarationLocation: instantiableDeclarationLocation,
 					),
 				]
@@ -495,6 +501,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					var patched = instantiable
 					patched.mockInitializer = mockInitializer
 					patched.mockReturnType = mockReturnType
+					patched.mockDeclarationLocation = mockDeclarationLocation
 					return patched
 				}
 			}
