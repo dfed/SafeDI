@@ -175,7 +175,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			let scannable = evaluator.scannableClauses(in: node, guarding: content)
 			activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
 			conditionalCompilationDecisions.append(contentsOf: scannable.decisions)
-			dependsOnConditionalCompilationEvaluator = dependsOnConditionalCompilationEvaluator || scannable.restsOnCompilationConditions
 		}
 		return .visitChildren
 	}
@@ -384,9 +383,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var uninitializedNonOptionalPropertyNames = [String]()
 	/// How each `#if` condition that guards members SafeDI scans was evaluated, in source order.
 	public private(set) var conditionalCompilationDecisions = [ConditionalCompilationDecision]()
-	/// Whether walking with a different evaluator could extract different members: true once an
-	/// `#if` block guarding members SafeDI scans rested on a bare compilation condition.
-	public private(set) var dependsOnConditionalCompilationEvaluator = false
 
 	/// The initializer SafeDI selects for construction — the first in source
 	/// order that fulfills this type's dependencies. `Instantiable.initializer`

@@ -25,9 +25,6 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 	/// The types must be known to the dependency tree (i.e., imported via module info).
 	public let additionalMocksToGenerate: [String]
 	public let mockConditionalCompilation: String?
-	/// Compilation conditions to treat as active while scanning this module's `#if` blocks,
-	/// for conditions the build integration cannot report.
-	public let activeCompilationConditions: [String]
 	/// The source file path where this configuration was declared.
 	/// Set during parsing to scope configuration to the current module.
 	public var sourceFilePath: String?
@@ -37,12 +34,10 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 		additionalDirectoriesToInclude: [String],
 		additionalMocksToGenerate: [String] = [],
 		mockConditionalCompilation: String? = "DEBUG",
-		activeCompilationConditions: [String] = [],
 	) {
 		self.additionalImportedModules = additionalImportedModules
 		self.additionalDirectoriesToInclude = additionalDirectoriesToInclude
 		self.additionalMocksToGenerate = additionalMocksToGenerate
 		self.mockConditionalCompilation = mockConditionalCompilation
-		self.activeCompilationConditions = activeCompilationConditions
 	}
 }
