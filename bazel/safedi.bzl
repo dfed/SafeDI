@@ -29,11 +29,13 @@ invoke SafeDITool twice on the same sources.
 ## Conditional compilation
 
 SafeDITool scans only the `#if` clauses that are active for the
-build. The rule forwards two sources of active conditions:
+build. The rule forwards three sources of active conditions:
 
   - `DEBUG`, whenever Bazel's compilation mode is `dbg` or
     `fastbuild`, matching the `-DDEBUG` rules_swift passes to swiftc
     in those modes.
+  - `NDEBUG`, whenever Bazel's compilation mode is `opt`, matching
+    the `-DNDEBUG` rules_swift passes to swiftc in that mode.
   - `defines`, which must mirror the wrapped `swift_library.defines`.
     The library cannot be read here (its `srcs` include this rule's
     output, so depending on it would be a cycle), so the list is
@@ -87,8 +89,11 @@ def _safedi_compile_impl(ctx):
         module_info.path,
     ]
     active_compilation_conditions = list(ctx.attr.defines)
-    if ctx.var.get("COMPILATION_MODE") in ("dbg", "fastbuild"):
+    compilation_mode = ctx.var.get("COMPILATION_MODE")
+    if compilation_mode in ("dbg", "fastbuild"):
         active_compilation_conditions.append("DEBUG")
+    elif compilation_mode == "opt":
+        active_compilation_conditions.append("NDEBUG")
     if active_compilation_conditions:
         arguments += ["--active-compilation-conditions"] + active_compilation_conditions
     extra_inputs = []
@@ -141,7 +146,8 @@ module-info artifacts this rule consumes for cross-module
             default = [],
             doc = """Compilation conditions active for this module,
 mirroring the wrapped `swift_library.defines`. `DEBUG` is added
-automatically in the `dbg` and `fastbuild` compilation modes.""",
+automatically in the `dbg` and `fastbuild` compilation modes, and
+`NDEBUG` in the `opt` compilation mode.""",
         ),
         "_safeditool": attr.label(
             default = Label("//Sources/SafeDITool:SafeDITool"),

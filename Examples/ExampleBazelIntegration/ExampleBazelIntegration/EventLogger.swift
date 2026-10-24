@@ -23,8 +23,8 @@ import SafeDI
 /// Records what the app does.
 ///
 /// A different `@Instantiable` fulfills `EventLogger` in debug and release builds, so SafeDITool
-/// has to know whether `DEBUG` is active to pick the right one. `DEBUG` reaches SafeDITool through the `safedi_compile` rule, which forwards it in the
-/// `dbg` and `fastbuild` compilation modes along with the rule's `defines`.
+/// has to know which of `DEBUG` and `NDEBUG` is active to pick the right one. Both reach SafeDITool through the `safedi_compile` rule, which forwards
+/// `DEBUG` in the `dbg` and `fastbuild` compilation modes and `NDEBUG` in the `opt` compilation mode, along with the rule's `defines`.
 public protocol EventLogger {
 	func record(_ event: String)
 }
@@ -38,7 +38,7 @@ public protocol EventLogger {
 			print("[ExampleBazelIntegration] \(event)")
 		}
 	}
-#else
+#elseif NDEBUG
 	@Instantiable(fulfillingAdditionalTypes: [EventLogger.self])
 	public final class DisabledEventLogger: EventLogger, Instantiable {
 		public init() {}
