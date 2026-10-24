@@ -40,6 +40,10 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
+				// The SafeDIGenerator plugin forwards this target's compilation conditions to
+				// SafeDITool, but SwiftPM's implicit `DEBUG` is not among them. Declaring it
+				// here lets SafeDITool evaluate the `#if DEBUG` in `EventLogger.swift`.
+				.define("DEBUG", .when(configuration: .debug)),
 			],
 			plugins: [
 				.plugin(name: "SafeDIGenerator", package: "SafeDI"),

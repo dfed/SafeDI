@@ -54,10 +54,11 @@ recompiles it on the next `xcodebuild`, no `tuist generate` round-trip.
 
 2. In `Tuist/Package.swift`, depend on SafeDI so its runtime library and
    `SafeDIToolBinary` artifact bundle are resolved (the plugin requires
-   `SafeDITool >= 2.0.0` for the `--combined-output` flag):
+   `SafeDITool >= 2.0.0` for the `--combined-output` flag, and forwards the
+   target's compilation conditions when the tool is `2.1.0-beta-1` or newer):
 
    ```swift
-   .package(url: "https://github.com/dfed/SafeDI.git", from: "2.0.0"),
+   .package(url: "https://github.com/dfed/SafeDI.git", from: "2.1.0-beta-3"),
    ```
 
 3. In `Project.swift`, `import SafeDITuist` and call the helpers from each
