@@ -56,15 +56,14 @@ struct MultipleConfigurationsError: Error, CustomStringConvertible {
 ///
 /// - Parameters:
 ///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
-///   - configuration: The module's `#SafeDIConfiguration`, whose `activeCompilationConditions` are also active
-///     and whose `mockConditionalCompilation` guards the generated mock code. A module without a configuration
-///     wraps its mocks in `DEBUG`.
+///   - configuration: The module's `#SafeDIConfiguration`, whose `mockConditionalCompilation` guards the
+///     generated mock code. A module without a configuration wraps its mocks in `DEBUG`.
 func conditionalCompilationEvaluator(
 	activeCompilationConditions: Set<String>,
 	configuration: SafeDIConfiguration?,
 ) -> ConditionalCompilationEvaluator {
 	ConditionalCompilationEvaluator(
-		activeCompilationConditions: activeCompilationConditions.union(configuration?.activeCompilationConditions ?? []),
+		activeCompilationConditions: activeCompilationConditions,
 		mockConditionalCompilation: configuration.map(\.mockConditionalCompilation) ?? "DEBUG",
 	)
 }
@@ -114,14 +113,17 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Str
 	}
 }
 
-/// Parses a module's input files, reading and parsing each file once.
+/// Parses a module's input files, parsing each file once.
 ///
-/// The module's `#SafeDIConfiguration` decides how `#if` blocks are evaluated, but it can sit in
-/// any of the module's files, so every file is first walked with a provisional evaluator built from
-/// the supplied conditions. Only files in which an `#if` block guarding SafeDI declarations rested
-/// on a bare condition can extract something different under another evaluator; those keep their
-/// syntax trees and are walked again if the configuration changes the evaluator. Every other file
-/// is released as soon as it is walked, so memory scales with concurrency rather than module size.
+/// The module's `#SafeDIConfiguration(mockConditionalCompilation:)` decides how `#if` blocks guarding
+/// mock-only declarations are evaluated, and it is the only part of the module's evaluator not known up
+/// front. Every file is read once up front. A file the mock condition cannot affect is parsed and walked
+/// right away. Any other file waits for the module's evaluator and is read again then, unless it may
+/// declare the module's configuration: finding a configuration does not depend on the mock condition,
+/// because a configuration is production content whose `#if` blocks are evaluated with the supplied
+/// conditions alone, so such a file is parsed up front and its syntax tree is kept for its one walk with
+/// the module's evaluator. Every other syntax tree is released as soon as it is walked, so memory scales
+/// with concurrency rather than module size.
 ///
 /// - Parameters:
 ///   - filePaths: Every file to parse.
@@ -134,15 +136,30 @@ func parseModule(
 	configurationFilePaths: Set<String>,
 	activeCompilationConditions: Set<String>,
 ) async throws -> ParsedModule {
-	let provisionalEvaluator = ConditionalCompilationEvaluator(activeCompilationConditions: activeCompilationConditions)
-	var fileScans = try await walkFiles(filePaths, conditionalCompilation: provisionalEvaluator, retainingTreesThatDependOnEvaluator: true)
-
-	let configurations = fileScans
-		.flatMap(\.configurations)
-		.filter { configuration in
-			guard let sourceFilePath = configuration.sourceFilePath else { return false }
-			return configurationFilePaths.contains(sourceFilePath)
+	let earlyFileScans = try await scanFilesBeforeEvaluatorIsKnown(
+		filePaths,
+		configurationFilePaths: configurationFilePaths,
+		activeCompilationConditions: activeCompilationConditions,
+	)
+	var completeFileScans = [FileScan]()
+	var filePathsAwaitingEvaluator = Set<String>()
+	var configurationSyntaxTrees = [String: SourceFileSyntax]()
+	var configurations = [SafeDIConfiguration]()
+	for earlyFileScan in earlyFileScans {
+		switch earlyFileScan {
+		case let .complete(fileScan):
+			completeFileScans.append(fileScan)
+			if configurationFilePaths.contains(fileScan.path) {
+				configurations += fileScan.configurations
+			}
+		case let .awaitingEvaluator(filePath, configurationFile):
+			filePathsAwaitingEvaluator.insert(filePath)
+			if let configurationFile {
+				configurationSyntaxTrees[filePath] = configurationFile.syntaxTree
+				configurations += configurationFile.configurations
+			}
 		}
+	}
 	guard configurations.count <= 1 else {
 		throw MultipleConfigurationsError(sourceFilePaths: configurations.compactMap(\.sourceFilePath).sorted())
 	}
@@ -151,12 +168,14 @@ func parseModule(
 		activeCompilationConditions: activeCompilationConditions,
 		configuration: configuration,
 	)
-	if evaluator != provisionalEvaluator {
-		fileScans = try await walkRetainedTrees(of: fileScans, conditionalCompilation: evaluator)
-	}
+	let evaluatedFileScans = try await walkFiles(
+		filePathsAwaitingEvaluator,
+		parsedSyntaxTrees: configurationSyntaxTrees,
+		conditionalCompilation: evaluator,
+	)
 
 	return ParsedModule(
-		moduleInfo: ModuleInfo(fileScans),
+		moduleInfo: ModuleInfo(completeFileScans + evaluatedFileScans),
 		configuration: configuration,
 		conditionalCompilationEvaluator: evaluator,
 	)
@@ -169,7 +188,7 @@ func parseSwiftFiles(
 	_ filePaths: Set<String>,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 ) async throws -> ModuleInfo {
-	try await ModuleInfo(walkFiles(filePaths, conditionalCompilation: evaluator, retainingTreesThatDependOnEvaluator: false))
+	try await ModuleInfo(walkFiles(filePaths, parsedSyntaxTrees: [:], conditionalCompilation: evaluator))
 }
 
 // MARK: - Private
@@ -182,9 +201,6 @@ private struct FileScan: Sendable {
 	let configurations: [SafeDIConfiguration]
 	let encounteredUnexpectedNodes: Bool
 	let conditionalCompilationDecisions: [ConditionalCompilationDecision]
-	/// The file's syntax tree, kept only when the walk rested on a bare compilation condition and
-	/// the caller may need to walk it again with another evaluator.
-	let retainedSyntaxTree: SourceFileSyntax?
 
 	/// Whether the file declares nothing SafeDI scans for and no `#if` block was decided for it.
 	var contributesNothing: Bool {
@@ -212,16 +228,31 @@ extension ModuleInfo {
 	}
 }
 
-/// Reads, parses, and walks every file in parallel, keeping what each contributes.
+/// What reading a file yields before the module's evaluator is known.
+private enum EarlyFileScan: Sendable {
+	/// The module's mock condition cannot affect the file, so it was walked with the supplied conditions alone.
+	case complete(FileScan)
+	/// The module's mock condition may decide one of the file's `#if` blocks, so it must be walked with the module's evaluator.
+	/// - Parameter configurationFile: When the file may declare the module's configuration, its syntax tree
+	///   and the configurations found in it.
+	case awaitingEvaluator(filePath: String, configurationFile: (syntaxTree: SourceFileSyntax, configurations: [SafeDIConfiguration])?)
+}
+
+/// Reads every file in parallel, walking those whose content cannot depend on the module's evaluator and
+/// finding the module's configuration among the rest.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-private func walkFiles(
+private func scanFilesBeforeEvaluatorIsKnown(
 	_ filePaths: Set<String>,
-	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-	retainingTreesThatDependOnEvaluator retainsTrees: Bool,
-) async throws -> [FileScan] {
-	try await withThrowingTaskGroup(
-		of: FileScan?.self,
-		returning: [FileScan].self,
+	configurationFilePaths: Set<String>,
+	activeCompilationConditions: Set<String>,
+) async throws -> [EarlyFileScan] {
+	// The module's evaluator differs from this one at most in its mock condition. A file the mock
+	// condition cannot affect extracts the same content under both, and a configuration is production
+	// content, which the mock condition never decides. So this evaluator serves both purposes here.
+	let evaluator = ConditionalCompilationEvaluator(activeCompilationConditions: activeCompilationConditions)
+	return try await withThrowingTaskGroup(
+		of: EarlyFileScan?.self,
+		returning: [EarlyFileScan].self,
 	) { taskGroup in
 		for filePath in filePaths where !filePath.isEmpty {
 			taskGroup.addTask {
@@ -229,12 +260,58 @@ private func walkFiles(
 				let containsInstantiable = content.contains("@\(InstantiableVisitor.macroName)")
 				let containsConfiguration = content.contains("#\(SafeDIConfigurationVisitor.macroName)")
 				guard containsInstantiable || containsConfiguration else { return nil }
-				let fileScan = walk(
-					Parser.parse(source: content),
-					at: filePath,
-					conditionalCompilation: evaluator,
-					retainingTreeIfDependentOnEvaluator: retainsTrees,
-				)
+				// The mock condition decides only `#if` blocks guarding mock-only declarations: `mockOnly`
+				// types and `mock()` or `customMockName` methods, none of which can be written without
+				// the text `mock` or `Mock`.
+				let mayDependOnMockCondition = content.contains("#if")
+					&& (content.contains("mock") || content.contains("Mock"))
+				if !mayDependOnMockCondition {
+					return .complete(walk(Parser.parse(source: content), at: filePath, conditionalCompilation: evaluator))
+				} else if containsConfiguration, configurationFilePaths.contains(filePath) {
+					let syntaxTree = Parser.parse(source: content)
+					let configurations = walk(syntaxTree, at: filePath, conditionalCompilation: evaluator).configurations
+					return .awaitingEvaluator(filePath: filePath, configurationFile: (syntaxTree: syntaxTree, configurations: configurations))
+				} else {
+					return .awaitingEvaluator(filePath: filePath, configurationFile: nil)
+				}
+			}
+		}
+
+		var earlyFileScans = [EarlyFileScan]()
+		for try await earlyFileScan in taskGroup {
+			if let earlyFileScan {
+				earlyFileScans.append(earlyFileScan)
+			}
+		}
+		return earlyFileScans
+	}
+}
+
+/// Reads, parses, and walks every file in parallel, keeping what each contributes.
+/// - Parameter parsedSyntaxTrees: Files already parsed, keyed by path, which are walked without being read again.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+private func walkFiles(
+	_ filePaths: Set<String>,
+	parsedSyntaxTrees: [String: SourceFileSyntax],
+	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+) async throws -> [FileScan] {
+	try await withThrowingTaskGroup(
+		of: FileScan?.self,
+		returning: [FileScan].self,
+	) { taskGroup in
+		for filePath in filePaths where !filePath.isEmpty {
+			taskGroup.addTask {
+				let syntaxTree: SourceFileSyntax
+				if let parsedSyntaxTree = parsedSyntaxTrees[filePath] {
+					syntaxTree = parsedSyntaxTree
+				} else {
+					let content = try String(contentsOfFile: filePath, encoding: .utf8)
+					let containsInstantiable = content.contains("@\(InstantiableVisitor.macroName)")
+					let containsConfiguration = content.contains("#\(SafeDIConfigurationVisitor.macroName)")
+					guard containsInstantiable || containsConfiguration else { return nil }
+					syntaxTree = Parser.parse(source: content)
+				}
+				let fileScan = walk(syntaxTree, at: filePath, conditionalCompilation: evaluator)
 				return fileScan.contributesNothing ? nil : fileScan
 			}
 		}
@@ -249,47 +326,11 @@ private func walkFiles(
 	}
 }
 
-/// Walks again, with `evaluator`, every file that kept its syntax tree, and releases the trees.
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-private func walkRetainedTrees(
-	of fileScans: [FileScan],
-	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-) async throws -> [FileScan] {
-	try await withThrowingTaskGroup(
-		of: (index: Int, fileScan: FileScan).self,
-		returning: [FileScan].self,
-	) { taskGroup in
-		for (index, fileScan) in fileScans.enumerated() {
-			if let retainedSyntaxTree = fileScan.retainedSyntaxTree {
-				taskGroup.addTask {
-					(
-						index: index,
-						fileScan: walk(
-							retainedSyntaxTree,
-							at: fileScan.path,
-							conditionalCompilation: evaluator,
-							retainingTreeIfDependentOnEvaluator: false,
-						),
-					)
-				}
-			}
-		}
-
-		// A file whose walk rested on a bare condition always yields a decision, so it still contributes.
-		var walkedFileScans = fileScans
-		for try await (index, fileScan) in taskGroup {
-			walkedFileScans[index] = fileScan
-		}
-		return walkedFileScans
-	}
-}
-
 /// Walks one parsed file.
 private func walk(
 	_ syntaxTree: SourceFileSyntax,
 	at filePath: String,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-	retainingTreeIfDependentOnEvaluator retainsTree: Bool,
 ) -> FileScan {
 	let fileVisitor = FileVisitor(
 		conditionalCompilationEvaluator: evaluator,
@@ -316,6 +357,5 @@ private func walk(
 		},
 		encounteredUnexpectedNodes: fileVisitor.encounteredUnexpectedNodesSyntax,
 		conditionalCompilationDecisions: fileVisitor.conditionalCompilationDecisions,
-		retainedSyntaxTree: retainsTree && fileVisitor.dependsOnConditionalCompilationEvaluator ? syntaxTree : nil,
 	)
 }

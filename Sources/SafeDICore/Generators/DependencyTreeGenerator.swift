@@ -126,6 +126,17 @@ public actor DependencyTreeGenerator {
 				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 			}
 
+		// Locate the hand-written methods named `mock` (no `customMockName`) for
+		// each concrete type. Several map entries can carry the same method
+		// (merged and unmerged mockOnly slots), so locations are deduplicated.
+		let handWrittenMockLocationsByConcreteType: [TypeDescription: Set<Dependency.DeclarationLocation?>] = typeDescriptionToFulfillingInstantiableMap.values
+			.reduce(into: [TypeDescription: Set<Dependency.DeclarationLocation?>]()) { result, instantiable in
+				guard instantiable.mockInitializer != nil,
+				      instantiable.customMockName == nil
+				else { return }
+				result[instantiable.concreteInstantiable, default: []].insert(instantiable.mockDeclarationLocation)
+			}
+
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
@@ -138,7 +149,7 @@ public actor DependencyTreeGenerator {
 			// Types from dependent modules are skipped unless they appear in
 			// additionalMocksToGenerate. When generateMock is true and a hand-written
 			// mock exists, the generated mock calls through to the hand-written one
-			// (which has a different name specified by customMockName).
+			// (which must have a different name specified by customMockName).
 			guard instantiable.generateMock || isAdditionalMock,
 			      seen.insert(instantiable.concreteInstantiable).inserted,
 			      let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable]
@@ -153,6 +164,22 @@ public actor DependencyTreeGenerator {
 				guard let sourceFilePath = instantiable.sourceFilePath,
 				      currentModuleSourceFilePaths.contains(sourceFilePath)
 				else { continue }
+			}
+
+			// A hand-written method also named `mock` can be confused with the
+			// generated `mock()`: identical signatures redeclare, overlapping ones
+			// make calls ambiguous or silently pick the generated method, and a
+			// mockOnly extension's mock defaults every parameter, so even a
+			// generated `mock(safeDIOverrides:)` leaves `Type.mock()` ambiguous.
+			// The macro rejects the pair within one declaration; this extends the
+			// rule across declarations and modules.
+			let handWrittenMockLocations = handWrittenMockLocationsByConcreteType[instantiable.concreteInstantiable, default: []]
+			guard handWrittenMockLocations.isEmpty else {
+				throw DependencyTreeGeneratorError.handWrittenMockSharesGeneratedMockName(
+					instantiable.concreteInstantiable,
+					declaredAt: Array(handWrittenMockLocations),
+					isGeneratedForAdditionalMocksToGenerate: !instantiable.generateMock,
+				)
 			}
 
 			// Validate that this type's constant @Instantiated children have no @Forwarded properties.
@@ -412,9 +439,25 @@ public actor DependencyTreeGenerator {
 		/// Reported at the `@Received` declaration that closes the chain: the one that receives `instantiated` back
 		/// inside the tree `instantiated` creates. No notes; the chain is spelled out in the message.
 		case receivedConstantCycleDetected(instantiated: Property, receivedPropertyChain: [Property], declarationLocation: Dependency.DeclarationLocation?)
+		/// Reported at the hand-written `mock` method of a type whose `mock()` this module also generates.
+		case handWrittenMockSharesGeneratedMockName(TypeDescription, declaredAt: [Dependency.DeclarationLocation?], isGeneratedForAdditionalMocksToGenerate: Bool)
 
 		var sourceDiagnostics: [SourceDiagnostic] {
 			switch self {
+			case let .handWrittenMockSharesGeneratedMockName(typeDescription, declaredAt, isGeneratedForAdditionalMocksToGenerate):
+				// Sorted by location so the order never depends on map iteration.
+				declaredAt
+					.map {
+						SourceDiagnostic(
+							severity: .error,
+							location: $0,
+							message: Self.handWrittenMockSharesGeneratedMockNameMessage(
+								typeDescription: typeDescription,
+								isGeneratedForAdditionalMocksToGenerate: isGeneratedForAdditionalMocksToGenerate,
+							),
+						)
+					}
+					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 			case let .noInstantiableFound(typeDescription, referencedAt):
 				// Sorted by location so the order never depends on map iteration.
 				referencedAt.map {
@@ -462,6 +505,18 @@ public actor DependencyTreeGenerator {
 							.joined(separator: " -> "),
 					),
 				]
+			}
+		}
+
+		private static func handWrittenMockSharesGeneratedMockNameMessage(
+			typeDescription: TypeDescription,
+			isGeneratedForAdditionalMocksToGenerate: Bool,
+		) -> String {
+			let typeName = typeDescription.asSource
+			return if isGeneratedForAdditionalMocksToGenerate {
+				"`\(typeName)` cannot have a hand-written `mock()` method because this module generates a `mock()` method for it (it is listed in `additionalMocksToGenerate`), and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@\(InstantiableVisitor.macroName)` that declares it, or remove `\(typeName)` from `additionalMocksToGenerate`."
+			} else {
+				"`\(typeName)` cannot have a hand-written `mock()` method because it is decorated with `@\(InstantiableVisitor.macroName)(generateMock: true)`, and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@\(InstantiableVisitor.macroName)` that declares it."
 			}
 		}
 

@@ -175,7 +175,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			let scannable = evaluator.scannableClauses(in: node, guarding: content)
 			activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
 			conditionalCompilationDecisions.append(contentsOf: scannable.decisions)
-			dependsOnConditionalCompilationEvaluator = dependsOnConditionalCompilationEvaluator || scannable.restsOnCompilationConditions
 		}
 		return .visitChildren
 	}
@@ -212,6 +211,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			} else {
 				mockInitializer = Initializer(node)
 				mockReturnType = node.signature.returnClause?.type.typeDescription
+				mockDeclarationLocation = declarationLocation(of: node)
 				mockFunctionSyntax = node
 			}
 		}
@@ -281,6 +281,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				mockInitializer: mockInitializer,
 				mockReturnType: mockReturnType,
 				customMockName: customMockName,
+				mockDeclarationLocation: mockDeclarationLocation,
 				declarationLocation: instantiableDeclarationLocation,
 			))
 		}
@@ -378,15 +379,14 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var mockInitializer: Initializer?
 	public private(set) var mockReturnType: TypeDescription?
 	public private(set) var mockFunctionSyntax: FunctionDeclSyntax?
+	/// Where `mockFunctionSyntax` begins, recorded when the declaration is visited with a converter.
+	public private(set) var mockDeclarationLocation: Dependency.DeclarationLocation?
 	public private(set) var duplicateMockFunctionSyntaxes = [FunctionDeclSyntax]()
 	public private(set) var conflictingMockFunctionSyntax: FunctionDeclSyntax?
 	public private(set) var diagnostics = [Diagnostic]()
 	public private(set) var uninitializedNonOptionalPropertyNames = [String]()
 	/// How each `#if` condition that guards members SafeDI scans was evaluated, in source order.
 	public private(set) var conditionalCompilationDecisions = [ConditionalCompilationDecision]()
-	/// Whether walking with a different evaluator could extract different members: true once an
-	/// `#if` block guarding members SafeDI scans rested on a bare compilation condition.
-	public private(set) var dependsOnConditionalCompilationEvaluator = false
 
 	/// The initializer SafeDI selects for construction — the first in source
 	/// order that fulfills this type's dependencies. `Instantiable.initializer`
@@ -456,6 +456,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						mockInitializer: mockInitializer,
 						mockReturnType: mockReturnType,
 						customMockName: customMockName,
+						mockDeclarationLocation: mockDeclarationLocation,
 						declarationLocation: instantiableDeclarationLocation,
 					),
 				]
@@ -482,6 +483,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						mockInitializer: mockInitializer,
 						mockReturnType: mockReturnType,
 						customMockName: customMockName,
+						mockDeclarationLocation: mockDeclarationLocation,
 						declarationLocation: instantiableDeclarationLocation,
 					),
 				]
@@ -495,6 +497,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					var patched = instantiable
 					patched.mockInitializer = mockInitializer
 					patched.mockReturnType = mockReturnType
+					patched.mockDeclarationLocation = mockDeclarationLocation
 					return patched
 				}
 			}

@@ -16,7 +16,7 @@ To add the SafeDI framework as a dependency to a package utilizing [Swift Packag
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.0.0"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.1.0"),
 ]
 ```
 
@@ -42,7 +42,7 @@ import SafeDI
 
 The `additionalDirectoriesToInclude` parameter specifies folders outside of your module that SafeDI will scan for Swift source files. Paths must be relative to the executing directory (the directory containing the `.xcodeproj` for Xcode integrations). Use this parameter to specify the paths to dependent modules’ source directories, since Xcode project plugins cannot discover these automatically. You can see [an example of this configuration](../Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](../Examples/ExampleMultiProjectIntegration) project.
 
-> **Note:** Xcode does not expose build settings to build tool plugins, so the `SafeDIGenerator` plugin cannot tell which compilation conditions are active in an Xcode project. See [Conditional compilation](#conditional-compilation) before guarding SafeDI declarations with `#if`.
+> **Note:** Xcode does not expose build settings to build tool plugins, so the `SafeDIGenerator` plugin reports no compilation conditions in an Xcode project. Production SafeDI declarations behind a bare condition such as `#if DEBUG` are not supported there; see [Conditional compilation](#conditional-compilation).
 
 > **Note:** `additionalDirectoriesToInclude` is only honored by the SPM build-tool plugin. The Bazel and Tuist integrations enumerate every input up front (Bazel via declared rule inputs; Tuist via the build phase's `inputPaths`), so files reached only through `additionalDirectoriesToInclude` won't be visible to SafeDITool at build time and won't trigger incremental rebuilds. Under those integrations, list every Swift source you want SafeDI to see directly via the build target.
 
@@ -499,7 +499,6 @@ public struct FeedView: Instantiable {
 - `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. Only honored by the SPM build-tool plugin. The Bazel and Tuist integrations enumerate inputs up front and ignore this parameter — list every Swift source via the build target itself instead. Default: `[]`.
 - `additionalMocksToGenerate`: Type names from dependent modules to generate `mock()` methods for in this module. The types must be `@Instantiable` in their home module. See [Cross-module mock generation](#cross-module-mock-generation). Default: `[]`.
 - `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Default: `"DEBUG"`.
-- `activeCompilationConditions`: Compilation conditions to treat as active while SafeDITool scans this module's `#if` blocks, for conditions your build integration cannot report. The list is static and applies in every build configuration. See [Conditional compilation](#conditional-compilation). Default: `[]`.
 
 ## Delayed instantiation
 
@@ -577,7 +576,7 @@ By default, `generateMock` is `false` and no mock is generated. Generated mocks 
 
 Each `@Instantiable` type with `generateMock: true` gets a generated `mock()` static method that builds its full dependency subtree. The hand-written mock method must be in the same `@Instantiable`-decorated declaration body — methods in undecorated extensions are not detected. To provide a mock from a separate extension, use `@Instantiable(mockOnly: true)` on that extension instead.
 
-When a type also has a hand-written mock method, it must have a different name from the generated `mock()` to avoid ambiguity. Use the `customMockName` parameter to specify the name of your hand-written method. The generated `mock()` will call through to it. With `mockOnly: true`, `customMockName` tells SafeDI which method to use as the mock provider. This is useful when you need custom logic during mock construction — for example, setting up stub behavior, configuring test doubles, or wiring delegates:
+When a type also has a hand-written mock method, it must have a different name from the generated `mock()` to avoid ambiguity. This applies wherever the hand-written method is declared — in the same declaration or in a separate [`mockOnly` declaration](#splitting-production-and-mock-declarations). Use the `customMockName` parameter to specify the name of your hand-written method. The generated `mock()` will call through to it. With `mockOnly: true`, `customMockName` tells SafeDI which method to use as the mock provider. This is useful when you need custom logic during mock construction — for example, setting up stub behavior, configuring test doubles, or wiring delegates:
 
 ```swift
 @Instantiable(generateMock: true, customMockName: "customMock")
@@ -601,6 +600,35 @@ public struct NetworkClient: Instantiable {
 The `customMockName` parameter requires `generateMock: true` or `mockOnly: true`.
 
 When the hand-written method returns an additional type the `@Instantiable` declaration fulfills (for example, a protocol declared in `fulfillingAdditionalTypes`), the generated `mock()` method also returns that type. This keeps the signatures type-compatible on extension-based declarations where a concrete `Self` return wouldn’t line up with a protocol-returning `customMock`. Concrete-type declarations are required to return `Self` or the concrete type from their `customMock`.
+
+#### A hand-written mock in a separate declaration
+
+The `@Instantiable` macro can only see the declaration it decorates, so it cannot require `customMockName` when the hand-written method lives in a separate [`mockOnly` declaration](#splitting-production-and-mock-declarations), possibly in another module. SafeDI checks the pair when it generates code instead: when a module generates a `mock()` for a type — because of `generateMock: true` or because the type is listed in [`additionalMocksToGenerate`](#cross-module-mock-generation) — and the type also has a hand-written method named `mock`, generation fails with an error at the hand-written method. The names must differ even when the parameter lists do: a `mockOnly` extension declares no dependencies, so every parameter of its mock has a default, and a generated `mock()` whose parameters are all defaulted (such as `mock(safeDIOverrides:)`) leaves `MyService.mock()` ambiguous. Other pairings produce an invalid redeclaration, an ambiguous call, or a call that silently resolves to the generated method.
+
+```swift
+@Instantiable(generateMock: true)
+public struct MyService: Instantiable {
+    public init(engine: Engine) { self.engine = engine }
+    @Instantiated let engine: Engine
+}
+
+// Error: `MyService` cannot have a hand-written `mock()` method because it is decorated with `@Instantiable(generateMock: true)`…
+@Instantiable(mockOnly: true)
+extension MyService {
+    public static func mock(engine: Engine = Engine()) -> MyService { MyService(engine: engine) }
+}
+```
+
+Give the hand-written method a different name and pass that name as `customMockName`. The generated `mock()` then calls through to it:
+
+```swift
+@Instantiable(mockOnly: true, customMockName: "preview")
+extension MyService {
+    public static func preview(engine: Engine = Engine()) -> MyService { MyService(engine: engine) }
+}
+```
+
+When the generated `mock()` exists only because the type is listed in `additionalMocksToGenerate`, removing the type from that list also resolves the error.
 
 If you provide a mock method without `generateMock: true`, parent types that instantiate the child will call `ChildType.mock(…)` (or `ChildType.customMock(…)`) instead of `ChildType(…)` when constructing it, threading mock parameters through your custom method.
 
@@ -667,7 +695,7 @@ extension MyService {
 }
 ```
 
-When both declarations exist, SafeDI uses the production `@Instantiable` for the dependency tree and the `mockOnly` declaration’s hand-written mock for mock generation. If the production type also has a hand-written `mock()` method, SafeDI emits an error — a type can have at most one hand-written mock. A `generateMock: true` production type that lacks a hand-written mock will use the `mockOnly` declaration’s mock, since hand-written mocks take priority over generated ones.
+When both declarations exist, SafeDI uses the production `@Instantiable` for the dependency tree and the `mockOnly` declaration’s hand-written mock for mock generation. If the production type also has a hand-written `mock()` method, SafeDI emits an error — a type can have at most one hand-written mock. A production type without `generateMock: true` (like the one above) is constructed in mocks by calling the `mockOnly` declaration’s method, which may be named `mock`. A `generateMock: true` production type paired with a `mockOnly` declaration must name the hand-written method with `customMockName` — otherwise it would share the name of the generated `mock()`, and SafeDI emits an error (see [A hand-written mock in a separate declaration](#a-hand-written-mock-in-a-separate-declaration)). Its generated `mock()` then calls through to the renamed method, since hand-written mocks take priority over generated ones. The same applies when the production type is listed in another module’s `additionalMocksToGenerate`.
 
 Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type’s `@Instantiated`, `@Received`, and `@Forwarded` dependencies. Non-dependency parameters must have default values. On concrete type declarations the return type must be `Self` or the type name; on extension-based `@Instantiable` types the return type must match the extended type (e.g. `-> Container<Bool>`) or a `fulfillingAdditionalTypes` entry, mirroring the corresponding `instantiate()` method. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
 
@@ -853,20 +881,16 @@ Each integration reports the conditions it can see:
 
 | Integration | Reported conditions |
 |-------------|---------------------|
-| Swift package plugin | The target’s `swiftSettings` defines, including those with `.when(configuration:)` conditions, and trait defines. SwiftPM’s implicit `DEBUG` is **not** reported: to guard a production declaration with `DEBUG`, add `.define("DEBUG", .when(configuration: .debug))` to the target’s `swiftSettings`. |
-| Xcode project plugin | None. Xcode does not expose build settings to build tool plugins, so every bare condition is inactive: a production declaration under `#if DEBUG` is never scanned, and a debug build then fails at the assertion (a root under such a block fails earlier, because the plugin's regex-based output discovery still declares its output file). Declare conditions that are always on with `#SafeDIConfiguration(activeCompilationConditions:)`. |
-| Bazel `safedi_compile` | `DEBUG` in the `dbg` and `fastbuild` compilation modes, plus the rule’s `defines` attribute, which must mirror the wrapped `swift_library.defines`. |
+| Swift package plugin | The target’s `swiftSettings` defines, including those with `.when(configuration:)` conditions, and trait defines. SwiftPM’s implicit `DEBUG` is **not** reported: to guard a production declaration with `DEBUG`, add `.define("DEBUG", .when(configuration: .debug))` to the target’s `swiftSettings`, as the [Example Package Integration](../Examples/Example Package Integration/Package.swift) does. This holds for `swift build`. When Xcode builds the package, it evaluates `.when(configuration:)` defines as for a debug build whatever configuration it compiles and runs the plugin in a work directory shared across configurations, so such a define is reported in Release too: the Debug build succeeds and the Release build fails at the assertion. A production declaration behind such a define is therefore unsupported when Xcode builds the package in Release. |
+| Xcode project plugin | None. Xcode does not expose build settings to build tool plugins, so the plugin cannot report any condition and SafeDITool treats every bare condition as inactive. A production declaration behind a bare condition such as `#if DEBUG` or `#if STAGING` is therefore unsupported: it is never scanned, and a build in which the condition is active fails at the assertion (a root under such a block fails earlier, because the plugin's regex-based output discovery still declares its output file). Move the declaration out of the `#if` block. Mock-only declarations under the `mockConditionalCompilation` condition are unaffected; see [Declarations that only feed mock generation](#declarations-that-only-feed-mock-generation). |
+| Bazel `safedi_compile` | `DEBUG` in the `dbg` and `fastbuild` compilation modes and `NDEBUG` in the `opt` compilation mode, plus the rule’s `defines` attribute, which must mirror the wrapped `swift_library.defines`. |
 | Tuist plugin and other prebuild scripts | The target’s `SWIFT_ACTIVE_COMPILATION_CONDITIONS` build setting, passed as `generate --active-compilation-conditions`. |
 
 The Swift package plugin scans the sources of a target’s dependencies with the target’s own conditions, so a condition that guards a production declaration in a dependency must be defined on every target whose dependency tree reaches it.
 
-### Conditions your build cannot report
-
-`#SafeDIConfiguration(activeCompilationConditions: ["STAGING"])` treats the listed conditions as active whenever SafeDITool scans the module. The list is static—it applies in every build configuration—so it suits conditions your build defines unconditionally, such as an entry in an Xcode project’s `SWIFT_ACTIVE_COMPILATION_CONDITIONS`, rather than ones that vary per configuration like `DEBUG`.
-
 ### Upgrading
 
-Earlier releases scanned every clause of every `#if` block. Existing projects keep building unless a production declaration sits behind a bare condition. SafeDITool now scans such a block according to the conditions your integration reports, and the generated code asserts that choice, so a build whose compiler disagrees fails with a message naming the condition. Fix it by reporting the condition as described above, declaring it in `#SafeDIConfiguration(activeCompilationConditions:)`, or moving the declaration out of the block.
+Earlier releases scanned every clause of every `#if` block. Existing projects keep building unless a production declaration sits behind a bare condition. SafeDITool now scans such a block according to the conditions your integration reports, and the generated code asserts that choice, so a build whose compiler disagrees fails with a message naming the condition. Fix it by reporting the condition as described above, or by moving the declaration out of the block. The Xcode project plugin reports no conditions, so in an Xcode project the only fix is to move the production declaration out of the `#if` block; a mock-only declaration under `#if DEBUG` keeps working.
 
 ## Comparing SafeDI and Manual Injection: Key Differences
 
