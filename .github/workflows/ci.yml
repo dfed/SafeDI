@@ -285,6 +285,31 @@ jobs:
       # still passes.
       - name: Build Package Integration (xcodebuild)
         run: pushd "Examples/Example Package Integration"; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -destination "platform=macOS"; popd
+      # Release-configuration builds prove the plugin stops reporting `DEBUG`
+      # when the configuration does not define it: the generated file must
+      # wire `DisabledEventLogger`. Optimization is turned off because only
+      # the configuration matters here, and an optimized build of swift-syntax
+      # takes several times longer.
+      - name: Build Package Integration in release configuration (swift build)
+        run: |
+          xcrun swift build -c release -Xswiftc -Onone --package-path "Examples/Example Package Integration"
+          grep -q "DisabledEventLogger()" "$(find "Examples/Example Package Integration/.build/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
+      # Xcode evaluates a package's `.when(configuration:)` defines as for a
+      # debug build whatever configuration it compiles, so it hands the plugin
+      # `DEBUG` in Release too and SafeDI scans the debug clause. The generated
+      # assertion must then stop the Release build. This step fails if the
+      # build succeeds (Xcode started reporting configuration-specific
+      # defines: update the Manual's Swift package plugin row) or if it fails
+      # for any other reason.
+      - name: Build Package Integration in release configuration (xcodebuild, expects the assertion)
+        run: |
+          pushd "Examples/Example Package Integration"
+          if xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -configuration Release -destination "platform=macOS" -derivedDataPath DerivedData SWIFT_OPTIMIZATION_LEVEL=-Onone SWIFT_COMPILATION_MODE=singlefile GCC_OPTIMIZATION_LEVEL=0 ONLY_ACTIVE_ARCH=YES > xcodebuild-release.log 2>&1; then
+            echo "Expected the Release build to stop at SafeDI's compile-time assertion, but it succeeded." >&2
+            exit 1
+          fi
+          grep -q 'SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation' xcodebuild-release.log || { cat xcodebuild-release.log; exit 1; }
+          popd
 
   spm-project-integration:
     name: Build Project Integration on Xcode 26
@@ -364,6 +389,16 @@ jobs:
           pushd Examples/ExampleTuistIntegration
           xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -workspace ExampleTuistIntegration.xcworkspace -scheme ExampleTuistIntegration -derivedDataPath DerivedData
           grep -q "ConsoleEventLogger()" "$(find DerivedData/Build/Intermediates.noindex -path "*/Debug/ExampleTuistIntegration.build/DerivedSources/SafeDIGenerated.swift")"
+          popd
+      # The Release configuration does not define `DEBUG`, so the generated
+      # file must wire `DisabledEventLogger`. Optimization is turned off and
+      # only the active architecture is built because only the configuration
+      # matters here.
+      - name: Build Tuist Integration in release configuration
+        run: |
+          pushd Examples/ExampleTuistIntegration
+          xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -workspace ExampleTuistIntegration.xcworkspace -scheme ExampleTuistIntegration -configuration Release -derivedDataPath DerivedData SWIFT_OPTIMIZATION_LEVEL=-Onone SWIFT_COMPILATION_MODE=singlefile GCC_OPTIMIZATION_LEVEL=0 ONLY_ACTIVE_ARCH=YES
+          grep -q "DisabledEventLogger()" "$(find DerivedData/Build/Intermediates.noindex -path "*/Release/ExampleTuistIntegration.build/DerivedSources/SafeDIGenerated.swift")"
           popd
 
   spm:
