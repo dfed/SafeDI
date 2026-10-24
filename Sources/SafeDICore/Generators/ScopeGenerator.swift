@@ -1044,14 +1044,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let useMockInitializer: Bool
 		/// The custom mock method name (e.g., "customMock"), if any.
 		let customMockName: String?
-		/// The return type of the hand-written mock method used for construction when
-		/// a direct call to it could also resolve to the generated `mock()`: the method
-		/// is named `mock`, the type also generates a mock, and the hand-written method
-		/// returns a type other than the concrete type (e.g. a protocol from
-		/// `fulfillingAdditionalTypes`). Overloads that differ only by return type are
-		/// ambiguous at a direct call, so the default call goes through a function
-		/// reference coerced to this return type instead. `nil` otherwise.
-		let overloadedMockReturnType: TypeDescription?
 		/// The concrete type (e.g., `ConcreteService`), which may differ from `instantiatedTypeDescription`
 		/// when the property uses an existential wrapper (e.g., `AnyService` fulfilled by `ConcreteService`).
 		let concreteType: TypeDescription
@@ -1304,18 +1296,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let labeledArguments = zip(surfacedArguments, arguments)
 				.map { $0.0.label == "_" ? $0.1 : "\($0.0.label): \($0.1)" }
 				.joined(separator: ", ")
-			if let overloadedMockReturnType {
-				// Coercing the function reference selects the hand-written overload,
-				// which a direct call cannot (see `overloadedMockReturnType`).
-				let labels = surfacedArguments.map { "\($0.label):" }.joined()
-				let reference = surfacedArguments.isEmpty
-					? "\(concreteType.asSource).\(methodName)"
-					: "\(concreteType.asSource).\(methodName)(\(labels))"
-				let parameterTypes = surfacedArguments
-					.map(\.typeDescription.asFunctionParameter.asSource)
-					.joined(separator: ", ")
-				return "(\(reference) as (\(parameterTypes)) -> \(overloadedMockReturnType.asSource))(\(arguments.joined(separator: ", ")))"
-			} else if methodName == "init" {
+			if methodName == "init" {
 				return "\(concreteType.asSource)(\(labeledArguments))"
 			} else {
 				return "\(concreteType.asSource).\(methodName)(\(labeledArguments))"
@@ -1489,17 +1470,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				}
 
-				let overloadedMockReturnType: TypeDescription? = if useMockInitializer,
-				                                                    childInstantiable.generateMock,
-				                                                    (childInstantiable.customMockName ?? InstantiableVisitor.mockMethodName) == InstantiableVisitor.mockMethodName,
-				                                                    let mockReturnType = childInstantiable.mockReturnType,
-				                                                    !childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childInstantiable.concreteInstantiable)
-				{
-					mockReturnType
-				} else {
-					nil
-				}
-
 				// Collect forwarded properties for Instantiator edges.
 				let forwardedProperties = Set(
 					childInstantiable.dependencies
@@ -1520,7 +1490,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					dependencies: childInstantiable.dependencies,
 					useMockInitializer: useMockInitializer,
 					customMockName: childInstantiable.customMockName,
-					overloadedMockReturnType: overloadedMockReturnType,
 					concreteType: childInstantiable.concreteInstantiable,
 					forwardedProperties: forwardedProperties,
 					isPropertyCycle: isPropertyCycle,

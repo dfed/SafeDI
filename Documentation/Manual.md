@@ -576,7 +576,7 @@ By default, `generateMock` is `false` and no mock is generated. Generated mocks 
 
 Each `@Instantiable` type with `generateMock: true` gets a generated `mock()` static method that builds its full dependency subtree. The hand-written mock method must be in the same `@Instantiable`-decorated declaration body — methods in undecorated extensions are not detected. To provide a mock from a separate extension, use `@Instantiable(mockOnly: true)` on that extension instead.
 
-When a type also has a hand-written mock method, it must have a different name from the generated `mock()` to avoid ambiguity. Use the `customMockName` parameter to specify the name of your hand-written method. The generated `mock()` will call through to it. With `mockOnly: true`, `customMockName` tells SafeDI which method to use as the mock provider. This is useful when you need custom logic during mock construction — for example, setting up stub behavior, configuring test doubles, or wiring delegates:
+When a type also has a hand-written mock method, it must have a different name from the generated `mock()` to avoid ambiguity. This applies wherever the hand-written method is declared — in the same declaration or in a separate [`mockOnly` declaration](#splitting-production-and-mock-declarations). Use the `customMockName` parameter to specify the name of your hand-written method. The generated `mock()` will call through to it. With `mockOnly: true`, `customMockName` tells SafeDI which method to use as the mock provider. This is useful when you need custom logic during mock construction — for example, setting up stub behavior, configuring test doubles, or wiring delegates:
 
 ```swift
 @Instantiable(generateMock: true, customMockName: "customMock")
@@ -600,6 +600,35 @@ public struct NetworkClient: Instantiable {
 The `customMockName` parameter requires `generateMock: true` or `mockOnly: true`.
 
 When the hand-written method returns an additional type the `@Instantiable` declaration fulfills (for example, a protocol declared in `fulfillingAdditionalTypes`), the generated `mock()` method also returns that type. This keeps the signatures type-compatible on extension-based declarations where a concrete `Self` return wouldn’t line up with a protocol-returning `customMock`. Concrete-type declarations are required to return `Self` or the concrete type from their `customMock`.
+
+#### A hand-written mock in a separate declaration
+
+The `@Instantiable` macro can only see the declaration it decorates, so it cannot require `customMockName` when the hand-written method lives in a separate [`mockOnly` declaration](#splitting-production-and-mock-declarations), possibly in another module. SafeDI checks the pair when it generates code instead: when a module generates a `mock()` for a type — because of `generateMock: true` or because the type is listed in [`additionalMocksToGenerate`](#cross-module-mock-generation) — and the type also has a hand-written method named `mock`, generation fails with an error at the hand-written method. The names must differ even when the parameter lists do: a `mockOnly` extension declares no dependencies, so every parameter of its mock has a default, and a generated `mock()` whose parameters are all defaulted (such as `mock(safeDIOverrides:)`) leaves `MyService.mock()` ambiguous. Other pairings produce an invalid redeclaration, an ambiguous call, or a call that silently resolves to the generated method.
+
+```swift
+@Instantiable(generateMock: true)
+public struct MyService: Instantiable {
+    public init(engine: Engine) { self.engine = engine }
+    @Instantiated let engine: Engine
+}
+
+// Error: `MyService` cannot have a hand-written `mock()` method because it is decorated with `@Instantiable(generateMock: true)`…
+@Instantiable(mockOnly: true)
+extension MyService {
+    public static func mock(engine: Engine = Engine()) -> MyService { MyService(engine: engine) }
+}
+```
+
+Give the hand-written method a different name and pass that name as `customMockName`. The generated `mock()` then calls through to it:
+
+```swift
+@Instantiable(mockOnly: true, customMockName: "preview")
+extension MyService {
+    public static func preview(engine: Engine = Engine()) -> MyService { MyService(engine: engine) }
+}
+```
+
+When the generated `mock()` exists only because the type is listed in `additionalMocksToGenerate`, removing the type from that list also resolves the error.
 
 If you provide a mock method without `generateMock: true`, parent types that instantiate the child will call `ChildType.mock(…)` (or `ChildType.customMock(…)`) instead of `ChildType(…)` when constructing it, threading mock parameters through your custom method.
 
@@ -666,7 +695,7 @@ extension MyService {
 }
 ```
 
-When both declarations exist, SafeDI uses the production `@Instantiable` for the dependency tree and the `mockOnly` declaration’s hand-written mock for mock generation. If the production type also has a hand-written `mock()` method, SafeDI emits an error — a type can have at most one hand-written mock. A `generateMock: true` production type that lacks a hand-written mock will use the `mockOnly` declaration’s mock, since hand-written mocks take priority over generated ones.
+When both declarations exist, SafeDI uses the production `@Instantiable` for the dependency tree and the `mockOnly` declaration’s hand-written mock for mock generation. If the production type also has a hand-written `mock()` method, SafeDI emits an error — a type can have at most one hand-written mock. A production type without `generateMock: true` (like the one above) is constructed in mocks by calling the `mockOnly` declaration’s method, which may be named `mock`. A `generateMock: true` production type paired with a `mockOnly` declaration must name the hand-written method with `customMockName` — otherwise it would share the name of the generated `mock()`, and SafeDI emits an error (see [A hand-written mock in a separate declaration](#a-hand-written-mock-in-a-separate-declaration)). Its generated `mock()` then calls through to the renamed method, since hand-written mocks take priority over generated ones. The same applies when the production type is listed in another module’s `additionalMocksToGenerate`.
 
 Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type’s `@Instantiated`, `@Received`, and `@Forwarded` dependencies. Non-dependency parameters must have default values. On concrete type declarations the return type must be `Self` or the type name; on extension-based `@Instantiable` types the return type must match the extended type (e.g. `-> Container<Bool>`) or a `fulfillingAdditionalTypes` entry, mirroring the corresponding `instantiate()` method. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
 
