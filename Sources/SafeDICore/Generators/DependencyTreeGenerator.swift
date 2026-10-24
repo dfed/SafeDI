@@ -185,6 +185,7 @@ public actor DependencyTreeGenerator {
 			)
 			mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
 		}
+		let typesWithGeneratedMock = Set(mockRoots.map(\.instantiable.concreteInstantiable))
 
 		// Compute the global cycle edges across all mock-reachable types. Per-tree
 		// cycle detection (`isPropertyCycle`) breaks at a different edge depending
@@ -205,7 +206,7 @@ public actor DependencyTreeGenerator {
 		) { taskGroup in
 			for (_, mockRoot) in mockRoots {
 				taskGroup.addTask {
-					await mockRoot.collectSendableConfigurationTypeNames()
+					await mockRoot.collectSendableConfigurationTypeNames(typesWithGeneratedMock: typesWithGeneratedMock)
 				}
 			}
 			var union = Set<String>()
@@ -227,11 +228,13 @@ public actor DependencyTreeGenerator {
 							mockConditionalCompilation: mockConditionalCompilation,
 							forwardedParameterMockDefaults: forwardedParameterMockDefaults,
 							cycleEdges: cycleEdges,
+							typesWithGeneratedMock: typesWithGeneratedMock,
 						)),
 					)
 					async let configurationTypes = mockRoot.collectConfigurationTypes(
 						cycleEdges: cycleEdges,
 						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+						typesWithGeneratedMock: typesWithGeneratedMock,
 					)
 					return try await (
 						root: GeneratedRoot(

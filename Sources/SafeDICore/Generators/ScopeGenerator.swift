@@ -289,6 +289,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// per-root syntactic flag and differs between roots for the same
 		/// underlying cycle.
 		let cycleEdges: Set<CycleEdge>
+		/// The concrete types this module generates a `mock()` method for:
+		/// `generateMock: true` types declared in this module and the types its
+		/// `#SafeDIConfiguration` lists in `additionalMocksToGenerate`. Generated
+		/// mocks are internal, so these are the only generated `mock` overloads a
+		/// hand-written `mock` method can collide with in this module's code
+		/// (see `MockParameterNode.overloadedMockReturnType`).
+		let typesWithGeneratedMock: Set<TypeDescription>
 	}
 
 	private let scopeData: ScopeData
@@ -626,7 +633,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}()
 
 		// 1. Build the parameter tree.
-		let parameterTree = await collectMockParameterTree()
+		let parameterTree = await collectMockParameterTree(typesWithGeneratedMock: context.typesWithGeneratedMock)
 
 		// 2. Identify flat parameters.
 
@@ -1046,11 +1053,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let customMockName: String?
 		/// The return type of the hand-written mock method used for construction when
 		/// a direct call to it could also resolve to the generated `mock()`: the method
-		/// is named `mock`, the type also generates a mock, and the hand-written method
-		/// returns a type other than the concrete type (e.g. a protocol from
+		/// is named `mock`, this module generates a mock for the type (through
+		/// `generateMock: true` or `additionalMocksToGenerate`), and the hand-written
+		/// method returns a type other than the concrete type (e.g. a protocol from
 		/// `fulfillingAdditionalTypes`). Overloads that differ only by return type are
 		/// ambiguous at a direct call, so the default call goes through a function
 		/// reference coerced to this return type instead. `nil` otherwise.
+		///
+		/// The coerced reference is limited to types with a generated overload because
+		/// it type-checks measurably slower than a direct call, and because it names
+		/// the method by its surfaced argument labels only: it cannot reach a
+		/// hand-written method that has parameters the call site does not surface
+		/// (a `_`-labeled default, or a labeled default on a pruned back-edge). A
+		/// direct call reaches such a method through its default arguments when no
+		/// generated overload competes.
 		let overloadedMockReturnType: TypeDescription?
 		/// The concrete type (e.g., `ConcreteService`), which may differ from `instantiatedTypeDescription`
 		/// when the property uses an existential wrapper (e.g., `AnyService` fulfilled by `ConcreteService`).
@@ -1386,8 +1402,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	func collectConfigurationTypes(
 		cycleEdges: Set<CycleEdge>,
 		sendableConfigurationTypeNames: Set<String>,
+		typesWithGeneratedMock: Set<TypeDescription>,
 	) async -> [(typeName: String, structCode: String)] {
-		let parameterTree = await collectMockParameterTree()
+		let parameterTree = await collectMockParameterTree(typesWithGeneratedMock: typesWithGeneratedMock)
 		let uniqueTypes = Self.collectUniqueConfigurationTypes(from: parameterTree.propertyNodes)
 		let indent = Self.standardIndent
 		return uniqueTypes.map { node in
@@ -1407,8 +1424,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `SendableInstantiator` scope. Aggregated across all roots before generation
 	/// so every root emits consistent `@Sendable`-ness for a given type's
 	/// `SafeDIMockConfiguration` struct.
-	func collectSendableConfigurationTypeNames() async -> Set<String> {
-		let parameterTree = await collectMockParameterTree()
+	func collectSendableConfigurationTypeNames(typesWithGeneratedMock: Set<TypeDescription>) async -> Set<String> {
+		let parameterTree = await collectMockParameterTree(typesWithGeneratedMock: typesWithGeneratedMock)
 		var result = Set<String>()
 
 		func walk(_ node: MockParameterNode) {
@@ -1432,7 +1449,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `@Received(fulfilledByDependencyNamed:)` needs. Items appear in production's
 	/// `orderedPropertiesToGenerate` order, so an alias always sits after the
 	/// sibling child that fulfills it.
+	///
+	/// `typesWithGeneratedMock` lists the concrete types this module generates a
+	/// `mock()` method for (see `MockContext.typesWithGeneratedMock`).
 	private func collectMockParameterTree(
+		typesWithGeneratedMock: Set<TypeDescription>,
 		insideSendableScope: Bool = false,
 	) async -> [MockTreeItem] {
 		var items = [MockTreeItem]()
@@ -1454,6 +1475,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 				// Recurse into children to build the subtree.
 				let childItems = await childGenerator.collectMockParameterTree(
+					typesWithGeneratedMock: typesWithGeneratedMock,
 					insideSendableScope: childInsideSendable,
 				)
 
@@ -1490,7 +1512,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 
 				let overloadedMockReturnType: TypeDescription? = if useMockInitializer,
-				                                                    childInstantiable.generateMock,
+				                                                    typesWithGeneratedMock.contains(childInstantiable.concreteInstantiable),
 				                                                    (childInstantiable.customMockName ?? InstantiableVisitor.mockMethodName) == InstantiableVisitor.mockMethodName,
 				                                                    let mockReturnType = childInstantiable.mockReturnType,
 				                                                    !childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childInstantiable.concreteInstantiable)
