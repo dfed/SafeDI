@@ -11923,6 +11923,54 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#expect(output.mockConfigurationFile == emptyMockConfigurationFileOutput)
 	}
 
+	@Test(.timeLimit(.minutes(1)))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_generatesWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds() async throws {
+		// Each service receives the two services before it and the service at half its index.
+		// The number of distinct received-dependency paths from the last service grows
+		// exponentially with the service count, while the number of services does not.
+		let serviceCount = 40
+		let serviceFiles = (0..<serviceCount).map { index in
+			let receivedIndices = Set([index - 1, index - 2, index / 2])
+				.filter { $0 >= 0 && $0 < index }
+				.sorted()
+			let initializerParameters = receivedIndices.map { "service\($0): Service\($0)" }.joined(separator: ", ")
+			let receivedProperties = receivedIndices.map { "    @Received let service\($0): Service\($0)" }.joined(separator: "\n")
+			return """
+			@Instantiable
+			public struct Service\(index): Instantiable {
+			    public init(\(initializerParameters)) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			\(receivedProperties)
+			}
+			"""
+		}
+		let featureInitializerParameters = (0..<serviceCount).map { "service\($0): Service\($0)" }.joined(separator: ", ")
+		let featureProperties = (0..<serviceCount).map { "    @Instantiated let service\($0): Service\($0)" }.joined(separator: "\n")
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public struct Feature: Instantiable {
+				    public init(\(featureInitializerParameters)) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				\(featureProperties)
+				}
+				""",
+			] + serviceFiles,
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
+		)
+
+		#expect(output.mockFiles.keys.sorted() == ["Feature+SafeDIMock.swift"])
+		#expect(output.dependencyTreeFiles.isEmpty)
+	}
+
 	// MARK: - Forwarded property defaults
 
 	@Test

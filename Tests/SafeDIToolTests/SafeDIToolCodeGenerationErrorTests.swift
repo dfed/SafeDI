@@ -932,6 +932,88 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleErrorFoundOnSecondVisit_whenFirstVisitStoppedAtAnUnrelatedReceivedCycle() async {
+		// Walking Parent's received properties reaches Shared twice. The first visit arrives through
+		// `alpha`, so Shared stops at its own `alpha` (a received cycle that does not involve `parent`)
+		// before checking `parent`. The second visit arrives through `extra` and finds `parent`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Shared.swift"]):9:5: error: Dependency received in same chain it is instantiated: @Instantiated parent: Parent -> @Received extra: Extra -> @Received shared: Shared -> @Received parent: Parent
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(parent: Parent, alpha: Alpha, extra: Extra, shared: Shared) {
+					        self.parent = parent
+					        self.alpha = alpha
+					        self.extra = extra
+					        self.shared = shared
+					    }
+
+					    @Instantiated let parent: Parent
+					    @Instantiated let alpha: Alpha
+					    @Instantiated let extra: Extra
+					    @Instantiated let shared: Shared
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Parent: Instantiable {
+					    public init(alpha: Alpha, extra: Extra) {
+					        self.alpha = alpha
+					        self.extra = extra
+					    }
+
+					    @Received let alpha: Alpha
+					    @Received let extra: Extra
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Alpha: Instantiable {
+					    public init(shared: Shared) {
+					        self.shared = shared
+					    }
+
+					    @Received let shared: Shared
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Extra: Instantiable {
+					    public init(shared: Shared) {
+					        self.shared = shared
+					    }
+
+					    @Received let shared: Shared
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Shared: Instantiable {
+					    public init(alpha: Alpha, parent: Parent) {
+					        self.alpha = alpha
+					        self.parent = parent
+					    }
+
+					    @Received let alpha: Alpha
+					    @Received let parent: Parent
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableAliasedReceivedPropertyName_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
