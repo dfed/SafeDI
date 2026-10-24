@@ -43,12 +43,82 @@ enum SafeDIContentContext {
 	case members(InstantiableMembers)
 
 	struct InstantiableMembers {
-		/// Whether the declaration is an extension, whose `instantiate()` method constructs the type.
-		let isExtension: Bool
+		let construction: Construction
 		/// Whether every member only feeds mock generation.
 		let isMockOnly: Bool
 		let customMockName: String?
+
+		/// How SafeDI constructs the declared type, which determines which methods and initializers matter.
+		enum Construction {
+			/// An extension, whose `instantiate()` method constructs the type. SafeDI never scans its initializers.
+			case instantiateMethod
+			/// A type definition, which SafeDI constructs with the first initializer that fulfills its dependencies.
+			case initializer(ConstructionInitializerCandidates)
+		}
 	}
+}
+
+/// Determines which initializers of an `@Instantiable` type definition SafeDI could select for
+/// construction under some evaluation of the `#if` blocks among its members.
+///
+/// SafeDI selects the first initializer, in source order, that fulfills the dependencies it scanned.
+/// A guarded initializer changes neither that selection nor the generated call when no evaluation
+/// lets it be selected: either it fulfills the dependencies of no evaluation, or an initializer
+/// outside every `#if` block precedes it and fulfills the dependencies of every evaluation.
+/// Evaluations are bounded without evaluating any condition: every evaluation scans the dependencies
+/// declared outside `#if` blocks, and none scans more than those declared in every clause.
+final class ConstructionInitializerCandidates {
+	// MARK: Initialization
+
+	init(declaration: some ConcreteDeclSyntaxProtocol) {
+		self.declaration = declaration
+	}
+
+	// MARK: Internal
+
+	/// Whether `node`, an initializer inside an `#if` block, could be the initializer SafeDI selects.
+	func couldSelect(_ node: InitializerDeclSyntax) -> Bool {
+		let isPrecededByInitializerSelectableInEveryEvaluation = firstInitializerSelectableInEveryEvaluationPosition.map { $0 < node.position } ?? false
+		return !isPrecededByInitializerSelectableInEveryEvaluation
+			&& Initializer(node).couldBeValid(forFulfillingEvery: guaranteedDependencies, amongPossible: possibleDependencies)
+	}
+
+	// MARK: Private
+
+	private let declaration: any ConcreteDeclSyntaxProtocol
+
+	/// The dependencies declared in every clause of every `#if` block, in source order. Each evaluation scans a subsequence of these.
+	private lazy var possibleDependencies: [Dependency] = {
+		let visitor = InstantiableVisitor(declarationType: .concreteDecl, conditionalCompilation: .scanAllClauses)
+		visitor.walk(declaration)
+		return visitor.dependencies
+	}()
+
+	/// The dependencies declared outside every `#if` block, which every evaluation scans.
+	private lazy var guaranteedDependencies: [Dependency] = {
+		var unconditionalDeclaration = declaration
+		unconditionalDeclaration.memberBlock.members = declaration.memberBlock.members.filter { !$0.decl.is(IfConfigDeclSyntax.self) }
+		let visitor = InstantiableVisitor(declarationType: .concreteDecl, conditionalCompilation: .scanAllClauses)
+		visitor.walk(unconditionalDeclaration)
+		return visitor.dependencies
+	}()
+
+	/// Where the first initializer outside every `#if` block that fulfills the dependencies of every evaluation begins.
+	///
+	/// Fulfilling both bounds suffices: each argument without a default binds to a guaranteed
+	/// dependency, which every evaluation has, and because an evaluation's dependencies are a
+	/// subsequence of the possible ones, each of them is bound by the argument that binds it among the possible ones.
+	private lazy var firstInitializerSelectableInEveryEvaluationPosition: AbsolutePosition? = declaration
+		.memberBlock
+		.members
+		.lazy
+		.compactMap { $0.decl.as(InitializerDeclSyntax.self) }
+		.first {
+			let initializer = Initializer($0)
+			return initializer.isValid(forFulfilling: self.guaranteedDependencies)
+				&& initializer.isValid(forFulfilling: self.possibleDependencies)
+		}?
+		.position
 }
 
 extension IfConfigDeclSyntax {
@@ -110,8 +180,11 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 		return .skipChildren
 	}
 
-	override func visit(_: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
-		if case .members = context {
+	override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+		if case let .members(members) = context,
+		   case let .initializer(candidates) = members.construction,
+		   candidates.couldSelect(node)
+		{
 			record(.production)
 		}
 		return .skipChildren
@@ -123,7 +196,7 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 			let mockMethodNames = [InstantiableVisitor.mockMethodName, members.customMockName].compactMap(\.self)
 			if isStaticOrClass, mockMethodNames.contains(node.name.text) {
 				record(.mockOnly)
-			} else if members.isExtension, node.name.text == InstantiableVisitor.instantiateMethodName {
+			} else if case .instantiateMethod = members.construction, node.name.text == InstantiableVisitor.instantiateMethodName {
 				record(.production)
 			}
 		}

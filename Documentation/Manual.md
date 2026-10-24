@@ -845,7 +845,7 @@ public final class DisabledEventLogger: EventLogger, Instantiable { … }
 
 - Platform conditions such as `os(iOS)`, `arch(arm64)`, `canImport(UIKit)`, `targetEnvironment(simulator)`, `swift(>=6.0)`, and `compiler(>=6.0)` are left to the compiler. SafeDITool scans every clause one of them could select, so declarations under `#if os(iOS)` and under its `#else` are both visible to code generation.
 
-The reported conditions are taken as complete, so a condition your build defines but your integration does not report would make SafeDITool scan the wrong clause. To keep that from going unnoticed, every generated file begins by asserting each decision SafeDITool made about a block that declares something SafeDI scans for—an `@Instantiable` type, a dependency property, an initializer or `instantiate()` method, or a `#SafeDIConfiguration`:
+The reported conditions are taken as complete, so a condition your build defines but your integration does not report would make SafeDITool scan the wrong clause. To keep that from going unnoticed, every generated file begins by asserting each decision SafeDITool made about a block that declares something SafeDI scans for—an `@Instantiable` type, a dependency property, an `instantiate()` method, an initializer SafeDI could select to construct its type, or a `#SafeDIConfiguration`:
 
 ```swift
 #if !(DEBUG)
@@ -854,6 +854,22 @@ The reported conditions are taken as complete, so a condition your build defines
 ```
 
 The compiler evaluates the same condition with the real build settings, so a mismatch fails the build at the generated file with a message naming the condition instead of producing code for the wrong configuration. Blocks that guard nothing SafeDI reads are not asserted.
+
+SafeDI constructs an `@Instantiable` type with the first initializer that fulfills its dependencies, so a guarded initializer is asserted only when some evaluation of the type’s `#if` blocks could select it. An initializer that fulfills no such evaluation’s dependencies—one that is not `public`, or that takes an argument without a default value that no dependency provides, or that omits a dependency declared outside every `#if` block—is not asserted, nor is one that follows an unguarded initializer that fulfills the dependencies of every evaluation. This keeps a preview helper working under every integration:
+
+```swift
+@Instantiable
+public struct ProfileView: Instantiable {
+    public init(user: User) { self.user = user }
+    @Received let user: User
+
+    #if DEBUG
+    init(previewName: String) { self.user = User(name: previewName) }
+    #endif
+}
+```
+
+Initializers in an `@Instantiable` extension are never asserted, because the extension’s `instantiate()` method constructs the type.
 
 ### Declarations that only feed mock generation
 
