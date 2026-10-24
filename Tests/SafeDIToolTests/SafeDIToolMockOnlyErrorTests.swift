@@ -679,6 +679,80 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsErrorSuggestingRemovalFromAdditionalMocks_whenAdditionalMockIsGenerateMockInDependentModule() async throws {
+		// One dependent module declares MyService with `generateMock: true`, and
+		// another declares the mockOnly extension, so each is valid on its own.
+		// This module generates a `mock()` for MyService only because it lists the
+		// type in `additionalMocksToGenerate`, so removing it from the list is a fix.
+		let productionModuleOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol ServiceProtocol {}
+				public struct Engine {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], generateMock: true)
+				public struct MyService: Instantiable, ServiceProtocol {
+				    public init(engine: Engine) {
+				        self.engine = engine
+				    }
+				    @Received let engine: Engine
+				}
+				""",
+			],
+			filesToDelete: &filesToDelete,
+		)
+		let mockModuleOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+				extension MyService {
+				    public static func mock(engine: Engine = Engine()) -> ServiceProtocol { MyService(engine: engine) }
+				}
+				""",
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		await assertThrowsError(
+			diagnostics: { _ in
+				"""
+				\(mockModuleOutput.fixtures["File.swift"]):3:5: error: `MyService` cannot have a hand-written `mock()` method because this module generates a `mock()` method for it (it is listed in `additionalMocksToGenerate`), and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@Instantiable` that declares it, or remove `MyService` from `additionalMocksToGenerate`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#SafeDIConfiguration(
+					    additionalMocksToGenerate: [
+					        "MyService",
+					    ]
+					)
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct Root: Instantiable {
+					    public init(engine: Engine, service: ServiceProtocol) {
+					        self.engine = engine
+					        self.service = service
+					    }
+					    @Received let engine: Engine
+					    @Instantiated let service: ServiceProtocol
+					}
+					""",
+				],
+				dependentModuleInfoPaths: [productionModuleOutput.moduleInfoOutputPath, mockModuleOutput.moduleInfoOutputPath],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private static let generateMockNameCollisionMessage = "`MyService` cannot have a hand-written `mock()` method because it is decorated with `@Instantiable(generateMock: true)`, and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@Instantiable` that declares it."
