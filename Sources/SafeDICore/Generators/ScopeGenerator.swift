@@ -1170,10 +1170,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
-		/// The path to this node's optional override closure, given the path to
-		/// the node's entry in its parent's overrides. A node with a configuration
-		/// struct keeps its override in the struct's `safeDIBuilder`; a leaf node's
-		/// entry is the optional override closure itself.
+		/// The Swift expression, for use inside a generated `mock()` body, that
+		/// reads this node's optional override closure.
+		///
+		/// A caller of `mock()` overrides how a node is built by setting a closure
+		/// on `SafeDIOverrides` (or on a nested `SafeDIMockConfiguration`). Where
+		/// that closure lives depends on the node's shape: a node with a
+		/// configuration struct keeps it in the struct's `safeDIBuilder` property,
+		/// while a leaf node's entry is the optional closure itself.
+		///
+		/// - Parameter nodePath: The expression for this node's entry in its
+		///   parent's overrides, e.g. `safeDIOverrides.service` or
+		///   `safeDIOverrides.parent.child`.
+		/// - Returns: An expression of optional closure type, e.g.
+		///   `safeDIOverrides.service.safeDIBuilder` for a node with a
+		///   configuration struct or `safeDIOverrides.service` for a leaf. Pass it
+		///   as the `overrideExpression` of `constructionExpression`, which unwraps
+		///   it and falls back to the node's default construction when it is `nil`.
 		func overridePath(nodePath: String) -> String {
 			if needsConfigurationStruct {
 				"\(nodePath).safeDIBuilder"
@@ -1182,10 +1195,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
-		/// The type an `erasedToConcreteExistential` node wraps its concrete
-		/// value in (e.g., `AnyService`). Instantiator-family properties wrap in
-		/// the type they build, constant properties in the property type itself.
-		var erasedWrapperType: TypeDescription {
+		/// For a node declared with `erasedToConcreteExistential: true`, the
+		/// concrete existential type that erases the node's concrete type (e.g.,
+		/// `AnyService` erasing `DefaultService`). Generated mock code wraps the
+		/// concrete value in this type: `AnyService(DefaultService(…))`.
+		/// Instantiator-family properties erase to the type they build, constant
+		/// properties to the property type itself.
+		var concreteExistentialType: TypeDescription {
 			if isInstantiator {
 				typeDescription.unwrapped.asInstantiatedType
 			} else {
@@ -1208,7 +1224,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// the property type.
 		var overriddenBindingTypeAnnotation: String {
 			let defaultBranchType = if erasedToConcreteExistential {
-				erasedWrapperType
+				concreteExistentialType
 			} else {
 				concreteType
 			}
@@ -1219,7 +1235,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
-		/// A single-line expression constructing this node.
+		/// A single-line expression, emitted into a generated `mock()` body, that
+		/// constructs this node — via the caller's override when one is set, and
+		/// via the node's default construction otherwise.
 		///
 		/// When `overrideExpression` names an optional override closure, emits
 		/// `if let safeDIBuilder = <override> { safeDIBuilder(<arguments>) } else { <default call> }`.
@@ -1242,7 +1260,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		) -> String {
 			let defaultCall = defaultBuilderCall(arguments: arguments, overrideReachable: overrideReachable)
 			let defaultConstruction = if erasedToConcreteExistential {
-				"\(erasedWrapperType.asSource)(\(defaultCall))"
+				"\(concreteExistentialType.asSource)(\(defaultCall))"
 			} else {
 				defaultCall
 			}
@@ -1255,7 +1273,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			let overrideCall = "\(overrideName)(\(arguments.joined(separator: ", ")))"
 			let overrideConstruction = if erasedToConcreteExistential, needsConfigurationStruct {
-				"\(erasedWrapperType.asSource)(\(overrideCall))"
+				"\(concreteExistentialType.asSource)(\(overrideCall))"
 			} else {
 				overrideCall
 			}
