@@ -16,7 +16,7 @@ To add the SafeDI framework as a dependency to a package utilizing [Swift Packag
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.0.0"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.1.0"),
 ]
 ```
 
