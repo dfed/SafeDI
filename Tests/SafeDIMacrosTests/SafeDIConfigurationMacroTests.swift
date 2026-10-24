@@ -56,8 +56,7 @@ import Testing
 				    additionalImportedModules: ["MyModule"],
 				    additionalDirectoriesToInclude: ["DirA"],
 				    additionalMocksToGenerate: ["SomeService"],
-				    mockConditionalCompilation: "DEBUG",
-				    activeCompilationConditions: ["STAGING"]
+				    mockConditionalCompilation: "DEBUG"
 				)
 				""",
 				expandedSource: "",
@@ -270,30 +269,6 @@ import Testing
 				diagnostics: [
 					DiagnosticSpec(
 						message: "The `mockConditionalCompilation` argument must be a string literal or `nil`",
-						line: 1,
-						column: 1,
-					),
-				],
-				macros: safeDIConfigurationTestMacros,
-			)
-		}
-
-		@Test
-		func expansion_throwsError_whenActiveCompilationConditionsHasNonLiteralValue() {
-			assertMacroExpansion(
-				"""
-				#SafeDIConfiguration(
-				    activeCompilationConditions: [someVariable]
-				)
-				""",
-				expandedSource: """
-				#SafeDIConfiguration(
-				    activeCompilationConditions: [someVariable]
-				)
-				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "The `activeCompilationConditions` argument must be an array of string literals",
 						line: 1,
 						column: 1,
 					),

@@ -46,7 +46,6 @@ struct SafeDIConfigurationVisitorTests {
 		#expect(configuration.additionalImportedModules == [])
 		#expect(configuration.additionalDirectoriesToInclude == [])
 		#expect(configuration.mockConditionalCompilation == "DEBUG")
-		#expect(configuration.activeCompilationConditions == [])
 	}
 
 	@Test
@@ -57,16 +56,6 @@ struct SafeDIConfigurationVisitorTests {
 		)
 		""")
 		#expect(configuration.mockConditionalCompilation == nil)
-	}
-
-	@Test
-	func extractConfiguration_returnsActiveCompilationConditions() {
-		let configuration = extractConfiguration(from: """
-		#SafeDIConfiguration(
-		    activeCompilationConditions: ["STAGING", "FEATURE_FLAG"]
-		)
-		""")
-		#expect(configuration.activeCompilationConditions == ["STAGING", "FEATURE_FLAG"])
 	}
 
 	@Test
