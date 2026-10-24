@@ -1044,14 +1044,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let useMockInitializer: Bool
 		/// The custom mock method name (e.g., "customMock"), if any.
 		let customMockName: String?
-		/// The return type of the hand-written mock method used for construction when
-		/// a direct call to it could also resolve to the generated `mock()`: the method
-		/// is named `mock`, the type also generates a mock, and the hand-written method
-		/// returns a type other than the concrete type (e.g. a protocol from
-		/// `fulfillingAdditionalTypes`). Overloads that differ only by return type are
-		/// ambiguous at a direct call, so the default call goes through a function
-		/// reference coerced to this return type instead. `nil` otherwise.
-		let overloadedMockReturnType: TypeDescription?
 		/// The concrete type (e.g., `ConcreteService`), which may differ from `instantiatedTypeDescription`
 		/// when the property uses an existential wrapper (e.g., `AnyService` fulfilled by `ConcreteService`).
 		let concreteType: TypeDescription
@@ -1304,18 +1296,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let labeledArguments = zip(surfacedArguments, arguments)
 				.map { $0.0.label == "_" ? $0.1 : "\($0.0.label): \($0.1)" }
 				.joined(separator: ", ")
-			if let overloadedMockReturnType {
-				// Coercing the function reference selects the hand-written overload,
-				// which a direct call cannot (see `overloadedMockReturnType`).
-				let labels = surfacedArguments.map { "\($0.label):" }.joined()
-				let reference = surfacedArguments.isEmpty
-					? "\(concreteType.asSource).\(methodName)"
-					: "\(concreteType.asSource).\(methodName)(\(labels))"
-				let parameterTypes = surfacedArguments
-					.map(\.typeDescription.asFunctionParameter.asSource)
-					.joined(separator: ", ")
-				return "(\(reference) as (\(parameterTypes)) -> \(overloadedMockReturnType.asSource))(\(arguments.joined(separator: ", ")))"
-			} else if methodName == "init" {
+			if methodName == "init" {
 				return "\(concreteType.asSource)(\(labeledArguments))"
 			} else {
 				return "\(concreteType.asSource).\(methodName)(\(labeledArguments))"
@@ -1489,17 +1470,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				}
 
-				let overloadedMockReturnType: TypeDescription? = if useMockInitializer,
-				                                                    childInstantiable.generateMock,
-				                                                    (childInstantiable.customMockName ?? InstantiableVisitor.mockMethodName) == InstantiableVisitor.mockMethodName,
-				                                                    let mockReturnType = childInstantiable.mockReturnType,
-				                                                    !childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childInstantiable.concreteInstantiable)
-				{
-					mockReturnType
-				} else {
-					nil
-				}
-
 				// Collect forwarded properties for Instantiator edges.
 				let forwardedProperties = Set(
 					childInstantiable.dependencies
@@ -1520,7 +1490,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					dependencies: childInstantiable.dependencies,
 					useMockInitializer: useMockInitializer,
 					customMockName: childInstantiable.customMockName,
-					overloadedMockReturnType: overloadedMockReturnType,
 					concreteType: childInstantiable.concreteInstantiable,
 					forwardedProperties: forwardedProperties,
 					isPropertyCycle: isPropertyCycle,
@@ -1848,86 +1817,39 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	// MARK: Mock Body Generation
 
-	/// Collects all `safeDIOverrides` references that would appear inside a
-	/// `@Sendable func`, so they can be read into locals outside the function.
-	/// Each extraction is a `(localName, expression)` pair emitted as
-	/// `let <localName> = <expression>`. Override closures are extracted as the
-	/// optional itself: the function body unwraps it with `if let` and calls the
-	/// default construction directly when it is `nil`. Default parameter values
-	/// are extracted as plain values.
-	private static func collectSendableExtractions(
-		items: [MockTreeItem],
-		parentPath: String,
-		functionName: String,
-		ancestorTypes: Set<String>,
-		parentConcreteType: String? = nil,
-		cycleEdges: Set<CycleEdge> = [],
-		overridePathReachable: Bool = true,
-		into extractions: inout [(localName: String, expression: String)],
-	) {
-		let nodes = items.propertyNodes
-		let labelMap = disambiguatePropertyLabels(for: nodes)
-		for node in nodes {
-			let nodeTypeKey = node.instantiatedTypeDescription.asSource
-			let isCycleNode = ancestorTypes.contains(nodeTypeKey)
-			let nodeConcreteType = node.concreteType.asSource
-			// A back-edge from parentConcreteType to this node means this node
-			// was filtered out of the parent's SafeDIMockConfiguration struct —
-			// so its override path is unreachable here. Descendants of an
-			// unreachable node stay unreachable (path can't be recovered).
-			let isBackEdge = parentConcreteType.map {
-				cycleEdges.contains(CycleEdge(parent: $0, child: nodeConcreteType))
-			} ?? false
-			let thisOverrideReachable = overridePathReachable && !isBackEdge
-
-			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
-			let nodePath = "\(parentPath).\(disambiguated)"
-			// Convert nodePath to a local name: replace dots with underscores,
-			// strip the "safeDIOverrides." prefix.
-			let relativePath = nodePath
-				.replacingOccurrences(of: "safeDIOverrides.", with: "")
-				.replacingOccurrences(of: ".", with: "_")
-
-			if !isCycleNode, thisOverrideReachable {
-				extractions.append((
-					localName: "\(functionName)__\(relativePath)_safeDIBuilder",
-					expression: node.overridePath(nodePath: nodePath),
-				))
-			}
-
-			// Extract default parameter references — direct assignment, no optional.
-			// Skip when the override path is unreachable: the slot was pruned from
-			// the config struct, so `nodePath.<label>` would not compile.
-			// `resolveBuilderArguments` inlines the declared default expression in
-			// that case via its `!overrideReachable` branch.
-			if thisOverrideReachable {
-				for defaultParameter in node.defaultParameters {
-					extractions.append((
-						localName: "\(functionName)__\(relativePath)_\(defaultParameter.label)",
-						expression: "\(nodePath).\(defaultParameter.label)",
-					))
-				}
-			}
-
-			// Recurse into children (for constant node children inside the sendable function).
-			if !node.isInstantiator {
-				var childAncestors = ancestorTypes
-				childAncestors.insert(nodeTypeKey)
-				collectSendableExtractions(
-					items: node.children,
-					parentPath: nodePath,
-					functionName: functionName,
-					ancestorTypes: childAncestors,
-					parentConcreteType: nodeConcreteType,
-					cycleEdges: cycleEdges,
-					overridePathReachable: thisOverrideReachable,
-					into: &extractions,
-				)
-			}
-			// Instantiator children inside a sendable function would have their own
-			// extraction scope — handled recursively when generateInstantiatorBinding
-			// is called for the nested Instantiator.
+	/// Reads `safeDIOverrides` values into locals declared before the outermost
+	/// `@Sendable` builder function of a sendable subtree.
+	///
+	/// `SafeDIOverrides` is not `Sendable` whenever any of its stored closures
+	/// is not, so code lexically inside a `@Sendable` function — at any depth,
+	/// including inside builder functions of nested instantiators — must not
+	/// reference it. Every value in a sendable subtree's configuration is
+	/// `Sendable` (its closures are generated `@Sendable`), so each value is
+	/// read into a local outside the function and the function captures the
+	/// local instead.
+	///
+	/// The mock body walk asks the extractor for a local each time it would
+	/// otherwise read `safeDIOverrides`, so every extracted local has exactly
+	/// one reader. The builder that created the extractor then emits the
+	/// recorded `let <localName> = <expression>` lines before its function.
+	private final class SendableOverrideExtractor {
+		init(functionName: String) {
+			self.functionName = functionName
 		}
+
+		/// Records that `expression` is read into a local named after the
+		/// outermost `@Sendable` function, and returns that local's name.
+		func extract(_ expression: String, localNameSuffix: String) -> String {
+			let localName = "\(functionName)__\(localNameSuffix)"
+			extractions.append((localName: localName, expression: expression))
+			return localName
+		}
+
+		/// The `(localName, expression)` pairs recorded so far, in the order
+		/// they were extracted.
+		private(set) var extractions = [(localName: String, expression: String)]()
+
+		private let functionName: String
 	}
 
 	/// Generates the mock body bindings for the tree. Walks the items in
@@ -1938,14 +1860,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// For leaf constant nodes: `let {label} = if let safeDIBuilder = safeDIOverrides.{path} { safeDIBuilder({arguments}) } else { {Type}({labeled arguments}) }`
 	/// For constant nodes with children: a nested helper function that returns the property type.
 	/// For Instantiator nodes: an inner builder function plus `Instantiator<T>(...)` wrapping.
-	/// When `sendableExtractionPrefix` is set, references resolve against extracted locals
-	/// (produced by `collectSendableExtractions`) instead of `safeDIOverrides` paths.
+	/// When `sendableOverrideExtractor` is set, the bindings are lexically inside a
+	/// `@Sendable` function, so every `safeDIOverrides` read is routed through the
+	/// extractor and references the resulting local instead.
 	private static func generateMockBodyBindings(
 		items: [MockTreeItem],
 		parentPath: String,
 		indent: String,
 		ancestorTypes: Set<String> = [],
-		sendableExtractionPrefix: String? = nil,
+		sendableOverrideExtractor: SendableOverrideExtractor? = nil,
 		flatParameterDisambiguationMap: [String: [String: String]] = [:],
 		parentConcreteType: String?,
 		cycleEdges: Set<CycleEdge>,
@@ -2005,12 +1928,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// none to consult: a cycle node constructs itself directly, and a
 				// node whose override path was pruned from its parent's
 				// `SafeDIMockConfiguration` has no override slot to read. Inside a
-				// sendable extraction the override was read into a local outside
-				// the `@Sendable` function, so reference that local instead.
+				// `@Sendable` function the override is read into a local outside
+				// that function, so reference that local instead.
 				let overrideExpression: String? = if isCycleNode || !thisOverrideReachable {
 					nil
-				} else if let sendableExtractionPrefix {
-					"\(sendableExtractionPrefix)__\(relativePath)_safeDIBuilder"
+				} else if let sendableOverrideExtractor {
+					sendableOverrideExtractor.extract(
+						node.overridePath(nodePath: nodePath),
+						localNameSuffix: "\(relativePath)_safeDIBuilder",
+					)
 				} else {
 					node.overridePath(nodePath: nodePath)
 				}
@@ -2018,7 +1944,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let arguments = resolveBuilderArguments(
 					for: node,
 					nodePath: nodePath,
-					sendableExtractionPrefix: sendableExtractionPrefix,
+					sendableOverrideExtractor: sendableOverrideExtractor,
 					overrideReachable: thisOverrideReachable,
 				)
 				let constructionExpression = node.constructionExpression(
@@ -2042,6 +1968,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						arguments: arguments,
 						indent: indent,
 						ancestorTypes: childAncestors,
+						sendableOverrideExtractor: sendableOverrideExtractor,
 						flatParameterDisambiguationMap: combinedDisambiguationMap,
 						cycleEdges: cycleEdges,
 						overridePathReachable: thisOverrideReachable,
@@ -2071,7 +1998,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						parentPath: nodePath,
 						indent: innerIndent,
 						ancestorTypes: childAncestors,
-						sendableExtractionPrefix: sendableExtractionPrefix,
+						sendableOverrideExtractor: sendableOverrideExtractor,
 						flatParameterDisambiguationMap: combinedDisambiguationMap,
 						parentConcreteType: node.concreteType.asSource,
 						cycleEdges: cycleEdges,
@@ -2131,8 +2058,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func resolveBuilderArguments(
 		for node: MockParameterNode,
 		nodePath: String,
-		sendableExtractionPrefix: String? = nil,
-		overrideReachable: Bool = true,
+		sendableOverrideExtractor: SendableOverrideExtractor?,
+		overrideReachable: Bool,
 	) -> [String] {
 		let dependenciesByLabel = Dictionary(
 			uniqueKeysWithValues: node.dependencies.map { ($0.property.label, $0) },
@@ -2146,8 +2073,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return argumentsToSurface.map { argument in
 			if dependenciesByLabel[argument.innerLabel] != nil {
 				argument.innerLabel
-			} else if let sendableExtractionPrefix {
-				"\(sendableExtractionPrefix)__\(relativePath)_\(argument.label)"
+			} else if let sendableOverrideExtractor {
+				sendableOverrideExtractor.extract(
+					"\(nodePath).\(argument.label)",
+					localNameSuffix: "\(relativePath)_\(argument.label)",
+				)
 			} else {
 				"\(nodePath).\(argument.label)"
 			}
@@ -2161,7 +2091,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// `overrideExpression` is the optional override closure the inner builder
 	/// consults, or `nil` when the node constructs itself directly (see
-	/// `MockParameterNode.constructionExpression`).
+	/// `MockParameterNode.constructionExpression`). `sendableOverrideExtractor`
+	/// is set when the binding is already inside a `@Sendable` function; a
+	/// sendable binding outside one starts its own extractor and re-reads its
+	/// override and `arguments` through it.
 	private static func generateInstantiatorBinding(
 		for node: MockParameterNode,
 		outerBindingName: String,
@@ -2170,6 +2103,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		arguments: [String],
 		indent: String,
 		ancestorTypes: Set<String>,
+		sendableOverrideExtractor: SendableOverrideExtractor?,
 		flatParameterDisambiguationMap: [String: [String: String]],
 		cycleEdges: Set<CycleEdge>,
 		overridePathReachable: Bool,
@@ -2221,47 +2155,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Children are generated INSIDE the function body because they may
 		// depend on forwarded properties that are only available as parameters.
 		if !node.isPropertyCycle {
-			let functionOverrideExpression: String?
-			let childSendableExtractionPrefix: String?
-			if propertyType.isSendable {
-				// For @Sendable functions, read all safeDIOverrides references into
-				// locals OUTSIDE the function (in the mock() context). This avoids
-				// capturing the non-Sendable SafeDIOverrides struct inside the
-				// @Sendable function. Override closures are read as optionals; the
-				// function body unwraps them and otherwise calls the default
-				// construction directly.
-				var extractions = [(localName: String, expression: String)]()
-				collectSendableExtractions(
-					items: node.children,
-					parentPath: nodePath,
-					functionName: functionName,
-					ancestorTypes: ancestorTypes,
-					parentConcreteType: node.concreteType.asSource,
-					cycleEdges: cycleEdges,
-					overridePathReachable: overridePathReachable,
-					into: &extractions,
-				)
-				// Extract the node's own override.
-				if let overrideExpression {
-					let extractedBuilderName = "\(functionName)__safeDIBuilder"
-					extractions.append((localName: extractedBuilderName, expression: overrideExpression))
-					functionOverrideExpression = extractedBuilderName
-				} else {
-					functionOverrideExpression = nil
-				}
-				for extraction in extractions {
-					lines.append("\(indent)let \(extraction.localName) = \(extraction.expression)")
-				}
-				childSendableExtractionPrefix = functionName
+			// A `@Sendable` function that is not already inside another one
+			// starts a new extraction: every `safeDIOverrides` read in its body,
+			// including inside nested builder functions at any depth, becomes a
+			// local declared before it. Inside an enclosing `@Sendable` function,
+			// reads keep flowing to the outermost function's extractor, whose
+			// locals are already in scope.
+			let startedSendableOverrideExtractor: SendableOverrideExtractor? = if sendableOverrideExtractor == nil, propertyType.isSendable {
+				SendableOverrideExtractor(functionName: functionName)
 			} else {
-				functionOverrideExpression = overrideExpression
-				childSendableExtractionPrefix = nil
+				nil
 			}
-
-			let functionReturnType = node.instantiatedTypeDescription.asSource
-			lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
-
-			lines.append(contentsOf: receiverBindings)
 
 			// Generate children's bindings inside the function body.
 			// Include this node's type in ancestors so self-referencing
@@ -2273,12 +2177,42 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				parentPath: nodePath,
 				indent: innerIndent,
 				ancestorTypes: functionAncestors,
-				sendableExtractionPrefix: childSendableExtractionPrefix,
+				sendableOverrideExtractor: sendableOverrideExtractor ?? startedSendableOverrideExtractor,
 				flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 				parentConcreteType: node.concreteType.asSource,
 				cycleEdges: cycleEdges,
 				overridePathReachable: overridePathReachable,
 			)
+
+			let functionOverrideExpression: String?
+			let functionConstructionArguments: [String]
+			if let startedSendableOverrideExtractor {
+				// The caller read this node's own override and default arguments
+				// from `safeDIOverrides` because it is outside any `@Sendable`
+				// function; the construction below is inside this one, so read
+				// them into locals too. Override closures are read as optionals;
+				// the function body unwraps them and otherwise calls the default
+				// construction directly.
+				functionConstructionArguments = resolveBuilderArguments(
+					for: node,
+					nodePath: nodePath,
+					sendableOverrideExtractor: startedSendableOverrideExtractor,
+					overrideReachable: overridePathReachable,
+				)
+				functionOverrideExpression = overrideExpression.map {
+					startedSendableOverrideExtractor.extract($0, localNameSuffix: "safeDIBuilder")
+				}
+				for extraction in startedSendableOverrideExtractor.extractions {
+					lines.append("\(indent)let \(extraction.localName) = \(extraction.expression)")
+				}
+			} else {
+				functionOverrideExpression = overrideExpression
+				functionConstructionArguments = arguments
+			}
+
+			let functionReturnType = node.instantiatedTypeDescription.asSource
+			lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
+			lines.append(contentsOf: receiverBindings)
 			lines.append(contentsOf: childBindings)
 
 			// Swift's implicit-return rule only applies when the function
@@ -2289,7 +2223,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let returnKeyword = childBindings.isEmpty && receiverBindings.isEmpty ? "" : "return "
 			let constructionExpression = node.constructionExpression(
 				overrideExpression: functionOverrideExpression,
-				arguments: arguments,
+				arguments: functionConstructionArguments,
 				overrideReachable: overridePathReachable,
 			)
 			lines.append("\(innerIndent)\(returnKeyword)\(constructionExpression)")

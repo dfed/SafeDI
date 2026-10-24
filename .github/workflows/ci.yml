@@ -271,14 +271,45 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: xcrun swift package resolve --package-path "Examples/Example Package Integration"
+      # `EventLogger.swift` in RootModule declares a different `@Instantiable`
+      # under `#if DEBUG` and `#else`. If the plugin did not report `DEBUG`,
+      # SafeDI would wire `DisabledEventLogger` and the generated compile-time
+      # assertion would fail this build; the grep makes the check explicit.
       - name: Build Package Integration (swift build)
-        run: xcrun swift build --package-path "Examples/Example Package Integration"
+        run: |
+          xcrun swift build --package-path "Examples/Example Package Integration"
+          grep -q "ConsoleEventLogger()" "$(find "Examples/Example Package Integration/.build/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
       # Also build via xcodebuild — it exercises the plugin's in-process
       # PluginScanner fallback, which `swift build` doesn't. A bug in that
       # path would make Xcode IDE builds fail while the swift build above
       # still passes.
       - name: Build Package Integration (xcodebuild)
         run: pushd "Examples/Example Package Integration"; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -destination "platform=macOS"; popd
+      # Release-configuration builds prove the plugin stops reporting `DEBUG`
+      # when the configuration does not define it: the generated file must
+      # wire `DisabledEventLogger`. Optimization is turned off because only
+      # the configuration matters here, and an optimized build of swift-syntax
+      # takes several times longer.
+      - name: Build Package Integration in release configuration (swift build)
+        run: |
+          xcrun swift build -c release -Xswiftc -Onone --package-path "Examples/Example Package Integration"
+          grep -q "DisabledEventLogger()" "$(find "Examples/Example Package Integration/.build/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
+      # Xcode evaluates a package's `.when(configuration:)` defines as for a
+      # debug build whatever configuration it compiles, so it hands the plugin
+      # `DEBUG` in Release too and SafeDI scans the debug clause. The generated
+      # assertion must then stop the Release build. This step fails if the
+      # build succeeds (Xcode started reporting configuration-specific
+      # defines: update the Manual's Swift package plugin row) or if it fails
+      # for any other reason.
+      - name: Build Package Integration in release configuration (xcodebuild, expects the assertion)
+        run: |
+          pushd "Examples/Example Package Integration"
+          if xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -configuration Release -destination "platform=macOS" -derivedDataPath DerivedData SWIFT_OPTIMIZATION_LEVEL=-Onone SWIFT_COMPILATION_MODE=singlefile GCC_OPTIMIZATION_LEVEL=0 ONLY_ACTIVE_ARCH=YES > xcodebuild-release.log 2>&1; then
+            echo "Expected the Release build to stop at SafeDI's compile-time assertion, but it succeeded." >&2
+            exit 1
+          fi
+          grep -q 'SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation' xcodebuild-release.log || { cat xcodebuild-release.log; exit 1; }
+          popd
 
   spm-project-integration:
     name: Build Project Integration on Xcode 26
@@ -348,8 +379,27 @@ jobs:
         run: pushd Examples/ExampleTuistIntegration && tuist install && popd
       - name: Tuist Generate
         run: pushd Examples/ExampleTuistIntegration && tuist generate --no-open && popd
+      # `EventLogger.swift` in the app target declares a different
+      # `@Instantiable` under `#if DEBUG` and `#else`. If the plugin did not
+      # forward `SWIFT_ACTIVE_COMPILATION_CONDITIONS`, SafeDI would wire
+      # `DisabledEventLogger` and the generated compile-time assertion would
+      # fail this build; the grep makes the check explicit.
       - name: Build Tuist Integration
-        run: pushd Examples/ExampleTuistIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -workspace ExampleTuistIntegration.xcworkspace -scheme ExampleTuistIntegration; popd
+        run: |
+          pushd Examples/ExampleTuistIntegration
+          xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -workspace ExampleTuistIntegration.xcworkspace -scheme ExampleTuistIntegration -derivedDataPath DerivedData
+          grep -q "ConsoleEventLogger()" "$(find DerivedData/Build/Intermediates.noindex -path "*/Debug/ExampleTuistIntegration.build/DerivedSources/SafeDIGenerated.swift")"
+          popd
+      # The Release configuration does not define `DEBUG`, so the generated
+      # file must wire `DisabledEventLogger`. Optimization is turned off and
+      # only the active architecture is built because only the configuration
+      # matters here.
+      - name: Build Tuist Integration in release configuration
+        run: |
+          pushd Examples/ExampleTuistIntegration
+          xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -workspace ExampleTuistIntegration.xcworkspace -scheme ExampleTuistIntegration -configuration Release -derivedDataPath DerivedData SWIFT_OPTIMIZATION_LEVEL=-Onone SWIFT_COMPILATION_MODE=singlefile GCC_OPTIMIZATION_LEVEL=0 ONLY_ACTIVE_ARCH=YES
+          grep -q "DisabledEventLogger()" "$(find DerivedData/Build/Intermediates.noindex -path "*/Release/ExampleTuistIntegration.build/DerivedSources/SafeDIGenerated.swift")"
+          popd
 
   spm:
     name: Build and Test on Xcode 26
@@ -560,15 +610,16 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration)
-      # Optimized builds define no `DEBUG`, so the rule must withhold it and SafeDI
-      # must wire the example's `#else` logger. The `_safedi` target is listed so
+      # Optimized builds define `NDEBUG` and no `DEBUG`, so the rule must report the
+      # former, withhold the latter, and SafeDI must wire the example's
+      # `#elseif NDEBUG` logger. The `_safedi` target is listed so
       # Bazel writes its output to bazel-bin even when every action is a cache hit.
       - name: Build downstream example in opt mode
         uses: ./.github/actions/retry
         with:
           command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" -c opt //ExampleBazelIntegration:ExampleBazelIntegration //ExampleBazelIntegration:ExampleBazelIntegration_safedi)
       # Kept out of the retry wrapper: a missing logger is deterministic, not a flake.
-      - name: Verify opt mode wired the `#else` logger
+      - name: Verify opt mode wired the `#elseif NDEBUG` logger
         run: grep -q "DisabledEventLogger()" Examples/ExampleBazelIntegration/bazel-bin/ExampleBazelIntegration/ExampleBazelIntegration_safedi.swift
 
   codecov-empty-upload:

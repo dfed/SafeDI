@@ -34,6 +34,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		mockInitializer: Initializer? = nil,
 		mockReturnType: TypeDescription? = nil,
 		customMockName: String? = nil,
+		mockDeclarationLocation: Dependency.DeclarationLocation? = nil,
 		declarationLocation: Dependency.DeclarationLocation? = nil,
 	) {
 		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
@@ -48,6 +49,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.mockInitializer = mockInitializer
 		self.mockReturnType = mockReturnType
 		self.customMockName = customMockName
+		self.mockDeclarationLocation = mockDeclarationLocation
 	}
 
 	// MARK: Public
@@ -84,6 +86,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// The name of the user's custom mock method. With `generateMock`, the generated `mock()` calls
 	/// through to this method. With `mockOnly`, SafeDI uses this method as the mock provider.
 	public var customMockName: String?
+	/// Where the user-defined mock method begins in source: its first attribute or modifier. Travels with
+	/// `mockInitializer` when a `mockOnly` declaration's mock is merged into a production entry, so diagnostics
+	/// about the hand-written mock point at the method rather than at the production declaration.
+	public var mockDeclarationLocation: Dependency.DeclarationLocation?
 
 	/// Returns a copy of this Instantiable with mock-related fields replaced by those from `mockProvider`.
 	/// Used when merging a production `@Instantiable` with a `mockOnly` declaration for the same type.
@@ -92,6 +98,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		merged.mockInitializer = mockProvider.mockInitializer
 		merged.mockReturnType = mockProvider.mockReturnType
 		merged.customMockName = mockProvider.customMockName
+		merged.mockDeclarationLocation = mockProvider.mockDeclarationLocation
 		return merged
 	}
 

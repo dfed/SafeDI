@@ -67,7 +67,6 @@ public final class FileVisitor: SyntaxVisitor {
 		let scannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: node.safeDIContent(in: .declarations))
 		activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
 		record(scannable.decisions)
-		dependsOnConditionalCompilationEvaluator = dependsOnConditionalCompilationEvaluator || scannable.restsOnCompilationConditions
 		return .visitChildren
 	}
 
@@ -129,7 +128,6 @@ public final class FileVisitor: SyntaxVisitor {
 			instantiables.append(instantiable)
 		}
 		record(instantiableVisitor.conditionalCompilationDecisions)
-		dependsOnConditionalCompilationEvaluator = dependsOnConditionalCompilationEvaluator || instantiableVisitor.dependsOnConditionalCompilationEvaluator
 
 		// Extensions are always top-level.
 		parentType = node.extendedType.typeDescription
@@ -160,9 +158,6 @@ public final class FileVisitor: SyntaxVisitor {
 	public private(set) var encounteredUnexpectedNodesSyntax = false
 	/// How each `#if` condition that guards SafeDI declarations was evaluated, in source order.
 	public private(set) var conditionalCompilationDecisions = [ConditionalCompilationDecision]()
-	/// Whether walking with a different evaluator could extract something different: true once an
-	/// `#if` block guarding SafeDI declarations rested on a bare compilation condition.
-	public private(set) var dependsOnConditionalCompilationEvaluator = false
 
 	// MARK: Private
 
@@ -184,7 +179,6 @@ public final class FileVisitor: SyntaxVisitor {
 			instantiables.append(instantiable)
 		}
 		record(instantiableVisitor.conditionalCompilationDecisions)
-		dependsOnConditionalCompilationEvaluator = dependsOnConditionalCompilationEvaluator || instantiableVisitor.dependsOnConditionalCompilationEvaluator
 
 		// Keep track of how nested we are.
 		enterTypeNamed(node.name.text)

@@ -89,7 +89,7 @@ func performScan(
 
 	// Parse all files once to find roots, mocks, and configurations. Only the
 	// mock-scoped files can declare this module's configuration, which decides
-	// how every file's `#if` blocks are evaluated.
+	// how every file's `#if` blocks are evaluated, so they are searched for it first.
 	let parsedModule = try await parseModule(
 		filePaths: allFilePaths,
 		configurationFilePaths: mockScopedFilePaths,
@@ -284,7 +284,7 @@ func performScan(
 		csvInputPaths: inputFilePaths.sorted(),
 		additionalInputAbsolutePaths: additionalInputFiles.sorted(),
 		additionalDirectories: additionalDirectories,
-		activeCompilationConditions: evaluator.activeCompilationConditions.sorted(),
+		activeCompilationConditions: activeCompilationConditions.sorted(),
 	)
 	let scannedModuleInfoURL = scannedModuleInfoURL(forManifestPath: manifestFile)
 	// Cache write is best-effort. A full disk or other transient FS
@@ -346,8 +346,7 @@ struct CachedScannedModuleInfo: Codable {
 	/// during freshness checks so files added to those directories
 	/// between scan and generate correctly invalidate the cache.
 	let additionalDirectories: [String]
-	/// Every compilation condition the scan treated as active: those supplied to `scan` plus the
-	/// module's `#SafeDIConfiguration(activeCompilationConditions:)`. `generate` bypasses the cache
+	/// Every compilation condition the scan treated as active. `generate` bypasses the cache
 	/// when its own set differs, since the set decides which `#if` clauses were parsed.
 	let activeCompilationConditions: [String]
 }
