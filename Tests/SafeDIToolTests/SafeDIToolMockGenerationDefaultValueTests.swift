@@ -614,9 +614,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        let __safeDI_childBuilder__childBuilder_flag = safeDIOverrides.childBuilder.flag
 		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
 		        @Sendable func __safeDI_childBuilder(name: String) -> Child {
-		            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(name, safeDIOverrides.childBuilder.flag) } else { Child(name: name, flag: safeDIOverrides.childBuilder.flag) }
+		            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(name, __safeDI_childBuilder__childBuilder_flag) } else { Child(name: name, flag: __safeDI_childBuilder__childBuilder_flag) }
 		        }
 		        let childBuilder = SendableInstantiator<Child> {
 		            __safeDI_childBuilder(name: $0)
@@ -982,9 +983,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        let __safeDI_childBuilder__childBuilder_flag = safeDIOverrides.childBuilder.flag
 		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
 		        @Sendable func __safeDI_childBuilder(name: String) -> Child {
-		            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(name, safeDIOverrides.childBuilder.flag) } else { Child(name: name, flag: safeDIOverrides.childBuilder.flag) }
+		            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(name, __safeDI_childBuilder__childBuilder_flag) } else { Child(name: name, flag: __safeDI_childBuilder__childBuilder_flag) }
 		        }
 		        let childBuilder = SendableErasedInstantiator<String, Child> {
 		            __safeDI_childBuilder(name: $0)
