@@ -92,7 +92,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let dep = (safeDIOverrides.dep ?? Dep.init)()
+		        let dep = if let safeDIBuilder = safeDIOverrides.dep { safeDIBuilder() } else { Dep() }
 		        return Root(dep: dep)
 		    }
 		}
@@ -236,8 +236,8 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_middle() -> Middle {
-		            let leaf = (safeDIOverrides.middle.leaf ?? Leaf.init)()
-		            return (safeDIOverrides.middle.safeDIBuilder ?? Middle.init(leaf:))(leaf)
+		            let leaf = if let safeDIBuilder = safeDIOverrides.middle.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.middle.safeDIBuilder { safeDIBuilder(leaf) } else { Middle(leaf: leaf) }
 		        }
 		        let middle: Middle = __safeDI_middle()
 		        return Root(middle: middle)
@@ -645,7 +645,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let crossModuleService = (safeDIOverrides.crossModuleService ?? CrossModuleService.init)()
+		        let crossModuleService = if let safeDIBuilder = safeDIOverrides.crossModuleService { safeDIBuilder() } else { CrossModuleService() }
 		        return Root(crossModuleService: crossModuleService)
 		    }
 		}
@@ -777,7 +777,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let crossModuleService = (safeDIOverrides.crossModuleService ?? CrossModuleService.init)()
+		        let crossModuleService = if let safeDIBuilder = safeDIOverrides.crossModuleService { safeDIBuilder() } else { CrossModuleService() }
 		        return Root(crossModuleService: crossModuleService)
 		    }
 		}
@@ -871,7 +871,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? LocalService.init)()
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { LocalService() }
 		        return Root(service: service)
 		    }
 		}

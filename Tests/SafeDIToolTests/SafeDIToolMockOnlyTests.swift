@@ -364,7 +364,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? ExternalService.mock)()
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { ExternalService.mock() }
 		        return Root(service: service)
 		    }
 		}
@@ -476,7 +476,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.mock)()
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService.mock() }
 		        return Root(service: service)
 		    }
 		}
@@ -537,7 +537,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.mock)()
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService.mock() }
 		        return Root(service: service)
 		    }
 		}
@@ -712,7 +712,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.preview)()
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService.preview() }
 		        return Root(service: service)
 		    }
 		}
@@ -780,7 +780,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.preview)()
+		        let service: ServiceProtocol = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService.preview() }
 		        return Root(service: service)
 		    }
 		}
@@ -1041,7 +1041,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MockService.mock)()
+		        let service: Service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MockService.mock() }
 		        return Root(service: service)
 		    }
 		}
@@ -1121,7 +1121,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MockService.mock)()
+		        let service: ServiceProtocol = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MockService.mock() }
 		        return Root(service: service)
 		    }
 		}
@@ -1186,7 +1186,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = safeDIOverrides.service?() ?? AnyService(MockService.mock())
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { AnyService(MockService.mock()) }
 		        return Root(service: service)
 		    }
 		}
@@ -1257,7 +1257,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = safeDIOverrides.service?() ?? AnyService(MockService.mock())
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { AnyService(MockService.mock()) }
 		        return Root(service: service)
 		    }
 		}
@@ -1319,7 +1319,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = safeDIOverrides.service?() ?? AnyService(ConcreteService())
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { AnyService(ConcreteService()) }
 		        return Root(service: service)
 		    }
 		}
@@ -1383,7 +1383,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.preview)()
+		        let service: ServiceProtocol = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService.preview() }
 		        return Root(service: service)
 		    }
 		}
@@ -1503,7 +1503,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.preview)()
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService.preview() }
 		        return Root(service: service)
 		    }
 		}
@@ -1578,7 +1578,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.preview)()
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService.preview() }
 		        return Root(service: service)
 		    }
 		}
@@ -1660,7 +1660,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.preview)()
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService.preview() }
 		        return Root(service: service)
 		    }
 		}
@@ -1739,7 +1739,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.preview)()
+		        let service: ServiceProtocol = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService.preview() }
 		        return Root(service: service)
 		    }
 		}
@@ -1817,7 +1817,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.preview)()
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService.preview() }
 		        return Root(service: service)
 		    }
 		}
@@ -1947,7 +1947,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? ConcreteService.customMock)()
+		        let service: ServiceProtocol = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { ConcreteService.customMock() }
 		        return Root(service: service)
 		    }
 		}
@@ -2079,8 +2079,8 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_service() -> MyService {
-		            let database = (safeDIOverrides.service.database ?? Database.init)()
-		            return (safeDIOverrides.service.safeDIBuilder ?? MyService.preview(database:))(database)
+		            let database = if let safeDIBuilder = safeDIOverrides.service.database { safeDIBuilder() } else { Database() }
+		            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(database) } else { MyService.preview(database: database) }
 		        }
 		        let service: MyService = __safeDI_service()
 		        return Root(service: service)
@@ -2152,7 +2152,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? ConcreteService.mock)()
+		        let service: ServiceProtocol = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { ConcreteService.mock() }
 		        return Root(service: service)
 		    }
 		}
@@ -2274,7 +2274,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let other = (safeDIOverrides.other ?? AaaMockOther.mock)()
+		        let other: OtherProtocol = if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder() } else { AaaMockOther.mock() }
 		        return Root(other: other)
 		    }
 		}
@@ -2340,7 +2340,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let other = (safeDIOverrides.other ?? ZzzMockOther.mock)()
+		        let other: OtherProtocol = if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder() } else { ZzzMockOther.mock() }
 		        return Root(other: other)
 		    }
 		}
@@ -2405,7 +2405,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let other = (safeDIOverrides.other ?? MockService.mock)()
+		        let other: OtherProtocol = if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder() } else { MockService.mock() }
 		        return Root(other: other)
 		    }
 		}
@@ -2457,10 +2457,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let rootMock = output.mockFiles["Root+SafeDIMock.swift"] ?? ""
 		// ConcreteOther should win OtherProtocol — the mockOnly's mock returns
 		// ServiceProtocol, not OtherProtocol, so it can't serve this slot.
-		#expect(rootMock.contains("ConcreteOther.init"), "Expected ConcreteOther for OtherProtocol slot, got: \(rootMock)")
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            other: (() -> OtherProtocol)? = nil
+		        ) {
+		            self.other = other
+		        }
+
+		        let other: (() -> OtherProtocol)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let other: OtherProtocol = if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder() } else { ConcreteOther() }
+		        return Root(other: other)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
 	}
 
 	@Test
@@ -2537,7 +2562,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.init)()
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService() }
 		        return Root(service: service)
 		    }
 		}
@@ -2615,7 +2640,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.init)()
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService() }
 		        return Root(service: service)
 		    }
 		}
@@ -2664,7 +2689,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		#expect(output.mockFiles["MyService+SafeDIMock.swift"] == nil,
 		        "Should not generate mock for MyService without generateMock")
 
-		// Root's mock uses MyService.init as default builder.
+		// Root's mock calls MyService's init as the default construction.
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
 		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
 		// Any modifications made to this file will be overwritten on subsequent builds.
@@ -2686,7 +2711,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.init)()
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService() }
 		        return Root(service: service)
 		    }
 		}
@@ -2733,7 +2758,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		)
 
 		// The mockOnly's mock() is compatible with ServiceProtocol (returns MyService
-		// which conforms). Root's mock should use MyService.mock as the default builder.
+		// which conforms). Root's mock should call MyService.mock() as the default construction.
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
 		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
 		// Any modifications made to this file will be overwritten on subsequent builds.
@@ -2755,7 +2780,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.mock)()
+		        let service: ServiceProtocol = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService.mock() }
 		        return Root(service: service)
 		    }
 		}
@@ -2840,7 +2865,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MyService.preview)()
+		        let service: ServiceProtocol = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService.preview() }
 		        return Root(service: service)
 		    }
 		}
@@ -2907,6 +2932,85 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_callsHandWrittenMockThroughCoercedReference_whenGeneratedMockSharesItsCallShape() async throws {
+		// MyService generates `mock(engine:) -> MyService` and the mockOnly
+		// extension declares `mock(engine:) -> ServiceProtocol` (its `engine`
+		// parameter is defaulted because a mockOnly extension declares no
+		// dependencies of its own). A direct
+		// `MyService.mock(engine: engine)` call is ambiguous between the two, so
+		// the parent's default construction coerces a function reference to
+		// select the hand-written overload.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol ServiceProtocol {}
+				public struct Engine {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Root: Instantiable {
+				    public init(engine: Engine, service: ServiceProtocol) {
+				        self.engine = engine
+				        self.service = service
+				    }
+				    @Received let engine: Engine
+				    @Instantiated let service: ServiceProtocol
+				}
+				""",
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], generateMock: true)
+				public struct MyService: Instantiable, ServiceProtocol {
+				    public init(engine: Engine) {
+				        self.engine = engine
+				    }
+				    @Received let engine: Engine
+				}
+				""",
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+				extension MyService {
+				    public static func mock(engine: Engine = Engine()) -> ServiceProtocol { MyService(engine: engine) }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            service: ((Engine) -> ServiceProtocol)? = nil
+		        ) {
+		            self.service = service
+		        }
+
+		        let service: ((Engine) -> ServiceProtocol)?
+		    }
+
+		    static func mock(
+		        engine: Engine,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let service: ServiceProtocol = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder(engine) } else { (MyService.mock(engine:) as (Engine) -> ServiceProtocol)(engine) }
+		        return Root(engine: engine, service: service)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_usesMockOnlyMock_whenDifferentConcreteTypeMockOnlyClaimsSlotAlreadyHeldByProduction() async throws {
 		// Production ConcreteService claims ServiceProtocol. A different-concrete
 		// mockOnly (MockService) also claims ServiceProtocol with a hand-written mock.
@@ -2968,7 +3072,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = (safeDIOverrides.service ?? MockService.mock)()
+		        let service: ServiceProtocol = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MockService.mock() }
 		        return Root(service: service)
 		    }
 		}
@@ -3041,7 +3145,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let other = (safeDIOverrides.other ?? MyService.init)()
+		        let other: OtherProtocol = if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder() } else { MyService() }
 		        return Root(other: other)
 		    }
 		}

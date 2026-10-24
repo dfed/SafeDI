@@ -173,7 +173,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let dependency = (safeDIOverrides.dependency ?? Dependency.init)()
+		        let dependency = if let safeDIBuilder = safeDIOverrides.dependency { safeDIBuilder() } else { Dependency() }
 		        return Root(dependency: dependency)
 		    }
 		}
@@ -493,7 +493,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let crossModuleService = (safeDIOverrides.crossModuleService ?? CrossModuleService.init)()
+		        let crossModuleService = if let safeDIBuilder = safeDIOverrides.crossModuleService { safeDIBuilder() } else { CrossModuleService() }
 		        return Root(crossModuleService: crossModuleService)
 		    }
 		}
@@ -566,8 +566,8 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
-		            let leaf = (safeDIOverrides.child.leaf ?? Leaf.init)()
-		            return (safeDIOverrides.child.safeDIBuilder ?? Child.init(leaf:))(leaf)
+		            let leaf = if let safeDIBuilder = safeDIOverrides.child.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leaf) } else { Child(leaf: leaf) }
 		        }
 		        let child: Child = __safeDI_child()
 		        return Root(child: child)
@@ -637,8 +637,8 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> RootA {
 		        func __safeDI_middle() -> Middle {
-		            let leaf = (safeDIOverrides.middle.leaf ?? Leaf.init)()
-		            return (safeDIOverrides.middle.safeDIBuilder ?? Middle.init(leaf:))(leaf)
+		            let leaf = if let safeDIBuilder = safeDIOverrides.middle.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.middle.safeDIBuilder { safeDIBuilder(leaf) } else { Middle(leaf: leaf) }
 		        }
 		        let middle: Middle = __safeDI_middle()
 		        return RootA(middle: middle)
@@ -759,8 +759,8 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> RootA {
 		        func __safeDI_middle() -> Middle {
-		            let leaf = (safeDIOverrides.middle.leaf ?? Leaf.init)()
-		            return (safeDIOverrides.middle.safeDIBuilder ?? Middle.init(leaf:))(leaf)
+		            let leaf = if let safeDIBuilder = safeDIOverrides.middle.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.middle.safeDIBuilder { safeDIBuilder(leaf) } else { Middle(leaf: leaf) }
 		        }
 		        let middle: Middle = __safeDI_middle()
 		        return RootA(middle: middle)
@@ -791,8 +791,8 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> RootB {
 		        func __safeDI_middle() -> Middle {
-		            let leaf = (safeDIOverrides.middle.leaf ?? Leaf.init)()
-		            return (safeDIOverrides.middle.safeDIBuilder ?? Middle.init(leaf:))(leaf)
+		            let leaf = if let safeDIBuilder = safeDIOverrides.middle.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.middle.safeDIBuilder { safeDIBuilder(leaf) } else { Middle(leaf: leaf) }
 		        }
 		        let middle: Middle = __safeDI_middle()
 		        return RootB(middle: middle)
@@ -910,7 +910,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let crossModuleService = (safeDIOverrides.crossModuleService ?? CrossModuleService.init)()
+		        let crossModuleService = if let safeDIBuilder = safeDIOverrides.crossModuleService { safeDIBuilder() } else { CrossModuleService() }
 		        return Root(crossModuleService: crossModuleService)
 		    }
 		}
