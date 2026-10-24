@@ -586,20 +586,8 @@ struct Generate: AsyncParsableCommand {
 
 		// Bypass the cache if scan treated a different set of compilation
 		// conditions as active — the set decides which `#if` clauses were
-		// parsed. Scan rejected more than one configuration in scope, so the
-		// first by path is the module's.
-		let configuration = cached.moduleInfo.configurations
-			.filter { configuration in
-				guard let sourceFilePath = configuration.sourceFilePath else { return false }
-				return configurationFilePaths.contains(sourceFilePath)
-			}
-			.sorted { ($0.sourceFilePath ?? "") < ($1.sourceFilePath ?? "") }
-			.first
-		let evaluator = conditionalCompilationEvaluator(
-			activeCompilationConditions: activeCompilationConditions,
-			configuration: configuration,
-		)
-		guard Set(cached.activeCompilationConditions) == evaluator.activeCompilationConditions else {
+		// parsed.
+		guard Set(cached.activeCompilationConditions) == activeCompilationConditions else {
 			return nil
 		}
 
@@ -645,10 +633,21 @@ struct Generate: AsyncParsableCommand {
 		}) else {
 			return nil
 		}
+		// Scan rejected more than one configuration in scope, so the first by path is the module's.
+		let configuration = cached.moduleInfo.configurations
+			.filter { configuration in
+				guard let sourceFilePath = configuration.sourceFilePath else { return false }
+				return configurationFilePaths.contains(sourceFilePath)
+			}
+			.sorted { ($0.sourceFilePath ?? "") < ($1.sourceFilePath ?? "") }
+			.first
 		return ParsedModule(
 			moduleInfo: cached.moduleInfo,
 			configuration: configuration,
-			conditionalCompilationEvaluator: evaluator,
+			conditionalCompilationEvaluator: conditionalCompilationEvaluator(
+				activeCompilationConditions: activeCompilationConditions,
+				configuration: configuration,
+			),
 		)
 	}
 
