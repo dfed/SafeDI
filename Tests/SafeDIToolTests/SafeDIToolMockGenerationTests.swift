@@ -12540,13 +12540,18 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#expect(output.mockConfigurationFile == emptyMockConfigurationFileOutput)
 	}
 
-	@Test(.timeLimit(.minutes(1)))
+	// The time limit only turns a hang into a failure, so it sits far above any scheduling delay:
+	// this test does a fraction of a second of work, but on a loaded CI runner it can wait more
+	// than a minute behind the rest of the suite.
+	@Test(.timeLimit(.minutes(10)))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatesWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds() async throws {
 		// Each service receives the two services before it and the service at half its index.
 		// The number of distinct received-dependency paths from the last service grows
 		// exponentially with the service count, while the number of services does not.
-		let serviceCount = 40
+		// Walking every path took about 1.66 times longer per added service (23 seconds at 30
+		// services), so at this count it would not finish in a lifetime, whatever the hardware.
+		let serviceCount = 64
 		let serviceFiles = (0..<serviceCount).map { index in
 			let receivedIndices = Set([index - 1, index - 2, index / 2])
 				.filter { $0 >= 0 && $0 < index }
