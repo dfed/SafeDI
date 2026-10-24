@@ -121,7 +121,7 @@ For previews and tests that need real data, pass forwarded values directly and u
 
 Three steps to integrate:
 
-1. Add `.package(url: "https://github.com/dfed/SafeDI.git", from: "2.0.0")` to your `Package.swift` dependencies.
+1. Add `.package(url: "https://github.com/dfed/SafeDI.git", from: "2.1.0")` to your `Package.swift` dependencies.
 2. Attach the `SafeDIGenerator` build tool plugin to your first-party target(s).
 3. Decorate your app’s root type with `@Instantiable(isRoot: true)` and add `@Instantiable` to the dependencies it reaches.
 
