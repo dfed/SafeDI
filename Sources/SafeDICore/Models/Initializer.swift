@@ -98,23 +98,8 @@ public struct Initializer: Codable, Hashable, Sendable {
 				reasons.append(generationError)
 			}
 		}
-		if !isPublicOrOpen {
-			try recordError(.inaccessibleInitializer)
-		}
-		if isOptional {
-			try recordError(.optionalInitializer)
-		}
-		if isAsync {
-			try recordError(.asyncInitializer)
-		}
-		if doesThrow {
-			try recordError(.throwingInitializer)
-		}
-		if hasGenericParameter {
-			try recordError(.genericParameterInInitializer)
-		}
-		if hasGenericWhereClause {
-			try recordError(.whereClauseOnInitializer)
+		for error in dependencyIndependentErrors {
+			try recordError(error)
 		}
 
 		let dependencyAndArgumentBinding = try createDependencyAndArgumentBinding(given: dependencies)
@@ -203,13 +188,22 @@ public struct Initializer: Codable, Hashable, Sendable {
 
 	// MARK: - Internal
 
+	/// Whether this initializer could fulfill the dependencies a declaration has under some evaluation
+	/// of the `#if` blocks among its members. Every evaluation has each of `guaranteedDependencies`
+	/// and none beyond `possibleDependencies`. Returns `false` only when no such evaluation exists.
+	func couldBeValid(forFulfillingEvery guaranteedDependencies: [Dependency], amongPossible possibleDependencies: [Dependency]) -> Bool {
+		// Each argument without a default must bind to a dependency, and each guaranteed dependency must be bound.
+		dependencyIndependentErrors.isEmpty
+			&& (try? createDependencyAndArgumentBinding(given: possibleDependencies)) != nil
+			&& guaranteedDependencies.allSatisfy { dependency in
+				arguments.contains { $0.isFulfilled(by: dependency) }
+			}
+	}
+
 	func createDependencyAndArgumentBinding(given dependencies: [Dependency]) throws(GenerationError) -> [(dependency: Dependency, argument: Argument)] {
 		var bindings = [(dependency: Dependency, argument: Argument)]()
 		for argument in arguments {
-			guard let dependency = dependencies.first(where: {
-				$0.property.label == argument.innerLabel
-					&& $0.property.typeDescription.isEqualToFunctionArgument(argument.typeDescription)
-			}) else {
+			guard let dependency = dependencies.first(where: argument.isFulfilled(by:)) else {
 				guard argument.hasDefaultValue else {
 					throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
 				}
@@ -246,10 +240,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 	) -> String {
 		var parts = [String]()
 		for argument in arguments {
-			if let dependency = dependencies.first(where: {
-				$0.property.label == argument.innerLabel
-					&& $0.property.typeDescription.isEqualToFunctionArgument(argument.typeDescription)
-			}) {
+			if let dependency = dependencies.first(where: argument.isFulfilled(by:)) {
 				if let unavailableProperties, unavailableProperties.contains(dependency.property) {
 					parts.append("\(argument.label): nil")
 				} else {
@@ -262,6 +253,20 @@ public struct Initializer: Codable, Hashable, Sendable {
 			// caught by validate(fulfilling:) before mock code gen runs.
 		}
 		return parts.joined(separator: ", ")
+	}
+
+	// MARK: - Private
+
+	/// The reasons this initializer cannot construct its type, whatever dependencies the type has.
+	private var dependencyIndependentErrors: [GenerationError] {
+		[
+			isPublicOrOpen ? nil : .inaccessibleInitializer,
+			isOptional ? .optionalInitializer : nil,
+			isAsync ? .asyncInitializer : nil,
+			doesThrow ? .throwingInitializer : nil,
+			hasGenericParameter ? .genericParameterInInitializer : nil,
+			hasGenericWhereClause ? .whereClauseOnInitializer : nil,
+		].compactMap(\.self)
 	}
 
 	// MARK: - GenerationError
@@ -337,6 +342,12 @@ public struct Initializer: Codable, Hashable, Sendable {
 		}
 
 		static let dependenciesArgumentName: TokenSyntax = .identifier("buildSafeDIDependencies")
+
+		/// Whether `dependency` is passed to this argument.
+		fileprivate func isFulfilled(by dependency: Dependency) -> Bool {
+			dependency.property.label == innerLabel
+				&& dependency.property.typeDescription.isEqualToFunctionArgument(typeDescription)
+		}
 	}
 }
 

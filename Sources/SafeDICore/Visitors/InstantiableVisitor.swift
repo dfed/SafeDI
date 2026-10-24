@@ -163,9 +163,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
 		if case let .evaluate(evaluator) = conditionalCompilation {
 			// Members of a declaration without `@Instantiable` are never scanned, so nothing inside matters.
-			let content: SafeDIContent = if hasFoundDeclaration {
+			let content: SafeDIContent = if let instantiableConstruction {
 				node.safeDIContent(in: .members(.init(
-					isExtension: declarationType.isExtension,
+					construction: instantiableConstruction,
 					isMockOnly: mockOnly,
 					customMockName: customMockName,
 				)))
@@ -192,7 +192,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		instantiableType = node.extendedType.typeDescription
 		instantiableDeclarationLocation = declarationLocation(of: node)
 		if let instantiableMacro = node.attributes.instantiableMacro {
-			hasFoundDeclaration = true
+			instantiableConstruction = .instantiateMethod
 			processAttributes(node.attributes, on: instantiableMacro)
 		}
 
@@ -506,8 +506,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	// MARK: Private
 
-	/// Whether the walked declaration carries `@Instantiable`, which is when its members matter.
-	private var hasFoundDeclaration = false
+	/// How the walked declaration constructs its type, set once the declaration is found to carry
+	/// `@Instantiable`, which is when its members matter.
+	private var instantiableConstruction: SafeDIContentContext.InstantiableMembers.Construction?
 	private var instantiableDeclarationType: ConcreteDeclType?
 
 	private var extensionInstantiables = [Instantiable]()
@@ -559,10 +560,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			// Not an instantiable type. We do not care.
 			return .skipChildren
 		}
-		guard !hasFoundDeclaration else {
+		guard instantiableConstruction == nil else {
 			return .skipChildren
 		}
-		hasFoundDeclaration = true
+		instantiableConstruction = .initializer(ConstructionInitializerCandidates(declaration: node))
 		instantiableDeclarationType = node.declType
 		instantiableDeclarationLocation = declarationLocation(of: node)
 
