@@ -56,15 +56,14 @@ struct MultipleConfigurationsError: Error, CustomStringConvertible {
 ///
 /// - Parameters:
 ///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
-///   - configuration: The module's `#SafeDIConfiguration`, whose `activeCompilationConditions` are also active
-///     and whose `mockConditionalCompilation` guards the generated mock code. A module without a configuration
-///     wraps its mocks in `DEBUG`.
+///   - configuration: The module's `#SafeDIConfiguration`, whose `mockConditionalCompilation` guards the
+///     generated mock code. A module without a configuration wraps its mocks in `DEBUG`.
 func conditionalCompilationEvaluator(
 	activeCompilationConditions: Set<String>,
 	configuration: SafeDIConfiguration?,
 ) -> ConditionalCompilationEvaluator {
 	ConditionalCompilationEvaluator(
-		activeCompilationConditions: activeCompilationConditions.union(configuration?.activeCompilationConditions ?? []),
+		activeCompilationConditions: activeCompilationConditions,
 		mockConditionalCompilation: configuration.map(\.mockConditionalCompilation) ?? "DEBUG",
 	)
 }
@@ -116,12 +115,13 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Str
 
 /// Parses a module's input files, reading and parsing each file once.
 ///
-/// The module's `#SafeDIConfiguration` decides how `#if` blocks are evaluated, but it can sit in
-/// any of the module's files, so every file is first walked with a provisional evaluator built from
-/// the supplied conditions. Only files in which an `#if` block guarding SafeDI declarations rested
-/// on a bare condition can extract something different under another evaluator; those keep their
-/// syntax trees and are walked again if the configuration changes the evaluator. Every other file
-/// is released as soon as it is walked, so memory scales with concurrency rather than module size.
+/// The module's `#SafeDIConfiguration(mockConditionalCompilation:)` decides how `#if` blocks guarding
+/// mock-only declarations are evaluated, but the configuration can sit in any of the module's files,
+/// so every file is first walked with a provisional evaluator built from the supplied conditions and
+/// the default `DEBUG` mock condition. Only files in which an `#if` block guarding SafeDI declarations
+/// rested on a bare condition can extract something different under another evaluator; those keep
+/// their syntax trees and are walked again if the configuration changes the mock condition. Every
+/// other file is released as soon as it is walked, so memory scales with concurrency rather than module size.
 ///
 /// - Parameters:
 ///   - filePaths: Every file to parse.

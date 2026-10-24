@@ -29,7 +29,6 @@ public enum SafeDIConfigurationVisitor {
 	public static let additionalDirectoriesToIncludeArgumentLabel = "additionalDirectoriesToInclude"
 	public static let additionalMocksToGenerateArgumentLabel = "additionalMocksToGenerate"
 	public static let mockConditionalCompilationArgumentLabel = "mockConditionalCompilation"
-	public static let activeCompilationConditionsArgumentLabel = "activeCompilationConditions"
 
 	/// Extracts a `SafeDIConfiguration` from a `MacroExpansionDeclSyntax` node
 	/// representing a `#SafeDIConfiguration(...)` invocation.
@@ -38,7 +37,6 @@ public enum SafeDIConfigurationVisitor {
 		var additionalDirectoriesToInclude = [String]()
 		var additionalMocksToGenerate = [String]()
 		var mockConditionalCompilation: String? = "DEBUG"
-		var activeCompilationConditions = [String]()
 
 		for argument in node.arguments {
 			guard let label = argument.label?.text else {
@@ -61,10 +59,6 @@ public enum SafeDIConfigurationVisitor {
 				if let value = extractOptionalStringLiteral(from: argument.expression) {
 					mockConditionalCompilation = value
 				}
-			case activeCompilationConditionsArgumentLabel:
-				if let values = extractStringLiterals(from: argument.expression) {
-					activeCompilationConditions = values
-				}
 			default:
 				continue
 			}
@@ -75,7 +69,6 @@ public enum SafeDIConfigurationVisitor {
 			additionalDirectoriesToInclude: additionalDirectoriesToInclude,
 			additionalMocksToGenerate: additionalMocksToGenerate,
 			mockConditionalCompilation: mockConditionalCompilation,
-			activeCompilationConditions: activeCompilationConditions,
 		)
 	}
 

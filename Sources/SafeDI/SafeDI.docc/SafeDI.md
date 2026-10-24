@@ -74,7 +74,7 @@ Working sample projects live in the [Examples folder](https://github.com/dfed/Sa
 
 ### Configuration
 
-- ``SafeDIConfiguration(additionalImportedModules:additionalDirectoriesToInclude:additionalMocksToGenerate:mockConditionalCompilation:activeCompilationConditions:)``
+- ``SafeDIConfiguration(additionalImportedModules:additionalDirectoriesToInclude:additionalMocksToGenerate:mockConditionalCompilation:)``
 
 ### Delayed instantiation
 
