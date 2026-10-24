@@ -160,11 +160,11 @@ public actor DependencyTreeGenerator {
 			// Always use the concrete-type key entry so mock root generation
 			// uses the correct mock info for the concrete type.
 			let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiable.concreteInstantiable] ?? instantiable
-			if let currentModuleSourceFilePaths, !isAdditionalMock {
-				guard let sourceFilePath = instantiable.sourceFilePath,
-				      currentModuleSourceFilePaths.contains(sourceFilePath)
-				else { continue }
-			}
+			// Without module scoping, every type belongs to the current module.
+			let isDeclaredInCurrentModule = currentModuleSourceFilePaths.map { currentModuleSourceFilePaths in
+				instantiable.sourceFilePath.map(currentModuleSourceFilePaths.contains) ?? false
+			} ?? true
+			guard isAdditionalMock || isDeclaredInCurrentModule else { continue }
 
 			// A hand-written method also named `mock` can be confused with the
 			// generated `mock()`: identical signatures redeclare, overlapping ones
@@ -178,7 +178,10 @@ public actor DependencyTreeGenerator {
 				throw DependencyTreeGeneratorError.handWrittenMockSharesGeneratedMockName(
 					instantiable.concreteInstantiable,
 					declaredAt: Array(handWrittenMockLocations),
-					isGeneratedForAdditionalMocksToGenerate: !instantiable.generateMock,
+					// A `generateMock: true` type declared in this module gets its mock whether
+					// or not it is listed; any other type reaching here is generated only
+					// because it is listed, so removing it from the list is also a fix.
+					isGeneratedForAdditionalMocksToGenerate: !(instantiable.generateMock && isDeclaredInCurrentModule),
 				)
 			}
 
