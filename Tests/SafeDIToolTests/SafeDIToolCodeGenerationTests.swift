@@ -7461,8 +7461,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// The number of distinct received-dependency paths from the last service grows
 		// exponentially with the service count, while the number of services does not.
 		// Walking every path took about 1.66 times longer per added service (23 seconds at 30
-		// services), so at this count it would not finish in a lifetime, whatever the hardware.
-		let serviceCount = 64
+		// services), so at this count it would take tens of thousands of years on any hardware.
+		let serviceCount = 80
 		let serviceFiles = (0..<serviceCount).map { index in
 			let receivedIndices = Set([index - 1, index - 2, index / 2])
 				.filter { $0 >= 0 && $0 < index }
