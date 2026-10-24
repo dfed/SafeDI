@@ -46,10 +46,3 @@ public protocol EventLogger {
 		public func record(_: String) {}
 	}
 #endif
-
-#if NDEBUG
-@Instantiable
-public struct OptimizedOnlyProbe: Instantiable {
-    public init() {}
-}
-#endif
