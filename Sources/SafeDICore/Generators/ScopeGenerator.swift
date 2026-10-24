@@ -289,44 +289,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// per-root syntactic flag and differs between roots for the same
 		/// underlying cycle.
 		let cycleEdges: Set<CycleEdge>
-		/// The hand-written methods named `mock` that generated code may call to
-		/// build the type whose `mock()` is being generated. Each must be
-		/// distinguishable from that generated `mock()`; see
-		/// `validateHandWrittenMocksAreDistinguishable`.
-		let handWrittenMocks: [HandWrittenMock]
-		/// Whether the `mock()` is generated only because the type is listed in
-		/// the module's `additionalMocksToGenerate`, rather than because the type
-		/// declares `generateMock: true`.
-		let isGeneratedForAdditionalMocksToGenerate: Bool
-	}
-
-	/// A hand-written mock method named `mock` (one without a `customMockName`),
-	/// described by the calls generated code may make to it.
-	struct HandWrittenMock: Hashable {
-		init(
-			mockInitializer: Initializer,
-			dependencies: [Dependency],
-			declarationLocation: Dependency.DeclarationLocation?,
-		) {
-			let dependencyLabels = Set(dependencies.map(\.property.label))
-			callSiteArgumentLabels = [
-				mockInitializer.arguments.surfacedAtMockCallSite(dependencyLabels: dependencyLabels).map(\.label),
-				mockInitializer.arguments.surfacedAtPrunedMockCallSite(dependencyLabels: dependencyLabels).map(\.label),
-			]
-			parameterCount = mockInitializer.arguments.count
-			self.declarationLocation = declarationLocation
-		}
-
-		/// The argument labels, in order, of the calls generated code makes to
-		/// the method to construct the type: the full call from a mock body or a
-		/// parent's default construction, and the call on a pruned back-edge,
-		/// which also elides labeled non-dependency defaults.
-		let callSiteArgumentLabels: Set<[String]>
-		/// The number of parameters the method declares, including defaulted
-		/// ones that generated calls leave out.
-		let parameterCount: Int
-		/// Where the method is declared.
-		let declarationLocation: Dependency.DeclarationLocation?
 	}
 
 	private let scopeData: ScopeData
@@ -792,70 +754,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			flatParameterDisambiguationMap[parameter.label, default: [:]][parameter.typeSource] = disambiguatedLabel
 			return (label: disambiguatedLabel, typeSource: parameter.typeSource)
 		}
+		// 3. Simple mock case — no tree, no flat parameters.
 		let hasTree = !parameterTree.isEmpty || !onlyIfAvailableSafeDIParameterEntries.isEmpty
 		// SafeDIOverrides is only needed when there are property children or
 		// onlyIfAvailable entries. Alias-only trees emit `let` bindings directly
 		// in the mock body and require no override storage.
 		let hasOverridableTree = !treePropertyNodes.isEmpty || !onlyIfAvailableSafeDIParameterEntries.isEmpty
+		let hasFlatParameters = !forwardedDependencies.isEmpty
+			|| !rootDefaultParameters.isEmpty
+			|| !flatReceivedParameters.isEmpty
+			|| !flatUncoveredParameters.isEmpty
 
-		// 3. Build the mock() signature.
-		// Build a lookup of default values from the construction initializer
-		// so forwarded deps with defaults on customMock preserve them.
-		let constructionDefaults: [String: String] = {
-			guard let rootConstructionInitializer else { return [:] }
-			var defaults = [String: String]()
-			for argument in rootConstructionInitializer.arguments {
-				if let defaultExpression = argument.defaultValueExpression {
-					defaults[argument.innerLabel] = defaultExpression
-				}
-			}
-			return defaults
-		}()
-		var mockParameters = [MockMethodParameter]()
-		for dependency in forwardedDependencies {
-			let defaultExpression: String? = if let defaultExpression = constructionDefaults[dependency.property.label] {
-				defaultExpression
-			} else if let mockMethodName = context.forwardedParameterMockDefaults[dependency.property.typeDescription] {
-				"\(dependency.property.typeDescription.asSource).\(mockMethodName)()"
-			} else {
-				nil
-			}
-			mockParameters.append(MockMethodParameter(
-				label: dependency.property.label,
-				typeSource: dependency.property.typeDescription.asFunctionParameter.asSource,
-				defaultExpression: defaultExpression,
-			))
-		}
-		for rootDefault in rootDefaultParameters {
-			mockParameters.append(MockMethodParameter(
-				label: rootDefault.label,
-				typeSource: rootDefault.typeSource,
-				defaultExpression: rootDefault.defaultExpression,
-			))
-		}
-		for flatParameter in flatReceivedParameters + flatUncoveredParameters {
-			mockParameters.append(MockMethodParameter(
-				label: flatParameter.label,
-				typeSource: flatParameter.typeSource,
-				defaultExpression: nil,
-			))
-		}
-		if hasOverridableTree {
-			mockParameters.append(MockMethodParameter(
-				label: "safeDIOverrides",
-				typeSource: "SafeDIOverrides",
-				defaultExpression: ".init()",
-			))
-		}
-
-		try Self.validateHandWrittenMocksAreDistinguishable(
-			fromGeneratedMockWithParameters: mockParameters,
-			for: instantiable,
-			context: context,
-		)
-
-		// 4. Simple mock case — no tree, no parameters.
-		guard hasTree || !mockParameters.isEmpty else {
+		guard hasTree || hasFlatParameters else {
 			let argumentList = try instantiable.generateArgumentList(
 				unavailableProperties: unavailableOptionalProperties,
 				forMockGeneration: true,
@@ -878,7 +788,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
 		}
 
-		// 5. Build the mock method.
+		// 4. Build the mock method.
 		var lines = [String]()
 		lines.append("extension \(typeName) {")
 
@@ -891,8 +801,46 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.append("")
 		}
 
+		// Build mock() signature.
+		// Build a lookup of default values from the construction initializer
+		// so forwarded deps with defaults on customMock preserve them.
+		let constructionDefaults: [String: String] = {
+			guard let rootConstructionInitializer else { return [:] }
+			var defaults = [String: String]()
+			for argument in rootConstructionInitializer.arguments {
+				if let defaultExpression = argument.defaultValueExpression {
+					defaults[argument.innerLabel] = defaultExpression
+				}
+			}
+			return defaults
+		}()
+		var mockParameters = [String]()
+		for dependency in forwardedDependencies {
+			let typeSource = dependency.property.typeDescription.asFunctionParameter.asSource
+			if let defaultExpression = constructionDefaults[dependency.property.label] {
+				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(defaultExpression)")
+			} else if let mockMethodName = context.forwardedParameterMockDefaults[dependency.property.typeDescription] {
+				let mockTypeName = dependency.property.typeDescription.asSource
+				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(mockTypeName).\(mockMethodName)()")
+			} else {
+				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource)")
+			}
+		}
+		for rootDefault in rootDefaultParameters {
+			mockParameters.append("\(bodyIndent)\(rootDefault.label): \(rootDefault.typeSource) = \(rootDefault.defaultExpression)")
+		}
+		for flatReceived in flatReceivedParameters {
+			mockParameters.append("\(bodyIndent)\(flatReceived.label): \(flatReceived.typeSource)")
+		}
+		for flatUncovered in flatUncoveredParameters {
+			mockParameters.append("\(bodyIndent)\(flatUncovered.label): \(flatUncovered.typeSource)")
+		}
+		if hasOverridableTree {
+			mockParameters.append("\(bodyIndent)safeDIOverrides: SafeDIOverrides = .init()")
+		}
+
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
-		lines.append(mockParameters.map { "\(bodyIndent)\($0.asSource)" }.joined(separator: ",\n"))
+		lines.append(mockParameters.joined(separator: ",\n"))
 		lines.append("\(indent)) -> \(mockMethodReturnType) {")
 
 		// Generate mock body.
@@ -963,82 +911,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		let code = lines.joined(separator: "\n")
 		return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
-	}
-
-	/// A parameter of a generated `mock()` method.
-	private struct MockMethodParameter {
-		let label: String
-		let typeSource: String
-		let defaultExpression: String?
-
-		var asSource: String {
-			if let defaultExpression {
-				"\(label): \(typeSource) = \(defaultExpression)"
-			} else {
-				"\(label): \(typeSource)"
-			}
-		}
-	}
-
-	/// Throws when a hand-written method named `mock` cannot be told apart from
-	/// the `mock()` generated for the same type.
-	///
-	/// Both methods share a base name, so Swift picks between them by argument
-	/// labels and parameter counts. A hand-written mock collides with the
-	/// generated `mock()` when both of these hold:
-	///
-	/// 1. The generated `mock()` accepts one of the hand-written mock's
-	///    `callSiteArgumentLabels`: walking the generated parameters in order,
-	///    each argument label binds to the next parameter with that label, every
-	///    parameter left unbound has a default, and every label binds. Swift
-	///    rejects reordered labels, so a call whose labels appear in a different
-	///    order is not accepted.
-	/// 2. The hand-written mock declares at least as many parameters as the
-	///    generated `mock()`. When two methods accept a call, Swift prefers the
-	///    one that leaves fewer parameters to their defaults: with more
-	///    parameters the hand-written call silently resolves to the generated
-	///    `mock()`, with the same number it is ambiguous, or – when the
-	///    signatures match exactly – an invalid redeclaration. With fewer
-	///    parameters, the hand-written mock wins every call it accepts.
-	///
-	/// Parameter types are not compared. Generated calls pass values of exactly
-	/// the hand-written parameter types, and a generated parameter of a
-	/// different type still accepts any argument convertible to it – the
-	/// compiler then resolves `mock(engine: engine)` to a generated
-	/// `mock(engine: EngineProtocol)` over a hand-written
-	/// `mock(engine: Engine, _ verbose: Bool = false)` – which SafeDI cannot
-	/// decide without type checking.
-	private static func validateHandWrittenMocksAreDistinguishable(
-		fromGeneratedMockWithParameters generatedParameters: [MockMethodParameter],
-		for instantiable: Instantiable,
-		context: MockContext,
-	) throws {
-		func generatedMockAccepts(argumentLabels: [String]) -> Bool {
-			var unboundArgumentLabels = ArraySlice(argumentLabels)
-			for parameter in generatedParameters {
-				if unboundArgumentLabels.first == parameter.label {
-					unboundArgumentLabels.removeFirst()
-				} else {
-					guard parameter.defaultExpression != nil else { return false }
-				}
-			}
-			return unboundArgumentLabels.isEmpty
-		}
-		let collidingDeclarationLocations = Set(
-			context.handWrittenMocks
-				.filter { handWrittenMock in
-					handWrittenMock.parameterCount >= generatedParameters.count
-						&& handWrittenMock.callSiteArgumentLabels.contains(where: generatedMockAccepts(argumentLabels:))
-				}
-				.map(\.declarationLocation),
-		)
-		guard collidingDeclarationLocations.isEmpty else {
-			throw MockGenerationError.handWrittenMockCollidesWithGeneratedMock(
-				typeDescription: instantiable.concreteInstantiable,
-				declarationLocations: Array(collidingDeclarationLocations),
-				isGeneratedForAdditionalMocksToGenerate: context.isGeneratedForAdditionalMocksToGenerate,
-			)
-		}
 	}
 
 	/// Generates the labeled argument list for the return statement in the mock body.
@@ -1232,10 +1104,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"\(concreteType.asSource).\(Self.configurationStructName)"
 		}
 
+		/// Whether this argument is a non-dependency `_`-labeled defaulted
+		/// parameter that the mock call site elides. Elided parameters are
+		/// filled in by Swift's default-argument thunk in the callee's
+		/// declaration context, which preserves `Self`-binding and unqualified
+		/// name lookup inside the default expression. Dependency parameters
+		/// (even when shaped `_ dep: Dep = …`) are never elided — the override
+		/// flow must thread the resolved binding through to the callee.
+		/// `validateUnlabeledDefaultShape` on the macro rejects the shapes
+		/// where eliding would produce an uncallable signature (non-trailing
+		/// `_`-labeled default).
+		private func isElidedInCallSite(_ argument: Initializer.Argument, dependencyInnerLabels: Set<String>) -> Bool {
+			argument.label == "_"
+				&& argument.hasDefaultValue
+				&& !dependencyInnerLabels.contains(argument.innerLabel)
+		}
+
 		/// Construction arguments surfaced at the mock call site, with elided
 		/// non-dependency unlabeled defaults removed.
 		var callSiteArguments: [Initializer.Argument] {
-			constructionArguments.surfacedAtMockCallSite(dependencyLabels: Set(dependencies.map(\.property.label)))
+			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
+			return constructionArguments.filter { !isElidedInCallSite($0, dependencyInnerLabels: dependencyInnerLabels) }
 		}
 
 		/// The builder closure type as a Swift source string (unlabeled parameters).
@@ -1267,7 +1156,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// and file-scoped helpers in the default expression, which would
 		/// otherwise resolve in the wrong context if inlined at the caller.
 		var callSiteArgumentsForPrunedOverride: [Initializer.Argument] {
-			constructionArguments.surfacedAtPrunedMockCallSite(dependencyLabels: Set(dependencies.map(\.property.label)))
+			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
+			return callSiteArguments.filter { argument in
+				dependencyInnerLabels.contains(argument.innerLabel) || !argument.hasDefaultValue
+			}
 		}
 
 		/// The Swift expression, for use inside a generated `mock()` body, that
@@ -2404,36 +2296,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	// MARK: MockGenerationError
-
-	private enum MockGenerationError: SourceLocatedError {
-		/// Reported at each hand-written `mock` method that collides with the generated `mock()`.
-		/// See `validateHandWrittenMocksAreDistinguishable`.
-		case handWrittenMockCollidesWithGeneratedMock(
-			typeDescription: TypeDescription,
-			declarationLocations: [Dependency.DeclarationLocation?],
-			isGeneratedForAdditionalMocksToGenerate: Bool,
-		)
-
-		var sourceDiagnostics: [SourceDiagnostic] {
-			switch self {
-			case let .handWrittenMockCollidesWithGeneratedMock(typeDescription, declarationLocations, isGeneratedForAdditionalMocksToGenerate):
-				let typeName = typeDescription.asSource
-				let summary = "The hand-written `\(InstantiableVisitor.mockMethodName)` method for `\(typeName)` can be called with the same arguments as the `\(InstantiableVisitor.mockMethodName)()` method SafeDI generates for `\(typeName)`, so calls to it are ambiguous or resolve to the generated method."
-				let remedy = "Give the hand-written method a different name and pass that name to `@\(InstantiableVisitor.macroName)(customMockName:)` on its declaration"
-				let message = if isGeneratedForAdditionalMocksToGenerate {
-					"\(summary) \(remedy), or remove `\(typeName)` from `additionalMocksToGenerate` in this module’s `#SafeDIConfiguration`."
-				} else {
-					"\(summary) \(remedy)."
-				}
-				// Sorted by location so the output does not depend on collection order.
-				return declarationLocations
-					.map { SourceDiagnostic(severity: .error, location: $0, message: message) }
-					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
-			}
-		}
-	}
-
 	// MARK: GenerationError
 
 	private enum GenerationError: Error, CustomStringConvertible {
@@ -2461,40 +2323,6 @@ extension [ScopeGenerator.MockTreeItem] {
 			} else {
 				nil
 			}
-		}
-	}
-}
-
-// MARK: - [Initializer.Argument]
-
-extension [Initializer.Argument] {
-	/// The arguments a generated mock body passes when it calls a construction
-	/// method (an `init`, `instantiate`, or hand-written mock) declaring these
-	/// arguments, given the inner labels of the type's dependencies.
-	///
-	/// Non-dependency `_`-labeled defaulted parameters are elided. Elided
-	/// parameters are filled in by Swift's default-argument thunk in the callee's
-	/// declaration context, which preserves `Self`-binding and unqualified
-	/// name lookup inside the default expression. Dependency parameters
-	/// (even when shaped `_ dep: Dep = …`) are never elided — the override
-	/// flow must thread the resolved binding through to the callee.
-	/// `validateUnlabeledDefaultShape` on the macro rejects the shapes
-	/// where eliding would produce an uncallable signature (non-trailing
-	/// `_`-labeled default).
-	fileprivate func surfacedAtMockCallSite(dependencyLabels: Set<String>) -> [Initializer.Argument] {
-		filter { argument in
-			argument.label != "_"
-				|| !argument.hasDefaultValue
-				|| dependencyLabels.contains(argument.innerLabel)
-		}
-	}
-
-	/// The arguments a generated mock body passes on a pruned back-edge, where
-	/// labeled non-dependency defaults are elided as well so Swift's
-	/// default-argument thunk fills them in the callee's scope.
-	fileprivate func surfacedAtPrunedMockCallSite(dependencyLabels: Set<String>) -> [Initializer.Argument] {
-		surfacedAtMockCallSite(dependencyLabels: dependencyLabels).filter { argument in
-			dependencyLabels.contains(argument.innerLabel) || !argument.hasDefaultValue
 		}
 	}
 }

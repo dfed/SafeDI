@@ -126,21 +126,15 @@ public actor DependencyTreeGenerator {
 				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 			}
 
-		// Collect the hand-written methods named `mock` for each concrete type.
-		// When the type also gets a generated `mock()`, each must be
-		// distinguishable from it. Entries under different keys for the same
-		// concrete type can carry the same method with different dependencies
-		// (merged vs. unmerged), which changes the calls generated code makes.
-		let handWrittenMocksByConcreteType: [TypeDescription: Set<ScopeGenerator.HandWrittenMock>] = typeDescriptionToFulfillingInstantiableMap.values
-			.reduce(into: [TypeDescription: Set<ScopeGenerator.HandWrittenMock>]()) { result, instantiable in
-				guard let mockInitializer = instantiable.mockInitializer,
+		// Locate the hand-written methods named `mock` (no `customMockName`) for
+		// each concrete type. Several map entries can carry the same method
+		// (merged and unmerged mockOnly slots), so locations are deduplicated.
+		let handWrittenMockLocationsByConcreteType: [TypeDescription: Set<Dependency.DeclarationLocation?>] = typeDescriptionToFulfillingInstantiableMap.values
+			.reduce(into: [TypeDescription: Set<Dependency.DeclarationLocation?>]()) { result, instantiable in
+				guard instantiable.mockInitializer != nil,
 				      instantiable.customMockName == nil
 				else { return }
-				result[instantiable.concreteInstantiable, default: []].insert(ScopeGenerator.HandWrittenMock(
-					mockInitializer: mockInitializer,
-					dependencies: instantiable.dependencies,
-					declarationLocation: instantiable.mockDeclarationLocation,
-				))
+				result[instantiable.concreteInstantiable, default: []].insert(instantiable.mockDeclarationLocation)
 			}
 
 		// Create mock-root ScopeGenerators using the production Scope tree.
@@ -154,10 +148,8 @@ public actor DependencyTreeGenerator {
 			// in additionalMocksToGenerate), duplicates, and types not in the scope map.
 			// Types from dependent modules are skipped unless they appear in
 			// additionalMocksToGenerate. When generateMock is true and a hand-written
-			// mock exists, the generated mock calls through to the hand-written one,
-			// which has a different name specified by customMockName or a call
-			// shape the generated mock does not share (see
-			// `ScopeGenerator.validateHandWrittenMocksAreDistinguishable`).
+			// mock exists, the generated mock calls through to the hand-written one
+			// (which must have a different name specified by customMockName).
 			guard instantiable.generateMock || isAdditionalMock,
 			      seen.insert(instantiable.concreteInstantiable).inserted,
 			      let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable]
@@ -172,6 +164,22 @@ public actor DependencyTreeGenerator {
 				guard let sourceFilePath = instantiable.sourceFilePath,
 				      currentModuleSourceFilePaths.contains(sourceFilePath)
 				else { continue }
+			}
+
+			// A hand-written method also named `mock` can be confused with the
+			// generated `mock()`: identical signatures redeclare, overlapping ones
+			// make calls ambiguous or silently pick the generated method, and a
+			// mockOnly extension's mock defaults every parameter, so even a
+			// generated `mock(safeDIOverrides:)` leaves `Type.mock()` ambiguous.
+			// The macro rejects the pair within one declaration; this extends the
+			// rule across declarations and modules.
+			let handWrittenMockLocations = handWrittenMockLocationsByConcreteType[instantiable.concreteInstantiable, default: []]
+			guard handWrittenMockLocations.isEmpty else {
+				throw DependencyTreeGeneratorError.handWrittenMockSharesGeneratedMockName(
+					instantiable.concreteInstantiable,
+					declaredAt: Array(handWrittenMockLocations),
+					isGeneratedForAdditionalMocksToGenerate: !instantiable.generateMock,
+				)
 			}
 
 			// Validate that this type's constant @Instantiated children have no @Forwarded properties.
@@ -234,14 +242,10 @@ public actor DependencyTreeGenerator {
 			return union
 		}
 
-		// Generate mock code and collect configuration types in parallel. Every
-		// root's outcome is collected before an error is thrown, so a failure
-		// reports the first failing root in type order rather than whichever
-		// task failed first.
-		typealias MockRootOutput = (root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)])
-		let mockRootOutcomes = await withTaskGroup(
-			of: (typeDescription: TypeDescription, output: Result<MockRootOutput, any Error>).self,
-			returning: [(typeDescription: TypeDescription, output: Result<MockRootOutput, any Error>)].self,
+		// Generate mock code and collect configuration types in parallel.
+		let generatedRoots = try await withThrowingTaskGroup(
+			of: (root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)]).self,
+			returning: [(root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)])].self,
 		) { taskGroup in
 			for (instantiable, mockRoot) in mockRoots {
 				taskGroup.addTask {
@@ -250,40 +254,28 @@ public actor DependencyTreeGenerator {
 							mockConditionalCompilation: mockConditionalCompilation,
 							forwardedParameterMockDefaults: forwardedParameterMockDefaults,
 							cycleEdges: cycleEdges,
-							handWrittenMocks: Array(handWrittenMocksByConcreteType[instantiable.concreteInstantiable] ?? []),
-							isGeneratedForAdditionalMocksToGenerate: !instantiable.generateMock,
 						)),
 					)
 					async let configurationTypes = mockRoot.collectConfigurationTypes(
 						cycleEdges: cycleEdges,
 						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 					)
-					do {
-						return try await (
+					return try await (
+						root: GeneratedRoot(
 							typeDescription: instantiable.concreteInstantiable,
-							output: .success((
-								root: GeneratedRoot(
-									typeDescription: instantiable.concreteInstantiable,
-									sourceFilePath: instantiable.sourceFilePath,
-									code: code,
-								),
-								configurationTypes: configurationTypes,
-							)),
-						)
-					} catch {
-						return (typeDescription: instantiable.concreteInstantiable, output: .failure(error))
-					}
+							sourceFilePath: instantiable.sourceFilePath,
+							code: code,
+						),
+						configurationTypes: configurationTypes,
+					)
 				}
 			}
-			var outcomes = [(typeDescription: TypeDescription, output: Result<MockRootOutput, any Error>)]()
-			for await outcome in taskGroup {
-				outcomes.append(outcome)
+			var results = [(root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)])]()
+			for try await result in taskGroup {
+				results.append(result)
 			}
-			return outcomes
+			return results
 		}
-		let generatedRoots = try mockRootOutcomes
-			.sorted { $0.typeDescription < $1.typeDescription }
-			.map { try $0.output.get() }
 
 		let rootedTypeNames = Set(generatedRoots.map(\.root.typeDescription.asSource))
 		// Deduplicate configuration types by type name across all roots.
@@ -447,9 +439,25 @@ public actor DependencyTreeGenerator {
 		/// Reported at the `@Received` declaration that closes the chain: the one that receives `instantiated` back
 		/// inside the tree `instantiated` creates. No notes; the chain is spelled out in the message.
 		case receivedConstantCycleDetected(instantiated: Property, receivedPropertyChain: [Property], declarationLocation: Dependency.DeclarationLocation?)
+		/// Reported at the hand-written `mock` method of a type whose `mock()` this module also generates.
+		case handWrittenMockSharesGeneratedMockName(TypeDescription, declaredAt: [Dependency.DeclarationLocation?], isGeneratedForAdditionalMocksToGenerate: Bool)
 
 		var sourceDiagnostics: [SourceDiagnostic] {
 			switch self {
+			case let .handWrittenMockSharesGeneratedMockName(typeDescription, declaredAt, isGeneratedForAdditionalMocksToGenerate):
+				// Sorted by location so the order never depends on map iteration.
+				declaredAt
+					.map {
+						SourceDiagnostic(
+							severity: .error,
+							location: $0,
+							message: Self.handWrittenMockSharesGeneratedMockNameMessage(
+								typeDescription: typeDescription,
+								isGeneratedForAdditionalMocksToGenerate: isGeneratedForAdditionalMocksToGenerate,
+							),
+						)
+					}
+					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 			case let .noInstantiableFound(typeDescription, referencedAt):
 				// Sorted by location so the order never depends on map iteration.
 				referencedAt.map {
@@ -497,6 +505,18 @@ public actor DependencyTreeGenerator {
 							.joined(separator: " -> "),
 					),
 				]
+			}
+		}
+
+		private static func handWrittenMockSharesGeneratedMockNameMessage(
+			typeDescription: TypeDescription,
+			isGeneratedForAdditionalMocksToGenerate: Bool,
+		) -> String {
+			let typeName = typeDescription.asSource
+			return if isGeneratedForAdditionalMocksToGenerate {
+				"`\(typeName)` cannot have a hand-written `mock()` method because this module generates a `mock()` method for it (it is listed in `additionalMocksToGenerate`), and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@\(InstantiableVisitor.macroName)` that declares it, or remove `\(typeName)` from `additionalMocksToGenerate`."
+			} else {
+				"`\(typeName)` cannot have a hand-written `mock()` method because it is decorated with `@\(InstantiableVisitor.macroName)(generateMock: true)`, and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@\(InstantiableVisitor.macroName)` that declares it."
 			}
 		}
 

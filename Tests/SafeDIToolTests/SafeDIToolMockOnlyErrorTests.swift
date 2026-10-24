@@ -430,13 +430,13 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenHandWrittenMockSharesGeneratedMockSignature() async {
+	mutating func mock_throwsError_whenMockOnlyMockSharesGeneratedMockSignature() async {
 		// The generated `mock(engine: Engine) -> MyService` would redeclare the
 		// hand-written `mock(engine:) -> MyService`.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):3:5: error: \(Self.collisionMessage)
+				\(fixtures["File.swift"]):3:5: error: \(Self.generateMockNameCollisionMessage)
 				"""
 			},
 		) {
@@ -471,14 +471,14 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenHandWrittenMockReturningAdditionalTypeSharesGeneratedMockCallShape() async {
+	mutating func mock_throwsError_whenMockOnlyMockReturningAdditionalTypeSharesNameWithGeneratedMock() async {
 		// MyService generates `mock(engine:) -> MyService` and the mockOnly
 		// extension declares `mock(engine:) -> ServiceProtocol`. Root's
 		// `MyService.mock(engine: engine)` call would be ambiguous between the two.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):3:5: error: \(Self.collisionMessage)
+				\(fixtures["File.swift"]):3:5: error: \(Self.generateMockNameCollisionMessage)
 				"""
 			},
 		) {
@@ -525,7 +525,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenHandWrittenMockHasParameterGeneratedCallsOmit() async {
+	mutating func mock_throwsError_whenMockOnlyMockWithExtraParameterSharesNameWithGeneratedMock() async {
 		// SafeDI calls the hand-written mock as `MyService.mock(engine: engine)`,
 		// leaving `verbose` to its default. Swift resolves that call to the
 		// generated `mock(engine:)`, which needs no defaults, and silently skips
@@ -533,7 +533,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):3:5: error: \(Self.collisionMessage)
+				\(fixtures["File.swift"]):3:5: error: \(Self.generateMockNameCollisionMessage)
 				"""
 			},
 		) {
@@ -569,23 +569,22 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenGeneratedMockAcceptsHandWrittenMockDependencyOnlyCall() async {
-		// The generated `mock(verbose: Bool = false, engine: Engine)` lists the
-		// hand-written default before the received dependency, so it does not
-		// accept the full `mock(engine:verbose:)` call. It does accept the
-		// dependency-only `mock(engine:)` call SafeDI makes on a pruned back-edge,
-		// where both methods leave one parameter to its default.
+	mutating func mock_throwsError_whenMockOnlyMockSharesNameWithGeneratedMockTakingOnlyOverrides() async {
+		// The generated `mock(safeDIOverrides: SafeDIOverrides = .init())` and the
+		// hand-written `mock(engine: Engine = Engine())` take different labels, but
+		// every parameter of each has a default, so `MyService.mock()` is ambiguous.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):3:5: error: \(Self.collisionMessage)
+				\(fixtures["File.swift"]):3:5: error: \(Self.generateMockNameCollisionMessage)
 				"""
 			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
-					public struct Engine {
+					@Instantiable
+					public struct Engine: Instantiable {
 					    public init() {}
 					}
 					""",
@@ -595,13 +594,13 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					    public init(engine: Engine) {
 					        self.engine = engine
 					    }
-					    @Received let engine: Engine
+					    @Instantiated let engine: Engine
 					}
 					""",
 					"""
 					@Instantiable(mockOnly: true)
 					extension MyService {
-					    public static func mock(engine: Engine = Engine(), verbose: Bool = false) -> MyService { MyService(engine: engine) }
+					    public static func mock(engine: Engine = Engine()) -> MyService { MyService(engine: engine) }
 					}
 					""",
 				],
@@ -613,7 +612,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsErrorSuggestingRemovalFromAdditionalMocks_whenAdditionalMockCollidesWithHandWrittenMockFromDependentModule() async throws {
+	mutating func mock_throwsErrorSuggestingRemovalFromAdditionalMocks_whenAdditionalMockSharesNameWithHandWrittenMockFromDependentModule() async throws {
 		// The dependent module declares MyService without `generateMock` plus a
 		// mockOnly extension. This module generates `mock(engine:) -> MyService`
 		// through `additionalMocksToGenerate`, so Root's
@@ -648,7 +647,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { _ in
 				"""
-				\(dependentModuleOutput.fixtures["File.swift"]):3:5: error: The hand-written `mock` method for `MyService` can be called with the same arguments as the `mock()` method SafeDI generates for `MyService`, so calls to it are ambiguous or resolve to the generated method. Give the hand-written method a different name and pass that name to `@Instantiable(customMockName:)` on its declaration, or remove `MyService` from `additionalMocksToGenerate` in this module’s `#SafeDIConfiguration`.
+				\(dependentModuleOutput.fixtures["File.swift"]):3:5: error: `MyService` cannot have a hand-written `mock()` method because this module generates a `mock()` method for it (it is listed in `additionalMocksToGenerate`), and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@Instantiable` that declares it, or remove `MyService` from `additionalMocksToGenerate`.
 				"""
 			},
 		) {
@@ -682,7 +681,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	// MARK: Private
 
-	private static let collisionMessage = "The hand-written `mock` method for `MyService` can be called with the same arguments as the `mock()` method SafeDI generates for `MyService`, so calls to it are ambiguous or resolve to the generated method. Give the hand-written method a different name and pass that name to `@Instantiable(customMockName:)` on its declaration."
+	private static let generateMockNameCollisionMessage = "`MyService` cannot have a hand-written `mock()` method because it is decorated with `@Instantiable(generateMock: true)`, and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@Instantiable` that declares it."
 
 	private var filesToDelete = [URL]()
 }
