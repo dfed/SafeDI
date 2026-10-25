@@ -379,13 +379,14 @@ jobs:
           fi
           echo "Build-setting arguments: $(.github/scripts/report-build-setting-arguments.sh "$log")"
           grep -q 'SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation' "$log" || { tail -n 100 "$log"; exit 1; }
-      # Whether `swift build --build-system swiftbuild` expands the arguments
-      # depends on the toolchain, so the debug build's expectation follows what
-      # the log shows: expanded arguments must wire `ConsoleEventLogger`, and
-      # unexpanded ones must fall back to the assertion, as on the native
-      # backend. A toolchain whose default backend is swiftbuild must expand
-      # them, and the plugin must never withhold them from a SafeDITool built
-      # from this checkout.
+      # The debug build's expectation follows what the log shows. Expanded
+      # arguments must wire `ConsoleEventLogger`. Arguments that arrive
+      # unexpanded, or that the plugin withholds, must fall back to the
+      # assertion, as on the native backend. Only a released SafeDITool may
+      # have them withheld: Swift 6.2 sometimes hands the plugin the prebuilt
+      # binary from the artifact bundle despite the `sourceBuild` trait, and
+      # that release predates the arguments. A toolchain whose default backend
+      # is swiftbuild must expand them.
       - name: Build Package Integration without the DEBUG define (swift build, Swift Build backend)
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' && steps.backends.outputs.swiftbuild == 'true' }}
         env:
@@ -401,18 +402,21 @@ jobs:
               [ "$status" -eq 0 ] || { tail -n 100 "$log"; exit 1; }
               grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/swiftbuild-debug/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
               ;;
-            unexpanded)
-              if [ "$SWIFTBUILD_IS_DEFAULT" = true ]; then
+            unexpanded | withheld)
+              if [ "$arguments" = withheld ]; then
+                if ! grep -Eq '\.artifactbundle/[^ ]*/SafeDITool [^ ]*InputSwiftFiles\.csv' "$log"; then
+                  echo "::error::The plugin did not pass the build-setting arguments to a SafeDITool built from this checkout." >&2
+                  exit 1
+                fi
+                echo "::notice::SwiftPM ran the prebuilt SafeDITool from the artifact bundle despite the sourceBuild trait. That release predates the build-setting arguments, so the plugin withheld them and SafeDITool falls back."
+              elif [ "$SWIFTBUILD_IS_DEFAULT" = true ]; then
                 echo "::error::This toolchain's default swiftbuild backend passed the build-setting arguments through unexpanded." >&2
                 exit 1
+              else
+                echo "::notice::This toolchain's opt-in swiftbuild backend passes build tool plugin arguments through unexpanded, so SafeDITool falls back as on the native backend."
               fi
-              echo "::notice::This toolchain's opt-in swiftbuild backend passes build tool plugin arguments through unexpanded, so SafeDITool falls back as on the native backend."
               [ "$status" -ne 0 ] || { echo "Expected the fallback to stop at SafeDI's compile-time assertion, but the build succeeded." >&2; exit 1; }
               grep -q 'SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation' "$log" || { tail -n 100 "$log"; exit 1; }
-              ;;
-            *)
-              echo "::error::The plugin did not pass the build-setting arguments to a SafeDITool built from this checkout." >&2
-              exit 1
               ;;
           esac
       - name: Build Package Integration without the DEBUG define in release configuration (swift build, Swift Build backend)
