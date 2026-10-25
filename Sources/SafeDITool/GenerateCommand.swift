@@ -143,7 +143,7 @@ struct Generate: AsyncParsableCommand {
 		let evaluator = parsed.module.conditionalCompilationEvaluator
 		// Derived from the configuration rather than from how this run parsed, so a module loaded from
 		// scan's cache warns too. Only `generate` warns, so a build that runs `scan` first warns once.
-		let warnings = [sourceConfiguration?.placementWarning].compactMap(\.self)
+		var warnings = [sourceConfiguration?.placementWarning].compactMap(\.self)
 
 		let resolvedAdditionalImportedModules: [String] = if let sourceConfiguration {
 			additionalImportedModules + sourceConfiguration.additionalImportedModules
@@ -270,6 +270,7 @@ struct Generate: AsyncParsableCommand {
 				}
 			} else {
 				let generatedRoots = try await generator.generatePerRootCodeTrees()
+				try await warnings.append(contentsOf: generator.generateWarnings())
 				// Every generated file asserts how `#if` conditions were evaluated, so a build
 				// whose compiler disagrees fails here with a message naming the condition.
 				let fileHeader = await generator.fileHeader
