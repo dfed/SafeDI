@@ -36,7 +36,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		// SwiftPM's implicit `DEBUG` is not among them, and Xcode reports debug-configuration
 		// defines in Release too, so `generate` replaces them with the conditions the build
 		// settings report when the build system expands them (see
-		// `buildSettingCompilationConditionArguments(for:)`).
+		// `buildSettingCompilationConditionArguments(for:scanManifest:)`).
 		let activeCompilationConditionArguments = activeCompilationConditionArguments(sourceTarget.compilationConditions)
 
 		let tool = try context.tool(named: "SafeDITool").url
@@ -122,7 +122,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					// input of this command. Repeating them here changes the command when they change, so a
 					// build in another configuration regenerates instead of reusing the previous output.
 					+ activeCompilationConditionArguments
-					+ buildSettingCompilationConditionArguments(for: tool),
+					+ buildSettingCompilationConditionArguments(for: tool, scanManifest: manifest),
 				environment: [:],
 				inputFiles: allSwiftFiles + additionalInputFiles,
 				outputFiles: outputFiles,
@@ -164,7 +164,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					"--mock-scoped-files",
 				] + targetSwiftFiles.map { $0.path(percentEncoded: false) }
 					+ activeCompilationConditionArguments
-					+ buildSettingCompilationConditionArguments(for: tool),
+					+ buildSettingCompilationConditionArguments(for: tool, scanManifest: nil),
 				environment: [:],
 				inputFiles: allSwiftFiles + scanResult.additionalInputFiles,
 				outputFiles: scanResult.outputFiles,
@@ -197,8 +197,13 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 ///
 /// This plugin often runs a SafeDITool released before it, such as the prebuilt binary pinned in
 /// `Package.swift` or one downloaded into `.safedi/`, which would reject options it does not know.
-func buildSettingCompilationConditionArguments(for tool: URL) -> [String] {
-	if toolAcceptsBuildSettingCompilationConditions(tool) {
+///
+/// - Parameters:
+///   - tool: The SafeDITool the build command runs.
+///   - scanManifest: The manifest `tool` wrote when this plugin ran `scan` with it, or `nil` when the
+///     plugin could not run it.
+func buildSettingCompilationConditionArguments(for tool: URL, scanManifest: ScanManifest?) -> [String] {
+	if toolAcceptsBuildSettingCompilationConditions(tool, scanManifest: scanManifest) {
 		[
 			"--build-setting-active-compilation-conditions=[${SWIFT_ACTIVE_COMPILATION_CONDITIONS}]",
 			"--build-setting-other-swift-flags=[${OTHER_SWIFT_FLAGS}]",
@@ -209,18 +214,29 @@ func buildSettingCompilationConditionArguments(for tool: URL) -> [String] {
 }
 
 /// Whether `tool`'s `generate` accepts the build-setting options.
-private func toolAcceptsBuildSettingCompilationConditions(_ tool: URL) -> Bool {
-	// Only a released binary can predate the options: the artifact bundle `Package.swift` pins, or a
-	// tool downloaded into `.safedi/`. Any other tool is built from the same package checkout as this
-	// plugin. It is recognized by where it lives rather than by running it, because a tool built from
-	// source may not exist yet, may be named with unexpanded build settings such as
-	// `${BUILD_DIR}/${CONFIGURATION}/SafeDITool`, or may not run while the plugin plans the build.
-	let isReleasedBinary = tool.pathComponents.contains { component in
-		component.hasSuffix(".artifactbundle") || component == ".safedi"
+///
+/// Answered without launching anything whenever possible, because the plugin plans every target
+/// that uses it on every build:
+/// - When the plugin ran `scan` with `tool`, the manifest `tool` wrote says so. A release that
+///   predates the options does not write the key.
+/// - Otherwise a tool outside an artifact bundle and outside `.safedi/` is built from the same
+///   package checkout as this plugin. It is recognized by where it lives rather than by running it,
+///   because it may not exist yet, may be named with unexpanded build settings such as
+///   `${BUILD_DIR}/${CONFIGURATION}/SafeDITool`, or may not run while the plugin plans the build.
+/// - Only a released binary the plugin did not run `scan` with, which happens in an Xcode project
+///   that uses the artifact bundle's tool, is asked with `generate --help`.
+private func toolAcceptsBuildSettingCompilationConditions(_ tool: URL, scanManifest: ScanManifest?) -> Bool {
+	if let scanManifest {
+		scanManifest.acceptsBuildSettingCompilationConditions == true
+	} else if tool.pathComponents.contains(where: { $0.hasSuffix(".artifactbundle") || $0 == ".safedi" }) {
+		releasedToolAcceptsBuildSettingCompilationConditions(tool)
+	} else {
+		true
 	}
-	guard isReleasedBinary else {
-		return true
-	}
+}
+
+/// Whether the released binary `tool` lists the build-setting options in `generate --help`.
+private func releasedToolAcceptsBuildSettingCompilationConditions(_ tool: URL) -> Bool {
 	let process = Process()
 	process.executableURL = tool
 	process.arguments = ["generate", "--help"]
@@ -395,7 +411,7 @@ extension Target {
 						inputSourcesFile.path(percentEncoded: false),
 						"--swift-manifest",
 						manifestFile.path(percentEncoded: false),
-					] + buildSettingCompilationConditionArguments(for: tool),
+					] + buildSettingCompilationConditionArguments(for: tool, scanManifest: manifest),
 					environment: [:],
 					inputFiles: inputSwiftFiles + additionalInputFiles,
 					outputFiles: outputFiles,
@@ -428,7 +444,7 @@ extension Target {
 						"--output-directory", outputDirectory.path(percentEncoded: false),
 						"--mock-scoped-files",
 					] + inputSwiftFiles.map { $0.path(percentEncoded: false) }
-						+ buildSettingCompilationConditionArguments(for: tool),
+						+ buildSettingCompilationConditionArguments(for: tool, scanManifest: nil),
 					environment: [:],
 					inputFiles: inputSwiftFiles + scanResult.additionalInputFiles,
 					outputFiles: scanResult.outputFiles,

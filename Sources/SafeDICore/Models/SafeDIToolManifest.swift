@@ -76,6 +76,12 @@ public struct SafeDIToolManifest: Codable, Sendable {
 	/// declaring it differently. `nil` in a hand-written manifest, where nothing is checked.
 	public var mockScopedFilePaths: [String]?
 
+	/// Whether the SafeDITool that wrote this manifest accepts `generate`'s
+	/// `--build-setting-active-compilation-conditions` and `--build-setting-other-swift-flags`. Build
+	/// tool plugins read it to decide whether to pass them without launching the tool again; a
+	/// manifest written by a release that predates the options, or by hand, leaves it `nil`.
+	public var acceptsBuildSettingCompilationConditions: Bool?
+
 	/// The directory `scan` resolved input paths against when writing `configurationFilePaths`
 	/// and `inputFilePath`s, so `generate` can resolve its own input paths the same way.
 	/// `nil` in a hand-written manifest, where paths are taken as written.
@@ -90,6 +96,7 @@ public struct SafeDIToolManifest: Codable, Sendable {
 		additionalInputFiles: [String] = [],
 		activeCompilationConditions: [String]? = nil,
 		mockScopedFilePaths: [String]? = nil,
+		acceptsBuildSettingCompilationConditions: Bool? = nil,
 		projectRoot: String? = nil,
 	) {
 		self.dependencyTreeGeneration = dependencyTreeGeneration
@@ -100,6 +107,7 @@ public struct SafeDIToolManifest: Codable, Sendable {
 		self.additionalInputFiles = additionalInputFiles
 		self.activeCompilationConditions = activeCompilationConditions
 		self.mockScopedFilePaths = mockScopedFilePaths
+		self.acceptsBuildSettingCompilationConditions = acceptsBuildSettingCompilationConditions
 		self.projectRoot = projectRoot
 	}
 }

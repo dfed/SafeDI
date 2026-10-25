@@ -221,6 +221,7 @@ func performScan(
 		mockScopedFilePaths: mockScopedFilePaths.map { filePath in
 			relativePath(for: URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL, relativeTo: projectRootURL)
 		}.sorted(),
+		acceptsBuildSettingCompilationConditions: true,
 		projectRoot: projectRootURL.path,
 	)
 
