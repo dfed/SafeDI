@@ -210,12 +210,15 @@ func buildSettingCompilationConditionArguments(for tool: URL) -> [String] {
 
 /// Whether `tool`'s `generate` accepts the build-setting options.
 private func toolAcceptsBuildSettingCompilationConditions(_ tool: URL) -> Bool {
-	let toolPath = tool.path(percentEncoded: false)
-	guard !toolPath.contains("${"), FileManager.default.fileExists(atPath: toolPath) else {
-		// A tool this build compiles from source does not exist yet while the plugin plans a clean
-		// build, and Xcode names one with unexpanded build settings, such as
-		// `${BUILD_DIR}/${CONFIGURATION}/SafeDITool`. Either is built from the same package checkout
-		// as this plugin, so it accepts the options. A prebuilt or downloaded tool always exists.
+	// Only a released binary can predate the options: the artifact bundle `Package.swift` pins, or a
+	// tool downloaded into `.safedi/`. Any other tool is built from the same package checkout as this
+	// plugin. It is recognized by where it lives rather than by running it, because a tool built from
+	// source may not exist yet, may be named with unexpanded build settings such as
+	// `${BUILD_DIR}/${CONFIGURATION}/SafeDITool`, or may not run while the plugin plans the build.
+	let isReleasedBinary = tool.pathComponents.contains { component in
+		component.hasSuffix(".artifactbundle") || component == ".safedi"
+	}
+	guard isReleasedBinary else {
 		return true
 	}
 	let process = Process()

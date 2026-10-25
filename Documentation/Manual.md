@@ -886,7 +886,7 @@ SafeDITool can read the conditions in two ways:
 
 | Integration | Conditions SafeDITool generates code with |
 |-------------|-------------------------------------------|
-| Swift package plugin, `swift build` with the Swift Build backend (`--build-system swiftbuild`; `swift build --help` names your toolchain’s default) | The build settings. |
+| Swift package plugin, `swift build` with the Swift Build backend (`--build-system swiftbuild`; `swift build --help` names your toolchain’s default: native in Swift 6.2, which ships with Xcode 26, and Swift Build in Swift 6.4) | The build settings. Verified with Swift 6.2 and Swift 6.4. |
 | Swift package plugin, `swift build` with the native backend (`--build-system native`) | What the plugin can see. To guard a production declaration with `DEBUG`, add `.define("DEBUG", .when(configuration: .debug))` to the target’s `swiftSettings`, as the [Example Package Integration](../Examples/Example Package Integration/Package.swift) does. The define is harmless under the other build systems, which read the build settings instead. |
 | Swift package plugin, built by Xcode | The build settings, in every configuration. Xcode hands the plugin a package’s `.when(configuration:)` defines as for a debug build whatever configuration it compiles, so the build settings correct what the plugin sees in Release. |
 | Xcode project plugin | The build settings. |
