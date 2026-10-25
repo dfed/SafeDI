@@ -162,10 +162,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// generation to surface dependencies the tree does not itself provide.
 	let receivedProperties: Set<Property>
 
-	/// - Parameter propertiesGeneratedLater: Unwrapped properties that an enclosing
-	///   scope declares but generates after this code (see
-	///   `orderedPropertiesToGenerate`). An `onlyIfAvailable` receive of one of them
-	///   is unavailable here.
+	/// - Parameter propertiesGeneratedLater: Unwrapped properties that this subtree
+	///   receives `onlyIfAvailable` and that an enclosing scope declares but generates
+	///   after this code (see `orderedPropertiesToGenerate`), so they are unavailable
+	///   here. Restricting it to this subtree's `onlyIfAvailable` receives also drops a
+	///   property a scope in this subtree declares itself, since that declaration
+	///   fulfills the receives beneath it.
 	func generateCode(
 		codeGeneration: CodeGeneration = .dependencyTree,
 		propertiesAlreadyGeneratedAtThisScope: Set<Property> = [],
@@ -173,10 +175,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		leadingWhitespace: String = "",
 	) async throws -> String {
 		let generatedCode: String
-		// Only the properties this subtree receives `onlyIfAvailable` matter. This
-		// also drops a property a scope in this subtree declares itself, since that
-		// declaration fulfills the receives beneath it.
-		let propertiesGeneratedLater = propertiesGeneratedLater.intersection(onlyIfAvailableUnwrappedReceivedProperties)
 		let unavailableProperties = unavailableOptionalProperties
 			.filter {
 				!(propertiesAlreadyGeneratedAtThisScope.contains($0) || propertiesAlreadyGeneratedAtThisScope.contains($0.asUnwrappedProperty))
@@ -340,20 +338,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// is deterministic, and it matches a plain topological order whenever every
 	/// receive can be honored.
 	private lazy var orderedPropertiesToGenerate: [ScopeGenerator] = {
-		let siblingIndexByProperty = propertiesToGenerate
-			.enumerated()
-			.reduce(into: [Property: Int]()) { partialResult, indexAndScope in
-				if let property = indexAndScope.element.property {
-					partialResult[property] = indexAndScope.offset
-				}
+		// A property can be listed more than once — a mock root promotes a received
+		// property that a promoted scope receives even when the root already
+		// instantiates it. Only the first child for each property is generated.
+		var siblings = [(property: Property, index: Int)]()
+		var listedProperties = Set<Property>()
+		for (index, scope) in propertiesToGenerate.enumerated() {
+			if let property = scope.property, listedProperties.insert(property).inserted {
+				siblings.append((property, index))
 			}
+		}
 		// Required receives first: they are always honored.
 		var siblingDependencies = propertiesToGenerate.map { scope in
-			Set(
-				scope.receivedProperties
-					.subtracting(scope.onlyIfAvailableUnwrappedReceivedProperties)
-					.compactMap { siblingIndexByProperty[$0] },
-			)
+			Set(siblings.compactMap { sibling in
+				scope.receivedProperties.contains(sibling.property)
+					&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property)
+					? sibling.index
+					: nil
+			})
 		}
 		func dependsOn(_ dependencyIndex: Int, from dependentIndex: Int) -> Bool {
 			var visitedIndices = Set<Int>()
@@ -366,19 +368,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			return false
 		}
-		// Then each `onlyIfAvailable` receive, unless the sibling it would wait on
-		// already waits on the receiver.
-		for (index, scope) in propertiesToGenerate.enumerated() {
-			let onlyIfAvailableSiblingIndices = scope.onlyIfAvailableUnwrappedReceivedProperties
-				.compactMap { siblingIndexByProperty[$0] }
-				.sorted()
-			for siblingIndex in onlyIfAvailableSiblingIndices where !dependsOn(index, from: siblingIndex) {
-				siblingDependencies[index].insert(siblingIndex)
+		// Then each `onlyIfAvailable` receive, in sibling order, unless the sibling it
+		// would wait on already waits on the receiver.
+		for (index, scope) in propertiesToGenerate.enumerated() where !scope.onlyIfAvailableUnwrappedReceivedProperties.isEmpty {
+			for sibling in siblings
+				where scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property)
+				&& !dependsOn(index, from: sibling.index)
+			{
+				siblingDependencies[index].insert(sibling.index)
 			}
 		}
 
 		var orderedPropertiesToGenerate = [ScopeGenerator]()
-		var unfulfilledIndices = Set(propertiesToGenerate.indices)
+		var unfulfilledIndices = Set(siblings.map(\.index))
 		func fulfill(_ index: Int) {
 			// Mark as fulfilled before recursing to prevent cycles.
 			guard unfulfilledIndices.remove(index) != nil else { return }
@@ -394,17 +396,34 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return orderedPropertiesToGenerate
 	}()
 
-	/// The properties a child at `index` in `orderedPropertiesToGenerate` must treat
-	/// as unavailable: those this scope's ancestors generate later
-	/// (`propertiesGeneratedLater`) and those of the siblings generated after it.
-	/// Both are unwrapped, so they match an `onlyIfAvailable` receive of `x: X?`.
+	/// The index in `orderedPropertiesToGenerate` of the last child declaring each
+	/// unwrapped property.
+	private lazy var orderedIndexByUnwrappedProperty: [Property: Int] = orderedPropertiesToGenerate
+		.enumerated()
+		.reduce(into: [Property: Int]()) { partialResult, indexAndScope in
+			if let property = indexAndScope.element.property {
+				partialResult[property.asUnwrappedProperty] = indexAndScope.offset
+			}
+		}
+
+	/// The properties `child`, at `index` in `orderedPropertiesToGenerate`, receives
+	/// `onlyIfAvailable` but must treat as unavailable: those this scope's ancestors
+	/// generate later (`propertiesGeneratedLater`) and those of the siblings
+	/// generated after it. All are unwrapped, so they match a receive of `x: X?`.
 	private func propertiesGeneratedLater(
 		thanChildAt index: Int,
+		receivedOnlyIfAvailableBy child: ScopeGenerator,
 		propertiesGeneratedLater: Set<Property>,
 	) -> Set<Property> {
-		propertiesGeneratedLater.union(
-			orderedPropertiesToGenerate[(index + 1)...].compactMap(\.property?.asUnwrappedProperty),
-		)
+		child.onlyIfAvailableUnwrappedReceivedProperties.filter { property in
+			if propertiesGeneratedLater.contains(property) {
+				true
+			} else if let orderedIndex = orderedIndexByUnwrappedProperty[property] {
+				orderedIndex > index
+			} else {
+				false
+			}
+		}
 	}
 
 	/// The properties this scope's type receives `onlyIfAvailable` that are
@@ -458,6 +477,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					propertiesAlreadyGeneratedAtThisScope: .init(orderedPropertiesToGenerate[0..<index].compactMap(\.property)),
 					propertiesGeneratedLater: self.propertiesGeneratedLater(
 						thanChildAt: index,
+						receivedOnlyIfAvailableBy: childGenerator,
 						propertiesGeneratedLater: propertiesGeneratedLater,
 					),
 					leadingWhitespace: leadingMemberWhitespace,
@@ -1536,9 +1556,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
 			let childPropertiesGeneratedLater = self.propertiesGeneratedLater(
 				thanChildAt: index,
+				receivedOnlyIfAvailableBy: childGenerator,
 				propertiesGeneratedLater: propertiesGeneratedLater,
 			)
-			.intersection(childGenerator.onlyIfAvailableUnwrappedReceivedProperties)
 			let childUnavailableProperties = childGenerator.onlyIfAvailableDependencies(
 				fulfilledByPropertiesGeneratedLater: childPropertiesGeneratedLater,
 			)

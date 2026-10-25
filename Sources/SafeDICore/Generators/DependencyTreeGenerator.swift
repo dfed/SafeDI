@@ -809,15 +809,22 @@ public actor DependencyTreeGenerator {
 			))
 		}
 
-		// Validate the promoted mock scope for cycles before generating code, with the
-		// same walk production uses. This catches cycles that only become visible after
-		// @Received dependencies are promoted to the mock root: one through an ancestor
-		// (e.g., B @Receives Instantiator<A> where A instantiates B — the promotion
-		// creates a cycle in the mock root scope), and one between promoted siblings
-		// (e.g., C @Receives B while B's subtree @Receives C — each needs the other
-		// built first).
+		// Validate the promoted mock scope for cycles before generating code.
+		// This catches cycles that only become visible after @Received dependencies
+		// are promoted to the mock root (e.g., B @Receives Instantiator<A> where A
+		// instantiates B — the promotion creates a cycle in the mock root scope).
+		try validateMockRootScopeForCycles(
+			mockRootScope,
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+		)
+		// Promotion can also make the mock root's children require one another
+		// (e.g., C @Receives B while B's subtree @Receives C — each must be built
+		// first), which no ancestor stack shows. Detecting that is cheap; production's
+		// walk, which follows received dependencies between scopes, then reports the
+		// cycle. Running that walk on every mock root instead would add a
+		// received-dependency walk for every node of every mock tree.
 		try validatePropertiesAreFulfillable(
-			onRootScopes: [mockRootScope],
+			onRootScopes: Self.childrenRequireEachOther(in: mockRootScope, cache: &cache) ? [mockRootScope] : [],
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 			cyclesOnly: true,
 		)
@@ -832,10 +839,94 @@ public actor DependencyTreeGenerator {
 		)
 	}
 
+	/// Walks a post-promotion mock root scope for dependency cycles.
+	/// The mock root scope has @Received dependencies promoted as children,
+	/// which can create cycles not visible in the pre-promotion scope.
+	private func validateMockRootScopeForCycles(
+		_ scope: Scope,
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		propertyStack: [Property] = [],
+	) throws {
+		// Check dependencies for cycles (catches @Received references back to ancestors).
+		// Skip forwarded dependencies — they're runtime Instantiator closure parameters.
+		for dependency in scope.instantiable.dependencies where dependency.source != .forwarded {
+			let propertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
+			guard let cycleIndex = propertyStack.firstIndex(of: propertyForDependency) else {
+				continue
+			}
+			let typesInCycle = (
+				[propertyForDependency]
+					+ propertyStack[0...cycleIndex],
+			).map(\.typeDescription)
+			try throwIfInvalidCycle(
+				typesInCycle: typesInCycle,
+				property: propertyForDependency,
+				declarationLocation: dependency.declarationLocation,
+				directParent: scope.instantiable.concreteInstantiable,
+				isReceived: dependency.source.isReceived,
+			)
+		}
+
+		// Recurse into children.
+		for childPropertyToGenerate in scope.propertiesToGenerate {
+			switch childPropertyToGenerate {
+			case let .instantiated(childProperty, childScope, _):
+				guard !propertyStack.contains(childProperty) else { continue }
+				let nextStack = [childProperty] + propertyStack
+				try validateMockRootScopeForCycles(
+					childScope,
+					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+					propertyStack: nextStack,
+				)
+			case .aliased:
+				break
+			}
+		}
+	}
+
+	/// Whether the instantiated children of `scope` require one another in a cycle:
+	/// each child's subtree requires (not `onlyIfAvailable`) a sibling that,
+	/// directly or through other siblings, requires it. Such children cannot be
+	/// ordered so that each is built after the siblings it receives.
+	private static func childrenRequireEachOther(
+		in scope: Scope,
+		cache: inout [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
+	) -> Bool {
+		var children = [(property: Property, scope: Scope)]()
+		for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
+			children.append((property, childScope))
+		}
+		var childIndexByProperty = [Property: Int]()
+		for (index, child) in children.enumerated() {
+			childIndexByProperty[child.property] = index
+		}
+		let requiredSiblingIndices = children.map { child in
+			let (received, onlyIfAvailable) = collectReceivedProperties(from: child.scope, cache: &cache)
+			return received.compactMap { property in
+				property != child.property && !onlyIfAvailable.contains(property)
+					? childIndexByProperty[property]
+					: nil
+			}
+		}
+		// Depth-first search for a back edge.
+		var visitingIndices = Set<Int>()
+		var visitedIndices = Set<Int>()
+		func reachesVisitingIndex(from index: Int) -> Bool {
+			guard visitedIndices.insert(index).inserted else {
+				return visitingIndices.contains(index)
+			}
+			visitingIndices.insert(index)
+			defer { visitingIndices.remove(index) }
+			return requiredSiblingIndices[index].contains(where: reachesVisitingIndex(from:))
+		}
+		return children.indices.contains(where: reachesVisitingIndex(from:))
+	}
+
 	/// Classifies a detected cycle and throws the appropriate error, or
-	/// returns silently if the cycle is valid. Called from
-	/// `validatePropertiesAreFulfillable`, which walks both the production graph
-	/// and each mock root's graph after `@Received` promotion.
+	/// returns silently if the cycle is valid. Called from both
+	/// `validatePropertiesAreFulfillable` (production graph, and a mock root whose
+	/// children require one another) and `validateMockRootScopeForCycles` (mock
+	/// graph after `@Received` promotion).
 	///
 	/// Rejected:
 	/// - Constant entry point in a fully-constant cycle → `.constantDependencyCycleDetected`.

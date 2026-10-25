@@ -183,6 +183,86 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	// The time limit only turns a hang into a failure; see
+	// `mock_generatesWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
+	@Test(.timeLimit(.minutes(10)))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsErrorWithinTimeLimit_whenPromotedDependenciesReceiveEachOtherAfterDeepChainOfDiamonds() async {
+		// Feature's promoted children require one another (Zeta -> ZetaWorker -> ZetaPeer
+		// -> Zeta), so the mock root is walked like a production root. Its other promoted
+		// children, which sort first, form a deep chain of diamonds whose received-dependency
+		// paths grow exponentially: the walk must stay memoized to reach the cycle.
+		let serviceCount = 80
+		let serviceFiles = (0..<serviceCount).map { index in
+			let receivedIndices = Set([index - 1, index - 2, index / 2])
+				.filter { $0 >= 0 && $0 < index }
+				.sorted()
+			let initializerParameters = receivedIndices.map { "service\($0): Service\($0)" }.joined(separator: ", ")
+			let receivedProperties = receivedIndices.map { "    @Received let service\($0): Service\($0)" }.joined(separator: "\n")
+			return """
+			@Instantiable
+			public struct Service\(index): Instantiable {
+			    public init(\(initializerParameters)) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			\(receivedProperties)
+			}
+			"""
+		}
+		let lastService = serviceCount - 1
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["ZetaPeer.swift"]):4:5: error: Dependency cycle detected: Zeta -> ZetaWorker -> ZetaPeer -> Zeta
+				\(fixtures["Zeta.swift"]):1:1: note: `Zeta` is part of the cycle
+				\(fixtures["ZetaWorker.swift"]):1:1: note: `ZetaWorker` is part of the cycle
+				\(fixtures["ZetaPeer.swift"]):1:1: note: `ZetaPeer` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Feature: Instantiable {
+					    public init(service\(lastService): Service\(lastService), zeta: Zeta) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let service\(lastService): Service\(lastService)
+					    @Received let zeta: Zeta
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Zeta: Instantiable {
+					    public init(zetaWorker: ZetaWorker) { self.zetaWorker = zetaWorker }
+					    @Instantiated let zetaWorker: ZetaWorker
+					}
+					""",
+					"""
+					@Instantiable
+					public struct ZetaWorker: Instantiable {
+					    public init(zetaPeer: ZetaPeer) { self.zetaPeer = zetaPeer }
+					    @Received let zetaPeer: ZetaPeer
+					}
+					""",
+					"""
+					@Instantiable
+					public struct ZetaPeer: Instantiable {
+					    public init(zeta: Zeta) { self.zeta = zeta }
+					    @Received let zeta: Zeta
+					}
+					""",
+				] + serviceFiles,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				skipCompileVerification: true,
+			)
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenUnfulfillableInstantiatedPropertyExists() async {
