@@ -100,7 +100,9 @@ public final class FileVisitor: SyntaxVisitor {
 
 	public override func visit(_ node: MacroExpansionExprSyntax) -> SyntaxVisitorContinueKind {
 		if parentType == nil, node.macroName.text == SafeDIConfigurationVisitor.macroName {
-			configurations.append(SafeDIConfigurationVisitor.extractConfiguration(from: node))
+			var configuration = SafeDIConfigurationVisitor.extractConfiguration(from: node)
+			configuration.declarationLocation = sourceLocationConverter?.declarationLocation(for: node.positionAfterSkippingLeadingTrivia)
+			configurations.append(configuration)
 		}
 		return .skipChildren
 	}

@@ -30,7 +30,7 @@ SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin us
 
 If your first-party code comprises a single module in an `.xcodeproj`, once your Xcode project depends on the SafeDI package you can integrate the Swift Package Plugin simply by going to your target’s `Build Phases`, expanding the `Run Build Tool Plug-ins` drop-down, and adding the `SafeDIGenerator` as a build tool plug-in. You can see this integration in practice in the [ExampleProjectIntegration](../Examples/ExampleProjectIntegration) project.
 
-If your Xcode project comprises multiple modules, follow the above steps, and then add a `#SafeDIConfiguration` to your module to configure SafeDI:
+If your Xcode project comprises multiple modules, follow the above steps, and then add a `#SafeDIConfiguration` to a file named `SafeDIConfiguration.swift` in your module to configure SafeDI:
 
 ```swift
 import SafeDI
@@ -70,7 +70,7 @@ To also generate mocks for non-root modules, add the plugin to all first-party t
 
 You can see this integration in practice in the [Example Package Integration](../Examples/Example Package Integration) package.
 
-Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may add a `#SafeDIConfiguration` in your root module with the additional module names:
+Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may add a `#SafeDIConfiguration` to a file named `SafeDIConfiguration.swift` in your root module with the additional module names:
 
 ```swift
 import SafeDI
@@ -483,6 +483,8 @@ public struct FeedView: Instantiable {
 ### #SafeDIConfiguration
 
 [`#SafeDIConfiguration`](../Sources/SafeDI/Decorators/SafeDIConfiguration.swift) is a freestanding declaration macro that provides build-time configuration for SafeDI’s code generation plugin. Each module may have at most one `#SafeDIConfiguration` invocation. It must appear at the top level of a Swift file (not nested inside a type). All arguments must be literal values. All parameters have defaults, so the simplest valid invocation is `#SafeDIConfiguration()`.
+
+Declare the configuration in a file named `SafeDIConfiguration.swift` in the module’s sources. SafeDI reads that file before it scans the rest of the module, because `mockConditionalCompilation` decides how SafeDI evaluates `#if` blocks around [declarations that only feed mock generation](#declarations-that-only-feed-mock-generation). A configuration in any other file still works in SafeDI 2.x: SafeDI then finds it while scanning the module assuming the default `mockConditionalCompilation`, and when the configuration sets a different value SafeDI scans the module’s files a second time and reports a build warning at the `#SafeDIConfiguration`.
 
 ```swift
 #SafeDIConfiguration(

@@ -27,6 +27,11 @@
 /// `#SafeDIConfiguration` is a freestanding declaration macro that must appear at the top level of a Swift file (not nested inside a type).
 /// Each module may have at most one `#SafeDIConfiguration` invocation. All arguments must be literal values.
 ///
+/// Declare it in a file named `SafeDIConfiguration.swift`. SafeDI reads that file before scanning the rest of the
+/// module, so the configuration decides how every other file is scanned. A configuration in any other file still
+/// works, but SafeDI must scan the module to find it, and scan it again when `mockConditionalCompilation` is not
+/// `"DEBUG"`; `SafeDITool` warns in that case.
+///
 /// - Parameters:
 ///   - additionalImportedModules: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types.
 ///   - additionalDirectoriesToInclude: Directories containing Swift files to include, relative to the executing directory. Only honored by the SPM build-tool plugin. The Bazel and Tuist integrations enumerate inputs up front and therefore ignore this parameter — list every Swift source via the build target itself instead.
