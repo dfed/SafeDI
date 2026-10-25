@@ -46,7 +46,11 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Swift file paths scoped to the current target for mock generation. Only used when --output-directory is provided without --swift-manifest.") var mockScopedFiles: [String] = []
 
-	@Option(parsing: .upToNextOption, help: "The compilation conditions that are active for this build, matching the compiler's -D flags, in addition to any recorded in the manifest by `scan`. SafeDI declarations in `#if` blocks are scanned only when the block's condition evaluates to true, and the generated code asserts each such evaluation at compile time.") var activeCompilationConditions: [String] = []
+	@Option(parsing: .upToNextOption, help: "The compilation conditions that are active for this build, matching the compiler's -D flags, in addition to any recorded in the manifest by `scan`, unless the build-setting options arrive expanded. SafeDI declarations in `#if` blocks are scanned only when the block's condition evaluates to true, and the generated code asserts each such evaluation at compile time.") var activeCompilationConditions: [String] = []
+
+	@Option(name: .customLong(BuildSettingCompilationConditions.activeCompilationConditionsOptionName), help: "The target's `SWIFT_ACTIVE_COMPILATION_CONDITIONS` build setting wrapped in square brackets, written as the literal `[${SWIFT_ACTIVE_COMPILATION_CONDITIONS}]` for the build system to expand when it runs the command. When both build-setting options arrive expanded, their conditions replace those from `--active-compilation-conditions` and the manifest. When either arrives unexpanded, as SwiftPM's native build system passes them, both are ignored.") var buildSettingActiveCompilationConditions: String?
+
+	@Option(name: .customLong(BuildSettingCompilationConditions.otherSwiftFlagsOptionName), help: "The target's `OTHER_SWIFT_FLAGS` build setting wrapped in square brackets, written as the literal `[${OTHER_SWIFT_FLAGS}]`. Its `-D` flags are active conditions. Used only together with `--build-setting-active-compilation-conditions`.") var buildSettingOtherSwiftFlags: String?
 
 	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path — one header, bodies joined in source-file order, deterministic for stable inputs. Intended for build systems that need rule outputs statically declared at analysis time (Bazel, Buck2). Requires 'swift-sources-file-path' or '--include'. Cannot be combined with '--output-directory' or '--swift-manifest' — those are per-file emission modes. May be combined with '--module-info-output'. The combined file is always rewritten on every run, even when content would be unchanged.") var combinedOutput: String?
 
@@ -86,6 +90,16 @@ struct Generate: AsyncParsableCommand {
 			throw ValidationError("--combined-output is mutually exclusive with --output-directory and --swift-manifest. Use --combined-output alone for a single output file, or one of the others for per-file outputs.")
 		}
 
+		// The conditions the compiler receives, when the build system expanded them into this command's
+		// arguments. They replace rather than add to the conditions supplied on the command line and
+		// through the manifest, which a build tool plugin collects before the build and which can name
+		// conditions the compiler does not define: Xcode hands plugins a package's debug-configuration
+		// defines in Release too.
+		let buildSettingConditions = try BuildSettingCompilationConditions.conditions(
+			activeCompilationConditions: buildSettingActiveCompilationConditions,
+			otherSwiftFlags: buildSettingOtherSwiftFlags,
+		)
+
 		// When --output-directory is provided without --swift-manifest, run an
 		// inline scan to discover roots/mocks and build the manifest automatically.
 		var resolvedSwiftManifest = swiftManifest
@@ -100,7 +114,7 @@ struct Generate: AsyncParsableCommand {
 				outputDirectory: outputDirectory,
 				manifestFile: manifestPath,
 				mockScopedFiles: mockScopedFiles,
-				activeCompilationConditions: Set(activeCompilationConditions),
+				activeCompilationConditions: buildSettingConditions ?? Set(activeCompilationConditions),
 			)
 			resolvedSwiftManifest = manifestPath
 		}
@@ -112,7 +126,8 @@ struct Generate: AsyncParsableCommand {
 		}
 
 		let inputFilePaths = try await findGenerateSwiftFiles()
-		let suppliedCompilationConditions = Set(activeCompilationConditions).union(manifest?.activeCompilationConditions ?? [])
+		let suppliedCompilationConditions = buildSettingConditions
+			?? Set(activeCompilationConditions).union(manifest?.activeCompilationConditions ?? [])
 
 		let (dependentModuleInfo, parsed) = try await (
 			loadSafeDIModuleInfo(),
@@ -147,14 +162,7 @@ struct Generate: AsyncParsableCommand {
 		   !sourceConfiguration.additionalDirectoriesToInclude.isEmpty
 		{
 			let additionalFiles = try await findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude)
-			let additionalModule = try await parseSwiftFiles(additionalFiles, conditionalCompilation: evaluator)
-			module = ModuleInfo(
-				imports: initialModule.imports + additionalModule.imports,
-				instantiables: initialModule.instantiables + additionalModule.instantiables,
-				configurations: initialModule.configurations,
-				filesWithUnexpectedNodes: initialModule.filesWithUnexpectedNodes.map { $0 + (additionalModule.filesWithUnexpectedNodes ?? []) } ?? additionalModule.filesWithUnexpectedNodes,
-				conditionalCompilationDecisions: Set(initialModule.conditionalCompilationDecisions + additionalModule.conditionalCompilationDecisions).sorted(),
-			)
+			module = try await initialModule.including(ModuleInfo(parseSwiftFiles(additionalFiles, conditionalCompilation: evaluator)))
 		} else {
 			module = initialModule
 		}
@@ -291,6 +299,40 @@ struct Generate: AsyncParsableCommand {
 					for sourceFile in currentModuleRootSourceFiles {
 						if !manifestInputPaths.contains(sourceFile) {
 							throw ManifestError.rootNotInManifest(sourceFilePath: sourceFile)
+						}
+					}
+					if let mockScopedFilePaths = manifest.mockScopedFilePaths {
+						// Paths are compared as scan wrote them, since this parse may name files as the CSV does.
+						let mockScopedFilePathSet = Set(mockScopedFilePaths)
+						let manifestMockInputPaths = Set(manifest.mockGeneration.map(\.inputFilePath))
+						for instantiable in module.instantiables where instantiable.generateMock {
+							if let sourceFilePath = instantiable.sourceFilePath.map(manifest.resolvedPath(for:)),
+							   mockScopedFilePathSet.contains(sourceFilePath),
+							   !manifestMockInputPaths.contains(sourceFilePath)
+							{
+								throw ManifestError.mockNotInManifest(typeName: instantiable.concreteInstantiable.asSource, sourceFilePath: sourceFilePath)
+							}
+						}
+						let configurationFilePaths = Set(module.configurations.compactMap(\.sourceFilePath).map(manifest.resolvedPath(for:)))
+							.intersection(mockScopedFilePathSet)
+						let manifestConfigurationFilePaths = Set(manifest.configurationFilePaths)
+						if let sourceFilePath = configurationFilePaths.subtracting(manifestConfigurationFilePaths).min() {
+							throw ManifestError.configurationNotInManifest(sourceFilePath: sourceFilePath)
+						}
+						if let sourceFilePath = manifestConfigurationFilePaths.subtracting(configurationFilePaths).min() {
+							throw ManifestError.noConfigurationFound(sourceFilePath: sourceFilePath)
+						}
+						// The manifest's mock outputs follow the configuration scan found, which an `#if`
+						// block can make differ from the one found here.
+						if let sourceConfiguration,
+						   sourceConfiguration.additionalMocksToGenerate != manifest.additionalMocksToGenerate
+						{
+							// The configuration's file is the one the manifest lists, as checked above.
+							throw ManifestError.additionalMocksDiffer(
+								sourceFilePaths: manifest.configurationFilePaths,
+								configured: sourceConfiguration.additionalMocksToGenerate,
+								listed: manifest.additionalMocksToGenerate,
+							)
 						}
 					}
 				}
@@ -482,17 +524,37 @@ struct Generate: AsyncParsableCommand {
 
 	// MARK: Private
 
+	/// The manifest names the files `generate` writes, and `scan` chose them before the build ran, with
+	/// only the compilation conditions a build tool plugin can see. When `generate` evaluates an `#if`
+	/// block differently, using the conditions the build settings report, the declarations that decide
+	/// which files exist can appear or vanish, and these errors say so instead of omitting code.
 	private enum ManifestError: Error, CustomStringConvertible {
 		case noRootFound(inputPath: String)
 		case rootNotInManifest(sourceFilePath: String)
+		case mockNotInManifest(typeName: String, sourceFilePath: String)
+		case configurationNotInManifest(sourceFilePath: String)
+		case noConfigurationFound(sourceFilePath: String)
+		case additionalMocksDiffer(sourceFilePaths: [String], configured: [String], listed: [String])
 
 		var description: String {
 			switch self {
 			case let .noRootFound(inputPath):
-				"Manifest lists '\(inputPath)' as containing a dependency tree root, but no @\(InstantiableVisitor.macroName)(isRoot: true) was found in that file."
+				"Manifest lists '\(inputPath)' as containing a dependency tree root, but no @\(InstantiableVisitor.macroName)(isRoot: true) was found in that file. \(Self.planningExplanation(declaring: "the root")) Declare the root outside the `#if` block."
 			case let .rootNotInManifest(sourceFilePath):
-				"Found @\(InstantiableVisitor.macroName)(isRoot: true) in '\(sourceFilePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. Add it to the manifest or remove the isRoot annotation."
+				"Found @\(InstantiableVisitor.macroName)(isRoot: true) in '\(sourceFilePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. \(Self.planningExplanation(declaring: "the root")) Declare the root outside the `#if` block. A hand-written manifest must list the file, or the type must not be a root."
+			case let .mockNotInManifest(typeName, sourceFilePath):
+				"Found @\(InstantiableVisitor.macroName)(generateMock: true) on `\(typeName)` in '\(sourceFilePath)', but this file is not listed in the manifest’s mockGeneration. \(Self.planningExplanation(declaring: "the type")) Declare the type outside the `#if` block, or remove `generateMock: true`."
+			case let .configurationNotInManifest(sourceFilePath):
+				"Found #\(SafeDIConfigurationVisitor.macroName) in '\(sourceFilePath)', but this file is not listed in the manifest’s configurationFilePaths. \(Self.planningExplanation(declaring: "the configuration")) Declare the configuration outside the `#if` block."
+			case let .additionalMocksDiffer(sourceFilePaths, configured, listed):
+				"The #\(SafeDIConfigurationVisitor.macroName) in '\(sourceFilePaths.joined(separator: "', '"))' lists \(configured) in additionalMocksToGenerate, but the manifest lists \(listed). \(Self.planningExplanation(declaring: "the configuration")) Declare the configuration outside the `#if` block."
+			case let .noConfigurationFound(sourceFilePath):
+				"Manifest lists '\(sourceFilePath)' as declaring a #\(SafeDIConfigurationVisitor.macroName), but none was found in that file. \(Self.planningExplanation(declaring: "the configuration")) Declare the configuration outside the `#if` block."
 			}
+		}
+
+		private static func planningExplanation(declaring declaration: String) -> String {
+			"If an `#if` block declares \(declaration), SafeDI evaluated it differently when it decided which files to generate, which happens before the build with only the compilation conditions the build tool plugin can see, such as a target’s `swiftSettings` defines but not SwiftPM’s `DEBUG`."
 		}
 	}
 
@@ -566,7 +628,7 @@ struct Generate: AsyncParsableCommand {
 					// files are matched among the CSV's paths.
 					configurationFilePaths: manifest.map { $0.configurationFilePaths(among: inputFilePaths) } ?? inputFilePaths,
 					activeCompilationConditions: activeCompilationConditions,
-				),
+				).module,
 				false,
 			)
 		}
@@ -587,13 +649,6 @@ struct Generate: AsyncParsableCommand {
 		guard let data = try? Data(contentsOf: cacheURL),
 		      let cached = try? JSONDecoder().decode(CachedScannedModuleInfo.self, from: data)
 		else { return nil }
-
-		// Bypass the cache if scan treated a different set of compilation
-		// conditions as active — the set decides which `#if` clauses were
-		// parsed.
-		guard Set(cached.activeCompilationConditions) == activeCompilationConditions else {
-			return nil
-		}
 
 		// Bypass the cache if the current CSV's file set differs from what
 		// scan observed — a custom script could reuse a manifest path with a
@@ -638,21 +693,78 @@ struct Generate: AsyncParsableCommand {
 			return nil
 		}
 		// Scan rejected more than one configuration in scope, so the first by path is the module's.
-		let configuration = cached.moduleInfo.configurations
+		let configuration = (cached.moduleInfo.configurations + cached.conditionSensitiveFileScans.flatMap(\.fileScan.configurations))
 			.filter { configuration in
 				guard let sourceFilePath = configuration.sourceFilePath else { return false }
 				return configurationFilePaths.contains(sourceFilePath)
 			}
 			.sorted { ($0.sourceFilePath ?? "") < ($1.sourceFilePath ?? "") }
 			.first
-		return ParsedModule(
-			moduleInfo: cached.moduleInfo,
+		let evaluator = conditionalCompilationEvaluator(
+			activeCompilationConditions: activeCompilationConditions,
 			configuration: configuration,
-			conditionalCompilationEvaluator: conditionalCompilationEvaluator(
-				activeCompilationConditions: activeCompilationConditions,
-				configuration: configuration,
-			),
 		)
+		guard let fileScans = try await refreshed(cached.conditionSensitiveFileScans, from: cached, activeCompilationConditions: activeCompilationConditions, evaluator: evaluator),
+		      let additionalFileScans = try await refreshed(cached.additionalConditionSensitiveFileScans, from: cached, activeCompilationConditions: activeCompilationConditions, evaluator: evaluator)
+		else {
+			return nil
+		}
+		return ParsedModule(
+			moduleInfo: cached.moduleInfo.adding(fileScans).including(cached.additionalModuleInfo.adding(additionalFileScans)),
+			configuration: configuration,
+			conditionalCompilationEvaluator: evaluator,
+		)
+	}
+
+	/// What each file in `cachedFileScans` contributes under `activeCompilationConditions`, or `nil` when
+	/// the module must be parsed afresh.
+	///
+	/// A file's scan records every bare condition whose value decided what the file contributed, so a
+	/// file is walked again only when one of those has a different value now. The build settings
+	/// usually report more conditions than the build tool plugin handed `scan`, such as `DEBUG` and
+	/// `SWIFT_PACKAGE`, and only the files whose `#if` blocks consult them are walked again. Each is
+	/// walked under the name scan gave it, so the locations it records read as scan's do.
+	///
+	/// A file that declared a configuration could declare a different one now, which would change the
+	/// evaluator every file is walked with, so then the whole module is parsed afresh. A file that
+	/// declares a configuration only now is not the module's: the manifest does not list it, and
+	/// `generate` rejects it.
+	private func refreshed(
+		_ cachedFileScans: [CachedFileScan],
+		from cached: CachedScannedModuleInfo,
+		activeCompilationConditions: Set<String>,
+		evaluator: ConditionalCompilationEvaluator,
+	) async throws -> [FileScan]? {
+		let scanActiveCompilationConditions = Set(cached.activeCompilationConditions)
+		func hasChangedValue(_ condition: String) -> Bool {
+			scanActiveCompilationConditions.contains(condition) != activeCompilationConditions.contains(condition)
+		}
+		let staleFileScans = cachedFileScans.filter { cachedFileScan in
+			cachedFileScan.fileScan.consultedCompilationConditions.contains(where: hasChangedValue)
+		}
+		guard staleFileScans.allSatisfy(\.fileScan.configurations.isEmpty) else {
+			return nil
+		}
+		let projectRootURL = cached.projectRoot.asFileURL.appendingPathComponent("", isDirectory: true)
+		let rescans = try await parseSwiftFiles(
+			readingFilePathsByName: Dictionary(uniqueKeysWithValues: staleFileScans.map { cachedFileScan in
+				(cachedFileScan.scannedPath, URL(fileURLWithPath: cachedFileScan.scannedPath, relativeTo: projectRootURL).standardizedFileURL.path)
+			}),
+			conditionalCompilation: evaluator,
+		)
+		let rescanByScannedPath = Dictionary(uniqueKeysWithValues: rescans.map { ($0.path, $0) })
+		let staleScannedPaths = Set(staleFileScans.map(\.scannedPath))
+		// A file that no longer mentions SafeDI is not walked, so it contributes nothing, as in a fresh parse.
+		return cachedFileScans.compactMap { cachedFileScan in
+			if staleScannedPaths.contains(cachedFileScan.scannedPath) {
+				rescanByScannedPath[cachedFileScan.scannedPath]?.relocated(to: cachedFileScan.fileScan.path)
+			} else if cachedFileScan.fileScan.importOnlyConsultedCompilationConditions.contains(where: hasChangedValue) {
+				// Only the file's imports depend on a changed condition, and its import segments hold them.
+				cachedFileScan.fileScan.withImports(evaluatedWith: evaluator)
+			} else {
+				cachedFileScan.fileScan
+			}
+		}
 	}
 
 	/// `diagnostics` formatted for the build log. Build systems hand the tool paths relative to its working
