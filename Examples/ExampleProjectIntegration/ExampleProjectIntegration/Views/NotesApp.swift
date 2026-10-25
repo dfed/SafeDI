@@ -44,11 +44,14 @@ public struct NotesApp: Instantiable, App {
 		stringStorage: StringStorage,
 		nameEntryViewBuilder: Instantiator<NameEntryView>,
 		loggedInViewBuilder: Instantiator<LoggedInView>,
+		eventLogger: EventLogger,
 	) {
 		self.userService = userService
 		self.stringStorage = stringStorage
 		self.nameEntryViewBuilder = nameEntryViewBuilder
 		self.loggedInViewBuilder = loggedInViewBuilder
+		self.eventLogger = eventLogger
+		eventLogger.record("Launched")
 	}
 
 	/// A private property that is instantiated when the app is instantiated and manages the User state.
@@ -59,4 +62,6 @@ public struct NotesApp: Instantiable, App {
 	@Instantiated private let nameEntryViewBuilder: Instantiator<NameEntryView>
 	/// A private property that is instantiated when the app is instantiated and can create a LoggedInView on demand.
 	@Instantiated private let loggedInViewBuilder: Instantiator<LoggedInView>
+	/// Which type fulfills `EventLogger` depends on whether `DEBUG` is active; see `EventLogger.swift`.
+	@Instantiated private let eventLogger: EventLogger
 }

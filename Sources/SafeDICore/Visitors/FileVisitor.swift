@@ -51,7 +51,15 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: ImportDeclSyntax) -> SyntaxVisitorContinueKind {
-		imports.append(node.asImportStatement)
+		let importStatement = node.asImportStatement
+		imports.append(importStatement)
+		if importOnlyBlockDepth == 0 {
+			if case let .imports(importStatements) = importSegments.last {
+				importSegments[importSegments.count - 1] = .imports(importStatements + [importStatement])
+			} else {
+				importSegments.append(.imports([importStatement]))
+			}
+		}
 		return .skipChildren
 	}
 
@@ -64,10 +72,31 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
-		let scannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: node.safeDIContent(in: .declarations))
+		let content = node.safeDIContent(in: .declarations)
+		let scannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: content)
 		activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
 		record(scannable.decisions)
+		if importOnlyBlockDepth > 0 {
+			// The enclosing block's source, which `importSegments` holds, contains this block too.
+			importOnlyBlockDepth += 1
+			importOnlyConsultedCompilationConditions.formUnion(scannable.consultedConditions)
+		} else if content == .none, !node.hasError, node.containsImport {
+			// This block decides nothing but which imports this visitor finds, which
+			// ``ImportSegment/conditionalImports(source:)`` lets a caller decide again without the file.
+			importOnlyBlockDepth = 1
+			importSegments.append(.conditionalImports(source: node.trimmedDescription))
+			importOnlyConsultedCompilationConditions.formUnion(scannable.consultedConditions)
+		} else if content != .none || node.hasError {
+			// A block guarding nothing SafeDI scans for still decides which syntax errors this visitor finds.
+			consultedCompilationConditions.formUnion(scannable.consultedConditions)
+		}
 		return .visitChildren
+	}
+
+	public override func visitPost(_: IfConfigDeclSyntax) {
+		if importOnlyBlockDepth > 0 {
+			importOnlyBlockDepth -= 1
+		}
 	}
 
 	public override func visit(_ node: IfConfigClauseSyntax) -> SyntaxVisitorContinueKind {
@@ -130,6 +159,7 @@ public final class FileVisitor: SyntaxVisitor {
 			instantiables.append(instantiable)
 		}
 		record(instantiableVisitor.conditionalCompilationDecisions)
+		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
 
 		// Extensions are always top-level.
 		parentType = node.extendedType.typeDescription
@@ -160,6 +190,24 @@ public final class FileVisitor: SyntaxVisitor {
 	public private(set) var encounteredUnexpectedNodesSyntax = false
 	/// How each `#if` condition that guards SafeDI declarations was evaluated, in source order.
 	public private(set) var conditionalCompilationDecisions = [ConditionalCompilationDecision]()
+	/// Every bare condition whose value decided what this visitor found, except imports in `#if` blocks
+	/// that guard nothing else this visitor reports. Walking the same file with any evaluator that gives
+	/// each of these conditions the same value finds the same declarations, configurations, syntax
+	/// errors, and decisions, and the imports `importSegments` describe.
+	public private(set) var consultedCompilationConditions = Set<String>()
+	/// The file's imports in source order, with each `#if` block that guards nothing but imports and
+	/// other code SafeDI ignores kept as source, so its imports can be found again with another evaluator.
+	public private(set) var importSegments = [ImportSegment]()
+	/// Every bare condition whose value decided which imports the `#if` blocks in `importSegments` hold.
+	public private(set) var importOnlyConsultedCompilationConditions = Set<String>()
+
+	/// A run of a file's imports.
+	public enum ImportSegment: Codable, Hashable, Sendable {
+		/// Imports outside any `#if` block that guards only imports.
+		case imports([ImportStatement])
+		/// An `#if` block that guards only imports and code SafeDI ignores.
+		case conditionalImports(source: String)
+	}
 
 	// MARK: Private
 
@@ -168,6 +216,8 @@ public final class FileVisitor: SyntaxVisitor {
 	private let sourceLocationConverter: SourceLocationConverter?
 	/// The `#if` clauses the evaluator selected for scanning.
 	private var activeIfConfigClauses = Set<SyntaxIdentifier>()
+	/// How many `#if` blocks deep the walk is inside a block that `importSegments` holds as source.
+	private var importOnlyBlockDepth = 0
 
 	private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
 		let instantiableVisitor = InstantiableVisitor(
@@ -181,6 +231,7 @@ public final class FileVisitor: SyntaxVisitor {
 			instantiables.append(instantiable)
 		}
 		record(instantiableVisitor.conditionalCompilationDecisions)
+		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
 
 		// Keep track of how nested we are.
 		enterTypeNamed(node.name.text)
@@ -206,5 +257,12 @@ public final class FileVisitor: SyntaxVisitor {
 		for decision in decisions where !conditionalCompilationDecisions.contains(decision) {
 			conditionalCompilationDecisions.append(decision)
 		}
+	}
+}
+
+extension IfConfigDeclSyntax {
+	/// Whether any clause holds an import, which `FileVisitor` reports even when nothing SafeDI scans for is inside.
+	fileprivate var containsImport: Bool {
+		tokens(viewMode: .sourceAccurate).contains { $0.tokenKind == .keyword(.import) }
 	}
 }
