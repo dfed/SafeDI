@@ -79,6 +79,15 @@ func performScan(
 	}
 	let allFilePaths = Set(allSwiftFiles.map(\.relativePath))
 
+	// Each input's modification times, recorded before the input is read so that an edit made
+	// while scan runs shows in `generate`'s comparison. Keyed by absolute path, so `generate`'s
+	// freshness check works regardless of its working directory. The input URLs are already
+	// standardized, so their paths are absolute without resolving every input again.
+	var scannedInputStamps = [String: FileModificationStamp]()
+	for filePath in allSwiftFiles.map(\.path) {
+		scannedInputStamps[filePath] = FileModificationStamp(ofFileAtPath: filePath)
+	}
+
 	// Determine which files are scoped for mock scanning.
 	let mockScopedFilePaths: Set<String> = if mockScopedFiles.isEmpty {
 		allFilePaths
@@ -122,6 +131,9 @@ func performScan(
 		// Record the additional files for the plugin to use as build inputs.
 		additionalInputFiles = additionalFiles.sorted().map { filePath in
 			URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path
+		}
+		for filePath in additionalInputFiles where scannedInputStamps[filePath] == nil {
+			scannedInputStamps[filePath] = FileModificationStamp(ofFileAtPath: filePath)
 		}
 
 		// Exclude files already parsed via the CSV — re-parsing them would
@@ -247,23 +259,6 @@ func performScan(
 	func cached(_ fileScan: FileScan) -> CachedFileScan {
 		CachedFileScan(scannedPath: fileScan.path, fileScan: normalized(fileScan))
 	}
-	// Every path scan parsed for this module — CSV inputs plus any files
-	// reached through `#SafeDIConfiguration.additionalDirectoriesToInclude`.
-	// `generate` uses this list to validate cache freshness against the
-	// exact file set `scan` observed, so edits to additional-directory
-	// files correctly invalidate the cache too.
-	//
-	// Normalized to absolute paths so `generate`'s freshness check works
-	// regardless of its CWD — `FileManager.attributesOfItem(atPath:)`
-	// resolves relative paths against the process's CWD, which would
-	// silently fail and invalidate the cache if `generate` runs from a
-	// different directory than `scan`. The input URLs are already standardized, so
-	// their paths are these absolute paths without resolving every input again.
-	let absoluteCSVPaths = allSwiftFiles.map(\.path)
-	let allScannedFilePaths = (Set(absoluteCSVPaths).union(
-		// `additionalInputFiles` is already normalized to `.standardizedFileURL.path`.
-		Set(additionalInputFiles),
-	)).sorted()
 	let additionalDirectories = configuration?.additionalDirectoriesToInclude.map { directory in
 		URL(fileURLWithPath: directory, relativeTo: directoryBaseURL).standardizedFileURL.path
 	}.sorted() ?? []
@@ -273,7 +268,11 @@ func performScan(
 		additionalModuleInfo: ModuleInfo(additionalFileScans.filter { !$0.consultsCompilationConditions }.map(normalized)),
 		additionalConditionSensitiveFileScans: additionalFileScans.filter(\.consultsCompilationConditions).map(cached),
 		projectRoot: projectRootURL.path,
-		scannedInputPaths: allScannedFilePaths,
+		// Every file scan read for this module — CSV inputs plus any files reached through
+		// `#SafeDIConfiguration.additionalDirectoriesToInclude` — so edits to either invalidate the cache.
+		scannedInputs: scannedInputStamps
+			.map { ScannedInput(path: $0.key, modificationStamp: $0.value) }
+			.sorted { $0.path < $1.path },
 		csvInputPaths: inputFilePaths.sorted(),
 		additionalInputAbsolutePaths: additionalInputFiles.sorted(),
 		additionalDirectories: additionalDirectories,
@@ -334,9 +333,10 @@ struct CachedScannedModuleInfo: Codable {
 	let additionalConditionSensitiveFileScans: [CachedFileScan]
 	/// The directory relative paths in the scans are relative to.
 	let projectRoot: String
-	/// Absolute paths of every file `scan` observed — CSV inputs plus
-	/// additional-directory files. Drives the mtime freshness check.
-	let scannedInputPaths: [String]
+	/// Every file `scan` read — CSV inputs plus additional-directory files — with the modification
+	/// times it recorded before reading them. `generate` reuses this cache only while every one of them
+	/// still reports the same times.
+	let scannedInputs: [ScannedInput]
 	/// Raw CSV file paths as `scan` read them. Drives the "current generate
 	/// CSV matches the CSV that scan observed" check.
 	let csvInputPaths: [String]
@@ -355,6 +355,13 @@ struct CachedScannedModuleInfo: Codable {
 	/// may differ: a build tool plugin hands `scan` only the conditions it can see, while `generate`
 	/// usually reads more from the build settings, such as `DEBUG` and `SWIFT_PACKAGE`.
 	let activeCompilationConditions: [String]
+}
+
+/// A file `scan` read, and its modification times when scan read it.
+struct ScannedInput: Codable {
+	/// The file's absolute path.
+	let path: String
+	let modificationStamp: FileModificationStamp
 }
 
 /// What one file contributed to the module that `scan` cached.

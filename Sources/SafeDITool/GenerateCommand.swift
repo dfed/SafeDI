@@ -596,12 +596,12 @@ struct Generate: AsyncParsableCommand {
 	/// pass `--include` expect those directories scanned afresh, and scan
 	/// doesn't see `--include`.
 	///
-	/// The cache is also bypassed when any source file's mtime is newer
-	/// than the cache file — e.g. a manual `generate` invocation after a
-	/// source edit without rerunning `scan` would otherwise consume stale
-	/// parse results and emit stale code. Plugin-driven builds rerun
-	/// `scan` every build, so this check is effectively free on the fast
-	/// path.
+	/// The cache is also bypassed when any file scan read reports
+	/// modification times other than those scan recorded before reading it —
+	/// e.g. a manual `generate` invocation after a source edit without
+	/// rerunning `scan` would otherwise consume stale parse results and emit
+	/// stale code. Plugin-driven builds rerun `scan` every build, so this
+	/// check passes on the fast path, at one or two system calls per input.
 	///
 	/// Decode failures (truncated file from an interrupted write,
 	/// cross-version schema drift, etc.) fall through to a fresh parse
@@ -651,11 +651,11 @@ struct Generate: AsyncParsableCommand {
 		activeCompilationConditions: Set<String>,
 	) async throws -> ParsedModule? {
 		let cacheURL = scannedModuleInfoURL(forManifestPath: manifestPath)
-		guard let cacheModifiedAt = contentModificationDate(ofFileAtPath: cacheURL.path) else { return nil }
 
-		// Treat decode failures as cache misses, not hard errors — the
+		// Treat a missing cache and decode failures as cache misses, not hard errors — the
 		// cache may have been truncated by an interrupted write or carry
-		// an older schema that a newer SafeDITool can no longer read.
+		// an older schema that a newer SafeDITool can no longer read, such
+		// as one that recorded no modification times.
 		guard let data = try? Data(contentsOf: cacheURL),
 		      let cached = try? JSONDecoder().decode(CachedScannedModuleInfo.self, from: data)
 		else { return nil }
@@ -673,9 +673,9 @@ struct Generate: AsyncParsableCommand {
 
 		// Bypass the cache if new Swift files have been added to any of the
 		// `additionalDirectoriesToInclude` directories since scan ran. The
-		// mtime check below only catches files scan already knew about — it
-		// would miss a newly-added file whose path doesn't appear in
-		// `cached.scannedInputPaths`.
+		// modification-time check below only catches files scan already knew
+		// about — it would miss a newly-added file whose path doesn't appear in
+		// `cached.scannedInputs`.
 		if !cached.additionalDirectories.isEmpty {
 			let currentAdditionalFiles = await (try? findSwiftFiles(inDirectories: cached.additionalDirectories)) ?? []
 			let currentAdditionalAbsolute = Set(currentAdditionalFiles.map { filePath in
@@ -686,19 +686,14 @@ struct Generate: AsyncParsableCommand {
 			}
 		}
 
-		// Bypass the cache if any input file scan observed has changed
-		// since the cache was written — newer mtime OR missing-from-disk
-		// both invalidate. We check every path scan parsed (including
-		// files reached through `#SafeDIConfiguration.additionalDirectoriesToInclude`,
+		// Bypass the cache if any file scan read reports different
+		// modification times than scan recorded before reading it: edited,
+		// touched, moved back in time, deleted, or a symbolic link pointed
+		// elsewhere. We check every path scan read (including files reached
+		// through `#SafeDIConfiguration.additionalDirectoriesToInclude`,
 		// which don't appear in `findGenerateSwiftFiles()`'s output).
-		guard !cached.scannedInputPaths.contains(where: { filePath in
-			guard let modifiedAt = contentModificationDate(ofFileAtPath: filePath) else {
-				// File missing or unreadable — the scan-observed input set
-				// doesn't match disk, so a fresh parse is safer than
-				// trusting stale parse results.
-				return true
-			}
-			return modifiedAt > cacheModifiedAt
+		guard cached.scannedInputs.allSatisfy({ scannedInput in
+			FileModificationStamp(ofFileAtPath: scannedInput.path) == scannedInput.modificationStamp
 		}) else {
 			return nil
 		}
@@ -784,16 +779,6 @@ struct Generate: AsyncParsableCommand {
 		return diagnostics
 			.map { $0.resolvingFilePath(relativeToDirectory: currentDirectoryPath).formatted }
 			.joined(separator: "\n")
-	}
-
-	/// When the file at `path` was last modified, or `nil` when it is missing or unreadable.
-	/// Asks for the one value rather than `FileManager.attributesOfItem`'s whole dictionary:
-	/// this runs for every input file on every build. `isDirectory` is stated so that building
-	/// the URL does not consult the file system.
-	private func contentModificationDate(ofFileAtPath path: String) -> Date? {
-		try? URL(fileURLWithPath: path, isDirectory: false)
-			.resourceValues(forKeys: [.contentModificationDateKey])
-			.contentModificationDate
 	}
 
 	private var moduleInfoURLs: Set<URL> {
