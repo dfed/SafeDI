@@ -41,7 +41,7 @@ import PackagePlugin
 		/// callers — the binary format is forward-compatible within a minor
 		/// release line.
 		var safeDIVersion: String {
-			"2.1.0-rc-1"
+			"2.1.0-rc-2"
 		}
 
 		/// Hardcoded source repo (forks must update this to point at their
