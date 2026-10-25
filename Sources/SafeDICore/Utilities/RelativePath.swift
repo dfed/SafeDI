@@ -23,15 +23,35 @@ import Foundation
 /// Compute a path string relative to a base directory, for use in the CSV and manifest.
 /// Falls back to the absolute path if the URL is not under the base directory.
 public func relativePath(for url: URL, relativeTo base: URL) -> String {
-	let urlPath = url.standardizedFileURL.path
-	let standardizedBasePath = base.standardizedFileURL.path
-	let basePath = standardizedBasePath.hasSuffix("/")
-		? standardizedBasePath
-		: standardizedBasePath + "/"
+	RelativePathBase(base).relativePath(for: url)
+}
 
-	if urlPath.hasPrefix(basePath) {
-		return String(urlPath.dropFirst(basePath.count))
-	} else {
-		return urlPath
+/// A base directory that paths are expressed relative to, for use in the CSV and manifest.
+///
+/// Standardizing a URL is far costlier than comparing strings, and `scan` expresses every file
+/// it parses relative to the same project root, so the base's path is standardized once.
+public struct RelativePathBase {
+	public init(_ base: URL) {
+		let standardizedBasePath = base.standardizedFileURL.path
+		basePath = standardizedBasePath.hasSuffix("/")
+			? standardizedBasePath
+			: standardizedBasePath + "/"
 	}
+
+	/// `url`'s path relative to the base, or its absolute path if it is not under the base.
+	public func relativePath(for url: URL) -> String {
+		relativePath(forStandardizedPath: url.standardizedFileURL.path)
+	}
+
+	/// The path of a standardized file URL, relative to the base, or as given if it is not under
+	/// the base. Standardizing again would return the same path.
+	public func relativePath(forStandardizedPath path: String) -> String {
+		if path.hasPrefix(basePath) {
+			String(path.dropFirst(basePath.count))
+		} else {
+			path
+		}
+	}
+
+	private let basePath: String
 }
