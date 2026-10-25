@@ -733,17 +733,18 @@ public actor DependencyTreeGenerator {
 		)
 
 		// Worklist: promoted scopes may introduce additional transitive received properties.
+		// Only required properties are walked: a property received only if available becomes
+		// an optional mock parameter with no default construction, so its transitive
+		// dependencies don't need promoting. A property is required when any receiver in the
+		// root's tree or in a promoted scope's tree requires it, even if others receive it
+		// only if available.
 		var allReceived = initialReceived
 		var allOnlyIfAvailable = initialOnlyIfAvailable
+		var allRequired = initialReceived.subtracting(initialOnlyIfAvailable)
 		var visitedTypes = Set<TypeDescription>()
-		var worklist = Array(allReceived)
+		var worklist = Array(allRequired)
 
 		while let property = worklist.popLast() {
-			// Don't walk into scopes for onlyIfAvailable dependencies.
-			// They become optional mock parameters with no default construction,
-			// so their transitive dependencies don't need promoting.
-			guard !allOnlyIfAvailable.contains(property) else { continue }
-
 			var dependencyType = property.typeDescription.asInstantiatedType
 			if typeDescriptionToScopeMap[dependencyType] == nil,
 			   let concreteType = erasedToConcreteTypeMap[property.typeDescription]
@@ -758,11 +759,13 @@ public actor DependencyTreeGenerator {
 				from: promotedScope,
 				cache: &cache,
 			)
-			for newProperty in scopeReceived where allReceived.insert(newProperty).inserted {
+			allReceived.formUnion(scopeReceived)
+			allOnlyIfAvailable.formUnion(scopeOnlyIfAvailable)
+			for newProperty in scopeReceived.subtracting(scopeOnlyIfAvailable) where allRequired.insert(newProperty).inserted {
 				worklist.append(newProperty)
 			}
-			allOnlyIfAvailable.formUnion(scopeOnlyIfAvailable)
 		}
+		allOnlyIfAvailable.subtract(allRequired)
 
 		// Promote all received properties that have scopes.
 		// onlyIfAvailable dependencies are NOT promoted — they become optional
@@ -979,6 +982,10 @@ public actor DependencyTreeGenerator {
 
 	/// Mirrors ScopeGenerator's `receivedProperties` and `onlyIfAvailableUnwrappedReceivedProperties`
 	/// computation but operates on Scope objects directly, with memoization for O(1) revisits.
+	///
+	/// - Returns: `received`, every property the subtree needs from an ancestor, and
+	///   `onlyIfAvailable`, those of them that every receiver in the subtree receives only if
+	///   available. A property some receiver requires is not in `onlyIfAvailable`.
 	private static func collectReceivedProperties(
 		from scope: Scope,
 		cache: inout [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
@@ -1007,6 +1014,10 @@ public actor DependencyTreeGenerator {
 
 		var received = Set<Property>()
 		var onlyIfAvailable = Set<Property>()
+		// Received properties some receiver in this subtree requires. A property can be
+		// received both ways — e.g. a required `x: X` and an `onlyIfAvailable` alias
+		// fulfilled by `x: X` — and a required receive wins.
+		var required = Set<Property>()
 
 		// Collect from instantiated children — mirrors ScopeGenerator's receivedProperties aggregation.
 		// Aliases are handled below in the own-dependency loop: alias children's receivedProperties
@@ -1017,15 +1028,15 @@ public actor DependencyTreeGenerator {
 				from: childScope,
 				cache: &cache,
 			)
-			received.formUnion(
-				childReceived
-					.subtracting(propertiesToDeclare)
-					.filter { property in
-						!property.typeDescription.isOptional
-							|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
-					}
-					.subtracting(forwardedProperties),
-			)
+			let childReceivedFromAncestors = childReceived
+				.subtracting(propertiesToDeclare)
+				.filter { property in
+					!property.typeDescription.isOptional
+						|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
+				}
+				.subtracting(forwardedProperties)
+			received.formUnion(childReceivedFromAncestors)
+			required.formUnion(childReceivedFromAncestors.subtracting(childOnlyIfAvailable))
 			// Subtract by unwrapped form — a declared `x: X` satisfies onlyIfAvailable `x: X?`.
 			onlyIfAvailable.formUnion(
 				childOnlyIfAvailable.filter { property in
@@ -1046,6 +1057,8 @@ public actor DependencyTreeGenerator {
 				received.insert(dependency.property)
 				if isOnlyIfAvailable {
 					onlyIfAvailable.insert(dependency.property)
+				} else {
+					required.insert(dependency.property)
 				}
 			case let .aliased(fulfillingProperty, _, isOnlyIfAvailable):
 				// If the fulfilling property is also locally declared here (e.g., as an
@@ -1055,13 +1068,15 @@ public actor DependencyTreeGenerator {
 				received.insert(fulfillingProperty)
 				if isOnlyIfAvailable {
 					onlyIfAvailable.insert(fulfillingProperty)
+				} else {
+					required.insert(fulfillingProperty)
 				}
 			case .instantiated, .forwarded:
 				break
 			}
 		}
 
-		let result = (received, onlyIfAvailable)
+		let result = (received, onlyIfAvailable.subtracting(required))
 		cache[id] = result
 		return result
 	}
