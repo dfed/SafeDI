@@ -411,7 +411,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// unavailable because an ancestor generates them after this scope — the
 	/// fulfilling property and, for an aliased dependency, the alias, matching how
 	/// `Scope.createScopeGenerator` marks a dependency no ancestor provides.
-	private nonisolated func onlyIfAvailableDependencies(
+	nonisolated private func onlyIfAvailableDependencies(
 		fulfilledByPropertiesGeneratedLater propertiesGeneratedLater: Set<Property>,
 	) -> Set<Property> {
 		switch scopeData {
