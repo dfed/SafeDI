@@ -2167,7 +2167,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		filesToDelete += [swiftFileCSV, swiftFile, manifestFile, moduleInfoOutput]
 
 		await assertThrowsError(
-			"Manifest lists '\(swiftFile.relativePath)' as containing a dependency tree root, but no @Instantiable(isRoot: true) was found in that file.",
+			"Manifest lists '\(swiftFile.relativePath)' as containing a dependency tree root, but no @Instantiable(isRoot: true) was found in that file. If an `#if` block declares the root, SafeDI evaluated it differently when it decided which files to generate, which happens before the build with only the compilation conditions the build tool plugin can see, such as a target’s `swiftSettings` defines but not SwiftPM’s `DEBUG`. Declare the root outside the `#if` block.",
 		) {
 			let tool = try Generate.parse([
 				swiftFileCSV.relativePath,
@@ -2203,7 +2203,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		filesToDelete += [swiftFileCSV, swiftFile, manifestFile, moduleInfoOutput]
 
 		await assertThrowsError(
-			"Found @Instantiable(isRoot: true) in '\(swiftFile.relativePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. Add it to the manifest or remove the isRoot annotation.",
+			"Found @Instantiable(isRoot: true) in '\(swiftFile.relativePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. If an `#if` block declares the root, SafeDI evaluated it differently when it decided which files to generate, which happens before the build with only the compilation conditions the build tool plugin can see, such as a target’s `swiftSettings` defines but not SwiftPM’s `DEBUG`. Declare the root outside the `#if` block. A hand-written manifest must list the file, or the type must not be a root.",
 		) {
 			let tool = try Generate.parse([
 				swiftFileCSV.relativePath,

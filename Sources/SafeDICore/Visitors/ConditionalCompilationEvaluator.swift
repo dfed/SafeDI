@@ -67,10 +67,7 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 		switch content {
 		case .none:
 			// Nothing SafeDI scans for is inside, so the selection affects nothing SafeDI generates.
-			ScannableClauses(
-				clauses: activeClauses(in: node, activeCompilationConditions: activeCompilationConditions).clauses,
-				decisions: [],
-			)
+			activeClauses(in: node, activeCompilationConditions: activeCompilationConditions).withoutDecisions
 		case .mockOnly:
 			if let mockConditionalCompilation {
 				mockOnlyScannableClauses(in: node, mockConditionalCompilation: mockConditionalCompilation)
@@ -107,6 +104,8 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 	/// The generated mock code that references mock-only declarations is wrapped in the mock
 	/// condition, so the condition is active wherever that code compiles. A decision that rests on
 	/// it cannot be asserted outside that code, so only decisions about other conditions are reported.
+	/// The mock condition is active here whatever conditions are supplied, so the selection does not
+	/// consult it.
 	private func mockOnlyScannableClauses(in node: IfConfigDeclSyntax, mockConditionalCompilation: String) -> ScannableClauses {
 		activeClauses(
 			in: node,
@@ -128,12 +127,14 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 		)
 		var selectedClauses = [IfConfigClauseSyntax]()
 		var decisions = [ConditionalCompilationDecision]()
+		var consultedConditions = Set<String>()
 		var isSettled = false
 		for clause in node.clauses where !isSettled {
 			if let condition = clause.condition {
+				let mentionedConditions = mentionedCompilationConditions(in: condition)
+				consultedConditions.formUnion(mentionedConditions.subtracting([ignoredCondition].compactMap(\.self)))
 				switch evaluator.evaluate(condition) {
 				case let .known(isActive):
-					let mentionedConditions = mentionedCompilationConditions(in: condition)
 					// A condition without compilation conditions, such as `#if false`, cannot be decided wrongly.
 					if !mentionedConditions.isEmpty, !mentionedConditions.contains(ignoredCondition ?? "") {
 						decisions.append(ConditionalCompilationDecision(
@@ -157,6 +158,7 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 		return ScannableClauses(
 			clauses: selectedClauses,
 			decisions: decisions,
+			consultedConditions: consultedConditions,
 		)
 	}
 
@@ -245,4 +247,13 @@ struct ScannableClauses {
 	let clauses: [IfConfigClauseSyntax]
 	/// The evaluations of bare conditions that the selection rests on, in source order.
 	let decisions: [ConditionalCompilationDecision]
+	/// Every bare condition whose value the selection depends on: given the same value for each,
+	/// any set of supplied conditions selects the same clauses. A superset of the conditions
+	/// `decisions` mention, which omits those no compile-time assertion can check.
+	let consultedConditions: Set<String>
+
+	/// These clauses, reporting no decision to assert.
+	var withoutDecisions: Self {
+		ScannableClauses(clauses: clauses, decisions: [], consultedConditions: consultedConditions)
+	}
 }
