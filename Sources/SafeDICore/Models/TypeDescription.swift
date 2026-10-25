@@ -207,6 +207,10 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 				.sendableInstantiator
 			} else if name == Dependency.sendableErasedInstantiatorType {
 				.sendableErasedInstantiator
+			} else if name == Dependency.lazilyInstantiatedType {
+				.lazilyInstantiated
+			} else if name == Dependency.sendableLazilyInstantiatedType {
+				.sendableLazilyInstantiated
 			} else {
 				.constant
 			}
@@ -463,6 +467,12 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			{
 				// This is a type that is lazily instantiated with explicitly declared forwarded arguments due to type erasure.
 				// The second generic is the built type.
+				builtType
+			} else if name == Dependency.lazilyInstantiatedType || name == Dependency.sendableLazilyInstantiatedType,
+			          let builtType = generics.first
+			{
+				// This is a type that is instantiated once, the first time it is requested.
+				// The first generic is the built type.
 				builtType
 			} else {
 				self

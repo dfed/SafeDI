@@ -30,6 +30,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		property: Property?,
 		propertiesToGenerate: [ScopeGenerator],
 		unavailableOptionalProperties: Set<Property>,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
 		isPropertyCycle: Bool,
 	) {
@@ -53,8 +54,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		self.property = property
 		self.propertiesToGenerate = propertiesToGenerate
-		propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property))
+		// A lazily instantiated property also declares the property that receives its instance by value.
+		propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property).flatMap(\.withLazilyInstantiatedInstanceProperty))
 		self.unavailableOptionalProperties = unavailableOptionalProperties
+		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
+		fulfillingPropertyIsLazilyInstantiatedInstance = false
 		receivedProperties = Set(
 			propertiesToGenerate.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
 				// All the properties this child and its children require be passed in.
@@ -126,6 +130,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	init(
 		property: Property,
 		fulfillingProperty: Property,
+		fulfillingPropertyIsLazilyInstantiatedInstance: Bool,
 		unavailableOptionalProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
@@ -148,6 +153,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		propertiesToGenerate = []
 		propertiesToDeclare = []
 		self.unavailableOptionalProperties = unavailableOptionalProperties
+		lazilyInstantiatedInstanceProperties = []
+		self.fulfillingPropertyIsLazilyInstantiatedInstance = fulfillingPropertyIsLazilyInstantiatedInstance
 		self.property = property
 	}
 
@@ -301,6 +308,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let propertiesToGenerate: [ScopeGenerator]
 	/// Properties that this scope declares as a `let` constant.
 	private let propertiesToDeclare: Set<Property>
+	/// The received properties that are in scope only as the instance of a `LazilyInstantiated` property created
+	/// further up the tree. Passing one to this scope’s initializer reads that instance, which instantiates it.
+	private let lazilyInstantiatedInstanceProperties: Set<Property>
+	/// Whether the property an alias renames is in scope only as the instance of a `LazilyInstantiated` property.
+	private let fulfillingPropertyIsLazilyInstantiatedInstance: Bool
 	private let property: Property?
 
 	private var unavailablePropertiesToGenerateCodeTask = [Set<Property>: Task<String, Error>]()
@@ -327,7 +339,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.compactMap { childScope -> ScopeGenerator? in
 					guard let childProperty = childScope.property,
 					      propertyToUnfulfilledScopeMap[childProperty] != nil,
-					      receivedAndOnlyIfAvailable.contains(childProperty)
+					      // Receiving a lazily instantiated property’s instance by value depends on that property too.
+					      !receivedAndOnlyIfAvailable.isDisjoint(with: childProperty.withLazilyInstantiatedInstanceProperty)
 					else {
 						return nil
 					}
@@ -413,6 +426,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		):
 			let argumentList = try instantiable.generateArgumentList(
 				unavailableProperties: unavailableProperties,
+				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			)
 			let concreteTypeName = instantiable.concreteInstantiable.asSource
 			let instantiationDeclaration = if instantiable.declarationType.isExtension {
@@ -518,6 +532,45 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				return """
 				\(functionDeclaration)\(propertyDeclaration) = \(instantiatorInstantiation)
 				"""
+			case .lazilyInstantiated,
+			     .sendableLazilyInstantiated:
+				// The builder function is the one a constant with children declares. A constant calls it
+				// immediately; a lazily instantiated property hands it to its wrapper, which calls it the
+				// first time the instance is requested. Dependency cycle validation treats the property
+				// as a constant, so it is never the repeated property of a cycle.
+				let generatedProperties = try await generateProperties(
+					codeGeneration: codeGeneration,
+					leadingMemberWhitespace: Self.standardIndent,
+				)
+				let functionName = functionName(toBuild: property)
+				let functionDecorator = if propertyType.isSendable {
+					"@Sendable "
+				} else {
+					""
+				}
+				// The wrapper is always spelled with its generic argument, so the declaration needs no type
+				// annotation: an optional property receives the wrapper through optional promotion.
+				let unwrappedTypeDescription = property
+					.typeDescription
+					.unwrapped
+					.asSource
+				let lazilyInstantiatedInstantiation = if erasedToConcreteExistential {
+					"""
+					\(unwrappedTypeDescription) {
+					\(Self.standardIndent)\(property.typeDescription.asInstantiatedType.asSource)(\(functionName)())
+					}
+					"""
+				} else {
+					"\(unwrappedTypeDescription)(\(functionName))"
+				}
+
+				return """
+				\(functionDecorator)func \(functionName)() -> \(concreteTypeName) {
+				\(generatedProperties.joined(separator: "\n"))
+				\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
+				}
+				let \(property.label) = \(lazilyInstantiatedInstantiation)
+				"""
 			case .constant:
 				let generatedProperties = try await generateProperties(
 					codeGeneration: codeGeneration,
@@ -569,10 +622,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if onlyIfAvailable, unavailableProperties.contains(fulfillingProperty) {
 				return "// Did not create `\(property.asSource)` because `\(fulfillingProperty.asSource)` is unavailable."
 			} else {
-				let aliasDeclaration = if erasedToConcreteExistential {
-					"let \(property.label): \(property.typeDescription.asSource) = \(fulfillingProperty.label)"
+				let fulfillingExpression = if fulfillingPropertyIsLazilyInstantiatedInstance {
+					"\(fulfillingProperty.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 				} else {
-					"let \(property.asSource) = \(fulfillingProperty.label)"
+					fulfillingProperty.label
+				}
+				let aliasDeclaration = if erasedToConcreteExistential {
+					"let \(property.label): \(property.typeDescription.asSource) = \(fulfillingExpression)"
+				} else {
+					"let \(property.asSource) = \(fulfillingExpression)"
 				}
 				return Self.remappingSourceLocation(of: aliasDeclaration, to: declarationLocation)
 			}
@@ -1040,6 +1098,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let constructionArguments: [Initializer.Argument]
 		/// The type's declared dependencies.
 		let dependencies: [Dependency]
+		/// The received dependencies that are in scope only as the instance of a `LazilyInstantiated` property.
+		/// Construction arguments for them read that instance.
+		let lazilyInstantiatedInstanceProperties: Set<Property>
 		/// Whether a compatible user-defined mock method exists for this type.
 		let useMockInitializer: Bool
 		/// The custom mock method name (e.g., "customMock"), if any.
@@ -1488,6 +1549,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					defaultParameters: defaultParameters,
 					constructionArguments: constructionArguments,
 					dependencies: childInstantiable.dependencies,
+					lazilyInstantiatedInstanceProperties: childGenerator.lazilyInstantiatedInstanceProperties,
 					useMockInitializer: useMockInitializer,
 					customMockName: childInstantiable.customMockName,
 					concreteType: childInstantiable.concreteInstantiable,
@@ -2071,8 +2133,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			? node.callSiteArguments
 			: node.callSiteArgumentsForPrunedOverride
 		return argumentsToSurface.map { argument in
-			if dependenciesByLabel[argument.innerLabel] != nil {
-				argument.innerLabel
+			if let dependency = dependenciesByLabel[argument.innerLabel] {
+				if dependency.source.isReceived,
+				   node.lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
+				{
+					"\(argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+				} else {
+					argument.innerLabel
+				}
 			} else if let sendableOverrideExtractor {
 				sendableOverrideExtractor.extract(
 					"\(nodePath).\(argument.label)",
@@ -2299,6 +2367,7 @@ extension Instantiable {
 
 	fileprivate func generateArgumentList(
 		unavailableProperties: Set<Property>? = nil,
+		lazilyInstantiatedInstanceProperties: Set<Property> = [],
 		forMockGeneration: Bool = false,
 		useMockInitializer: Bool = true,
 	) throws -> String {
@@ -2323,6 +2392,7 @@ extension Instantiable {
 				.createInitializerArgumentList(
 					given: dependencies,
 					unavailableProperties: unavailableProperties,
+					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 				) ?? Self.incorrectlyConfiguredComment
 		}
 	}

@@ -57,9 +57,10 @@ final class Scope: Hashable {
 		)
 	}
 
+	/// Every property this scope declares. A lazily instantiated property is followed by the property that receives its instance by value.
 	private(set) lazy var properties: [Property] = instantiable
 		.dependencies
-		.map(\.property)
+		.flatMap(\.property.withLazilyInstantiatedInstanceProperty)
 
 	private(set) lazy var createdProperties = Set(
 		instantiable
@@ -76,7 +77,8 @@ final class Scope: Hashable {
 					false
 				}
 			}
-			.map(\.property),
+			// A lazily instantiated property can also be received by value, as the instance it creates.
+			.flatMap(\.property.withLazilyInstantiatedInstanceProperty),
 	)
 
 	/// A received property this scope requires an ancestor to provide, with the location of the declaration that requires it.
@@ -133,6 +135,7 @@ final class Scope: Hashable {
 		for property: Property?,
 		propertyStack: [Property],
 		receivableProperties: Set<Property>,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
 	) throws -> ScopeGenerator {
@@ -140,11 +143,26 @@ final class Scope: Hashable {
 		let isPropertyCycle: Bool
 		if let property {
 			isPropertyCycle = propertyStack.contains(property)
-			childPropertyStack.insert(property, at: 0)
+			childPropertyStack.insert(contentsOf: property.withLazilyInstantiatedInstanceProperty, at: 0)
 		} else {
 			isPropertyCycle = false
 		}
 		let receivableProperties = receivableProperties.union(createdProperties)
+		// The properties this scope’s children receive by reading the instance of a `LazilyInstantiated` property.
+		// A property this scope declares shadows one with the same label that was lazily instantiated further up the
+		// tree. A mock root also declares the received dependencies that were promoted to its children.
+		let declaredProperties = propertiesToGenerate.map { propertyToGenerate in
+			switch propertyToGenerate {
+			case let .instantiated(property, _, _):
+				property
+			case let .aliased(property, _, _, _, _):
+				property
+			}
+		} + instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)
+		let declaredPropertyLabels = Set(declaredProperties.map(\.label))
+		let childLazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
+			.filter { !declaredPropertyLabels.contains($0.label) }
+			.union(declaredProperties.compactMap(\.asLazilyInstantiatedInstanceProperty))
 		// In mock mode, unavailableOptionalProperties is empty — onlyIfAvailable
 		// dependencies become optional mock parameters instead of being marked unavailable.
 		let unavailableOptionalProperties: Set<Property>
@@ -185,6 +203,7 @@ final class Scope: Hashable {
 						for: property,
 						propertyStack: childPropertyStack,
 						receivableProperties: receivableProperties,
+						lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						forMockGeneration: forMockGeneration,
 					)
@@ -192,6 +211,7 @@ final class Scope: Hashable {
 					ScopeGenerator(
 						property: property,
 						fulfillingProperty: fulfillingProperty,
+						fulfillingPropertyIsLazilyInstantiatedInstance: childLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty),
 						unavailableOptionalProperties: unavailableOptionalProperties,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
@@ -200,6 +220,7 @@ final class Scope: Hashable {
 				}
 			},
 			unavailableOptionalProperties: unavailableOptionalProperties,
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			isPropertyCycle: isPropertyCycle,
 		)
