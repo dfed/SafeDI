@@ -33,6 +33,7 @@ let emptyMockConfigurationFileOutput = """
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func executeSafeDIToolTest(
 	swiftFileContent: [String],
+	swiftFileContentByFilePath: [String: String] = [:],
 	additionalDirectorySwiftFileContent: [String] = [],
 	dependentModuleInfoPaths: [String] = [],
 	additionalImportedModules: [String] = [],
@@ -77,10 +78,16 @@ func executeSafeDIToolTest(
 		return resolved
 	}
 
-	let swiftFiles = try createSwiftFixtureFiles(
+	let contentNamedSwiftFiles = try createSwiftFixtureFiles(
 		from: resolvedSwiftFileContent,
 		in: swiftFixtureDirectory,
 	)
+	let pathNamedSwiftFiles = try createSwiftFixtureFiles(
+		atFilePaths: swiftFileContentByFilePath,
+		in: swiftFixtureDirectory,
+		alongside: contentNamedSwiftFiles,
+	)
+	let swiftFiles = contentNamedSwiftFiles + pathNamedSwiftFiles
 	// Build systems like Bazel hand the tool paths relative to its working
 	// directory; mirror that by computing paths relative to the test process's
 	// current directory, which leaves the process-global directory untouched.
@@ -173,11 +180,12 @@ func executeSafeDIToolTest(
 		// Call `generate()` rather than `run()`: `run()` prints located errors in compiler format and
 		// rethrows them as an `ExitCode`, which would hide the error from the assertion helpers.
 		let fixtures = FixturePaths(
-			fileNames: swiftFiles.map(\.lastPathComponent),
+			fileNames: contentNamedSwiftFiles.map(\.lastPathComponent) + swiftFileContentByFilePath.keys.sorted(),
 			paths: inputSwiftFilePaths,
 		)
+		let warnings: [SourceDiagnostic]
 		do {
-			try await tool.generate()
+			warnings = try await tool.generate()
 		} catch {
 			throw SafeDIToolTestError(underlyingError: error, fixtures: fixtures)
 		}
@@ -228,6 +236,7 @@ func executeSafeDIToolTest(
 			moduleInfo: JSONDecoder().decode(ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
 			moduleInfoOutputPath: moduleInfoOutput.relativePath,
 			fixtures: fixtures,
+			warnings: warnings,
 			generatedFiles: generatedFiles,
 			dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil,
 			combinedOutput: buildCombinedOutput
@@ -243,6 +252,8 @@ struct TestOutput {
 	let moduleInfoOutputPath: String
 	/// The fixture files written for `swiftFileContent`, looked up by file name.
 	let fixtures: FixturePaths
+	/// The non-fatal diagnostics `generate` reported, which `run()` prints to standard error.
+	let warnings: [SourceDiagnostic]
 	let generatedFiles: [String: String]?
 	let dotTree: String?
 	let combinedOutput: String?
@@ -330,7 +341,8 @@ struct StubFileFinder: FileFinder {
 ///
 /// Each file is named after the `@Instantiable` type its snippet declares (falling back to the first
 /// declared type, then to `File`, with `_2`, `_3`… suffixes for repeats), so a test names the file it means
-/// rather than relying on the order of its snippets. Paths are exactly as they were written to the CSV
+/// rather than relying on the order of its snippets. A file from `swiftFileContentByFilePath` is looked up by
+/// the path it was given there, such as `Module/SafeDIConfiguration.swift`. Paths are exactly as they were written to the CSV
 /// the tool read: absolute by default, or relative to the current directory when the test passed
 /// `inputPathsRelativeToCurrentDirectory: true`.
 struct FixturePaths {
@@ -417,6 +429,25 @@ func assertThrowsError(
 			"Expected error description to contain \"\(substring)\" but got: \(description)",
 			sourceLocation: sourceLocation,
 		)
+	}
+}
+
+/// Writes each of `swiftFileContentByFilePath`'s contents at its path, relative to `directory`, creating
+/// intermediate directories. Use it when a test depends on a file's name, such as `SafeDIConfiguration.swift`.
+/// Paths are written in sorted order so the input order does not depend on dictionary iteration.
+private func createSwiftFixtureFiles(
+	atFilePaths swiftFileContentByFilePath: [String: String],
+	in directory: URL,
+	alongside contentNamedSwiftFiles: [URL],
+) throws -> [URL] {
+	try swiftFileContentByFilePath.keys.sorted().map { filePath in
+		let fileURL = directory.appendingPathComponent(filePath)
+		if contentNamedSwiftFiles.contains(fileURL) {
+			Issue.record("Fixture \(filePath) collides with a fixture named from its content")
+		}
+		try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+		try swiftFileContentByFilePath[filePath, default: ""].write(to: fileURL, atomically: true, encoding: .utf8)
+		return fileURL
 	}
 }
 

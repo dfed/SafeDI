@@ -56,25 +56,24 @@ struct Generate: AsyncParsableCommand {
 
 	func run() async throws {
 		do {
-			try await generate()
+			let warnings = try await generate()
+			if !warnings.isEmpty {
+				FileHandle.standardError.write(Data("\(formattedForBuildLog(warnings))\n".utf8))
+			}
 		} catch let error as any SourceLocatedError {
 			// Print located errors ourselves. ArgumentParser would print `Error: ` ahead of the first line,
 			// which stops Xcode and SwiftPM from recognizing the `<path>:<line>:<column>: error:` format.
 			// Throwing an `ExitCode` makes ArgumentParser exit non-zero without printing anything further.
-			// Build systems hand the tool paths relative to its working directory; resolve them so the
-			// printed location identifies the file wherever the build log is read.
-			let currentDirectoryPath = FileManager.default.currentDirectoryPath
-			let diagnostics = error.sourceDiagnostics
-				.map { $0.resolvingFilePath(relativeToDirectory: currentDirectoryPath).formatted }
-				.joined(separator: "\n")
-			FileHandle.standardError.write(Data("\(diagnostics)\n".utf8))
+			FileHandle.standardError.write(Data("\(formattedForBuildLog(error.sourceDiagnostics))\n".utf8))
 			throw ExitCode.failure
 		}
 	}
 
 	/// Parses, validates, and writes the configured outputs.
 	/// Throws `SourceLocatedError`s as-is so tests can inspect their diagnostics; `run()` formats them for the build log.
-	func generate() async throws {
+	/// - Returns: Warnings about the module, which do not stop generation. `run()` prints them.
+	@discardableResult
+	func generate() async throws -> [SourceDiagnostic] {
 		if swiftSourcesFilePath == nil, include.isEmpty {
 			throw ValidationError("Must provide 'swift-sources-file-path' or '--include'.")
 		}
@@ -127,6 +126,9 @@ struct Generate: AsyncParsableCommand {
 		let initialModuleIsFromCache = parsed.isFromCache
 		let sourceConfiguration = parsed.module.configuration
 		let evaluator = parsed.module.conditionalCompilationEvaluator
+		// Derived from the configuration rather than from how this run parsed, so a module loaded from
+		// scan's cache warns too. Only `generate` warns, so a build that runs `scan` first warns once.
+		let warnings = [sourceConfiguration?.placementWarning].compactMap(\.self)
 
 		let resolvedAdditionalImportedModules: [String] = if let sourceConfiguration {
 			additionalImportedModules + sourceConfiguration.additionalImportedModules
@@ -475,6 +477,7 @@ struct Generate: AsyncParsableCommand {
 			}
 			""".write(toPath: dotFileOutput)
 		}
+		return warnings
 	}
 
 	// MARK: Private
@@ -650,6 +653,15 @@ struct Generate: AsyncParsableCommand {
 				configuration: configuration,
 			),
 		)
+	}
+
+	/// `diagnostics` formatted for the build log. Build systems hand the tool paths relative to its working
+	/// directory; they are resolved so the printed location identifies the file wherever the log is read.
+	private func formattedForBuildLog(_ diagnostics: [SourceDiagnostic]) -> String {
+		let currentDirectoryPath = FileManager.default.currentDirectoryPath
+		return diagnostics
+			.map { $0.resolvingFilePath(relativeToDirectory: currentDirectoryPath).formatted }
+			.joined(separator: "\n")
 	}
 
 	/// When the file at `path` was last modified, or `nil` when it is missing or unreadable.

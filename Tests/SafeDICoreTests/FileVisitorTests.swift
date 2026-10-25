@@ -446,6 +446,7 @@ struct FileVisitorTests {
 			SafeDIConfiguration(
 				additionalImportedModules: ["ModuleA", "ModuleB"],
 				additionalDirectoriesToInclude: ["DirA"],
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 		])
 		#expect(fileVisitor.instantiables.isEmpty)
@@ -462,6 +463,7 @@ struct FileVisitorTests {
 			SafeDIConfiguration(
 				additionalImportedModules: [],
 				additionalDirectoriesToInclude: [],
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 		])
 	}
@@ -480,6 +482,7 @@ struct FileVisitorTests {
 			SafeDIConfiguration(
 				additionalImportedModules: [],
 				additionalDirectoriesToInclude: [],
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 		])
 	}
@@ -498,6 +501,7 @@ struct FileVisitorTests {
 			SafeDIConfiguration(
 				additionalImportedModules: [],
 				additionalDirectoriesToInclude: [],
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 		])
 	}
@@ -520,6 +524,7 @@ struct FileVisitorTests {
 			SafeDIConfiguration(
 				additionalImportedModules: ["ModuleA"],
 				additionalDirectoriesToInclude: [],
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 		])
 		#expect(fileVisitor.instantiables == [

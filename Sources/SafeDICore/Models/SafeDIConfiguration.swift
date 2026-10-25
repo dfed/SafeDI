@@ -28,16 +28,21 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 	/// The source file path where this configuration was declared.
 	/// Set during parsing to scope configuration to the current module.
 	public var sourceFilePath: String?
+	/// Where the `#SafeDIConfiguration` invocation begins.
+	/// Set during parsing so diagnostics about the configuration point at it.
+	public var declarationLocation: Dependency.DeclarationLocation?
 
 	public init(
 		additionalImportedModules: [String],
 		additionalDirectoriesToInclude: [String],
 		additionalMocksToGenerate: [String] = [],
 		mockConditionalCompilation: String? = "DEBUG",
+		declarationLocation: Dependency.DeclarationLocation? = nil,
 	) {
 		self.additionalImportedModules = additionalImportedModules
 		self.additionalDirectoriesToInclude = additionalDirectoriesToInclude
 		self.additionalMocksToGenerate = additionalMocksToGenerate
 		self.mockConditionalCompilation = mockConditionalCompilation
+		self.declarationLocation = declarationLocation
 	}
 }

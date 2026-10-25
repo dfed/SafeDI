@@ -76,6 +76,9 @@ public struct SourceDiagnostic: Hashable, Sendable {
 	public enum Severity: String, Hashable, Sendable {
 		/// The problem itself. An error fails generation and is the first line printed for it.
 		case error
+		/// A problem that does not stop generation. `generate` returns warnings rather than throwing them,
+		/// and `run()` prints them once generation succeeds.
+		case warning
 		/// Detail that accompanies an error at a *different* location, such as a cycle member’s declaration.
 		/// A note never stands alone, and Xcode does not display notes from build-tool output, so a note must
 		/// never carry information the user needs at the error’s own location – fold that into the error line.

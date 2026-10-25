@@ -659,7 +659,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 // MARK: - SourceLocationConverter
 
 extension SourceLocationConverter {
-	fileprivate func declarationLocation(for position: AbsolutePosition) -> Dependency.DeclarationLocation {
+	func declarationLocation(for position: AbsolutePosition) -> Dependency.DeclarationLocation {
 		let location = location(for: position)
 		return Dependency.DeclarationLocation(filePath: location.file, line: location.line, column: location.column)
 	}
