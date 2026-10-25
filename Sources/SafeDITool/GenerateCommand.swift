@@ -233,10 +233,26 @@ struct Generate: AsyncParsableCommand {
 			normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath
 			return normalized
 		}
+		let moduleFiles = moduleFilePaths(manifest: manifest, inputFilePaths: inputFilePaths)
 		let generator = try DependencyTreeGenerator(
 			importStatements: dependentModuleInfo.flatMap(\.imports) + resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
 			typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
 				instantiables: normalizedInstantiables,
+			),
+			sourceLocationDirectiveFilePaths: SourceLocationDirectiveFilePaths(
+				declarationFilePaths: Set(normalizedInstantiables.flatMap { instantiable in
+					instantiable.dependencies.compactMap { dependency in
+						switch dependency.source {
+						case .aliased:
+							dependency.declarationLocation?.filePath
+						case .forwarded, .instantiated, .received:
+							nil
+						}
+					}
+				}),
+				moduleFilePaths: moduleFiles.filePaths,
+				compilerModuleFilePath: moduleFiles.compilerFilePath,
+				compilerFilePath: manifest?.compilerFilePath(for:) ?? { $0 },
 			),
 		)
 		if let moduleInfoOutput {
@@ -764,6 +780,25 @@ struct Generate: AsyncParsableCommand {
 			} else {
 				cachedFileScan.fileScan
 			}
+		}
+	}
+
+	/// The module's own files, and how to read the path the compiler is handed for one of them.
+	///
+	/// A build tool plugin that has `generate` scan for itself names the target's files with `--mock-scoped-files`
+	/// exactly as the build system reported them, which is how the build system hands them to the compiler. A
+	/// plugin that ran `scan` left them in the manifest, relative to the project root it reported. Without
+	/// either list every input file is taken to be the module's, which can only leave out directives.
+	private func moduleFilePaths(
+		manifest: SafeDIToolManifest?,
+		inputFilePaths: Set<String>,
+	) -> (filePaths: Set<String>, compilerFilePath: (String) -> String) {
+		if swiftManifest == nil, !mockScopedFiles.isEmpty {
+			(Set(mockScopedFiles), { $0 })
+		} else if let manifest, let mockScopedFilePaths = manifest.mockScopedFilePaths {
+			(Set(mockScopedFilePaths), manifest.compilerFilePath(for:))
+		} else {
+			(inputFilePaths, { $0 })
 		}
 	}
 

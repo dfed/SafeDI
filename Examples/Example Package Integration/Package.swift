@@ -29,6 +29,8 @@ let package = Package(
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
 		// Targets can depend on other targets in this package and products from dependencies.
+		// Every target treats warnings as errors so that CI fails on a warning in SafeDI's generated
+		// code, such as a `#sourceLocation` directive whose path conflicts with the compiler's.
 		.target(
 			name: "RootModule",
 			dependencies: [
@@ -40,6 +42,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
+				.treatAllWarnings(as: .error),
 				// Only `swift build` on SwiftPM's native backend needs this define. The native
 				// backend is `swift build`'s default through Swift 6.2, the toolchain in
 				// Xcode 26, and `--build-system native` selects it on later toolchains. There
@@ -65,6 +68,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
+				.treatAllWarnings(as: .error),
 			],
 			plugins: [
 				.plugin(name: "SafeDIGenerator", package: "SafeDI"),
@@ -79,6 +83,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
+				.treatAllWarnings(as: .error),
 			],
 			plugins: [
 				.plugin(name: "SafeDIGenerator", package: "SafeDI"),
@@ -93,6 +98,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
+				.treatAllWarnings(as: .error),
 			],
 			plugins: [
 				.plugin(name: "SafeDIGenerator", package: "SafeDI"),
@@ -106,6 +112,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
+				.treatAllWarnings(as: .error),
 			],
 			plugins: [
 				.plugin(name: "SafeDIGenerator", package: "SafeDI"),
@@ -116,6 +123,7 @@ let package = Package(
 			dependencies: ["SafeDI"],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
+				.treatAllWarnings(as: .error),
 			],
 			plugins: [
 				.plugin(name: "SafeDIGenerator", package: "SafeDI"),

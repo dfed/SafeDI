@@ -150,7 +150,11 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 		exit 4
 	fi
 
-	# Build a CSV of paths relative to $SRCROOT for `generate`.
+	# Build a CSV of the sources' paths under $SRCROOT for `generate`.
+	# They stay absolute and spelled as Xcode spells them: a generated
+	# `#sourceLocation` directive names a file exactly as SafeDITool was
+	# handed it, and the compiler warns when that differs from the path
+	# Xcode hands it for the same file.
 	# Run `find` standalone so `set -e` catches a non-zero exit (e.g.
 	# unreadable subdir or broken symlink) — a pipeline would mask it
 	# under POSIX sh, which has no pipefail.
@@ -160,13 +164,12 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 	input_csv="$scratch_dir/InputSwiftFiles.csv"
 	: >"$input_csv"
 	first=1
-	while IFS= read -r abs; do
-		rel=${abs#"$SRCROOT/"}
+	while IFS= read -r source_path; do
 		if [ "$first" = 1 ]; then
-			printf '%s' "$rel" >>"$input_csv"
+			printf '%s' "$source_path" >>"$input_csv"
 			first=0
 		else
-			printf ',%s' "$rel" >>"$input_csv"
+			printf ',%s' "$source_path" >>"$input_csv"
 		fi
 	done <"$sources_list"
 

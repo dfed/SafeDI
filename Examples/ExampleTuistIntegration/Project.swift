@@ -17,6 +17,9 @@ import SafeDITuist
 
 let project = Project(
 	name: "ExampleTuistIntegration",
+	// Treating warnings as errors makes CI fail on a warning in SafeDI's generated code, such as a
+	// `#sourceLocation` directive whose path conflicts with the one the compiler was handed.
+	settings: .settings(base: ["SWIFT_TREAT_WARNINGS_AS_ERRORS": "YES"]),
 	targets: [
 		.target(
 			name: "Subproject",
